@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Ai\Controller\Backend;
 
 use Weline\Ai\Model\AiSkill;
+use Weline\Ai\Service\AdapterScanner;
 use Weline\Ai\Service\Skill\AdapterSkillRepository;
 use Weline\Ai\Service\Skill\AdapterSkillResolver;
 use Weline\Ai\Service\Skill\SkillExporter;
@@ -26,6 +27,7 @@ class Skill extends BackendController
         }
         $this->assign('activeTab', 'skill');
         $this->assign('skills', \array_values($this->registry()->listAvailableSkills(true)));
+        $this->assign('adapters', $this->listAdapterItems());
         $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
 
         return $this->fetch();
@@ -43,24 +45,49 @@ class Skill extends BackendController
         return $this->catalogResponse(true);
     }
 
+    #[Acl('Weline_Ai::ai_skill_view', 'AI adapter catalog', 'mdi-vector-link', 'View AI scenario adapters')]
+    public function postAdapters(): string
+    {
+        return $this->jsonResponse([
+            'success' => true,
+            'items' => $this->listAdapterItems(),
+        ]);
+    }
+
     #[Acl('Weline_Ai::ai_skill_save', 'Save AI skill', 'mdi-content-save', 'Save AI custom skill')]
     public function postSave(): string
     {
+        $code = (string)$this->bodyValue('code', '');
+        $existing = $this->repository()->findArrayByCode($code);
+        if (\is_array($existing) && \in_array((string)($existing['source_type'] ?? ''), [AiSkill::SOURCE_SYSTEM, AiSkill::SOURCE_MODULE], true)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'code' => 'SKILL_READONLY',
+                'message' => 'System and module skills are readonly.',
+            ]);
+        }
+
+        $sourceType = \is_array($existing)
+            ? (string)($existing['source_type'] ?? AiSkill::SOURCE_CUSTOM)
+            : AiSkill::SOURCE_CUSTOM;
         $data = [
-            'code' => $this->bodyValue('code', ''),
+            'code' => $code,
             'name' => $this->bodyValue('name', ''),
             'description' => $this->bodyValue('description', ''),
             'body' => $this->bodyValue('body', ''),
             'status' => $this->bodyValue('status', AiSkill::STATUS_ACTIVE),
-            'source_type' => AiSkill::SOURCE_CUSTOM,
+            'source_type' => $sourceType,
+            'source_module' => \is_array($existing) ? (string)($existing['source_module'] ?? '') : '',
+            'source_url' => \is_array($existing) ? (string)($existing['source_url'] ?? '') : '',
+            'source_platform' => \is_array($existing) ? (string)($existing['source_platform'] ?? '') : '',
+            'version' => $this->bodyValue('version', \is_array($existing) ? (string)($existing['version'] ?? '') : ''),
         ];
 
         try {
-            $code = (string)$data['code'];
-            if ($this->registry()->isReservedCode($code)) {
+            if (!\is_array($existing) && $this->registry()->isReservedCode($code)) {
                 throw new \InvalidArgumentException('Skill code "' . $code . '" conflicts with a system/module skill.');
             }
-            $saved = $this->repository()->saveFromArray($data, AiSkill::SOURCE_CUSTOM);
+            $saved = $this->repository()->saveFromArray($data, $sourceType);
             return $this->jsonResponse([
                 'success' => true,
                 'item' => $this->repository()->modelToArray($saved),
@@ -69,6 +96,43 @@ class Skill extends BackendController
             return $this->jsonResponse([
                 'success' => false,
                 'code' => 'SKILL_SAVE_FAILED',
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    #[Acl('Weline_Ai::ai_skill_save', 'Set AI skill status', 'mdi-toggle-switch', 'Enable, pend, or disable AI skill')]
+    public function postSetStatus(): string
+    {
+        $code = \trim((string)$this->bodyValue('code', ''));
+        $status = \trim((string)$this->bodyValue('status', ''));
+        if ($code === '' || !\in_array($status, [AiSkill::STATUS_ACTIVE, AiSkill::STATUS_PENDING, AiSkill::STATUS_DISABLED], true)) {
+            return $this->jsonResponse([
+                'success' => false,
+                'code' => 'INVALID_STATUS',
+                'message' => 'Skill code and a valid status are required.',
+            ]);
+        }
+
+        try {
+            $existing = $this->repository()->findArrayByCode($code);
+            if (!\is_array($existing)) {
+                return $this->jsonResponse(['success' => false, 'code' => 'SKILL_NOT_FOUND', 'message' => 'Skill not found.']);
+            }
+            if (\in_array((string)($existing['source_type'] ?? ''), [AiSkill::SOURCE_SYSTEM, AiSkill::SOURCE_MODULE], true)) {
+                return $this->jsonResponse(['success' => false, 'code' => 'SKILL_READONLY', 'message' => 'System and module skills are readonly.']);
+            }
+
+            $existing['status'] = $status;
+            $saved = $this->repository()->saveFromArray($existing, (string)($existing['source_type'] ?? AiSkill::SOURCE_CUSTOM));
+            return $this->jsonResponse([
+                'success' => true,
+                'item' => $this->repository()->modelToArray($saved),
+            ]);
+        } catch (\Throwable $throwable) {
+            return $this->jsonResponse([
+                'success' => false,
+                'code' => 'SKILL_STATUS_FAILED',
                 'message' => $throwable->getMessage(),
             ]);
         }
@@ -201,6 +265,59 @@ class Skill extends BackendController
     }
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    private function listAdapterItems(): array
+    {
+        $itemsByCode = [];
+        try {
+            foreach ($this->adapterScanner()->scanAllAdapters() as $adapter) {
+                $code = \trim((string)$adapter->getCode());
+                if ($code === '') {
+                    continue;
+                }
+                $itemsByCode[$code] = [
+                    'code' => $code,
+                    'name' => (string)$adapter->getName(),
+                    'description' => (string)$adapter->getDescription(),
+                    'version' => (string)$adapter->getVersion(),
+                    'locked_skill_codes' => $this->resolver()->getLockedSkillCodes($code),
+                    'manual_skill_codes' => $this->adapterSkillRepository()->listActiveSkillCodes($code),
+                ];
+            }
+        } catch (\Throwable $throwable) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('AI skill adapter list unavailable: ' . $throwable->getMessage());
+            }
+        }
+
+        foreach (['pagebuilder_plan_generation', 'pagebuilder_component_generation', 'pagebuilder_ai_site_assets'] as $code) {
+            if (isset($itemsByCode[$code])) {
+                continue;
+            }
+            try {
+                $adapter = $this->adapterScanner()->getAdapter($code);
+            } catch (\Throwable) {
+                $adapter = null;
+            }
+            if (!$adapter) {
+                continue;
+            }
+            $itemsByCode[$code] = [
+                'code' => $code,
+                'name' => (string)$adapter->getName(),
+                'description' => (string)$adapter->getDescription(),
+                'version' => (string)$adapter->getVersion(),
+                'locked_skill_codes' => $this->resolver()->getLockedSkillCodes($code),
+                'manual_skill_codes' => $this->adapterSkillRepository()->listActiveSkillCodes($code),
+            ];
+        }
+
+        \ksort($itemsByCode);
+        return \array_values($itemsByCode);
+    }
+
+    /**
      * @return list<string>
      */
     private function parseCodeList(mixed $raw): array
@@ -272,5 +389,10 @@ class Skill extends BackendController
     private function adapterSkillRepository(): AdapterSkillRepository
     {
         return ObjectManager::getInstance(AdapterSkillRepository::class);
+    }
+
+    private function adapterScanner(): AdapterScanner
+    {
+        return ObjectManager::getInstance(AdapterScanner::class);
     }
 }

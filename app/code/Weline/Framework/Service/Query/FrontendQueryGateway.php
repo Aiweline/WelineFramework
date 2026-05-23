@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Service\Query;
 
+use Weline\Framework\Runtime\RequestContext;
+
 final class FrontendQueryGateway
 {
     private const GRAPH_MAX_COST = 20;
@@ -35,11 +37,20 @@ final class FrontendQueryGateway
      */
     private function executeCall(array $payload, string $capability): mixed
     {
+        $stepStart = \microtime(true);
         $provider = (string)($payload['provider'] ?? '');
         $operation = (string)($payload['operation'] ?? '');
         $params = $this->normalizeParams($payload['params'] ?? []);
-        $descriptor = $this->requireOperation($provider, $operation);
+        $this->recordGatewayStep('call_normalize', $stepStart, [
+            'provider' => $provider,
+            'operation' => $operation,
+        ]);
 
+        $stepStart = \microtime(true);
+        $descriptor = $this->requireOperation($provider, $operation);
+        $this->recordGatewayStep('require_operation', $stepStart);
+
+        $stepStart = \microtime(true);
         $expectedCapability = $provider . '.' . $operation;
         if ($capability !== $expectedCapability) {
             throw new FrontendQueryException('capability_denied', 'Worker capability does not match operation.', 403);
@@ -49,9 +60,17 @@ final class FrontendQueryGateway
         if ($mode === 'stream') {
             throw new FrontendQueryException('capability_denied', 'Stream operation requires Weline.Api.stream().', 403);
         }
+        $this->recordGatewayStep('capability_check', $stepStart);
 
+        $stepStart = \microtime(true);
         $params = $this->validateParams($params, $descriptor);
-        return $this->queryService->execute($provider, $operation, $params, 'frontend_worker');
+        $this->recordGatewayStep('validate_params', $stepStart);
+
+        $stepStart = \microtime(true);
+        $result = $this->queryService->execute($provider, $operation, $params, 'frontend_worker');
+        $this->recordGatewayStep('query_service_execute', $stepStart);
+
+        return $result;
     }
 
     /**
@@ -371,5 +390,26 @@ final class FrontendQueryGateway
         }
 
         return $operations;
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function recordGatewayStep(string $name, float $startedAt, array $meta = []): void
+    {
+        $profile = RequestContext::get('query_bin.gateway_profile');
+        if (!\is_array($profile)) {
+            $profile = [];
+        }
+
+        $step = [
+            'name' => $name,
+            'duration_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+        ];
+        if ($meta !== []) {
+            $step['meta'] = $meta;
+        }
+        $profile[] = $step;
+        RequestContext::set('query_bin.gateway_profile', $profile);
     }
 }

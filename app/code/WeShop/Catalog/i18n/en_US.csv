@@ -38,6 +38,9 @@
 上级分类,"Superior classification"
 子分类,Sub-Category
 首页,Homepage
+展开子菜单,"Expand submenu"
+更多分类,"More categories"
+更多,More
 选择分类,"Select Category"
 全部分类,"All Categories"
 商品列表,"Product List"
@@ -48,3 +51,18 @@
 返回首页,"Return to Homepage"
 "%{count} 个子分类","%{count} subcategory"
 "SKU: %{sku}","SKU: %{sku}"
+电子产品,Electronics
+服装服饰,"Clothing & Accessories"
+家居用品,"Home & Living"
+运动户外,"Sports & Outdoors"
+图书音像,"Books & Media"
+食品饮料,"Food & Drinks"
+手机通讯,"Mobile Phones & Communication"
+家具,Furniture
+家纺,"Home Textiles"
+厨房用品,"Kitchen Supplies"
+装饰用品,"Decorative Items"
+男装,"Men's Clothing"
+女装,"Women's Clothing"
+童装,"Children's Clothing"
+运动服饰,Sportswear

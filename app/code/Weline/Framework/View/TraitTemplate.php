@@ -501,6 +501,41 @@ trait TraitTemplate
      *
      * @param string $type
      *
+     * @return bool
+     */
+    public function templateStaticExists(string $source): bool
+    {
+        $source = trim($source);
+        if ('/' !== DS) {
+            $source = str_replace('/', DS, $source);
+        }
+
+        $module_name = null;
+        $rel_path = $source;
+        if (strpos($source, '::') !== false) {
+            $parts = explode('::', $source, 2);
+            $module_name = trim($parts[0]);
+            $rel_path = trim($parts[1], DS);
+        }
+
+        $rel_path = ltrim($rel_path, DS);
+        if (strpos($rel_path, 'templates' . DS) === 0) {
+            $rel_path = substr($rel_path, strlen('templates' . DS));
+        }
+        $rel_path = 'templates' . DS . $rel_path;
+
+        $modules = Env::getInstance()->getModuleList();
+        if ($module_name && isset($modules[$module_name]) && $module = $modules[$module_name]) {
+            $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
+        } else {
+            $module_view_dir_path = $this->getRequest()->getModulePath() . 'view' . DS;
+        }
+
+        return is_file(rtrim($module_view_dir_path, DS) . DS . $rel_path);
+    }
+
+    /**
+     * @param string $type
      * @return string
      */
     private function getViewDir(string $type = ''): string

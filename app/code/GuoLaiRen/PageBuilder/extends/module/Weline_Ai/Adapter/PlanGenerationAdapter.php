@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Ai\Adapter;
 
 use Weline\Ai\Interface\AdapterSkillBindingInterface;
+use Weline\Ai\Interface\AdapterStyleBindingInterface;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
-class PlanGenerationAdapter implements ScenarioAdapterInterface, AdapterSkillBindingInterface
+class PlanGenerationAdapter implements ScenarioAdapterInterface, AdapterSkillBindingInterface, AdapterStyleBindingInterface
 {
     public function getDefaultSkillCodes(): array
     {
         return ['claude-design', 'weline-pixel-events'];
+    }
+
+    public function getDefaultStyleCodes(): array
+    {
+        return ['india-card-game-apk-dark-neon'];
     }
 
     public function getCode(): string

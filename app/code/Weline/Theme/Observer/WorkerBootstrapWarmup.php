@@ -9,6 +9,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
@@ -51,6 +52,10 @@ class WorkerBootstrapWarmup implements ObserverInterface
         SchedulerSystem::yield();
         $warmed += $this->tryWarm(function (): void {
             $this->warmRoutingCaches();
+        });
+        SchedulerSystem::yield();
+        $warmed += $this->tryWarm(function (): void {
+            $this->warmFpcFastPathPayloads();
         });
 
         if ($warmed > 0 && \function_exists('w_log_info')) {
@@ -105,11 +110,14 @@ class WorkerBootstrapWarmup implements ObserverInterface
         $template = Template::getInstance();
         foreach ([
             'Weline_Theme::theme/frontend/layouts/category/default.phtml',
+            'Weline_Theme::theme/frontend/layouts/product/default.phtml',
             'Weline_Theme::theme/frontend/partials/head/default.phtml',
             'Weline_Theme::theme/frontend/partials/head/minimal.phtml',
             'Weline_Theme::theme/frontend/partials/header/default.phtml',
             'Weline_Theme::theme/frontend/partials/breadcrumb/default.phtml',
             'Weline_Theme::theme/frontend/partials/footer/default.phtml',
+            'Weline_Theme::theme/frontend/widgets/product/related-products/default.phtml',
+            'Weline_Theme::theme/frontend/widgets/product/bestsellers/default.phtml',
             'Weline_Theme::theme/frontend/layouts/account/default.phtml',
             'Weline_Theme::theme/frontend/layouts/account/dashboard.phtml',
             'Weline_Theme::theme/frontend/layouts/account_orders/default.phtml',
@@ -117,6 +125,7 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'Weline_Customer::templates/frontend/account/sidebar/side.phtml',
             'Weline_Customer::templates/frontend/account/index.phtml',
             'WeShop_Catalog::templates/Frontend/Category/content.phtml',
+            'WeShop_Product::templates/frontend/product/view.phtml',
             'WeShop_Filters::templates/Frontend/filters.phtml',
         ] as $fileName) {
             $this->warmCompiledFile((string)$template->getFetchFile($fileName));
@@ -129,6 +138,7 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'WeShop_Catalog::Weline_Theme/frontend/partials/breadcrumb/items.phtml',
             'WeShop_Catalog::Weline_Theme/frontend/partials/header/categories-before.phtml',
             'WeShop_Catalog::Weline_Theme/frontend/partials/header/search-form-before.phtml',
+            'WeShop_Product::WeShop_Product/frontend/layouts/product/main-content.phtml',
             'Weline_Order::hooks/account.sidebar.phtml',
             'Weline_Order::hooks/account.sidebar.content.phtml',
             'WeShop_Order::hooks/account.sidebar.phtml',
@@ -209,6 +219,256 @@ class WorkerBootstrapWarmup implements ObserverInterface
         try {
             \w_cache('module_router')->get('routers_rules_cache');
         } catch (\Throwable) {
+        }
+    }
+
+    private function warmFpcFastPathPayloads(): void
+    {
+        if (!\class_exists(FullPageCacheCoordinator::class)) {
+            return;
+        }
+
+        $paths = $this->resolveFpcWarmupPaths();
+        $maxPaths = (int)(\Weline\Framework\App\Env::get('wls.worker.fpc_warmup_max_paths', 96) ?: 96);
+        $maxPaths = \max(1, \min($maxPaths, 384));
+        $paths = \array_slice($paths, 0, $maxPaths);
+
+        $hosts = $this->resolveFpcWarmupHosts();
+        $coordinator = ObjectManager::getInstance(FullPageCacheCoordinator::class);
+        if (!$coordinator instanceof FullPageCacheCoordinator) {
+            return;
+        }
+
+        $warmed = 0;
+        foreach ($hosts as $host) {
+            foreach ($paths as $path) {
+                $fullUri = 'https://' . $host . $path;
+                $hit = $coordinator->getFormattedCachedResponseForFullUri(
+                    $fullUri,
+                    'GET',
+                    'text/html,application/xhtml+xml',
+                    'gzip',
+                    '',
+                    true
+                );
+                if ($hit !== null) {
+                    $warmed++;
+                }
+                SchedulerSystem::yield();
+            }
+        }
+
+        if ($warmed > 0 && \function_exists('w_log_info')) {
+            \w_log_info('[ThemeWorkerWarmup] fpc_fastpath=' . $warmed);
+        }
+    }
+
+    public function warmFpcFastPathPayloadsForReady(): void
+    {
+        $this->warmFpcFastPathPayloads();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getFpcWarmupHosts(): array
+    {
+        return $this->resolveFpcWarmupHosts();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getFpcWarmupPaths(): array
+    {
+        return $this->resolveFpcWarmupPaths();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveFpcWarmupHosts(): array
+    {
+        $hosts = ['127.0.0.1'];
+        $configured = \Weline\Framework\App\Env::get('wls.worker.fpc_warmup_hosts', []);
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (\is_array($configured)) {
+            foreach ($configured as $host) {
+                if (!\is_scalar($host)) {
+                    continue;
+                }
+                $host = \trim((string)$host);
+                if ($host !== '') {
+                    $hosts[] = $host;
+                }
+            }
+        }
+
+        try {
+            $serverHost = (string)(\Weline\Framework\App\Env::get('server.host', '') ?: \Weline\Framework\App\Env::get('wls.host', ''));
+            if ($serverHost !== '') {
+                $hosts[] = $serverHost;
+            }
+        } catch (\Throwable) {
+        }
+
+        $normalized = [];
+        foreach ($hosts as $host) {
+            if (\str_contains($host, '://')) {
+                $parsed = \parse_url($host, \PHP_URL_HOST);
+                $host = \is_string($parsed) ? $parsed : '';
+            }
+            $host = \trim($host, " \t\n\r\0\x0B[]/");
+            if ($host === '' || $host === '0.0.0.0' || $host === '::') {
+                continue;
+            }
+            $normalized[$host] = $host;
+            if (\count($normalized) >= 3) {
+                break;
+            }
+        }
+
+        return \array_values($normalized);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveFpcWarmupPaths(): array
+    {
+        $paths = [
+            '/',
+            '/en_US/catalog/category/sports',
+            '/USD/en_US/catalog/category/sports',
+            '/zh_Hans_CN/catalog/category/sports',
+            '/CNY/zh_Hans_CN/catalog/category/sports',
+            '/en_US/catalog/category/men/shirts',
+            '/USD/en_US/catalog/category/men/shirts',
+            '/zh_Hans_CN/catalog/category/men/shirts',
+            '/CNY/zh_Hans_CN/catalog/category/men/shirts',
+            '/en_US/catalog/category/women',
+            '/USD/en_US/catalog/category/women',
+            '/zh_Hans_CN/catalog/category/women',
+            '/CNY/zh_Hans_CN/catalog/category/women',
+            '/en_US/catalog/category/gear',
+            '/en_US/catalog/category/running-gear',
+            '/USD/en_US/catalog/category/running-gear',
+            '/zh_Hans_CN/catalog/category/running-gear',
+            '/CNY/zh_Hans_CN/catalog/category/running-gear',
+            '/en_US/product/demo-category-81-sports',
+            '/en_US/product/demo-category-45-clothing',
+            '/product/demo-category-81-sports',
+            '/product/demo-category-45-clothing',
+        ];
+
+        $configured = \Weline\Framework\App\Env::get('wls.worker.fpc_warmup_paths', []);
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (\is_array($configured)) {
+            foreach ($configured as $path) {
+                if (\is_scalar($path)) {
+                    $paths[] = (string)$path;
+                }
+            }
+        }
+
+        $paths = $this->applyDispatcherWarmupPathObservers($paths);
+
+        $normalized = [];
+        foreach ($paths as $path) {
+            $path = \str_replace(["\r", "\n", "\t"], '', \trim((string)$path));
+            if ($path === '') {
+                continue;
+            }
+            if ($path[0] !== '/') {
+                $path = '/' . $path;
+            }
+            $normalized[$path] = $path;
+        }
+
+        return $this->prioritizeFpcWarmupPaths(\array_values($normalized));
+    }
+
+    /**
+     * @param list<string> $paths
+     * @return list<string>
+     */
+    private function prioritizeFpcWarmupPaths(array $paths): array
+    {
+        $buckets = [[], [], [], [], []];
+        foreach ($paths as $path) {
+            $rank = $this->fpcWarmupPathRank($path);
+            $buckets[$rank][] = $path;
+        }
+
+        return \array_values(\array_merge(...$buckets));
+    }
+
+    private function fpcWarmupPathRank(string $path): int
+    {
+        $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
+        $trimmed = \trim($pathOnly, '/');
+        if ($trimmed === ''
+            || \preg_match('/^(?:[A-Z]{3}\/)?[a-z]{2}(?:_[A-Za-z]+){1,2}$/', $trimmed) === 1
+        ) {
+            return 0;
+        }
+
+        if (\str_contains($pathOnly, '/catalog/category/')) {
+            return 1;
+        }
+
+        if (\str_contains($pathOnly, '/product/') && !\str_contains($pathOnly, '/product/view')) {
+            return 2;
+        }
+
+        if (\str_contains($pathOnly, '/product/view')) {
+            return 4;
+        }
+
+        return 3;
+    }
+
+    /**
+     * @param list<string> $paths
+     * @return list<string>
+     */
+    private function applyDispatcherWarmupPathObservers(array $paths): array
+    {
+        try {
+            $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            $data = new \Weline\Framework\DataObject\DataObject([
+                'paths' => $paths,
+                'instance_name' => (string)(\getenv('WLS_INSTANCE_NAME') ?: ''),
+                'port' => (int)(\getenv('WLS_WORKER_PORT') ?: 0),
+                'hosts' => $this->resolveFpcWarmupHosts(),
+            ]);
+            $events = $eventsManager->scanEvents();
+            $eventName = 'Weline_Server::dispatcher::warmup_paths';
+            $observers = \is_array($events[$eventName] ?? null) ? $events[$eventName] : [];
+            if ($observers === []) {
+                $eventsManager->dispatch($eventName, $data);
+            } else {
+                $event = new \Weline\Framework\Event\Event([
+                    'data' => &$data,
+                    'observers' => $observers,
+                ]);
+                $event->setName($eventName)->dispatch();
+            }
+
+            $eventPaths = $data->getData('paths');
+            return \is_array($eventPaths) ? \array_values($eventPaths) : $paths;
+        } catch (\Throwable) {
+            return $paths;
         }
     }
 

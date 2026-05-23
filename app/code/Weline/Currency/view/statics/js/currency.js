@@ -43,16 +43,45 @@
         return query ? '?' + query : '';
     }
 
+    function readCookieValue(key) {
+        if (!key) {
+            return '';
+        }
+        if (typeof window.getCookie === 'function') {
+            const value = window.getCookie(key);
+            if (value) {
+                return value;
+            }
+        }
+        const match = document.cookie.match('(?:^|; )' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)');
+        return match ? decodeURIComponent(match[1]) : '';
+    }
+
+    function writeCookieValue(key, value, expiry = 365, options = {}) {
+        if (!key) {
+            return;
+        }
+        const normalizedOptions = Object.assign({ path: '/' }, options || {});
+        if (typeof window.setCookie === 'function') {
+            window.setCookie(key, value, expiry, normalizedOptions);
+            return;
+        }
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
+        let cookieString = key + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
+        Object.keys(normalizedOptions).forEach((optionKey) => {
+            cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
+        });
+        document.cookie = cookieString;
+    }
+
     /**
      * 获取当前货币代码
      */
     function getCurrentCurrency() {
-        // 从 Cookie 获取
-        if (typeof window.getCookie === 'function') {
-            const cookieCurrency = window.getCookie('WELINE_USER_CURRENCY');
-            if (cookieCurrency) {
-                return cookieCurrency.toUpperCase();
-            }
+        const cookieCurrency = readCookieValue('WELINE_USER_CURRENCY');
+        if (cookieCurrency) {
+            return cookieCurrency.toUpperCase();
         }
 
         // 从 URL 参数获取
@@ -206,9 +235,7 @@
             localStorage.setItem('weline_user_currency', currency);
 
             // 保存货币偏好到 Cookie（如果 getCookie/setCookie 函数存在）
-            if (typeof window.setCookie === 'function') {
-                window.setCookie('WELINE_USER_CURRENCY', currency, 365); // 保存365天
-            }
+            writeCookieValue('WELINE_USER_CURRENCY', currency, 365); // 保存365天
 
             // 立即跳转到新 URL
             window.location.href = currencyUrl;
@@ -221,9 +248,7 @@
 
             // 保存货币偏好
             localStorage.setItem('weline_user_currency', currency);
-            if (typeof window.setCookie === 'function') {
-                window.setCookie('WELINE_USER_CURRENCY', currency, 365);
-            }
+            writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
 
             // 立即跳转到新 URL
             window.location.href = currencyUrl;
@@ -258,9 +283,7 @@
 
         // 保存货币偏好
         localStorage.setItem('weline_user_currency', currency);
-        if (typeof window.setCookie === 'function') {
-            window.setCookie('WELINE_USER_CURRENCY', currency, 365);
-        }
+        writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
 
         // 立即跳转到新 URL
         window.location.href = currencyUrl;

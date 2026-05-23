@@ -38,6 +38,13 @@ return [
             'description' => 'AI skill provider extension point for governed prompt skills',
             'required' => false,
             'multiple' => true
+        ],
+        'Style' => [
+            'path' => 'extends/module/Weline_Ai/Style',
+            'interface' => 'Weline\Ai\Interface\StyleProviderInterface',
+            'description' => 'AI style provider extension point for governed website style directions',
+            'required' => false,
+            'multiple' => true
         ]
     ]
 ];

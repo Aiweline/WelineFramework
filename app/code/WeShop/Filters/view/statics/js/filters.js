@@ -521,8 +521,6 @@
             
             if (!grid) return;
             
-            const basePath = this.getProductBasePath();
-            
             if (products.length === 0) {
                 const noProducts = typeof window.__ === 'function'
                     ? window.__('该分类下暂无商品')
@@ -534,9 +532,7 @@
             const html = products.map(p => {
                 const name = (p.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 const price = parseFloat(p.price) || 0;
-                const productUrl = p.handle
-                    ? basePath + '/product/' + encodeURIComponent(p.handle)
-                    : basePath + '/weshop/product/view?id=' + (p.product_id || '');
+                const productUrl = this.buildProductUrl(p);
                 const imgSrc = (p.image || '').replace(/"/g, '&quot;');
                 const inStock = p.in_stock !== false && (p.stock || 0) > 0;
                 const outOfStockLabel = typeof window.__ === 'function' ? window.__('缺货') : 'Out of stock';
@@ -559,9 +555,38 @@
         }
         
         /**
-         * 获取产品链接基础路径（与当前页同源，用于 /product/{handle}）
+         * 产品详情链接：优先走框架 url()/frontend_url()，与模板 $this->getUrl() 一致。
          */
-        getProductBasePath() {
+        buildProductUrl(product) {
+            const handle = (product && product.handle) ? String(product.handle).trim() : '';
+            const productId = product && product.product_id ? String(product.product_id) : '';
+            if (typeof window.url === 'function') {
+                if (handle) {
+                    return window.url('product/' + handle);
+                }
+                if (productId) {
+                    return window.url('weshop/product/view', { id: productId });
+                }
+            }
+            if (typeof window.frontend_url === 'function') {
+                if (handle) {
+                    return window.frontend_url('product/' + handle);
+                }
+                if (productId) {
+                    return window.frontend_url('weshop/product/view', { id: productId });
+                }
+            }
+            const basePath = this.getProductBasePathFallback();
+            if (handle) {
+                return basePath + '/product/' + encodeURIComponent(handle);
+            }
+            return basePath + '/weshop/product/view?id=' + encodeURIComponent(productId);
+        }
+
+        /**
+         * url()/frontend_url() 不可用时的兜底（沿用页内已有产品卡链接前缀）。
+         */
+        getProductBasePathFallback() {
             const firstLink = document.querySelector('.category-products .product-card a[href*="/product/"], .product-list-container .product-card a[href*="/product/"], .category-products-grid .product-card a[href*="/product/"]');
             if (firstLink && firstLink.href) {
                 try {

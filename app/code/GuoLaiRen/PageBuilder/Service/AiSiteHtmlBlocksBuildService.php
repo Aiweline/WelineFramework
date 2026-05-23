@@ -1173,6 +1173,8 @@ class AiSiteHtmlBlocksBuildService
                 . '</div>';
         }
 
+        $visitorExperience = $this->escape((string)($config['visitor_experience'] ?? ''));
+
         return '<footer class="ai-block ai-block-site-footer" style="padding:28px;background:#020617;color:#e2e8f0;display:grid;gap:20px;">'
             . '<div style="display:grid;gap:8px;">'
             . '<strong style="font-size:18px;line-height:1.2;color:#fff;">' . $siteTitle . '</strong>'
@@ -1181,7 +1183,7 @@ class AiSiteHtmlBlocksBuildService
             . '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px 24px;">' . \implode('', $groupHtml) . '</div>'
             . '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;color:#64748b;font-size:12px;">'
             . '<span>&copy; 2026 ' . $siteTitle . '</span>'
-            . ($domain !== '' ? '<span>' . $domain . '</span>' : '<span>Always improving the visitor experience</span>')
+            . ($domain !== '' ? '<span>' . $domain . '</span>' : '<span>' . ($visitorExperience !== '' ? $visitorExperience : 'Always improving the visitor experience') . '</span>')
             . '</div></footer>';
     }
 
@@ -1389,8 +1391,220 @@ class AiSiteHtmlBlocksBuildService
         ));
     }
 
+    private function lookupLocalizedPageTypeLabel(string $pageType, string $locale): string
+    {
+        if ($this->isHindiLocale($locale)) {
+            return match ($pageType) {
+                Page::TYPE_HOME => "\u{0939}\u{094B}\u{092E}",
+                Page::TYPE_ABOUT => "\u{0939}\u{092E}\u{093E}\u{0930}\u{0947} \u{092C}\u{093E}\u{0930}\u{0947} \u{092E}\u{0947}\u{0902}",
+                Page::TYPE_CONTACT => "\u{0938}\u{0902}\u{092A}\u{0930}\u{094D}\u{0915} \u{0915}\u{0930}\u{0947}\u{0902}",
+                Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => "\u{092C}\u{094D}\u{0932}\u{0949}\u{0917}",
+                Page::TYPE_PRIVACY_POLICY => "\u{0917}\u{094B}\u{092A}\u{0928}\u{0940}\u{092F}\u{0924}\u{093E} \u{0928}\u{0940}\u{0924}\u{093F}",
+                Page::TYPE_TERMS_OF_SERVICE => "\u{0938}\u{0947}\u{0935}\u{093E} \u{0915}\u{0940} \u{0936}\u{0930}\u{094D}\u{0924}\u{0947}\u{0902}",
+                Page::TYPE_REFUND_POLICY => "\u{0930}\u{093F}\u{092B}\u{0902}\u{0921} \u{0928}\u{0940}\u{0924}\u{093F}",
+                Page::TYPE_SHIPPING_POLICY => "\u{0936}\u{093F}\u{092A}\u{093F}\u{0902}\u{0917} \u{0928}\u{0940}\u{0924}\u{093F}",
+                Page::TYPE_COOKIE_POLICY => "\u{0915}\u{0941}\u{0915}\u{0940} \u{0928}\u{0940}\u{0924}\u{093F}",
+                default => '',
+            };
+        }
+        $labels = [
+            'en' => [
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
+            ],
+            'th' => [
+                Page::TYPE_HOME => 'หน้าแรก',
+                Page::TYPE_ABOUT => 'เกี่ยวกับเรา',
+                Page::TYPE_CONTACT => 'ติดต่อเรา',
+                Page::TYPE_BLOG_LIST => 'บทความ',
+                Page::TYPE_BLOG => 'บทความ',
+                Page::TYPE_PRIVACY_POLICY => 'นโยบายความเป็นส่วนตัว',
+                Page::TYPE_TERMS_OF_SERVICE => 'ข้อกำหนดการใช้บริการ',
+                Page::TYPE_REFUND_POLICY => 'นโยบายการคืนเงิน',
+                Page::TYPE_SHIPPING_POLICY => 'นโยบายการจัดส่ง',
+                Page::TYPE_COOKIE_POLICY => 'นโยบายคุกกี้',
+            ],
+            'hi' => [
+                Page::TYPE_HOME => 'होम',
+                Page::TYPE_ABOUT => 'हमारे बारे में',
+                Page::TYPE_CONTACT => 'संपर्क करें',
+                Page::TYPE_BLOG_LIST => 'ब्लॉग',
+                Page::TYPE_BLOG => 'ब्लॉग',
+                Page::TYPE_PRIVACY_POLICY => 'गोपनीयता नीति',
+                Page::TYPE_TERMS_OF_SERVICE => 'सेवा की शर्तें',
+                Page::TYPE_REFUND_POLICY => 'रिफंड नीति',
+                Page::TYPE_SHIPPING_POLICY => 'शिपिंग नीति',
+                Page::TYPE_COOKIE_POLICY => 'कुकी नीति',
+            ],
+            'zh' => [
+                Page::TYPE_HOME => '首页',
+                Page::TYPE_ABOUT => '关于我们',
+                Page::TYPE_CONTACT => '联系我们',
+                Page::TYPE_BLOG_LIST => '博客',
+                Page::TYPE_BLOG => '博客',
+                Page::TYPE_PRIVACY_POLICY => '隐私政策',
+                Page::TYPE_TERMS_OF_SERVICE => '服务条款',
+                Page::TYPE_REFUND_POLICY => '退款政策',
+                Page::TYPE_SHIPPING_POLICY => '配送政策',
+                Page::TYPE_COOKIE_POLICY => 'Cookie 政策',
+            ],
+            'ru' => [
+                Page::TYPE_HOME => 'Главная',
+                Page::TYPE_ABOUT => 'О нас',
+                Page::TYPE_CONTACT => 'Контакты',
+                Page::TYPE_BLOG_LIST => 'Блог',
+                Page::TYPE_BLOG => 'Блог',
+                Page::TYPE_PRIVACY_POLICY => 'Политика конфиденциальности',
+                Page::TYPE_TERMS_OF_SERVICE => 'Условия использования',
+                Page::TYPE_REFUND_POLICY => 'Политика возврата',
+                Page::TYPE_SHIPPING_POLICY => 'Доставка',
+                Page::TYPE_COOKIE_POLICY => 'Политика Cookie',
+            ],
+        ];
+
+        $family = $this->localeFamily($locale);
+        return (string)($labels[$family][$pageType] ?? '');
+    }
+
+    private function lookupLocalizedBuildText(string $key, string $locale): string
+    {
+        if ($this->isHindiLocale($locale)) {
+            return match ($key) {
+                'home' => "\u{0939}\u{094B}\u{092E}",
+                'about' => "\u{0939}\u{092E}\u{093E}\u{0930}\u{0947} \u{092C}\u{093E}\u{0930}\u{0947} \u{092E}\u{0947}\u{0902}",
+                'contact' => "\u{0938}\u{0902}\u{092A}\u{0930}\u{094D}\u{0915} \u{0915}\u{0930}\u{0947}\u{0902}",
+                'blog' => "\u{092C}\u{094D}\u{0932}\u{0949}\u{0917}",
+                'privacy_policy' => "\u{0917}\u{094B}\u{092A}\u{0928}\u{0940}\u{092F}\u{0924}\u{093E} \u{0928}\u{0940}\u{0924}\u{093F}",
+                'terms_of_service' => "\u{0938}\u{0947}\u{0935}\u{093E} \u{0915}\u{0940} \u{0936}\u{0930}\u{094D}\u{0924}\u{0947}\u{0902}",
+                'refund_policy' => "\u{0930}\u{093F}\u{092B}\u{0902}\u{0921} \u{0928}\u{0940}\u{0924}\u{093F}",
+                'shipping_policy' => "\u{0936}\u{093F}\u{092A}\u{093F}\u{0902}\u{0917} \u{0928}\u{0940}\u{0924}\u{093F}",
+                'cookie_policy' => "\u{0915}\u{0941}\u{0915}\u{0940} \u{0928}\u{0940}\u{0924}\u{093F}",
+                'policy_info' => "\u{0928}\u{0940}\u{0924}\u{093F} \u{091C}\u{093E}\u{0928}\u{0915}\u{093E}\u{0930}\u{0940}",
+                'featured_pages' => "\u{092E}\u{0941}\u{0916}\u{094D}\u{092F} \u{092A}\u{0947}\u{091C}",
+                'all_pages' => "\u{0938}\u{092D}\u{0940} \u{092A}\u{0947}\u{091C}",
+                'all_rights_reserved' => "\u{0938}\u{0930}\u{094D}\u{0935}\u{093E}\u{0927}\u{093F}\u{0915}\u{093E}\u{0930} \u{0938}\u{0941}\u{0930}\u{0915}\u{094D}\u{0937}\u{093F}\u{0924}\u{0964}",
+                'visitor_experience' => "\u{092A}\u{094D}\u{0932}\u{0947}\u{092F}\u{0930} \u{0905}\u{0928}\u{0941}\u{092D}\u{0935} \u{0915}\u{094B} \u{0932}\u{0917}\u{093E}\u{0924}\u{093E}\u{0930} \u{092C}\u{0947}\u{0939}\u{0924}\u{0930} \u{092C}\u{0928}\u{093E}\u{092F}\u{093E} \u{091C}\u{093E} \u{0930}\u{0939}\u{093E} \u{0939}\u{0948}\u{0964}",
+                'brief_description', 'brand_summary' => "\u{0915}\u{093E}\u{0930}\u{094D}\u{0921} \u{0917}\u{0947}\u{092E} APK \u{0921}\u{093E}\u{0909}\u{0928}\u{0932}\u{094B}\u{0921}, \u{0928}\u{093F}\u{092F}\u{092E} \u{0914}\u{0930} \u{0938}\u{0939}\u{093E}\u{092F}\u{0924}\u{093E} \u{0915}\u{0947} \u{0932}\u{093F}\u{090F} \u{092D}\u{0930}\u{094B}\u{0938}\u{0947}\u{092E}\u{0902}\u{0926} \u{0915}\u{0947}\u{0902}\u{0926}\u{094D}\u{0930}\u{0964}",
+                'site_name_fallback' => "\u{0935}\u{0947}\u{092C}\u{0938}\u{093E}\u{0907}\u{091F}",
+                default => '',
+            };
+        }
+        $labels = [
+            'en' => [
+                'home' => 'Home',
+                'about' => 'About',
+                'contact' => 'Contact',
+                'blog' => 'Blog',
+                'privacy_policy' => 'Privacy Policy',
+                'terms_of_service' => 'Terms of Service',
+                'refund_policy' => 'Refund Policy',
+                'shipping_policy' => 'Shipping Policy',
+                'cookie_policy' => 'Cookie Policy',
+                'policy_info' => 'Policy Info',
+                'featured_pages' => 'Featured Pages',
+                'all_pages' => 'All Pages',
+                'all_rights_reserved' => 'All rights reserved.',
+                'visitor_experience' => 'Always improving the visitor experience',
+                'brief_description' => 'A curated destination with clear information, trusted support, and simple next steps.',
+                'brand_summary' => 'A curated destination with clear information, trusted support, and simple next steps.',
+                'site_name_fallback' => 'Website',
+            ],
+            'th' => [
+                'home' => 'หน้าแรก',
+                'about' => 'เกี่ยวกับเรา',
+                'contact' => 'ติดต่อเรา',
+                'blog' => 'บทความ',
+                'privacy_policy' => 'นโยบายความเป็นส่วนตัว',
+                'terms_of_service' => 'ข้อกำหนดการใช้บริการ',
+                'refund_policy' => 'นโยบายการคืนเงิน',
+                'shipping_policy' => 'นโยบายการจัดส่ง',
+                'cookie_policy' => 'นโยบายคุกกี้',
+                'policy_info' => 'ข้อมูลนโยบาย',
+                'featured_pages' => 'หน้าสำคัญ',
+                'all_pages' => 'ทุกหน้า',
+                'all_rights_reserved' => 'สงวนลิขสิทธิ์',
+                'visitor_experience' => 'ปรับปรุงประสบการณ์ผู้เล่นอย่างต่อเนื่อง',
+                'brief_description' => 'เว็บไซต์เกมไพ่ APK ที่ช่วยให้ผู้เล่นดาวน์โหลดได้ง่าย อ่านกติกา และติดต่อทีมช่วยเหลือได้สะดวก',
+                'brand_summary' => 'เว็บไซต์เกมไพ่ APK ที่รวมข้อมูลดาวน์โหลด กติกา และช่องทางช่วยเหลือสำหรับผู้เล่น',
+                'site_name_fallback' => 'เว็บไซต์',
+            ],
+            'hi' => [
+                'home' => 'होम',
+                'about' => 'हमारे बारे में',
+                'contact' => 'संपर्क करें',
+                'blog' => 'ब्लॉग',
+                'privacy_policy' => 'गोपनीयता नीति',
+                'terms_of_service' => 'सेवा की शर्तें',
+                'refund_policy' => 'रिफंड नीति',
+                'shipping_policy' => 'शिपिंग नीति',
+                'cookie_policy' => 'कुकी नीति',
+                'policy_info' => 'नीति जानकारी',
+                'featured_pages' => 'मुख्य पेज',
+                'all_pages' => 'सभी पेज',
+                'all_rights_reserved' => 'सर्वाधिकार सुरक्षित।',
+                'visitor_experience' => 'खिलाड़ियों के अनुभव को लगातार बेहतर बनाया जा रहा है',
+                'brief_description' => 'एक कार्ड गेम APK साइट जहां खिलाड़ी डाउनलोड, नियम और सहायता जानकारी आसानी से पा सकते हैं',
+                'brand_summary' => 'डाउनलोड, नियम और सहायता जानकारी के साथ एक कार्ड गेम APK गाइड',
+                'site_name_fallback' => 'वेबसाइट',
+            ],
+            'zh' => [
+                'home' => '首页',
+                'about' => '关于我们',
+                'contact' => '联系我们',
+                'blog' => '博客',
+                'privacy_policy' => '隐私政策',
+                'terms_of_service' => '服务条款',
+                'refund_policy' => '退款政策',
+                'shipping_policy' => '配送政策',
+                'cookie_policy' => 'Cookie 政策',
+                'policy_info' => '政策信息',
+                'featured_pages' => '重点页面',
+                'all_pages' => '全部页面',
+                'all_rights_reserved' => '保留所有权利。',
+                'visitor_experience' => '持续优化玩家访问体验',
+                'brief_description' => '面向玩家的棋牌 APK 下载与规则支持站点，提供清晰信息和便捷帮助。',
+                'brand_summary' => '棋牌 APK 下载、规则与支持信息站点。',
+                'site_name_fallback' => '站点',
+            ],
+            'ru' => [
+                'home' => 'Главная',
+                'about' => 'О нас',
+                'contact' => 'Контакты',
+                'blog' => 'Блог',
+                'privacy_policy' => 'Политика конфиденциальности',
+                'terms_of_service' => 'Условия использования',
+                'refund_policy' => 'Политика возврата',
+                'shipping_policy' => 'Доставка',
+                'cookie_policy' => 'Политика Cookie',
+                'policy_info' => 'Правовая информация',
+                'featured_pages' => 'Основные разделы',
+                'all_pages' => 'Все разделы',
+                'all_rights_reserved' => 'Все права защищены.',
+                'visitor_experience' => 'Мы постоянно улучшаем впечатления посетителей.',
+                'brief_description' => 'Сайт APK для карточных игр с понятной информацией о загрузке, правилах и поддержке.',
+                'brand_summary' => 'Сайт APK для карточных игр с информацией о загрузке, правилах и поддержке.',
+                'site_name_fallback' => 'Сайт',
+            ],
+        ];
+
+        $family = $this->localeFamily($locale);
+        return (string)($labels[$family][$key] ?? '');
+    }
+
     private function localizePageTypeLabel(string $pageType, string $locale): string
     {
+        $localized = $this->lookupLocalizedPageTypeLabel($pageType, $locale);
+        if ($localized !== '') {
+            return $localized;
+        }
         if ($this->isRussianLocale($locale)) {
             return match ($pageType) {
                 Page::TYPE_HOME => 'Главная',
@@ -1425,6 +1639,11 @@ class AiSiteHtmlBlocksBuildService
 
     private function localizeBuildText(string $key, string $locale): string
     {
+        $localized = $this->lookupLocalizedBuildText($key, $locale);
+        if ($localized !== '') {
+            return $localized;
+        }
+
         if ($this->isRussianLocale($locale)) {
             return match ($key) {
                 'policy_info' => 'Правовая информация',
@@ -1496,13 +1715,13 @@ class AiSiteHtmlBlocksBuildService
 
         return match ($template) {
             'site_header' => [
-                'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
-                'site_tagline' => (string)($config['site_tagline'] ?? $websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''),
-                'current_page_label' => (string)($config['current_page_label'] ?? ''),
-                'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildHeaderNavItems($scope)),
+                'site_title' => $this->normalizePublicSiteLabel((string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''), $scope),
+                'site_tagline' => $this->normalizeHeaderLocaleText((string)($config['site_tagline'] ?? $websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''), 'brand_summary', $locale),
+                'current_page_label' => $this->normalizeHeaderPageLabel((string)($config['current_page_label'] ?? ''), $locale),
+                'nav_items' => $this->localizeKnownNavLabels($this->normalizeNavItems($config['nav_items'] ?? $this->buildHeaderNavItems($scope)), $locale),
             ],
             'site_footer' => [
-                'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
+                'site_title' => $this->normalizePublicSiteLabel((string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''), $scope),
                 'brief_description' => $this->normalizeFooterLocaleText(
                     (string)($config['brief_description'] ?? $pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope)),
                     'brief_description',
@@ -1516,6 +1735,7 @@ class AiSiteHtmlBlocksBuildService
                 'links.column3_title' => $this->normalizeFooterLocaleText((string)($config['links.column3_title'] ?? ($footerGroups['column3_title'] ?? 'All Pages')), 'all_pages', $locale),
                 'links.column3_items' => $this->normalizeFooterNavItems($config['links.column3_items'] ?? ($footerGroups['column3_items'] ?? $this->buildFooterNavItems($scope)), $scope),
                 'nav_items' => $this->normalizeFooterNavItems($config['nav_items'] ?? $this->buildFooterNavItems($scope), $scope),
+                'visitor_experience' => $this->localizeBuildText('visitor_experience', $locale),
             ],
             'cards' => [
                 'section_title' => (string)($config['section_title'] ?? ''),
@@ -1593,6 +1813,21 @@ class AiSiteHtmlBlocksBuildService
      */
     private function localizeKnownNavLabels(array $items, string $locale): array
     {
+        foreach ($items as &$item) {
+            $label = \trim((string)($item['label'] ?? ''));
+            $canonical = $this->canonicalNavLabelKey($label, (string)($item['href'] ?? ''), (string)($item['type'] ?? ''));
+            if ($canonical === '') {
+                continue;
+            }
+            $localized = $this->localizeBuildText($canonical, $locale);
+            if ($localized !== '' && $localized !== $canonical) {
+                $item['label'] = $localized;
+            }
+        }
+        unset($item);
+
+        return $items;
+
         if (!$this->isRussianLocale($locale)) {
             return $items;
         }
@@ -1619,6 +1854,18 @@ class AiSiteHtmlBlocksBuildService
     private function normalizeFooterLocaleText(string $value, string $fallbackKey, string $locale): string
     {
         $normalized = \preg_replace('/\s+/u', ' ', \trim($value)) ?? \trim($value);
+        if ($normalized === '') {
+            return $this->localizeBuildText($fallbackKey, $locale);
+        }
+
+        if ($this->isGenericFooterBoilerplate($normalized) || ($this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($normalized))) {
+            return $this->localizeBuildText($fallbackKey, $locale);
+        }
+
+        if (($this->isThaiLocale($locale) || $this->isHindiLocale($locale)) && $fallbackKey !== 'brief_description' && $this->looksLikeEnglishNavOrFooterLabel($normalized)) {
+            return $this->localizeBuildText($fallbackKey, $locale);
+        }
+
         if ($this->isRussianLocale($locale)) {
             $englishBoilerplate = [
                 'A curated destination with clear information, trusted support, and simple next steps.',
@@ -1635,6 +1882,177 @@ class AiSiteHtmlBlocksBuildService
         }
 
         return $value;
+    }
+
+    private function normalizeHeaderLocaleText(string $value, string $fallbackKey, string $locale): string
+    {
+        $normalized = \preg_replace('/\s+/u', ' ', \trim($value)) ?? \trim($value);
+        if ($normalized === '') {
+            return '';
+        }
+        if ($this->isGenericFooterBoilerplate($normalized) || ($this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($normalized))) {
+            return $this->localizeBuildText($fallbackKey, $locale);
+        }
+
+        return $value;
+    }
+
+    private function normalizeHeaderPageLabel(string $value, string $locale): string
+    {
+        $normalized = \preg_replace('/\s+/u', ' ', \trim($value)) ?? \trim($value);
+        if ($normalized === '') {
+            return '';
+        }
+
+        $canonical = $this->canonicalNavLabelKey($normalized);
+        if ($canonical !== '') {
+            return $this->localizeBuildText($canonical, $locale);
+        }
+        if ($this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($normalized)) {
+            return '';
+        }
+
+        return $value;
+    }
+
+    private function normalizePublicSiteLabel(string $value, array $scope): string
+    {
+        $label = \preg_replace('/\b(?:website\s*profile|websiteProfile|site\s*profile|profile_json|scope_json|target_domain)\b/iu', '', $value) ?? $value;
+        $label = \preg_replace('/\s+/u', ' ', \trim($label)) ?? \trim($label);
+        if ($label !== '') {
+            return $label;
+        }
+
+        foreach ([
+            $scope['site_title'] ?? null,
+            $scope['site_name'] ?? null,
+            $scope['brand_name'] ?? null,
+            $scope['website_profile']['site_title'] ?? null,
+            $scope['website_profile']['brand_name'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $candidateLabel = \preg_replace('/\b(?:website\s*profile|websiteProfile|site\s*profile|profile_json|scope_json|target_domain)\b/iu', '', (string)$candidate) ?? (string)$candidate;
+            $candidateLabel = \preg_replace('/\s+/u', ' ', \trim($candidateLabel)) ?? \trim($candidateLabel);
+            if ($candidateLabel !== '') {
+                return $candidateLabel;
+            }
+        }
+
+        return $this->localizeBuildText('site_name_fallback', $this->resolveContentLocale($scope)) ?: 'Website';
+    }
+
+    private function canonicalNavLabelKey(string $label, string $href = '', string $type = ''): string
+    {
+        $typeMap = [
+            Page::TYPE_HOME => 'home',
+            Page::TYPE_ABOUT => 'about',
+            Page::TYPE_CONTACT => 'contact',
+            Page::TYPE_BLOG_LIST => 'blog',
+            Page::TYPE_BLOG => 'blog',
+            Page::TYPE_PRIVACY_POLICY => 'privacy_policy',
+            Page::TYPE_TERMS_OF_SERVICE => 'terms_of_service',
+            Page::TYPE_REFUND_POLICY => 'refund_policy',
+            Page::TYPE_SHIPPING_POLICY => 'shipping_policy',
+            Page::TYPE_COOKIE_POLICY => 'cookie_policy',
+            'policy_info' => 'policy_info',
+        ];
+        if (isset($typeMap[$type])) {
+            return $typeMap[$type];
+        }
+
+        $normalized = \strtolower(\trim(\preg_replace('/[\s\-_]+/u', ' ', $label) ?? $label));
+        $labelMap = [
+            'home' => 'home',
+            'homepage' => 'home',
+            'front page' => 'home',
+            'about' => 'about',
+            'about us' => 'about',
+            'contact' => 'contact',
+            'contact us' => 'contact',
+            'blog' => 'blog',
+            'news' => 'blog',
+            'privacy policy' => 'privacy_policy',
+            'privacy' => 'privacy_policy',
+            'terms of service' => 'terms_of_service',
+            'terms' => 'terms_of_service',
+            'refund policy' => 'refund_policy',
+            'shipping policy' => 'shipping_policy',
+            'cookie policy' => 'cookie_policy',
+            'policy info' => 'policy_info',
+            'policies' => 'policy_info',
+        ];
+        if (isset($labelMap[$normalized])) {
+            return $labelMap[$normalized];
+        }
+
+        $path = \strtolower(\trim(\parse_url($href, PHP_URL_PATH) ?: $href));
+        $path = '/' . \trim($path, '/');
+        return match ($path) {
+            '/', '/home', '/index' => 'home',
+            '/about', '/about-us' => 'about',
+            '/contact', '/contact-us' => 'contact',
+            '/blog', '/news' => 'blog',
+            '/privacy', '/privacy-policy' => 'privacy_policy',
+            '/terms', '/terms-of-service' => 'terms_of_service',
+            '/refund', '/refund-policy' => 'refund_policy',
+            '/shipping', '/shipping-policy' => 'shipping_policy',
+            '/cookie', '/cookie-policy' => 'cookie_policy',
+            default => '',
+        };
+    }
+
+    private function isGenericFooterBoilerplate(string $value): bool
+    {
+        $normalized = \strtolower(\trim(\preg_replace('/\s+/u', ' ', $value) ?? $value));
+        return \in_array($normalized, [
+            'a curated destination with clear information, trusted support, and simple next steps.',
+            'featured',
+            'featured pages',
+            'policy info',
+            'policies',
+            'all pages',
+            'all rights reserved.',
+            'always improving the visitor experience',
+            'website',
+            'site profile',
+            'website profile',
+            'websiteprofile',
+        ], true);
+    }
+
+    private function looksLikeEnglishNavOrFooterLabel(string $value): bool
+    {
+        return \preg_match('/^(?:featured|featured pages|policy info|policies|all pages|home|about|contact|blog|privacy policy|terms of service|all rights reserved\.?|always improving the visitor experience)$/iu', \trim($value)) === 1;
+    }
+
+    private function localeFamily(string $locale): string
+    {
+        $locale = \trim($locale);
+        if ($this->isThaiLocale($locale)) {
+            return 'th';
+        }
+        if ($this->isHindiLocale($locale)) {
+            return 'hi';
+        }
+        if ($this->isChineseLocale($locale)) {
+            return 'zh';
+        }
+        if ($this->isRussianLocale($locale)) {
+            return 'ru';
+        }
+        return 'en';
+    }
+
+    private function isThaiLocale(string $locale): bool
+    {
+        return \preg_match('/^th(?:[_-]|$)/i', \trim($locale)) === 1;
+    }
+
+    private function isHindiLocale(string $locale): bool
+    {
+        return \preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', \trim($locale)) === 1;
     }
 
     /**

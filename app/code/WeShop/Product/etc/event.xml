@@ -24,6 +24,10 @@
     <event name="WeShop_Product::product_delete_before">
         <observer name="WeShop_Product::product_url_rewrite_cleanup" instance="WeShop\Product\Observer\ProductUrlRewriteObserver" disabled="false" shared="true" sort="100"/>
     </event>
+
+    <event name="Weline_Server::dispatcher::warmup_paths">
+        <observer name="WeShop_Product::dispatcher_warmup_paths" instance="WeShop\Product\Observer\DispatcherWarmupPaths" disabled="false" shared="true" sort="30"/>
+    </event>
     
     <!-- 注意：其他事件定义在 event.php 中，此文件仅用于注册观察者 -->
     <!-- 如果事件没有观察者，则不需要在此文件中定义 -->

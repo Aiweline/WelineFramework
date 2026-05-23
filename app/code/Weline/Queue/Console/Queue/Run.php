@@ -52,6 +52,28 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->success(__('正确示例：php bin/w queue:run --id=%{1}', $id));
             exit();
         }
+        $takeoverOnly = !empty($args['takeover-only']) || !empty($args['no-execute']);
+        if ($force && $takeoverOnly) {
+            $this->printing->note('Force takeover now returns after releasing the queue; execution remains owned by the system scheduler.');
+            $takeover = w_query('queue', 'takeover', [
+                'queue_id' => (int)$id,
+                'force' => true,
+                'owner' => 'system_scheduler',
+                'reason' => 'queue_run_takeover_only',
+                'mark_force_rebuild' => true,
+                'clear_output' => false,
+            ]);
+            $message = \is_array($takeover)
+                ? (string)($takeover['message'] ?? 'Queue takeover completed; waiting for system scheduler.')
+                : 'Queue takeover completed; waiting for system scheduler.';
+            if (!\is_array($takeover) || empty($takeover['success'])) {
+                $this->printing->error($message);
+                exit();
+            }
+            $this->printing->note($message);
+
+            return $message;
+        }
         $currentPid = (int)getmypid();
         $existingPid = (int)($queue->getPid() ?: 0);
         $existingStatus = \trim((string)$queue->getStatus());
@@ -71,6 +93,24 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 exit();
             }
             $this->printing->warning(__('强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先终止旧任务再继续。', [$id, (string)($existingPid > 0 ? $existingPid : '-')]));
+            $takeover = w_query('queue', 'takeover', [
+                'queue_id' => (int)$id,
+                'force' => true,
+                'owner' => 'system_scheduler',
+                'reason' => 'queue_run_force_takeover',
+                'mark_force_rebuild' => true,
+                'clear_output' => false,
+            ]);
+            $message = \is_array($takeover)
+                ? (string)($takeover['message'] ?? 'Queue takeover completed; waiting for system scheduler.')
+                : 'Queue takeover completed; waiting for system scheduler.';
+            if (!\is_array($takeover) || empty($takeover['success'])) {
+                $this->printing->error($message);
+                exit();
+            }
+            $this->printing->note($message);
+
+            return $message;
             if ($existingPid > 0 && $existingPid !== $currentPid && Processer::isRunningByPid($existingPid)) {
                 $killed = (bool)Processer::killByPid($existingPid, true);
                 if (!$killed) {

@@ -12,8 +12,6 @@ $GLOBALS['__weshop_order_account_orders_rendered'] = true;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
-use WeShop\Order\Model\Order;
-use WeShop\Order\Model\OrderItem;
 use WeShop\Order\Service\OrderService;
 
 $customerSession = SessionFactory::getInstance()->createFrontendSession();
@@ -25,292 +23,67 @@ if (!$customer || !$customer->getId()) {
 
 /** @var OrderService $orderService */
 $orderService = ObjectManager::getInstance(OrderService::class);
-$customerId = (int)$customer->getId();
-$currentPage = max(1, (int)($this->request->getParam('order_page') ?? 1));
-$defaultPageSize = 10;
-$maxPageSize = 50;
-$requestedPageSize = (int)($this->request->getParam('order_page_size') ?? $defaultPageSize);
-$pageSize = min($maxPageSize, max($defaultPageSize, $requestedPageSize));
-$result = $orderService->getCustomerOrders($customerId, $currentPage, $pageSize);
-$unpaidOrders = $orderService->getUnpaidOrders($customerId);
-$orders = (array)($result['items'] ?? []);
-$totalOrders = max(0, (int)($result['total'] ?? count($orders)));
-$pagination = (array)($result['pagination'] ?? []);
-$totalPages = max(1, (int)($pagination['total_pages'] ?? (int)ceil($totalOrders / $pageSize)));
-if ($currentPage > $totalPages) {
-    $currentPage = $totalPages;
-    $result = $orderService->getCustomerOrders($customerId, $currentPage, $pageSize);
-    $orders = (array)($result['items'] ?? []);
-    $totalOrders = max(0, (int)($result['total'] ?? count($orders)));
-    $pagination = (array)($result['pagination'] ?? []);
-    $totalPages = max(1, (int)($pagination['total_pages'] ?? (int)ceil($totalOrders / $pageSize)));
-}
+$statusFilterOptions = $orderService->getAvailableStatuses();
+$requestParams = $this->request->getParams();
+$requestedOrderStatus = trim((string)($requestParams['order_status'] ?? ''));
+$activeOrderStatus = $requestedOrderStatus !== '' && isset($statusFilterOptions[$requestedOrderStatus])
+    ? $requestedOrderStatus
+    : '';
+$pageSize = min(50, max(10, (int)($requestParams['order_page_size'] ?? 10)));
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-$buildPageUrl = static function (int $page) use ($pageSize): string {
-    $query = http_build_query([
-        'order_page' => max(1, $page),
-        'order_page_size' => $pageSize,
-    ]);
-
-    return '/customer/account/index?' . $query . '#orders';
-};
-$buildReturnsUrl = static function (int $orderId, string $orderIncrementId, string $returnAnchor, int $orderPage, int $orderPageSize): string {
-    $context = [
-        'order_id' => $orderId,
-    ];
-    if ($orderIncrementId !== '') {
-        $context['order_increment_id'] = $orderIncrementId;
-    }
-
-    if ($returnAnchor !== '') {
-        $context['return_anchor'] = $returnAnchor;
-    }
-
-    $returnUrl = '/customer/account/index?' . http_build_query([
-        'order_page' => max(1, $orderPage),
-        'order_page_size' => max(1, $orderPageSize),
-    ]) . '#orders';
-
-    $context['return_url'] = $returnUrl;
-
-    return '/customer/account/index?' . http_build_query($context) . '#returns';
-};
-$statusText = [
-    OrderService::STATUS_PENDING => __('待处理'),
-    OrderService::STATUS_PROCESSING => __('处理中'),
-    OrderService::STATUS_PAID => __('已支付'),
-    OrderService::STATUS_FULFILLED => __('已发货'),
-    OrderService::STATUS_COMPLETED => __('已完成'),
-    OrderService::STATUS_CANCELLED => __('已取消'),
-    OrderService::STATUS_REFUNDED => __('已退款'),
+$orderJsText = [
+    'noticeTitle' => __('订单通知'),
+    'noticeSuccessTitle' => __('订单已更新'),
+    'noticeWarningTitle' => __('请确认操作'),
+    'noticeErrorTitle' => __('操作失败'),
+    'confirmText' => __('知道了'),
+    'cancelText' => __('取消'),
+    'cancelOrderTitle' => __('取消订单'),
+    'confirmCancelText' => __('确认取消'),
+    'rethinkText' => __('再想想'),
+    'cancellingOrder' => __('正在取消订单...'),
+    'cancelOrderFailed' => __('取消订单失败'),
+    'statusCancelled' => __('已取消'),
+    'orderCancelled' => __('订单已取消。'),
+    'ordersFragmentFailed' => __('订单列表加载失败，请稍后重试'),
+    'ordersLoading' => __('订单加载中...'),
+    'unpaidAlertTitle' => __('您有 %{1} 个订单待支付'),
+    'unpaidAlertHint' => __('请及时完成支付，避免订单自动取消。支付流程会在当前个人中心页面打开。'),
 ];
 ?>
 
-<div class="weshop-account-orders" id="weshop-account-orders">
-    <?php if ($unpaidOrders !== []): ?>
-        <div class="weshop-unpaid-orders-alert">
-            <div class="weshop-alert-content">
-                <i class="ri-error-warning-line weshop-alert-icon" aria-hidden="true"></i>
-                <div class="weshop-alert-text">
-                    <strong><?= __('您有 %{1} 个订单待支付', [count($unpaidOrders)]) ?></strong>
-                    <p><?= __('请及时完成支付，避免订单自动取消。支付流程会在当前个人中心页面打开。') ?></p>
-                </div>
-            </div>
-        </div>
-    <?php endif; ?>
+<div class="weshop-account-orders"
+     id="weshop-account-orders"
+     data-order-page-size="<?= (int)$pageSize ?>"
+     data-active-order-status="<?= $escape($activeOrderStatus) ?>"
+     data-orders-deferred="1">
+    <div class="weshop-unpaid-orders-alert" data-weshop-unpaid-alert hidden></div>
 
     <div class="weshop-orders-header">
         <h2 class="weshop-orders-title"><?= __('我的订单') ?></h2>
-        <a href="/customer/account/index#orders" class="weshop-view-all-link" data-account-nav-link="true" data-section="orders">
-            <?= __('查看全部') ?>
-            <i class="ri-arrow-right-s-line weshop-view-all-icon" aria-hidden="true"></i>
-        </a>
-    </div>
-
-    <div class="weshop-orders-list">
-        <?php if ($orders === []): ?>
-            <div class="weshop-empty-orders">
-                <i class="ri-shopping-bag-line weshop-empty-orders-icon" aria-hidden="true"></i>
-                <p><?= __('您还没有订单') ?></p>
-                <a href="<?= $this->getUrl('weshop') ?>" class="weshop-shopping-button"><?= __('去购物') ?></a>
-            </div>
-        <?php else: ?>
-            <?php foreach ($orders as $orderIndex => $order): ?>
-                <?php
-                $orderId = (int)($order['order_id'] ?? $order[Order::schema_fields_ID] ?? 0);
-                $incrementId = (string)($order['increment_id'] ?? $order[Order::schema_fields_increment_id] ?? $orderId);
-                $orderCardId = 'order-card-' . ($orderId > 0 ? $orderId : ((int)$orderIndex + 1));
-                $status = (string)($order['status'] ?? $order[Order::schema_fields_status] ?? OrderService::STATUS_PENDING);
-                $paymentStatus = (string)($order['payment_status'] ?? $order[Order::schema_fields_payment_status] ?? OrderService::PAYMENT_STATUS_PENDING);
-                $total = (float)($order['total'] ?? $order[Order::schema_fields_total] ?? 0);
-                $createdAt = (string)($order['created_at'] ?? $order[Order::schema_fields_created_at] ?? '');
-                $paymentMethod = (string)($order['payment_method'] ?? $order[Order::schema_fields_payment_method] ?? '');
-                $shippingMethod = (string)($order['shipping_method'] ?? $order[Order::schema_fields_shipping_method] ?? '');
-                $fulfillmentStatus = (string)($order['fulfillment_status'] ?? $order[Order::schema_fields_fulfillment_status] ?? '');
-                $statusLabel = $statusText[$status] ?? $status;
-                $isUnpaid = in_array($paymentStatus, [OrderService::PAYMENT_STATUS_PENDING, OrderService::PAYMENT_STATUS_FAILED], true);
-                $canRetryPayment = $orderId > 0 && $orderService->canRetryPayment($orderId, $customerId);
-                $cancelCheck = $orderId > 0 ? $orderService->canCancelOrder($orderId, $customerId) : ['can_cancel' => false];
-                $canCancel = !empty($cancelCheck['can_cancel']);
-                $cancelReason = (string)($cancelCheck['reason'] ?? '');
-                $requireReturn = !empty($cancelCheck['require_return']);
-                $requireRefund = !empty($cancelCheck['require_refund']);
-                $orderItems = $orderId > 0 ? $orderService->getOrderItems($orderId) : [];
-                $visibleOrderItems = array_slice($orderItems, 0, 3);
-                $remainingItemCount = max(0, count($orderItems) - count($visibleOrderItems));
-                $checkoutUrl = $this->getUrl('checkout', ['order_id' => $orderId]);
-                $createdLabel = $createdAt !== '' ? date('Y-m-d H:i', strtotime($createdAt)) : '-';
-                $returnLink = $buildReturnsUrl($orderId, $incrementId, $orderCardId, $currentPage, $pageSize);
-                $returnUrl = $buildPageUrl($currentPage);
-                ?>
-                <article class="weshop-order-item <?= $isUnpaid ? 'unpaid' : '' ?>" id="<?= $escape($orderCardId) ?>" data-order-card data-order-id="<?= $orderId ?>">
-                    <div class="weshop-order-header">
-                        <div class="weshop-order-info">
-                            <span class="weshop-order-number"><?= __('订单号：%{1}', [$incrementId]) ?></span>
-                            <span class="weshop-order-date"><?= $escape($createdLabel) ?></span>
-                        </div>
-                        <div class="weshop-order-status">
-                            <span class="weshop-status-badge status-<?= $escape($status) ?>"><?= $statusLabel ?></span>
-                            <?php if ($isUnpaid): ?>
-                                <span class="weshop-payment-badge payment-failed"><?= __('待支付') ?></span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <div class="weshop-order-content">
-                        <div class="weshop-order-amount">
-                            <span class="weshop-amount-label"><?= __('订单金额：') ?></span>
-                            <span class="weshop-amount-value"><?= $this->formatPrice($total) ?></span>
-                        </div>
-                        <div class="weshop-order-products-summary">
-                            <?php if ($visibleOrderItems === []): ?>
-                                <span class="weshop-order-muted"><?= __('订单商品快照缺失，请重新导入订单数据') ?></span>
-                            <?php else: ?>
-                                <?php foreach ($visibleOrderItems as $summaryItem): ?>
-                                    <?php
-                                    $summaryName = (string)($summaryItem[OrderItem::schema_fields_PRODUCT_NAME] ?? $summaryItem['product_name'] ?? '');
-                                    $summarySku = (string)($summaryItem[OrderItem::schema_fields_PRODUCT_SKU] ?? $summaryItem['product_sku'] ?? '');
-                                    $summaryImage = (string)($summaryItem[OrderItem::schema_fields_PRODUCT_IMAGE] ?? $summaryItem['product_image'] ?? $summaryItem['image'] ?? '');
-                                    $summaryQty = (int)($summaryItem[OrderItem::schema_fields_QUANTITY] ?? $summaryItem['quantity'] ?? 1);
-                                    $summaryPrice = (float)($summaryItem[OrderItem::schema_fields_PRICE] ?? $summaryItem['price'] ?? 0);
-                                    $summaryTotal = (float)($summaryItem[OrderItem::schema_fields_TOTAL] ?? $summaryItem['total'] ?? 0);
-                                    ?>
-                                    <div class="weshop-order-product-row">
-                                        <div class="weshop-order-product-image">
-                                            <?php if ($summaryImage !== ''): ?>
-                                                <img src="<?= $escape($summaryImage) ?>" alt="<?= $escape($summaryName) ?>" loading="lazy">
-                                            <?php else: ?>
-                                                <i class="ri-image-line" aria-hidden="true"></i>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div class="weshop-order-product-main">
-                                            <strong><?= $escape($summaryName !== '' ? $summaryName : '-') ?></strong>
-                                            <?php if ($summarySku !== ''): ?><span>SKU: <?= $escape($summarySku) ?></span><?php endif; ?>
-                                        </div>
-                                        <span>x<?= $summaryQty ?></span>
-                                        <span><?= $this->formatPrice($summaryPrice) ?></span>
-                                        <strong><?= $this->formatPrice($summaryTotal) ?></strong>
-                                    </div>
-                                <?php endforeach; ?>
-                                <?php if ($remainingItemCount > 0): ?>
-                                    <button type="button" class="weshop-order-more-items" data-order-toggle="details"><?= __('还有 %{1} 件商品，查看详情', [$remainingItemCount]) ?></button>
-                                <?php endif; ?>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <div class="weshop-order-actions">
-                        <button type="button" class="weshop-action-link" data-order-toggle="details" aria-expanded="false"><?= __('查看详情') ?></button>
-
-                        <?php if ($canRetryPayment): ?>
-                            <button type="button" class="weshop-action-button weshop-retry-payment-button" data-order-toggle="payment" data-checkout-url="<?= $escape($checkoutUrl) ?>" aria-expanded="false">
-                                <i class="ri-bank-card-line" aria-hidden="true"></i>
-                                <?= __('继续支付') ?>
-                            </button>
-                        <?php endif; ?>
-
-                        <?php if ($canCancel): ?>
-                            <?php $cancelConfirmMessage = $requireRefund ? __('确定要取消此订单吗？取消后将自动退款。') : __('确定要取消此订单吗？'); ?>
-                            <button type="button" class="weshop-action-button weshop-cancel-button" data-order-cancel data-confirm-message="<?= $escape($cancelConfirmMessage) ?>">
-                                <i class="ri-close-circle-line" aria-hidden="true"></i>
-                                <?= __('取消订单') ?>
-                            </button>
-                        <?php elseif ($requireReturn): ?>
-                            <a href="<?= $escape($returnLink) ?>" class="weshop-action-button weshop-return-button js-account-rma-trigger" data-account-nav-link="true" data-section="returns" data-order-id="<?= (int)$orderId ?>" data-order-increment-id="<?= $escape($incrementId) ?>" data-return-anchor="<?= $escape($orderCardId) ?>" data-return-url="<?= $escape($returnUrl) ?>" title="<?= $escape($cancelReason) ?>">
-                                <i class="ri-exchange-line" aria-hidden="true"></i>
-                                <?= __('申请退货') ?>
-                            </a>
-                        <?php elseif ($cancelReason !== ''): ?>
-                            <span class="weshop-cancel-disabled" title="<?= $escape($cancelReason) ?>"><?= __('不可取消') ?></span>
-                        <?php endif; ?>
-                    </div>
-
-                    <section class="weshop-order-panel" data-order-panel="details" hidden>
-                        <div class="weshop-order-panel__header">
-                            <h3><?= __('订单详情') ?></h3>
-                            <div class="weshop-order-panel__meta">
-                                <span><?= $escape($incrementId) ?></span>
-                                <button type="button" class="weshop-order-panel__close" data-order-close><?= __('返回订单位置') ?></button>
-                            </div>
-                        </div>
-                        <div class="weshop-order-detail-grid">
-                            <div><span><?= __('订单状态') ?></span><strong><?= $statusLabel ?></strong></div>
-                            <div><span><?= __('支付状态') ?></span><strong><?= $isUnpaid ? __('待支付') : $escape($paymentStatus) ?></strong></div>
-                            <div><span><?= __('配送状态') ?></span><strong><?= $escape($fulfillmentStatus !== '' ? $fulfillmentStatus : '-') ?></strong></div>
-                            <div><span><?= __('支付方式') ?></span><strong><?= $escape($paymentMethod !== '' ? $paymentMethod : '-') ?></strong></div>
-                            <div><span><?= __('配送方式') ?></span><strong><?= $escape($shippingMethod !== '' ? $shippingMethod : '-') ?></strong></div>
-                            <div><span><?= __('订单金额') ?></span><strong><?= $this->formatPrice($total) ?></strong></div>
-                        </div>
-                        <div class="weshop-order-items-inline">
-                            <h4><?= __('订单商品') ?></h4>
-                            <?php if ($orderItems === []): ?>
-                                <p class="weshop-order-muted"><?= __('订单商品快照缺失，请重新导入订单数据') ?></p>
-                            <?php else: ?>
-                                <?php foreach ($orderItems as $item): ?>
-                                    <?php
-                                    $itemName = (string)($item[OrderItem::schema_fields_PRODUCT_NAME] ?? $item['product_name'] ?? '');
-                                    $itemSku = (string)($item[OrderItem::schema_fields_PRODUCT_SKU] ?? $item['product_sku'] ?? '');
-                                    $itemImage = (string)($item[OrderItem::schema_fields_PRODUCT_IMAGE] ?? $item['product_image'] ?? $item['image'] ?? '');
-                                    $itemQty = (int)($item[OrderItem::schema_fields_QUANTITY] ?? $item['quantity'] ?? 1);
-                                    $itemTotal = (float)($item[OrderItem::schema_fields_TOTAL] ?? $item['total'] ?? 0);
-                                    ?>
-                                    <div class="weshop-order-item-line">
-                                        <div class="weshop-order-product-image">
-                                            <?php if ($itemImage !== ''): ?>
-                                                <img src="<?= $escape($itemImage) ?>" alt="<?= $escape($itemName) ?>" loading="lazy">
-                                            <?php else: ?>
-                                                <i class="ri-image-line" aria-hidden="true"></i>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div>
-                                            <strong><?= $escape($itemName !== '' ? $itemName : '-') ?></strong>
-                                            <span><?= $escape($itemSku) ?></span>
-                                        </div>
-                                        <div><?= __('×%{1}', [$itemQty]) ?></div>
-                                        <div><?= $this->formatPrice($itemTotal) ?></div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </div>
-                    </section>
-
-                    <?php if ($canRetryPayment): ?>
-                        <section class="weshop-order-panel weshop-order-payment-panel" data-order-panel="payment" hidden>
-                            <div class="weshop-order-panel__header">
-                                <h3><?= __('继续支付') ?></h3>
-                                <span><?= __('订单号：%{1}', [$incrementId]) ?></span>
-                            </div>
-                            <p class="weshop-order-muted"><?= __('支付流程会嵌入当前个人中心页面，不再跳到独立订单页。') ?></p>
-                            <iframe class="weshop-order-checkout-frame" title="<?= $escape(__('继续支付')) ?>" data-src="<?= $escape($checkoutUrl) ?>"></iframe>
-                        </section>
-                    <?php endif; ?>
-                </article>
+        <nav class="weshop-orders-filters" aria-label="<?= $escape(__('订单状态筛选')) ?>">
+            <button type="button"
+                    class="weshop-orders-filter<?= $activeOrderStatus === '' ? ' is-active' : '' ?>"
+                    data-order-status-filter
+                    data-order-status=""
+                    aria-pressed="<?= $activeOrderStatus === '' ? 'true' : 'false' ?>">
+                <?= __('全部') ?>
+            </button>
+            <?php foreach ($statusFilterOptions as $statusCode => $statusLabel): ?>
+                <button type="button"
+                        class="weshop-orders-filter<?= $activeOrderStatus === $statusCode ? ' is-active' : '' ?>"
+                        data-order-status-filter
+                        data-order-status="<?= $escape((string)$statusCode) ?>"
+                        aria-pressed="<?= $activeOrderStatus === $statusCode ? 'true' : 'false' ?>">
+                    <?= $statusLabel ?>
+                </button>
             <?php endforeach; ?>
-        <?php endif; ?>
-    </div>
-    <?php if ($totalPages > 1): ?>
-        <nav class="weshop-order-pagination" aria-label="Order pagination">
-            <?php if ($currentPage > 1): ?>
-                <a href="<?= $escape($buildPageUrl($currentPage - 1)) ?>">Prev</a>
-            <?php else: ?>
-                <span class="is-disabled">Prev</span>
-            <?php endif; ?>
-
-            <?php for ($page = 1; $page <= $totalPages; $page++): ?>
-                <?php if ($page === $currentPage): ?>
-                    <span class="is-active"><?= $page ?></span>
-                <?php else: ?>
-                    <a href="<?= $escape($buildPageUrl($page)) ?>"><?= $page ?></a>
-                <?php endif; ?>
-            <?php endfor; ?>
-
-            <?php if ($currentPage < $totalPages): ?>
-                <a href="<?= $escape($buildPageUrl($currentPage + 1)) ?>">Next</a>
-            <?php else: ?>
-                <span class="is-disabled">Next</span>
-            <?php endif; ?>
         </nav>
-    <?php endif; ?>
+    </div>
+
+    <div class="weshop-orders-body is-loading" data-weshop-orders-body>
+        <div class="weshop-orders-loading" aria-live="polite"><?= __('订单加载中...') ?></div>
+    </div>
 
     <div class="weshop-order-notice" data-order-notice hidden>
         <div class="weshop-order-notice__backdrop" data-order-notice-dismiss></div>
@@ -331,15 +104,42 @@ $statusText = [
 </div>
 
 <style>
-    .weshop-account-orders { margin-top: 0; scroll-margin-top: 8rem; }
+    .weshop-account-orders {
+        margin-top: 0;
+        scroll-margin-top: 8rem;
+        --weshop-orders-accent: var(--color-primary, var(--weshop-primary, #2563eb));
+        --weshop-orders-accent-strong: var(--color-primary-dark, var(--weshop-primary-hover, var(--weshop-orders-accent)));
+        --weshop-orders-accent-border: var(--color-primary-border, var(--weshop-orders-accent));
+        --weshop-orders-accent-surface: color-mix(in srgb, var(--weshop-orders-accent) 16%, var(--weshop-surface, var(--weshop-background, #fff)));
+    }
     .weshop-unpaid-orders-alert { background-color: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.3); border-radius: var(--weshop-border-radius-lg); padding: 1rem; margin-bottom: 1.5rem; }
     .weshop-alert-content { display: flex; align-items: flex-start; gap: 0.75rem; }
     .weshop-alert-icon { color: #ffc107; font-size: 1.5rem; flex-shrink: 0; }
     .weshop-alert-text strong { display: block; color: var(--weshop-text-primary); margin-bottom: 0.25rem; }
     .weshop-alert-text p { color: var(--weshop-text-secondary); font-size: var(--weshop-font-size-sm); margin: 0; }
-    .weshop-orders-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-    .weshop-orders-title { font-size: 1.5rem; font-weight: var(--weshop-font-weight-bold); color: var(--weshop-text-primary); margin: 0; }
-    .weshop-view-all-link { display: flex; align-items: center; gap: 0.25rem; color: var(--weshop-primary); text-decoration: none; font-size: var(--weshop-font-size-sm); font-weight: var(--weshop-font-weight-medium); }
+    .weshop-orders-header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; margin-bottom: 1.5rem; }
+    .weshop-orders-title { flex: 0 0 auto; font-size: 1.5rem; font-weight: var(--weshop-font-weight-bold); color: var(--weshop-text-primary); margin: 0; }
+    .weshop-orders-filters { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 0.5rem; min-width: 0; }
+    .weshop-orders-filter { display: inline-flex; align-items: center; padding: 0.35rem 0.85rem; border-radius: var(--weshop-border-radius-full); border: 1px solid var(--weshop-border); background: var(--weshop-surface); color: var(--weshop-text-secondary); cursor: pointer; font-family: inherit; font-size: var(--weshop-font-size-xs); font-weight: var(--weshop-font-weight-medium); white-space: nowrap; transition: color 0.2s, border-color 0.2s, background-color 0.2s; }
+    .weshop-orders-filter:disabled { opacity: 0.65; cursor: wait; }
+    .weshop-orders-body.is-loading { opacity: 0.55; pointer-events: none; }
+    .weshop-orders-loading { color: var(--weshop-text-secondary); font-size: var(--weshop-font-size-sm); padding: 2rem 0; text-align: center; }
+    .weshop-orders-filter:hover {
+        color: var(--weshop-orders-accent-strong);
+        border-color: var(--weshop-orders-accent-border);
+        background: var(--weshop-orders-accent-surface);
+    }
+    .weshop-orders-filter.is-active {
+        color: var(--weshop-orders-accent-strong);
+        border-color: transparent;
+        background: var(--weshop-orders-accent-surface);
+        font-weight: var(--weshop-font-weight-bold, 700);
+    }
+    .weshop-orders-filter.is-active:hover {
+        color: var(--weshop-orders-accent-strong);
+        border-color: transparent;
+        background: var(--weshop-orders-accent-surface);
+    }
     .weshop-orders-list { display: flex; flex-direction: column; gap: 1.25rem; max-height: min(72vh, 960px); overflow-y: auto; overscroll-behavior: contain; padding: 0.25rem 0.5rem 0.75rem 0.25rem; margin: -0.25rem -0.5rem 0 -0.25rem; }
     .weshop-orders-list::-webkit-scrollbar { width: 0.5rem; }
     .weshop-orders-list::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.06); border-radius: 999px; }
@@ -398,8 +198,14 @@ $statusText = [
     .weshop-empty-orders p { color: var(--weshop-text-secondary); margin: 1rem 0; }
     .weshop-shopping-button { display: inline-block; padding: 0.75rem 2rem; background-color: var(--weshop-primary); color: white; text-decoration: none; border-radius: var(--weshop-border-radius-lg); font-weight: var(--weshop-font-weight-medium); }
     .weshop-order-pagination { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 1.5rem; }
-    .weshop-order-pagination a, .weshop-order-pagination span { min-width: 2.25rem; padding: 0.5rem 0.75rem; border: 1px solid var(--weshop-border); border-radius: var(--weshop-border-radius-lg); text-align: center; text-decoration: none; color: var(--weshop-text-primary); background: var(--weshop-surface); }
-    .weshop-order-pagination .is-active { border-color: var(--weshop-primary); background: var(--weshop-primary); color: #fff; }
+    .weshop-order-pagination a, .weshop-order-pagination button, .weshop-order-pagination span { min-width: 2.25rem; padding: 0.5rem 0.75rem; border: 1px solid var(--weshop-border); border-radius: var(--weshop-border-radius-lg); text-align: center; text-decoration: none; color: var(--weshop-text-primary); background: var(--weshop-surface); }
+    .weshop-order-pagination button { cursor: pointer; font-family: inherit; font-size: inherit; }
+    .weshop-order-pagination .is-active {
+        border-color: transparent;
+        background: var(--weshop-orders-accent-surface);
+        color: var(--weshop-orders-accent-strong);
+        font-weight: var(--weshop-font-weight-bold, 700);
+    }
     .weshop-order-pagination .is-disabled { opacity: 0.45; }
     .weshop-order-notice { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 1.5rem; opacity: 0; pointer-events: none; transition: opacity 0.22s ease; }
     .weshop-order-notice.is-visible { opacity: 1; pointer-events: auto; }
@@ -421,12 +227,13 @@ $statusText = [
     .weshop-order-notice__button--primary.is-success { background: linear-gradient(135deg, #16a34a, #15803d); box-shadow: 0 12px 24px rgba(22, 163, 74, 0.22); }
     .weshop-order-notice__button--primary.is-warning { background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 12px 24px rgba(245, 158, 11, 0.22); }
     .weshop-order-notice__button--primary.is-error { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 12px 24px rgba(239, 68, 68, 0.22); }
-    @media (max-width: 768px) { .weshop-orders-list { max-height: none; overflow-y: visible; padding: 0; margin: 0; } .weshop-order-detail-grid, .weshop-order-item-line, .weshop-order-product-row { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .weshop-orders-header { flex-direction: column; align-items: stretch; } .weshop-orders-filters { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 0.25rem; -webkit-overflow-scrolling: touch; } .weshop-orders-list { max-height: none; overflow-y: visible; padding: 0; margin: 0; } .weshop-order-detail-grid, .weshop-order-item-line, .weshop-order-product-row { grid-template-columns: 1fr; } }
     @media (max-width: 640px) { .weshop-order-notice__dialog { width: min(100%, 22rem); padding: 1.1rem; } .weshop-order-notice__actions { flex-direction: column-reverse; } .weshop-order-notice__button { width: 100%; } }
 </style>
 
 <script>
 (function () {
+    var orderText = <?= json_encode($orderJsText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     var orderApiPromise = null;
     var noticeTimer = 0;
     var noticeResolver = null;
@@ -516,10 +323,10 @@ $statusText = [
         }
 
         parts.badge.innerHTML = '<i class="' + iconMap[type] + '"></i>';
-        parts.title.textContent = (options && options.title) || '订单通知';
+        parts.title.textContent = (options && options.title) || orderText.noticeTitle;
         parts.message.textContent = (options && options.message) || '';
-        parts.confirm.textContent = (options && options.confirmText) || '知道了';
-        parts.cancel.textContent = (options && options.cancelText) || '取消';
+        parts.confirm.textContent = (options && options.confirmText) || orderText.confirmText;
+        parts.cancel.textContent = (options && options.cancelText) || orderText.cancelText;
         parts.cancel.hidden = mode !== 'confirm';
 
         parts.root.hidden = false;
@@ -544,10 +351,10 @@ $statusText = [
 
     function notifyOrder(message, type, duration) {
         var titleMap = {
-            info: '订单通知',
-            success: '订单已更新',
-            warning: '请确认操作',
-            error: '操作失败'
+            info: orderText.noticeTitle,
+            success: orderText.noticeSuccessTitle,
+            warning: orderText.noticeWarningTitle,
+            error: orderText.noticeErrorTitle
         };
         var normalizedType = normalizeNoticeType(type);
         return openNotice({
@@ -597,10 +404,10 @@ $statusText = [
         return openNotice({
             mode: 'confirm',
             type: 'warning',
-            title: '取消订单',
+            title: orderText.cancelOrderTitle,
             message: message,
-            confirmText: '确认取消',
-            cancelText: '再想想'
+            confirmText: orderText.confirmCancelText,
+            cancelText: orderText.rethinkText
         });
     }
 
@@ -613,35 +420,412 @@ $statusText = [
         confirmCancel(button.getAttribute('data-confirm-message') || '').then(function (confirmed) {
             if (!confirmed) return;
             button.disabled = true;
-            notifyOrder('正在取消订单...', 'info', 1200);
+            notifyOrder(orderText.cancellingOrder, 'info', 1200);
             getOrderApi()
                 .then(function (OrderApi) { return OrderApi.cancel({ order_id: orderId }); })
                 .then(function (payload) {
                     if (!payload || payload.success === false) {
-                        throw new Error((payload && payload.message) || '取消订单失败');
+                        throw new Error((payload && payload.message) || orderText.cancelOrderFailed);
                     }
                     var statusBadge = card.querySelector('.weshop-status-badge');
                     if (statusBadge) {
-                        statusBadge.textContent = '已取消';
+                        statusBadge.textContent = orderText.statusCancelled;
                         statusBadge.className = 'weshop-status-badge status-cancelled';
                     }
                     card.classList.remove('unpaid');
                     var paymentBadge = card.querySelector('.weshop-payment-badge');
                     if (paymentBadge) paymentBadge.remove();
                     card.querySelectorAll('[data-order-cancel], [data-order-toggle="payment"]').forEach(function (item) { item.remove(); });
-                    notifyOrder((payload && payload.message) || '订单已取消。', 'success', 2200);
+                    notifyOrder((payload && payload.message) || orderText.orderCancelled, 'success', 2200);
                 })
                 .catch(function (error) {
                     button.disabled = false;
-                    notifyOrder(error && error.message ? error.message : '取消订单失败', 'error', 3200);
+                    notifyOrder(error && error.message ? error.message : orderText.cancelOrderFailed, 'error', 3200);
                 });
         });
     }
 
+    function executeInsertedScripts(container) {
+        if (!container) return;
+        Array.prototype.slice.call(container.querySelectorAll('script')).forEach(function (oldScript) {
+            var script = document.createElement('script');
+            Array.prototype.slice.call(oldScript.attributes).forEach(function (attribute) {
+                script.setAttribute(attribute.name, attribute.value);
+            });
+            script.text = oldScript.textContent || '';
+            oldScript.parentNode.replaceChild(script, oldScript);
+        });
+    }
+
+    function escapeOrdersHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function formatOrdersLabel(pattern, arg) {
+        return String(pattern || '').replace('%{1}', String(arg == null ? '' : arg));
+    }
+
+    function renderSummaryItems(order, labels) {
+        if (!order.summary_items || order.summary_items.length === 0) {
+            return '<span class="weshop-order-muted">' + escapeOrdersHtml(labels.items_missing) + '</span>';
+        }
+        var html = '';
+        order.summary_items.forEach(function (item) {
+            html += '<div class="weshop-order-product-row">'
+                + '<div class="weshop-order-product-image">'
+                + (item.image
+                    ? '<img src="' + escapeOrdersHtml(item.image) + '" alt="' + escapeOrdersHtml(item.name) + '" loading="lazy">'
+                    : '<i class="ri-image-line" aria-hidden="true"></i>')
+                + '</div>'
+                + '<div class="weshop-order-product-main"><strong>' + escapeOrdersHtml(item.name) + '</strong>'
+                + (item.sku ? '<span>SKU: ' + escapeOrdersHtml(item.sku) + '</span>' : '')
+                + '</div><span>x' + escapeOrdersHtml(item.qty) + '</span>'
+                + '<span>' + escapeOrdersHtml(item.price_formatted) + '</span>'
+                + '<strong>' + escapeOrdersHtml(item.total_formatted) + '</strong></div>';
+        });
+        if (order.remaining_item_count > 0) {
+            html += '<button type="button" class="weshop-order-more-items" data-order-toggle="details">'
+                + escapeOrdersHtml(formatOrdersLabel(labels.more_items, order.remaining_item_count))
+                + '</button>';
+        }
+        return html;
+    }
+
+    function renderDetailItems(order, labels) {
+        if (!order.has_detail_items) {
+            return '<p class="weshop-order-muted">' + escapeOrdersHtml(labels.items_missing) + '</p>';
+        }
+        var html = '';
+        (order.detail_items || []).forEach(function (item) {
+            html += '<div class="weshop-order-item-line">'
+                + '<div class="weshop-order-product-image">'
+                + (item.image
+                    ? '<img src="' + escapeOrdersHtml(item.image) + '" alt="' + escapeOrdersHtml(item.name) + '" loading="lazy">'
+                    : '<i class="ri-image-line" aria-hidden="true"></i>')
+                + '</div><div><strong>' + escapeOrdersHtml(item.name) + '</strong><span>' + escapeOrdersHtml(item.sku) + '</span></div>'
+                + '<div>' + escapeOrdersHtml(formatOrdersLabel(labels.qty, item.qty)) + '</div>'
+                + '<div>' + escapeOrdersHtml(item.total_formatted) + '</div></div>';
+        });
+        return html;
+    }
+
+    function renderOrderCard(order, labels) {
+        var unpaidClass = order.is_unpaid ? ' unpaid' : '';
+        var html = '<article class="weshop-order-item' + unpaidClass + '" id="' + escapeOrdersHtml(order.card_id)
+            + '" data-order-card data-order-id="' + escapeOrdersHtml(order.order_id) + '">'
+            + '<div class="weshop-order-header"><div class="weshop-order-info">'
+            + '<span class="weshop-order-number">' + escapeOrdersHtml(formatOrdersLabel(labels.order_number, order.increment_id)) + '</span>'
+            + '<span class="weshop-order-date">' + escapeOrdersHtml(order.created_label) + '</span></div>'
+            + '<div class="weshop-order-status"><span class="weshop-status-badge status-' + escapeOrdersHtml(order.status) + '">'
+            + escapeOrdersHtml(order.status_label) + '</span>'
+            + (order.is_unpaid ? '<span class="weshop-payment-badge payment-failed">' + escapeOrdersHtml(labels.pending_payment) + '</span>' : '')
+            + '</div></div><div class="weshop-order-content"><div class="weshop-order-amount">'
+            + '<span class="weshop-amount-label">' + escapeOrdersHtml(labels.amount_label) + '</span>'
+            + '<span class="weshop-amount-value">' + escapeOrdersHtml(order.total_formatted) + '</span></div>'
+            + '<div class="weshop-order-products-summary">' + renderSummaryItems(order, labels) + '</div></div>'
+            + '<div class="weshop-order-actions"><button type="button" class="weshop-action-link" data-order-toggle="details" aria-expanded="false">'
+            + escapeOrdersHtml(labels.view_details) + '</button>';
+        if (order.can_retry_payment) {
+            html += '<button type="button" class="weshop-action-button weshop-retry-payment-button" data-order-toggle="payment" data-checkout-url="'
+                + escapeOrdersHtml(order.checkout_url) + '" aria-expanded="false"><i class="ri-bank-card-line" aria-hidden="true"></i>'
+                + escapeOrdersHtml(labels.continue_payment) + '</button>';
+        }
+        if (order.can_cancel) {
+            html += '<button type="button" class="weshop-action-button weshop-cancel-button" data-order-cancel data-confirm-message="'
+                + escapeOrdersHtml(order.cancel_confirm_message) + '"><i class="ri-close-circle-line" aria-hidden="true"></i>'
+                + escapeOrdersHtml(labels.cancel_order) + '</button>';
+        } else if (order.require_return) {
+            html += '<a href="' + escapeOrdersHtml(order.return_link) + '" class="weshop-action-button weshop-return-button js-account-rma-trigger" data-account-nav-link="true" data-section="returns" data-order-id="'
+                + escapeOrdersHtml(order.order_id) + '" data-order-increment-id="' + escapeOrdersHtml(order.increment_id) + '" data-return-anchor="'
+                + escapeOrdersHtml(order.card_id) + '" data-return-url="' + escapeOrdersHtml(order.return_url) + '" title="'
+                + escapeOrdersHtml(order.cancel_reason) + '"><i class="ri-exchange-line" aria-hidden="true"></i>'
+                + escapeOrdersHtml(labels.request_return) + '</a>';
+        } else if (order.cancel_reason) {
+            html += '<span class="weshop-cancel-disabled" title="' + escapeOrdersHtml(order.cancel_reason) + '">'
+                + escapeOrdersHtml(labels.cannot_cancel) + '</span>';
+        }
+        html += '</div><section class="weshop-order-panel" data-order-panel="details" hidden><div class="weshop-order-panel__header"><h3>'
+            + escapeOrdersHtml(labels.order_details) + '</h3><div class="weshop-order-panel__meta"><span>'
+            + escapeOrdersHtml(order.increment_id) + '</span><button type="button" class="weshop-order-panel__close" data-order-close>'
+            + escapeOrdersHtml(labels.back_to_order) + '</button></div></div><div class="weshop-order-detail-grid">'
+            + '<div><span>' + escapeOrdersHtml(labels.order_status) + '</span><strong>' + escapeOrdersHtml(order.status_label) + '</strong></div>'
+            + '<div><span>' + escapeOrdersHtml(labels.payment_status) + '</span><strong>'
+            + escapeOrdersHtml(order.is_unpaid ? labels.pending_payment : order.payment_status) + '</strong></div>'
+            + '<div><span>' + escapeOrdersHtml(labels.fulfillment_status) + '</span><strong>' + escapeOrdersHtml(order.fulfillment_status) + '</strong></div>'
+            + '<div><span>' + escapeOrdersHtml(labels.payment_method) + '</span><strong>' + escapeOrdersHtml(order.payment_method) + '</strong></div>'
+            + '<div><span>' + escapeOrdersHtml(labels.shipping_method) + '</span><strong>' + escapeOrdersHtml(order.shipping_method) + '</strong></div>'
+            + '<div><span>' + escapeOrdersHtml(labels.order_amount) + '</span><strong>' + escapeOrdersHtml(order.total_formatted) + '</strong></div>'
+            + '</div><div class="weshop-order-items-inline"><h4>' + escapeOrdersHtml(labels.order_items) + '</h4>'
+            + renderDetailItems(order, labels) + '</div></section>';
+        if (order.can_retry_payment) {
+            html += '<section class="weshop-order-panel weshop-order-payment-panel" data-order-panel="payment" hidden><div class="weshop-order-panel__header"><h3>'
+                + escapeOrdersHtml(labels.continue_payment) + '</h3><span>' + escapeOrdersHtml(formatOrdersLabel(labels.order_number, order.increment_id)) + '</span></div>'
+                + '<p class="weshop-order-muted">' + escapeOrdersHtml(labels.payment_panel_hint) + '</p>'
+                + '<iframe class="weshop-order-checkout-frame" title="' + escapeOrdersHtml(labels.continue_payment) + '" data-src="'
+                + escapeOrdersHtml(order.checkout_url) + '"></iframe></section>';
+        }
+        html += '</article>';
+        return html;
+    }
+
+    function renderOrdersPagination(payload, labels) {
+        if (!payload || payload.total_pages <= 1) {
+            return '';
+        }
+        var currentPage = payload.current_page || 1;
+        var totalPages = payload.total_pages || 1;
+        var html = '<nav class="weshop-order-pagination" aria-label="' + escapeOrdersHtml(labels.pagination) + '">';
+        if (currentPage > 1) {
+            html += '<button type="button" data-order-page="' + (currentPage - 1) + '">' + escapeOrdersHtml(labels.prev) + '</button>';
+        } else {
+            html += '<span class="is-disabled">' + escapeOrdersHtml(labels.prev) + '</span>';
+        }
+        for (var page = 1; page <= totalPages; page++) {
+            if (page === currentPage) {
+                html += '<span class="is-active">' + page + '</span>';
+            } else {
+                html += '<button type="button" data-order-page="' + page + '">' + page + '</button>';
+            }
+        }
+        if (currentPage < totalPages) {
+            html += '<button type="button" data-order-page="' + (currentPage + 1) + '">' + escapeOrdersHtml(labels.next) + '</button>';
+        } else {
+            html += '<span class="is-disabled">' + escapeOrdersHtml(labels.next) + '</span>';
+        }
+        html += '</nav>';
+        return html;
+    }
+
+    function renderOrdersBody(bodyMount, payload) {
+        var labels = payload.labels || {};
+        var html = '<div class="weshop-orders-list">';
+        if (!payload.orders || payload.orders.length === 0) {
+            html += '<div class="weshop-empty-orders"><i class="ri-shopping-bag-line weshop-empty-orders-icon" aria-hidden="true"></i><p>'
+                + escapeOrdersHtml(payload.is_filtered_empty ? labels.empty_filtered : labels.empty_all) + '</p>';
+            if (payload.is_filtered_empty) {
+                html += '<button type="button" class="weshop-shopping-button" data-order-status-filter data-order-status="">'
+                    + escapeOrdersHtml(labels.view_all_orders) + '</button>';
+            } else {
+                html += '<a href="' + escapeOrdersHtml(payload.shop_url || '/') + '" class="weshop-shopping-button">'
+                    + escapeOrdersHtml(labels.go_shopping) + '</a>';
+            }
+            html += '</div>';
+        } else {
+            payload.orders.forEach(function (order) {
+                html += renderOrderCard(order, labels);
+            });
+        }
+        html += '</div>' + renderOrdersPagination(payload, labels);
+        bodyMount.innerHTML = html;
+    }
+
+    function renderUnpaidAlert(root, unpaidCount) {
+        if (!root) {
+            return;
+        }
+
+        var alertMount = root.querySelector('[data-weshop-unpaid-alert]');
+        if (!alertMount) {
+            return;
+        }
+
+        var count = Math.max(0, parseInt(unpaidCount || 0, 10) || 0);
+        if (count <= 0) {
+            alertMount.hidden = true;
+            alertMount.innerHTML = '';
+            return;
+        }
+
+        alertMount.hidden = false;
+        alertMount.innerHTML = '<div class="weshop-alert-content">'
+            + '<i class="ri-error-warning-line weshop-alert-icon" aria-hidden="true"></i>'
+            + '<div class="weshop-alert-text"><strong>'
+            + escapeOrdersHtml(formatOrdersLabel(orderText.unpaidAlertTitle, count))
+            + '</strong><p>' + escapeOrdersHtml(orderText.unpaidAlertHint) + '</p></div></div>';
+    }
+
+    function initOrderFragmentLoader() {
+        var root = document.getElementById('weshop-account-orders');
+        if (!root || root.dataset.fragmentLoaderReady === '1') return;
+        root.dataset.fragmentLoaderReady = '1';
+
+        var bodyMount = root.querySelector('[data-weshop-orders-body]');
+        var fragmentLoading = false;
+        var fragmentRequestId = 0;
+
+        function getActiveOrderStatus() {
+            return root.getAttribute('data-active-order-status') || '';
+        }
+
+        function setActiveOrderStatus(status) {
+            root.setAttribute('data-active-order-status', status || '');
+        }
+
+        function setActiveOrderFilter(status) {
+            setActiveOrderStatus(status);
+            root.querySelectorAll('[data-order-status-filter]').forEach(function (button) {
+                var code = button.getAttribute('data-order-status') || '';
+                var active = code === (status || '');
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+        }
+
+        function syncOrdersUrlState(status, page) {
+            var url = new URL(window.location.href);
+            if (status) {
+                url.searchParams.set('order_status', status);
+            } else {
+                url.searchParams.delete('order_status');
+            }
+            if (page > 1) {
+                url.searchParams.set('order_page', String(page));
+            } else {
+                url.searchParams.delete('order_page');
+            }
+            var pageSize = root.getAttribute('data-order-page-size') || '';
+            if (pageSize !== '') {
+                url.searchParams.set('order_page_size', pageSize);
+            }
+            var nextUrl = url.pathname + url.search + '#orders';
+            history.replaceState({
+                order_status: status || '',
+                order_page: page
+            }, '', nextUrl);
+        }
+
+        function readOrdersStateFromUrl() {
+            var url = new URL(window.location.href);
+            return {
+                status: url.searchParams.get('order_status') || '',
+                page: Math.max(1, parseInt(url.searchParams.get('order_page') || '1', 10) || 1)
+            };
+        }
+
+        function loadOrdersFragment(status, page, options) {
+            if (!bodyMount || fragmentLoading) {
+                return Promise.resolve(false);
+            }
+
+            options = options || {};
+            var requestId = ++fragmentRequestId;
+            fragmentLoading = true;
+            bodyMount.classList.add('is-loading');
+            root.querySelectorAll('[data-order-status-filter]').forEach(function (button) {
+                button.disabled = true;
+            });
+
+            return getOrderApi()
+                .then(function (OrderApi) {
+                    return OrderApi.accountListFragment({
+                        order_status: status || '',
+                        order_page: Math.max(1, page || 1),
+                        order_page_size: parseInt(root.getAttribute('data-order-page-size') || '10', 10) || 10
+                    });
+                })
+                .then(function (payload) {
+                    if (!payload || requestId !== fragmentRequestId) {
+                        return false;
+                    }
+                    if (payload.success === false) {
+                        if (payload.redirect_url) {
+                            window.location.href = payload.redirect_url;
+                            return false;
+                        }
+                        throw new Error(payload.message || orderText.ordersFragmentFailed);
+                    }
+                    renderOrdersBody(bodyMount, payload);
+                    renderUnpaidAlert(root, payload.unpaid_count);
+                    executeInsertedScripts(bodyMount);
+                    var nextStatus = payload.active_order_status || status || '';
+                    var nextPage = payload.current_page || page || 1;
+                    setActiveOrderFilter(nextStatus);
+                    if (!options.skipUrlSync) {
+                        syncOrdersUrlState(nextStatus, nextPage);
+                    }
+                    return true;
+                })
+                .catch(function (error) {
+                    if (requestId === fragmentRequestId) {
+                        notifyOrder(error && error.message ? error.message : orderText.ordersFragmentFailed, 'error', 3200);
+                    }
+                    return false;
+                })
+                .finally(function () {
+                    if (requestId !== fragmentRequestId) {
+                        return;
+                    }
+                    fragmentLoading = false;
+                    bodyMount.classList.remove('is-loading');
+                    root.querySelectorAll('[data-order-status-filter]').forEach(function (button) {
+                        button.disabled = false;
+                    });
+                });
+        }
+
+        root.addEventListener('click', function (event) {
+            var statusFilter = event.target.closest('[data-order-status-filter]');
+            if (statusFilter && root.contains(statusFilter)) {
+                event.preventDefault();
+                var nextStatus = statusFilter.getAttribute('data-order-status') || '';
+                if (nextStatus === getActiveOrderStatus()) {
+                    return;
+                }
+                loadOrdersFragment(nextStatus, 1);
+                return;
+            }
+
+            var pageButton = event.target.closest('[data-order-page]');
+            if (pageButton && bodyMount && bodyMount.contains(pageButton)) {
+                event.preventDefault();
+                var targetPage = parseInt(pageButton.getAttribute('data-order-page') || '1', 10);
+                if (!targetPage || targetPage < 1) {
+                    return;
+                }
+                loadOrdersFragment(getActiveOrderStatus(), targetPage);
+            }
+        });
+
+        window.addEventListener('popstate', function () {
+            if (!window.location.hash || window.location.hash.indexOf('orders') === -1) {
+                return;
+            }
+            var state = readOrdersStateFromUrl();
+            loadOrdersFragment(state.status, state.page, { skipUrlSync: true }).then(function () {
+                setActiveOrderFilter(state.status);
+            });
+        });
+
+        function bootstrapOrdersData() {
+            if (root.dataset.ordersBootstrapped === '1') {
+                return;
+            }
+            root.dataset.ordersBootstrapped = '1';
+            var state = readOrdersStateFromUrl();
+            loadOrdersFragment(state.status, state.page);
+        }
+
+        window.addEventListener('weshop:orders-viewed', bootstrapOrdersData);
+        if (root.dataset.ordersDeferred === '1') {
+            bootstrapOrdersData();
+        }
+    }
+
     function initOrderInlineActions() {
         var root = document.getElementById('weshop-account-orders');
-        if (!root || root.dataset.inlineActionsReady === '1') return;
+        if (!root) {
+            return;
+        }
+        if (root.dataset.inlineActionsReady === '1') {
+            return;
+        }
         root.dataset.inlineActionsReady = '1';
+        initOrderFragmentLoader();
         root.addEventListener('click', function (event) {
             var dismiss = event.target.closest('[data-order-notice-dismiss]');
             if (dismiss) {
@@ -695,10 +879,16 @@ $statusText = [
         }
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initOrderInlineActions);
-    } else {
+    function bootstrapAccountOrders() {
         initOrderInlineActions();
     }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootstrapAccountOrders);
+    } else {
+        bootstrapAccountOrders();
+    }
+
+    window.addEventListener('weline:account-sidebar-content-loaded', bootstrapAccountOrders);
 })();
 </script>

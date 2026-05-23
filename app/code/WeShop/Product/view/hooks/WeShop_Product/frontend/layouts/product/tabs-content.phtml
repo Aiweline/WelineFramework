@@ -16,73 +16,6 @@ if ($productId <= 0) {
     return;
 }
 
-$__welineProductTabsCacheKey = null;
-$__welineProductTabsCache = null;
-$__welineProductTabsBufferStarted = false;
-$__welineProductHookTtl = 120;
-$__welineProductHookMemoryOptions = [
-    'connect_timeout' => 0.08,
-    'timeout' => 0.12,
-    'acquire_timeout' => 0.08,
-];
-try {
-    $__welineProductHookPolicy = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\CacheManager\Service\RuntimeCachePolicy::class);
-    $__welineProductHookTtl = $__welineProductHookPolicy->ttl('page.product_view_ttl', $__welineProductHookTtl);
-    $__welineProductHookMemoryOptions = $__welineProductHookPolicy->memoryOptions($__welineProductHookMemoryOptions);
-} catch (\Throwable) {
-}
-try {
-    if (\class_exists(\Weline\Framework\Runtime\Runtime::class, false)
-        && \Weline\Framework\Runtime\Runtime::isPersistent()
-        && \class_exists(\Weline\Server\Service\MemoryStateFacade::class)) {
-        $__welineProductTabsCacheKey = 'product.tabs.' . sha1(json_encode([
-            'product_id' => $productId,
-            'lang' => \Weline\Framework\App\State::getLang(),
-            'lang_local' => \Weline\Framework\App\State::getLangLocal(),
-            'currency' => \Weline\Framework\App\State::getCurrency(),
-            'product_sig' => [
-                $product['updated_at'] ?? null,
-                $product['description'] ?? null,
-                $product['specifications'] ?? null,
-            ],
-            'reviews_sig' => md5(json_encode($reviews, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: ''),
-            'qa_sig' => md5(json_encode($qa, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: ''),
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: (string)$productId);
-        $__welineLocalProductHookCache = $GLOBALS['weline_product_hook_output_cache'][$__welineProductTabsCacheKey] ?? null;
-        if (is_array($__welineLocalProductHookCache)
-            && (float)($__welineLocalProductHookCache['expires_at'] ?? 0) >= microtime(true)
-            && is_string($__welineLocalProductHookCache['html'] ?? null)) {
-            echo $__welineLocalProductHookCache['html'];
-            return;
-        }
-        $__welineProductTabsCache = $GLOBALS['weline_product_hook_cache_facade'] ?? null;
-        if (!$__welineProductTabsCache instanceof \Weline\Server\Service\MemoryStateFacade) {
-            $__welineProductTabsCache = new \Weline\Server\Service\MemoryStateFacade(array_merge([
-                'consumer_code' => 'weshop_product_hook',
-                'prefer_direct_connect' => true,
-            ], $__welineProductHookMemoryOptions, [
-                'pool_size' => 1,
-                'auto_start' => false,
-            ]));
-            $GLOBALS['weline_product_hook_cache_facade'] = $__welineProductTabsCache;
-        }
-        $__welineCachedProductTabs = $__welineProductTabsCache->get('weshop_product_hook', $__welineProductTabsCacheKey);
-        if (is_string($__welineCachedProductTabs)) {
-            $GLOBALS['weline_product_hook_output_cache'][$__welineProductTabsCacheKey] = [
-                'expires_at' => microtime(true) + $__welineProductHookTtl,
-                'html' => $__welineCachedProductTabs,
-            ];
-            echo $__welineCachedProductTabs;
-            return;
-        }
-        ob_start();
-        $__welineProductTabsBufferStarted = true;
-    }
-} catch (\Throwable) {
-    $__welineProductTabsCacheKey = null;
-    $__welineProductTabsCache = null;
-    $__welineProductTabsBufferStarted = false;
-}
 ?>
 <div class="border-b border-border-light dark:border-border-dark">
     <nav aria-label="Tabs" class="-mb-px flex space-x-8">
@@ -120,21 +53,3 @@ try {
 <div class="tab-content py-10 hidden" id="reviews-content">
     <w:hook name="WeShop_Review::frontend::layouts::product-reviews::content"/>
 </div>
-<?php
-if (isset($__welineProductTabsCacheKey, $__welineProductTabsCache)
-    && $__welineProductTabsCacheKey
-    && $__welineProductTabsCache instanceof \Weline\Server\Service\MemoryStateFacade
-    && $__welineProductTabsBufferStarted
-    && ob_get_level() > 0) {
-    $__welineProductTabsHtml = ob_get_clean();
-    echo $__welineProductTabsHtml;
-    $GLOBALS['weline_product_hook_output_cache'][$__welineProductTabsCacheKey] = [
-        'expires_at' => microtime(true) + $__welineProductHookTtl,
-        'html' => $__welineProductTabsHtml,
-    ];
-    try {
-        $__welineProductTabsCache->set('weshop_product_hook', $__welineProductTabsCacheKey, $__welineProductTabsHtml, $__welineProductHookTtl);
-    } catch (\Throwable) {
-    }
-}
-?>

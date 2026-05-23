@@ -54,6 +54,17 @@
 设置语言失败：%{1},"Failed to set language: %{1}"
 客服消息翻译,"Customer Service Message Translation"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"The customer service module requests translation service through this event. Event data includes text to be translated, source language, target language, etc. Translation modules can listen to this event and provide translation services."
+"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
+"Session and message content are required.","Session and message content are required."
+"Session ID is required.","Session ID is required."
+"Language code is required.","Language code is required."
+"Language updated.","Language updated."
+"Please enter a valid email address.","Please enter a valid email address."
+"Session token is required.","Session token is required."
+"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
+"Verification email has been sent.","Verification email has been sent."
+"Customer Service Query","Customer Service Query"
+"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
 "客服服务 - 邮箱绑定验证","Customer Service - Email Binding Verification"
 客服系统,"Customer Service System"
 客服服务,"Customer Service"
@@ -61,8 +72,6 @@
 设置,Settings
 收起,Minimize
 我的语言,"My Language"
-简体中文,"Simplified Chinese"
-繁體中文,"Traditional Chinese"
 显示模式,"Display Mode"
 仅显示译文,"Translation Only"
 原文+译文,"Original + Translation"
@@ -104,12 +113,10 @@
 分钟,minutes
 最长,Longest
 秒,seconds
-客服会话初始化失败，请稍后重试,"Customer Service Session Initialization Failed, Please Retry Later"
 欢迎使用客服服务,"Welcome to customer service"
+客服会话初始化失败，请稍后重试,"Customer Service Session Initialization Failed, Please Retry Later"
 鐎广垺婀囬崷銊у殠,"Menu Bar"
 "AI 智能客服","AI Customer Service"
-在线客服,"Live Support"
-离线,Offline
 鐎广垺婀囩粋鑽ゅ殠,Menu
 请输入有效的邮箱地址,"Please enter a valid email address"
 会话未初始化，请刷新页面重试,"Session not initialized, please refresh the page and try again"
@@ -161,6 +168,7 @@ ID,ID
 启用客服服务,"Enable Customer Service"
 启用,Enable
 默认客服语言,"Default Agent Language"
+简体中文,"Simplified Chinese"
 English,English
 默认客户语言,"Default Customer Language"
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","When no service agents are online, AI can be enabled to automatically reply to customer messages."

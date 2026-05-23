@@ -7,6 +7,7 @@ namespace WeShop\Cart\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use WeShop\Cart\Model\Cart as CartModel;
 use WeShop\Cart\Service\CartApiPayloadService;
+use WeShop\Cart\Service\CartCountCookieService;
 use WeShop\Cart\Service\CartService;
 use WeShop\Price\Service\PriceService;
 use WeShop\Product\Service\ConfigurableProductService;
@@ -187,7 +188,8 @@ class CartApiPayloadServiceTest extends TestCase
         ?CartService $cartService = null,
         ?ProductService $productService = null,
         ?ConfigurableProductService $configurableProductService = null,
-        ?PriceService $priceService = null
+        ?PriceService $priceService = null,
+        ?CartCountCookieService $cartCountCookieService = null
     ): CartApiPayloadService {
         if ($priceService === null) {
             $priceService = $this->createMock(PriceService::class);
@@ -196,11 +198,16 @@ class CartApiPayloadServiceTest extends TestCase
             );
         }
 
+        if ($cartCountCookieService === null) {
+            $cartCountCookieService = $this->createMock(CartCountCookieService::class);
+        }
+
         return new CartApiPayloadService(
             $cartService ?? $this->createMock(CartService::class),
             $productService ?? $this->createMock(ProductService::class),
             $configurableProductService ?? $this->createMock(ConfigurableProductService::class),
-            $priceService
+            $priceService,
+            $cartCountCookieService
         );
     }
 }

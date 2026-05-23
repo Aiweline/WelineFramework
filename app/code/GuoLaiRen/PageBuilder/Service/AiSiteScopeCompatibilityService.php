@@ -92,6 +92,20 @@ class AiSiteScopeCompatibilityService
         if (!\is_array($normalized['website_profile'] ?? null)) {
             $normalized['website_profile'] = [];
         }
+        $explicitContentLocale = $this->resolveExplicitContentLocale($normalized, $normalized['website_profile']);
+        if ($explicitContentLocale !== '') {
+            $normalized['content_locale'] = $explicitContentLocale;
+            $normalized['website_profile']['content_locale'] = $explicitContentLocale;
+            $normalized['locales'] = $this->prependLocaleToList(
+                \is_array($normalized['locales'] ?? null) ? $normalized['locales'] : [],
+                $explicitContentLocale
+            );
+        }
+        foreach ($normalized['page_type_layouts'] as $pageType => $layout) {
+            if (\is_array($layout)) {
+                $normalized['page_type_layouts'][$pageType] = $this->localizeSharedLayoutConfigForScope($layout, $normalized, (string)$pageType);
+            }
+        }
         $routeContractRaw = \is_array($scope['page_route_contract'] ?? null)
             ? $scope['page_route_contract']
             : (\is_array($scope['stage1_contract']['page_route_contract'] ?? null) ? $scope['stage1_contract']['page_route_contract'] : []);
@@ -665,7 +679,10 @@ class AiSiteScopeCompatibilityService
             $defaultLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
             $localizedLabel = $this->localizePageTypeLabel($pageType, $contentLocale);
             $currentTitle = \trim((string)($record['title'] ?? ''));
-            if ($currentTitle === '' || ($currentTitle === $defaultLabel && $localizedLabel !== '' && $localizedLabel !== $defaultLabel)) {
+            $localizedCurrentTitle = $this->localizeGenericPageTitle($currentTitle, $contentLocale);
+            if ($localizedCurrentTitle !== '' && $localizedCurrentTitle !== $currentTitle) {
+                $record['title'] = $localizedCurrentTitle;
+            } elseif ($currentTitle === '' || ($currentTitle === $defaultLabel && $localizedLabel !== '' && $localizedLabel !== $defaultLabel)) {
                 $label = $localizedLabel !== '' ? $localizedLabel : $defaultLabel;
                 $record['title'] = $pageType === Page::TYPE_HOME
                     ? ($siteTitle !== '' ? $siteTitle : $label)
@@ -891,6 +908,87 @@ class AiSiteScopeCompatibilityService
             (int)($raw['page_id'] ?? 0),
             (bool)($raw['use_original_template'] ?? false)
         );
+    }
+
+    /**
+     * @param array<string,mixed> $layout
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    public function localizeSharedLayoutConfigForScope(array $layout, array $scope, string $pageType = ''): array
+    {
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        $locale = $this->resolveContentLocale($scope, $websiteProfile);
+        if ($locale === '') {
+            return $layout;
+        }
+
+        if (\is_array($layout['header']['config'] ?? null)) {
+            $layout['header']['config'] = $this->localizeHeaderLayoutConfig($layout['header']['config'], $locale);
+        }
+        if (\is_array($layout['footer']['config'] ?? null)) {
+            $layout['footer']['config'] = $this->localizeFooterLayoutConfig($layout['footer']['config'], $locale);
+        }
+
+        return $layout;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function localizeHeaderLayoutConfig(array $config, string $locale): array
+    {
+        foreach (['navigation.items', 'nav_items'] as $key) {
+            if (\array_key_exists($key, $config)) {
+                $config[$key] = $this->localizeLinkItemsValue($config[$key], $locale);
+            }
+        }
+        foreach (['cta.text', 'cta.label'] as $key) {
+            if (\array_key_exists($key, $config) && $this->looksLikeEnglishNavOrFooterLabel((string)$config[$key])) {
+                $config[$key] = $this->localizeBuildText('download_now', $locale);
+            }
+        }
+
+        return $config;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function localizeFooterLayoutConfig(array $config, string $locale): array
+    {
+        $titleKeys = [
+            'links.column1_title' => 'featured_pages',
+            'links.column2_title' => 'policy_info',
+            'links.column3_title' => 'all_pages',
+            'copyright.text' => 'all_rights_reserved',
+        ];
+        foreach ($titleKeys as $key => $fallbackKey) {
+            if (!\array_key_exists($key, $config)) {
+                continue;
+            }
+            $value = \preg_replace('/\s+/u', ' ', \trim((string)$config[$key])) ?? \trim((string)$config[$key]);
+            if ($value === '' || $this->isGenericFooterBoilerplate($value) || $this->looksLikeEnglishNavOrFooterLabel($value) || ($this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($value))) {
+                $config[$key] = $this->localizeBuildText($fallbackKey, $locale);
+            }
+        }
+
+        foreach (['links.column1_items', 'links.column2_items', 'links.column3_items', 'nav_items'] as $key) {
+            if (\array_key_exists($key, $config)) {
+                $config[$key] = $this->localizeLinkItemsValue($config[$key], $locale);
+            }
+        }
+
+        if (\array_key_exists('brand.description', $config)) {
+            $description = \preg_replace('/\s+/u', ' ', \trim((string)$config['brand.description'])) ?? \trim((string)$config['brand.description']);
+            if ($description === '' || $this->isGenericFooterBoilerplate($description) || ($this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($description))) {
+                $config['brand.description'] = $this->localizeBuildText('brand_summary', $locale);
+            }
+        }
+
+        return $config;
     }
 
     /**
@@ -1267,18 +1365,416 @@ class AiSiteScopeCompatibilityService
      */
     private function resolveContentLocale(array $scope, array $websiteProfile): string
     {
-        return \trim((string)(
+        $explicit = \trim((string)(
             $scope['content_locale']
                 ?? $websiteProfile['content_locale']
-                ?? $scope['default_locale']
+                ?? ''
+        ));
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        $inferred = $this->inferContentLocaleFromBrief($scope, $websiteProfile);
+        if ($inferred !== '') {
+            return $inferred;
+        }
+
+        return \trim((string)(
+            $scope['default_locale']
                 ?? $scope['default_language']
                 ?? $websiteProfile['default_locale']
                 ?? ''
         ));
     }
 
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function resolveExplicitContentLocale(array $scope, array $websiteProfile): string
+    {
+        $explicit = \trim((string)($scope['content_locale'] ?? $websiteProfile['content_locale'] ?? ''));
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        return $this->inferContentLocaleFromBrief($scope, $websiteProfile);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function inferContentLocaleFromBrief(array $scope, array $websiteProfile): string
+    {
+        $parts = [];
+        foreach ([
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+            $scope['site_description'] ?? null,
+            $scope['source_brief'] ?? null,
+            $scope['requirements']['expanded_brief'] ?? null,
+            $scope['execution_blueprint']['site_brief']['summary'] ?? null,
+            $scope['execution_blueprint']['content_locale'] ?? null,
+            $scope['plan_json']['content_locale'] ?? null,
+            $scope['plan_json']['i18n']['content_locale'] ?? null,
+            $websiteProfile['brief_description'] ?? null,
+            $websiteProfile['_ai_profile']['source_brief'] ?? null,
+        ] as $candidate) {
+            if (\is_scalar($candidate)) {
+                $value = \trim((string)$candidate);
+                if ($value !== '') {
+                    $parts[] = $value;
+                }
+            }
+        }
+
+        $text = \implode("\n", $parts);
+        if ($text === '') {
+            return '';
+        }
+
+        if (\preg_match('/\bhi(?:[_-]IN)?\b|Hindi|Hindustani|Devanagari|印地语|印地文|印度语|हिन्दी|हिंदी/iu', $text) === 1) {
+            return 'hi_IN';
+        }
+        if (\preg_match('/\bth(?:[_-]TH)?\b|Thai|泰语|泰文|ภาษาไทย/iu', $text) === 1) {
+            return 'th_TH';
+        }
+        if (\preg_match('/\bzh(?:[_-](?:Hans|CN|SG))?\b|简体中文|中文|Chinese/iu', $text) === 1) {
+            return 'zh_Hans_CN';
+        }
+        if (\preg_match('/\bru(?:[_-]RU)?\b|Russian|俄语|русский/iu', $text) === 1) {
+            return 'ru_RU';
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<int|string, mixed> $locales
+     * @return list<string>
+     */
+    private function prependLocaleToList(array $locales, string $locale): array
+    {
+        $locale = \trim($locale);
+        $result = [];
+        if ($locale !== '') {
+            $result[] = $locale;
+        }
+        foreach ($locales as $item) {
+            $candidate = \trim((string)$item);
+            if ($candidate === '' || \in_array($candidate, $result, true)) {
+                continue;
+            }
+            $result[] = $candidate;
+        }
+
+        return $result;
+    }
+
+    private function localizeBuildText(string $key, string $locale): string
+    {
+        if ($this->isHindiLocale($locale)) {
+            return match ($key) {
+                'home' => "\u{0939}\u{094B}\u{092E}",
+                'about' => "\u{0939}\u{092E}\u{093E}\u{0930}\u{0947} \u{092C}\u{093E}\u{0930}\u{0947} \u{092E}\u{0947}\u{0902}",
+                'contact' => "\u{0938}\u{0902}\u{092A}\u{0930}\u{094D}\u{0915} \u{0915}\u{0930}\u{0947}\u{0902}",
+                'blog' => "\u{092C}\u{094D}\u{0932}\u{0949}\u{0917}",
+                'privacy_policy' => "\u{0917}\u{094B}\u{092A}\u{0928}\u{0940}\u{092F}\u{0924}\u{093E} \u{0928}\u{0940}\u{0924}\u{093F}",
+                'terms_of_service' => "\u{0938}\u{0947}\u{0935}\u{093E} \u{0915}\u{0940} \u{0936}\u{0930}\u{094D}\u{0924}\u{0947}\u{0902}",
+                'refund_policy' => "\u{0930}\u{093F}\u{092B}\u{0902}\u{0921} \u{0928}\u{0940}\u{0924}\u{093F}",
+                'shipping_policy' => "\u{0936}\u{093F}\u{092A}\u{093F}\u{0902}\u{0917} \u{0928}\u{0940}\u{0924}\u{093F}",
+                'cookie_policy' => "\u{0915}\u{0941}\u{0915}\u{0940} \u{0928}\u{0940}\u{0924}\u{093F}",
+                'policy_info' => "\u{0928}\u{0940}\u{0924}\u{093F} \u{091C}\u{093E}\u{0928}\u{0915}\u{093E}\u{0930}\u{0940}",
+                'featured_pages' => "\u{092E}\u{0941}\u{0916}\u{094D}\u{092F} \u{092A}\u{0947}\u{091C}",
+                'all_pages' => "\u{0938}\u{092D}\u{0940} \u{092A}\u{0947}\u{091C}",
+                'all_rights_reserved' => "\u{0938}\u{0930}\u{094D}\u{0935}\u{093E}\u{0927}\u{093F}\u{0915}\u{093E}\u{0930} \u{0938}\u{0941}\u{0930}\u{0915}\u{094D}\u{0937}\u{093F}\u{0924}\u{0964}",
+                'brand_summary' => "\u{0915}\u{093E}\u{0930}\u{094D}\u{0921} \u{0917}\u{0947}\u{092E} APK \u{0921}\u{093E}\u{0909}\u{0928}\u{0932}\u{094B}\u{0921}, \u{0928}\u{093F}\u{092F}\u{092E} \u{0914}\u{0930} \u{0938}\u{0939}\u{093E}\u{092F}\u{0924}\u{093E} \u{0915}\u{0947} \u{0932}\u{093F}\u{090F} \u{092D}\u{0930}\u{094B}\u{0938}\u{0947}\u{092E}\u{0902}\u{0926} \u{0915}\u{0947}\u{0902}\u{0926}\u{094D}\u{0930}\u{0964}",
+                'download_now' => "\u{0905}\u{092D}\u{0940} \u{0921}\u{093E}\u{0909}\u{0928}\u{0932}\u{094B}\u{0921} \u{0915}\u{0930}\u{0947}\u{0902}",
+                default => $key,
+            };
+        }
+        $labels = [
+            'en' => [
+                'home' => 'Home',
+                'about' => 'About',
+                'contact' => 'Contact',
+                'blog' => 'Blog',
+                'privacy_policy' => 'Privacy Policy',
+                'terms_of_service' => 'Terms of Service',
+                'refund_policy' => 'Refund Policy',
+                'shipping_policy' => 'Shipping Policy',
+                'cookie_policy' => 'Cookie Policy',
+                'policy_info' => 'Policy Info',
+                'featured_pages' => 'Featured Pages',
+                'all_pages' => 'All Pages',
+                'all_rights_reserved' => 'All rights reserved.',
+                'brand_summary' => 'A curated destination with clear information, trusted support, and simple next steps.',
+                'download_now' => 'Download Now',
+            ],
+            'th' => [
+                'home' => 'หน้าแรก',
+                'about' => 'เกี่ยวกับเรา',
+                'contact' => 'ติดต่อเรา',
+                'blog' => 'บทความ',
+                'privacy_policy' => 'นโยบายความเป็นส่วนตัว',
+                'terms_of_service' => 'ข้อกำหนดการใช้บริการ',
+                'refund_policy' => 'นโยบายการคืนเงิน',
+                'shipping_policy' => 'นโยบายการจัดส่ง',
+                'cookie_policy' => 'นโยบายคุกกี้',
+                'policy_info' => 'ข้อมูลนโยบาย',
+                'featured_pages' => 'หน้าสำคัญ',
+                'all_pages' => 'ทุกหน้า',
+                'all_rights_reserved' => 'สงวนลิขสิทธิ์',
+                'brand_summary' => 'เว็บไซต์เกมไพ่ APK ที่รวมข้อมูลดาวน์โหลด กติกา และช่องทางช่วยเหลือสำหรับผู้เล่น',
+                'download_now' => 'ดาวน์โหลดตอนนี้',
+            ],
+            'hi' => [
+                'home' => 'होम',
+                'about' => 'हमारे बारे में',
+                'contact' => 'संपर्क करें',
+                'blog' => 'ब्लॉग',
+                'privacy_policy' => 'गोपनीयता नीति',
+                'terms_of_service' => 'सेवा की शर्तें',
+                'refund_policy' => 'रिफंड नीति',
+                'shipping_policy' => 'शिपिंग नीति',
+                'cookie_policy' => 'कुकी नीति',
+                'policy_info' => 'नीति जानकारी',
+                'featured_pages' => 'मुख्य पेज',
+                'all_pages' => 'सभी पेज',
+                'all_rights_reserved' => 'सर्वाधिकार सुरक्षित।',
+                'brand_summary' => 'डाउनलोड, नियम और सहायता जानकारी के साथ एक कार्ड गेम APK गाइड',
+                'download_now' => 'अभी डाउनलोड करें',
+            ],
+            'zh' => [
+                'home' => '首页',
+                'about' => '关于我们',
+                'contact' => '联系我们',
+                'blog' => '博客',
+                'privacy_policy' => '隐私政策',
+                'terms_of_service' => '服务条款',
+                'refund_policy' => '退款政策',
+                'shipping_policy' => '配送政策',
+                'cookie_policy' => 'Cookie 政策',
+                'policy_info' => '政策信息',
+                'featured_pages' => '重点页面',
+                'all_pages' => '全部页面',
+                'all_rights_reserved' => '保留所有权利。',
+                'brand_summary' => '棋牌 APK 下载、规则与支持信息站点。',
+                'download_now' => '立即下载',
+            ],
+            'ru' => [
+                'home' => 'Главная',
+                'about' => 'О нас',
+                'contact' => 'Контакты',
+                'blog' => 'Блог',
+                'privacy_policy' => 'Политика конфиденциальности',
+                'terms_of_service' => 'Условия использования',
+                'refund_policy' => 'Политика возврата',
+                'shipping_policy' => 'Доставка',
+                'cookie_policy' => 'Политика Cookie',
+                'policy_info' => 'Правовая информация',
+                'featured_pages' => 'Основные разделы',
+                'all_pages' => 'Все разделы',
+                'all_rights_reserved' => 'Все права защищены.',
+                'brand_summary' => 'Сайт APK для карточных игр с информацией о загрузке, правилах и поддержке.',
+                'download_now' => 'Скачать сейчас',
+            ],
+        ];
+
+        $family = $this->localeFamily($locale);
+        return (string)($labels[$family][$key] ?? $key);
+    }
+
+    private function localizeLinkItemsValue(mixed $value, string $locale): mixed
+    {
+        if (\is_array($value)) {
+            $items = [];
+            $seen = [];
+            foreach ($value as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $label = (string)($item['label'] ?? $item['text'] ?? $item['name'] ?? '');
+                $href = (string)($item['href'] ?? $item['url'] ?? '#');
+                $canonical = $this->canonicalNavLabelKey($label, $href, (string)($item['type'] ?? ''));
+                if ($canonical !== '') {
+                    $localized = $this->localizeBuildText($canonical, $locale);
+                    $item['label'] = $localized;
+                    $item['text'] = $localized;
+                    $item['name'] = $localized;
+                }
+                $dedupe = \strtolower($href . '|' . (string)($item['label'] ?? $item['text'] ?? $item['name'] ?? ''));
+                if (isset($seen[$dedupe])) {
+                    continue;
+                }
+                $seen[$dedupe] = true;
+                $items[] = $item;
+            }
+
+            return $items;
+        }
+
+        $raw = \trim((string)$value);
+        if ($raw === '') {
+            return $value;
+        }
+
+        $lines = [];
+        $seen = [];
+        foreach (\preg_split('/\r?\n/', $raw) ?: [] as $line) {
+            $line = \trim((string)$line);
+            if ($line === '') {
+                continue;
+            }
+            [$label, $href] = \array_pad(\explode('=>', $line, 2), 2, '#');
+            $label = \trim((string)$label);
+            $href = \trim((string)$href);
+            $canonical = $this->canonicalNavLabelKey($label, $href);
+            if ($canonical !== '') {
+                $label = $this->localizeBuildText($canonical, $locale);
+            }
+            $dedupe = \strtolower($href . '|' . $label);
+            if (isset($seen[$dedupe])) {
+                continue;
+            }
+            $seen[$dedupe] = true;
+            $lines[] = $label . '=>' . ($href !== '' ? $href : '#');
+        }
+
+        return \implode("\n", $lines);
+    }
+
+    private function canonicalNavLabelKey(string $label, string $href = '', string $type = ''): string
+    {
+        $typeMap = [
+            Page::TYPE_HOME => 'home',
+            Page::TYPE_ABOUT => 'about',
+            Page::TYPE_CONTACT => 'contact',
+            Page::TYPE_BLOG_LIST => 'blog',
+            Page::TYPE_BLOG => 'blog',
+            Page::TYPE_PRIVACY_POLICY => 'privacy_policy',
+            Page::TYPE_TERMS_OF_SERVICE => 'terms_of_service',
+            Page::TYPE_REFUND_POLICY => 'refund_policy',
+            Page::TYPE_SHIPPING_POLICY => 'shipping_policy',
+            Page::TYPE_COOKIE_POLICY => 'cookie_policy',
+            'policy_info' => 'policy_info',
+        ];
+        if (isset($typeMap[$type])) {
+            return $typeMap[$type];
+        }
+
+        $normalized = \strtolower(\trim(\preg_replace('/[\s\-_]+/u', ' ', $label) ?? $label));
+        $labelMap = [
+            'home' => 'home',
+            'homepage' => 'home',
+            'about' => 'about',
+            'about us' => 'about',
+            'contact' => 'contact',
+            'contact us' => 'contact',
+            'blog' => 'blog',
+            'news' => 'blog',
+            'privacy policy' => 'privacy_policy',
+            'privacy' => 'privacy_policy',
+            'terms of service' => 'terms_of_service',
+            'terms' => 'terms_of_service',
+            'refund policy' => 'refund_policy',
+            'shipping policy' => 'shipping_policy',
+            'cookie policy' => 'cookie_policy',
+            'policy info' => 'policy_info',
+            'policies' => 'policy_info',
+        ];
+        if (isset($labelMap[$normalized])) {
+            return $labelMap[$normalized];
+        }
+
+        $path = \strtolower(\trim((string)(\parse_url($href, PHP_URL_PATH) ?: $href)));
+        $path = '/' . \trim($path, '/');
+        return match ($path) {
+            '/', '/home', '/index' => 'home',
+            '/about', '/about-us' => 'about',
+            '/contact', '/contact-us' => 'contact',
+            '/blog', '/news' => 'blog',
+            '/privacy', '/privacy-policy' => 'privacy_policy',
+            '/terms', '/terms-of-service' => 'terms_of_service',
+            '/refund', '/refund-policy' => 'refund_policy',
+            '/shipping', '/shipping-policy' => 'shipping_policy',
+            '/cookie', '/cookie-policy' => 'cookie_policy',
+            default => '',
+        };
+    }
+
+    private function localizeGenericPageTitle(string $title, string $locale): string
+    {
+        $canonical = $this->canonicalNavLabelKey($title);
+        if ($canonical === '') {
+            return '';
+        }
+
+        return $this->localizeBuildText($canonical, $locale);
+    }
+
+    private function isGenericFooterBoilerplate(string $value): bool
+    {
+        $normalized = \strtolower(\trim(\preg_replace('/\s+/u', ' ', $value) ?? $value));
+        return \in_array($normalized, [
+            'a curated destination with clear information, trusted support, and simple next steps.',
+            'featured',
+            'featured pages',
+            'quick links',
+            'policy info',
+            'policies',
+            'all pages',
+            'all rights reserved.',
+            'website',
+            'site profile',
+            'website profile',
+            'websiteprofile',
+        ], true);
+    }
+
+    private function looksLikeEnglishNavOrFooterLabel(string $value): bool
+    {
+        return \preg_match('/^(?:featured|featured pages|quick links|policy info|policies|all pages|home|about|contact|blog|privacy policy|terms of service|all rights reserved\.?|download now|download apk)$/iu', \trim($value)) === 1;
+    }
+
+    private function localeFamily(string $locale): string
+    {
+        $locale = \trim($locale);
+        if ($this->isThaiLocale($locale)) {
+            return 'th';
+        }
+        if ($this->isHindiLocale($locale)) {
+            return 'hi';
+        }
+        if ($this->isChineseLocale($locale)) {
+            return 'zh';
+        }
+        if ($this->isRussianLocale($locale)) {
+            return 'ru';
+        }
+
+        return 'en';
+    }
+
     private function localizePageTypeLabel(string $pageType, string $locale): string
     {
+        $label = match ($pageType) {
+            Page::TYPE_HOME => $this->localizeBuildText('home', $locale),
+            Page::TYPE_ABOUT => $this->localizeBuildText('about', $locale),
+            Page::TYPE_CONTACT => $this->localizeBuildText('contact', $locale),
+            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => $this->localizeBuildText('blog', $locale),
+            Page::TYPE_PRIVACY_POLICY => $this->localizeBuildText('privacy_policy', $locale),
+            Page::TYPE_TERMS_OF_SERVICE => $this->localizeBuildText('terms_of_service', $locale),
+            Page::TYPE_REFUND_POLICY => $this->localizeBuildText('refund_policy', $locale),
+            Page::TYPE_SHIPPING_POLICY => $this->localizeBuildText('shipping_policy', $locale),
+            Page::TYPE_COOKIE_POLICY => $this->localizeBuildText('cookie_policy', $locale),
+            default => '',
+        };
+        if ($label !== '') {
+            return $label;
+        }
+
         $isZh = $this->isChineseLocale($locale);
         $isJa = $this->isJapaneseLocale($locale);
         $isKo = $this->isKoreanLocale($locale);
@@ -1310,5 +1806,30 @@ class AiSiteScopeCompatibilityService
     private function isKoreanLocale(string $locale): bool
     {
         return \preg_match('/^ko(?:[_-]|$)/i', $locale) === 1;
+    }
+
+    private function isRussianLocale(string $locale): bool
+    {
+        return \preg_match('/^ru(?:[_-]|$)/i', \trim($locale)) === 1;
+    }
+
+    private function isThaiLocale(string $locale): bool
+    {
+        return \preg_match('/^th(?:[_-]|$)/i', \trim($locale)) === 1;
+    }
+
+    private function isHindiLocale(string $locale): bool
+    {
+        return \preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', \trim($locale)) === 1;
+    }
+
+    private function isNonCjkLocale(string $locale): bool
+    {
+        return $locale !== '' && !$this->isChineseLocale($locale) && !$this->isJapaneseLocale($locale) && !$this->isKoreanLocale($locale);
+    }
+
+    private function hasAnyCjkContent(string $value): bool
+    {
+        return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $value) === 1;
     }
 }

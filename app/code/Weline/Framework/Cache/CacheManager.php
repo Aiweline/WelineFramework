@@ -53,6 +53,7 @@ class CacheManager implements CacheManagerInterface
         'enabled' => true,
         'tip' => '',
         'jitter' => CachePool::DEFAULT_JITTER_RATIO,
+        'environment_scoped' => false,
     ];
 
     /**
@@ -88,7 +89,7 @@ class CacheManager implements CacheManagerInterface
         'file_manager' => ['ttl' => 86400, 'permanent' => true, 'tip' => '文件管理器缓存'],
         'editor' => ['ttl' => 86400, 'permanent' => true, 'tip' => '编辑器缓存'],
         'api_doc' => ['ttl' => 3600, 'tip' => 'API文档缓存'],
-        'fpc' => ['ttl' => 3600, 'taggable' => true, 'tip' => '全页缓存'],
+        'fpc' => ['ttl' => 3600, 'taggable' => true, 'tip' => '全页缓存', 'environment_scoped' => true],
         'single_flight' => ['ttl' => 30, 'tip' => '请求合并锁池', 'jitter' => 0.0],
         'hot_key_tracker' => ['ttl' => 60, 'tip' => '热点 Key 跟踪', 'jitter' => 0.0],
         'url_guard' => ['ttl' => 1800, 'tip' => 'URL 越界规则缓存'],
@@ -177,12 +178,31 @@ class CacheManager implements CacheManagerInterface
         $taggable = $poolConfig['taggable'] ?? false;
         $enabled = $poolConfig['enabled'] ?? true;
         $jitter = (float)($poolConfig['jitter'] ?? CachePool::DEFAULT_JITTER_RATIO);
+        $environmentScoped = (bool)($poolConfig['environment_scoped'] ?? false);
 
         if ($taggable) {
-            return new TaggableCachePool($identity, $adapter, $tip, $permanent, $ttl, (bool)$enabled, $jitter);
+            return new TaggableCachePool(
+                $identity,
+                $adapter,
+                $tip,
+                (bool)$permanent,
+                (int)$ttl,
+                (bool)$enabled,
+                $jitter,
+                $environmentScoped
+            );
         }
 
-        return new CachePool($identity, $adapter, $tip, $permanent, $ttl, (bool)$enabled, $jitter);
+        return new CachePool(
+            $identity,
+            $adapter,
+            $tip,
+            (bool)$permanent,
+            (int)$ttl,
+            (bool)$enabled,
+            $jitter,
+            $environmentScoped
+        );
     }
 
     /**

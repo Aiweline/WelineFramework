@@ -6,6 +6,7 @@ namespace Weline\Customer\Controller\Account;
 
 use Weline\Framework\View\Template;
 use Weline\Customer\Model\Customer;
+use Weline\Customer\Service\AccountI18nModuleRegistry;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 /**
@@ -42,6 +43,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             return;
         }
         $loginMs = $this->elapsedMs($loginStartedAt);
+        $this->prepareAccountI18nModules();
 
         // 获取登录用户
         $userStartedAt = microtime(true);
@@ -173,6 +175,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             ]);
         }
         $loginMs = $this->elapsedMs($loginStartedAt);
+        $this->prepareAccountI18nModules();
 
         $userStartedAt = microtime(true);
         $user = $this->getLoginUser();
@@ -181,8 +184,29 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             $this->assign('user', $user);
         }
 
+        $section = trim((string) ($this->request->getParam('section') ?? ''));
+        if ($section === '') {
+            $this->setAccountTimingHeaders([
+                'sections_total' => $this->elapsedMs($requestStartedAt),
+                'sections_login' => $loginMs,
+                'sections_user' => $userMs,
+                'sections_hook' => 0.0,
+                'sections_json' => 0.0,
+                'sections_bytes' => 0,
+                'sections_missing' => 1,
+            ]);
+
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少账户分区参数'),
+            ]);
+        }
+
+        $GLOBALS['__weline_account_sidebar_content_section'] = $section;
+
         $startedAt = microtime(true);
         $html = (string)$this->getTemplate()->getHook('account.sidebar.content');
+        unset($GLOBALS['__weline_account_sidebar_content_section']);
         $durationMs = (microtime(true) - $startedAt) * 1000;
         $htmlBytes = strlen($html);
 
@@ -255,6 +279,12 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
     private function elapsedMs(float $startedAt): float
     {
         return (microtime(true) - $startedAt) * 1000;
+    }
+
+    private function prepareAccountI18nModules(): void
+    {
+        // Account pages render hooks from many modules, so their dictionaries must be visible before __() runs.
+        $this->request->addModules(AccountI18nModuleRegistry::modules());
     }
 
     private function formatMs(float $milliseconds): string

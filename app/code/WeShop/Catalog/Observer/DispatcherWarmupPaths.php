@@ -11,31 +11,35 @@ use WeShop\Catalog\Service\CategoryService;
 
 class DispatcherWarmupPaths implements ObserverInterface
 {
-    private const CURRENCY = 'CNY';
-    private const LOCALES = ['en_US', 'zh_Hans_CN'];
-    private const PREFERRED_CATEGORY_HANDLE = 'clothing';
-    private const MAX_CATEGORY_HANDLES = 2;
+    private const LOCALE_CURRENCY = [
+        'en_US' => 'USD',
+        'zh_Hans_CN' => 'CNY',
+    ];
+    private const PREFERRED_CATEGORY_HANDLES = [
+        'men/shirts',
+        'sports',
+        'women',
+        'clothing/women',
+        'running-gear',
+        'clothing/sports/running-gear',
+        'gear',
+        'clothing/men/shirts',
+        'shirts',
+        'clothing',
+    ];
+    private const MAX_CATEGORY_HANDLES = 10;
     private const PUBLIC_ENTRY_PATHS = [
         '/',
-        '/about',
-        '/contact',
-        '/search',
     ];
 
     public function execute(Event &$event): void
     {
         $paths = $this->normalizePaths($event->getData('paths'));
         foreach (self::PUBLIC_ENTRY_PATHS as $entryPath) {
-            $paths[] = $entryPath;
-            foreach (self::LOCALES as $locale) {
-                $paths[] = '/' . self::CURRENCY . '/' . $locale . $entryPath;
-            }
+            $this->appendWarmupPathVariants($paths, $entryPath);
         }
         foreach ($this->resolveCategoryHandles() as $handle) {
-            $paths[] = '/catalog/category/' . $this->encodeHandlePath($handle);
-            foreach (self::LOCALES as $locale) {
-                $paths[] = '/' . self::CURRENCY . '/' . $locale . '/catalog/category/' . $this->encodeHandlePath($handle);
-            }
+            $this->appendWarmupPathVariants($paths, '/catalog/category/' . $this->encodeHandlePath($handle));
         }
 
         $event->setData('paths', $this->normalizePaths($paths));
@@ -55,9 +59,14 @@ class DispatcherWarmupPaths implements ObserverInterface
         }
 
         $handles = [];
-        $preferred = $this->findHandle($tree, self::PREFERRED_CATEGORY_HANDLE);
-        if ($preferred !== '') {
-            $handles[$preferred] = $preferred;
+        foreach (self::PREFERRED_CATEGORY_HANDLES as $preferredHandle) {
+            $preferred = $this->findHandle($tree, $preferredHandle);
+            if ($preferred !== '') {
+                $handles[$preferred] = $preferred;
+            }
+            if (\count($handles) >= self::MAX_CATEGORY_HANDLES) {
+                return \array_values($handles);
+            }
         }
 
         $this->collectHandles($tree, $handles);
@@ -152,6 +161,20 @@ class DispatcherWarmupPaths implements ObserverInterface
         }
 
         return \array_values($normalized);
+    }
+
+    /**
+     * @param list<string> $paths
+     */
+    private function appendWarmupPathVariants(array &$paths, string $path): void
+    {
+        $path = '/' . \ltrim($path, '/');
+        $paths[] = $path;
+
+        foreach (self::LOCALE_CURRENCY as $locale => $currency) {
+            $paths[] = '/' . $locale . $path;
+            $paths[] = '/' . $currency . '/' . $locale . $path;
+        }
     }
 
     private function encodeHandlePath(string $handlePath): string

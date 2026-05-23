@@ -30,10 +30,50 @@ class CheckoutQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
+            'context' => $this->context($this->normalizeFormParams($params)),
             'methods' => $this->methods($this->normalizeFormParams($params)),
             'placeOrder' => $this->placeOrder($this->normalizeFormParams($params)),
             default => throw new \InvalidArgumentException('Checkout query provider does not support operation: ' . $operation),
         };
+    }
+
+    private function context(array $form): array
+    {
+        $cartCustomerId = $this->cartIdentityService->getCartCustomerId();
+        $authenticatedCustomerId = $this->cartIdentityService->getAuthenticatedCustomerId();
+        $checkoutIdentity = $this->resolveCheckoutIdentity($form, $cartCustomerId, $authenticatedCustomerId);
+        $isGuestCheckout = !empty($checkoutIdentity['is_guest_checkout']);
+        $customer = $this->cartIdentityService->getCustomer();
+
+        $pageData = $this->checkoutPageDataService->build($cartCustomerId, 1, (int) (($form['order_id'] ?? $form['retry_order_id'] ?? 0)), [
+            'checkout_mode' => (string) ($checkoutIdentity['checkout_mode'] ?? CheckoutIdentityService::MODE_GUEST),
+            'is_guest_checkout' => $isGuestCheckout,
+            'guest_email' => (string) ($checkoutIdentity['guest_email'] ?? ''),
+            'cart_customer_id' => $cartCustomerId,
+            'authenticated_customer_id' => $authenticatedCustomerId,
+            'shipping_address_id' => $isGuestCheckout ? 0 : (int) ($form['shipping_address_id'] ?? 0),
+            'shipping_address' => $this->readShippingAddress($form),
+            'shipping_method' => (string) ($form['shipping_method'] ?? ''),
+            'payment_method' => (string) ($form['payment_method'] ?? ''),
+        ]);
+
+        return $this->success('Checkout context refreshed.', [
+            'checkout_mode' => (string) ($checkoutIdentity['checkout_mode'] ?? CheckoutIdentityService::MODE_GUEST),
+            'is_guest_checkout' => $isGuestCheckout,
+            'customer_checkout_allowed' => !empty($checkoutIdentity['customer_allowed']),
+            'guest_checkout_allowed' => !empty($checkoutIdentity['guest_allowed']),
+            'customer' => $customer ? [
+                'user_id' => (int) ($customer->getId() ?? 0),
+                'username' => (string) ($customer->getUsername() ?? ''),
+                'email' => (string) ($customer->getEmail() ?? ''),
+            ] : null,
+            'guest_email' => (string) ($checkoutIdentity['guest_email'] ?? ''),
+            'saved_addresses' => $pageData['saved_addresses'] ?? [],
+            'selected_shipping_address_id' => (int) ($pageData['selected_shipping_address_id'] ?? 0),
+            'shipping_methods' => $pageData['shipping_methods'] ?? [],
+            'payment_methods' => $pageData['payment_methods'] ?? [],
+            'cart_summary' => $pageData['cart_summary'] ?? [],
+        ]);
     }
 
     private function methods(array $form): array
@@ -190,6 +230,19 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'description' => 'Checkout dynamic method refresh and order placement through Weline.Api.',
             'module' => 'WeShop_Checkout',
             'operations' => [
+                [
+                    'name' => 'context',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        'form' => ['type' => 'map'],
+                        'payload' => ['type' => 'map'],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Refresh current checkout identity, addresses, methods, and summary',
+                ],
                 [
                     'name' => 'methods',
                     'frontend' => true,

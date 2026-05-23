@@ -13,6 +13,17 @@ use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceContractHelper;
 
 final class AiSiteBuildPlanService
 {
+    private const TEMPLATE_SCAFFOLD_BRAND_TERMS = [
+        'LudoEmpire',
+        'PokerArena',
+        'Poker Arena',
+        'Satta King 786',
+        'Satta King',
+        'BharatPlay',
+        'RummyRoyal',
+        'Teen Patti Royal',
+    ];
+
     private const DEFAULT_POLICY_RULES = [
         'priority.user_requirements_first',
         'priority.default_premium_when_unspecified',
@@ -54,6 +65,10 @@ final class AiSiteBuildPlanService
             $this->looksLikeBuildPlanV2($existing)
             && $this->existingContractMatchesCurrentSource($existing, $sourceSignature, $expectedPageTypes)
         ) {
+            $existingMeta = \is_array($existing['contract_meta'] ?? null) ? $existing['contract_meta'] : [];
+            if (\strtolower(\trim((string)($existingMeta['status'] ?? ''))) === 'confirmed') {
+                return $existing;
+            }
             return $this->normalizeExistingContract($existing, $scope, $websiteProfile);
         }
 
@@ -103,6 +118,8 @@ final class AiSiteBuildPlanService
             [
                 'site.name' => $siteName,
                 'site.primary_goal' => $primaryGoal,
+                'site.allowed_brand_terms' => \implode(', ', $this->buildAllowedBrandTerms($scope, $profile, $siteName)),
+                'site.forbidden_template_brand_terms' => \implode(', ', $this->buildForbiddenTemplateBrandTerms($scope, $profile, $siteName)),
             ],
             $contentItems
         );
@@ -660,6 +677,76 @@ final class AiSiteBuildPlanService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $profile
+     * @return list<string>
+     */
+    private function buildAllowedBrandTerms(array $scope, array $profile, string $siteName): array
+    {
+        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        $siteIdentity = \is_array($sourceTruth['site_identity'] ?? null) ? $sourceTruth['site_identity'] : [];
+        $terms = [
+            $siteName,
+            (string)($scope['site_title'] ?? ''),
+            (string)($scope['site_name'] ?? ''),
+            (string)($profile['site_title'] ?? ''),
+            (string)($profile['site_name'] ?? ''),
+            (string)($siteIdentity['site_name'] ?? ''),
+        ];
+        foreach (\is_array($siteIdentity['brand_terms'] ?? null) ? $siteIdentity['brand_terms'] : [] as $term) {
+            $terms[] = (string)$term;
+        }
+        foreach (\is_array($siteIdentity['allowed_brand_terms'] ?? null) ? $siteIdentity['allowed_brand_terms'] : [] as $term) {
+            $terms[] = (string)$term;
+        }
+
+        return $this->uniqueNonEmptyStrings($terms);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $profile
+     * @return list<string>
+     */
+    private function buildForbiddenTemplateBrandTerms(array $scope, array $profile, string $siteName): array
+    {
+        $allowed = $this->buildAllowedBrandTerms($scope, $profile, $siteName);
+        $allowedLookup = \array_fill_keys(\array_map(static fn(string $term): string => \mb_strtolower($term), $allowed), true);
+        $forbidden = [];
+        foreach (self::TEMPLATE_SCAFFOLD_BRAND_TERMS as $term) {
+            if (!isset($allowedLookup[\mb_strtolower($term)])) {
+                $forbidden[] = $term;
+            }
+        }
+
+        return $forbidden;
+    }
+
+    /**
+     * @param list<string> $values
+     * @return list<string>
+     */
+    private function uniqueNonEmptyStrings(array $values): array
+    {
+        $result = [];
+        $seen = [];
+        foreach ($values as $value) {
+            $value = \trim((string)$value);
+            if ($value === '') {
+                continue;
+            }
+            $key = \mb_strtolower($value);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $result[] = $value;
+        }
+
+        return $result;
+    }
+
+    /**
      * @param list<mixed> $values
      */
     private function firstSafeVisibleCopy(array $values): string
@@ -742,7 +829,9 @@ final class AiSiteBuildPlanService
                 'no_media_or_decor_layer_covering_text_or_form',
                 'all_grid_flex_children_min_width_zero',
             ],
-            'source_design_tags' => \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [],
+            'source_design_tags' => $this->stripBuildPlanExplanatoryFields(
+                \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : []
+            ),
         ];
     }
 
@@ -787,6 +876,8 @@ final class AiSiteBuildPlanService
             'image_role',
             'image_subject',
             'placement',
+            'visual_atmosphere',
+            'image_treatment',
             'reuse_policy',
             'css_motif',
         ] as $key) {
@@ -952,8 +1043,11 @@ final class AiSiteBuildPlanService
                 'task_kind' => 'block_build',
                 'executor' => 'AiSiteBuildQueue',
                 'input_scope' => ['region' => 'header', 'component' => 'header'],
+                'runtime_context' => $this->buildSharedTaskRuntimeContext('header'),
+                'output_contract' => $this->buildSharedTaskOutputContract('header'),
                 'policy_slices' => ['layout.grid_alignment', 'typography.refined_font_stack', 'color.readable_contrast'],
                 'context_budget' => ['max_tokens' => 1200],
+                'acceptance' => $this->buildTaskAcceptanceContract(['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'], 'shared header'),
                 'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'],
                 'depends_on' => [],
             ],
@@ -962,8 +1056,11 @@ final class AiSiteBuildPlanService
                 'task_kind' => 'block_build',
                 'executor' => 'AiSiteBuildQueue',
                 'input_scope' => ['region' => 'footer', 'component' => 'footer'],
+                'runtime_context' => $this->buildSharedTaskRuntimeContext('footer'),
+                'output_contract' => $this->buildSharedTaskOutputContract('footer'),
                 'policy_slices' => ['layout.grid_alignment', 'typography.body_16_18', 'color.readable_contrast'],
                 'context_budget' => ['max_tokens' => 1200],
+                'acceptance' => $this->buildTaskAcceptanceContract(['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'], 'shared footer'),
                 'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'],
                 'depends_on' => [],
             ],
@@ -1007,7 +1104,8 @@ final class AiSiteBuildPlanService
                 }
                 $blockKey = $this->resolveBlockKey($rawBlock, $blockIndex);
                 $blockId = $pageId . '.' . $this->slugify($blockKey);
-                $taskId = 'page:' . $pageType . ':' . $this->slugify($blockKey);
+                $sectionCode = 'content/' . \str_replace('_', '-', $this->slugify($pageType)) . '-' . \str_replace('_', '-', $this->slugify($blockKey));
+                $taskId = 'page:' . $pageType . ':' . $sectionCode;
                 $titleKey = 'block.' . $blockId . '.title';
                 $copyKey = 'block.' . $blockId . '.copy';
                 $ctaKey = 'block.' . $blockId . '.cta';
@@ -1024,8 +1122,14 @@ final class AiSiteBuildPlanService
                     $contentKeys[] = $ctaKey;
                 }
                 $visualSignature = $this->normalizeBlockVisualSignatureForBuildPlan($rawBlock['visual_signature'] ?? []);
-                $designTags = \is_array($rawBlock['design_tags'] ?? null) ? $rawBlock['design_tags'] : [];
+                $designTags = $this->stripBuildPlanExplanatoryFields(
+                    \is_array($rawBlock['design_tags'] ?? null) ? $rawBlock['design_tags'] : []
+                );
                 $imageIntent = $this->normalizeBlockImageIntentForBuildPlan($rawBlock['image_intent'] ?? []);
+                $policySlices = ['layout.4_8_spacing', 'typography.refined_font_stack', 'image.integrated_not_pasted', 'responsive.no_horizontal_scroll'];
+                $acceptanceRuleIds = ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic', 'color.readable_contrast'];
+                $implementationSlices = $this->buildBlockImplementationSlices($blockType, $blockKey);
+                $responsiveContract = $this->buildBlockResponsiveContract($blockType, $blockKey);
 
                 $blocks[] = [
                     'block_id' => $blockId,
@@ -1059,11 +1163,28 @@ final class AiSiteBuildPlanService
                     'visual_signature' => $visualSignature,
                     'design_tags' => $designTags,
                     'image_intent' => $imageIntent,
-                    'policy_slices' => ['layout.4_8_spacing', 'typography.refined_font_stack', 'image.integrated_not_pasted', 'responsive.no_horizontal_scroll'],
+                    'runtime_context' => $this->buildBlockTaskRuntimeContext(
+                        $page,
+                        $pageId,
+                        $pageType,
+                        $blockId,
+                        $blockKey,
+                        $blockType,
+                        $pageFlowRole,
+                        $contentKeys,
+                        $visualSignature,
+                        $imageIntent,
+                        $designTags,
+                        $implementationSlices,
+                        $responsiveContract
+                    ),
+                    'output_contract' => $this->buildBlockTaskOutputContract($blockType, $blockKey, $contentKeys),
+                    'policy_slices' => $policySlices,
                     'context_budget' => ['max_tokens' => 1800],
-                    'implementation_slices' => $this->buildBlockImplementationSlices($blockType, $blockKey),
-                    'responsive_contract' => $this->buildBlockResponsiveContract($blockType, $blockKey),
-                    'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic', 'color.readable_contrast'],
+                    'implementation_slices' => $implementationSlices,
+                    'responsive_contract' => $responsiveContract,
+                    'acceptance' => $this->buildTaskAcceptanceContract($acceptanceRuleIds, $blockType . ' block'),
+                    'acceptance_rule_ids' => $acceptanceRuleIds,
                     'depends_on' => ['shared:header', 'shared:footer'],
                 ];
                 $buildOrder[] = $taskId;
@@ -1078,13 +1199,152 @@ final class AiSiteBuildPlanService
                 'content_focus' => (string)($page['content_focus'] ?? ''),
                 'conversion_role' => (string)($page['conversion_role'] ?? ''),
                 'theme_alignment_summary' => (string)($page['theme_alignment_summary'] ?? ''),
-                'page_design_plan' => \is_array($page['page_design_plan'] ?? null) ? $page['page_design_plan'] : [],
+                'page_design_plan' => $this->stripBuildPlanExplanatoryFields(
+                    \is_array($page['page_design_plan'] ?? null) ? $page['page_design_plan'] : []
+                ),
                 'blocks' => $pageBlockIds,
                 'sort_order' => 100 + ((int)$pageIndex * 10),
             ];
         }
 
         return [$pages, $blocks, $tasks, $buildOrder, $contentItems];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildSharedTaskRuntimeContext(string $component): array
+    {
+        return [
+            'target' => [
+                'component' => $component,
+                'region' => $component,
+            ],
+            'allowed_contract_refs' => [
+                'site_brief',
+                'pages',
+                'content_manifest.items.site.name',
+                'content_manifest.items.site.primary_goal',
+            ],
+            'generation_intent' => $component === 'header'
+                ? 'Generate a concise, navigable shared header that reflects the confirmed site goal.'
+                : 'Generate a complete shared footer with navigation, trust cues, and policy/support access.',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildSharedTaskOutputContract(string $component): array
+    {
+        return [
+            'format' => 'pagebuilder_component_payload',
+            'required_outputs' => ['html', 'css', 'render_data'],
+            'component' => $component,
+            'render_data' => [
+                'root_class' => 'string',
+                'navigation_items' => 'list',
+                'cta' => 'object',
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @param list<string> $contentKeys
+     * @param array<string, mixed> $visualSignature
+     * @param array<string, mixed> $imageIntent
+     * @param array<string, mixed> $designTags
+     * @param list<string> $implementationSlices
+     * @param array<string, mixed> $responsiveContract
+     * @return array<string, mixed>
+     */
+    private function buildBlockTaskRuntimeContext(
+        array $page,
+        string $pageId,
+        string $pageType,
+        string $blockId,
+        string $blockKey,
+        string $blockType,
+        string $pageFlowRole,
+        array $contentKeys,
+        array $visualSignature,
+        array $imageIntent,
+        array $designTags,
+        array $implementationSlices,
+        array $responsiveContract
+    ): array {
+        return [
+            'target' => [
+                'page_id' => $pageId,
+                'page_type' => $pageType,
+                'block_id' => $blockId,
+                'block_key' => $blockKey,
+                'block_type' => $blockType,
+                'page_flow_role' => $pageFlowRole,
+            ],
+            'page_contract' => [
+                'title_key' => (string)($page['title_key'] ?? ''),
+                'description_key' => (string)($page['description_key'] ?? ''),
+                'page_goal' => (string)($page['page_goal'] ?? $page['goal'] ?? ''),
+                'content_focus' => (string)($page['content_focus'] ?? ''),
+                'conversion_role' => (string)($page['conversion_role'] ?? ''),
+            ],
+            'block_contract' => [
+                'content_keys' => $contentKeys,
+                'visual_signature' => $visualSignature,
+                'image_intent' => $imageIntent,
+                'design_tags' => $designTags,
+                'implementation_slices' => $implementationSlices,
+                'responsive_contract' => $responsiveContract,
+            ],
+            'allowed_contract_refs' => [
+                'site_brief',
+                'design_manifest',
+                'content_manifest.items',
+                'pages.' . $pageId,
+                'blocks.' . $blockId,
+            ],
+        ];
+    }
+
+    /**
+     * @param list<string> $contentKeys
+     * @return array<string, mixed>
+     */
+    private function buildBlockTaskOutputContract(string $blockType, string $blockKey, array $contentKeys): array
+    {
+        return [
+            'format' => 'pagebuilder_component_payload',
+            'required_outputs' => ['html', 'css', 'render_data'],
+            'block_type' => $blockType,
+            'block_key' => $blockKey,
+            'required_content_keys' => $contentKeys,
+            'render_data' => [
+                'root_class' => 'string',
+                'headline' => 'string',
+                'body' => 'string',
+                'cta' => 'object',
+                'media' => 'object',
+            ],
+        ];
+    }
+
+    /**
+     * @param list<string> $ruleIds
+     * @return array<string, mixed>
+     */
+    private function buildTaskAcceptanceContract(array $ruleIds, string $targetLabel): array
+    {
+        return [
+            'rule_ids' => $ruleIds,
+            'checks' => [
+                'visible_content_matches_confirmed_plan_for_' . $this->slugify($targetLabel),
+                'no_placeholder_or_prompt_copy',
+                'responsive_without_horizontal_scroll',
+                'visual_hierarchy_and_cta_are_clear',
+            ],
+        ];
     }
 
     /**

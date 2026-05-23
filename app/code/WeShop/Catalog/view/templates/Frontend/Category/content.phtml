@@ -60,14 +60,6 @@ if ($currentPath === '') {
 
 $hasValidChildren = $childCategories !== [];
 $products = $this->request->getData('products') ?? $this->getData('products') ?? [];
-$requestUri = function_exists('w_env_request_uri') ? (string) w_env_request_uri() : '';
-$storefrontPrefix = '';
-if (preg_match('#^/([A-Z]{3})(?:/([A-Za-z]{2}_[A-Za-z]+_[A-Z]{2}))?(?:/|$)#', $requestUri, $prefixMatches)) {
-    $storefrontPrefix = '/' . $prefixMatches[1] . (!empty($prefixMatches[2]) ? '/' . $prefixMatches[2] : '');
-}
-$buildStorefrontUrl = static function (string $path) use ($storefrontPrefix): string {
-    return $storefrontPrefix . '/' . ltrim($path, '/');
-};
 $resolveCategoryCardImage = static function (array $categoryRow): string {
     $image = trim((string) ($categoryRow['image'] ?? ''));
     if ($image !== '') {
@@ -118,7 +110,7 @@ $resolveCategoryCardImage = static function (array $categoryRow): string {
             }
 
             $childUrl = $this->getUrl($categoryUrlService->buildCategoryPublicPath($child, $currentPath));
-            $childName = htmlspecialchars((string) ($child['name'] ?? ''));
+            $childName = htmlspecialchars($categoryUrlService->localizeCategoryDisplayName((string) ($child['name'] ?? '')));
             $childDescription = htmlspecialchars((string) ($child['description'] ?? ''));
             $childImage = $resolveCategoryCardImage($child);
             $grandChildren = $child['children'] ?? [];
@@ -213,8 +205,8 @@ $resolveCategoryCardImage = static function (array $categoryRow): string {
                 $productSku = htmlspecialchars((string) ($product['sku'] ?? ''));
                 $inStock = (bool) ($product['in_stock'] ?? ((int) ($product['stock'] ?? 0) > 0));
                 $productUrl = $productHandle !== ''
-                    ? $buildStorefrontUrl('product/' . rawurlencode($productHandle))
-                    : $buildStorefrontUrl('product/view?id=' . $productId);
+                    ? $this->getUrl('product/' . $productHandle)
+                    : $this->getUrl('weshop/product/view', ['id' => $productId]);
                 ?>
                 <div class="product-card" data-product-id="<?= $productId ?>">
                     <a href="<?= htmlspecialchars($productUrl) ?>" class="product-card__link">
@@ -225,6 +217,8 @@ $resolveCategoryCardImage = static function (array $categoryRow): string {
                                     alt="<?= $productName ?>"
                                     class="product-card__image"
                                     loading="lazy"
+                                    decoding="async"
+                                    fetchpriority="low"
                                 >
                             <?php else: ?>
                                 <div class="product-card__image-placeholder">

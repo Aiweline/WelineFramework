@@ -5,6 +5,7 @@ namespace Weline\Framework\Service\Query;
 
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 class FrameworkQueryService
 {
@@ -43,7 +44,13 @@ class FrameworkQueryService
             'error' => '',
             'result' => null,
         ];
+        $stepStart = \microtime(true);
         $this->eventsManager->dispatch('Weline_Framework_Query::before_execute', $eventData);
+        $this->recordQueryServiceStep('before_execute_event', $stepStart, [
+            'provider' => $provider,
+            'operation' => $operation,
+            'area' => $area,
+        ]);
 
         if (($eventData['allow'] ?? true) !== true) {
             $error = (string)($eventData['error'] ?? __('查询被拒绝'));
@@ -53,12 +60,18 @@ class FrameworkQueryService
             return $eventData['result'];
         }
 
+        $stepStart = \microtime(true);
         $providerInstance = $this->registry->getProvider($provider);
+        $this->recordQueryServiceStep('registry_get_provider', $stepStart);
         if ($providerInstance === null) {
             throw new \InvalidArgumentException((string)__('未注册的查询器：%{1}。请通过 extends 注册 QueryProviderInterface 实现。', $provider));
         }
 
+        $stepStart = \microtime(true);
         $result = $providerInstance->execute($operation, (array)$eventData['params']);
+        $this->recordQueryServiceStep('provider_execute', $stepStart, [
+            'provider_class' => \get_class($providerInstance),
+        ]);
 
         $afterEventData = [
             'provider' => $provider,
@@ -67,7 +80,9 @@ class FrameworkQueryService
             'area' => $area,
             'result' => $result,
         ];
+        $stepStart = \microtime(true);
         $this->eventsManager->dispatch('Weline_Framework_Query::after_execute', $afterEventData);
+        $this->recordQueryServiceStep('after_execute_event', $stepStart);
         return $afterEventData['result'] ?? $result;
     }
 
@@ -131,6 +146,26 @@ class FrameworkQueryService
             throw new \InvalidArgumentException((string)__('provider %{1} 中未找到 operation：%{2}', $targetProvider, $targetOperation));
         }
         throw new \InvalidArgumentException((string)__('未找到 provider：%{1}', $targetProvider));
+    }
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function recordQueryServiceStep(string $name, float $startedAt, array $meta = []): void
+    {
+        $profile = RequestContext::get('query_bin.service_profile');
+        if (!\is_array($profile)) {
+            $profile = [];
+        }
+
+        $step = [
+            'name' => $name,
+            'duration_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+        ];
+        if ($meta !== []) {
+            $step['meta'] = $meta;
+        }
+        $profile[] = $step;
+        RequestContext::set('query_bin.service_profile', $profile);
     }
 }
 

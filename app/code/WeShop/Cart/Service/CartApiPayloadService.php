@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Cart\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use WeShop\Cart\Model\Cart;
 use WeShop\Price\Service\PriceService;
 use WeShop\Product\Service\ConfigurableProductService;
@@ -15,7 +16,8 @@ class CartApiPayloadService
         private readonly CartService $cartService,
         private readonly ProductService $productService,
         private readonly ConfigurableProductService $configurableProductService,
-        private readonly PriceService $priceService
+        private readonly PriceService $priceService,
+        private readonly ?CartCountCookieService $cartCountCookieService = null
     ) {
     }
 
@@ -85,6 +87,8 @@ class CartApiPayloadService
         $cartCount = $this->cartService->getCartItemCount($customerId);
         $totals = $this->cartService->calculateTotals($customerId);
         $cartTotal = (float) ($totals['total'] ?? 0);
+
+        $this->syncCartCountCookie($cartCount);
 
         return $this->successResponse((string) __('已成功加入购物车。'), [
             'cart_item_id' => $cartItemId,
@@ -159,8 +163,11 @@ class CartApiPayloadService
 
         $this->cartService->updateCart($itemId, $quantity, $customerId);
 
+        $totals = $this->buildCompactTotals($customerId);
+        $this->syncCartCountCookie((int) ($totals['count'] ?? 0));
+
         return $this->successResponse((string) __('购物车更新成功。'), [
-            'totals' => $this->buildCompactTotals($customerId),
+            'totals' => $totals,
         ]);
     }
 
@@ -179,8 +186,11 @@ class CartApiPayloadService
 
         $this->cartService->moveToTrash($itemId, $customerId);
 
+        $totals = $this->buildCompactTotals($customerId);
+        $this->syncCartCountCookie((int) ($totals['count'] ?? 0));
+
         return $this->successResponse((string) __('商品已移至购物车回收站。'), [
-            'totals' => $this->buildCompactTotals($customerId),
+            'totals' => $totals,
             'trash' => $this->buildTrashData($customerId),
         ]);
     }
@@ -200,8 +210,11 @@ class CartApiPayloadService
 
         $this->cartService->restoreFromTrash($itemId, $customerId);
 
+        $totals = $this->buildCompactTotals($customerId);
+        $this->syncCartCountCookie((int) ($totals['count'] ?? 0));
+
         return $this->successResponse((string) __('商品已恢复至购物车。'), [
-            'totals' => $this->buildCompactTotals($customerId),
+            'totals' => $totals,
             'trash' => $this->buildTrashData($customerId),
         ]);
     }
@@ -387,5 +400,15 @@ class CartApiPayloadService
             'msg' => $message,
             'data' => ['success' => false, 'message' => $message] + $data,
         ];
+    }
+
+    private function syncCartCountCookie(int $count): void
+    {
+        $this->getCartCountCookieService()->sync($count);
+    }
+
+    private function getCartCountCookieService(): CartCountCookieService
+    {
+        return $this->cartCountCookieService ?? ObjectManager::getInstance(CartCountCookieService::class);
     }
 }
