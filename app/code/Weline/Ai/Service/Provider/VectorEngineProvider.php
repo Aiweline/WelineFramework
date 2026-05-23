@@ -201,6 +201,10 @@ class VectorEngineProvider extends OpenAiProvider
         }
 
         foreach ([
+            'quality' => $params['quality'] ?? $config['quality'] ?? null,
+            'style' => $params['style'] ?? $config['style'] ?? null,
+            'background' => $params['background'] ?? $config['background'] ?? null,
+            'output_format' => $params['output_format'] ?? $config['output_format'] ?? null,
             'watermark' => $params['watermark'] ?? $config['watermark'] ?? null,
             'prompt_extend' => $params['prompt_extend'] ?? $config['prompt_extend'] ?? null,
             'negative_prompt' => $params['negative_prompt'] ?? $config['negative_prompt'] ?? null,

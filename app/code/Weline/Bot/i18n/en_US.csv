@@ -129,22 +129,22 @@ Bot,Bot
 "Schedule management: create automatic prompt jobs.","Schedule management: create automatic prompt jobs."
 "Go To Role Management","Go To Role Management"
 "Memory Management","Memory Management"
-Memory,Memory
-Type,Type
-All,All
-Status,Status
-Filter,Filter
+内存,内存
+类型,类型
+全部,全部
+状态,状态
+筛选,筛选
 "Memory Nodes","Memory Nodes"
-Key,Key
-Value,Value
+键,键
+趋势值,趋势值
 Importance,Importance
-"Updated At","Updated At"
+更新时间,更新时间
 "No memory nodes found.","No memory nodes found."
 "Recent Memory Edges","Recent Memory Edges"
 "Source Node","Source Node"
 "Target Node","Target Node"
 Relation,Relation
-Weight,Weight
+重量,重量
 "No memory edges found.","No memory edges found."
 "Edit Role","Edit Role"
 "Create Role","Create Role"
@@ -186,6 +186,7 @@ Dangerous,Dangerous
 "Basic Info","Basic Info"
 "Role Code","Role Code"
 "Role Name","Role Name"
+Status,Status
 Enabled,Enabled
 Icon,Icon
 Description,Description
@@ -204,6 +205,7 @@ Back,Back
 Code,Code
 Name,Name
 Default,Default
+"Updated At","Updated At"
 Actions,Actions
 Yes,Yes
 No,No
@@ -226,6 +228,7 @@ Trigger,Trigger
 "Session Management","Session Management"
 Sessions,Sessions
 Channel,Channel
+Filter,Filter
 Title,Title
 Messages,Messages
 View,View
@@ -238,6 +241,7 @@ ID,ID
 "No messages in this session yet.","No messages in this session yet."
 "Skill Management","Skill Management"
 Category,Category
+All,All
 Active,Active
 "No skill records found.","No skill records found."
 "Skill Detail","Skill Detail"

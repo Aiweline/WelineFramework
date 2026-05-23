@@ -561,7 +561,6 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             pid: 303,
             state: ServiceInstance::STATE_READY,
             metadata: [
-                'shared_external' => true,
                 'process_name' => 'weline-wls-session-owner',
             ]
         ));

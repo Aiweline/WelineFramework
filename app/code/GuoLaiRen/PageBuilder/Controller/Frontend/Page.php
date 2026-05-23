@@ -18,8 +18,6 @@ use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\Runtime;
-use Weline\Server\Service\MemoryStateFacade;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
@@ -34,8 +32,6 @@ class Page extends FrontendController
 
     /** @var array<string, array{expires_at: float, html: string}> */
     private static array $viewHtmlCache = [];
-    private static ?MemoryStateFacade $runtimeCache = null;
-    private static bool $runtimeCacheResolved = false;
 
     private PageModel $pageModel;
     private PageHelper $pageHelper;
@@ -297,6 +293,16 @@ class Page extends FrontendController
             return;
         }
 
+        $viewHtmlCacheKey = '';
+        if (!$isPreview) {
+            $viewHtmlCacheKey = $this->buildViewHtmlCacheKey($page, $currentLocale, $websiteId, (string)($page->getData(PageModel::schema_fields_STYLE) ?? ''));
+            $cachedHtml = $this->getViewHtmlCache($viewHtmlCacheKey);
+            if (is_string($cachedHtml)) {
+                echo $cachedHtml;
+                return;
+            }
+        }
+
         // 检查页面是否选择了当前语言
         $selectedLocales = $page->getSelectedLocales();
         $isLocaleSupported = empty($selectedLocales) || in_array($currentLocale, $selectedLocales);
@@ -312,16 +318,6 @@ class Page extends FrontendController
         
         // 获取SEO数据
         $seoData = $this->pageHelper->getSeoData($page);
-
-        $viewHtmlCacheKey = '';
-        if (!$isPreview) {
-            $viewHtmlCacheKey = $this->buildViewHtmlCacheKey($page, $currentLocale, $websiteId, (string)($page->getData(PageModel::schema_fields_STYLE) ?? ''));
-            $cachedHtml = $this->getViewHtmlCache($viewHtmlCacheKey);
-            if (is_string($cachedHtml)) {
-                echo $cachedHtml;
-                return;
-            }
-        }
 
         // 传递数据到视图
         $this->assign('page', $page);
@@ -409,12 +405,6 @@ class Page extends FrontendController
             unset(self::$viewHtmlCache[$key]);
         }
 
-        $runtimeCached = $this->runtimeCacheGet('pagebuilder.view.' . $key);
-        if (\is_string($runtimeCached) && $runtimeCached !== '') {
-            self::rememberLocalViewHtmlCache($key, $runtimeCached, $now);
-            return $runtimeCached;
-        }
-
         return null;
     }
 
@@ -428,16 +418,11 @@ class Page extends FrontendController
         }
 
         self::rememberLocalViewHtmlCache($key, $html, \microtime(true));
-        $this->runtimeCacheSet('pagebuilder.view.' . $key, $html, self::VIEW_HTML_CACHE_TTL);
     }
 
     public static function clearProcessCaches(bool $aggressive = false): void
     {
         self::$viewHtmlCache = [];
-        if ($aggressive) {
-            self::$runtimeCache = null;
-            self::$runtimeCacheResolved = false;
-        }
     }
 
     /**
@@ -521,65 +506,6 @@ class Page extends FrontendController
             'host' => $host,
             'uri' => $uri,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
-    }
-
-    private function runtimeCacheGet(string $key): mixed
-    {
-        $cache = self::runtimeCache();
-        if ($cache === null) {
-            return null;
-        }
-
-        try {
-            return $cache->get('pagebuilder_frontend_runtime', $key);
-        } catch (\Throwable) {
-            self::$runtimeCache = null;
-            self::$runtimeCacheResolved = true;
-            return null;
-        }
-    }
-
-    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
-    {
-        $cache = self::runtimeCache();
-        if ($cache === null) {
-            return;
-        }
-
-        try {
-            $cache->set('pagebuilder_frontend_runtime', $key, $value, \max(1, $ttl));
-        } catch (\Throwable) {
-            self::$runtimeCache = null;
-            self::$runtimeCacheResolved = true;
-        }
-    }
-
-    private static function runtimeCache(): ?MemoryStateFacade
-    {
-        if (self::$runtimeCacheResolved) {
-            return self::$runtimeCache;
-        }
-        self::$runtimeCacheResolved = true;
-
-        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
-            return null;
-        }
-
-        try {
-            self::$runtimeCache = new MemoryStateFacade([
-                'consumer_code' => 'pagebuilder_frontend_runtime',
-                'prefer_direct_connect' => true,
-                'connect_timeout' => 0.02,
-                'timeout' => 0.05,
-                'acquire_timeout' => 0.02,
-                'persistent' => true,
-                'lazy_connect' => true,
-            ]);
-        } catch (\Throwable) {
-            self::$runtimeCache = null;
-        }
-
-        return self::$runtimeCache;
     }
     
     /**

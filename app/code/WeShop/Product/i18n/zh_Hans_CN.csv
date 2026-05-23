@@ -68,6 +68,7 @@ EAV属性保存失败：%{1},EAV属性保存失败：%{1}
 产品价格变更时触发。,产品价格变更时触发。
 "Default product attribute set is missing. Run setup:upgrade first.","Default product attribute set is missing. Run setup:upgrade first."
 "Failed to resolve product after save: %{1}","Failed to resolve product after save: %{1}"
+"Failed to save fake review for product %{1}","Failed to save fake review for product %{1}"
 "Failed to resolve variant after save: %{1}","Failed to resolve variant after save: %{1}"
 "Product 查询器不支持的操作：%{1}","Product 查询器不支持的操作：%{1}"
 产品查询,产品查询
@@ -102,6 +103,11 @@ EAV属性保存失败：%{1},EAV属性保存失败：%{1}
 产品详情标签内容,产品详情标签内容
 在产品详情页标签区域渲染产品描述、规格、评价、问答等内容。支持多个标签页切换，包括商品详情、规格参数、用户评价、问答等。,在产品详情页标签区域渲染产品描述、规格、评价、问答等内容。支持多个标签页切换，包括商品详情、规格参数、用户评价、问答等。
 "Product Description","Product Description"
+颜色,颜色
+黑色,黑色
+藏青,藏青
+米色,米色
+尺码,尺码
 暂无图片,暂无图片
 SKU,SKU
 库存状态,库存状态
@@ -113,7 +119,9 @@ SKU,SKU
 加入购物车,加入购物车
 立即购买,立即购买
 产品规格,产品规格
+添加中,添加中
 已添加,已添加
+跳转结算中,跳转结算中
 Specifications,规格参数
 Q&A,Q&A
 Reviews,Reviews
@@ -286,3 +294,7 @@ ID,ID
 原价：,原价：
 现价：,现价：
 活动倒计时：,活动倒计时：
+相关产品,相关产品
+热销产品,热销产品
+最近浏览,最近浏览
+最受欢迎的商品,最受欢迎的商品

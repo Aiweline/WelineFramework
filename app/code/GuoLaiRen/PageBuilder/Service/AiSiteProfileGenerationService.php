@@ -8,7 +8,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteProfileGenerationService
 {
-    private const PROFILE_VERSION = 5;
+    private const PROFILE_VERSION = 6;
 
     public function __construct(
         private readonly ?AiSiteProfileAiGenerationService $aiProfileGenerator = null,
@@ -33,6 +33,10 @@ class AiSiteProfileGenerationService
         );
         $locales = $this->resolveLocales($scope, $existing, $defaultLocale);
         $sourceBrief = $this->resolveSourceBrief($scope, $existing, $manualFlags);
+        $contentLocale = $this->resolveContentLocale($scope, $existing, $sourceBrief);
+        if ($contentLocale !== '') {
+            $locales = $this->prependLocaleToList($locales, $contentLocale);
+        }
         $targetDomain = $this->resolveTargetDomain($scope, $existing, $manualFlags);
 
         $titleLocked = $this->hasManualOverride($scope, 'site_title', $manualFlags);
@@ -144,6 +148,10 @@ class AiSiteProfileGenerationService
             $this->profileTitleLabelPatterns(),
             $this->profileTaglineLabelPatterns()
         )));
+        $metaTitle = $this->stripInternalProfileTokens($metaTitle);
+        if ($metaTitle === '') {
+            $metaTitle = $siteTitle;
+        }
 
         $metaDescription = \trim((string)($seoInput['meta_description'] ?? ''));
         if ($metaDescription === '') {
@@ -168,6 +176,7 @@ class AiSiteProfileGenerationService
             'brief_description' => $briefDescription,
             'target_domain' => $targetDomain,
             'default_locale' => $defaultLocale,
+            'content_locale' => $contentLocale,
             'locales' => $locales,
             'logo' => $logo,
             'favicon' => $icon,
@@ -277,6 +286,72 @@ class AiSiteProfileGenerationService
         }
 
         return $this->normalizeLocales($localesSource, $defaultLocale);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $existing
+     */
+    private function resolveContentLocale(array $scope, array $existing, string $sourceBrief): string
+    {
+        $explicit = $this->pickString(
+            $scope['content_locale'] ?? null,
+            $existing['content_locale'] ?? null
+        );
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        return $this->inferContentLocaleFromText($sourceBrief . "\n" . $this->pickString(
+            $scope['user_description'] ?? null,
+            $scope['site_description'] ?? null,
+            $scope['requirements']['expanded_brief'] ?? null
+        ));
+    }
+
+    private function inferContentLocaleFromText(string $text): string
+    {
+        $text = \trim($text);
+        if ($text === '') {
+            return '';
+        }
+
+        if (\preg_match('/\bhi(?:[_-]IN)?\b|Hindi|Hindustani|Devanagari|印地语|印地文|印度语|हिन्दी|हिंदी/iu', $text) === 1) {
+            return 'hi_IN';
+        }
+        if (\preg_match('/\bth(?:[_-]TH)?\b|Thai|泰语|泰文|ภาษาไทย/iu', $text) === 1) {
+            return 'th_TH';
+        }
+        if (\preg_match('/\bzh(?:[_-](?:Hans|CN|SG))?\b|简体中文|中文|Chinese/iu', $text) === 1) {
+            return 'zh_Hans_CN';
+        }
+        if (\preg_match('/\bru(?:[_-]RU)?\b|Russian|俄语|русский/iu', $text) === 1) {
+            return 'ru_RU';
+        }
+
+        return '';
+    }
+
+    /**
+     * @param list<string> $locales
+     * @return list<string>
+     */
+    private function prependLocaleToList(array $locales, string $locale): array
+    {
+        $locale = \trim($locale);
+        $result = [];
+        if ($locale !== '') {
+            $result[] = $locale;
+        }
+        foreach ($locales as $item) {
+            $candidate = \trim((string)$item);
+            if ($candidate === '' || \in_array($candidate, $result, true)) {
+                continue;
+            }
+            $result[] = $candidate;
+        }
+
+        return $result;
     }
 
     /**
@@ -684,11 +759,28 @@ class AiSiteProfileGenerationService
         } else {
             $title = $this->stripProfileFieldLabelPrefix($title, $this->profileTitleLabelPatterns());
         }
+        $title = $this->stripInternalProfileTokens($title);
         if ($title === '' || $this->isPlaceholderSiteTitle($title)) {
             return '';
         }
 
         return $this->clipSiteTitle($title);
+    }
+
+    private function stripInternalProfileTokens(string $value): string
+    {
+        $value = $this->normalizeWhitespace($value);
+        if ($value === '') {
+            return '';
+        }
+        $value = (string)\preg_replace(
+            '/\b(?:website\s*profile|websiteprofile|site\s*profile|target[_\s-]*domain|scope[_\s-]*json|profile[_\s-]*json)\b/iu',
+            ' ',
+            $value
+        );
+        $value = (string)\preg_replace('/\s*[-:|]\s*$/u', '', $value);
+
+        return $this->normalizeWhitespace($value);
     }
 
     private function deriveSiteTitleFromBrief(string $briefDescription, string $targetDomain): string
@@ -977,13 +1069,20 @@ class AiSiteProfileGenerationService
 
         $normalized = \strtolower((string)\preg_replace('/\s+/', ' ', $decoded));
 
-        return \str_contains($normalized, '<rect width="100%" height="100%" rx="10"')
+        if (
+            \str_contains($normalized, '<rect width="100%" height="100%" rx="10"')
             && \str_contains($normalized, 'dominant-baseline="central"')
             && \str_contains($normalized, 'font-family="arial, sans-serif"')
             && (
                 \str_contains($normalized, 'fill="#0f172a"')
                 || \str_contains($normalized, 'fill="#2563eb"')
-            );
+            )
+        ) {
+            return true;
+        }
+
+        return \str_contains($normalized, 'id="brandlogogradient"')
+            || \str_contains($normalized, 'id="brandicongradient"');
     }
 
     private function buildFallbackLogoDataUri(string $siteTitle, string $siteTagline, string $briefDescription): string
@@ -1005,7 +1104,6 @@ class AiSiteProfileGenerationService
       <stop offset="100%" stop-color="{$secondary}"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="0" width="160" height="48" rx="14" fill="#ffffff"/>
   <rect x="6" y="6" width="36" height="36" rx="12" fill="url(#brandLogoGradient)"/>
   <circle cx="24" cy="24" r="10" fill="rgba(255,255,255,0.18)"/>
   <text x="24" y="26" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">{$safeMark}</text>
@@ -1072,7 +1170,7 @@ SVG;
         }
 
         if (!\class_exists(\DOMDocument::class)) {
-            return true;
+            return !$this->svgContainsGeneratedIdentityBackground($value, 0, 0);
         }
 
         $previousUseInternalErrors = \libxml_use_internal_errors(true);
@@ -1096,7 +1194,11 @@ SVG;
         }
 
         $namespace = \trim((string)$root->namespaceURI);
-        return $namespace === '' || $namespace === 'http://www.w3.org/2000/svg';
+        if ($namespace !== '' && $namespace !== 'http://www.w3.org/2000/svg') {
+            return false;
+        }
+
+        return !$this->svgContainsGeneratedIdentityBackground($value, 0, 0);
     }
 
     private function normalizeProfileAsset(string $value): string
@@ -1131,14 +1233,94 @@ SVG;
       <stop offset="100%" stop-color="{$secondary}"/>
     </linearGradient>
   </defs>
-  <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#brandIconGradient)"/>
-  <circle cx="32" cy="32" r="16" fill="rgba(255,255,255,0.14)"/>
-  <path d="M18 46 L46 18" stroke="{$accent}" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
-  <text x="32" y="35" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#ffffff">{$safeMark}</text>
+  <circle cx="32" cy="32" r="24" fill="url(#brandIconGradient)" opacity="0.18"/>
+  <path d="M18 46 L46 18" stroke="{$accent}" stroke-width="5" stroke-linecap="round" opacity="0.72"/>
+  <circle cx="32" cy="32" r="19" fill="none" stroke="url(#brandIconGradient)" stroke-width="4"/>
+  <text x="32" y="36" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="{$primary}">{$safeMark}</text>
 </svg>
 SVG;
 
         return 'data:image/svg+xml;base64,' . \base64_encode($svg);
+    }
+
+    private function svgContainsGeneratedIdentityBackground(string $value, int $expectedWidth, int $expectedHeight): bool
+    {
+        if (\preg_match('/viewBox\s*=\s*["\']\s*0\s+0\s+([0-9.]+)\s+([0-9.]+)\s*["\']/i', $value, $viewBoxMatches) === 1) {
+            $expectedWidth = $expectedWidth > 0 ? $expectedWidth : (int)\round((float)$viewBoxMatches[1]);
+            $expectedHeight = $expectedHeight > 0 ? $expectedHeight : (int)\round((float)$viewBoxMatches[2]);
+        }
+
+        if ($expectedWidth <= 0 || $expectedHeight <= 0) {
+            return false;
+        }
+
+        if (\preg_match_all('/<rect\b([^>]*)>/i', $value, $rectMatches) !== false) {
+            foreach ($rectMatches[1] as $rawAttrs) {
+                $attrs = $this->parseSvgAttributes((string)$rawAttrs);
+                $width = $this->resolveSvgLength($attrs['width'] ?? '', $expectedWidth);
+                $height = $this->resolveSvgLength($attrs['height'] ?? '', $expectedHeight);
+                $x = $this->resolveSvgLength($attrs['x'] ?? '0', $expectedWidth);
+                $y = $this->resolveSvgLength($attrs['y'] ?? '0', $expectedHeight);
+                if ($width <= 0.0 || $height <= 0.0) {
+                    continue;
+                }
+
+                $coversCanvas = $x <= ($expectedWidth * 0.05)
+                    && $y <= ($expectedHeight * 0.05)
+                    && ($x + $width) >= ($expectedWidth * 0.95)
+                    && ($y + $height) >= ($expectedHeight * 0.95);
+                if ($coversCanvas) {
+                    return true;
+                }
+
+                $isIconTile = $expectedWidth <= 80
+                    && $expectedHeight <= 80
+                    && $x <= 8.0
+                    && $y <= 8.0
+                    && $width >= ($expectedWidth * 0.72)
+                    && $height >= ($expectedHeight * 0.72);
+                if ($isIconTile) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    private function parseSvgAttributes(string $rawAttrs): array
+    {
+        $attrs = [];
+        if (\preg_match_all('/([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(["\'])(.*?)\2/s', $rawAttrs, $matches, \PREG_SET_ORDER) === false) {
+            return $attrs;
+        }
+
+        foreach ($matches as $match) {
+            $attrs[\strtolower((string)$match[1])] = (string)$match[3];
+        }
+
+        return $attrs;
+    }
+
+    private function resolveSvgLength(string $value, int $basis): float
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return 0.0;
+        }
+
+        if (\str_ends_with($value, '%')) {
+            return ((float)\rtrim($value, '%')) * $basis / 100;
+        }
+
+        if (\preg_match('/^-?[0-9]+(?:\.[0-9]+)?/', $value, $matches) !== 1) {
+            return 0.0;
+        }
+
+        return (float)$matches[0];
     }
 
     /**

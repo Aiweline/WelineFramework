@@ -50,6 +50,10 @@ final class AsyncBizAdapters
     {
         $startedAt = \microtime(true);
         try {
+            // Fiber is cooperative; cold framework dispatch must enter from the scheduler, not from start().
+            if (\Weline\Framework\Runtime\SchedulerSystem::isSchedulerActive()) {
+                \Weline\Framework\Runtime\SchedulerSystem::yield();
+            }
             return $callback();
         } finally {
             $elapsedMs = (\microtime(true) - $startedAt) * 1000;

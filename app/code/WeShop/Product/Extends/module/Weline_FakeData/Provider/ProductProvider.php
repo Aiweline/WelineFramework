@@ -6,9 +6,12 @@ namespace WeShop\Product\Extends\Module\Weline_FakeData\Provider;
 
 use WeShop\Catalog\Model\Category;
 use WeShop\Catalog\Extends\Module\Weline_FakeData\Provider\CatalogProvider;
+use WeShop\Customer\Model\Customer;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
+use WeShop\Product\Model\Product\LocalDescription as ProductLocalDescription;
 use WeShop\Product\Model\Product\OptionId as ProductOptionId;
+use WeShop\Review\Model\Review;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Option;
@@ -24,6 +27,7 @@ class ProductProvider implements FakeDataProviderInterface
 {
     private const CODE = 'weshop_product';
     private const ENTITY_PRODUCT = 'product';
+    private const ENTITY_REVIEW = 'review';
 
     public function __construct(
         private readonly Product $product,
@@ -31,11 +35,14 @@ class ProductProvider implements FakeDataProviderInterface
         private readonly ProductCategory $productCategory,
         private readonly EavEntity $eavEntity,
         private readonly Set $attributeSet,
+        private readonly ?ProductLocalDescription $productLocalDescription = null,
         private readonly ?ProductOptionId $productOptionId = null,
         private readonly ?EavAttribute $eavAttribute = null,
         private readonly ?Option $eavAttributeOption = null,
         private readonly ?Group $attributeGroup = null,
         private readonly ?Type $attributeType = null,
+        private readonly ?Review $review = null,
+        private readonly ?Customer $customer = null,
     ) {
     }
 
@@ -75,14 +82,19 @@ class ProductProvider implements FakeDataProviderInterface
     public function seed(FakeDataContext $context): FakeDataResult
     {
         $result = new FakeDataResult();
-        $setId = $this->getDefaultProductSetId();
-        if ($setId === 0) {
+        $defaultSetId = $this->getDefaultProductSetId();
+        if ($defaultSetId === 0) {
             return $result->addError((string)__('Default product attribute set is missing. Run setup:upgrade first.'));
         }
 
+        $this->cleanupLegacyWesternApparelProducts();
         $products = $this->applyLimit($this->getProducts(), $context->getLimit());
         foreach ($products as $productData) {
             $productData = $this->withGalleryImages($productData);
+            $setId = $this->resolveProductAttributeSetId($productData);
+            if ($setId <= 0) {
+                $setId = $defaultSetId;
+            }
             $existingId = $this->getProductIdBySku((string)$productData['sku']);
             $productModel = clone $this->product;
             $productModel->reset()->clearData();
@@ -116,6 +128,7 @@ class ProductProvider implements FakeDataProviderInterface
                 continue;
             }
 
+            $this->syncLocalDescriptions($productId, $productData);
             $this->syncCategories($productId, $productData);
             $this->saveProductAttributes($productId, $productData, 0);
             $variantResult = $this->syncVariants($productId, $productData, $setId, $context);
@@ -134,6 +147,7 @@ class ProductProvider implements FakeDataProviderInterface
         $this->repairStaleDemoFoodHandleCollisions();
         $this->repairDuplicateSkus();
         $this->cleanupInvalidManagedAttributeOptions();
+        $result->merge($this->seedProductReviews($context));
 
         return $result;
     }
@@ -145,8 +159,21 @@ class ProductProvider implements FakeDataProviderInterface
 
         foreach ($records as $record) {
             $productId = (int)($record['entity_id'] ?? 0);
+            $entityType = (string)($record['entity_type'] ?? '');
             $stableKey = (string)($record['stable_key'] ?? '');
-            if ($productId > 0) {
+            if ($entityType === self::ENTITY_REVIEW && $productId > 0) {
+                $this->getReviewModel()->clear()
+                    ->getQuery()
+                    ->where(Review::schema_fields_ID, $productId)
+                    ->delete()
+                    ->fetch();
+                $result->addDeleted();
+            } elseif ($productId > 0) {
+                $this->getProductLocalDescriptionModel()->clear()
+                    ->getQuery()
+                    ->where(ProductLocalDescription::schema_fields_ID, $productId)
+                    ->delete()
+                    ->fetch();
                 $this->productCategory->clear()
                     ->getQuery()
                     ->where(ProductCategory::schema_fields_product_id, $productId)
@@ -162,6 +189,87 @@ class ProductProvider implements FakeDataProviderInterface
             if ($stableKey !== '') {
                 $context->getRecordService()->removeRecord(self::CODE, $stableKey);
             }
+        }
+
+        return $result;
+    }
+
+    private function seedProductReviews(FakeDataContext $context): FakeDataResult
+    {
+        $result = new FakeDataResult();
+        $productIds = $this->resolveRootProductIdsFromRecords($context);
+        if ($productIds === []) {
+            return $result;
+        }
+
+        $customerIds = $this->resolveReviewCustomerIds();
+        $existingRecords = $context->getRecordService()->getRecords(self::CODE, self::ENTITY_REVIEW);
+        $existingByKey = [];
+        foreach ($existingRecords as $record) {
+            $stableKey = (string)($record['stable_key'] ?? '');
+            if ($stableKey !== '') {
+                $existingByKey[$stableKey] = (int)($record['entity_id'] ?? 0);
+            }
+        }
+
+        $reviewTitles = $this->getSampleReviewTitles();
+        $reviewContents = $this->getSampleReviewContents();
+        $touchedStableKeys = [];
+        foreach ($productIds as $productId) {
+            $reviewCount = 2 + ($productId % 5);
+            for ($index = 0; $index < $reviewCount; $index++) {
+                $stableKey = 'review:product:' . $productId . ':' . $index;
+                $touchedStableKeys[$stableKey] = true;
+                $existingId = (int)($existingByKey[$stableKey] ?? 0);
+                $createdAt = $this->buildReviewTimestamp($productId, $index);
+
+                $review = clone $this->getReviewModel();
+                $review->reset()->clearData();
+                if ($existingId > 0) {
+                    $review->load($existingId);
+                }
+
+                $review->setData(Review::schema_fields_PRODUCT_ID, $productId)
+                    ->setData(Review::schema_fields_CUSTOMER_ID, $customerIds[($productId + $index) % count($customerIds)])
+                    ->setData(Review::schema_fields_RATING, $this->resolveReviewRating($productId, $index))
+                    ->setData(Review::schema_fields_TITLE, $reviewTitles[($productId + $index) % count($reviewTitles)])
+                    ->setData(Review::schema_fields_CONTENT, $reviewContents[($productId * 2 + $index) % count($reviewContents)])
+                    ->setData(Review::schema_fields_STATUS, Review::STATUS_APPROVED)
+                    ->setData(Review::schema_fields_CREATED_AT, $createdAt)
+                    ->setData(Review::schema_fields_UPDATED_AT, $createdAt)
+                    ->save();
+
+                $reviewId = (int)($review->getId() ?? 0);
+                if ($reviewId <= 0) {
+                    $result->addError((string)__('Failed to save fake review for product %{1}', [$productId]));
+                    continue;
+                }
+
+                $context->record(
+                    self::CODE,
+                    self::ENTITY_REVIEW,
+                    $reviewId,
+                    $stableKey,
+                    ['product_id' => $productId, 'index' => $index]
+                );
+                $existingId > 0 ? $result->addUpdated() : $result->addCreated();
+            }
+        }
+
+        foreach ($existingByKey as $stableKey => $reviewId) {
+            if (isset($touchedStableKeys[$stableKey])) {
+                continue;
+            }
+
+            if ($reviewId > 0) {
+                $this->getReviewModel()->clear()
+                    ->getQuery()
+                    ->where(Review::schema_fields_ID, $reviewId)
+                    ->delete()
+                    ->fetch();
+                $result->addDeleted();
+            }
+            $context->getRecordService()->removeRecord(self::CODE, $stableKey);
         }
 
         return $result;
@@ -342,75 +450,75 @@ class ProductProvider implements FakeDataProviderInterface
                 'category_handles' => ['fake-home', 'fake-living-space'],
             ],
             [
-                'sku' => 'FAKE-DAILY-HOODIE-001',
-                'spu' => 'DAILY-FLEECE-HOODIE',
-                'handle' => 'daily-fleece-hoodie',
-                'name' => 'Daily Fleece Hoodie',
-                'short_description' => 'Midweight cotton-blend hoodie with a relaxed everyday fit.',
-                'description' => 'Soft fleece hoodie with ribbed cuffs, kangaroo pocket, and durable stitching for daily casual wear.',
-                'price' => 199.00,
-                'cost' => 82.00,
-                'stock' => 60,
+                'sku' => 'FAKE-HANFU-RUAO-001',
+                'spu' => 'HANFU-JIAOLING-RUAO',
+                'handle' => 'hanfu-jiaoling-ruao',
+                'name' => '青玉交领上襦',
+                'short_description' => '宋制灵感交领上襦，轻薄垂坠，适合作为汉服日常上装。',
+                'description' => '以宋制交领剪裁为灵感的汉服上襦，袖型舒展，搭配系带与暗纹面料，适合与马面裙、褶裙或披帛组合穿着。',
+                'price' => 239.00,
+                'cost' => 98.00,
+                'stock' => 64,
                 'weight' => 1,
-                'image' => 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=80',
+                'image' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
                 'images' => '[]',
-                'meta_keywords' => 'hoodie,fleece,daily wear',
+                'meta_keywords' => 'hanfu,jiaoling ruao,traditional chinese clothing',
                 'category_handles' => ['fake-apparel', 'fake-daily-wear'],
                 'configurable_attributes' => ['color', 'size'],
-                'attributes' => ['brand' => 'uniqlo', 'material' => 'cotton_blend'],
+                'attributes' => ['brand' => 'hua_chao', 'material' => 'silk'],
                 'variants' => [
-                    ['sku' => 'FAKE-DAILY-HOODIE-NAVY-M', 'handle' => 'daily-fleece-hoodie-navy-m', 'name' => 'Daily Fleece Hoodie Navy M', 'price' => 199.00, 'cost' => 82.00, 'stock' => 18, 'color' => 'navy', 'size' => 'm'],
-                    ['sku' => 'FAKE-DAILY-HOODIE-NAVY-L', 'handle' => 'daily-fleece-hoodie-navy-l', 'name' => 'Daily Fleece Hoodie Navy L', 'price' => 199.00, 'cost' => 82.00, 'stock' => 22, 'color' => 'navy', 'size' => 'l'],
-                    ['sku' => 'FAKE-DAILY-HOODIE-GRAY-M', 'handle' => 'daily-fleece-hoodie-gray-m', 'name' => 'Daily Fleece Hoodie Gray M', 'price' => 199.00, 'cost' => 82.00, 'stock' => 20, 'color' => 'gray', 'size' => 'm'],
-                    ['sku' => 'FAKE-DAILY-HOODIE-BLK-XL', 'handle' => 'daily-fleece-hoodie-black-xl', 'name' => 'Daily Fleece Hoodie Black XL', 'price' => 209.00, 'cost' => 88.00, 'stock' => 15, 'color' => 'black', 'size' => 'xl'],
+                    ['sku' => 'FAKE-HANFU-RUAO-GRN-M', 'handle' => 'hanfu-jiaoling-ruao-green-m', 'name' => '青玉交领上襦 松绿 M', 'price' => 239.00, 'cost' => 98.00, 'stock' => 18, 'color' => 'green', 'size' => 'm', 'image' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900'],
+                    ['sku' => 'FAKE-HANFU-RUAO-WHT-L', 'handle' => 'hanfu-jiaoling-ruao-white-l', 'name' => '青玉交领上襦 月白 L', 'price' => 239.00, 'cost' => 98.00, 'stock' => 22, 'color' => 'white', 'size' => 'l', 'image' => 'https://images.pexels.com/photos/8152155/pexels-photo-8152155.jpeg?auto=compress&cs=tinysrgb&w=900'],
+                    ['sku' => 'FAKE-HANFU-RUAO-RED-M', 'handle' => 'hanfu-jiaoling-ruao-red-m', 'name' => '青玉交领上襦 绛纱 M', 'price' => 249.00, 'cost' => 102.00, 'stock' => 20, 'color' => 'red', 'size' => 'm', 'image' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900'],
+                    ['sku' => 'FAKE-HANFU-RUAO-BEI-XL', 'handle' => 'hanfu-jiaoling-ruao-beige-xl', 'name' => '青玉交领上襦 米杏 XL', 'price' => 259.00, 'cost' => 108.00, 'stock' => 15, 'color' => 'beige', 'size' => 'xl', 'image' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=900'],
                 ],
             ],
             [
-                'sku' => 'FAKE-CITY-TEE-001',
-                'spu' => 'CITY-COTTON-TEE',
-                'handle' => 'city-cotton-tee',
-                'name' => 'City Cotton T-Shirt',
-                'short_description' => 'Breathable cotton T-shirt with a clean regular fit.',
-                'description' => 'Everyday cotton tee designed for layering or wearing on its own, with a soft hand feel and stable collar.',
-                'price' => 69.00,
-                'cost' => 24.00,
-                'stock' => 200,
+                'sku' => 'FAKE-HANFU-MAMIANQUN-001',
+                'spu' => 'HANFU-MAMIANQUN',
+                'handle' => 'hanfu-mamianqun',
+                'name' => '织金马面裙',
+                'short_description' => '明制灵感马面裙，下摆挺括，适合搭配交领上襦与披帛。',
+                'description' => '以传统织金纹样为灵感的马面裙示例商品，兼顾分类筛选、规格展示与国风穿搭场景，适合作为汉服下装假数据。',
+                'price' => 329.00,
+                'cost' => 146.00,
+                'stock' => 58,
                 'weight' => 1,
-                'image' => 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80',
+                'image' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
                 'images' => '[]',
-                'meta_keywords' => 'cotton t-shirt,casual wear',
+                'meta_keywords' => 'hanfu,mamianqun,traditional chinese skirt',
                 'category_handles' => ['fake-apparel', 'fake-daily-wear'],
                 'configurable_attributes' => ['color', 'size'],
-                'attributes' => ['brand' => 'uniqlo', 'material' => 'cotton'],
+                'attributes' => ['brand' => 'yun_jin_studio', 'material' => 'silk'],
                 'variants' => [
-                    ['sku' => 'FAKE-CITY-TEE-WHT-S', 'handle' => 'city-cotton-tee-white-s', 'name' => 'City Cotton T-Shirt White S', 'price' => 69.00, 'cost' => 24.00, 'stock' => 36, 'color' => 'white', 'size' => 's'],
-                    ['sku' => 'FAKE-CITY-TEE-WHT-M', 'handle' => 'city-cotton-tee-white-m', 'name' => 'City Cotton T-Shirt White M', 'price' => 69.00, 'cost' => 24.00, 'stock' => 42, 'color' => 'white', 'size' => 'm'],
-                    ['sku' => 'FAKE-CITY-TEE-BLK-M', 'handle' => 'city-cotton-tee-black-m', 'name' => 'City Cotton T-Shirt Black M', 'price' => 69.00, 'cost' => 24.00, 'stock' => 38, 'color' => 'black', 'size' => 'm'],
-                    ['sku' => 'FAKE-CITY-TEE-BLUE-L', 'handle' => 'city-cotton-tee-blue-l', 'name' => 'City Cotton T-Shirt Blue L', 'price' => 69.00, 'cost' => 24.00, 'stock' => 31, 'color' => 'blue', 'size' => 'l'],
+                    ['sku' => 'FAKE-HANFU-MAMIANQUN-RED-M', 'handle' => 'hanfu-mamianqun-red-m', 'name' => '织金马面裙 绯红 M', 'price' => 329.00, 'cost' => 146.00, 'stock' => 16, 'color' => 'red', 'size' => 'm', 'image' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900'],
+                    ['sku' => 'FAKE-HANFU-MAMIANQUN-NAVY-L', 'handle' => 'hanfu-mamianqun-navy-l', 'name' => '织金马面裙 黛青 L', 'price' => 339.00, 'cost' => 152.00, 'stock' => 18, 'color' => 'navy', 'size' => 'l', 'image' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=900'],
+                    ['sku' => 'FAKE-HANFU-MAMIANQUN-GRN-S', 'handle' => 'hanfu-mamianqun-green-s', 'name' => '织金马面裙 竹青 S', 'price' => 329.00, 'cost' => 146.00, 'stock' => 12, 'color' => 'green', 'size' => 's', 'image' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900'],
+                    ['sku' => 'FAKE-HANFU-MAMIANQUN-BEI-XL', 'handle' => 'hanfu-mamianqun-beige-xl', 'name' => '织金马面裙 米杏 XL', 'price' => 349.00, 'cost' => 158.00, 'stock' => 12, 'color' => 'beige', 'size' => 'xl', 'image' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=900'],
                 ],
             ],
             [
-                'sku' => 'FAKE-STREET-SNEAKERS-001',
-                'spu' => 'STREET-KNIT-SNEAKERS',
-                'handle' => 'street-knit-sneakers',
-                'name' => 'Street Knit Sneakers',
-                'short_description' => 'Lightweight knit sneakers with cushioned midsoles.',
-                'description' => 'Breathable lace-up sneakers for city walking and casual outfits, with flexible knit uppers and grippy soles.',
-                'price' => 159.00,
-                'cost' => 66.00,
-                'stock' => 90,
-                'weight' => 2,
-                'image' => 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=80',
+                'sku' => 'FAKE-HANFU-BUXIE-001',
+                'spu' => 'HANFU-YUNWEN-BUXIE',
+                'handle' => 'hanfu-yunwen-buxie',
+                'name' => '云纹绣花布鞋',
+                'short_description' => '传统云纹绣花布鞋，轻便柔软，适合作为汉服鞋履搭配。',
+                'description' => '以传统绣花云纹与软底鞋型为灵感的汉服布鞋示例商品，用于展示鞋类规格、颜色筛选与国风搭配效果。',
+                'price' => 189.00,
+                'cost' => 72.00,
+                'stock' => 96,
+                'weight' => 1,
+                'image' => 'https://images.pexels.com/photos/36311713/pexels-photo-36311713.jpeg?auto=compress&cs=tinysrgb&w=900',
                 'images' => '[]',
-                'meta_keywords' => 'knit sneakers,casual shoes',
+                'meta_keywords' => 'hanfu,buxie,embroidered cloth shoes,traditional footwear',
                 'category_handles' => ['fake-apparel'],
                 'configurable_attributes' => ['color', 'size'],
-                'attributes' => ['brand' => 'adidas', 'material' => 'knit'],
+                'attributes' => ['brand' => 'jin_xiu_ge', 'material' => 'cotton'],
                 'variants' => [
-                    ['sku' => 'FAKE-STREET-SNEAKERS-BLK-41', 'handle' => 'street-knit-sneakers-black-41', 'name' => 'Street Knit Sneakers Black EU 41', 'price' => 159.00, 'cost' => 66.00, 'stock' => 12, 'color' => 'black', 'size' => '41'],
-                    ['sku' => 'FAKE-STREET-SNEAKERS-BLK-42', 'handle' => 'street-knit-sneakers-black-42', 'name' => 'Street Knit Sneakers Black EU 42', 'price' => 159.00, 'cost' => 66.00, 'stock' => 15, 'color' => 'black', 'size' => '42'],
-                    ['sku' => 'FAKE-STREET-SNEAKERS-WHT-42', 'handle' => 'street-knit-sneakers-white-42', 'name' => 'Street Knit Sneakers White EU 42', 'price' => 159.00, 'cost' => 66.00, 'stock' => 18, 'color' => 'white', 'size' => '42'],
-                    ['sku' => 'FAKE-STREET-SNEAKERS-GREEN-43', 'handle' => 'street-knit-sneakers-green-43', 'name' => 'Street Knit Sneakers Green EU 43', 'price' => 169.00, 'cost' => 72.00, 'stock' => 10, 'color' => 'green', 'size' => '43'],
+                    ['sku' => 'FAKE-HANFU-BUXIE-RED-40', 'handle' => 'hanfu-yunwen-buxie-red-40', 'name' => '云纹绣花布鞋 朱砂 40', 'price' => 189.00, 'cost' => 72.00, 'stock' => 16, 'color' => 'red', 'size' => '40', 'image' => 'https://images.pexels.com/photos/36311713/pexels-photo-36311713.jpeg?auto=compress&cs=tinysrgb&w=900'],
+                    ['sku' => 'FAKE-HANFU-BUXIE-BEI-41', 'handle' => 'hanfu-yunwen-buxie-beige-41', 'name' => '云纹绣花布鞋 米杏 41', 'price' => 189.00, 'cost' => 72.00, 'stock' => 18, 'color' => 'beige', 'size' => '41', 'image' => 'https://images.pexels.com/photos/35222104/pexels-photo-35222104.jpeg?auto=compress&cs=tinysrgb&w=900'],
+                    ['sku' => 'FAKE-HANFU-BUXIE-WHT-42', 'handle' => 'hanfu-yunwen-buxie-white-42', 'name' => '云纹绣花布鞋 月白 42', 'price' => 189.00, 'cost' => 72.00, 'stock' => 14, 'color' => 'white', 'size' => '42', 'image' => 'https://images.pexels.com/photos/12024998/pexels-photo-12024998.jpeg?auto=compress&cs=tinysrgb&w=900'],
+                    ['sku' => 'FAKE-HANFU-BUXIE-GRN-43', 'handle' => 'hanfu-yunwen-buxie-green-43', 'name' => '云纹绣花布鞋 竹青 43', 'price' => 199.00, 'cost' => 78.00, 'stock' => 10, 'color' => 'green', 'size' => '43', 'image' => 'https://images.pexels.com/photos/35069508/pexels-photo-35069508.jpeg?auto=compress&cs=tinysrgb&w=900'],
                 ],
             ],
             ],
@@ -797,6 +905,7 @@ class ProductProvider implements FakeDataProviderInterface
                 continue;
             }
 
+            $this->syncLocalDescriptions($variantId, $variant);
             $this->syncCategories($variantId, $productData);
             $this->saveProductAttributes(
                 $variantId,
@@ -862,9 +971,12 @@ class ProductProvider implements FakeDataProviderInterface
     {
         $image = $this->resolveCategoryImage($handle);
         $englishName = ucwords(str_replace('-', ' ', $handle));
-        $displayName = $this->isMostlyAscii($categoryName) ? $categoryName : $categoryName . '精选款';
+        $profile = $this->resolveCategoryCoverageProfile($handle, $categoryName);
+        $displayName = (string)($profile['name'] ?? ($this->isMostlyAscii($categoryName) ? $categoryName : $categoryName . '精选款'));
+        $resolvedImage = (string)($profile['image'] ?? $image);
+        $metaKeywords = (string)($profile['meta_keywords'] ?? (strtolower($englishName) . ',demo product,category sample'));
 
-        return [
+        return array_replace([
             'sku' => 'DEMO-CAT-' . str_pad((string)$categoryId, 4, '0', STR_PAD_LEFT),
             'spu' => 'DEMO-CAT-' . str_pad((string)$categoryId, 4, '0', STR_PAD_LEFT),
             'handle' => 'demo-category-' . $categoryId . '-' . strtolower(preg_replace('/[^a-z0-9]+/i', '-', $handle)),
@@ -875,15 +987,185 @@ class ProductProvider implements FakeDataProviderInterface
             'cost' => $this->resolveCategoryPrice($handle, $categoryId) * 0.45,
             'stock' => 40 + ($categoryId % 90),
             'weight' => 1 + ($categoryId % 8),
-            'image' => $image,
+            'image' => $resolvedImage,
             'images' => $this->encodeGalleryImages($this->resolveProductGalleryImages(
                 'DEMO-CAT-' . str_pad((string)$categoryId, 4, '0', STR_PAD_LEFT),
                 $displayName,
-                $image
+                $resolvedImage
             )),
-            'meta_keywords' => strtolower($englishName) . ',demo product,category sample',
+            'meta_keywords' => $metaKeywords,
             'category_ids' => [$categoryId],
+            'local_descriptions' => $profile['local_descriptions'] ?? $this->buildCategoryCoverageLocalDescriptions(
+                $handle,
+                $categoryName,
+                $displayName,
+                $englishName,
+                $metaKeywords
+            ),
+        ], $profile);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveCategoryCoverageProfile(string $handle, string $categoryName): array
+    {
+        $needle = strtolower($handle . ' ' . $categoryName);
+
+        return match (true) {
+            str_contains($needle, 'shoe'),
+            str_contains($needle, 'sneaker'),
+            str_contains($needle, '布鞋') => [
+                'name' => '汉服布鞋精选款',
+                'short_description' => '国风绣花布鞋示例商品，适配鞋类筛选与汉服搭配展示。',
+                'description' => '用于演示鞋类分类浏览、筛选与商品卡片的汉服布鞋假数据，保留传统软底鞋与绣花元素的视觉风格。',
+                'image' => 'https://images.pexels.com/photos/36311713/pexels-photo-36311713.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'meta_keywords' => 'hanfu,buxie,embroidered cloth shoes,category sample',
+                'attributes' => ['brand' => 'jin_xiu_ge', 'material' => 'cotton'],
+                'local_descriptions' => [
+                    'zh_Hans_CN' => [
+                        'name' => '汉服布鞋精选款',
+                        'short_description' => '国风绣花布鞋示例商品，适配鞋类筛选与汉服搭配展示。',
+                        'description' => '用于演示鞋类分类浏览、筛选与商品卡片的汉服布鞋假数据，保留传统软底鞋与绣花元素的视觉风格。',
+                        'meta_name' => '汉服布鞋精选款',
+                        'meta_description' => '国风绣花布鞋示例商品，适配鞋类筛选与汉服搭配展示。',
+                        'meta_keywords' => '汉服布鞋,绣花布鞋,类目示例',
+                    ],
+                    'en_US' => [
+                        'name' => 'Hanfu Cloth Shoes Featured Pick',
+                        'short_description' => 'Sample embroidered cloth shoes for shoe filters and hanfu outfit showcases.',
+                        'description' => 'Seeded hanfu cloth shoes demo product for category browsing, filtering, product cards, and storefront smoke tests.',
+                        'meta_name' => 'Hanfu Cloth Shoes Featured Pick',
+                        'meta_description' => 'Sample embroidered cloth shoes for shoe filters and hanfu outfit showcases.',
+                        'meta_keywords' => 'hanfu cloth shoes,embroidered shoes,category sample',
+                    ],
+                ],
+            ],
+            str_contains($needle, 'pant'),
+            str_contains($needle, 'skirt'),
+            str_contains($needle, '裙') => [
+                'name' => '马面裙精选款',
+                'short_description' => '汉服下装示例商品，适配下装分类筛选与规格展示。',
+                'description' => '用于演示下装分类浏览、筛选与商品卡片的马面裙假数据，突出汉服裙装的传统纹样与层次感。',
+                'image' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'meta_keywords' => 'hanfu,mamianqun,traditional chinese skirt,category sample',
+                'attributes' => ['brand' => 'yun_jin_studio', 'material' => 'silk'],
+                'local_descriptions' => [
+                    'zh_Hans_CN' => [
+                        'name' => '马面裙精选款',
+                        'short_description' => '汉服下装示例商品，适配下装分类筛选与规格展示。',
+                        'description' => '用于演示下装分类浏览、筛选与商品卡片的马面裙假数据，突出汉服裙装的传统纹样与层次感。',
+                        'meta_name' => '马面裙精选款',
+                        'meta_description' => '汉服下装示例商品，适配下装分类筛选与规格展示。',
+                        'meta_keywords' => '马面裙,汉服下装,类目示例',
+                    ],
+                    'en_US' => [
+                        'name' => 'Mamian Skirt Featured Pick',
+                        'short_description' => 'Sample hanfu skirt product for apparel filters, specifications, and storefront browsing.',
+                        'description' => 'Seeded mamian skirt demo product for category browsing, filtering, and product cards with traditional hanfu styling cues.',
+                        'meta_name' => 'Mamian Skirt Featured Pick',
+                        'meta_description' => 'Sample hanfu skirt product for apparel filters, specifications, and storefront browsing.',
+                        'meta_keywords' => 'mamian skirt,hanfu skirt,category sample',
+                    ],
+                ],
+            ],
+            str_contains($needle, 'shirt'),
+            str_contains($needle, 't-shirt'),
+            str_contains($needle, 'top'),
+            str_contains($needle, 'clothing'),
+            str_contains($needle, '上衣'),
+            str_contains($needle, '汉服'),
+            str_contains($needle, '服饰') => [
+                'name' => '交领上襦精选款',
+                'short_description' => '汉服上装示例商品，适配服饰分类筛选与商品卡片展示。',
+                'description' => '用于演示服饰分类浏览、筛选与商品卡片的交领上襦假数据，以汉服上装替代普通 T 恤与日常卫衣风格。',
+                'image' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'meta_keywords' => 'hanfu,jiaoling ruao,traditional chinese clothing,category sample',
+                'attributes' => ['brand' => 'hua_chao', 'material' => 'silk'],
+                'local_descriptions' => [
+                    'zh_Hans_CN' => [
+                        'name' => '交领上襦精选款',
+                        'short_description' => '汉服上装示例商品，适配服饰分类筛选与商品卡片展示。',
+                        'description' => '用于演示服饰分类浏览、筛选与商品卡片的交领上襦假数据，以汉服上装替代普通 T 恤与日常卫衣风格。',
+                        'meta_name' => '交领上襦精选款',
+                        'meta_description' => '汉服上装示例商品，适配服饰分类筛选与商品卡片展示。',
+                        'meta_keywords' => '交领上襦,汉服上装,类目示例',
+                    ],
+                    'en_US' => [
+                        'name' => 'Cross-Collar Ruao Featured Pick',
+                        'short_description' => 'Sample hanfu top product for apparel filters, product cards, and category browsing.',
+                        'description' => 'Seeded cross-collar ruao demo product for storefront browsing, filtering, and product-card flows with traditional hanfu styling.',
+                        'meta_name' => 'Cross-Collar Ruao Featured Pick',
+                        'meta_description' => 'Sample hanfu top product for apparel filters, product cards, and category browsing.',
+                        'meta_keywords' => 'cross-collar ruao,hanfu top,category sample',
+                    ],
+                ],
+            ],
+            default => [],
+        };
+    }
+
+    /**
+     * @return array<string, array<string, string>>
+     */
+    private function buildCategoryCoverageLocalDescriptions(
+        string $handle,
+        string $categoryName,
+        string $displayName,
+        string $englishName,
+        string $metaKeywords
+    ): array {
+        $chineseCategoryName = trim($categoryName) !== '' ? $categoryName : $displayName;
+        $englishCategoryName = $this->resolveCategoryCoverageEnglishLabel($handle, $categoryName, $englishName);
+        $englishProductName = $englishCategoryName !== '' ? $englishCategoryName . ' Featured Pick' : 'Featured Category Pick';
+        $englishShortDescription = $englishCategoryName !== ''
+            ? 'Sample ' . strtolower($englishCategoryName) . ' product with realistic storefront demo data.'
+            : 'Sample category product with realistic storefront demo data.';
+        $englishDescription = $englishProductName . ' is a seeded catalog item for category browsing, filters, product cards, and checkout smoke tests.';
+
+        return [
+            'zh_Hans_CN' => [
+                'name' => $displayName,
+                'short_description' => $chineseCategoryName . '类目示例商品，使用更贴近真实店铺的演示数据。',
+                'description' => $displayName . '用于演示分类浏览、筛选、商品卡片与下单流程等店铺前台场景。',
+                'meta_name' => $displayName,
+                'meta_description' => $chineseCategoryName . '类目示例商品，使用更贴近真实店铺的演示数据。',
+                'meta_keywords' => $chineseCategoryName . ',示例商品,分类演示',
+            ],
+            'en_US' => [
+                'name' => $englishProductName,
+                'short_description' => $englishShortDescription,
+                'description' => $englishDescription,
+                'meta_name' => $englishProductName,
+                'meta_description' => $englishShortDescription,
+                'meta_keywords' => $metaKeywords,
+            ],
         ];
+    }
+
+    private function resolveCategoryCoverageEnglishLabel(string $handle, string $categoryName, string $fallback): string
+    {
+        $needle = strtolower($handle . ' ' . $categoryName);
+
+        return match (true) {
+            str_contains($needle, 'bag') => 'Handbag',
+            str_contains($needle, 'shoe'),
+            str_contains($needle, 'sneaker') => 'Shoes',
+            str_contains($needle, 'pant'),
+            str_contains($needle, 'skirt') => 'Skirt',
+            str_contains($needle, 'shirt'),
+            str_contains($needle, 't-shirt'),
+            str_contains($needle, 'top'),
+            str_contains($needle, 'clothing') => 'Apparel',
+            str_contains($needle, 'electronics') => 'Electronics',
+            str_contains($needle, 'phone') => 'Phone',
+            str_contains($needle, 'computer') => 'Computer',
+            str_contains($needle, 'watch') => 'Watch',
+            str_contains($needle, 'home') => 'Home Living',
+            str_contains($needle, 'furniture') => 'Furniture',
+            str_contains($needle, 'kitchen') => 'Kitchen',
+            default => $this->isMostlyAscii($categoryName) ? $categoryName : $fallback,
+        };
     }
 
     private function resolveCategoryImage(string $handle): string
@@ -894,9 +1176,10 @@ class ProductProvider implements FakeDataProviderInterface
             'computer' => 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=80',
             'audio' => 'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=900&q=80',
             'camera' => 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=80',
-            'clothing' => 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=900&q=80',
-            'shirt' => 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80',
-            'shoe' => 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=80',
+            'hanfu' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
+            'clothing' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
+            'shirt' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
+            'shoe' => 'https://images.pexels.com/photos/36311713/pexels-photo-36311713.jpeg?auto=compress&cs=tinysrgb&w=900',
             'bag' => 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=900&q=80',
             'home' => 'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=900&q=80',
             'furniture' => 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=80',
@@ -941,6 +1224,74 @@ class ProductProvider implements FakeDataProviderInterface
     private function isMostlyAscii(string $value): bool
     {
         return preg_match('/^[\x20-\x7E]+$/', $value) === 1;
+    }
+
+    /**
+     * @param array<string, mixed> $productData
+     */
+    private function syncLocalDescriptions(int $productId, array $productData): void
+    {
+        $localDescriptions = $this->resolveProductLocalDescriptions($productData);
+        if ($productId <= 0 || $localDescriptions === []) {
+            return;
+        }
+
+        $records = [];
+        foreach ($localDescriptions as $localeCode => $fields) {
+            $localeCode = trim((string)$localeCode);
+            if ($localeCode === '' || !is_array($fields)) {
+                continue;
+            }
+
+            $name = trim((string)($fields['name'] ?? ''));
+            $shortDescription = trim((string)($fields['short_description'] ?? ''));
+            $description = trim((string)($fields['description'] ?? ''));
+            if ($name === '' && $shortDescription === '' && $description === '') {
+                continue;
+            }
+
+            $records[] = [
+                ProductLocalDescription::schema_fields_ID => $productId,
+                ProductLocalDescription::schema_fields_local_code => $localeCode,
+                ProductLocalDescription::schema_fields_NAME => $name !== '' ? $name : (string)($productData['name'] ?? ''),
+                ProductLocalDescription::schema_fields_SHORT_DESCRIPTION => $shortDescription !== '' ? $shortDescription : (string)($productData['short_description'] ?? ''),
+                ProductLocalDescription::schema_fields_DESCRIPTION => $description !== '' ? $description : (string)($productData['description'] ?? ''),
+                ProductLocalDescription::schema_fields_META_NAME => trim((string)($fields['meta_name'] ?? '')) !== '' ? (string)$fields['meta_name'] : (string)($fields['name'] ?? $productData['name'] ?? ''),
+                ProductLocalDescription::schema_fields_META_DESCRIPTION => trim((string)($fields['meta_description'] ?? '')) !== '' ? (string)$fields['meta_description'] : (string)($fields['short_description'] ?? $productData['short_description'] ?? ''),
+                ProductLocalDescription::schema_fields_META_KEYWORDS => trim((string)($fields['meta_keywords'] ?? '')) !== '' ? (string)$fields['meta_keywords'] : (string)($productData['meta_keywords'] ?? ''),
+            ];
+        }
+
+        if ($records === []) {
+            return;
+        }
+
+        $localDescriptionModel = $this->getProductLocalDescriptionModel();
+        $localDescriptionModel->clear()
+            ->getQuery()
+            ->where(ProductLocalDescription::schema_fields_ID, $productId)
+            ->delete()
+            ->fetch();
+
+        $localDescriptionModel->reset()
+            ->insert($records)
+            ->fetch();
+    }
+
+    /**
+     * @param array<string, mixed> $productData
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolveProductLocalDescriptions(array $productData): array
+    {
+        $localDescriptions = $productData['local_descriptions'] ?? [];
+
+        return is_array($localDescriptions) ? $localDescriptions : [];
+    }
+
+    private function getProductLocalDescriptionModel(): ProductLocalDescription
+    {
+        return $this->productLocalDescription ?? ObjectManager::getInstance(ProductLocalDescription::class);
     }
 
     private function backfillMissingProductImages(): void
@@ -1057,6 +1408,172 @@ class ProductProvider implements FakeDataProviderInterface
         }
     }
 
+    private function cleanupLegacyWesternApparelProducts(): void
+    {
+        $legacySkus = [
+            'FAKE-DAILY-HOODIE-001',
+            'FAKE-DAILY-HOODIE-NAVY-M',
+            'FAKE-DAILY-HOODIE-NAVY-L',
+            'FAKE-DAILY-HOODIE-GRAY-M',
+            'FAKE-DAILY-HOODIE-BLK-XL',
+            'FAKE-CITY-TEE-001',
+            'FAKE-CITY-TEE-WHT-S',
+            'FAKE-CITY-TEE-WHT-M',
+            'FAKE-CITY-TEE-BLK-M',
+            'FAKE-CITY-TEE-BLUE-L',
+            'FAKE-STREET-SNEAKERS-001',
+            'FAKE-STREET-SNEAKERS-BLK-41',
+            'FAKE-STREET-SNEAKERS-BLK-42',
+            'FAKE-STREET-SNEAKERS-WHT-42',
+            'FAKE-STREET-SNEAKERS-GREEN-43',
+        ];
+
+        $productIds = [];
+        foreach ($legacySkus as $sku) {
+            $productId = $this->getProductIdBySku($sku);
+            if ($productId > 0) {
+                $productIds[] = $productId;
+            }
+        }
+        $productIds = array_values(array_unique($productIds));
+        if ($productIds === []) {
+            return;
+        }
+
+        $pdo = $this->product->getConnection()->getConnector()->getLink();
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $statement = $pdo->prepare("SELECT product_id FROM \"m_weshop_product\" WHERE parent_id IN ({$placeholders})");
+        $statement->execute($productIds);
+        foreach ($statement->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $childId = (int)($row['product_id'] ?? 0);
+            if ($childId > 0) {
+                $productIds[] = $childId;
+            }
+        }
+
+        $productIds = array_values(array_unique($productIds));
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $pdo->prepare("DELETE FROM \"m_weshop_product_category\" WHERE product_id IN ({$placeholders})")->execute($productIds);
+        $pdo->prepare("DELETE FROM \"m_weshop_product_option_id\" WHERE product_id IN ({$placeholders}) OR parent_product_id IN ({$placeholders})")
+            ->execute(array_merge($productIds, $productIds));
+        $pdo->prepare("DELETE FROM \"m_eav_product_select_option\" WHERE entity_id IN ({$placeholders})")->execute($productIds);
+        $pdo->prepare("DELETE FROM \"m_weshop_product\" WHERE product_id IN ({$placeholders})")->execute($productIds);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function resolveRootProductIdsFromRecords(FakeDataContext $context): array
+    {
+        $records = $context->getRecordService()->getRecords(self::CODE, self::ENTITY_PRODUCT);
+        $candidateIds = [];
+        foreach ($records as $record) {
+            $productId = (int)($record['entity_id'] ?? 0);
+            if ($productId > 0) {
+                $candidateIds[] = $productId;
+            }
+        }
+        $candidateIds = array_values(array_unique($candidateIds));
+        if ($candidateIds === []) {
+            return [];
+        }
+
+        $rows = $this->product->clear()
+            ->fields(Product::schema_fields_ID . ',' . Product::schema_fields_parent_id)
+            ->where(Product::schema_fields_ID, $candidateIds, 'in')
+            ->select()
+            ->fetchArray();
+
+        $productIds = [];
+        foreach ($rows as $row) {
+            $productId = (int)($row[Product::schema_fields_ID] ?? 0);
+            $parentId = (int)($row[Product::schema_fields_parent_id] ?? 0);
+            if ($productId > 0 && $parentId === 0) {
+                $productIds[] = $productId;
+            }
+        }
+
+        sort($productIds);
+        return $productIds;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function resolveReviewCustomerIds(): array
+    {
+        $rows = $this->getCustomerModel()->reset()
+            ->fields(Customer::schema_fields_ID)
+            ->order(Customer::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        $customerIds = [];
+        foreach ($rows as $row) {
+            $customerId = (int)($row[Customer::schema_fields_ID] ?? 0);
+            if ($customerId > 0) {
+                $customerIds[] = $customerId;
+            }
+        }
+
+        return $customerIds !== [] ? array_values(array_unique($customerIds)) : [1];
+    }
+
+    private function resolveReviewRating(int $productId, int $index): int
+    {
+        $pattern = [5, 5, 4, 4, 5, 3, 4, 5, 2, 5];
+        return $pattern[($productId + $index) % count($pattern)];
+    }
+
+    private function buildReviewTimestamp(int $productId, int $index): string
+    {
+        $daysAgo = (($productId + $index * 11) % 160) + 1;
+        $hoursAgo = (($productId + $index * 17) % 23);
+        return date('Y-m-d H:i:s', strtotime("-{$daysAgo} days -{$hoursAgo} hours"));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function getSampleReviewTitles(): array
+    {
+        return [
+            '做工精致',
+            '上身很有气质',
+            '配色很雅致',
+            '版型非常好',
+            '适合日常穿搭',
+            '细节超出预期',
+            '面料垂感不错',
+            '整体很满意',
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function getSampleReviewContents(): array
+    {
+        return [
+            '实物比图片更有层次，面料轻盈，搭配马面裙和披帛都很顺。',
+            '颜色很正，汉服细节处理得不错，日常拍照和活动穿着都合适。',
+            '版型端正，袖型自然，整体不会显得臃肿，穿起来很有国风气质。',
+            '绣花和纹样比较精致，鞋子或裙摆的做工也比预期稳，值得推荐。',
+            '尺码比较合适，穿着舒适，和页面展示的汉服风格基本一致。',
+            '适合做入门汉服穿搭，价格和完成度比较平衡，整体体验很好。',
+        ];
+    }
+
+    private function getReviewModel(): Review
+    {
+        return $this->review ?? ObjectManager::getInstance(Review::class);
+    }
+
+    private function getCustomerModel(): Customer
+    {
+        return $this->customer ?? ObjectManager::getInstance(Customer::class);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -1156,16 +1673,16 @@ class ProductProvider implements FakeDataProviderInterface
                 'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=900&q=80',
             ],
             'apparel' => [
-                'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=900&q=80',
-                'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80',
-                'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=80',
-                'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=900&q=80',
+                'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=900',
             ],
             'shoes' => [
-                'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=80',
-                'https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=900&q=80',
-                'https://images.unsplash.com/photo-1460353581641-37baddab0fa2?auto=format&fit=crop&w=900&q=80',
-                'https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?auto=format&fit=crop&w=900&q=80',
+                'https://images.pexels.com/photos/36311713/pexels-photo-36311713.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'https://images.pexels.com/photos/12024998/pexels-photo-12024998.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'https://images.pexels.com/photos/35222104/pexels-photo-35222104.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'https://images.pexels.com/photos/35069508/pexels-photo-35069508.jpeg?auto=compress&cs=tinysrgb&w=900',
             ],
             'home' => [
                 'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=900&q=80',
@@ -1188,6 +1705,11 @@ class ProductProvider implements FakeDataProviderInterface
         ];
 
         return match (true) {
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'jiaoling'),
+            str_contains($needle, 'ruao'),
+            str_contains($needle, 'mamian'),
+            str_contains($needle, 'ruqun'),
             str_contains($needle, 'gallery_family:apparel'),
             str_contains($needle, 'fake-apparel'),
             str_contains($needle, 'daily-wear') => $sets['apparel'],
@@ -1198,6 +1720,9 @@ class ProductProvider implements FakeDataProviderInterface
             str_contains($needle, 'watchface'),
             str_contains($needle, 'preset'),
             str_contains($needle, 'download') => $sets['digital'],
+            str_contains($needle, 'buxie'),
+            str_contains($needle, 'cloth shoes'),
+            str_contains($needle, 'embroidered shoes'),
             str_contains($needle, 'shoe'),
             str_contains($needle, 'sneaker') => $sets['shoes'],
             str_contains($needle, 'hoodie'),
@@ -1243,6 +1768,11 @@ class ProductProvider implements FakeDataProviderInterface
             'logitech' => 'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?auto=format&fit=crop&w=900&q=80',
             'canon' => 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=80',
             'apple-watch' => 'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?auto=format&fit=crop&w=900&q=80',
+            'hanfu' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
+            'jiaoling' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
+            'ruao' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
+            'mamian' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
+            'buxie' => 'https://images.pexels.com/photos/36311713/pexels-photo-36311713.jpeg?auto=compress&cs=tinysrgb&w=900',
             'nike' => 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=80',
             'adidas' => 'https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=900&q=80',
             'uniqlo' => 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80',
@@ -1382,6 +1912,11 @@ class ProductProvider implements FakeDataProviderInterface
             'bose' => 'bose',
             'logitech' => 'logitech',
             'canon' => 'canon',
+            'hanfu' => 'hua_chao',
+            'jiaoling' => 'hua_chao',
+            'ruao' => 'hua_chao',
+            'mamian' => 'yun_jin_studio',
+            'buxie' => 'jin_xiu_ge',
             'nike' => 'nike',
             'adidas' => 'adidas',
             'levis' => 'levis',
@@ -1413,6 +1948,11 @@ class ProductProvider implements FakeDataProviderInterface
             'earbuds' => 'plastic',
             'keyboard' => 'plastic',
             'mouse' => 'plastic',
+            'hanfu' => 'silk',
+            'jiaoling' => 'silk',
+            'ruao' => 'silk',
+            'mamian' => 'silk',
+            'buxie' => 'cotton',
             'hoodie' => 'cotton_blend',
             't-shirt' => 'cotton',
             'tee' => 'cotton',
@@ -1457,6 +1997,10 @@ class ProductProvider implements FakeDataProviderInterface
         }
 
         $definition = $this->getAttributeDefinitions()[$attributeCode] ?? ['name' => ucfirst(str_replace('_', ' ', $attributeCode))];
+        $groupId = $this->ensureAttributeGroupId($this->getDefaultProductSetId());
+        if ($groupId <= 0) {
+            return 0;
+        }
         $statement = $pdo->prepare(
             'INSERT INTO "m_eav_attribute" '
             . '(code, eav_entity_id, set_id, group_id, name, type_id, basic_is_enable, frontend_is_visible, frontend_is_filterable, frontend_is_searchable, data_is_multiple, data_has_option) '
@@ -1466,7 +2010,7 @@ class ProductProvider implements FakeDataProviderInterface
             $attributeCode,
             $entityId,
             $this->getDefaultProductSetId(),
-            $this->getDefaultAttributeGroupId(),
+            $groupId,
             (string)$definition['name'],
             $this->getSelectTypeId(),
             1,
@@ -1637,14 +2181,108 @@ class ProductProvider implements FakeDataProviderInterface
 
     private function getDefaultAttributeGroupId(): int
     {
+        return $this->ensureAttributeGroupId($this->getDefaultProductSetId());
+    }
+
+    private function ensureAttributeGroupId(int $setId): int
+    {
+        if ($setId <= 0) {
+            return 0;
+        }
+
         $groupModel = $this->attributeGroup ?? ObjectManager::getInstance(Group::class);
         $group = $groupModel->reset()
             ->where(Group::schema_fields_code, 'default')
-            ->where(Group::schema_fields_set_id, $this->getDefaultProductSetId())
+            ->where(Group::schema_fields_set_id, $setId)
             ->where(Group::schema_fields_eav_entity_id, $this->getProductEntityId())
             ->find()
             ->fetch();
-        return (int)($group->getId() ?? 0);
+        $groupId = (int)($group->getId() ?? 0);
+        if ($groupId > 0) {
+            return $groupId;
+        }
+
+        $groupModel->reset()->clearData();
+        $groupModel->setData(Group::schema_fields_code, 'default')
+            ->setData(Group::schema_fields_set_id, $setId)
+            ->setData(Group::schema_fields_eav_entity_id, $this->getProductEntityId())
+            ->setData(Group::schema_fields_name, '默认属性组')
+            ->forceCheck(true, [Group::schema_fields_code, Group::schema_fields_set_id, Group::schema_fields_eav_entity_id])
+            ->save();
+
+        return (int)($groupModel->getId() ?? 0);
+    }
+
+    private function resolveProductAttributeSetId(array $productData): int
+    {
+        $entityId = $this->getProductEntityId();
+        if ($entityId <= 0) {
+            return 0;
+        }
+
+        $setMeta = $this->resolveProductAttributeSetMeta($productData);
+        $setModel = $this->attributeSet ?? ObjectManager::getInstance(Set::class);
+        $existing = $setModel->reset()
+            ->where(Set::schema_fields_code, $setMeta['code'])
+            ->where(Set::schema_fields_eav_entity_id, $entityId)
+            ->find()
+            ->fetch();
+        $setId = (int)($existing->getId() ?? 0);
+        if ($setId > 0) {
+            $this->ensureAttributeGroupId($setId);
+            return $setId;
+        }
+
+        $setModel->reset()->clearData();
+        $setModel->setData(Set::schema_fields_code, $setMeta['code'])
+            ->setData(Set::schema_fields_eav_entity_id, $entityId)
+            ->setData(Set::schema_fields_name, $setMeta['name'])
+            ->forceCheck(true, [Set::schema_fields_code, Set::schema_fields_eav_entity_id])
+            ->save();
+
+        $setId = (int)($setModel->getId() ?? 0);
+        if ($setId > 0) {
+            $this->ensureAttributeGroupId($setId);
+        }
+
+        return $setId;
+    }
+
+    /**
+     * @return array{code:string,name:string}
+     */
+    private function resolveProductAttributeSetMeta(array $productData): array
+    {
+        $needle = strtolower(
+            (string)($productData['sku'] ?? '') . ' '
+            . (string)($productData['name'] ?? '') . ' '
+            . (string)($productData['meta_keywords'] ?? '') . ' '
+            . implode(' ', array_map('strval', $productData['category_handles'] ?? []))
+        );
+
+        return match (true) {
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'apparel'),
+            str_contains($needle, 'clothing'),
+            str_contains($needle, 'daily-wear'),
+            str_contains($needle, 'shoe'),
+            str_contains($needle, 'buxie') => ['code' => 'apparel', 'name' => '服饰属性集'],
+            str_contains($needle, 'iphone'),
+            str_contains($needle, 'galaxy'),
+            str_contains($needle, 'electronics'),
+            str_contains($needle, 'smart-device'),
+            str_contains($needle, 'audio'),
+            str_contains($needle, 'computer'),
+            str_contains($needle, 'laptop') => ['code' => 'electronics', 'name' => '电子属性集'],
+            str_contains($needle, 'download'),
+            str_contains($needle, 'watchface'),
+            str_contains($needle, 'preset') => ['code' => 'digital', 'name' => '数字商品属性集'],
+            str_contains($needle, 'home'),
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'table'),
+            str_contains($needle, 'lamp') => ['code' => 'home', 'name' => '家居属性集'],
+            default => ['code' => 'default', 'name' => '默认属性集'],
+        };
     }
 
     private function getSelectTypeId(): int
@@ -1711,6 +2349,7 @@ class ProductProvider implements FakeDataProviderInterface
                 'plastic' => ['value' => 'Plastic'],
                 'cotton' => ['value' => 'Cotton'],
                 'cotton_blend' => ['value' => 'Cotton Blend'],
+                'silk' => ['value' => 'Silk'],
                 'linen' => ['value' => 'Linen'],
                 'oak' => ['value' => 'Oak'],
                 'metal' => ['value' => 'Metal'],
@@ -1724,6 +2363,9 @@ class ProductProvider implements FakeDataProviderInterface
                 'bose' => ['value' => 'Bose'],
                 'logitech' => ['value' => 'Logitech'],
                 'canon' => ['value' => 'Canon'],
+                'hua_chao' => ['value' => 'Huachao Hanfu'],
+                'yun_jin_studio' => ['value' => 'Yunjin Studio'],
+                'jin_xiu_ge' => ['value' => 'Jinxiu Pavilion'],
                 'nike' => ['value' => 'Nike'],
                 'adidas' => ['value' => 'Adidas'],
                 'levis' => ['value' => 'Levi\'s'],

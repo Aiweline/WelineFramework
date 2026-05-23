@@ -659,11 +659,18 @@
             el.style.display = count > 0 ? '' : 'none';
         });
 
+        if (window.WeShopCartHydrate && typeof window.WeShopCartHydrate.writeCartCookie === 'function') {
+            window.WeShopCartHydrate.writeCartCookie(count);
+        }
+
         // 触发购物车更新事件
         dispatchEvent('weshop:cart:updated', { 
             count: count,
             cart_count: count,
         });
+        window.dispatchEvent(new CustomEvent('weline:cart:update', {
+            detail: { count: count, cart_count: count },
+        }));
     }
 
     /**

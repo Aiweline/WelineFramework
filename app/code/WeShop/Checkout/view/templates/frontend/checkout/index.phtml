@@ -29,6 +29,11 @@ if ($customerEmail === '' && $customer && method_exists($customer, 'getUsername'
     $candidateEmail = (string) $customer->getUsername();
     $customerEmail = filter_var($candidateEmail, FILTER_VALIDATE_EMAIL) ? $candidateEmail : '';
 }
+$customerData = [
+    'user_id' => $customer && method_exists($customer, 'getId') ? (int) $customer->getId() : 0,
+    'username' => $customer && method_exists($customer, 'getUsername') ? (string) $customer->getUsername() : '',
+    'email' => $customerEmail,
+];
 $formatCheckoutPrice = static function (float $amount) use ($checkoutCurrency): string {
     return \Weline\Currency\Helper\CurrencyFormatter::format($amount, $checkoutCurrency);
 };
@@ -292,6 +297,106 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
         background: color-mix(in srgb, var(--color-error, #ef4444) 10%, var(--color-bg-primary, #fff));
     }
 
+    .weshop-checkout-auth-modal[hidden] {
+        display: none !important;
+    }
+
+    .weshop-checkout-auth-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+    }
+
+    .weshop-checkout-auth-modal__backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.48);
+        backdrop-filter: blur(6px);
+    }
+
+    .weshop-checkout-auth-modal__dialog {
+        position: relative;
+        z-index: 1;
+        width: min(100%, 32rem);
+        border: 1px solid var(--color-border-light, #e5e7eb);
+        border-radius: 1.25rem;
+        padding: 1.25rem;
+        background: var(--color-bg-primary, #fff);
+        box-shadow: 0 30px 80px rgba(15, 23, 42, 0.24);
+    }
+
+    .weshop-checkout-auth-modal__header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+
+    .weshop-checkout-auth-modal__title {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: var(--color-text-primary, #111827);
+    }
+
+    .weshop-checkout-auth-modal__desc {
+        margin: 0.35rem 0 0;
+        color: var(--color-text-secondary, #6b7280);
+        font-size: 0.9rem;
+        line-height: 1.6;
+    }
+
+    .weshop-checkout-auth-modal__close {
+        border: 0;
+        background: transparent;
+        color: var(--color-text-secondary, #6b7280);
+        font-size: 1.5rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .weshop-checkout-auth-modal__form {
+        display: grid;
+        gap: 0.9rem;
+    }
+
+    .weshop-checkout-auth-modal__actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        margin-top: 0.35rem;
+    }
+
+    .weshop-checkout-auth-modal__btn {
+        min-height: 2.9rem;
+        border-radius: 0.85rem;
+        padding: 0 1rem;
+        font-size: 0.95rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .weshop-checkout-auth-modal__btn--ghost {
+        border: 1px solid var(--color-border-default, #d1d5db);
+        color: var(--color-text-primary, #111827);
+        background: var(--color-bg-primary, #fff);
+    }
+
+    .weshop-checkout-auth-modal__btn--primary {
+        border: 1px solid var(--color-primary-border, var(--color-primary, #f0c14b));
+        color: var(--color-primary-contrast, #111827);
+        background: linear-gradient(180deg, var(--color-primary-light, #f4d078), var(--color-primary, #f0c14b));
+    }
+
+    .weshop-checkout-auth-modal__btn:disabled {
+        opacity: 0.7;
+        cursor: wait;
+    }
+
     .weshop-checkout-terms {
         display: flex;
         gap: 0.65rem;
@@ -545,8 +650,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                             type="radio"
                             name="checkout_mode"
                             value="customer"
-                            <?= !$isGuestCheckout && $customerCheckoutAllowed ? 'checked' : '' ?>
-                            <?= $customerCheckoutAllowed ? '' : 'disabled' ?>
+                            <?= !$isGuestCheckout ? 'checked' : '' ?>
                             data-weshop-checkout-mode-input
                         >
                         <span>
@@ -790,6 +894,44 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     </div>
 </div>
 
+<div class="weshop-checkout-auth-modal" data-weshop-auth-modal hidden aria-hidden="true">
+    <div class="weshop-checkout-auth-modal__backdrop" data-weshop-auth-close></div>
+    <div class="weshop-checkout-auth-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="weshop-checkout-auth-title">
+        <div class="weshop-checkout-auth-modal__header">
+            <div>
+                <h2 class="weshop-checkout-auth-modal__title" id="weshop-checkout-auth-title"><?= __('登录后使用账户结账') ?></h2>
+                <p class="weshop-checkout-auth-modal__desc"><?= __('登录成功后会自动同步账户邮箱、已保存地址，以及当前可用的配送和支付方式。') ?></p>
+            </div>
+            <button type="button" class="weshop-checkout-auth-modal__close" data-weshop-auth-close aria-label="<?= $escape(__('关闭')) ?>">×</button>
+        </div>
+        <form class="weshop-checkout-auth-modal__form" data-weshop-auth-form>
+            <div class="weshop-checkout-alert" data-weshop-auth-alert role="alert"></div>
+            <div class="weshop-checkout-field full">
+                <label for="weshop-auth-username"><?= __('用户名或邮箱') ?></label>
+                <input id="weshop-auth-username" name="username" type="text" autocomplete="username" required>
+            </div>
+            <div class="weshop-checkout-field full">
+                <label for="weshop-auth-password"><?= __('密码') ?></label>
+                <input id="weshop-auth-password" name="password" type="password" autocomplete="current-password" required>
+            </div>
+            <div class="weshop-checkout-field full">
+                <label for="weshop-auth-remember-duration"><?= __('登录保持时长') ?></label>
+                <select id="weshop-auth-remember-duration" name="remember_duration">
+                    <option value="0"><?= __('本次会话') ?></option>
+                    <option value="21600"><?= __('6 小时') ?></option>
+                    <option value="86400"><?= __('1 天') ?></option>
+                    <option value="604800" selected><?= __('1 周') ?></option>
+                    <option value="2592000"><?= __('1 个月') ?></option>
+                </select>
+            </div>
+            <div class="weshop-checkout-auth-modal__actions">
+                <button type="button" class="weshop-checkout-auth-modal__btn weshop-checkout-auth-modal__btn--ghost" data-weshop-auth-close><?= __('取消') ?></button>
+                <button type="submit" class="weshop-checkout-auth-modal__btn weshop-checkout-auth-modal__btn--primary" data-weshop-auth-submit><?= __('登录并继续') ?></button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
     (function () {
         var form = document.getElementById('weshop-checkout-form');
@@ -799,6 +941,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
 
         var successUrl = '<?= $this->getUrl('checkout/success') ?>';
         var checkoutApiPromise = null;
+        var accountApiPromise = null;
         var submitButton = form.querySelector('[data-weshop-place-order]');
         var alertBox = form.querySelector('[data-weshop-checkout-alert]');
         var shippingMethodHost = document.querySelector('[data-weshop-shipping-method-host]');
@@ -826,8 +969,17 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
         var newAddressGrid = document.querySelector('[data-weshop-new-address-grid]');
         var addressFields = Array.prototype.slice.call(form.querySelectorAll('[data-new-address-field]'));
         var requiredAddressFields = Array.prototype.slice.call(form.querySelectorAll('[data-guest-address-required]'));
+        var guestEmailInput = form.querySelector('input[name="guest_email"]');
+        var authModal = document.querySelector('[data-weshop-auth-modal]');
+        var authForm = authModal ? authModal.querySelector('[data-weshop-auth-form]') : null;
+        var authAlert = authModal ? authModal.querySelector('[data-weshop-auth-alert]') : null;
+        var authSubmitButton = authModal ? authModal.querySelector('[data-weshop-auth-submit]') : null;
+        var authUsernameInput = authModal ? authModal.querySelector('input[name="username"]') : null;
+        var authPasswordInput = authModal ? authModal.querySelector('input[name="password"]') : null;
         var refreshTimer = null;
         var initialCartSummary = <?= json_encode($cartSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        var isAuthenticatedCustomer = <?= $customerCheckoutAllowed ? 'true' : 'false' ?>;
+        var currentCustomer = <?= json_encode($customerData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
         function escapeHtml(value) {
             return String(value || '').replace(/[&<>"']/g, function (character) {
@@ -848,6 +1000,15 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                     : Promise.reject(new Error('Weline.Api is unavailable.'));
             }
             return checkoutApiPromise;
+        }
+
+        function getAccountApi() {
+            if (!accountApiPromise) {
+                accountApiPromise = window.Weline && window.Weline.Api
+                    ? window.Weline.Api.resource('account')
+                    : Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+            return accountApiPromise;
         }
 
         function formDataToObject(formData) {
@@ -929,6 +1090,20 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             syncAddressRequiredState();
             if (shouldRefresh !== false) {
                 scheduleCheckoutMethodRefresh();
+            }
+        }
+
+        function ensureCustomerModeChecked() {
+            var customerModeInput = form.querySelector('input[name="checkout_mode"][value="customer"]');
+            if (customerModeInput) {
+                customerModeInput.checked = true;
+            }
+        }
+
+        function ensureGuestModeChecked() {
+            var guestModeInput = form.querySelector('input[name="checkout_mode"][value="guest"]');
+            if (guestModeInput) {
+                guestModeInput.checked = true;
             }
         }
 
@@ -1051,6 +1226,186 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             host.innerHTML = html;
         }
 
+        function renderSavedAddressList(addresses, selectedAddressId) {
+            if (!savedAddressList) {
+                return;
+            }
+
+            var items = Array.isArray(addresses) ? addresses : [];
+            var html = '';
+
+            if (items.length > 0) {
+                items.forEach(function (address, index) {
+                    if (!address) {
+                        return;
+                    }
+
+                    var addressId = parseInt(address.address_id || address.delivery_address_id || '0', 10) || 0;
+                    var isChecked = selectedAddressId > 0 ? addressId === selectedAddressId : index === 0;
+                    var name = address.name || [address.firstname || '', address.lastname || ''].join(' ').trim();
+                    var region = address.state || address.region || '';
+
+                    html += '<label class="weshop-checkout-choice">'
+                        + '<input type="radio" name="shipping_address_id" value="' + escapeHtml(String(addressId)) + '"' + (isChecked ? ' checked' : '') + '>'
+                        + '<span>'
+                        + '<span class="weshop-checkout-choice-title">' + escapeHtml(name) + '</span>'
+                        + '<span class="weshop-checkout-choice-meta">'
+                        + escapeHtml(address.street || '') + '<br>'
+                        + escapeHtml(address.city || '') + ', ' + escapeHtml(region) + ' ' + escapeHtml(address.postcode || '')
+                        + '</span>'
+                        + '</span>'
+                        + '</label>';
+                });
+
+                html += '<label class="weshop-checkout-choice">'
+                    + '<input type="radio" name="shipping_address_id" value="0"' + (selectedAddressId <= 0 ? ' checked' : '') + '>'
+                    + '<span>'
+                    + '<span class="weshop-checkout-choice-title"><?= $escape((string) __('使用新地址')) ?></span>'
+                    + '<span class="weshop-checkout-choice-meta"><?= $escape((string) __('在下方填写新的收货地址。')) ?></span>'
+                    + '</span>'
+                    + '</label>';
+            } else {
+                html = '<label class="weshop-checkout-choice weshop-checkout-address-empty" data-weshop-account-address-empty>'
+                    + '<input type="radio" name="shipping_address_id" value="0" checked>'
+                    + '<span>'
+                    + '<span class="weshop-checkout-choice-title"><?= $escape((string) __('添加新的收货地址')) ?></span>'
+                    + '<span class="weshop-checkout-choice-meta"><?= $escape((string) __('当前账户还没有保存地址，填写下方地址即可完成本次结账。')) ?></span>'
+                    + '</span>'
+                    + '</label>';
+            }
+
+            savedAddressList.innerHTML = html;
+        }
+
+        function fillShippingAddressFields(address) {
+            if (!address || typeof address !== 'object') {
+                return;
+            }
+
+            ['firstname', 'lastname', 'street', 'city', 'region', 'postcode', 'telephone', 'country_id'].forEach(function (key) {
+                var field = form.querySelector('[name="shipping_address[' + key + ']"]');
+                if (!field) {
+                    return;
+                }
+
+                var value = address[key];
+                if ((key === 'region') && (value == null || value === '')) {
+                    value = address.state || '';
+                }
+                if (value == null || value === '') {
+                    return;
+                }
+
+                field.value = String(value);
+            });
+        }
+
+        function applyCheckoutContext(data) {
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+
+            isAuthenticatedCustomer = Boolean(data.customer_checkout_allowed);
+            currentCustomer = data.customer || currentCustomer || null;
+
+            if (guestEmailInput) {
+                if (currentCustomer && currentCustomer.email) {
+                    guestEmailInput.value = String(currentCustomer.email);
+                } else if (data.guest_email) {
+                    guestEmailInput.value = String(data.guest_email);
+                }
+            }
+
+            renderSavedAddressList(data.saved_addresses || [], parseInt(data.selected_shipping_address_id || '0', 10) || 0);
+            renderMethodList(shippingMethodHost, data.shipping_methods || [], 'shipping_method', '<?= $escape((string) __('当前收货地址没有可用配送方式。')) ?>');
+            renderMethodList(paymentMethodHost, data.payment_methods || [], 'payment_method', '<?= $escape((string) __('当前没有可用的支付方式。')) ?>');
+            renderCartSummary(data.cart_summary || {});
+
+            if (Array.isArray(data.saved_addresses) && data.saved_addresses.length > 0) {
+                fillShippingAddressFields(data.saved_addresses[0]);
+            }
+
+            ensureCustomerModeChecked();
+            syncCheckoutModeState(false);
+        }
+
+        function refreshCheckoutContext() {
+            return getCheckoutApi().then(function (CheckoutApi) {
+                return CheckoutApi.context({form: formDataToObject(new FormData(form))}, {
+                    onError: function (_status, error) {
+                        showCheckoutMessage((error && error.message) || '<?= $escape((string) __('暂时无法同步登录后的结账信息。')) ?>', 'error');
+                    }
+                });
+            }).then(function (payload) {
+                if (!payload || !payload.success) {
+                    throw new Error((payload && payload.message) || '<?= $escape((string) __('暂时无法同步登录后的结账信息。')) ?>');
+                }
+
+                applyCheckoutContext(payload.data || {});
+                return payload.data || {};
+            });
+        }
+
+        function showAuthAlert(message, type) {
+            if (!authAlert) {
+                return;
+            }
+
+            authAlert.textContent = message || '';
+            authAlert.classList.toggle('is-visible', Boolean(message));
+            authAlert.classList.toggle('is-error', type === 'error');
+        }
+
+        function openAuthModal() {
+            if (!authModal) {
+                return;
+            }
+
+            authModal.hidden = false;
+            authModal.setAttribute('aria-hidden', 'false');
+            showAuthAlert('', '');
+            if (authUsernameInput) {
+                authUsernameInput.focus();
+            }
+        }
+
+        function closeAuthModal() {
+            if (!authModal) {
+                return;
+            }
+
+            authModal.hidden = true;
+            authModal.setAttribute('aria-hidden', 'true');
+            showAuthAlert('', '');
+            if (authPasswordInput) {
+                authPasswordInput.value = '';
+            }
+        }
+
+        function normalizeLoginPayload(raw) {
+            if (raw == null) {
+                return null;
+            }
+            if (typeof raw === 'object' && !Array.isArray(raw)) {
+                if (
+                    typeof raw.success !== 'undefined'
+                    || typeof raw.redirect !== 'undefined'
+                    || raw.status === 'authenticated'
+                    || raw.status === 'challenge_required'
+                ) {
+                    return raw;
+                }
+                if (raw.data && typeof raw.data === 'object') {
+                    return normalizeLoginPayload(raw.data);
+                }
+            }
+            return null;
+        }
+
+        function isLoginSuccessPayload(payload) {
+            return Boolean(payload && (payload.success === true || payload.status === 'authenticated'));
+        }
+
         function refreshCheckoutMethods() {
             return getCheckoutApi().then(function (CheckoutApi) {
                 return CheckoutApi.methods({form: formDataToObject(new FormData(form))}, {
@@ -1100,6 +1455,12 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             }
 
             if (target.name === 'checkout_mode') {
+                if (target.value === 'customer' && !isAuthenticatedCustomer) {
+                    ensureGuestModeChecked();
+                    syncCheckoutModeState(false);
+                    openAuthModal();
+                    return;
+                }
                 syncCheckoutModeState(true);
                 return;
             }
@@ -1128,6 +1489,76 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
         addressFields.forEach(function (field) {
             field.addEventListener('input', scheduleCheckoutMethodRefresh);
         });
+
+        if (authModal) {
+            Array.prototype.slice.call(authModal.querySelectorAll('[data-weshop-auth-close]')).forEach(function (button) {
+                button.addEventListener('click', function () {
+                    closeAuthModal();
+                    ensureGuestModeChecked();
+                    syncCheckoutModeState(false);
+                });
+            });
+        }
+
+        if (authForm) {
+            authForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                showAuthAlert('', '');
+
+                if (!authUsernameInput.value.trim()) {
+                    showAuthAlert('<?= $escape((string) __('请输入用户名或邮箱。')) ?>', 'error');
+                    authUsernameInput.focus();
+                    return;
+                }
+
+                if (!authPasswordInput.value) {
+                    showAuthAlert('<?= $escape((string) __('请输入密码。')) ?>', 'error');
+                    authPasswordInput.focus();
+                    return;
+                }
+
+                if (authSubmitButton) {
+                    authSubmitButton.disabled = true;
+                }
+
+                getAccountApi().then(function (AccountApi) {
+                    return AccountApi.login({
+                        username: authUsernameInput.value.trim(),
+                        password: authPasswordInput.value,
+                        remember_duration: Number((authForm.querySelector('[name="remember_duration"]') || {}).value || 0),
+                        redirect_url: window.location.pathname + window.location.search
+                    }, {
+                        silent: true
+                    });
+                }).then(function (payload) {
+                    var data = normalizeLoginPayload(payload);
+                    if (!isLoginSuccessPayload(data)) {
+                        throw new Error((data && data.message) || '<?= $escape((string) __('登录失败，请检查用户名和密码。')) ?>');
+                    }
+
+                    if (data.status === 'challenge_required') {
+                        throw new Error('<?= $escape((string) __('当前账户需要完成额外验证，请先在独立登录页完成登录。')) ?>');
+                    }
+
+                    currentCustomer = data.user || currentCustomer;
+                    isAuthenticatedCustomer = true;
+                    closeAuthModal();
+                    ensureCustomerModeChecked();
+                    return refreshCheckoutContext();
+                }).then(function () {
+                    showCheckoutMessage('<?= $escape((string) __('已切换到账户结账，并同步账户信息。')) ?>', '');
+                }).catch(function (error) {
+                    console.error('Checkout login error:', error);
+                    showAuthAlert((error && error.message) || '<?= $escape((string) __('登录请求失败，请稍后重试。')) ?>', 'error');
+                    ensureGuestModeChecked();
+                    syncCheckoutModeState(false);
+                }).finally(function () {
+                    if (authSubmitButton) {
+                        authSubmitButton.disabled = false;
+                    }
+                });
+            });
+        }
 
         form.addEventListener('submit', function (event) {
             event.preventDefault();

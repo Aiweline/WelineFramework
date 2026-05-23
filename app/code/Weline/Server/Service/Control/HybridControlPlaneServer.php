@@ -16,6 +16,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     private const SUPERVISOR_CLIENT_ID_BASE = 1000000;
 
     private ?string $expectedInstanceCode = null;
+    private string $expectedControlToken = '';
     private mixed $messageHandler = null;
     private mixed $disconnectHandler = null;
     private bool $windowsNativeSocketBridgeEnabled = false;
@@ -54,6 +55,7 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         if ($this->expectedInstanceCode !== null) {
             $this->controlServer->setExpectedInstanceCode($this->expectedInstanceCode);
         }
+        $this->controlServer->setExpectedControlToken($this->expectedControlToken);
         $this->controlServer->onMessage(function (array $msg, int $clientId, MasterControlServer $server): void {
             if ($this->messageHandler !== null) {
                 ($this->messageHandler)($msg, $clientId, $this);
@@ -122,6 +124,12 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
     {
         $this->expectedInstanceCode = $instanceCode;
         $this->controlServer->setExpectedInstanceCode($instanceCode);
+    }
+
+    public function setExpectedControlToken(string $controlToken): void
+    {
+        $this->expectedControlToken = \trim($controlToken);
+        $this->controlServer->setExpectedControlToken($this->expectedControlToken);
     }
 
     public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int

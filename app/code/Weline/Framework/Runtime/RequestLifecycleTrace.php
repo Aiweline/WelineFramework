@@ -88,7 +88,9 @@ class RequestLifecycleTrace
         }
 
         $enabled = false;
-        if (\defined('DEV') && DEV) {
+        if (self::isExplicitPersistentTraceRequested()) {
+            $enabled = true;
+        } elseif (\defined('DEV') && DEV) {
             $enabled = true;
         } elseif (\defined('DEBUG') && DEBUG) {
             $enabled = true;
@@ -126,12 +128,46 @@ class RequestLifecycleTrace
     private static function isPersistentRequestTraceAllowed(): bool
     {
         if (!\class_exists(\Weline\Framework\App\Env::class, false)) {
-            return false;
+            return self::isExplicitPersistentTraceRequested();
         }
 
         $panelEnabled = (bool)\Weline\Framework\App\Env::get('wls.debug.dev_tool_panel', false);
 
-        return (bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', $panelEnabled);
+        return self::isExplicitPersistentTraceRequested()
+            || (bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', $panelEnabled);
+    }
+
+    private static function isExplicitPersistentTraceRequested(): bool
+    {
+        $header = (string)($_SERVER['HTTP_X_WELINE_TRACE'] ?? '');
+        if ($header === '1' || \strtolower($header) === 'true') {
+            return true;
+        }
+
+        $query = (string)($_SERVER['QUERY_STRING'] ?? '');
+        if ($query === '') {
+            $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            if ($requestUri === '' && \function_exists('w_env_request_uri')) {
+                $requestUri = (string)\w_env_request_uri();
+            }
+            if ($requestUri === '' && \function_exists('w_env')) {
+                $requestUri = (string)\w_env('request.uri', '');
+            }
+            $parts = \parse_url($requestUri);
+            $query = \is_array($parts) ? (string)($parts['query'] ?? '') : '';
+        }
+        if ($query === '') {
+            return false;
+        }
+
+        \parse_str($query, $params);
+        $flag = $params['wls_trace'] ?? null;
+        if (\is_array($flag)) {
+            return false;
+        }
+
+        $value = \strtolower((string)$flag);
+        return $value === '1' || $value === 'true';
     }
 
     public static function shouldSkipForCurrentRequest(): bool

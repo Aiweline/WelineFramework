@@ -15,16 +15,45 @@
         return;
     }
 
+    function readCookieValue(key) {
+        if (!key) {
+            return '';
+        }
+        if (typeof window.getCookie === 'function') {
+            const value = window.getCookie(key);
+            if (value) {
+                return value;
+            }
+        }
+        const match = document.cookie.match('(?:^|; )' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)');
+        return match ? decodeURIComponent(match[1]) : '';
+    }
+
+    function writeCookieValue(key, value, expiry = 365, options = {}) {
+        if (!key) {
+            return;
+        }
+        const normalizedOptions = Object.assign({ path: '/' }, options || {});
+        if (typeof window.setCookie === 'function') {
+            window.setCookie(key, value, expiry, normalizedOptions);
+            return;
+        }
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
+        let cookieString = key + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
+        Object.keys(normalizedOptions).forEach((optionKey) => {
+            cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
+        });
+        document.cookie = cookieString;
+    }
+
     /**
      * 获取当前语言代码
      */
     function getCurrentLang() {
-        // 从 Cookie 获取
-        if (typeof window.getCookie === 'function') {
-            const cookieLang = window.getCookie('WELINE_USER_LANG');
-            if (cookieLang) {
-                return cookieLang;
-            }
+        const cookieLang = readCookieValue('WELINE_USER_LANG');
+        if (cookieLang) {
+            return cookieLang;
         }
 
         // 从 URL 参数获取
@@ -293,9 +322,7 @@
 
         // 保存语言偏好
         localStorage.setItem('weline_user_lang', lang);
-        if (typeof window.setCookie === 'function') {
-            window.setCookie('WELINE_USER_LANG', lang, 365);
-        }
+        writeCookieValue('WELINE_USER_LANG', lang, 365);
 
         // 立即跳转到新 URL
         window.location.href = langUrl;

@@ -111,6 +111,7 @@ class Run implements CommandInterface
             $task->setData($task::schema_fields_RUNTIME, $task_end_time);
             # 运行完毕将进程ID设置为0
             $task->setData($task::schema_fields_PID, 0);
+            $task->save();
             exit;
         }
         $tasks = $this->loadTaskSnapshot($task_names);

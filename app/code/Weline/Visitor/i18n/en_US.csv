@@ -23,6 +23,7 @@
 导出数据失败：%{1},"Export data failed: %{1}"
 获取报告成功,"Successfully got report"
 获取报告失败：%{1},"Failed to get report: %{1}"
+请求成功！,请求成功！
 获取统计信息成功,"Successfully fetched statistics"
 获取统计信息失败：%{1},"Failed to fetch statistics: %{1}"
 事件名称不能为空,"Event name cannot be empty"
@@ -53,11 +54,17 @@
 获取实时数据失败：%{1},"Failed to get real-time data: %{1}"
 访客像素标签,"Visitor pixel tag"
 "在渲染访客像素标签时触发，允许其他模块自定义像素代码。可以通过修改 pixel_code 字段来设置像素代码。","Triggered when rendering the visitor pixel tag, allowing other modules to customize the pixel code. The pixel code can be set by modifying the pixel_code field."
+"Visitor Query","Visitor Query"
+"Provides frontend visitor tracking operations through the worker channel.","Provides frontend visitor tracking operations through the worker channel."
+"Track storefront visitor pixel events.","Track storefront visitor pixel events."
+"Create visitor A/B test config.","Create visitor A/B test config."
+"Export visitor analytics data.","Export visitor analytics data."
 获取商业价值数据失败：%{1},"Failed to retrieve business value data: %{1}"
 获取变化百分比数据失败：%{1},"Failed to retrieve percentage change data: %{1}"
 "未找到版本号 %{1} 对应的加密token","Encryption token for version number %{1} not found"
 无效的加密数据格式,"Invalid Encrypted Data Format"
 解密失败：%{1},"Decryption failed: %{1}"
+解密后的数据格式错误,解密后的数据格式错误
 获取站点统计摘要失败：%{1},"Failed to fetch site statistics summary: %{1}"
 获取趋势数据失败：%{1},"Failed to fetch trend data: %{1}"
 数量,Quantity
@@ -81,7 +88,6 @@
 Pixel沙箱环境,"Pixel sandbox environment"
 系统级别事件,"System-Level Events"
 自定义事件,"Custom event"
-事件{eventName}需要指定value值所在位置，请用weline-pixel::{eventName}:value类名指定值所在的元素,"Event {eventName} requires specifying the value location, please use weline-pixel::{eventName}:value class name to specify the element containing the value"
 加载失败,"Failed to load"
 确定,Confirm
 提示,Prompt
@@ -92,6 +98,8 @@ Pixel沙箱环境,"Pixel sandbox environment"
 成功,Success
 创建成功,"Created successfully"
 创建失败,"Creation failed"
+瀵煎嚭澶辫触,瀵煎嚭澶辫触
+纭畾,纭畾
 请输入测试ID,"Please enter the test ID"
 站点详情,"Site Details"
 站点ID：,"Site ID:"

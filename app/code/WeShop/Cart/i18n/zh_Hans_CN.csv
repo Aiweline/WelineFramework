@@ -1,33 +1,26 @@
 ﻿减少数量,减少数量
 增加数量,增加数量
 删除商品,删除商品
-关闭购物车,关闭购物车
-您还没有向购物车添加任何商品。,您还没有向购物车添加任何商品。
-购物车页,购物车页
-您的购物车是空的,您的购物车是空的
 购物车是空的,购物车是空的
 开始购物,开始购物
-"Direct browser cart REST API is deprecated. Use the frontend worker API.","Direct browser cart REST API is deprecated. Use the frontend worker API."
+"浏览器直连购物车 REST API 已弃用，请使用前台 Worker API。","浏览器直连购物车 REST API 已弃用，请使用前台 Worker API。"
 请求方法不允许。,请求方法不允许。
-"Request method is not allowed.","Request method is not allowed."
-无效的商品 ID。,无效的商品 ID。
-"Invalid product ID.","无效的商品 ID。"
-"Product does not exist.",商品不存在。
-"Product is disabled.","Product is disabled."
-"Please choose product options.","Please choose product options."
-"The selected product option combination is unavailable.","The selected product option combination is unavailable."
-"Insufficient stock. Current stock: %{1}","Insufficient stock. Current stock: %{1}"
+"无效的商品 ID。","无效的商品 ID。"
+商品不存在。,商品不存在。
+商品已下架。,商品已下架。
+请选择商品规格。,请选择商品规格。
+所选商品规格组合不可用。,所选商品规格组合不可用。
+库存不足，当前库存：%{1},库存不足，当前库存：%{1}
 已成功加入购物车。,已成功加入购物车。
-"Added to cart successfully.",成功加入购物车。
-"Add to cart failed: %{1}","Add to cart failed: %{1}"
-"Unable to load product options: %{1}","Unable to load product options: %{1}"
-"Direct browser cart API is deprecated. Use the frontend worker API.","Direct browser cart API is deprecated. Use the frontend worker API."
-Product,商品
-"Please login first","Please login first"
-"Invalid cart item",无效的购物车项
-"Item removed from cart",商品已从购物车移除
-"Invalid quantity",无效的数量
-"Cart updated",购物车已更新
+加入购物车失败：%{1},加入购物车失败：%{1}
+无法加载商品规格：%{1},无法加载商品规格：%{1}
+"浏览器直连购物车 API 已弃用，请使用前台 Worker API。","浏览器直连购物车 API 已弃用，请使用前台 Worker API。"
+商品,商品
+请先登录,请先登录
+无效的购物车项,无效的购物车项
+商品已从购物车移除,商品已从购物车移除
+无效的数量,无效的数量
+购物车已更新,购物车已更新
 购物车ID不能为空,购物车ID不能为空
 已从购物车移除,已从购物车移除
 数量必须大于0,数量必须大于0
@@ -61,15 +54,18 @@ Product,商品
 迷你购物车已加载,迷你购物车已加载
 "在迷你购物车数据加载完成后触发，用于 AJAX 请求响应。","在迷你购物车数据加载完成后触发，用于 AJAX 请求响应。"
 "Cart 查询器不支持的操作：%{1}","Cart 查询器不支持的操作：%{1}"
-"Cart count loaded successfully.","Cart count loaded successfully."
+购物车数量加载成功。,购物车数量加载成功。
 购物车查询,购物车查询
 提供购物车读取与总额计算能力,提供购物车读取与总额计算能力
-"Frontend cart add operation","Frontend cart add operation"
-"Frontend product options operation","Frontend product options operation"
-"Frontend mini cart items operation","Frontend mini cart items operation"
-"Frontend cart count operation","Frontend cart count operation"
-"Frontend cart update operation","Frontend cart update operation"
-"Frontend cart remove operation","Frontend cart remove operation"
+"通过 Weline_Cart 根路由渲染前台购物车页面","通过 Weline_Cart 根路由渲染前台购物车页面"
+前台购物车加购操作,前台购物车加购操作
+前台商品规格读取操作,前台商品规格读取操作
+前台迷你购物车商品列表操作,前台迷你购物车商品列表操作
+前台购物车数量读取操作,前台购物车数量读取操作
+前台购物车更新操作,前台购物车更新操作
+前台购物车移除操作（移至回收站）,前台购物车移除操作（移至回收站）
+前台购物车回收站读取操作,前台购物车回收站读取操作
+前台购物车回收站恢复操作,前台购物车回收站恢复操作
 获取客户购物车商品列表,获取客户购物车商品列表
 计算客户购物车总额,计算客户购物车总额
 清空客户购物车,清空客户购物车
@@ -171,10 +167,10 @@ Product,商品
 在迷你购物车底部操作后渲染快捷支付或外部支付入口。,在迷你购物车底部操作后渲染快捷支付或外部支付入口。
 迷你购物车空状态,迷你购物车空状态
 迷你购物车空状态显示区域。,迷你购物车空状态显示区域。
-"WeShop Header 迷你购物车","WeShop Header 迷你购物车"
-"WeShop 主题 Header 中的迷你购物车区域。","WeShop 主题 Header 中的迷你购物车区域。"
-"Header 迷你购物车商品列表","Header 迷你购物车商品列表"
-"Header 下拉迷你购物车中的商品列表区域。","Header 下拉迷你购物车中的商品列表区域。"
+"WeShop 页眉迷你购物车","WeShop 页眉迷你购物车"
+"WeShop 主题页眉中的迷你购物车区域。","WeShop 主题页眉中的迷你购物车区域。"
+页眉迷你购物车商品列表,页眉迷你购物车商品列表
+页眉下拉迷你购物车中的商品列表区域。,页眉下拉迷你购物车中的商品列表区域。
 购物车商品列表前（兼容）,购物车商品列表前（兼容）
 购物车商品列表后（兼容）,购物车商品列表后（兼容）
 购物车单个商品后（兼容）,购物车单个商品后（兼容）
@@ -184,21 +180,23 @@ Product,商品
 购物车侧边栏（兼容）,购物车侧边栏（兼容）
 迷你购物车商品列表前（兼容）,迷你购物车商品列表前（兼容）
 迷你购物车商品列表后（兼容）,迷你购物车商品列表后（兼容）
-"Product is unavailable.",商品当前不可用。
-"Please select product options.",请选择商品规格。
-"The selected product configuration is unavailable.",所选商品规格当前不可用。
-"Insufficient stock. Available quantity: %{1}",库存不足。可用数量：%{1}
-"Product options loaded successfully.",商品规格加载成功。
-"Invalid cart item.",无效的购物车项。
-"Invalid quantity.",无效的数量。
-"Cart updated successfully.",购物车更新成功。
-"Item removed from cart successfully.",商品已从购物车移除。
-"Mini cart loaded successfully.",迷你购物车加载成功。
-"Please log in first",请先登录
-Option,Option
-购物车项不存在,购物车项不存在
-无权更新此购物车项,无权更新此购物车项
-无权移除此购物车项,无权移除此购物车项
+商品不可用。,商品不可用。
+所选商品配置不可用。,所选商品配置不可用。
+库存不足，可售数量：%{1},库存不足，可售数量：%{1}
+商品规格加载成功。,商品规格加载成功。
+无效的购物车项。,无效的购物车项。
+无效的数量。,无效的数量。
+购物车更新成功。,购物车更新成功。
+商品已移至购物车回收站。,商品已移至购物车回收站。
+商品已恢复至购物车。,商品已恢复至购物车。
+购物车回收站加载成功。,购物车回收站加载成功。
+迷你购物车加载成功。,迷你购物车加载成功。
+"商品 #%{1}","商品 #%{1}"
+规格,规格
+商品不存在或不可用。,商品不存在或不可用。
+购物车项目已在垃圾箱中,购物车项目已在垃圾箱中
+购物车项目不存在,购物车项目不存在
+无权%{1}此购物车项目,无权%{1}此购物车项目
 购物车,购物车
 打开购物车,打开购物车
 加入购物车,加入购物车
@@ -211,48 +209,60 @@ Option,Option
 已加入购物车,已加入购物车
 添加购物车失败,添加购物车失败
 已添加,已添加
-"Shopping Cart","Shopping Cart"
-"Deselect all items","Deselect all items"
-Price,价格
-"Your cart is empty","Your cart is empty"
-"Continue Shopping",继续购物
-"In Stock",有货
-"Low Stock","Low Stock"
-"Eligible for FREE Shipping","Eligible for FREE Shipping"
-Delete,Delete
-"Save for later",稍后保存
-"Order Summary",订单摘要
-"Items (%{1}):","Items (%{1}):"
-"Shipping & handling:","Shipping & handling:"
-Discount:,Discount:
-"Estimated tax:","Estimated tax:"
-"Order Total:","Order Total:"
-"Have a promo code?","Have a promo code?"
-"Enter code","Enter code"
-Apply,应用
-"Proceed to Checkout",去结算
-"You May Also Like","You May Also Like"
-"Add to Cart","Add to Cart"
-"Error updating cart","Error updating cart"
-"Error removing item","Error removing item"
-"Save for later is not available through the frontend worker API yet.","Save for later is not available through the frontend worker API yet."
-"Promo code is not available through the frontend worker API yet.","Promo code is not available through the frontend worker API yet."
-"%{1} items in your cart","购物车中有 %{1} 件商品"
-Quantity,Quantity
-Total,总计
-"Sold by",卖家
-"Out of Stock","Out of Stock"
-Remove,删除
-"Enter coupon code",输入优惠券代码
-Subtotal,小计
-Shipping,运费
-"Calculated at checkout",结算时计算
-Tax,税费
-"Secure Checkout",安全结算
-"Free Returns",免费退货
-"Start Shopping",开始购物
-查看购物车,查看购物车
-"Close cart",关闭购物车
+"WeShop 购物车","WeShop 购物车"
+"共 %{1} 件商品，确认后即可进入结账。","共 %{1} 件商品，确认后即可进入结账。"
+购物车还是空的，先去挑选商品。,购物车还是空的，先去挑选商品。
+购物车垃圾箱,购物车垃圾箱
+最近移除,最近移除
+可快速恢复到购物车,可快速恢复到购物车
+垃圾箱暂无商品。移除购物车商品后会出现在这里。,垃圾箱暂无商品。移除购物车商品后会出现在这里。
+暂无图片,暂无图片
+"数量 %{1}","数量 %{1}"
+恢复,恢复
+继续购物,继续购物
+购物车为空,购物车为空
+把喜欢的商品加入购物车后，可以在这里统一结账。,把喜欢的商品加入购物车后，可以在这里统一结账。
+去逛逛,去逛逛
+有货,有货
+库存不足,库存不足
+商品已失效,商品已失效
+支持配送,支持配送
+调整数量,调整数量
+商品数量,商品数量
+移除,移除
+稍后再买,稍后再买
+单价,单价
+订单摘要,订单摘要
+"%{1} 件","%{1} 件"
+商品小计,商品小计
+配送费,配送费
+优惠,优惠
+预估税费,预估税费
+应付合计,应付合计
+优惠码,优惠码
+输入优惠码,输入优惠码
+应用,应用
+去结账,去结账
+结账时可选择配送地址、配送方式和支付方式。,结账时可选择配送地址、配送方式和支付方式。
+为你推荐,为你推荐
+猜你喜欢,猜你喜欢
+查看更多,查看更多
+购物车页,购物车页
+"购物车中有 %{1} 件商品","购物车中有 %{1} 件商品"
+价格,价格
+合计,合计
+销售方,销售方
+稍后购买,稍后购买
+输入优惠券代码,输入优惠券代码
 小计,小计
-运费和税费将在结算时计算,运费和税费将在结算时计算
+运费,运费
+结算时计算,结算时计算
+税费,税费
 去结算,去结算
+安全结账,安全结账
+免费退货,免费退货
+您的购物车是空的,您的购物车是空的
+您还没有向购物车添加任何商品。,您还没有向购物车添加任何商品。
+查看购物车,查看购物车
+关闭购物车,关闭购物车
+运费和税费将在结算时计算,运费和税费将在结算时计算

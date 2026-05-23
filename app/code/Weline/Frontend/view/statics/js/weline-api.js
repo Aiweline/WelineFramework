@@ -760,20 +760,28 @@
 
         restoreCartState() {
             try {
-                const storedFlag = localStorage.getItem(this.config.cartFlagStorageKey);
-                if (storedFlag === 'true') {
-                    this.enableAutoRequests();
-                }
-
                 const cookieFlag = this.readCartCookie();
                 if (cookieFlag === true) {
                     this.markCartActive();
-                } else if (cookieFlag === false && storedFlag !== 'true') {
+                } else if (cookieFlag === false) {
                     this.markCartEmpty();
+                } else {
+                    const storedFlag = localStorage.getItem(this.config.cartFlagStorageKey);
+                    if (storedFlag === 'true' && this.hasCartCookieToken()) {
+                        this.enableAutoRequests();
+                    }
                 }
             } catch (error) {
                 /* storage may be unavailable */
             }
+        }
+
+        hasCartCookieToken() {
+            const key = this.config.cartCountCookieKey;
+            if (!key || !document.cookie) {
+                return false;
+            }
+            return document.cookie.split('; ').some((row) => row.startsWith(`${key}=`));
         }
 
         readCartCookie() {
@@ -805,9 +813,13 @@
         }
 
         listenCartUpdateEvent() {
-            window.addEventListener('weline:cart:update', (event) => {
+            const handleCartCountUpdate = (event) => {
                 const detail = event.detail || {};
-                const count = typeof detail.count === 'number' ? detail.count : null;
+                const count = typeof detail.count === 'number'
+                    ? detail.count
+                    : typeof detail.cart_count === 'number'
+                        ? detail.cart_count
+                        : null;
                 if (count === null) {
                     return;
                 }
@@ -816,7 +828,10 @@
                 } else {
                     this.markCartEmpty();
                 }
-            });
+            };
+
+            window.addEventListener('weline:cart:update', handleCartCountUpdate);
+            window.addEventListener('weshop:cart:updated', handleCartCountUpdate);
         }
 
         markCartActive() {

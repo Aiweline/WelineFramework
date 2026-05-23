@@ -97,6 +97,7 @@ class MasterProcess
     protected ?ServiceOrchestrator $orchestrator = null;
     protected ?ServiceContext $context = null;
     private bool $deferredSslRetryTriggered = false;
+    private string $controlToken = '';
 
     /**
      * 启动完成后的回调（用于释放启动锁等）
@@ -525,10 +526,13 @@ class MasterProcess
 
         $publicHostRaw = $this->config['public_host'] ?? null;
         $publicHost = \is_string($publicHostRaw) && $publicHostRaw !== '' ? $publicHostRaw : null;
+        if ($this->controlToken === '') {
+            $this->controlToken = self::generateControlToken();
+        }
 
         return new ServiceContext(
             instanceName: $this->instanceName,
-            epoch: 1,
+            epoch: $this->resolveNextMasterEpoch(),
             controlPort: $this->controlPort,
             masterPid: \getmypid(),
             host: $this->config['host'] ?? '127.0.0.1',
@@ -539,6 +543,7 @@ class MasterProcess
             mode: $this->mode,
             daemon: (bool) ($this->config['daemon'] ?? true),
             debug: (bool) ($this->config['debug'] ?? false),
+            controlToken: $this->controlToken,
             windowMode: $this->windowMode,
             envConfig: $envConfig,
             httpRedirectPort: $this->httpRedirectPort,
@@ -549,6 +554,29 @@ class MasterProcess
             workerPort: $this->workerPort,
             publicHost: $publicHost,
         );
+    }
+
+    private static function generateControlToken(): string
+    {
+        return \bin2hex(\random_bytes(32));
+    }
+
+    private function resolveNextMasterEpoch(): int
+    {
+        $data = null;
+        $file = $this->getInstanceFile();
+        if (\is_file($file)) {
+            $raw = @\file_get_contents($file);
+            $decoded = \is_string($raw) && $raw !== '' ? \json_decode($raw, true) : null;
+            $data = \is_array($decoded) ? $decoded : null;
+        }
+
+        $lastEpoch = \max(
+            (int)($data['epoch'] ?? 0),
+            (int)($data['master_epoch'] ?? 0)
+        );
+
+        return \max(1, $lastEpoch + 1);
     }
 
     /**
@@ -774,7 +802,7 @@ class MasterProcess
         if ($this->orchestrator !== null) {
             $this->orchestrator->forceTerminateMasterAndChildren('repeat_signal:' . $signal);
         }
-        exit(2);
+        $this->running = false;
     }
 
     /**
@@ -896,6 +924,10 @@ class MasterProcess
             'main_port' => $this->mainPort,
             'port' => $this->mainPort,
             'control_port' => $this->controlPort,
+            'control_token' => $this->context?->controlToken ?? $this->controlToken,
+            'control_token_created_at' => \date('Y-m-d H:i:s'),
+            'epoch' => $this->context?->epoch ?? 0,
+            'master_epoch' => $this->context?->epoch ?? 0,
             'startup_phase' => $startupPhase,
             'lifecycle_state' => $startupPhase === 'running' ? 'running' : 'starting',
             'instance_name' => $this->instanceName,
@@ -955,6 +987,12 @@ class MasterProcess
             'os',
             'window_mode',
             'frontend',
+            'control_token',
+            'control_token_created_at',
+            'epoch',
+            'master_epoch',
+            'slot_generations',
+            'slot_generations_updated_at',
         ];
 
         $record = [];
@@ -1197,7 +1235,8 @@ class MasterProcess
                 'stop_intent' => 'explicit',
                 'stop_source' => 'master:send-stop-command',
                 'stop_trace_id' => 'send-stop-' . \getmypid() . '-' . \time(),
-            ]
+            ],
+            (string)($info['control_token'] ?? '')
         );
         $written = @\fwrite($conn, $stopMsg);
         

@@ -9,21 +9,20 @@
  * @hook-priority 100
  */
 
+use WeShop\Cart\Service\CartCountCookieService;
 use Weline\Framework\Manager\ObjectManager;
-use WeShop\Cart\Service\CartService;
 use Weline\Framework\Session\SessionFactory;
 
-// 获取购物车数据
-$cartCount = 0;
-
-try {
-    $customerId = 0;
-} catch (\Exception $e) {
-    // 忽略错误，使用默认值
-}
+$session = SessionFactory::getInstance()->createFrontendSession();
+$isLoggedIn = $session->isLoggedIn();
+$cartCountCookie = ObjectManager::getInstance(CartCountCookieService::class);
+$cartCount = $cartCountCookie->read() ?? 0;
 ?>
 
 <!-- Header 购物车按钮 -->
+<div data-weshop-cart-hydrate
+     data-customer-logged-in="<?= $isLoggedIn ? 'true' : 'false' ?>"
+     data-cart-count-seed="<?= (int) $cartCount ?>">
 <button type="button" 
         class="action-link cart-link header-cart-trigger" 
         data-action="open-mini-cart"
@@ -44,6 +43,7 @@ try {
     </span>
     <span class="action-line-2"><lang>购物车</lang></span>
 </button>
+</div>
 
 <!-- MiniCart Widget -->
 <?= $this->fetch('WeShop_Cart::theme/frontend/widgets/mini-cart/drawer.phtml', [
@@ -51,7 +51,8 @@ try {
     'autoOpen' => true,
 ]) ?>
 
-<script src="@static(WeShop_Cart::js/mini-cart.js)?v=20260518-mini-cart-ops-2"></script>
+<script src="@static(WeShop_Cart::js/mini-cart.js)?v=20260522-mini-cart-hydrate"></script>
+<script src="@static(WeShop_Cart::js/cart-hydrate.js)?v=20260522-mini-cart-hydrate"></script>
 
 <script>
 (function () {

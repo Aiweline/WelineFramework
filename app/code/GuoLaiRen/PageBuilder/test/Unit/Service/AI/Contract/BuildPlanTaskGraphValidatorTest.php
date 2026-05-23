@@ -54,8 +54,18 @@ final class BuildPlanTaskGraphValidatorTest extends TestCase
                 'task_kind' => 'block_build',
                 'executor' => 'AiSiteBuildQueue',
                 'input_scope' => ['page_id' => 'home', 'block_id' => 'home.hero'],
+                'runtime_context' => [
+                    'target' => ['page_id' => 'home', 'block_id' => 'home.hero'],
+                ],
+                'output_contract' => [
+                    'format' => 'pagebuilder_component_payload',
+                    'required_outputs' => ['html', 'css', 'render_data'],
+                ],
                 'policy_slices' => ['layout.4_8_spacing'],
                 'context_budget' => ['max_tokens' => 1200],
+                'acceptance' => [
+                    'checks' => ['no_placeholder_or_prompt_copy'],
+                ],
                 'acceptance_rule_ids' => ['responsive.no_horizontal_scroll'],
             ], $task);
         }

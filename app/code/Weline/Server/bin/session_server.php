@@ -149,6 +149,9 @@ if ($persistFileName === '') {
     $persistFileName = $role === 'memory_server' ? 'wls_memory_store.dat' : 'wls_session_store.dat';
 }
 $sessionConfig['persist_file_name'] = $persistFileName;
+if ($role === 'memory_server') {
+    $sessionConfig['persist_enabled'] = false;
+}
 $safeRole = \preg_replace('/[^a-z0-9_]/i', '_', (string)$role) ?: 'session_server';
 $tokenFileName = \trim($tokenFileName);
 if ($tokenFileName === '') {

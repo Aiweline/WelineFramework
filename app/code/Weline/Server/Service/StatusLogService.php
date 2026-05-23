@@ -67,6 +67,11 @@ class StatusLogService
         if (self::isInFailureCooldown()) {
             return;
         }
+
+        if (!self::canUseStatusModel()) {
+            self::enterFailureCooldown();
+            return;
+        }
         
         $now = \time();
         if (!$force && ($now - self::$lastLogTime < self::$logInterval)) {
@@ -121,6 +126,11 @@ class StatusLogService
         if (self::isInFailureCooldown()) {
             return;
         }
+
+        if (!self::canUseStatusModel()) {
+            self::enterFailureCooldown();
+            return;
+        }
         
         try {
             $data = [
@@ -168,6 +178,11 @@ class StatusLogService
         if (self::isInFailureCooldown()) {
             return;
         }
+
+        if (!self::canUseStatusModel()) {
+            self::enterFailureCooldown();
+            return;
+        }
         
         try {
             $data = [
@@ -212,6 +227,13 @@ class StatusLogService
             self::$model = ObjectManager::getInstance(ServerStatusLog::class);
         }
         return self::$model;
+    }
+
+    private static function canUseStatusModel(): bool
+    {
+        return \function_exists('w_cache')
+            && \class_exists(ObjectManager::class)
+            && \class_exists(ServerStatusLog::class);
     }
 
     private static function isInFailureCooldown(): bool

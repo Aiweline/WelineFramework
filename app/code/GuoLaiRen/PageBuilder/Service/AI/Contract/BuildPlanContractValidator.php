@@ -239,6 +239,41 @@ final class BuildPlanContractValidator
                 $errors[] = 'Task ' . $taskId . ' has unsupported executor: ' . $executor;
             }
             $inputScope = \is_array($task['input_scope'] ?? null) ? $task['input_scope'] : [];
+            $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
+            $outputContract = \is_array($task['output_contract'] ?? null) ? $task['output_contract'] : [];
+            $acceptance = \is_array($task['acceptance'] ?? null) ? $task['acceptance'] : [];
+            $contextBudget = \is_array($task['context_budget'] ?? null) ? $task['context_budget'] : [];
+            if ($runtimeContext === []) {
+                $errors[] = 'Task ' . $taskId . ' runtime_context must not be empty';
+            }
+            foreach ($this->findForbiddenRuntimeContextKeys($runtimeContext) as $path) {
+                $errors[] = 'Task ' . $taskId . ' runtime_context contains forbidden broad context: ' . $path;
+            }
+            if ($outputContract === []) {
+                $errors[] = 'Task ' . $taskId . ' output_contract must not be empty';
+            } else {
+                if (\trim((string)($outputContract['format'] ?? '')) === '') {
+                    $errors[] = 'Task ' . $taskId . ' output_contract.format is required';
+                }
+                if (!\is_array($outputContract['required_outputs'] ?? null) || $outputContract['required_outputs'] === []) {
+                    $errors[] = 'Task ' . $taskId . ' output_contract.required_outputs must not be empty';
+                }
+            }
+            if ($acceptance === []) {
+                $errors[] = 'Task ' . $taskId . ' acceptance must not be empty';
+            } elseif (!\is_array($acceptance['checks'] ?? null) || $acceptance['checks'] === []) {
+                $errors[] = 'Task ' . $taskId . ' acceptance.checks must not be empty';
+            }
+            $maxTokens = (int)($contextBudget['max_tokens'] ?? 0);
+            if ($maxTokens <= 0) {
+                $errors[] = 'Task ' . $taskId . ' context_budget.max_tokens must be greater than zero';
+            }
+            if ($this->stringList($task['policy_slices'] ?? []) === []) {
+                $errors[] = 'Task ' . $taskId . ' policy_slices must not be empty';
+            }
+            if ($this->stringList($task['acceptance_rule_ids'] ?? []) === []) {
+                $errors[] = 'Task ' . $taskId . ' acceptance_rule_ids must not be empty';
+            }
             if (\trim((string)($inputScope['page_type'] ?? '')) !== '') {
                 if (\trim((string)($task['page_flow_role'] ?? $inputScope['page_flow_role'] ?? '')) === '') {
                     $errors[] = 'Task ' . $taskId . ' is missing stage-one page_flow_role';
@@ -250,9 +285,71 @@ final class BuildPlanContractValidator
                     }
                 }
             }
+            $semanticError = $this->validateTaskExecutorPair($taskId, $kind, $executor);
+            if ($semanticError !== '') {
+                $errors[] = $semanticError;
+            }
         }
 
         return $errors;
+    }
+
+    private function validateTaskExecutorPair(string $taskId, string $kind, string $executor): string
+    {
+        if ($kind === '' || $executor === '') {
+            return '';
+        }
+
+        $expected = [
+            'asset_generate' => 'AiSiteAssetQueue',
+            'block_build' => 'AiSiteBuildQueue',
+            'page_assemble' => 'AiSiteBuildQueue',
+            'i18n_generate' => 'AiSiteBuildQueue',
+            'seo_generate' => 'AiSiteBuildQueue',
+            'qa_run' => 'AiSiteQualityGateService',
+            'repair_patch' => 'ContractRepairExecutor',
+            'publish_prepare' => 'AiSiteBuildQueue',
+        ];
+        $requiredExecutor = $expected[$kind] ?? '';
+        if ($requiredExecutor !== '' && $executor !== $requiredExecutor) {
+            return 'Task ' . $taskId . ' executor must be ' . $requiredExecutor . ' for task_kind ' . $kind;
+        }
+
+        return '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function findForbiddenRuntimeContextKeys(mixed $value, string $path = 'runtime_context'): array
+    {
+        if (!\is_array($value)) {
+            return [];
+        }
+
+        $forbidden = [
+            'scope' => true,
+            'plan_json' => true,
+            'plan_structured' => true,
+            'plan_workbench' => true,
+            'execution_blueprint' => true,
+            'execution_blueprint_draft' => true,
+            'presentation_projection' => true,
+            'ui_projection' => true,
+        ];
+        $errors = [];
+        foreach ($value as $key => $item) {
+            $keyText = \trim((string)$key);
+            $nextPath = $path . '.' . $keyText;
+            if (isset($forbidden[$keyText])) {
+                $errors[] = $nextPath;
+            }
+            foreach ($this->findForbiddenRuntimeContextKeys($item, $nextPath) as $nestedPath) {
+                $errors[] = $nestedPath;
+            }
+        }
+
+        return \array_values(\array_unique($errors));
     }
 
     /**

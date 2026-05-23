@@ -41,13 +41,13 @@ use Weline\Server\Service\ServerInstanceManager;
 class Reload extends CommandAbstract
 {
     /** 等待模式最小硬超时（秒） */
-    private const WAIT_MIN_TIMEOUT = 120;
+    private const WAIT_MIN_TIMEOUT = 30;
 
     /** 等待模式最大硬超时（秒） */
-    private const WAIT_MAX_TIMEOUT = 7200;
+    private const WAIT_MAX_TIMEOUT = 300;
 
     /** 等待模式无进度超时（秒）：超过后主动退出，避免 CLI 卡死。 */
-    private const WAIT_IDLE_TIMEOUT = 90;
+    private const WAIT_IDLE_TIMEOUT = 15;
     
     /**
      * @inheritDoc
@@ -60,7 +60,7 @@ class Reload extends CommandAbstract
         $forceMode = isset($args['f']) || isset($args['force']);
         
         // 等待模式（默认），-n 跳过等待；-f 强制模式固定为不等待
-        $waitMode = !$forceMode && !(isset($args['n']) || isset($args['no-wait']));
+        $waitMode = !(isset($args['n']) || isset($args['no-wait']));
         
         $reloadType = $forceMode 
             ? ControlMessage::RELOAD_TYPE_FORCE 
@@ -76,10 +76,19 @@ class Reload extends CommandAbstract
 
         $targetInfo = $manager->getPersistedInstanceInfo($instanceName);
         $targetStats = $targetInfo !== null
-            ? $manager->getRuntimeStatsForInstance($targetInfo, false)
-            : ['workers' => 0];
+            ? $manager->probeRuntimeStatsForInstance($targetInfo, 6.0)
+            : ['workers' => 0, 'ipc_success' => false, 'ipc_message' => 'instance endpoint not found'];
         $targetRunningWorkers = (int)($targetStats['workers'] ?? 0);
         if ($targetRunningWorkers <= 0) {
+            if ($targetInfo !== null && !((bool)($targetStats['ipc_success'] ?? false))) {
+                $message = (string)($targetStats['ipc_message'] ?? '');
+                $this->printer->warning('Master IPC is unreachable; reload is not safe.');
+                if ($message !== '') {
+                    $this->printer->note($message);
+                }
+                $this->printer->note('This does not mean there are no workers. Check server:status and Master control-plane health first.');
+                return;
+            }
             $globalStats = $manager->getRunningStats();
             if (($globalStats['workers'] ?? 0) > 0) {
                 $this->printer->warning(__('实例 [%{1}] 未检测到运行中的 WLS Worker', [$requestedInstanceName]));
@@ -102,7 +111,9 @@ class Reload extends CommandAbstract
         }
 
         $this->printer->note(__('当前操作实例：%{1}', [$instanceName]));
-        $totalWorkers = $targetRunningWorkers;
+        $targetConfiguredWorkers = $targetInfo === null ? 0 : (int)$targetInfo->workerCount;
+        $targetDesiredWorkers = (int)($targetStats['desired_workers'] ?? 0);
+        $totalWorkers = \max($targetRunningWorkers, $targetConfiguredWorkers, $targetDesiredWorkers);
         
         if ($forceMode) {
             $this->printer->warning(__('强制重载模式：批量杀死所有 Worker 后重新启动'));
@@ -146,7 +157,12 @@ class Reload extends CommandAbstract
         \stream_set_blocking($conn, false);
         
         // 发送 reload_wait 命令
-        $command = ControlMessage::command(ControlMessage::ACTION_RELOAD_WAIT, $reloadType);
+        $command = ControlMessage::command(
+            ControlMessage::ACTION_RELOAD_WAIT,
+            $reloadType,
+            [],
+            (string)($info['control_token'] ?? '')
+        );
         $written = @\fwrite($conn, $command);
         
         if ($written === false || $written === 0) {
@@ -173,6 +189,7 @@ class Reload extends CommandAbstract
         $lastMessageAt = $startTime;
         $buffer = '';
         $lastProgress = '';
+        $lastIdleNoticeAt = $startTime;
         
         while (\microtime(true) < $deadline) {
             $data = @\fread($conn, 4096);
@@ -193,11 +210,13 @@ class Reload extends CommandAbstract
                 }
 
                 if ((\microtime(true) - $lastMessageAt) >= self::WAIT_IDLE_TIMEOUT) {
-                    @\fclose($conn);
-                    echo "\n";
-                    $this->printer->warning(__('等待重载进度超时（%{1}s 无新消息），已停止前台等待，Orchestrator 仍可能在后台执行', [self::WAIT_IDLE_TIMEOUT]));
-                    $this->printer->note(__('可执行 server:status 查看当前重载状态，或稍后再次执行 server:reload -n'));
-                    return;
+                    $now = \microtime(true);
+                    if (($now - $lastIdleNoticeAt) >= 30.0) {
+                        $elapsed = (int)\round($now - $startTime);
+                        $remaining = \max(0, (int)\round($deadline - $now));
+                        $this->printer->note(__('仍在等待 Master 回传 reload 进度（已等待 %{1}s，剩余 %{2}s）；不会主动断开控制连接。', [$elapsed, $remaining]));
+                        $lastIdleNoticeAt = $now;
+                    }
                 }
 
                 SchedulerSystem::usleep(50000); // 50ms
@@ -353,8 +372,8 @@ class Reload extends CommandAbstract
             $batchSizes[] = $baseSize + ($i < $remainder ? 1 : 0);
         }
 
-        $drainTimeout = (float) (Env::get('wls.orchestrator.drain_timeout_sec', 120.0) ?? 120.0);
-        $drainTimeout = \max(5.0, \min(7200.0, $drainTimeout));
+        $drainTimeout = (float) (Env::get('wls.orchestrator.drain_timeout_sec', 5.0) ?? 5.0);
+        $drainTimeout = \max(1.0, \min(60.0, $drainTimeout));
 
         $startupTimeout = (float) (Env::get('wls.orchestrator.startup_timeout_sec', 30.0) ?? 30.0);
         $startupTimeout = \max(10.0, \min(1800.0, $startupTimeout));

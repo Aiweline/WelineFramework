@@ -292,6 +292,18 @@ if (!isset($isMaintenanceWorker)) {
 if ($isMaintenanceWorker && !\defined('WLS_MAINTENANCE_WORKER')) {
     \define('WLS_MAINTENANCE_WORKER', true);
 }
+$_SERVER['WLS_PROCESS_ROLE'] = $isMaintenanceWorker ? 'maintenance' : 'worker';
+$_ENV['WLS_PROCESS_ROLE'] = $_SERVER['WLS_PROCESS_ROLE'];
+@\putenv('WLS_PROCESS_ROLE=' . $_SERVER['WLS_PROCESS_ROLE']);
+$_SERVER['WLS_INSTANCE'] = $instanceName;
+$_ENV['WLS_INSTANCE'] = $instanceName;
+@\putenv('WLS_INSTANCE=' . $instanceName);
+$_SERVER['WLS_WORKER_ID'] = (string)$workerId;
+$_ENV['WLS_WORKER_ID'] = (string)$workerId;
+@\putenv('WLS_WORKER_ID=' . (string)$workerId);
+$_SERVER['WLS_PORT'] = (string)$port;
+$_ENV['WLS_PORT'] = (string)$port;
+@\putenv('WLS_PORT=' . (string)$port);
 
 // 将相对路径转换为绝对路径
 if ($sslCert && !\preg_match('/^[a-zA-Z]:[\\\\\\/]|^\//', $sslCert)) {
@@ -319,6 +331,18 @@ if (!\defined('WLS_DEV_MODE')) {
 unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
 
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
+
+if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
+    function wlsResetLongRunningExecutionLimit(): void
+    {
+        if (\function_exists('ini_set') && (string)@\ini_get('max_execution_time') !== '0') {
+            @\ini_set('max_execution_time', '0');
+        }
+        if (\function_exists('set_time_limit')) {
+            @\set_time_limit(0);
+        }
+    }
+}
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
 use Weline\Server\Log\Error\ErrorBootstrap;
@@ -373,19 +397,48 @@ $envLoopDriver = (string) (($envConfig['wls']['loop']['driver'] ?? 'auto'));
 $wlsLoopDriver = $wlsLoopDriver !== '' ? $wlsLoopDriver : $envLoopDriver;
 $wlsLoopDriver = \Weline\Server\EventLoop\EventLoopFactory::normalizeDriver($wlsLoopDriver);
 $wlsEnv = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+$wlsSslConfig = \is_array($wlsEnv['ssl'] ?? null) ? $wlsEnv['ssl'] : [];
+$sslHandshakeMaxAdvancePerLoop = \max(1, (int)($wlsSslConfig['handshake_max_advance_per_loop'] ?? 16));
+$sslHandshakeQueueHighWatermark = \max(
+    $sslHandshakeMaxAdvancePerLoop,
+    (int)($wlsSslConfig['handshake_queue_high_watermark'] ?? 512)
+);
+$sslIdleSelectTimeoutUsec = \max(1000, \min(
+    100000,
+    (int)($wlsSslConfig['idle_select_timeout_usec'] ?? 5000)
+));
 
 WlsLogger::getInstance()
     ->setStdoutEnabled(\Weline\Server\Log\LogConfig::isStdoutEnabled($isFrontend, \Weline\Server\Log\LogConfig::isDevMode()))
     ->setProcessTag($processTag);
 
+$workerStartupTraceFileEnabled = (bool)($wlsEnv['debug']['worker_startup_trace'] ?? false)
+    || \in_array(\strtolower(\trim((string)(\getenv('WLS_WORKER_STARTUP_TRACE') ?: ''))), ['1', 'true', 'yes', 'on'], true);
 $wlsStartupTraceStartedAt = \microtime(true);
 $wlsStartupTraceLastAt = $wlsStartupTraceStartedAt;
-$wlsStartupTrace = static function (string $stage, array $context = []) use (&$wlsStartupTraceLastAt, $wlsStartupTraceStartedAt): void {
+$wlsStartupTrace = static function (string $stage, array $context = []) use (&$wlsStartupTraceLastAt, $wlsStartupTraceStartedAt, $workerId, $port, $instanceName, $isMaintenanceWorker, $workerStartupTraceFileEnabled): void {
     $now = \microtime(true);
     $context['delta_ms'] = (int)\round(($now - $wlsStartupTraceLastAt) * 1000);
     $context['total_ms'] = (int)\round(($now - $wlsStartupTraceStartedAt) * 1000);
     $context['memory_mb'] = \round(\memory_get_usage(true) / 1048576, 2);
     $wlsStartupTraceLastAt = $now;
+    if ($workerStartupTraceFileEnabled) {
+        $traceRow = [
+            'ts' => \date('c'),
+            'pid' => \getmypid(),
+            'instance' => $instanceName,
+            'role' => $isMaintenanceWorker ? 'maintenance' : 'worker',
+            'worker_id' => $workerId,
+            'port' => $port,
+            'stage' => $stage,
+            'data' => $context,
+        ];
+        @\file_put_contents(
+            BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-worker-startup-trace.log',
+            (\json_encode($traceRow, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
+            FILE_APPEND
+        );
+    }
     WlsLogger::info_('[StartupTrace] ' . $stage . ' ' . (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'));
 };
 $wlsStartupTrace('logger_ready');
@@ -466,6 +519,8 @@ if ($envConfig !== []) {
 $mainLoopUnblockedLogEvery = \Weline\Server\Service\MainLoopUnblockedLogConfig::resolve($wlsEnv, ['worker', 'worker_ssl']);
 $mainLoopUnblockedLogIntervalSec = \Weline\Server\Service\MainLoopUnblockedLogConfig::resolveInterval($wlsEnv, ['worker', 'worker_ssl']);
 $lastMainLoopUnblockedLogAt = 0.0;
+$hotPathLogsEnabled = (bool)($wlsEnv['debug']['hot_path_logs'] ?? false)
+    || \Weline\Server\Log\LogConfig::isVerboseWlsLog();
 
 /**
  * 从 ssl_certificate_map.json 加载 SNI 证书映射。
@@ -527,147 +582,6 @@ function _getDomainPolicy(string $domain): array
 }
 
 /**
- * 本地托管域名在子域目录无证书时，可复用磁盘上的共享通配证书。
- * 支持 `*.weline.test` 与 `*.weline.localhost` 两种本地后缀。
- *
- * @return array{local_cert: string, local_pk: string}|null
- */
-function _resolveWelineLocalWildcardCertFromDisk(string $host): ?array
-{
-    $host = \strtolower(\trim($host));
-    if (!\Weline\Server\Service\LocalDomainPolicy::isManagedSingleLabelSubdomain($host)) {
-        return null;
-    }
-    $wildcardDomain = \Weline\Server\Service\LocalDomainPolicy::resolveWildcardDomain($host);
-    if ($wildcardDomain === null) {
-        return null;
-    }
-
-    $segment = \Weline\Server\Service\SslCertificateService::certificateStorageSegmentForFilesystem($wildcardDomain);
-    $certDir = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . $segment . DIRECTORY_SEPARATOR;
-    $certFile = $certDir . 'fullchain.pem';
-    $keyFile = $certDir . 'privkey.pem';
-    wlsEnsureRuntimeFileReadable($certFile, 0644);
-    wlsEnsureRuntimeFileReadable($keyFile, 0600);
-    if (!\is_file($certFile) || !\is_file($keyFile) || !\is_readable($certFile) || !\is_readable($keyFile)) {
-        return null;
-    }
-
-    return ['local_cert' => $certFile, 'local_pk' => $keyFile];
-}
-
-/**
- * 为指定域名解析 SSL 证书。这是证书选择的唯一入口。
- *
- * 解析顺序：
- *  1. 进程内存缓存（$sniServerCerts，由 IPC ssl_cert_reload 维护）
- *  2. 磁盘证书目录（app/etc/ssl/{domain}/fullchain.pem + privkey.pem）
- *  3. 数据库回退：从证书管理表查询并恢复完整文件到磁盘
- *  4. 托管本地域名：仅有共享通配目录时，子域复用对应的本地通配证书目录
- *
- * 命中后自动写入内存缓存，后续同域名请求零开销。
- *
- * @param string $domain 小写域名
- * @param array<string, array{local_cert: string, local_pk: string}> &$cache 进程级缓存（引用传递）
- * @return array{local_cert: string, local_pk: string}|null
- */
-function _resolveSniCert(string $domain, array &$cache): ?array
-{
-    // 1. 内存缓存命中
-    if (isset($cache[$domain])) {
-        return $cache[$domain];
-    }
-
-    // 2. 磁盘证书目录（Windows 下泛域目录名为 _wildcard_.，与 SslCertificateService 一致）
-    $segment = \Weline\Server\Service\SslCertificateService::certificateStorageSegmentForFilesystem($domain);
-    $certDir = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . $segment . DIRECTORY_SEPARATOR;
-    $certFile = $certDir . 'fullchain.pem';
-    $keyFile = $certDir . 'privkey.pem';
-    wlsEnsureRuntimeFileReadable($certFile, 0644);
-    wlsEnsureRuntimeFileReadable($keyFile, 0600);
-    if (\is_file($certFile) && \is_file($keyFile) && \is_readable($certFile) && \is_readable($keyFile)) {
-        $entry = ['local_cert' => $certFile, 'local_pk' => $keyFile];
-        $cache[$domain] = $entry;
-        return $entry;
-    }
-
-    // 3. 数据库回退：磁盘无证书时从 DB 恢复
-    $restored = _restoreCertFromDb($domain);
-    if ($restored) {
-        \clearstatcache(true, $certFile);
-        \clearstatcache(true, $keyFile);
-        wlsEnsureRuntimeFileReadable($certFile, 0644);
-        wlsEnsureRuntimeFileReadable($keyFile, 0600);
-        if (\is_file($certFile) && \is_file($keyFile) && \is_readable($certFile) && \is_readable($keyFile)) {
-            $entry = ['local_cert' => $certFile, 'local_pk' => $keyFile];
-            $cache[$domain] = $entry;
-            WlsLogger::info_("证书已从数据库恢复到磁盘：{$domain}");
-            return $entry;
-        }
-    }
-
-    // 4. 仅有托管本地通配目录、未写入各子域目录时的兜底（map 未列全子域亦可握手）
-    $wildcardEntry = _resolveWelineLocalWildcardCertFromDisk($domain);
-    if ($wildcardEntry !== null) {
-        $cache[$domain] = $wildcardEntry;
-        return $wildcardEntry;
-    }
-
-    return null;
-}
-
-/**
- * 清除指定域名的 DB 回退负缓存（negative cache）。
- *
- * 当 SSL 证书申请成功后，通过 IPC 通知 Worker 清除该域名的负缓存，
- * 下次请求到来时 _restoreCertFromDb 会重新尝试从数据库恢复证书。
- *
- * @param string[] $domains 要清除的域名列表；空数组 = 清除全部负缓存。
- */
-function _clearRestoreCertNegativeCache(array $domains): void
-{
-    \Weline\Server\Service\WlsWorkerGlobals::clearRestoreAttempted($domains);
-}
-
-/**
- * 从证书管理表恢复域名证书文件到磁盘（全部 6 个文件）。
- * 仅在 _resolveSniCert 磁盘未命中时调用，避免每次请求都查库。
- */
-function _restoreCertFromDb(string $domain): bool
-{
-    if (\Weline\Server\Service\WlsWorkerGlobals::isRestoreAttempted($domain)) {
-        return false;
-    }
-    \Weline\Server\Service\WlsWorkerGlobals::setRestoreAttempted($domain);
-
-    try {
-        /** @var \Weline\Server\Service\SslCertificateService $sslService */
-        $sslService = \Weline\Framework\Manager\ObjectManager::getInstance(
-            \Weline\Server\Service\SslCertificateService::class
-        );
-        $restored = $sslService->restoreCertificateFromDb($domain);
-        if ($restored) {
-            $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Server\Model\SslCertificate::class, [], false
-            );
-            $certModel->clearQuery()->loadByDomain($domain);
-            if ($certModel->getCertId()) {
-                $policies = \Weline\Server\Service\WlsWorkerGlobals::getDomainPolicies();
-                $policies[$domain] = [
-                    'force_https' => $certModel->getForceHttps() ? 1 : 0,
-                    'force_root_to_www' => $certModel->getForceRootToWww() ? 1 : 0,
-                ];
-                \Weline\Server\Service\WlsWorkerGlobals::setDomainPolicies($policies);
-            }
-        }
-        return $restored;
-    } catch (\Throwable $e) {
-        WlsLogger::warning_("证书数据库恢复失败：{$domain} - {$e->getMessage()}");
-        return false;
-    }
-}
-
-/**
  * 从 TLS ClientHello 数据中解析 SNI（Server Name Indication）域名。
  * 用于 defer-ssl 模式：PHP 的 SNI_server_certs 在 stream_socket_enable_crypto 时不生效，
  * 需手动解析 ClientHello 并在握手前设置对应域名的证书。
@@ -695,6 +609,7 @@ function wlsSslPeekTcpPrefixNoConsume($conn): string
     if (!\is_resource($conn)) {
         return '';
     }
+    @\stream_set_blocking($conn, false);
     $peeked = @\stream_socket_recvfrom($conn, 65536, \STREAM_PEEK);
     if (\is_string($peeked) && $peeked !== '') {
         return $peeked;
@@ -705,6 +620,9 @@ function wlsSslPeekTcpPrefixNoConsume($conn): string
     $sock = @\socket_import_stream($conn);
     if ($sock === false) {
         return '';
+    }
+    if (\function_exists('socket_set_nonblock')) {
+        @\socket_set_nonblock($sock);
     }
     $buf = '';
     $flags = \defined('MSG_PEEK') ? \MSG_PEEK : 2;
@@ -842,49 +760,16 @@ function wlsSslMergeDefaultListenerHostnamesIntoSniMap(
     }
 }
 
-/**
- * 若 var/server/ssl_certificate_map.json 在磁盘上被更新，立即重载并应用到本进程 SSL 上下文（无需等 IPC）。
- */
-function wlsSslReloadSniMapIfFileChanged(
-    string $mapFile,
-    float &$sniMapFileMtime,
-    array &$sniServerCerts,
-    ?array &$deferSslOptions,
-    $listenSocket,
-    string $sslCert,
-    string $sslKey,
-    int $cryptoMethod,
-    string $defaultHost
-): void {
-    if (!\is_file($mapFile)) {
-        return;
-    }
-    \clearstatcache(true, $mapFile);
-    $mtime = (float) (@\filemtime($mapFile) ?: 0);
-    if ($mtime <= $sniMapFileMtime && $sniMapFileMtime > 0.0) {
-        return;
-    }
-    $sniMapFileMtime = $mtime;
-    $sniServerCerts = _loadSniCertsFromMap();
-    wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $defaultHost);
-    wlsSslApplySniOptionsToContexts($deferSslOptions, $listenSocket, $sniServerCerts, $sslCert, $sslKey, $cryptoMethod);
-}
-
 // 域名策略缓存（force_https / force_root_to_www），由 _loadSniCertsFromMap() 填充
 $_domainPolicies = [];
 
-// DB 回退负缓存：记录已尝试从 DB 恢复但未找到证书的域名，避免每次请求都查库。
-// 通过 _clearRestoreCertNegativeCache() 可在 ssl_cert_reload IPC 中清除指定域名的记录。
-$_wlsRestoreAttempted = [];
-
 // 读取 SNI 证书映射（var/server/ssl_certificate_map.json）
 // 使用 _loadSniCertsFromMap() 函数加载，后续收到 ssl_cert_reload IPC 命令时可热更新
+$wlsStartupTrace('sni_map_load_begin');
 $sniServerCerts = _loadSniCertsFromMap();
 wlsSslMergeDefaultListenerHostnamesIntoSniMap($sniServerCerts, $sslCert, $sslKey, $listenerHost);
 $wlsStartupTrace('sni_map_loaded', ['sni_count' => \count($sniServerCerts)]);
 WlsLogger::info_('[SSL] 初始化 SNI 映射，共 ' . \count($sniServerCerts) . ' 项：' . \implode(', ', \array_keys($sniServerCerts)));
-$sniMapFilePath = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
-$sniMapFileMtime = \is_file($sniMapFilePath) ? (float) @\filemtime($sniMapFilePath) : 0.0;
 
 // ========== 日志系统：直接使用 WlsLogger ==========
 // 检测模式（只检测一次）
@@ -921,8 +806,16 @@ $runtimeError = null;
 
 try {
     WlsLogger::info_("Worker 启动，监听 ssl://{$host}:{$port}");
+    $wlsStartupTrace('runtime_bootstrap_begin');
     $runtime = new \Weline\Framework\Runtime\WlsRuntime();
     $runtime->bootstrap();
+    try {
+        $wlsStartupTrace('fpc_coordinator_preload_begin');
+        \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Router\FullPageCacheCoordinator::class);
+        $wlsStartupTrace('fpc_coordinator_preloaded');
+    } catch (\Throwable $fpcPreloadError) {
+        WlsLogger::warning_('FPC coordinator preload failed: ' . $fpcPreloadError->getMessage());
+    }
     $wlsStartupTrace('runtime_bootstrap_done');
     WlsLogger::info_("框架运行时初始化成功");
 
@@ -964,7 +857,9 @@ try {
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
     WlsLogger::error_("框架运行时初始化失败: " . $e->getMessage());
-    w_log_error('[WLS Worker SSL] Bootstrap error: ' . $e->getMessage());
+    if (\function_exists('w_log_error')) {
+        w_log_error('[WLS Worker SSL] Bootstrap error: ' . $e->getMessage());
+    }
 }
 
 // Bootstrap 失败时仍补齐地址，避免后续代码访问未定义变量（维护 Worker 不做 Session/Memory 预检）
@@ -991,6 +886,7 @@ $asyncBizAdapters = new \Weline\Server\Runtime\Async\AsyncBizAdapters();
 \Weline\Framework\Runtime\SchedulerSystem::enableScheduler();
 $longLivedProtocolResolver = new \Weline\Server\Service\Protocol\LongLived\ProtocolResolver();
 $activeFibers = [];
+$fiberTickBudgetMs = (float)(\Weline\Framework\App\Env::get('wls.worker.fiber_tick_budget_ms', 8) ?: 8);
 \Weline\Framework\Runtime\WlsConcurrency::setOtherSuspendedFiberCountProvider(
     static function () use (&$activeFibers): int {
         return \count($activeFibers);
@@ -1013,6 +909,8 @@ WlsLogger::info_(
 );
 $wlsStartupTrace('event_loop_ready', ['backend' => $coroutineRuntime->getLoopBackend()]);
 
+$deferredWorkerBootstrapWarmupStarted = $deferredWorkerBootstrapWarmupStarted ?? false;
+
 $configuredLongLivedMaxActive = (int)($wlsInstance['fiber']['long_lived_max_active'] ?? $wls['fiber']['long_lived_max_active'] ?? 4);
 if ($configuredLongLivedMaxActive >= 0) {
     $longLivedMaxActive = $configuredLongLivedMaxActive;
@@ -1021,23 +919,41 @@ if ($configuredLongLivedMaxActive >= 0) {
 if ($runtimeError === null && isset($sessionHost, $sessionPort, $memoryHost, $memoryPort)) {
     // 启动期禁止同步预热连接，避免阻塞 IPC READY；消费者令牌由 Master 管理。
     try {
-        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, [
-            'token_file_name' => $sessionTokenFileName,
-            'min_idle' => 0,
-            'connect_timeout' => 0.2,
-            'timeout' => 0.5,
-            'log_pool_lifecycle' => false,
+        $sharedWarmupStats = \Weline\Server\Service\SharedRuntimeConnectionWarmup::warmWorkerPools($workerId, $instanceName, [
+            'session' => [
+                'host' => $sessionHost,
+                'port' => $sessionPort,
+                'token_file_name' => $sessionTokenFileName,
+            ],
+            'memory' => [
+                'host' => $memoryHost,
+                'port' => $memoryPort,
+                'token_file_name' => $memoryTokenFileName,
+            ],
         ]);
-        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($memoryHost, $memoryPort, [
-            'token_file_name' => $memoryTokenFileName,
-            'min_idle' => 0,
-            'connect_timeout' => 0.2,
-            'timeout' => 0.5,
-            'log_pool_lifecycle' => false,
+        $wlsStartupTrace('shared_pool_ready_gate_done', [
+            'errors' => \is_array($sharedWarmupStats['errors'] ?? null) ? \count($sharedWarmupStats['errors']) : 0,
         ]);
-        WlsLogger::info_('[ConnectionPool] Session/Memory startup prewarm disabled (min_idle=0); lazy connect in request fibers');
+        if (!empty($sharedWarmupStats['errors']) && \is_array($sharedWarmupStats['errors'])) {
+            WlsLogger::warning_('[ConnectionPool] Session/Memory ready-gate warmup incomplete: ' . \json_encode($sharedWarmupStats['errors'], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        } else {
+            WlsLogger::info_('[ConnectionPool] Session/Memory pools ready for worker ready-gate');
+        }
     } catch (\Throwable $e) {
         WlsLogger::warning_('[ConnectionPool] 预热失败，将在首次请求时自动重试: ' . $e->getMessage());
+    }
+}
+
+if (!$isMaintenanceWorker && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime && $runtimeError === null) {
+    try {
+        $wlsStartupTrace('fpc_ready_gate_begin');
+        WlsLogger::info_('[WorkerWarmup] FPC ready-gate warmup start worker=' . $workerId);
+        $runtime->runReadyGateFpcBuildAheadWarmup();
+        WlsLogger::info_('[WorkerWarmup] FPC ready-gate warmup done worker=' . $workerId);
+        $wlsStartupTrace('fpc_ready_gate_done');
+    } catch (\Throwable $e) {
+        WlsLogger::warning_('[WorkerWarmup] FPC ready-gate warmup failed worker=' . $workerId . ': ' . $e->getMessage());
+        $wlsStartupTrace('fpc_ready_gate_failed', ['error' => $e->getMessage()]);
     }
 }
 
@@ -1273,13 +1189,16 @@ if (\extension_loaded('uopz') && \function_exists('uopz_allow_exit')) {
     WlsLogger::flush_(true);
 });
 
-// 确定最高支持的 TLS 版本
+// Native WLS HTTPS is a development/runtime convenience path; keep the
+// handshake surface modern and small instead of negotiating legacy protocols.
 $cryptoMethod = STREAM_CRYPTO_METHOD_TLS_SERVER;
 if (\defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')) {
-    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_3_SERVER | STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_1_SERVER | STREAM_CRYPTO_METHOD_TLSv1_0_SERVER;
+    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_3_SERVER | STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
 } elseif (\defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')) {
-    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_1_SERVER | STREAM_CRYPTO_METHOD_TLSv1_0_SERVER;
+    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
 }
+$wlsModernTlsCiphers = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:!aNULL:!eNULL:!MD5:!RC4:!DES:!3DES:!DSS:!SHA1:!DHE';
+$wlsModernTlsCurves = 'X25519:prime256v1';
 
 // 检测 SO_REUSEPORT 支持（Linux 3.9+，允许多进程监听同一端口）
 $isWindows = \PHP_OS_FAMILY === 'Windows';
@@ -1319,7 +1238,8 @@ if ($deferSsl) {
         'allow_self_signed' => true,
         'disable_compression' => true,
         'crypto_method' => $cryptoMethod,
-        'ciphers' => 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4',
+        'ciphers' => $wlsModernTlsCiphers,
+        'ecdh_curve' => $wlsModernTlsCurves,
         'single_dh_use' => true,
         'honor_cipher_order' => true,
         'SNI_enabled' => !empty($sniServerCerts),
@@ -1438,7 +1358,8 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
             'allow_self_signed' => true,
             'disable_compression' => true,
             'crypto_method' => $cryptoMethod,
-            'ciphers' => 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4',
+            'ciphers' => $wlsModernTlsCiphers,
+            'ecdh_curve' => $wlsModernTlsCurves,
             'single_dh_use' => true,
             'honor_cipher_order' => true,
             'SNI_enabled' => !empty($sniServerCerts),
@@ -1560,7 +1481,8 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
             'allow_self_signed' => true,
             'disable_compression' => true,
             'crypto_method' => $cryptoMethod,
-            'ciphers' => 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4',
+            'ciphers' => $wlsModernTlsCiphers,
+            'ecdh_curve' => $wlsModernTlsCurves,
             'single_dh_use' => true,
             'honor_cipher_order' => true,
             'SNI_enabled' => !empty($sniServerCerts),
@@ -1669,7 +1591,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$pendingMaintDrainReqId, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, $isMaintenanceWorker, &$activeFibers, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, $sslCert, $sslKey, $cryptoMethod, &$sniMapFileMtime, $sniMapFilePath, $instanceName, $listenerHost): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$pendingMaintDrainReqId, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, $isMaintenanceWorker, &$activeFibers, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, $sslCert, $sslKey, $cryptoMethod, $instanceName, $listenerHost): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -1743,7 +1665,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $ipcDraining = true;
                     $drainStartTime = \time();
                     $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
-                    $maxDrainTime = $dt >= 10 ? \min(7200, $dt) : 120;
+                    $maxDrainTime = $dt > 0 ? \max(1, \min(7200, $dt)) : 120;
                     // 关闭监听 socket（不再接受新连接）
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
@@ -1804,8 +1726,6 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $reloadDomains = isset($msg['domains']) && \is_array($msg['domains'])
                         ? \array_filter($msg['domains'], static fn($d) => \is_string($d) && $d !== '')
                         : [];
-                    // 清除负缓存：让被清除的域名在下次访问时重新尝试 DB 恢复
-                    _clearRestoreCertNegativeCache(\array_values($reloadDomains));
                     // 清除指定域名的内存正缓存（若无指定则全量替换）
                     if (!empty($reloadDomains)) {
                         foreach ($reloadDomains as $reloadDomain) {
@@ -1821,7 +1741,6 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $domainsStr = $newCount > 0 ? \implode(', ', \array_keys($sniServerCerts)) : '(空)';
                     $targetStr = empty($reloadDomains) ? '全量重载' : ('域名：' . \implode(', ', $reloadDomains));
                     WlsLogger::info_("收到 ssl_cert_reload（{$targetStr}），已热更新 SNI 证书映射（{$oldCount} → {$newCount}）：{$domainsStr}");
-                    $sniMapFileMtime = \is_file($sniMapFilePath) ? (float) @\filemtime($sniMapFilePath) : 0.0;
                     wlsSslApplySniOptionsToContexts($deferSslOptions, $socket, $sniServerCerts, $sslCert, $sslKey, $cryptoMethod);
                     break;
 
@@ -1864,8 +1783,8 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $ipcDraining = true;
                     $drainStartTime = \time();
                     $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
-                    if ($dt >= 10) {
-                        $maxDrainTime = \min(7200, $dt);
+                    if ($dt > 0) {
+                        $maxDrainTime = \max(1, \min(7200, $dt));
                     }
                     // 关闭监听 socket（不再接受新连接）
                     if ($socket && \is_resource($socket)) {
@@ -1897,6 +1816,13 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     // 主动终结：优雅退出
                     $ipcReceivedShutdown = true;
                     $shouldExit = true;
+                    $ipcDraining = true;
+                    $maxDrainTime = 1;
+                    $drainStartTime = \time() - $maxDrainTime;
+                    if ($socket && \is_resource($socket)) {
+                        @\fclose($socket);
+                        $socket = null;
+                    }
                     WlsLogger::info_("收到 shutdown 命令，准备退出");
                     break;
             }
@@ -1975,8 +1901,6 @@ $pendingPeekStartTimes = [];
 $pendingHandshakes = [];
 $pendingClose = [];
 $handshakeStartTimes = [];
-/** defer-ssl：_resolveSniCert 磁盘/DB 回退用的进程级缓存 */
-$sniDeferResolveCache = [];
 /** SNI 解析失败或为空时，用当前监听主机再选证（避免默认 PEM 与浏览器访问主机不一致） */
 $deferSslPreferredHost = \filter_var($host, \FILTER_VALIDATE_IP) ? '' : (string) $host;
 $startTime = \time(); // 记录启动时间
@@ -2052,10 +1976,8 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$re
         WlsLogger::info_("已发送 exit_reason + exited 消息给 Master");
     }
     
-    // 使用进程管理器清理 PID 文件
-    if ($processName) {
-        \Weline\Framework\System\Process\Processer::destroy('--name=' . $processName);
-    }
+    // Master owns process-record cleanup; child exit must not block on shared
+    // PID/name/port index locks.
     
     exit(0);
 };
@@ -2102,10 +2024,15 @@ $workerLoopNotifyNotBefore = 0.0;
 $eventLoopWaitTimeouts = 0;
 $eventLoopLagWarnings = 0;
 $eventLoopLastMetricsLogAt = \time();
+$deferredWorkerBootstrapWarmupStarted = false;
+$deferredWorkerBootstrapWarmupNotBefore = \microtime(true) + \max(0.25, \min(4.0, $workerId * 0.25));
+$sharedRuntimeConnectionWarmupStarted = false;
+$sharedRuntimeConnectionWarmupNotBefore = \microtime(true) + \max(0.05, \min(1.0, $workerId * 0.05));
 
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
+    wlsResetLongRunningExecutionLimit();
     if (\function_exists('pcntl_signal_dispatch')) {
         \pcntl_signal_dispatch();
     }
@@ -2134,7 +2061,7 @@ while (true) {
     
     // 定期刷新日志缓冲区（避免日志堆积）
     WlsLogger::flush_(false);
-    
+
     $now = \time();
 
     // 注意：Worker 的主循环不进行连接池预热
@@ -2200,6 +2127,81 @@ while (true) {
             $workerLoopStartedSent = true;
         }
     }
+    if (!$sharedRuntimeConnectionWarmupStarted
+        && !$isMaintenanceWorker
+        && isset($sessionHost, $sessionPort, $memoryHost, $memoryPort)
+        && ($workerLoopStartedSent || $workerLoopCount > 1)
+        && !$ipcReceivedShutdown
+        && \microtime(true) >= $sharedRuntimeConnectionWarmupNotBefore
+    ) {
+        $sharedRuntimeConnectionWarmupStarted = true;
+        $fiberScheduler->registerFiber();
+        $sharedRuntimeConnectionWarmupFiber = new \Fiber(static function () use (
+            $workerId,
+            $instanceName,
+            $sessionHost,
+            $sessionPort,
+            $sessionTokenFileName,
+            $memoryHost,
+            $memoryPort,
+            $memoryTokenFileName,
+            $fiberScheduler
+        ): void {
+            try {
+                WlsLogger::info_("[ConnectionPoolWarmup] async shared-state prewarm start worker={$workerId}");
+                $stats = \Weline\Server\Service\SharedRuntimeConnectionWarmup::warmWorkerPools($workerId, $instanceName, [
+                    'session' => [
+                        'host' => $sessionHost,
+                        'port' => $sessionPort,
+                        'token_file_name' => $sessionTokenFileName,
+                    ],
+                    'memory' => [
+                        'host' => $memoryHost,
+                        'port' => $memoryPort,
+                        'token_file_name' => $memoryTokenFileName,
+                    ],
+                ]);
+                WlsLogger::info_('[ConnectionPoolWarmup] async shared-state prewarm done worker=' . $workerId . ' stats=' . \json_encode($stats, JSON_UNESCAPED_SLASHES));
+            } catch (\Throwable $e) {
+                WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm failed worker={$workerId}: " . $e->getMessage());
+            } finally {
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $sharedRuntimeConnectionWarmupFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm start failed worker={$workerId}: " . $e->getMessage());
+        }
+    }
+    if (!$deferredWorkerBootstrapWarmupStarted
+        && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        && ($workerLoopStartedSent || $workerLoopCount > 3)
+        && !$ipcReceivedShutdown
+        && \microtime(true) >= $deferredWorkerBootstrapWarmupNotBefore
+    ) {
+        $deferredWorkerBootstrapWarmupStarted = true;
+        $fiberScheduler->registerFiber();
+        $deferredWarmupFiber = new \Fiber(static function () use ($runtime, $workerId, $fiberScheduler): void {
+            try {
+                \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(\min(4000, \max(50, $workerId * 250)));
+                WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup start worker={$workerId}");
+                $runtime->runDeferredWorkerBootstrapWarmup();
+                WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup done worker={$workerId}");
+            } catch (\Throwable $e) {
+                WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup failed worker={$workerId}: " . $e->getMessage());
+            } finally {
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $deferredWarmupFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup start failed worker={$workerId}: " . $e->getMessage());
+        }
+    }
 
     if ($pendingMaintDrainReqId !== null && !$isMaintenanceWorker
         && empty($connections) && empty($pendingHandshakes)) {
@@ -2223,6 +2225,28 @@ while (true) {
     // 检查是否需要优雅退出（排水模式）
     if ($shouldExit) {
         if ($ipcDraining) {
+            if (!empty($longLivedConnections)) {
+                foreach (\array_keys($longLivedConnections) as $cid) {
+                    if (isset($connections[$cid]) && \is_resource($connections[$cid])) {
+                        safeCloseStream($connections[$cid]);
+                    }
+                    if (isset($activeFibers[$cid])) {
+                        $fiberScheduler->cancelTimersForFiber($activeFibers[$cid]['fiber']);
+                        $fiberScheduler->unregisterFiber();
+                    }
+                    unset(
+                        $connections[$cid],
+                        $requestBuffers[$cid],
+                        $connectionLastActivity[$cid],
+                        $requestLogged[$cid],
+                        $writeBuffers[$cid],
+                        $writableConnections[$cid],
+                        $pendingClose[$cid],
+                        $longLivedConnections[$cid],
+                        $activeFibers[$cid]
+                    );
+                }
+            }
             // ========== 排水模式：快速清理连接，加速退出 ==========
             // 1. 立即关闭所有空闲 Keep-Alive 连接（无请求数据、无写缓冲、非握手中）
             foreach ($connections as $cid => $cconn) {
@@ -2482,8 +2506,17 @@ while (true) {
     $except = [];
     
     // EventLoop + CoroutineRuntime：统一等待语义（select/event 后端可切换）
+    $loopWaitUsec = $sslIdleSelectTimeoutUsec;
+    if ($validConnectionsReadable !== []
+        || $pendingConns !== []
+        || $pendingPeekConns !== []
+        || $validWritableConnections !== []
+        || ($ipcSocket && $ipcClient && $ipcClient->hasPendingWrites())) {
+        $loopWaitUsec = 1000;
+    }
+
     $waitStartedAt = \microtime(true);
-    $changed = $coroutineRuntime->wait($read, $write, $except, 100000);
+    $changed = $coroutineRuntime->wait($read, $write, $except, $loopWaitUsec);
     $waitElapsedMs = (\microtime(true) - $waitStartedAt) * 1000;
     if ($waitElapsedMs >= 500) {
         $eventLoopLagWarnings++;
@@ -2501,13 +2534,14 @@ while (true) {
         function (\Fiber $fiber) use (&$activeFibers): void {
             \Weline\Server\Runtime\WorkerFiberContextTracker::restore($activeFibers, $fiber);
         },
-        null,
+        $fiberTickBudgetMs > 0.0 ? $fiberTickBudgetMs : null,
         function (\Fiber $fiber) use (&$activeFibers): void {
             $activeFibers = \Weline\Server\Runtime\WorkerFiberContextTracker::capture(
                 $activeFibers,
                 $fiber,
                 static fn () => \Weline\Framework\Runtime\WlsFiberContext::capture()
             );
+            wlsResetLongRunningExecutionLimit();
         }
     );
     foreach ($activeFibers as $afConnId => $afData) {
@@ -2640,8 +2674,8 @@ while (true) {
         );
     }
 
-    // Fiber tick 已可能让 SSE 等长连接向 writeBuffers 追加数据；若等到本轮末尾才 fwrite，
-    // 中间批量 fread 其它连接时同 Worker 上的静态资源会长时间 Pending（头阻塞）。
+    // Fiber tick may enqueue SSE/static response bytes; drain writable
+    // responses before reading more request data to avoid response head blocking.
     wlsSslFlushQueuedWrites(
         $writableConnections,
         $writeBuffers,
@@ -2652,7 +2686,7 @@ while (true) {
         $pendingClose,
         $longLivedConnections
     );
-    
+
     // 处理 IPC 控制通道消息
     if ($ipcSocket && \in_array($ipcSocket, $read, true)) {
         if ($ipcClient) {
@@ -2663,28 +2697,22 @@ while (true) {
         $ipcClient->handleWritable();
     }
     
+    // 处理连接
+    // Advance accepts and TLS handshakes before starting request fibers. A cold
+    // render can run synchronously until its first cooperative yield; if it
+    // starts first, pending clients observe that stall as appconnect latency.
     wlsSslAcceptNewConnections(
         $socket,
         $read,
         $deferSsl,
         $pendingPeek,
         $pendingPeekStartTimes,
+        \count($pendingHandshakes),
+        $sslHandshakeQueueHighWatermark,
         $connections,
         $requestBuffers,
         $connectionLastActivity,
-        $isDev
-    );
-
-    wlsSslReloadSniMapIfFileChanged(
-        $sniMapFilePath,
-        $sniMapFileMtime,
-        $sniServerCerts,
-        $deferSslOptions,
-        $socket,
-        $sslCert,
-        $sslKey,
-        $cryptoMethod,
-        $listenerHost
+        $hotPathLogsEnabled
     );
 
     wlsSslAdvancePeekState(
@@ -2698,11 +2726,12 @@ while (true) {
         $read,
         $deferSsl ? $deferSslOptions : null,
         $cryptoMethod,
-        $isDev,
+        $sslHandshakeMaxAdvancePerLoop,
+        $sslHandshakeQueueHighWatermark,
+        $hotPathLogsEnabled,
         $sniServerCerts,
         $sslCert,
         $sslKey,
-        $sniDeferResolveCache,
         $port,
         $deferSslPreferredHost
     );
@@ -2718,10 +2747,10 @@ while (true) {
         $write,
         $changed,
         $cryptoMethod,
-        $isDev
+        $sslHandshakeMaxAdvancePerLoop,
+        $hotPathLogsEnabled
     );
 
-    // 处理连接
     foreach ($read as $conn) {
         $connId = \get_resource_id($conn);
 
@@ -2823,7 +2852,7 @@ while (true) {
         }
         
         // 开发模式：在接收到请求的第一行时立即输出路径日志（前台直接输出，后台通过 IPC 汇聚到 Master）
-        if ($isDev && !isset($requestLogged[$connId])) {
+        if (($isDev || $hotPathLogsEnabled) && !isset($requestLogged[$connId])) {
             $firstLineEnd = \strpos($requestBuffers[$connId], "\r\n");
             if ($firstLineEnd !== false) {
                 $requestLine = \substr($requestBuffers[$connId], 0, $firstLineEnd);
@@ -2836,7 +2865,9 @@ while (true) {
                     if ($requestLogPrefix !== '') {
                         $method = $requestLogPrefix . $method;
                     }
-                    WlsLogger::info_("→ {$method} {$uri}");
+                    if ($hotPathLogsEnabled) {
+                        WlsLogger::info_("→ {$method} {$uri}");
+                    }
                     $requestLogged[$connId] = true;
                 }
             }
@@ -2927,19 +2958,57 @@ while (true) {
         $isSseProtocolRequest = ($requestProtocol === 'sse');
         $applyLongLivedLimit = !$isSseProtocolRequest;
 
-        $uriForLog = '/';
-        if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $m)) {
-            $uriForLog = \parse_url($m[1], \PHP_URL_PATH) ?: $m[1];
+        if ($hotPathLogsEnabled) {
+            $uriForLog = '/';
+            if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $m)) {
+                $uriForLog = \parse_url($m[1], \PHP_URL_PATH) ?: $m[1];
+            }
+            $requestLogPrefix = InternalRequestLabel::buildLogPrefix($rawRequest);
+            if ($requestLogPrefix !== '') {
+                $uriForLog = $requestLogPrefix . $uriForLog;
+            }
+            WlsLogger::info_(
+                'Worker 开始处理请求 connId=' . $connId . ' uri='
+                . (\strlen($uriForLog) > 80 ? \substr($uriForLog, 0, 80) . '...' : $uriForLog)
+            );
         }
-        $requestLogPrefix = InternalRequestLabel::buildLogPrefix($rawRequest);
-        if ($requestLogPrefix !== '') {
-            $uriForLog = $requestLogPrefix . $uriForLog;
-        }
-        WlsLogger::info_(
-            'Worker 开始处理请求 connId=' . $connId . ' uri='
-            . (\strlen($uriForLog) > 80 ? \substr($uriForLog, 0, 80) . '...' : $uriForLog)
-        );
         $handleStartTime = \microtime(true);
+
+        if (!$isLongLived) {
+            $fastPathResponse = wlsTryServeFormattedFpcFastResponse($rawRequest, isKeepAlive($rawRequest));
+            if ($fastPathResponse !== null) {
+                $fastPathElapsedMs = (string)\round((\microtime(true) - $handleStartTime) * 1000, 2);
+                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-Wls-Performance-Total', $fastPathElapsedMs);
+                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-Wls-Performance-Fpc-Fastpath', 'worker');
+                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-WLS-Worker-Id', (string)$workerId);
+                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-WLS-Worker-Port', (string)$port);
+                $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-WLS-Worker-PID', (string)\getmypid());
+                $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
+                $fastPathResponse = \Weline\Server\Service\RouteHintService::addHintToResponse($fastPathResponse, $sni);
+                $fastPathResponse = injectWlsProcessTimeHeader($fastPathResponse, (\microtime(true) - $handleStartTime) * 1000);
+                sslFinalizeHttpResponseAfterHandle(
+                    $conn,
+                    $connId,
+                    $rawRequest,
+                    $fastPathResponse,
+                    $handleStartTime,
+                    false,
+                    $ipcDraining,
+                    $connections,
+                    $requestBuffers,
+                    $connectionLastActivity,
+                    $requestLogged,
+                    $writeBuffers,
+                    $writableConnections,
+                    $pendingClose,
+                    $longLivedConnections,
+                    $ipcClient,
+                    $instanceName,
+                    $activeRequests
+                );
+                continue;
+            }
+        }
 
         if ($isLongLived) {
             $layer = (string) ($longLivedDetection['layer'] ?? 'unknown');
@@ -3050,6 +3119,7 @@ while (true) {
         ) {
             wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
             try {
+                \Weline\Framework\Runtime\SchedulerSystem::yield();
                 if ($isSseProtocolRequest) {
                     \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
                         static function (string $data) use (
@@ -3123,6 +3193,7 @@ while (true) {
             } finally {
                 // 统一清台：无论正常/异常/提前返回，都清理请求级上下文，避免 Fiber 间串味。
                 wlsFiberRequestContextLeave();
+                wlsResetLongRunningExecutionLimit();
             }
         });
 
@@ -3235,7 +3306,7 @@ while (true) {
         $pendingClose,
         $longLivedConnections
     );
-    
+
     // 重置连续错误计数（本轮循环成功完成）
     $consecutiveErrors = 0;
     
@@ -3282,6 +3353,8 @@ function wlsSslAcceptNewConnections(
     bool $deferSsl,
     array &$pendingPeek,
     array &$pendingPeekStartTimes,
+    int $pendingHandshakeCount,
+    int $handshakeQueueHighWatermark,
     array &$connections,
     array &$requestBuffers,
     array &$connectionLastActivity,
@@ -3291,9 +3364,22 @@ function wlsSslAcceptNewConnections(
         return;
     }
 
-    $conn = @\stream_socket_accept($socket, 0);
-    if ($conn) {
+    $accepted = 0;
+    $maxAcceptPerLoop = 64;
+    while ($accepted < $maxAcceptPerLoop) {
+        $conn = @\stream_socket_accept($socket, 0);
+        if (!$conn) {
+            break;
+        }
+        $accepted++;
         $connId = \get_resource_id($conn);
+        if ($deferSsl && (\count($pendingPeek) + $pendingHandshakeCount) >= $handshakeQueueHighWatermark) {
+            safeCloseStream($conn);
+            if ($isDev) {
+                WlsLogger::warning_('SSL handshake queue high watermark reached; closed new accepted connection');
+            }
+            break;
+        }
         $peerNameRaw = @\stream_socket_get_name($conn, true);
         $peerName = \is_string($peerNameRaw) ? $peerNameRaw : 'unknown-peer';
         if ($isDev) {
@@ -3301,6 +3387,7 @@ function wlsSslAcceptNewConnections(
         }
 
         \stream_set_blocking($conn, false);
+        wlsSslTuneAcceptedStream($conn);
         if ($deferSsl) {
             $pendingPeek[$connId] = [
                 'conn' => $conn,
@@ -3321,22 +3408,44 @@ function wlsSslAcceptNewConnections(
     }
 }
 
+function wlsSslTuneAcceptedStream(mixed $conn): void
+{
+    if (!\is_resource($conn)) {
+        return;
+    }
+
+    @\stream_set_read_buffer($conn, 0);
+    @\stream_set_write_buffer($conn, 0);
+
+    if (!\function_exists('socket_import_stream')) {
+        return;
+    }
+
+    $socket = @\socket_import_stream($conn);
+    if (!$socket instanceof \Socket) {
+        return;
+    }
+
+    @\socket_set_option($socket, \SOL_SOCKET, \SO_KEEPALIVE, 1);
+    if (\defined('TCP_NODELAY') && \defined('SOL_TCP')) {
+        @\socket_set_option($socket, \SOL_TCP, (int) \TCP_NODELAY, 1);
+    }
+}
+
 /**
- * defer-ssl：按 ClientHello 中的 SNI 选择证书（映射 / 通配 / 磁盘 / 默认 PEM）。
+ * defer-ssl：按 ClientHello 中的 SNI 选择证书（内存映射 / 通配 / 默认 PEM）。
  *
  * @param array<string, array{local_cert: string, local_pk: string}> $sniServerCerts
- * @param array<string, mixed> $resolveCache
  * @return array{local_cert: string, local_pk: string}
  */
 function wlsSslPickCertificatePairForDeferSni(
     ?string $sniHost,
     array $sniServerCerts,
     string $defaultCert,
-    string $defaultKey,
-    array &$resolveCache
+    string $defaultKey
 ): array {
     $fallback = ['local_cert' => $defaultCert, 'local_pk' => $defaultKey];
-    if ($defaultCert === '' || $defaultKey === '' || !\is_file($defaultCert) || !\is_file($defaultKey)) {
+    if ($defaultCert === '' || $defaultKey === '') {
         return $fallback;
     }
     $h = $sniHost !== null ? \strtolower(\trim($sniHost)) : '';
@@ -3345,8 +3454,7 @@ function wlsSslPickCertificatePairForDeferSni(
     }
     if (isset($sniServerCerts[$h])) {
         $p = $sniServerCerts[$h];
-        if (($p['local_cert'] ?? '') !== '' && \is_file((string) $p['local_cert'])
-            && ($p['local_pk'] ?? '') !== '' && \is_file((string) $p['local_pk'])) {
+        if (($p['local_cert'] ?? '') !== '' && ($p['local_pk'] ?? '') !== '') {
             return $p;
         }
     }
@@ -3356,17 +3464,11 @@ function wlsSslPickCertificatePairForDeferSni(
         }
         $root = \substr($mappedName, 2);
         if ($root !== '' && \str_ends_with($h, '.' . $root)) {
-            if (($pair['local_cert'] ?? '') !== '' && \is_file((string) $pair['local_cert'])
-                && ($pair['local_pk'] ?? '') !== '' && \is_file((string) $pair['local_pk'])) {
+            if (($pair['local_cert'] ?? '') !== '' && ($pair['local_pk'] ?? '') !== '') {
                 return $pair;
             }
         }
     }
-    $fromDisk = _resolveSniCert($h, $resolveCache);
-    if ($fromDisk !== null) {
-        return $fromDisk;
-    }
-
     return $fallback;
 }
 
@@ -3387,7 +3489,13 @@ function wlsSslApplyPerConnectionSslForDeferHandshake(
         ? (string) ($deferSslOptionsTemplate['ciphers'] ?? '')
         : '';
     if ($cipherSuite === '') {
-        $cipherSuite = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4';
+        $cipherSuite = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:!aNULL:!eNULL:!MD5:!RC4:!DES:!3DES:!DSS:!SHA1:!DHE';
+    }
+    $ecdhCurve = \is_array($deferSslOptionsTemplate)
+        ? (string) ($deferSslOptionsTemplate['ecdh_curve'] ?? '')
+        : '';
+    if ($ecdhCurve === '') {
+        $ecdhCurve = 'X25519:prime256v1';
     }
     $opts = [
         'local_cert' => $pair['local_cert'],
@@ -3398,6 +3506,7 @@ function wlsSslApplyPerConnectionSslForDeferHandshake(
         'disable_compression' => true,
         'crypto_method' => $cryptoMethod,
         'ciphers' => $cipherSuite,
+        'ecdh_curve' => $ecdhCurve,
         'single_dh_use' => true,
         'honor_cipher_order' => true,
         'SNI_enabled' => false,
@@ -3419,7 +3528,6 @@ function wlsSslApplyPerConnectionSslForDeferHandshake(
  * @param array<int, string> $requestBuffers
  * @param array<int, int> $connectionLastActivity
  * @param array<string, array{local_cert: string, local_pk: string}> $sniServerCerts
- * @param array<string, mixed> $sniDeferResolveCache
  */
 function wlsSslAdvancePeekState(
     array &$pendingPeek,
@@ -3432,11 +3540,12 @@ function wlsSslAdvancePeekState(
     array $read,
     ?array $deferSslOptions,
     int $cryptoMethod,
+    int $maxAdvancePerLoop,
+    int $handshakeQueueHighWatermark,
     bool $isDev,
     array $sniServerCerts,
     string $sslCert,
     string $sslKey,
-    array &$sniDeferResolveCache,
     int $publicTcpPort,
     string $deferSslPreferredHost = ''
 ): void {
@@ -3450,8 +3559,22 @@ function wlsSslAdvancePeekState(
     $peekTimeout = 5.0;
     $completedPeeks = [];
     $failedPeeks = [];
+    $advanced = 0;
+    $readyPeekIds = [];
+    foreach ($read as $readyConn) {
+        if (\is_resource($readyConn)) {
+            $readyPeekIds[\get_resource_id($readyConn)] = true;
+        }
+    }
 
     foreach ($pendingPeek as $connId => $peekInfo) {
+        if ($advanced >= $maxAdvancePerLoop) {
+            break;
+        }
+        if ((\count($pendingPeek) + \count($pendingHandshakes)) > $handshakeQueueHighWatermark) {
+            $failedPeeks[] = $connId;
+            continue;
+        }
         $conn = $peekInfo['conn'];
         $peerName = $peekInfo['peerName'];
         $startTime = $pendingPeekStartTimes[$connId] ?? \microtime(true);
@@ -3459,6 +3582,10 @@ function wlsSslAdvancePeekState(
         if ($elapsed > $peekTimeout) {
             $failedPeeks[] = $connId;
             WlsLogger::warning_("Peek 超时: {$peerName} (connId: {$connId})");
+            continue;
+        }
+
+        if (!isset($readyPeekIds[$connId])) {
             continue;
         }
 
@@ -3524,10 +3651,10 @@ function wlsSslAdvancePeekState(
             $effectiveHost,
             $sniServerCerts,
             $sslCert,
-            $sslKey,
-            $sniDeferResolveCache
+            $sslKey
         );
         wlsSslApplyPerConnectionSslForDeferHandshake($conn, $pair, $deferSslOptions, $cryptoMethod);
+        $advanced++;
 
         if ($isDev) {
             $sniLog = $sniHostNorm ?? '(none)';
@@ -3601,6 +3728,7 @@ function wlsSslAdvanceHandshakeState(
     array $write,
     int|false $changed,
     int $cryptoMethod,
+    int $maxAdvancePerLoop,
     bool $isDev
 ): void {
     if ($pendingHandshakes === []) {
@@ -3610,6 +3738,7 @@ function wlsSslAdvanceHandshakeState(
     $handshakeTimeout = 5.0;
     $completedHandshakes = [];
     $failedHandshakes = [];
+    $advanced = 0;
 
     if ($isDev) {
         static $lastPendingHandshakeLogAt = 0.0;
@@ -3625,6 +3754,9 @@ function wlsSslAdvanceHandshakeState(
     }
 
     foreach ($pendingHandshakes as $connId => $handshakeInfo) {
+        if ($advanced >= $maxAdvancePerLoop) {
+            break;
+        }
         $conn = $handshakeInfo['conn'];
         $peerName = $handshakeInfo['peerName'];
         $startTime = $handshakeStartTimes[$connId] ?? \microtime(true);
@@ -3658,6 +3790,7 @@ function wlsSslAdvanceHandshakeState(
         }
 
         $pendingHandshakes[$connId]['started'] = true;
+        $advanced++;
         $cryptoResult = @\stream_socket_enable_crypto($conn, true, $cryptoMethod);
 
         if ($cryptoResult === true) {
@@ -3974,6 +4107,19 @@ function wlsSetFormattedHeader(string $headersPart, string $name, string $value)
     }
 
     return \rtrim(\implode("\r\n", $kept), "\r\n") . "\r\n" . $replacement;
+}
+
+function wlsSetFormattedHttpResponseHeader(string $response, string $name, string $value): string
+{
+    $headerEnd = \strpos($response, "\r\n\r\n");
+    if ($headerEnd === false) {
+        return $response;
+    }
+
+    $headersPart = \substr($response, 0, $headerEnd);
+    $bodyPart = \substr($response, $headerEnd + 4);
+
+    return wlsSetFormattedHeader($headersPart, $name, $value) . "\r\n\r\n" . $bodyPart;
 }
 
 function wlsAddFormattedVaryAcceptEncoding(string $headersPart): string
@@ -4311,12 +4457,20 @@ function sslFinalizeHttpResponseAfterHandle(
             return;
         }
 
-        $immediateRetries = 0;
-        $maxImmediateRetries = 10;
+        $headerEnd = \strpos($response, "\r\n\r\n");
+        $headerBytes = $headerEnd === false ? 0 : $headerEnd + 4;
+        $configuredImmediateBytes = (int)(\Weline\Framework\App\Env::get('wls.ssl.immediate_response_write_bytes', 32768) ?: 32768);
+        $immediateBudget = \max(8192, \min(131072, $configuredImmediateBytes));
+        if ($headerBytes > 0) {
+            $immediateBudget = \max($immediateBudget, \min($responseLen, $headerBytes + 8192));
+        }
+        $immediateBudget = \min($responseLen, $immediateBudget);
+        $maxImmediateChunk = 16384;
 
-        while ($totalWritten < $responseLen && $immediateRetries < $maxImmediateRetries) {
-            $remaining = \substr($response, $totalWritten);
-            $written = @\fwrite($conn, $remaining);
+        while ($totalWritten < $immediateBudget) {
+            $remainingBudget = $immediateBudget - $totalWritten;
+            $writeLen = \min($maxImmediateChunk, $remainingBudget);
+            $written = @\fwrite($conn, \substr($response, $totalWritten, $writeLen));
 
             if ($written === false) {
                 safeCloseStream($conn);
@@ -4331,7 +4485,6 @@ function sslFinalizeHttpResponseAfterHandle(
             }
 
             $totalWritten += $written;
-            $immediateRetries++;
         }
 
         if ($totalWritten >= $responseLen) {
@@ -4381,7 +4534,7 @@ function sslFinalizeHttpResponseAfterHandle(
         ));
     }
 
-    WlsLogger::flush_(true);
+    WlsLogger::tick_();
 
     if (!$isSseMode && $responseFullyWritten && \class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)) {
         \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
@@ -4406,6 +4559,58 @@ function sslFinalizeHttpResponseAfterHandle(
                 \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
             }
         }
+    }
+}
+
+function wlsTryServeFormattedFpcFastResponse(string $rawRequest, bool $keepAlive): ?string
+{
+    if (!\preg_match('/^([A-Z]+)\s+(\S+)\s+HTTP\/\d(?:\.\d)?/i', $rawRequest, $matches)) {
+        return null;
+    }
+
+    $method = \strtoupper((string)($matches[1] ?? 'GET'));
+    if ($method !== 'GET' && $method !== 'HEAD') {
+        return null;
+    }
+
+    $target = (string)($matches[2] ?? '/');
+    $host = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
+    if ($host === '') {
+        return null;
+    }
+
+    $targetParts = \parse_url($target);
+    if (\is_array($targetParts) && !empty($targetParts['scheme']) && !empty($targetParts['host'])) {
+        $fullUri = $target;
+    } else {
+        $requestUri = $target === '' ? '/' : $target;
+        if (!\str_starts_with($requestUri, '/')) {
+            $requestUri = '/' . $requestUri;
+        }
+        $fullUri = 'https://' . $host . $requestUri;
+    }
+
+    try {
+        $coordinator = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Router\FullPageCacheCoordinator::class
+        );
+        if (!$coordinator instanceof \Weline\Framework\Router\FullPageCacheCoordinator) {
+            return null;
+        }
+
+        $cached = $coordinator->getFormattedCachedResponseForFullUri(
+            $fullUri,
+            $method,
+            (string)(getHeaderValue($rawRequest, 'Accept') ?? ''),
+            (string)(getHeaderValue($rawRequest, 'Accept-Encoding') ?? ''),
+            (string)(getHeaderValue($rawRequest, 'Cookie') ?? ''),
+            $keepAlive,
+            !(bool)\Weline\Framework\App\Env::get('wls.worker.fpc_fastpath_shared_enabled', true)
+        );
+
+        return \is_array($cached) ? (string)($cached['response'] ?? '') ?: null : null;
+    } catch (\Throwable) {
+        return null;
     }
 }
 
@@ -4622,6 +4827,7 @@ function handleRequest(
         $result = $asyncBizAdapters->dispatch(
             static fn() => $runtime->handle($request)
         );
+        wlsResetLongRunningExecutionLimit();
         
         // 释放 PHP Session 文件锁
         // 在 WLS 常驻进程模式下，session_start() 会锁定 session 文件
@@ -4839,6 +5045,8 @@ function handleRequest(
         }
         
         return $response->toHttpString(false);
+    } finally {
+        wlsResetLongRunningExecutionLimit();
     }
 }
 
@@ -5035,7 +5243,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     // 静态文件扩展名列表
     static $staticExtensions = [
         'css', 'js', 'map',
-        'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp',
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp',
         'woff', 'woff2', 'eot', 'ttf', 'otf',
         'mp4', 'mp3', 'webm', 'ogg', 'm3u8',
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
@@ -5058,6 +5266,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         'png' => 'image/png',
         'gif' => 'image/gif',
         'webp' => 'image/webp',
+        'avif' => 'image/avif',
         'svg' => 'image/svg+xml',
         'ico' => 'image/x-icon',
         'bmp' => 'image/bmp',
@@ -5161,6 +5370,25 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     
     // 文件不存在，交给框架处理（可能是动态生成的资源）
     if ($filename === null) {
+        foreach ($candidateUris as $candidateUri) {
+            if (\Weline\Server\Service\StaticRequestBypassDecider::shouldReturnFastMissingStatic($candidateUri)) {
+                \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache([
+                    'status' => 'missing',
+                    'uri' => $uriPath,
+                    'candidate' => $candidateUri,
+                ]);
+                $body = 'Static file not found';
+                $bodyLength = \strlen($body);
+                return "HTTP/1.1 404 Not Found\r\n" .
+                    "Content-Type: text/plain; charset=utf-8\r\n" .
+                    "Content-Length: {$bodyLength}\r\n" .
+                    "Cache-Control: no-store\r\n" .
+                    "Connection: close\r\n" .
+                    "X-WLS-Static-Missing: fastpath\r\n" .
+                    "\r\n" .
+                    $body;
+            }
+        }
         return null;
     }
     
