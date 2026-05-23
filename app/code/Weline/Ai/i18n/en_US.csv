@@ -249,6 +249,8 @@ AI监控告警,"AI Monitoring Alerts"
 AI翻译调用,"AI translation call"
 其他模块可以通过触发此事件调用AI进行翻译。支持批量翻译和增量翻译。事件数据包含待翻译词列表、目标语言、源语言等。,"Other modules can trigger this event to call AI for translation. Supports batch translation and incremental translation. The event data includes the list of words to be translated, target language, source language, etc."
 "Ai 查询器不支持的操作：%{1}","Operation not supported by Ai Queryer: %{1}"
+璇峰厛鐧诲綍,璇峰厛鐧诲綍
+鐢熸垚澶辫触锛?1,鐢熸垚澶辫触锛?1
 "generateStreamBatch task[%{1}] 必须是数组","generateStreamBatch task[%{1}] must be an array"
 "AI 模型查询","AI model query"
 "对外暴露 AiService 的统一调用入口","Expose a unified entry point for AiService calls"
@@ -297,6 +299,7 @@ AI模块资源扫描完成,"AI module resource scanning completed"
 无法选择合适的AI模型。原因：%{1},"Unable to select a suitable AI model. Reason: %{1}"
 "场景适配器不存在: %{code}","Scenario adapter does not exist: %{code}"
 没有满足条件的%{provider}供应商账户（需激活）,"No %{provider} provider account meets the conditions (needs to be activated)"
+没有满足条件的%{provider}供应商账户（需激活、连通成功）,没有满足条件的%{provider}供应商账户（需激活、连通成功）
 没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）,"No %{provider} provider account meets the conditions (needs to be activated, connection successful and balance > 0)"
 智能体不存在：%{1},"Agent does not exist: %{1}"
 "AI 返回格式异常，无法解析","AI return format is abnormal and cannot be parsed"
@@ -498,6 +501,8 @@ id属性不能为空,"The id attribute cannot be empty."
 暂无受保护的模型,"No protected models"
 "AI 管理","AI management"
 模型,Model
+Skills,Skills
+风格,风格
 复制模型,"Copy model"
 "您正在复制模型: <strong>%{1}</strong>","You are copying the model: <strong>%{1}</strong>"
 复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。,"The copied model will inherit all configurations of the original model, and you can modify its configurations after copying."

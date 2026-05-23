@@ -422,8 +422,8 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
     var securityUpdateFailedText = <?= json_encode((string) __('修改失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>;
 
     var sidebarContentMount = document.querySelector('[data-account-sidebar-content-mount]');
-    var sidebarContentLoaded = !sidebarContentMount;
-    var sidebarContentLoading = null;
+    var loadedSidebarSections = Object.create(null);
+    var sidebarContentLoading = Object.create(null);
 
     function refreshAccountSections() {
         sections = Array.prototype.slice.call(document.querySelectorAll('[data-account-section]'));
@@ -440,22 +440,36 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
         });
     }
 
-    function loadSidebarContent() {
-        if (!sidebarContentMount || sidebarContentLoaded) {
+    function buildSidebarContentUrl(sectionName) {
+        var baseUrl = sidebarContentMount ? (sidebarContentMount.getAttribute('data-account-sidebar-content-url') || '') : '';
+        if (!baseUrl || !sectionName) {
+            return '';
+        }
+
+        var separator = baseUrl.indexOf('?') >= 0 ? '&' : '?';
+        return baseUrl + separator + 'section=' + encodeURIComponent(sectionName);
+    }
+
+    function loadSidebarContent(sectionName) {
+        if (!sidebarContentMount || !sectionName) {
             return Promise.resolve(true);
         }
 
-        if (sidebarContentLoading) {
-            return sidebarContentLoading;
+        if (loadedSidebarSections[sectionName]) {
+            return Promise.resolve(true);
         }
 
-        var url = sidebarContentMount.getAttribute('data-account-sidebar-content-url') || '';
+        if (sidebarContentLoading[sectionName]) {
+            return sidebarContentLoading[sectionName];
+        }
+
+        var url = buildSidebarContentUrl(sectionName);
         if (!url) {
-            sidebarContentLoaded = true;
+            loadedSidebarSections[sectionName] = true;
             return Promise.resolve(false);
         }
 
-        sidebarContentLoading = fetch(url, {
+        sidebarContentLoading[sectionName] = fetch(url, {
             credentials: 'same-origin',
             headers: {
                 'Accept': 'application/json',
@@ -474,21 +488,24 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
                 return false;
             }
 
-            sidebarContentMount.innerHTML = payload.html || '';
-            executeInsertedScripts(sidebarContentMount);
-            sidebarContentLoaded = true;
+            if (payload.html) {
+                sidebarContentMount.insertAdjacentHTML('beforeend', payload.html);
+                executeInsertedScripts(sidebarContentMount);
+            }
+            loadedSidebarSections[sectionName] = true;
             refreshAccountSections();
             window.dispatchEvent(new CustomEvent('weline:account-sidebar-content-loaded', {
-                detail: { length: payload.length || 0 }
+                detail: { section: sectionName, length: payload.length || 0 }
             }));
             return true;
         }).catch(function(error) {
-            sidebarContentLoading = null;
             console.error(error);
             return false;
+        }).finally(function() {
+            delete sidebarContentLoading[sectionName];
         });
 
-        return sidebarContentLoading;
+        return sidebarContentLoading[sectionName];
     }
 
     function decodeHtmlEntities(message) {
@@ -729,8 +746,8 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
     function showSection(sectionName, shouldScroll, query) {
         sectionName = sectionName || 'overview';
 
-        if (!hasNavSection(sectionName) && sidebarContentMount && !sidebarContentLoaded) {
-            return loadSidebarContent().then(function() {
+        if (!hasNavSection(sectionName) && sidebarContentMount && !loadedSidebarSections[sectionName]) {
+            return loadSidebarContent(sectionName).then(function() {
                 return showSection(sectionName, shouldScroll, query);
             });
         }
@@ -758,6 +775,7 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
 
         if (sectionName === 'orders') {
             applyReturnAnchor(query);
+            window.dispatchEvent(new CustomEvent('weshop:orders-viewed'));
         }
 
         if (shouldScroll) {
@@ -771,8 +789,10 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
     function syncFromHash() {
         var parsed = parseAccountState();
         var targetId = parsed.section || 'overview';
-        if (!hasNavSection(targetId) && (!sidebarContentMount || sidebarContentLoaded)) {
-            targetId = 'overview';
+        if (!hasNavSection(targetId)) {
+            if (!sidebarContentMount || loadedSidebarSections[targetId]) {
+                targetId = 'overview';
+            }
         }
 
         showSection(targetId, false, parsed.query);

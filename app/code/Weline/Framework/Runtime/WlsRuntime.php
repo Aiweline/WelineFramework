@@ -21,12 +21,17 @@ use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Http\WlsRequest;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser as PhraseParser;
 use Weline\Framework\Router\Core as Router;
+use Weline\Framework\Runtime\Preload\WorkerPreloadContext;
+use Weline\Framework\Runtime\Preload\WorkerPreloadManager;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Extends\ExtendsData;
+use Weline\Framework\Service\Query\QueryProviderRegistry;
 use Weline\I18n\Parser as I18nParser;
 use Weline\Server\Log\LogConfig;
 /**
@@ -54,6 +59,10 @@ class WlsRuntime implements RuntimeInterface
      * 路由器（进程级缓存）
      */
     private ?Router $router = null;
+
+    private ?WorkerPreloadManager $preloadManager = null;
+
+    private array $preloadPhasesCompleted = [];
     
     /**
      * 请求计数
@@ -141,17 +150,21 @@ class WlsRuntime implements RuntimeInterface
         StateManager::registerFrameworkResets();
         FiberOutputBuffer::install();
         SchedulerSystem::yield();
+
+        if ($this->shouldRunReadyGateCorePreload()) {
+            $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
+            $this->runWorkerPreloadPhase(WorkerPreloadContext::PHASE_READY_GATE);
+            SchedulerSystem::yield();
+        }
         
         // 预加载常用对象（进程级缓存）
-        if ($this->shouldRunWorkerBootstrapWarmup()) {
+        if ($this->shouldRunSynchronousWorkerBootstrapRegistryWarmup()) {
             $this->eventManager = ObjectManager::getInstance(EventsManager::class);
             $this->router = ObjectManager::getInstance(Router::class);
-            Router::preloadGeneratedRouterFiles();
-            HookReader::preloadGeneratedHookRegistry();
-            PhraseParser::preloadWorkerDictionaries();
-            I18nParser::preloadWorkerDictionaries();
-            Url::preloadWorkerRoutingMetadata();
-            $this->dispatchWorkerBootstrapWarmup();
+            $this->preloadWorkerRegistries();
+            if ($this->shouldRunSynchronousWorkerBootstrapObserverWarmup()) {
+                $this->dispatchWorkerBootstrapWarmup();
+            }
             SchedulerSystem::yield();
         }
         
@@ -162,6 +175,64 @@ class WlsRuntime implements RuntimeInterface
         $this->bootstrapped = true;
     }
 
+    private function shouldRunReadyGateCorePreload(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_READY_GATE_CORE_PRELOAD');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker_ready_gate_core_preload', null);
+        }
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            return true;
+        }
+
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'], true);
+    }
+
+    private function getWorkerPreloadManager(): WorkerPreloadManager
+    {
+        if ($this->preloadManager === null) {
+            $this->preloadManager = WorkerPreloadManager::createDefault();
+        }
+
+        return $this->preloadManager;
+    }
+
+    private function runWorkerPreloadPhase(string $phase): void
+    {
+        if (isset($this->preloadPhasesCompleted[$phase])) {
+            return;
+        }
+
+        $this->getWorkerPreloadManager()->runPhase(
+            $phase,
+            WorkerPreloadContext::fromGlobals($phase, RuntimeInterface::MODE_WLS)
+        );
+        $this->preloadPhasesCompleted[$phase] = true;
+    }
+
+    private function shouldRunSynchronousWorkerBootstrapRegistryWarmup(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_BOOTSTRAP_SYNC_WARMUP');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker_bootstrap_sync_warmup', null);
+        }
+
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            $legacyFlag = \getenv('WLS_WORKER_BOOTSTRAP_WARMUP');
+            if ($legacyFlag === false || \trim((string)$legacyFlag) === '') {
+                $legacyFlag = Env::get('wls.worker_bootstrap_warmup', null);
+            }
+            if ($legacyFlag === null || \trim((string)$legacyFlag) === '') {
+                return false;
+            }
+
+            return \strtolower(\trim((string)$legacyFlag)) === 'sync';
+        }
+
+        $flag = \strtolower(\trim((string)$rawFlag));
+        return \in_array($flag, ['1', 'true', 'yes', 'on', 'sync'], true);
+    }
+
     private function shouldRunWorkerBootstrapWarmup(): bool
     {
         $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
@@ -169,12 +240,732 @@ class WlsRuntime implements RuntimeInterface
             return false;
         }
 
-        $flag = \strtolower(\trim((string)(\getenv('WLS_WORKER_BOOTSTRAP_WARMUP') ?: '')));
-        if ($flag === '') {
-            $flag = \strtolower(\trim((string)(Env::get('wls.worker_bootstrap_warmup', '') ?? '')));
+        $rawFlag = \getenv('WLS_WORKER_BOOTSTRAP_WARMUP');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker_bootstrap_warmup', null);
         }
 
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            return true;
+        }
+
+        $flag = \strtolower(\trim((string)$rawFlag));
+        return \in_array($flag, ['1', 'true', 'yes', 'on', 'sync', 'async', 'deferred'], true);
+    }
+
+    private function shouldRunSynchronousWorkerBootstrapObserverWarmup(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_BOOTSTRAP_OBSERVER_WARMUP');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker_bootstrap_observer_warmup', null);
+        }
+
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            $legacyFlag = \getenv('WLS_WORKER_BOOTSTRAP_WARMUP');
+            if ($legacyFlag === false || \trim((string)$legacyFlag) === '') {
+                $legacyFlag = Env::get('wls.worker_bootstrap_warmup', null);
+            }
+            if ($legacyFlag === null || \trim((string)$legacyFlag) === '') {
+                return false;
+            }
+
+            return \strtolower(\trim((string)$legacyFlag)) === 'sync';
+        }
+
+        $flag = \strtolower(\trim((string)$rawFlag));
         return \in_array($flag, ['1', 'true', 'yes', 'on', 'sync'], true);
+    }
+
+    public function runDeferredWorkerBootstrapWarmup(): void
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (!$this->roleCanRunDeferredWorkerBootstrap($role)) {
+            return;
+        }
+
+        $runRegistryWarmup = $this->shouldRunWorkerBootstrapWarmup();
+        $runObserverWarmup = $this->shouldRunDeferredWorkerBootstrapObserverWarmup();
+        $runUrlMetadataWarmup = $this->shouldRunDeferredWorkerBootstrapUrlMetadataWarmup();
+        $runFpcBuildAheadWarmup = $this->shouldRunDeferredFpcBuildAheadWarmup();
+        $runFpcProcessPullWarmup = $this->shouldRunDeferredFpcProcessPullWarmup();
+        if (!$runRegistryWarmup
+            && !$runObserverWarmup
+            && !$runUrlMetadataWarmup
+            && !$runFpcBuildAheadWarmup
+            && !$runFpcProcessPullWarmup
+        ) {
+            return;
+        }
+
+        $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
+        $this->router ??= ObjectManager::getInstance(Router::class);
+        if ($runRegistryWarmup) {
+            $this->preloadWorkerRegistries();
+        }
+        if ($runObserverWarmup) {
+            $this->dispatchWorkerBootstrapWarmup();
+        }
+        if ($runUrlMetadataWarmup) {
+            $this->warmupStep(static function (): void {
+                Url::preloadWorkerRoutingMetadata();
+            }, 'url metadata');
+        }
+        if ($runFpcBuildAheadWarmup) {
+            $this->runDeferredFpcBuildAheadWarmup();
+        }
+        if ($runFpcProcessPullWarmup) {
+            $this->runDeferredFpcProcessPullWarmup($runFpcBuildAheadWarmup);
+        }
+    }
+
+    public function runReadyGateFpcBuildAheadWarmup(): void
+    {
+        if (!$this->shouldRunReadyGateFpcBuildAheadWarmup()) {
+            return;
+        }
+
+        $paths = $this->resolveReadyGateFpcBuildAheadPaths();
+        $hosts = $this->resolveReadyGateFpcBuildAheadHosts();
+        if ($paths === [] || $hosts === []) {
+            return;
+        }
+
+        $built = 0;
+        $failed = 0;
+        $startedAt = \microtime(true);
+        foreach ($hosts as $host) {
+            foreach ($paths as $path) {
+                $published = false;
+                $lastError = '';
+                $attempts = (int)(Env::get('wls.worker.fpc_ready_gate_attempts', 2) ?: 2);
+                $attempts = \max(1, \min($attempts, 4));
+                for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+                    try {
+                        $this->runInternalWarmupRequest($host, $path, $built + $failed + 1, 'fpc-ready-gate');
+                        $published = $this->hasSharedFpcWarmupPayload($host, $path);
+                        if ($published) {
+                            break;
+                        }
+                        $lastError = 'shared FPC payload not readable after build';
+                    } catch (\Throwable $e) {
+                        $lastError = $e->getMessage();
+                    }
+
+                    if ($attempt < $attempts) {
+                        SchedulerSystem::yieldDelay(50);
+                    }
+                }
+
+                if ($published) {
+                    $built++;
+                    continue;
+                }
+
+                $failed++;
+                $message = '[WlsRuntime] FPC ready-gate failed ' . $host . $path
+                    . ($lastError !== '' ? ': ' . $lastError : '');
+                if (\function_exists('w_log_warning')) {
+                    \w_log_warning($message);
+                } else {
+                    \error_log($message);
+                }
+            }
+        }
+
+        if (\function_exists('w_log_info')) {
+            \w_log_info('[WlsRuntime] FPC ready-gate warmed=' . $built
+                . ' failed=' . $failed
+                . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
+        }
+    }
+
+    private function shouldRunReadyGateFpcBuildAheadWarmup(): bool
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
+            return false;
+        }
+
+        $rawFlag = \getenv('WLS_WORKER_FPC_READY_GATE_ENABLED');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.fpc_ready_gate_enabled', null);
+        }
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            $rawFlag = '1';
+        }
+        if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on'], true)) {
+            return false;
+        }
+
+        $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
+        $ownerWorkerId = (int)(Env::get('wls.worker.fpc_ready_gate_owner_worker_id', 1) ?: 1);
+        return $workerId <= 0 || $ownerWorkerId <= 0 || $workerId === $ownerWorkerId;
+    }
+
+    private function shouldRunDeferredWorkerBootstrapObserverWarmup(): bool
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor'], true)) {
+            return false;
+        }
+
+        $rawFlag = \getenv('WLS_WORKER_DEFERRED_BOOTSTRAP_WARMUP');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker_deferred_bootstrap_warmup', null);
+        }
+
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            return true;
+        }
+
+        $flag = \strtolower(\trim((string)$rawFlag));
+        return \in_array($flag, ['1', 'true', 'yes', 'on', 'async', 'deferred'], true);
+    }
+
+    private function shouldRunDeferredWorkerBootstrapUrlMetadataWarmup(): bool
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor'], true)) {
+            return false;
+        }
+
+        $rawFlag = \getenv('WLS_WORKER_DEFERRED_URL_METADATA_WARMUP');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker_deferred_url_metadata_warmup', null);
+        }
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            return false;
+        }
+
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true);
+    }
+
+    private function shouldRunDeferredFpcBuildAheadWarmup(): bool
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor'], true)) {
+            return false;
+        }
+        if (!$this->roleCanRunDeferredFpcBuildAhead($role)) {
+            return false;
+        }
+
+        $rawFlag = \getenv('WLS_WORKER_FPC_BUILDAHEAD_ENABLED');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.fpc_buildahead_enabled', null);
+        }
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            $rawFlag = '1';
+        }
+
+        $flag = \strtolower(\trim((string)$rawFlag));
+        if (!\in_array($flag, ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
+            return false;
+        }
+
+        $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
+        $ownerWorkerId = (int)(Env::get('wls.worker.fpc_buildahead_owner_worker_id', 1) ?: 1);
+        if ($workerId > 0 && $ownerWorkerId > 0 && $workerId !== $ownerWorkerId) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function roleCanRunDeferredFpcBuildAhead(string $role): bool
+    {
+        $configured = Env::get('wls.worker.fpc_buildahead_roles', null);
+        if ($configured === null || $configured === '') {
+            $configured = ['maintenance'];
+        }
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (!\is_array($configured)) {
+            return false;
+        }
+
+        $roles = [];
+        foreach ($configured as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $normalized = \strtolower(\trim((string)$item));
+            if ($normalized !== '') {
+                $roles[$normalized] = true;
+            }
+        }
+
+        return isset($roles['all']) || isset($roles[$role]);
+    }
+
+    private function shouldRunDeferredFpcProcessPullWarmup(): bool
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
+            return false;
+        }
+
+        $rawFlag = \getenv('WLS_WORKER_FPC_PROCESS_PULL_ENABLED');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.fpc_process_pull_enabled', null);
+        }
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            return true;
+        }
+
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true);
+    }
+
+    private function runDeferredFpcBuildAheadWarmup(): void
+    {
+        $paths = $this->resolveFpcBuildAheadPaths();
+        $hosts = $this->resolveFpcBuildAheadHosts();
+        if ($paths === [] || $hosts === []) {
+            return;
+        }
+
+        $built = 0;
+        $failed = 0;
+        $startedAt = \microtime(true);
+        foreach ($hosts as $host) {
+            foreach ($paths as $path) {
+                try {
+                    $this->runInternalWarmupRequest($host, $path, $built + $failed + 1, 'fpc-build-ahead');
+                    $built++;
+                } catch (\Throwable $e) {
+                    $failed++;
+                    if (\function_exists('w_log_warning')) {
+                        \w_log_warning('[WlsRuntime] FPC build-ahead failed ' . $host . $path . ': ' . $e->getMessage());
+                    }
+                }
+                SchedulerSystem::yield();
+            }
+        }
+
+        if (\function_exists('w_log_info')) {
+            \w_log_info('[WlsRuntime] FPC build-ahead warmed=' . $built
+                . ' failed=' . $failed
+                . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
+        }
+    }
+
+    private function roleCanRunDeferredWorkerBootstrap(string $role): bool
+    {
+        $configured = Env::get('wls.worker_deferred_bootstrap_roles', null);
+        if ($configured === null || $configured === '') {
+            $configured = ['maintenance'];
+        }
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (!\is_array($configured)) {
+            return false;
+        }
+
+        $roles = [];
+        foreach ($configured as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $normalized = \strtolower(\trim((string)$item));
+            if ($normalized !== '') {
+                $roles[$normalized] = true;
+            }
+        }
+
+        return isset($roles['all']) || isset($roles[$role]);
+    }
+
+    private function runDeferredFpcProcessPullWarmup(bool $ownerBuildAheadRan): void
+    {
+        if (!\class_exists(\Weline\Theme\Observer\WorkerBootstrapWarmup::class)) {
+            return;
+        }
+
+        $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
+        $defaultRounds = $ownerBuildAheadRan ? 2 : 3;
+        $rounds = (int)(Env::get('wls.worker.fpc_process_pull_rounds', $defaultRounds) ?: $defaultRounds);
+        $rounds = \max(1, \min($rounds, 10));
+        $initialDelayMs = (int)(Env::get(
+            'wls.worker.fpc_process_pull_initial_delay_ms',
+            $ownerBuildAheadRan ? 0 : 1000
+        ) ?: 0);
+        $intervalMs = (int)(Env::get('wls.worker.fpc_process_pull_interval_ms', 5000) ?: 5000);
+        $intervalMs = \max(0, \min($intervalMs, 30000));
+
+        if ($initialDelayMs > 0) {
+            SchedulerSystem::yieldDelay($initialDelayMs + \max(0, $workerId) * 125);
+        }
+
+        $startedAt = \microtime(true);
+        $completedRounds = 0;
+        for ($round = 1; $round <= $rounds; $round++) {
+            try {
+                $warmup = ObjectManager::getInstance(\Weline\Theme\Observer\WorkerBootstrapWarmup::class);
+                if (\method_exists($warmup, 'warmFpcFastPathPayloadsForReady')) {
+                    $warmup->warmFpcFastPathPayloadsForReady();
+                    $completedRounds++;
+                }
+            } catch (\Throwable $e) {
+                if (\function_exists('w_log_warning')) {
+                    \w_log_warning('[WlsRuntime] FPC process-pull warmup failed worker=' . $workerId
+                        . ' round=' . $round . ': ' . $e->getMessage());
+                }
+            }
+
+            if ($round < $rounds && $intervalMs > 0) {
+                SchedulerSystem::yieldDelay($intervalMs);
+            } else {
+                SchedulerSystem::yield();
+            }
+        }
+
+        if ($completedRounds > 0 && \function_exists('w_log_info')) {
+            \w_log_info('[WlsRuntime] FPC process-pull rounds=' . $completedRounds
+                . ' worker=' . $workerId
+                . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveReadyGateFpcBuildAheadHosts(): array
+    {
+        $configured = Env::get('wls.worker.fpc_ready_gate_hosts', ['127.0.0.1']);
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+
+        $hosts = \is_array($configured) ? $configured : ['127.0.0.1'];
+        $normalized = [];
+        foreach ($hosts as $host) {
+            if (!\is_scalar($host)) {
+                continue;
+            }
+            $host = \trim((string)$host);
+            if (\str_contains($host, '://')) {
+                $parsedHost = \parse_url($host, \PHP_URL_HOST);
+                $host = \is_string($parsedHost) ? $parsedHost : '';
+            }
+            $host = \trim($host, " \t\n\r\0\x0B[]/");
+            if ($host === '' || $host === '0.0.0.0' || $host === '::' || \str_contains($host, '/')) {
+                continue;
+            }
+            $normalized[$host] = $host;
+            if (\count($normalized) >= 2) {
+                break;
+            }
+        }
+
+        return \array_values($normalized);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveReadyGateFpcBuildAheadPaths(): array
+    {
+        $paths = [
+            '/',
+            '/en_US/catalog/category/sports',
+            '/USD/en_US/catalog/category/women',
+            '/en_US/catalog/category/men/shirts',
+            '/en_US/catalog/category/running-gear',
+            '/en_US/product/demo-category-81-sports',
+            '/en_US/product/demo-category-45-clothing',
+        ];
+
+        $configured = Env::get('wls.worker.fpc_ready_gate_paths', []);
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (\is_array($configured) && $configured !== []) {
+            $paths = [];
+            foreach ($configured as $path) {
+                if (\is_scalar($path)) {
+                    $paths[] = (string)$path;
+                }
+            }
+        }
+
+        $normalized = [];
+        foreach ($paths as $path) {
+            $path = \str_replace(["\r", "\n", "\t"], '', \trim((string)$path));
+            if ($path === '') {
+                continue;
+            }
+            if ($path[0] !== '/') {
+                $path = '/' . $path;
+            }
+            if (\strlen($path) > 2048) {
+                continue;
+            }
+            $normalized[$path] = $path;
+        }
+
+        $maxPaths = (int)(Env::get('wls.worker.fpc_ready_gate_max_paths', 8) ?: 8);
+        $maxPaths = \max(1, \min($maxPaths, 32));
+        return \array_slice(\array_values($normalized), 0, $maxPaths);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveFpcBuildAheadHosts(): array
+    {
+        $hosts = ['127.0.0.1'];
+        $configured = Env::get('wls.worker.fpc_buildahead_hosts', null);
+        if ($configured === null || $configured === '') {
+            $configured = Env::get('wls.worker.fpc_warmup_hosts', []);
+        }
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (\is_array($configured)) {
+            foreach ($configured as $host) {
+                if (\is_scalar($host)) {
+                    $hosts[] = (string)$host;
+                }
+            }
+        }
+
+        $normalized = [];
+        foreach ($hosts as $host) {
+            $host = \trim((string)$host);
+            if (\str_contains($host, '://')) {
+                $parsedHost = \parse_url($host, \PHP_URL_HOST);
+                $host = \is_string($parsedHost) ? $parsedHost : '';
+            }
+            $host = \trim($host, " \t\n\r\0\x0B[]/");
+            if ($host === '' || $host === '0.0.0.0' || $host === '::' || \str_contains($host, '/')) {
+                continue;
+            }
+            $normalized[$host] = $host;
+            if (\count($normalized) >= 3) {
+                break;
+            }
+        }
+
+        return \array_values($normalized);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveFpcBuildAheadPaths(): array
+    {
+        $paths = [
+            '/',
+            '/en_US/catalog/category/sports',
+            '/USD/en_US/catalog/category/sports',
+            '/zh_Hans_CN/catalog/category/sports',
+            '/CNY/zh_Hans_CN/catalog/category/sports',
+            '/en_US/catalog/category/men/shirts',
+            '/USD/en_US/catalog/category/men/shirts',
+            '/zh_Hans_CN/catalog/category/men/shirts',
+            '/CNY/zh_Hans_CN/catalog/category/men/shirts',
+            '/en_US/catalog/category/women',
+            '/USD/en_US/catalog/category/women',
+            '/zh_Hans_CN/catalog/category/women',
+            '/CNY/zh_Hans_CN/catalog/category/women',
+            '/en_US/catalog/category/gear',
+            '/en_US/catalog/category/running-gear',
+            '/USD/en_US/catalog/category/running-gear',
+            '/zh_Hans_CN/catalog/category/running-gear',
+            '/CNY/zh_Hans_CN/catalog/category/running-gear',
+            '/en_US/product/demo-category-81-sports',
+            '/en_US/product/demo-category-45-clothing',
+            '/product/demo-category-81-sports',
+            '/product/demo-category-45-clothing',
+        ];
+
+        try {
+            if (\class_exists(\Weline\Theme\Observer\WorkerBootstrapWarmup::class)) {
+                $warmup = ObjectManager::getInstance(\Weline\Theme\Observer\WorkerBootstrapWarmup::class);
+                if (\method_exists($warmup, 'getFpcWarmupPaths')) {
+                    $resolved = $warmup->getFpcWarmupPaths();
+                    if (\is_array($resolved) && $resolved !== []) {
+                        $paths = $resolved;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $configured = Env::get('wls.worker.fpc_buildahead_paths', []);
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (\is_array($configured)) {
+            foreach ($configured as $path) {
+                if (\is_scalar($path)) {
+                    $paths[] = (string)$path;
+                }
+            }
+        }
+
+        $normalized = [];
+        foreach ($paths as $path) {
+            $path = \str_replace(["\r", "\n", "\t"], '', \trim((string)$path));
+            if ($path === '') {
+                continue;
+            }
+            if ($path[0] !== '/') {
+                $path = '/' . $path;
+            }
+            if (\strlen($path) > 2048) {
+                continue;
+            }
+            $normalized[$path] = $path;
+        }
+
+        $maxPaths = (int)(Env::get('wls.worker.fpc_buildahead_max_paths', 96) ?: 96);
+        $maxPaths = \max(1, \min($maxPaths, 192));
+        return \array_slice(\array_values($normalized), 0, $maxPaths);
+    }
+
+    private function runInternalWarmupRequest(string $host, string $path, int $sequence, string $label = 'fpc-build-ahead'): void
+    {
+        $rawRequest = "GET {$path} HTTP/1.1\r\n"
+            . "Host: {$host}\r\n"
+            . "User-Agent: WLS-FPC-BuildAhead/1.0\r\n"
+            . "Accept: text/html,application/xhtml+xml\r\n"
+            . "Accept-Encoding: gzip\r\n"
+            . "Connection: close\r\n"
+            . "X-WLS-Internal-Request: {$label}\r\n"
+            . "Weline-Internal-Warmup: 1\r\n"
+            . "\r\n";
+
+        $request = WlsRequest::fromRaw($rawRequest, [
+            'WLS_INSTANCE' => (string)($_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: ''),
+            'WLS_WORKER_ID' => (string)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: ''),
+            'WLS_PORT' => (string)($_SERVER['WLS_PORT'] ?? $_ENV['WLS_PORT'] ?? \getenv('WLS_PORT') ?: ''),
+            'WLS_REQUEST_COUNT' => 'warmup-' . $sequence,
+            'WLS_INTERNAL_WARMUP' => '1',
+            'HTTPS' => 'on',
+            'REQUEST_SCHEME' => 'https',
+        ]);
+
+        $result = $this->handle($request);
+        unset($result, $request);
+    }
+
+    private function hasSharedFpcWarmupPayload(string $host, string $path): bool
+    {
+        try {
+            $coordinator = ObjectManager::getInstance(\Weline\Framework\Router\FullPageCacheCoordinator::class);
+            if (!$coordinator instanceof \Weline\Framework\Router\FullPageCacheCoordinator
+                || !\method_exists($coordinator, 'hasSharedCachedResponseForFullUri')) {
+                return false;
+            }
+
+            return $coordinator->hasSharedCachedResponseForFullUri(
+                'https://' . $host . $path,
+                'GET',
+                ''
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function preloadWorkerRegistries(): void
+    {
+        $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
+        $this->runWorkerPreloadPhase(WorkerPreloadContext::PHASE_READY_GATE);
+        SchedulerSystem::yield();
+
+        if ($this->isWorkerWarmupStepEnabled('query_provider', false)) {
+            $this->warmupStep(static function (): void {
+                ObjectManager::getInstance(QueryProviderRegistry::class)->getAllDescriptors();
+            }, 'query provider registry');
+            SchedulerSystem::yield();
+        }
+
+        if ($this->isWorkerWarmupStepEnabled('i18n', false)) {
+            $this->warmupStep(static function (): void {
+                PhraseParser::preloadWorkerDictionaries();
+                I18nParser::preloadWorkerDictionaries();
+            }, 'i18n dictionaries');
+            SchedulerSystem::yield();
+        }
+
+        if ($this->isWorkerWarmupStepEnabled('url_metadata', false)) {
+            $this->warmupStep(static function (): void {
+                Url::preloadWorkerRoutingMetadata();
+            }, 'url metadata');
+        }
+    }
+
+    private function isWorkerWarmupStepEnabled(string $step, bool $default): bool
+    {
+        $envName = 'WLS_WORKER_BOOTSTRAP_' . \strtoupper($step) . '_WARMUP';
+        $rawFlag = \getenv($envName);
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker_bootstrap_' . $step . '_warmup', null);
+        }
+        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
+            return $default;
+        }
+
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync'], true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function hotWorkerBootstrapEvents(): array
+    {
+        return [
+            'Weline_Framework_Runtime::worker_bootstrap_after',
+            'Weline_Framework::App::run_before',
+            'Weline_Framework::App::run_after',
+            'Weline_Framework::App::url_parsed_after',
+            'Weline_Framework_Router::before_start',
+            'Weline_Framework_Router::process_uri_before',
+            'Weline_Framework_Router::route_before',
+            'Weline_Framework_Router::route_after',
+            'Weline_Framework_View::fetch_file',
+            'Weline_Framework_Template::after_render',
+            'Weline_Framework_FrontendController::init_before',
+            'Weline_Framework_FrontendController::init_after',
+            'Weline_Framework_Query::before_execute',
+            'Weline_Framework_Query::after_execute',
+        ];
+    }
+
+    /**
+     * @param callable(): void $callback
+     */
+    private function warmupStep(callable $callback, string $label): void
+    {
+        try {
+            $callback();
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[WlsRuntime] worker bootstrap ' . $label . ' warmup failed: ' . $e->getMessage());
+            }
+        }
     }
 
     private function dispatchWorkerBootstrapWarmup(): void
@@ -294,6 +1085,7 @@ class WlsRuntime implements RuntimeInterface
                 // Template、PreparedContentStore 等请求级状态依赖 RequestContext
                 // 分片；缺失时会退回到 Fiber/连接级实例，导致模板数据跨请求串味。
                 RequestContext::init();
+                RequestContext::set('view.template.profile', []);
                 $requestMeta['request_id'] = (string)(RequestContext::getId() ?? '');
             }
             // WLS：请求入口再清一次 URL/ACL 请求级缓存，避免上一 finally 未跑全、fiber 交错或 parser 前
@@ -394,6 +1186,10 @@ class WlsRuntime implements RuntimeInterface
                 $timing['fpc_source'] = (string)(RequestContext::get('wls.fpc.hit_source', '') ?: 'unknown');
                 $timing['fpc_process_items'] = (int)(RequestContext::get('wls.fpc.process_items', 0) ?: 0);
                 $timing['fpc_process_bytes'] = (int)(RequestContext::get('wls.fpc.process_bytes', 0) ?: 0);
+                $appApplyUrlProfile = RequestContext::get('app.apply_url.profile');
+                if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
+                    $timing['app_apply_url'] = $appApplyUrlProfile;
+                }
                 $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
                 $timing['total_ms'] = $timing['pre_telemetry_total_ms'];
                 $cachedFpcResponse->setHeader('X-WLS-Performance-Total', (string)$timing['total_ms']);
@@ -454,6 +1250,26 @@ class WlsRuntime implements RuntimeInterface
             $accountSidebarContentTiming = RequestContext::get('account.sidebar_content.timing');
             if (\is_array($accountSidebarContentTiming) && $accountSidebarContentTiming !== []) {
                 $timing['account_sidebar_content'] = $accountSidebarContentTiming;
+            }
+            $queryBinTiming = RequestContext::get('query_bin.timing');
+            if (\is_array($queryBinTiming) && $queryBinTiming !== []) {
+                $timing['query_bin'] = $queryBinTiming;
+            }
+            $appApplyUrlProfile = RequestContext::get('app.apply_url.profile');
+            if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
+                $timing['app_apply_url'] = $appApplyUrlProfile;
+            }
+            $categoryViewProfile = RequestContext::get('category.view.profile');
+            if (\is_array($categoryViewProfile) && $categoryViewProfile !== []) {
+                $timing['category_view'] = $categoryViewProfile;
+            }
+            $productViewProfile = RequestContext::get('product.view.profile');
+            if (\is_array($productViewProfile) && $productViewProfile !== []) {
+                $timing['product_view'] = $productViewProfile;
+            }
+            $templateProfile = RequestContext::get('view.template.profile');
+            if (\is_array($templateProfile) && $templateProfile !== []) {
+                $timing['template_profile'] = $templateProfile;
             }
             $routerProfile = RequestContext::get('router.start.profile');
             if (\is_array($routerProfile) && $routerProfile !== []) {
@@ -541,9 +1357,29 @@ class WlsRuntime implements RuntimeInterface
             if (\is_array($accountSidebarContentTiming) && $accountSidebarContentTiming !== []) {
                 $timing['account_sidebar_content'] = $accountSidebarContentTiming;
             }
+            $appApplyUrlProfile = RequestContext::get('app.apply_url.profile');
+            if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
+                $timing['app_apply_url'] = $appApplyUrlProfile;
+            }
+            $categoryViewProfile = RequestContext::get('category.view.profile');
+            if (\is_array($categoryViewProfile) && $categoryViewProfile !== []) {
+                $timing['category_view'] = $categoryViewProfile;
+            }
+            $productViewProfile = RequestContext::get('product.view.profile');
+            if (\is_array($productViewProfile) && $productViewProfile !== []) {
+                $timing['product_view'] = $productViewProfile;
+            }
+            $templateProfile = RequestContext::get('view.template.profile');
+            if (\is_array($templateProfile) && $templateProfile !== []) {
+                $timing['template_profile'] = $templateProfile;
+            }
             $routerProfile = RequestContext::get('router.start.profile');
             if (\is_array($routerProfile) && $routerProfile !== []) {
                 $timing['router_profile'] = $routerProfile;
+            }
+            $pageBuilderRenderProfile = RequestContext::get('pagebuilder.render.profile');
+            if (\is_array($pageBuilderRenderProfile) && $pageBuilderRenderProfile !== []) {
+                $timing['pagebuilder_render'] = $pageBuilderRenderProfile;
             }
             $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
             if ($resultStr === '') {
@@ -736,6 +1572,22 @@ class WlsRuntime implements RuntimeInterface
             $queryBinTiming = RequestContext::get('query_bin.timing');
             if (\is_array($queryBinTiming) && $queryBinTiming !== []) {
                 $timing['query_bin'] = $queryBinTiming;
+            }
+            $appApplyUrlProfile = RequestContext::get('app.apply_url.profile');
+            if (\is_array($appApplyUrlProfile) && $appApplyUrlProfile !== []) {
+                $timing['app_apply_url'] = $appApplyUrlProfile;
+            }
+            $categoryViewProfile = RequestContext::get('category.view.profile');
+            if (\is_array($categoryViewProfile) && $categoryViewProfile !== []) {
+                $timing['category_view'] = $categoryViewProfile;
+            }
+            $productViewProfile = RequestContext::get('product.view.profile');
+            if (\is_array($productViewProfile) && $productViewProfile !== []) {
+                $timing['product_view'] = $productViewProfile;
+            }
+            $templateProfile = RequestContext::get('view.template.profile');
+            if (\is_array($templateProfile) && $templateProfile !== []) {
+                $timing['template_profile'] = $templateProfile;
             }
             // 同步到 WelineEnv
             WelineEnv::set('request.method', $timing['method'], 'WlsRuntime finally');
@@ -1135,6 +1987,18 @@ class WlsRuntime implements RuntimeInterface
             foreach (($timing['url_parser_perf'] ?? []) as $name => $value) {
                 if (\is_scalar($name) && \is_scalar($value)) {
                     $response->setHeader('X-WLS-Performance-UrlParser-' . (string)$name, (string)$value);
+                }
+            }
+            $pageBuilderRender = $timing['pagebuilder_render'] ?? null;
+            if (\is_array($pageBuilderRender)) {
+                foreach (['total', 'layout_config', 'render_header', 'render_content', 'render_footer', 'finalize_output'] as $stage) {
+                    $key = $stage === 'total' ? 'total_ms' : $stage . '_ms';
+                    if (isset($pageBuilderRender[$key]) && \is_scalar($pageBuilderRender[$key])) {
+                        $response->setHeader(
+                            'X-WLS-Performance-PageBuilder-' . \str_replace('_', '-', $stage),
+                            (string)$pageBuilderRender[$key]
+                        );
+                    }
                 }
             }
         } catch (\Throwable) {

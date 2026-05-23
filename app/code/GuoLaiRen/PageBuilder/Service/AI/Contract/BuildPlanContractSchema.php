@@ -147,8 +147,11 @@ final class BuildPlanContractSchema
             'task_kind',
             'executor',
             'input_scope',
+            'runtime_context',
+            'output_contract',
             'policy_slices',
             'context_budget',
+            'acceptance',
             'acceptance_rule_ids',
             'depends_on',
         ];

@@ -8,6 +8,12 @@
  * @hook-sort-order 10
  * @hook-solo false
  */
+use Weline\Customer\Service\AccountSidebarContentGate;
+
+if (!AccountSidebarContentGate::accepts('orders')) {
+    return;
+}
+
 $GLOBALS['__weline_order_account_sidebar_content_rendered'] = true;
 ?>
 <section class="account-hook-section account-index__section d-none motor-account-section" id="orders-section" data-account-section="orders" hidden>

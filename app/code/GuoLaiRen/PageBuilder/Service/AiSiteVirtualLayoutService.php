@@ -151,7 +151,7 @@ class AiSiteVirtualLayoutService
         }
 
         $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
-        if (!\str_contains($lowerPath, $expectedToken) || !\str_ends_with($lowerPath, '.png')) {
+        if (!\str_contains($lowerPath, $expectedToken) || (!\str_ends_with($lowerPath, '.png') && !\str_ends_with($lowerPath, '.svg'))) {
             return true;
         }
 
@@ -160,11 +160,16 @@ class AiSiteVirtualLayoutService
             return true;
         }
         $bytes = @\file_get_contents($absolutePath);
-        if (!\is_string($bytes) || $bytes === '' || \strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) !== 0) {
+        if (!\is_string($bytes) || $bytes === '') {
             return true;
         }
 
-        return !$this->pngAppearsToHaveTransparentBackground($bytes);
+        $assetRole = $role === 'logo' ? 'logo' : 'icon';
+        return !AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset(
+            $bytes,
+            \str_ends_with($lowerPath, '.svg') ? 'image/svg+xml' : 'image/png',
+            $assetRole
+        );
     }
 
     private function pngAppearsToHaveTransparentBackground(string $bytes): bool

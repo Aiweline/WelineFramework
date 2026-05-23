@@ -1922,22 +1922,7 @@ class Start extends CommandAbstract
             return true;
         }
 
-        $instanceName = \trim((string) ($instanceData['instance_name'] ?? $instanceData['name'] ?? ''));
-        if ($instanceName === '' || (int) ($instanceData['control_port'] ?? 0) <= 0) {
-            return false;
-        }
-
-        try {
-            $status = (new IpcControlGateway())->getStatus($instanceName, 0.3);
-        } catch (\Throwable) {
-            return false;
-        }
-
-        if (empty($status['success']) || !\is_array($status['data'] ?? null)) {
-            return false;
-        }
-
-        return $this->isBackgroundStartupIpcReady($status['data']);
+        return false;
     }
 
     /**
@@ -2701,7 +2686,7 @@ class Start extends CommandAbstract
         $defaults = [
             'host' => $this->getDefaultHost(),  // 使用项目唯一域名，避免多项目 SSL 证书冲突
             'port' => self::DEFAULT_PORT,
-            'worker_count' => 4,
+            'worker_count' => 'auto',
             'mode' => 'io',
             'daemon' => true,
             'hot_reload' => false,  // 默认关闭，可通过 wls.hot_reload=true 或 --hot-reload 启用
@@ -3565,7 +3550,8 @@ class Start extends CommandAbstract
         
         // 开发环境：固定 4 个 Worker，兼顾并发与调试体验
         if ($deployMode === 'dev') {
-            return 4;
+            $cpuCount = $this->getCpuCoreCount();
+            return \min(\max(4, (int)\ceil($cpuCount / 2)), 8);
         }
         
         // 生产环境：根据 CPU 核心数和工作模式计算
@@ -5389,15 +5375,16 @@ $sslKey = $argv[6] ?? '';
 // 静默模式，不输出到控制台
 error_reporting(0);
 
-// 确定最高支持的 TLS 版本
+// Keep native WLS HTTPS on modern TLS only; legacy TLS1.0/1.1 is slower to
+// negotiate and should not be offered by generated worker stubs.
 $cryptoMethod = STREAM_CRYPTO_METHOD_TLS_SERVER;
 if (defined('STREAM_CRYPTO_METHOD_TLSv1_3_SERVER')) {
-    // PHP 7.4+ 支持 TLS 1.3（最高协议）
-    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_3_SERVER | STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_1_SERVER | STREAM_CRYPTO_METHOD_TLSv1_0_SERVER;
+    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_3_SERVER | STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
 } elseif (defined('STREAM_CRYPTO_METHOD_TLSv1_2_SERVER')) {
-    // TLS 1.2
-    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_1_SERVER | STREAM_CRYPTO_METHOD_TLSv1_0_SERVER;
+    $cryptoMethod = STREAM_CRYPTO_METHOD_TLSv1_2_SERVER;
 }
+$wlsModernTlsCiphers = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:!aNULL:!eNULL:!MD5:!RC4:!DES:!3DES:!DSS:!SHA1:!DHE';
+$wlsModernTlsCurves = 'X25519:prime256v1';
 
 // 创建 SSL 上下文（支持所有协议，默认使用最高版本）
 $context = stream_context_create([
@@ -5413,9 +5400,8 @@ $context = stream_context_create([
         'allow_self_signed' => true,
         'disable_compression' => true,
         'crypto_method' => $cryptoMethod,
-        // 安全密码套件（优先使用高强度加密）
-        'ciphers' => 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:HIGH:!aNULL:!MD5:!RC4',
-        // 禁用不安全的协议
+        'ciphers' => $wlsModernTlsCiphers,
+        'ecdh_curve' => $wlsModernTlsCurves,
         'single_dh_use' => true,
         'honor_cipher_order' => true,
     ]
@@ -5542,7 +5528,12 @@ PHP;
         
         // Windows 上限制最大推荐值
         if (IS_WIN) {
-            $recommendedWorkers = \min($recommendedWorkers, $cpuCores);
+            $deployMode = Env::system('deploy') ?? 'dev';
+            if ($deployMode === 'dev') {
+                $recommendedWorkers = \min(\max(4, (int)\ceil($cpuCores / 2)), 8);
+            } else {
+                $recommendedWorkers = \min($recommendedWorkers, $cpuCores);
+            }
             $multiplier = 1;
         }
         
@@ -5562,7 +5553,10 @@ PHP;
         
         // 2. 检查 PHP 扩展
         foreach ($recommended['extensions'] as $ext => $benefit) {
-            if (!\extension_loaded($ext)) {
+            $loaded = $ext === 'opcache'
+                ? (\extension_loaded('Zend OPcache') || \function_exists('opcache_get_status'))
+                : \extension_loaded($ext);
+            if (!$loaded) {
                 $issues["ext_{$ext}"] = [
                     'level' => 'warning',
                     'message' => __('缺少扩展：%{1}', [$ext]),
@@ -5605,7 +5599,7 @@ PHP;
         }
         
         // OPCache CLI
-        if (\extension_loaded('opcache')) {
+        if (\extension_loaded('Zend OPcache') || \function_exists('opcache_get_status')) {
             $opcacheCliEnabled = \ini_get('opcache.enable_cli');
             if (!$opcacheCliEnabled || $opcacheCliEnabled === '0') {
                 $issues['opcache_cli'] = [

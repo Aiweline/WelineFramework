@@ -21,7 +21,7 @@ use Weline\Server\Service\Contract\ServiceInstance;
 
 final class StatusCommandTest extends TestCase
 {
-    public function testFilterActiveInstancesIgnoresSharedExternalSidecarsForStoppedInstances(): void
+    public function testFilterActiveInstancesIgnoresSharedStateDependenciesForStoppedInstances(): void
     {
         $manager = new class extends \Weline\Server\Service\ServerInstanceManager {
             public function getRawInstanceData(string $name): ?array
@@ -78,8 +78,7 @@ final class StatusCommandTest extends TestCase
                 instanceId: 1,
                 pid: 2001,
                 port: 19971,
-                state: ServiceInstance::STATE_READY,
-                metadata: ['shared_external' => true]
+                state: ServiceInstance::STATE_READY
             ),
         ]);
 
@@ -158,9 +157,9 @@ final class StatusCommandTest extends TestCase
              * @param array<int, array{pid: int, exists: bool, name?: string, command?: string, memory?: string, cpu?: string, start_time?: string}> $processInfoMap
              * @return array{total: int, running: int, stopped: int}
              */
-            public function stats(ServerInstanceInfo $info, array $processInfoMap, bool $includeSharedExternal = true): array
+            public function stats(ServerInstanceInfo $info, array $processInfoMap): array
             {
-                return $this->getServiceStats($info, $processInfoMap, $includeSharedExternal);
+                return $this->getServiceStats($info, $processInfoMap);
             }
         };
 
@@ -179,8 +178,7 @@ final class StatusCommandTest extends TestCase
                 instanceId: 1,
                 pid: 2001,
                 port: 19970,
-                state: ServiceInstance::STATE_READY,
-                metadata: ['shared_external' => true]
+                state: ServiceInstance::STATE_READY
             ),
         ]);
 
@@ -195,7 +193,7 @@ final class StatusCommandTest extends TestCase
         );
         self::assertSame(
             ['total' => 1, 'running' => 1, 'stopped' => 0],
-            $status->stats($info, $processInfoMap, false)
+            $status->stats($info, $processInfoMap)
         );
     }
 
@@ -227,8 +225,7 @@ final class StatusCommandTest extends TestCase
                 instanceId: 1,
                 pid: 2001,
                 port: 19970,
-                state: ServiceInstance::STATE_READY,
-                metadata: ['shared_external' => true]
+                state: ServiceInstance::STATE_READY
             ),
         ];
 

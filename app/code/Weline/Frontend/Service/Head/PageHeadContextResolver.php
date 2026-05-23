@@ -262,16 +262,19 @@ class PageHeadContextResolver
 
     private function normalizeMetaText(mixed $value): string
     {
+        $text = '';
         if (is_array($value)) {
             foreach (['default', 'name', 'value', 'label'] as $key) {
                 if (isset($value[$key]) && trim((string)$value[$key]) !== '') {
-                    return trim((string)$value[$key]);
+                    $text = trim((string)$value[$key]);
+                    break;
                 }
             }
-            return '';
+        } else {
+            $text = trim((string)$value);
         }
 
-        return trim((string)$value);
+        return $text === '' ? '' : (string)__($text);
     }
 
     private function combineTitleAndLayoutName(string $title, string $layoutName): string

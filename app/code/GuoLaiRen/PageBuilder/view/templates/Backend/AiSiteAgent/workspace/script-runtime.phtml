@@ -121,7 +121,9 @@
     var deferredQueueStatePollDeadline = 0;
     var deferredQueueStatePollOperation = '';
     var DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 5000;
-    var DEFERRED_QUEUE_STATE_POLL_TTL_MS = 20 * 60 * 1000;
+    // 0 means no wall-clock cutoff: once SSE hands off to snapshot polling,
+    // the poller stops only when the real queue state becomes terminal.
+    var DEFERRED_QUEUE_STATE_POLL_TTL_MS = 0;
     var lastOperationTerminalFingerprint = '';
     var blockRefreshState = (window.__pbBlockRefreshState && typeof window.__pbBlockRefreshState === 'object')
         ? window.__pbBlockRefreshState
@@ -234,28 +236,7 @@
     }
 
     function resumeOperationStreamForQueueWatch(operation, payload, sourceTag) {
-        var normalized = normalizeOperationStreamStartPayload(payload || {}, operation);
-        var queueStatus = readQueueStatusFromPayload(operation, payload || {});
-        if (isQueueStatusTerminalForWatch(queueStatus)) {
-            return false;
-        }
-        var streamUrl = String(normalized.streamUrl || '');
-        var executionToken = String(normalized.executionToken || '');
-        if (!executionToken) {
-            return false;
-        }
-        if (!streamUrl) {
-            streamUrl = buildOperationUrl(executionToken);
-        }
-        if (!streamUrl) {
-            return false;
-        }
-        return startOperationStream(
-            streamUrl,
-            String(normalized.operation || operation || ''),
-            executionToken,
-            sourceTag || 'queue-watch-resume'
-        );
+        return false;
     }
 
     function readQueueStatusForDeferredState(workspaceState, operation) {
@@ -288,6 +269,47 @@
             (queueInfo && (queueInfo.message || queueInfo.process))
             || ''
         ).trim();
+    }
+
+    function buildDeferredQueueProgressPayload(operation, workspaceState, queueStatus) {
+        var op = String(operation || '').trim().toLowerCase() || 'build';
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var active = state.active_operation && typeof state.active_operation === 'object'
+            ? state.active_operation
+            : {};
+        var activeOpName = String(active.operation || '').trim().toLowerCase();
+        var operationActive = activeOpName === op ? active : {};
+        var activeOperations = state.active_operations && typeof state.active_operations === 'object'
+            ? state.active_operations
+            : {};
+        var scopedActive = activeOperations[op] && typeof activeOperations[op] === 'object'
+            ? activeOperations[op]
+            : {};
+        var status = String(queueStatus || readQueueStatusForDeferredState(state, op) || '').trim().toLowerCase();
+        var message = String(
+            operationActive.message
+            || scopedActive.message
+            || readQueueMessageForDeferredState(state, op)
+            || (status === 'running' || status === 'processing'
+                ? <?= \json_encode((string)__('队列任务正在后台执行，正在同步最新进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                : <?= \json_encode((string)__('队列任务已进入系统队列，等待调度并持续同步状态。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>)
+        ).trim();
+        var progressPercent = parseInt(String(
+            operationActive.progress_percent
+            || scopedActive.progress_percent
+            || state.progress_percent
+            || 0
+        ), 10) || 0;
+        return {
+            operation: op,
+            state: state,
+            active_operation: Object.assign({}, scopedActive, operationActive, { operation: op }),
+            message: message,
+            queue_status: status || 'queued',
+            deferred_queue_progress: true,
+            queue_waiting_for_scheduler: ['pending', 'queued'].indexOf(status) !== -1,
+            progress_percent: progressPercent
+        };
     }
 
     function resolveDeferredQueueTerminalOperation(workspaceState, operation) {
@@ -792,6 +814,14 @@
             return true;
         }
 
+        var queueStatus = readQueueStatusForDeferredState(workspaceState, normalizedOperation);
+        if (isQueueStatusInProgressForWatch(queueStatus)) {
+            var progressPayload = buildDeferredQueueProgressPayload(normalizedOperation, workspaceState, queueStatus);
+            syncQueuedStageUi(normalizedOperation, 'progress', progressPayload, { level: 'progress' });
+            logOperationToWorkspaceTerminal('deferred_queue_progress', progressPayload, 'progress', progressPayload.message);
+            return false;
+        }
+
         var terminalActive = resolveDeferredQueueTerminalOperation(workspaceState, operation);
         if (!terminalActive) {
             return false;
@@ -808,7 +838,9 @@
         }
         stopDeferredQueueStatePoll();
         deferredQueueStatePollOperation = normalizedOperation;
-        deferredQueueStatePollDeadline = Date.now() + DEFERRED_QUEUE_STATE_POLL_TTL_MS;
+        deferredQueueStatePollDeadline = DEFERRED_QUEUE_STATE_POLL_TTL_MS > 0
+            ? Date.now() + DEFERRED_QUEUE_STATE_POLL_TTL_MS
+            : 0;
 
         function pollOnce() {
             if (!deferredQueueStatePollOperation || deferredQueueStatePollInFlight) {
@@ -819,7 +851,11 @@
                 return;
             }
             deferredQueueStatePollInFlight = true;
-            submitWorkspaceForm(workspaceSnapshotUrl, { public_id: publicId }).then(function (data) {
+            submitWorkspaceForm(workspaceSnapshotUrl, {
+                public_id: publicId,
+                snapshot_mode: 'queue_poll',
+                operation: normalizedOperation
+            }).then(function (data) {
                 deferredQueueStatePollInFlight = false;
                 if (deferredQueueStatePollOperation !== normalizedOperation) {
                     return;
@@ -834,6 +870,35 @@
         deferredQueueStatePollTimer = window.setInterval(pollOnce, DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS);
         pollOnce();
         return true;
+    }
+
+    function shouldObserveActiveQueueOperationOnLoad(active) {
+        if (!active || typeof active !== 'object') {
+            return false;
+        }
+        var op = String(active.operation || '').trim().toLowerCase();
+        if (!op || (op !== 'plan' && !isRuntimeVisualRefreshOperation(op))) {
+            return false;
+        }
+        var status = String(active.status || active.queue_status || '').trim().toLowerCase();
+        return isQueueStatusInProgressForWatch(status)
+            || runtimeTruthyFlag(active.queue_waiting_for_scheduler)
+            || runtimeTruthyFlag(active.can_close_stream)
+            || runtimeTruthyFlag(active.continue_other_operations);
+    }
+
+    function startActiveQueueObservationOnLoad() {
+        var active = activeOperation && typeof activeOperation === 'object' ? activeOperation : {};
+        if (!shouldObserveActiveQueueOperationOnLoad(active)) {
+            return;
+        }
+        var op = String(active.operation || '').trim().toLowerCase();
+        var status = String(active.status || active.queue_status || 'queued').trim().toLowerCase();
+        syncQueuedStageUi(op, 'progress', buildDeferredQueueProgressPayload(op, {
+            active_operation: active,
+            active_operations: Object.create(null)
+        }, status), { level: 'progress' });
+        startDeferredQueueStatePoll(op);
     }
 
     function getCurrentPreviewPageType() {
@@ -2453,10 +2518,10 @@
             ));
         var buildPlanConfirmed = runtimeTruthyFlag(state.build_plan_confirmed)
             || String(state.build_plan_confirmed_at || '').trim() !== '';
-        var buildReadyForBuild = buildPlanConfirmed || planConfirmed || hasBuildPlanV2;
+        var buildReadyForBuild = buildPlanConfirmed || hasBuildPlanV2;
         var hasPlanDraft = Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')
             ? !!state.has_stage_one_plan
-            : !!state.has_execution_blueprint;
+            : !!planConfirmed;
 
         function make(label, badgeClass, message) {
             return { label: label, badgeClass: badgeClass, message: message };
@@ -2637,6 +2702,7 @@
         has_execution_blueprint: getWorkspaceFlagState('getHasExecutionBlueprintState', false),
         workspace_status: ''
     });
+    startActiveQueueObservationOnLoad();
     function startOperationStream(streamUrl, operation, executionToken, sourceTag) {
         if (!streamUrl) {
             return false;
@@ -3205,10 +3271,8 @@
                 if (continueTerminal) {
                     startObserverSyncTerminalPulse(continueTerminal);
                 }
-                var streamResumed = resumeOperationStreamForQueueWatch(operation, payload, 'deferred-queue-handoff');
-                if (!streamResumed) {
-                    startDeferredQueueStatePoll(operation);
-                }
+                resumeOperationStreamForQueueWatch(operation, payload, 'deferred-queue-handoff');
+                startDeferredQueueStatePoll(operation);
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }

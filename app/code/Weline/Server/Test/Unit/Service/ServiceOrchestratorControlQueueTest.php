@@ -289,6 +289,21 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         self::assertNull($this->readPrivate($orchestrator, 'activeControlOperation'));
     }
 
+    public function testAsyncReloadDisconnectReleasesExclusiveWithoutBumpingEpoch(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $this->writePrivate($orchestrator, 'ipcImperialEpoch', 12);
+        $this->writePrivate($orchestrator, 'ipcExclusiveCommand', ControlMessage::ACTION_RELOAD);
+        $this->writePrivate($orchestrator, 'ipcExclusiveClientId', 37);
+
+        $this->invokePrivate($orchestrator, 'ipcOnExclusiveHolderDisconnect', [37]);
+
+        self::assertSame(12, $this->readPrivate($orchestrator, 'ipcImperialEpoch'));
+        self::assertNull($this->readPrivate($orchestrator, 'ipcExclusiveCommand'));
+        self::assertNull($this->readPrivate($orchestrator, 'ipcExclusiveClientId'));
+    }
+
     public function testMaintenanceEnableDuplicateCommandIsDeduplicated(): void
     {
         $orchestrator = new ServiceOrchestrator();

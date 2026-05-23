@@ -13,6 +13,7 @@ use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Context;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Controller\PcController;
@@ -101,6 +102,8 @@ class Template extends DataObject
     private const STATIC_HOOK_AGGREGATE_CACHE_TTL = 30.0;
     private const STATIC_HOOK_STALE_TTL = 300;
     private const STATIC_HOOK_REFRESH_LOCK_TTL = 10;
+    private const REUSABLE_TEMPLATE_OUTPUT_CACHE_TTL = 120;
+    private const REUSABLE_TEMPLATE_OUTPUT_CACHE_MAX_ITEMS = 32;
     /** @var array<string, true> */
     private const STATIC_HOOK_AGGREGATE_CACHEABLE_HOOKS = [
         'account.sidebar' => true,
@@ -133,6 +136,8 @@ class Template extends DataObject
     private static array $staticHookOutputCache = [];
     /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
     private static array $staticHookAggregateOutputCache = [];
+    /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
+    private static array $reusableTemplateOutputCache = [];
     private static ?MemoryStateFacade $staticHookRuntimeCache = null;
     private static bool $staticHookRuntimeCacheResolved = false;
 
@@ -204,6 +209,7 @@ class Template extends DataObject
     {
         self::$staticHookOutputCache = [];
         self::$staticHookAggregateOutputCache = [];
+        self::$reusableTemplateOutputCache = [];
         self::$staticHookRuntimeCache = null;
         self::$staticHookRuntimeCacheResolved = false;
     }
@@ -518,8 +524,8 @@ class Template extends DataObject
 
             // 检测目录是否存在,不存在则建立
             $baseComFileDir = $compile_dir . DS . Cookie::getLang() . DS . ($file_dir ?: '');
-            if (!is_dir($baseComFileDir)) {
-                mkdir($baseComFileDir, 0770, true);
+            if (!is_dir($baseComFileDir) && !@mkdir($baseComFileDir, 0770, true) && !is_dir($baseComFileDir)) {
+                throw new Exception('Failed to create template compile directory: ' . $baseComFileDir);
             }
 
             //定义编译合成的文件 加了前缀 和路径 和后缀名.phtml
@@ -847,7 +853,10 @@ class Template extends DataObject
         }
 
         $ttl = $this->staticHookOutputCacheTtl();
-        $cacheKey = 'hook.output.' . \sha1($hookFile . '|' . $compiledFile . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . $baseUrl . '|' . $cacheContext);
+        $cacheKey = 'hook.output.' . \sha1($hookFile . '|' . $compiledFile . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . KeyBuilder::environmentHash([
+            'base_url' => $baseUrl,
+            'hook_context' => $cacheContext,
+        ]));
         $cached = $this->readStaticHookOutputCache($cacheKey, $ttl);
         if ($cached['status'] !== 'miss') {
             if ($this->isEmptyCacheHtml((string)$cached['html'])) {
@@ -1074,13 +1083,10 @@ class Template extends DataObject
                 return null;
             }
 
-            return 'body-end:' . \sha1(\implode('|', [
-                $authContext,
-                $requestPath,
-                (string)State::getLang(),
-                (string)State::getLangLocal(),
-                (string)State::getCurrency(),
-            ]));
+            return 'body-end:' . KeyBuilder::environmentHash([
+                'auth' => $authContext,
+                'request_path' => $requestPath,
+            ]);
         } catch (\Throwable) {
             return null;
         }
@@ -1098,11 +1104,10 @@ class Template extends DataObject
         }
 
         try {
-            $lang = (string)State::getLang();
-            $langLocal = (string)State::getLangLocal();
-            $currency = $type === 'currency' ? (string)State::getCurrency() : '';
-
-            return $type . ':' . \sha1($lang . '|' . $langLocal . '|' . $currency);
+            return $type . ':' . KeyBuilder::environmentHash(
+                ['scope' => $eventName],
+                ['currency' => $type === 'currency']
+            );
         } catch (\Throwable) {
             return null;
         }
@@ -1121,12 +1126,33 @@ class Template extends DataObject
 
     public function ob_file(string $filename, array $dictionary = []): string
     {
+        $profileStart = \microtime(true);
         // 每次渲染都重新执行 init，确保请求级状态始终绑定当前请求。
-        $this->init();
         $this->init();
         // WLS swaps the request instance per incoming request. Refresh the legacy
         // `$this->request` reference so older templates using that property stay correct.
         $this->request = ObjectManager::getInstance(Request::class);
+        $profileInitEnd = \microtime(true);
+        $reusableTemplateCacheKey = $this->buildReusableTemplateOutputCacheKey($filename, $dictionary);
+        if ($reusableTemplateCacheKey !== null) {
+            $cachedTemplate = $this->readReusableTemplateOutputCache(
+                $reusableTemplateCacheKey,
+                self::REUSABLE_TEMPLATE_OUTPUT_CACHE_TTL
+            );
+            if ($cachedTemplate['status'] !== 'miss' && \is_string($cachedTemplate['html'])) {
+                $profileEnd = \microtime(true);
+                $this->recordTemplateRenderProfile(
+                    $filename,
+                    ($profileInitEnd - $profileStart) * 1000,
+                    0.0,
+                    0.0,
+                    ($profileEnd - $profileStart) * 1000,
+                    \strlen($cachedTemplate['html'])
+                );
+
+                return $cachedTemplate['html'];
+            }
+        }
         $traceAccountSidebar = $this->shouldTraceAccountSidebarTemplate($filename);
         if ($traceAccountSidebar) {
             $this->logAccountSidebarTemplateTrace('template_ob_begin', [
@@ -1138,10 +1164,8 @@ class Template extends DataObject
             ]);
         }
         FiberOutputBuffer::beginCapture();
+        $temporaryTemplateData = $this->pushTemporaryTemplateData($dictionary);
         try {
-            if ($dictionary) {
-                $this->addData($dictionary);
-            }
             // 框架级保障：模板内 $block 永远指向当前 Template 实例。
             // 兼容历史模板（含 view/tpl 编译产物）中的 $block->setTitle()/getBackendUrl() 调用。
             $block = $this;
@@ -1158,7 +1182,9 @@ class Template extends DataObject
                     'buffer' => FiberOutputBuffer::debugState(),
                 ]);
             }
+            $profileIncludeStart = \microtime(true);
             include $filename;
+            $profileIncludeEnd = \microtime(true);
             if ($traceAccountSidebar) {
                 $this->logAccountSidebarTemplateTrace('template_ob_after_include', [
                     'filename' => $filename,
@@ -1169,10 +1195,28 @@ class Template extends DataObject
             self::cooperativeTemplateYield();
         } catch (\Throwable $exception) {
             FiberOutputBuffer::discardCapture();
+            $this->popTemporaryTemplateData($temporaryTemplateData);
             throw $exception;
         }
         /** Get output buffer. */
         $result = FiberOutputBuffer::endCapture();
+        $this->popTemporaryTemplateData($temporaryTemplateData);
+        if ($reusableTemplateCacheKey !== null && !$this->isEmptyCacheHtml($result)) {
+            $this->rememberReusableTemplateOutput(
+                $reusableTemplateCacheKey,
+                $result,
+                self::REUSABLE_TEMPLATE_OUTPUT_CACHE_TTL
+            );
+        }
+        $profileEnd = \microtime(true);
+        $this->recordTemplateRenderProfile(
+            $filename,
+            ($profileInitEnd - $profileStart) * 1000,
+            (($profileIncludeEnd ?? $profileEnd) - ($profileIncludeStart ?? $profileInitEnd)) * 1000,
+            ($profileEnd - ($profileIncludeEnd ?? $profileInitEnd)) * 1000,
+            ($profileEnd - $profileStart) * 1000,
+            \strlen($result)
+        );
         if ($traceAccountSidebar) {
             $this->logAccountSidebarTemplateTrace('template_ob_end', [
                 'filename' => $filename,
@@ -1184,6 +1228,226 @@ class Template extends DataObject
             ]);
         }
         return $result;
+    }
+
+    private function recordTemplateRenderProfile(
+        string $filename,
+        float $initMs,
+        float $includeMs,
+        float $captureMs,
+        float $totalMs,
+        int $bytes
+    ): void {
+        if ($totalMs < 20.0 && $includeMs < 20.0) {
+            return;
+        }
+
+        $profile = RequestContext::get('view.template.profile');
+        $profile = \is_array($profile) ? $profile : [];
+        $path = \str_replace('\\', '/', $filename);
+        $basePath = \defined('BP') ? \str_replace('\\', '/', BP) : '';
+        if ($basePath !== '' && \str_starts_with($path, $basePath)) {
+            $path = \ltrim(\substr($path, \strlen($basePath)), '/');
+        }
+
+        $profile[] = [
+            'file' => $path,
+            'init_ms' => \round($initMs, 2),
+            'include_ms' => \round($includeMs, 2),
+            'capture_ms' => \round($captureMs, 2),
+            'total_ms' => \round($totalMs, 2),
+            'bytes' => $bytes,
+        ];
+
+        if (\count($profile) > 80) {
+            $profile = \array_slice($profile, -80);
+        }
+
+        RequestContext::set('view.template.profile', $profile);
+    }
+
+    private function buildReusableTemplateOutputCacheKey(string $filename, array $dictionary): ?string
+    {
+        if (!Runtime::isPersistent()) {
+            return null;
+        }
+
+        $path = \str_replace('\\', '/', $filename);
+        if (!\str_contains($path, '/theme/frontend/partials/header/com_default.phtml')) {
+            return null;
+        }
+
+        try {
+            if ($this->request->isBackend()) {
+                return null;
+            }
+            if ((string)($this->request->getMethod() ?: 'GET') !== 'GET') {
+                return null;
+            }
+            if ($this->shouldDecorateHookOutput()) {
+                return null;
+            }
+            if (\function_exists('w_env_get')) {
+                $editorMode = (string)\w_env_get('editor_mode', '');
+                if ($editorMode === '1' || $editorMode === 'true') {
+                    return null;
+                }
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $stat = @\stat($filename);
+        if (!\is_array($stat)) {
+            return null;
+        }
+
+        $authContext = $this->frontendAuthStaticHookCacheContext();
+        if ($authContext === null) {
+            return null;
+        }
+
+        return 'template.output.header.default.' . KeyBuilder::environmentHash([
+            'scope' => 'frontend-header-default',
+            'file' => $path,
+            'file_mtime' => (int)$stat['mtime'],
+            'file_size' => (int)$stat['size'],
+            'auth' => $authContext,
+            'dictionary' => $this->reusableHeaderDictionaryScopeHash($dictionary),
+        ]);
+    }
+
+    private function reusableHeaderDictionaryScopeHash(array $dictionary): string
+    {
+        $meta = \is_array($dictionary['meta'] ?? null) ? $dictionary['meta'] : [];
+        $layout = \is_array($dictionary['layout'] ?? null) ? $dictionary['layout'] : [];
+        $colors = \is_array($dictionary['colors'] ?? null) ? $dictionary['colors'] : [];
+        $scope = [
+            'meta' => $this->normalizeReusableHeaderDictionaryValue($this->pickReusableHeaderKeys($meta)),
+            'layout' => $this->normalizeReusableHeaderDictionaryValue($this->pickReusableHeaderKeys($layout)),
+            'colors' => $this->normalizeReusableHeaderDictionaryValue($colors),
+        ];
+        $encoded = \json_encode($scope, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE);
+
+        return \sha1(\is_string($encoded) ? $encoded : \serialize($scope));
+    }
+
+    /**
+     * @param array<string|int, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function pickReusableHeaderKeys(array $data): array
+    {
+        $keys = ['logo', 'logoText', 'logoHeight', 'navItems', 'showSearch', 'showUserMenu', 'class'];
+        $picked = [];
+        foreach ($keys as $key) {
+            if (\array_key_exists($key, $data)) {
+                $picked[$key] = $data[$key];
+            }
+        }
+
+        return $picked;
+    }
+
+    private function normalizeReusableHeaderDictionaryValue(mixed $value): mixed
+    {
+        if ($value === null || \is_scalar($value)) {
+            return $value;
+        }
+        if (!\is_array($value)) {
+            return \is_object($value) && \method_exists($value, '__toString')
+                ? (string)$value
+                : \get_debug_type($value);
+        }
+
+        $normalized = [];
+        foreach ($value as $key => $item) {
+            if (\count($normalized) >= 128) {
+                break;
+            }
+            $normalized[\is_int($key) ? $key : (string)$key] = $this->normalizeReusableHeaderDictionaryValue($item);
+        }
+        \ksort($normalized);
+
+        return $normalized;
+    }
+
+    /**
+     * @return array{status: string, html: ?string}
+     */
+    private function readReusableTemplateOutputCache(string $cacheKey, int $ttl): array
+    {
+        $entry = $this->normalizeStaticSwrEntry(self::$reusableTemplateOutputCache[$cacheKey] ?? null, $ttl);
+        if ($entry !== null) {
+            self::$reusableTemplateOutputCache[$cacheKey] = $entry;
+            return $this->staticSwrEntryStatus($entry);
+        }
+
+        unset(self::$reusableTemplateOutputCache[$cacheKey]);
+        $runtimeCached = $this->readRuntimeHookCache($cacheKey, $ttl);
+        if ($runtimeCached['status'] !== 'miss' && \is_string($runtimeCached['html'])) {
+            $this->rememberReusableTemplateOutput($cacheKey, $runtimeCached['html'], $ttl, (string)$runtimeCached['status']);
+        }
+
+        return $runtimeCached;
+    }
+
+    private function rememberReusableTemplateOutput(string $cacheKey, string $html, int $ttl, string $status = 'fresh'): void
+    {
+        if (\count(self::$reusableTemplateOutputCache) > self::REUSABLE_TEMPLATE_OUTPUT_CACHE_MAX_ITEMS) {
+            self::$reusableTemplateOutputCache = [];
+        }
+
+        self::$reusableTemplateOutputCache[$cacheKey] = $this->makeStaticSwrEntry($html, $ttl, $status);
+        self::runtimeHookCacheSet($cacheKey, $html, $ttl);
+    }
+
+    /**
+     * Keep child-template dictionary data request-local to that include.
+     * Persistent workers otherwise accumulate large parent/child payloads and
+     * extract them again for every later layout partial.
+     *
+     * @param array<string, mixed> $dictionary
+     * @return array{restore: array<string, mixed>, remove: list<string>}
+     */
+    private function pushTemporaryTemplateData(array $dictionary): array
+    {
+        if ($dictionary === []) {
+            return ['restore' => [], 'remove' => []];
+        }
+
+        $restore = [];
+        $remove = [];
+        foreach ($dictionary as $key => $value) {
+            if (!\is_string($key)) {
+                continue;
+            }
+            if ($this->hasData($key)) {
+                $restore[$key] = $this->getData($key);
+            } else {
+                $remove[] = $key;
+            }
+        }
+
+        $this->addData($dictionary);
+
+        return ['restore' => $restore, 'remove' => $remove];
+    }
+
+    /**
+     * @param array{restore: array<string, mixed>, remove: list<string>} $temporaryTemplateData
+     */
+    private function popTemporaryTemplateData(array $temporaryTemplateData): void
+    {
+        $remove = $temporaryTemplateData['remove'] ?? [];
+        if ($remove !== []) {
+            $this->unsetData($remove);
+        }
+
+        $restore = $temporaryTemplateData['restore'] ?? [];
+        foreach ($restore as $key => $value) {
+            $this->setData($key, $value);
+        }
     }
 
     private function shouldTraceAccountSidebarTemplate(string $filename): bool
@@ -1293,6 +1557,10 @@ class Template extends DataObject
         $now = \microtime(true);
         self::$fiberRenderYieldAt ??= new \WeakMap();
         $lastYieldAt = (float)(self::$fiberRenderYieldAt[$fiber] ?? 0.0);
+        if (!$force && $lastYieldAt <= 0.0) {
+            self::$fiberRenderYieldAt[$fiber] = $now;
+            return;
+        }
         if (!$force && $lastYieldAt > 0.0 && (($now - $lastYieldAt) * 1000000) < self::WLS_TEMPLATE_YIELD_MIN_INTERVAL_US) {
             return;
         }
@@ -1385,7 +1653,7 @@ class Template extends DataObject
             if ($requestId === null || $requestId === '') {
                 $requestId = (string)($context->get('runtime.request_count') ?? \spl_object_id($context));
             }
-            $requestCacheKey = 'view.hook.output.' . sha1($requestId . ':' . $name);
+            $requestCacheKey = 'view.hook.output.' . sha1($requestId . ':' . $name . ':' . $this->hookLocaleCacheContext());
             $cachedHookHtml = RequestContext::get($requestCacheKey);
             if (\is_string($cachedHookHtml)) {
                 if ($traceAccountSidebarHook) {
@@ -1402,7 +1670,7 @@ class Template extends DataObject
         if (isset(self::STATIC_HOOK_AGGREGATE_CACHEABLE_HOOKS[$name]) && !$this->shouldDecorateHookOutput()) {
             $aggregateContext = $this->resolveStaticHookAggregateCacheContext($name);
             if ($aggregateContext !== null) {
-                $aggregateCacheKey = 'view.hook.aggregate.' . \sha1($name . '|' . $this->baseUrlCacheContext() . '|' . $aggregateContext);
+                $aggregateCacheKey = 'view.hook.aggregate.' . \sha1($name . '|' . $this->baseUrlCacheContext() . '|' . $aggregateContext . '|' . $this->hookLocaleCacheContext());
                 $aggregateTtl = $this->staticHookAggregateCacheTtl();
                 if (!$forceRefresh) {
                     $cachedAggregateHtml = $this->readStaticHookAggregateCache($aggregateCacheKey, $aggregateTtl);
@@ -1954,12 +2222,10 @@ class Template extends DataObject
     private function accountSidebarStaticHookCacheContext(): ?string
     {
         try {
-            return 'account-sidebar:' . \sha1(\json_encode([
+            return 'account-sidebar:' . KeyBuilder::environmentHash([
                 'base_url' => $this->baseUrlCacheContext(),
-                'lang' => (string)State::getLang(),
-                'lang_local' => (string)State::getLangLocal(),
-                'currency' => (string)State::getCurrency(),
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: 'account-sidebar');
+                'scope' => 'account-sidebar',
+            ]);
         } catch (\Throwable) {
             return null;
         }
@@ -1968,12 +2234,10 @@ class Template extends DataObject
     private function headerActionStaticHookCacheContext(string $name): ?string
     {
         try {
-            return 'header-action:' . $name . ':' . \sha1(\json_encode([
+            return 'header-action:' . $name . ':' . KeyBuilder::environmentHash([
                 'base_url' => $this->baseUrlCacheContext(),
-                'lang' => (string)State::getLang(),
-                'lang_local' => (string)State::getLangLocal(),
-                'currency' => (string)State::getCurrency(),
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: $name);
+                'hook' => $name,
+            ]);
         } catch (\Throwable) {
             return null;
         }
@@ -1985,6 +2249,15 @@ class Template extends DataObject
             return (string)$this->request->getBaseUrl();
         } catch (\Throwable) {
             return '';
+        }
+    }
+
+    private function hookLocaleCacheContext(): string
+    {
+        try {
+            return 'env:' . KeyBuilder::environmentHash(['scope' => 'hook-locale']);
+        } catch (\Throwable) {
+            return 'locale:unknown';
         }
     }
 

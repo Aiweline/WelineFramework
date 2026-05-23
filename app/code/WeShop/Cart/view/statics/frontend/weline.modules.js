@@ -36,6 +36,15 @@ Object.assign(window.WelineModulesConfig.modules, {
             "weshop:mini-cart:loaded",
             "weshop:mini-cart:updated"
         ]
+    },
+    // 购物车按需 hydration（Cookie / 登录态门控）
+    cartHydrate: {
+        paths: [
+            "WeShop_Cart::js/cart-hydrate.js"
+        ],
+        globalVar: "WeShopCartHydrate",
+        description: "WeShop 购物车刷新 hydration",
+        autoInit: true
     }
 });
 

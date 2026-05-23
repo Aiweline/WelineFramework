@@ -620,12 +620,17 @@ class ControlMessage
     /**
      * 构建 drain 消息
      */
-    public static function drain(array $ports): string
+    public static function drain(array $ports, int $drainTimeoutSec = 0): string
     {
-        return self::encode([
+        $payload = [
             'type'  => self::TYPE_DRAIN,
             'ports' => $ports,
-        ]);
+        ];
+        if ($drainTimeoutSec > 0) {
+            $payload['drain_timeout_sec'] = $drainTimeoutSec;
+        }
+
+        return self::encode($payload);
     }
 
     /**
@@ -740,7 +745,7 @@ class ControlMessage
      * @param string $reloadType 重载类型（仅 reload 时用）
      * @param array $payload 可选载荷（如 security_unblock 时传 ip / clear_all）
      */
-    public static function command(string $action, string $reloadType = '', array $payload = []): string
+    public static function command(string $action, string $reloadType = '', array $payload = [], string $controlToken = ''): string
     {
         $data = [
             'type'   => self::TYPE_COMMAND,
@@ -748,6 +753,9 @@ class ControlMessage
         ];
         if ($reloadType !== '') {
             $data['reload_type'] = $reloadType;
+        }
+        if ($controlToken !== '' && !isset($payload['control_token'])) {
+            $data['control_token'] = $controlToken;
         }
         foreach ($payload as $k => $v) {
             $data[$k] = $v;

@@ -19,6 +19,59 @@
     min-height: 80vh;
 }
 
+/* ========== 布局主体主题变量桥接 ========== */
+:root {
+    --weline-layout-font-family: var(--font-family-base, var(--weshop-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif));
+    --weline-layout-font-family-display: var(--font-family-display, var(--weshop-font-display, var(--weline-layout-font-family)));
+    --weline-layout-font-size-xs: var(--font-size-xs, var(--weshop-font-size-xs, 0.75rem));
+    --weline-layout-font-size-sm: var(--font-size-sm, var(--weshop-font-size-sm, 0.875rem));
+    --weline-layout-font-size-base: var(--font-size-base, var(--weshop-font-size-base, 1rem));
+    --weline-layout-font-size-lg: var(--font-size-lg, var(--weshop-font-size-lg, 1.125rem));
+    --weline-layout-font-size-xl: var(--font-size-xl, var(--weshop-font-size-xl, 1.25rem));
+    --weline-layout-font-size-2xl: var(--font-size-2xl, var(--weshop-font-size-2xl, 1.5rem));
+    --weline-layout-font-size-3xl: var(--font-size-3xl, var(--weshop-font-size-3xl, 1.75rem));
+    --weline-layout-font-size-4xl: var(--font-size-4xl, var(--weshop-font-size-4xl, 2rem));
+    --weline-layout-font-weight-medium: var(--font-weight-medium, var(--weshop-font-weight-medium, 500));
+    --weline-layout-font-weight-semibold: var(--font-weight-semibold, var(--weshop-font-weight-semibold, 600));
+    --weline-layout-font-weight-bold: var(--font-weight-bold, var(--weshop-font-weight-bold, 700));
+    --weline-layout-line-height-tight: var(--line-height-tight, var(--weshop-line-height-tight, 1.25));
+    --weline-layout-line-height-normal: var(--line-height-normal, var(--weshop-line-height-normal, 1.5));
+    --weline-layout-line-height-relaxed: var(--line-height-relaxed, var(--weshop-line-height-relaxed, 1.75));
+    --weline-layout-line-height-loose: var(--line-height-loose, 2);
+    --weline-layout-spacing-xs: var(--spacing-xs, var(--weshop-spacing-xs, 0.25rem));
+    --weline-layout-spacing-sm: var(--spacing-sm, var(--weshop-spacing-sm, 0.5rem));
+    --weline-layout-spacing-md: var(--spacing-md, var(--weshop-spacing-md, 1rem));
+    --weline-layout-spacing-lg: var(--spacing-lg, var(--weshop-spacing-lg, 1.5rem));
+    --weline-layout-spacing-xl: var(--spacing-xl, var(--weshop-spacing-xl, 2rem));
+    --weline-layout-spacing-2xl: var(--spacing-2xl, var(--weshop-spacing-2xl, 3rem));
+    --weline-layout-spacing-3xl: var(--spacing-3xl, var(--weshop-spacing-3xl, 4rem));
+    --weline-layout-radius-sm: var(--radius-sm, var(--border-radius-sm, var(--weshop-border-radius-sm, 3px)));
+    --weline-layout-radius-md: var(--radius-md, var(--border-radius-md, var(--weshop-border-radius-md, 4px)));
+    --weline-layout-radius-lg: var(--radius-lg, var(--border-radius-lg, var(--weshop-border-radius-lg, 8px)));
+    --weline-layout-radius-xl: var(--radius-xl, var(--border-radius-xl, var(--weshop-border-radius-xl, 12px)));
+    --weline-layout-radius-full: var(--radius-full, var(--border-radius-full, var(--weshop-border-radius-full, 9999px)));
+    --weline-layout-text-primary: var(--color-text-primary, var(--weshop-text-primary, #111827));
+    --weline-layout-text-secondary: var(--color-text-secondary, var(--weshop-text-secondary, #6b7280));
+    --weline-layout-text-tertiary: var(--color-text-tertiary, var(--color-text-muted, var(--weshop-text-secondary, #6b7280)));
+    --weline-layout-surface-primary: var(--color-bg-primary, var(--weshop-surface, #ffffff));
+    --weline-layout-surface-secondary: var(--color-bg-secondary, var(--weshop-background, #f8f9fa));
+    --weline-layout-border-color: var(--color-border-light, var(--color-border-default, var(--weshop-border, #e5e7eb)));
+    --weline-layout-link-color: var(--color-link, var(--weshop-primary, #0066c0));
+    --weline-layout-link-hover-color: var(--color-link-hover, var(--weshop-primary-hover, #c45500));
+    --weline-layout-content-max-width: var(--layout-max-width, var(--spacing-container-max-width, var(--container-max-width, var(--weshop-container-max-width, 1400px))));
+    --weline-layout-content-padding-inline: var(--spacing-container-padding, var(--weshop-container-padding, 1rem));
+}
+
+.weline-page-wrapper,
+.weline-main-content,
+.main-content,
+main[data-layout] {
+    font-family: var(--weline-layout-font-family);
+    font-size: var(--weline-layout-font-size-base);
+    line-height: var(--weline-layout-line-height-normal);
+    color: var(--weline-layout-text-primary);
+}
+
 /* ========== 通用工具类 ========== */
 .skip-to-content {
     position: absolute;

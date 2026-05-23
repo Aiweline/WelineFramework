@@ -21,6 +21,7 @@
     const defaultConfig = {
         baseUrl: window.location.origin,
         modulesBaseUrl: '/static/Weline_Frontend/js/weline-api',
+        assetVersion: 'dev',
         // 模块配置
         api: {
             workerUrl: null,
@@ -69,8 +70,17 @@
             if (!isDev) {
                 return url;
             }
+            if (url.indexOf('_weline_dev=') !== -1) {
+                return url;
+            }
+            const assetVersion = encodeURIComponent(String(
+                runtimeConfig.assetVersion ||
+                runtimeConfig.deployVersion ||
+                runtimeConfig.deploy_version ||
+                'dev'
+            ));
             const separator = url.indexOf('?') === -1 ? '?' : '&';
-            return `${url}${separator}_weline_dev=${Date.now()}`;
+            return `${url}${separator}_weline_dev=${assetVersion}`;
         }
 
         isGlobalModuleReady(globalVarName, requireFullGlobal = false) {

@@ -271,10 +271,8 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, $pro
     }
     @\fclose($socket);
     
-    // 使用进程管理器清理 PID 文件
-    if ($processName) {
-        \Weline\Framework\System\Process\Processer::destroy('--name=' . $processName);
-    }
+    // Master owns process-record cleanup; child exit must not block on shared
+    // PID/name/port index locks.
     
     exit(0);
 };

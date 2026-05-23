@@ -71,12 +71,22 @@ class ServerInstanceManager
      */
     public function getInstanceInfo(string $name, bool $validateStale = true): ?ServerInstanceInfo
     {
+        return $this->getInstanceInfoUsingIpcTimeout($name, $validateStale, 1.5);
+    }
+
+    public function getInstanceInfoWithIpcTimeout(string $name, bool $validateStale, float $ipcTimeout): ?ServerInstanceInfo
+    {
+        return $this->getInstanceInfoUsingIpcTimeout($name, $validateStale, $ipcTimeout);
+    }
+
+    private function getInstanceInfoUsingIpcTimeout(string $name, bool $validateStale, float $ipcTimeout): ?ServerInstanceInfo
+    {
         $rawData = $this->getRawInstanceData($name);
         if ($rawData === null) {
             return null;
         }
 
-        $info = $this->buildInstanceInfo($name, $rawData);
+        $info = $this->buildInstanceInfo($name, $rawData, $ipcTimeout);
         if ($validateStale && $this->isStaleInstanceRecord($name, $rawData, $info)) {
             $this->cleanupStaleInstanceArtifacts($name, $rawData);
             return null;
@@ -286,6 +296,7 @@ class ServerInstanceManager
     public function cleanupInactiveInstances(): array
     {
         $cleanedNames = [];
+        $touchedPids = [];
 
         foreach ($this->listRawInstanceNames() as $name) {
             $rawData = $this->getRawInstanceData($name);
@@ -297,17 +308,22 @@ class ServerInstanceManager
                 continue;
             }
 
-            $info = $this->buildInstanceInfo($name, $rawData);
-            if (!$this->shouldPurgeStoppedInstanceRecord($rawData) && !$info->isFullyStopped()) {
-                continue;
+            if (!$this->shouldPurgeStoppedInstanceRecord($rawData)) {
+                $status = $this->getMasterIpcStatusResult($name, 0.5);
+                if ($status['success'] && (bool)($status['data']['running'] ?? false)) {
+                    continue;
+                }
             }
 
+            foreach ($this->collectTrackedPids($name, $rawData) as $pid) {
+                $touchedPids[$pid] = true;
+            }
             $this->purgeInactiveInstanceArtifacts($name, $rawData);
             $cleanedNames[] = $name;
         }
 
-        if ($cleanedNames !== []) {
-            Processer::cleanupStalePidFiles();
+        if ($touchedPids !== []) {
+            Processer::cleanupStalePidFilesForPids(\array_map('intval', \array_keys($touchedPids)));
         }
 
         return $cleanedNames;
@@ -430,6 +446,10 @@ class ServerInstanceManager
             'supervisor_channel',
             'supervisor_endpoint',
             'control_port',
+            'control_token',
+            'control_token_created_at',
+            'epoch',
+            'master_epoch',
             'host',
             'public_host',
             'port',
@@ -466,6 +486,8 @@ class ServerInstanceManager
             'retained_pid_count',
             'retained_at',
             'retained_timestamp',
+            'slot_generations',
+            'slot_generations_updated_at',
             'updated_at',
         ];
 
@@ -661,13 +683,7 @@ class ServerInstanceManager
             return true;
         }
 
-        foreach ($this->collectTrackedPids($name, $rawData) as $pid) {
-            if ($pid > 0 && Processer::processExists($pid)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->collectRunningTrackedPids($name, $rawData) !== [];
     }
 
     /**
@@ -686,19 +702,71 @@ class ServerInstanceManager
             }
         }
 
-        $running = [];
+        $candidatePids = [];
         foreach ($this->collectTrackedPids($name, $rawData) as $pid) {
             $pid = (int) $pid;
             if ($pid <= 0 || isset($ignored[$pid])) {
                 continue;
             }
 
-            if (Processer::processExists($pid)) {
+            $candidatePids[$pid] = true;
+        }
+
+        if ($candidatePids === []) {
+            return [];
+        }
+
+        $processInfo = Processer::batchGetProcessInfo(\array_map('intval', \array_keys($candidatePids)));
+        $running = [];
+        foreach (\array_keys($candidatePids) as $pid) {
+            $pid = (int) $pid;
+            $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
+            if (!(bool)($info['exists'] ?? false) || (bool)($info['is_zombie'] ?? false)) {
+                continue;
+            }
+            if ($this->isTrackedProcessIdentityForInstance($name, $rawData, $pid)) {
                 $running[$pid] = true;
             }
         }
 
         return \array_map('intval', \array_keys($running));
+    }
+
+    private function isTrackedProcessIdentityForInstance(string $name, array $rawData, int $pid): bool
+    {
+        $allowedPnames = [];
+        $allowedProcessNames = [];
+        foreach ($this->collectManagedProcessNames($name, $rawData) as $pname) {
+            $allowedPnames[$pname] = true;
+            try {
+                $processName = \str_starts_with($pname, '--name=')
+                    ? \substr($pname, 7)
+                    : Processer::getTaskName($pname);
+            } catch (\Throwable) {
+                $processName = '';
+            }
+            if ($processName !== '') {
+                $allowedProcessNames[$processName] = true;
+            }
+        }
+
+        $record = Processer::getProcessRecordByPid($pid);
+        $indexedPname = Processer::getNameByPid($pid);
+        $recordPname = (string)($record['pname'] ?? '');
+        foreach ([$recordPname, $indexedPname] as $pname) {
+            if ($pname !== '' && isset($allowedPnames[$pname])) {
+                return true;
+            }
+            if (\str_starts_with($pname, '--name=')) {
+                $processName = \substr($pname, 7);
+                if ($processName !== '' && isset($allowedProcessNames[$processName])) {
+                    return true;
+                }
+            }
+        }
+
+        $recordProcessName = (string)($record['process_name'] ?? $record['task_name'] ?? '');
+        return $recordProcessName !== '' && isset($allowedProcessNames[$recordProcessName]);
     }
 
     /**
@@ -811,6 +879,11 @@ class ServerInstanceManager
             $names[] = '--name=' . MasterProcess::buildScopedProcessName('weline-wls-worker', $name, $i);
         }
 
+        $maintenancePrefix = MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-';
+        foreach (Processer::getProcessNamesByPrefix($maintenancePrefix) as $processName) {
+            $names[] = $processName;
+        }
+
         return \array_values(\array_unique(\array_filter($names)));
     }
 
@@ -819,6 +892,7 @@ class ServerInstanceManager
      */
     private function cleanupStaleInstanceArtifacts(string $name, array $rawData): void
     {
+        $trackedPids = $this->collectTrackedPids($name, $rawData);
         foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
             Processer::removePidFile($processName);
         }
@@ -839,7 +913,7 @@ class ServerInstanceManager
         }
 
         $this->markInstanceRecordStopped($this->getInstanceFile($name), 'stale_cleanup');
-        Processer::cleanupStalePidFiles();
+        Processer::cleanupStalePidFilesForPids($trackedPids);
     }
 
     /**
@@ -869,10 +943,10 @@ class ServerInstanceManager
     /**
      * 从原始数据构建 ServerInstanceInfo 对象
      */
-    private function buildInstanceInfo(string $name, array $rawData): ServerInstanceInfo
+    private function buildInstanceInfo(string $name, array $rawData, float $ipcTimeout = 1.5): ServerInstanceInfo
     {
         $runtimeData = $rawData;
-        $ipcStatus = $this->getMasterIpcStatus($name);
+        $ipcStatus = $ipcTimeout > 0.0 ? $this->getMasterIpcStatus($name, $ipcTimeout) : null;
         $httpRedirectPort = $this->resolveHttpRedirectPort($runtimeData);
 
         return new ServerInstanceInfo(
@@ -889,6 +963,7 @@ class ServerInstanceManager
             startedAt: (string) ($runtimeData['started_at'] ?? ''),
             startedTimestamp: (int) ($runtimeData['started_timestamp'] ?? 0),
             services: $ipcStatus === null ? [] : $this->buildServiceInfoListFromIpcStatus($ipcStatus),
+            controlToken: (string) ($runtimeData['control_token'] ?? ''),
         );
     }
 
@@ -1102,10 +1177,23 @@ class ServerInstanceManager
         ];
     }
 
-    private function getMasterIpcStatus(string $name): ?array
+    /**
+     * @return array{success:bool,message:string,data:array}
+     */
+    public function getMasterIpcStatusResult(string $name, float $timeout = 1.5): array
     {
-        $status = (new IpcControlGateway())->getStatus($name, 1.5);
-        if (!$status['success'] || !\is_array($status['data'] ?? null)) {
+        $status = (new IpcControlGateway())->getStatus($name, $timeout);
+        return [
+            'success' => (bool)($status['success'] ?? false),
+            'message' => (string)($status['message'] ?? ''),
+            'data' => \is_array($status['data'] ?? null) ? $status['data'] : [],
+        ];
+    }
+
+    private function getMasterIpcStatus(string $name, float $timeout = 1.5): ?array
+    {
+        $status = $this->getMasterIpcStatusResult($name, $timeout);
+        if (!$status['success'] || $status['data'] === []) {
             return null;
         }
 
@@ -1122,6 +1210,7 @@ class ServerInstanceManager
         return [
             'instance_running' => (bool)($status['running'] ?? false),
             'workers' => $this->countRunningRoleFromServices($services, 'worker'),
+            'desired_workers' => (int)($status['desired_state']['worker'] ?? 0),
             'dispatchers' => $this->countRunningRoleFromServices($services, 'dispatcher'),
             'ports' => $this->collectRunningPortsFromServices($services, 'worker'),
         ];
@@ -1183,7 +1272,7 @@ class ServerInstanceManager
             return null;
         }
 
-        return $this->buildInstanceInfo($name, $rawData);
+        return $this->buildInstanceInfo($name, $rawData, 0.0);
     }
 
     /**
@@ -1218,6 +1307,29 @@ class ServerInstanceManager
             'workers' => 0,
             'dispatchers' => 0,
             'ports' => [],
+        ];
+    }
+
+    /**
+     * @return array{instance_running: bool, workers: int, dispatchers: int, ports: int[], ipc_success: bool, ipc_message: string}
+     */
+    public function probeRuntimeStatsForInstance(ServerInstanceInfo $info, float $timeout = 6.0): array
+    {
+        $result = $this->getMasterIpcStatusResult($info->name, $timeout);
+        if ($result['success'] && (bool)($result['data']['running'] ?? false)) {
+            return $this->collectRuntimeStatsFromIpcStatus($result['data']) + [
+                'ipc_success' => true,
+                'ipc_message' => $result['message'],
+            ];
+        }
+
+        return [
+            'instance_running' => false,
+            'workers' => 0,
+            'dispatchers' => 0,
+            'ports' => [],
+            'ipc_success' => false,
+            'ipc_message' => $result['message'],
         ];
     }
 

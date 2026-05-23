@@ -30,6 +30,9 @@ use Weline\Queue\QueueInterface;
 #[Acl('Weline_Queue::listing_manager', '队列管理', 'mdi-human-queue', '管理队列信息', 'Weline_Queue::listing')]
 class Queue extends \Weline\Framework\App\Controller\BackendController
 {
+    private const SNAPSHOT_PAGE_SIZE = 10;
+    private const SNAPSHOT_TEXT_LIMIT = 240;
+
     private \Weline\Queue\Model\Queue $queue;
     private \Weline\Queue\Model\Queue\Type $type;
 
@@ -62,7 +65,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     #[Acl('Weline_Queue::index', '队列列表快照', 'mdi mdi-refresh', '队列列表实时快照')]
     public function getSnapshot(): string
     {
-        $this->assignQueueListingState($this->buildQueueListingState());
+        $this->assignQueueListingState($this->buildQueueListingState(true));
 
         return $this->fetchJson([
             'success' => true,
@@ -82,7 +85,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
      *   pagination: mixed
      * }
      */
-    private function buildQueueListingState(): array
+    private function buildQueueListingState(bool $snapshot = false): array
     {
         $module = $this->request->getGet('module');
         $status = $this->request->getGet('status');
@@ -93,6 +96,22 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         /** @var \Weline\Queue\Model\Queue $queueListing */
         $queueListing = ObjectManager::make(\Weline\Queue\Model\Queue::class);
         $queueListing->joinModel(\Weline\Queue\Model\Queue\Type::class, 't', 'main_table.type_id=t.type_id', 'left');
+        if ($snapshot) {
+            $queueListing->fields([
+                'queue_id' => 'main_table.queue_id',
+                'type_id' => 'main_table.type_id',
+                'pid' => 'main_table.pid',
+                'name' => 'main_table.name',
+                'result' => 'SUBSTRING(main_table.result,1,' . self::SNAPSHOT_TEXT_LIMIT . ')',
+                'status' => 'main_table.status',
+                'finished' => 'main_table.finished',
+                'auto' => 'main_table.auto',
+                'module' => 'main_table.module',
+                'biz_key' => 'main_table.biz_key',
+                'create_time' => 'main_table.create_time',
+                'end_at' => 'main_table.end_at',
+            ]);
+        }
 
         if ($module) {
             $queueListing->where('t.module_name', $module);
@@ -112,7 +131,13 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
 
         $queueListing->additional('AND (t.enable = 1 OR t.enable IS NULL)')
             ->order('main_table.queue_id', 'DESC');
-        $queueListing->pagination()->select()->fetch();
+        if ($snapshot) {
+            $page = \max(1, (int)$this->request->getGet('page', 1));
+            $queueListing->pagination($page, self::SNAPSHOT_PAGE_SIZE)->select()->fetch();
+            $this->compactQueueListingItems($queueListing->items);
+        } else {
+            $queueListing->pagination()->select()->fetch();
+        }
 
         return [
             'queues' => $queueListing->getItems(),
@@ -145,6 +170,41 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         $this->assign('biz_key', $state['biz_key']);
         $this->assign('stats', $state['stats']);
         $this->assign('pagination', $state['pagination']);
+    }
+
+    /**
+     * @param array<int, mixed> $items
+     */
+    private function compactQueueListingItems(array &$items): void
+    {
+        foreach ($items as &$item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            foreach (['result', 'content', 'process'] as $field) {
+                if (!isset($item[$field])) {
+                    continue;
+                }
+                $item[$field] = $this->limitQueueSnapshotText((string)$item[$field]);
+            }
+        }
+        unset($item);
+    }
+
+    private function limitQueueSnapshotText(string $text): string
+    {
+        $text = $this->normalizeQueueText($text);
+        if ($text === '') {
+            return '';
+        }
+        if (\function_exists('mb_strlen') && \mb_strlen($text, 'UTF-8') > self::SNAPSHOT_TEXT_LIMIT) {
+            return \mb_substr($text, 0, self::SNAPSHOT_TEXT_LIMIT, 'UTF-8') . '...';
+        }
+        if (!\function_exists('mb_strlen') && \strlen($text) > self::SNAPSHOT_TEXT_LIMIT) {
+            return \substr($text, 0, self::SNAPSHOT_TEXT_LIMIT) . '...';
+        }
+
+        return $text;
     }
     
     private function getQueueStats(): array
@@ -864,6 +924,25 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                     $json['msg'] = __('队列已暂停');
                     break;
                     
+                case 'takeover':
+                    $takeover = w_query('queue', 'takeover', [
+                        'queue_id' => $queueId,
+                        'force' => true,
+                        'owner' => 'system_scheduler',
+                        'reason' => 'backend_api_takeover',
+                        'mark_force_rebuild' => true,
+                        'clear_output' => false,
+                    ]);
+                    if (!\is_array($takeover) || empty($takeover['success'])) {
+                        $json['msg'] = \is_array($takeover)
+                            ? (string)($takeover['message'] ?? 'Queue takeover failed.')
+                            : 'Queue takeover failed.';
+                        return $this->fetchJson($json);
+                    }
+                    $json['success'] = true;
+                    $json['msg'] = (string)($takeover['message'] ?? 'Queue takeover completed; waiting for system scheduler.');
+                    break;
+
                 case 'continue':
                 case 'retry':
                     $pid = $this->queue->getPid();
@@ -971,6 +1050,28 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
                         $results[] = ['id' => $queueId, 'success' => true];
                         break;
                         
+                    case 'takeover':
+                        $takeover = w_query('queue', 'takeover', [
+                            'queue_id' => $queueId,
+                            'force' => true,
+                            'owner' => 'system_scheduler',
+                            'reason' => 'backend_api_batch_takeover',
+                            'mark_force_rebuild' => true,
+                            'clear_output' => false,
+                        ]);
+                        if (!\is_array($takeover) || empty($takeover['success'])) {
+                            $results[] = [
+                                'id' => $queueId,
+                                'success' => false,
+                                'msg' => \is_array($takeover) ? (string)($takeover['message'] ?? 'Queue takeover failed.') : 'Queue takeover failed.',
+                            ];
+                            $failCount++;
+                            continue 2;
+                        }
+                        $successCount++;
+                        $results[] = ['id' => $queueId, 'success' => true, 'msg' => (string)($takeover['message'] ?? '')];
+                        break;
+
                     case 'continue':
                         $pid = $queue->getPid();
                         if ($pid && Process::isProcessRunning($pid)) {

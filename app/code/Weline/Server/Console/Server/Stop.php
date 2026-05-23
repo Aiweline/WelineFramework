@@ -65,22 +65,22 @@ class Stop extends CommandAbstract
     private bool $lastIpcStopFlowStillActive = false;
 
     /** IPC 等待超时（秒）- 与 Windows 一致，不长时间等待，超时后强制杀进程 */
-    private const IPC_TIMEOUT = 15;
+    private const IPC_TIMEOUT = 6;
     private const IPC_FORCE_TIMEOUT = 3;
 
     private const RESIDUAL_CLEANUP_MAX_ATTEMPTS = 3;
     private const RESIDUAL_CLEANUP_RETRY_USEC = 300000;
 
     /** IPC 硬超时（秒）- 避免进度持续刷新时无限等待 */
-    private const IPC_HARD_TIMEOUT_WIN = 45;
-    private const IPC_HARD_TIMEOUT_LINUX = 30;
+    private const IPC_HARD_TIMEOUT_WIN = 12;
+    private const IPC_HARD_TIMEOUT_LINUX = 12;
     /** `-f --ipc`：短硬超时，避免假死长等 */
-    private const IPC_FORCE_HARD_TIMEOUT_WIN = 6;
-    private const IPC_FORCE_HARD_TIMEOUT_LINUX = 5;
+    private const IPC_FORCE_HARD_TIMEOUT_WIN = 4;
+    private const IPC_FORCE_HARD_TIMEOUT_LINUX = 4;
     
     /** 子进程全部退出后等待 Master 退出的最大时间（秒）- Linux 上 Master 清理索引/退出主循环较慢，需更长超时 */
-    private const MASTER_EXIT_TIMEOUT_WIN = 5;
-    private const MASTER_EXIT_TIMEOUT_LINUX = 15;
+    private const MASTER_EXIT_TIMEOUT_WIN = 2;
+    private const MASTER_EXIT_TIMEOUT_LINUX = 5;
     
     /** IPC 消息颜色常量 */
     private const IPC_COLOR_TAG = 'Blue';       // [IPC] 标签颜色
@@ -407,7 +407,8 @@ class Stop extends CommandAbstract
         echo "\n";
         
         // 检查 Master 是否存在
-        if (!$this->isMasterProcessAvailableForStop($instanceInfo)) {
+        $masterAvailableForStop = $this->isMasterProcessAvailableForStop($instanceInfo);
+        if (!$masterAvailableForStop) {
             $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
             $this->showInstanceInfo($instanceInfo);
             // Master 失联后子进程脱离 Orchestrator/IPC；必须含 Session/Memory，否则会残留为「逃逸」进程。
@@ -452,7 +453,7 @@ class Stop extends CommandAbstract
         $this->showInstanceInfo($instanceInfo);
         echo "\n";
 
-        if (!$fastLocal && $this->isMasterProcessAvailableForStop($instanceInfo)) {
+        if (!$fastLocal && $masterAvailableForStop) {
             if (!$this->validateInstanceForIpcStop($instanceInfo)) {
                 $this->printer->warning(__('实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。'));
                 $fastLocal = true;
@@ -517,11 +518,10 @@ class Stop extends CommandAbstract
         
         if ($ipcSuccess) {
             $this->printer->success(__('所有子进程已完整退出 ✓'));
-            $this->runResidualCleanupPairWithRetry($name, $instanceInfo, false);
-            if (!$this->wasLastResidualCleanupComplete()) {
-                $this->printer->warning(__('Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.', [$name]));
-                return;
-            }
+            // Master IPC is the runtime authority. Once Master reports a full
+            // stop, do not run the expensive local prefix/port residual scan on
+            // the success path; it belongs to IPC failure and fast-local modes.
+            $this->lastResidualCleanupComplete = true;
         } else {
             if ($this->lastIpcStopFlowStillActive) {
                 $this->printer->warning(__('Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup.'));
@@ -1502,6 +1502,8 @@ class Stop extends CommandAbstract
         
         // 发送 STOP 命令（msg_id 与 Master ACK / trace 对齐）
         $traceId = 'cli-stop-' . \getmypid() . '-' . \time();
+        $endpoint = MasterProcess::getMasterEndpoint($instanceName);
+        $controlToken = (string)($endpoint['control_token'] ?? '');
         $stopMsg = \Weline\Server\IPC\ControlMessage::command(
             \Weline\Server\IPC\ControlMessage::ACTION_STOP,
             '',
@@ -1511,7 +1513,8 @@ class Stop extends CommandAbstract
                 'stop_source' => 'cli:server:stop',
                 'stop_trace_id' => $traceId,
                 'force_stop' => $force,
-            ]
+            ],
+            $controlToken
         );
         $written = @\fwrite($conn, $stopMsg);
         
@@ -1839,24 +1842,24 @@ class Stop extends CommandAbstract
         $base = $isWin ? self::IPC_HARD_TIMEOUT_WIN : self::IPC_HARD_TIMEOUT_LINUX;
         $cap = $isWin ? 600 : 420;
 
-        $stopDrainWait = (float) Env::get('wls.orchestrator.stop_all_drain_wait_sec', 10.0);
+        $stopDrainWait = (float) Env::get('wls.orchestrator.stop_all_drain_wait_sec', 2.0);
         if ($stopDrainWait < 1.0) {
             $stopDrainWait = 1.0;
         }
-        if ($stopDrainWait > 300.0) {
-            $stopDrainWait = 300.0;
+        if ($stopDrainWait > 30.0) {
+            $stopDrainWait = 30.0;
         }
 
         $terminateTimeout = (float) Env::get('wls.orchestrator.stop_terminate_timeout_sec', 3.0);
         if ($terminateTimeout < 1.0) {
             $terminateTimeout = 1.0;
         }
-        if ($terminateTimeout > 30.0) {
-            $terminateTimeout = 30.0;
+        if ($terminateTimeout > 10.0) {
+            $terminateTimeout = 10.0;
         }
 
         // 预留阶段切换、IPC 传输与最终校验窗口，避免长排水配置下过早硬超时
-        $adaptive = (int) \ceil($stopDrainWait + $terminateTimeout + 20.0);
+        $adaptive = (int) \ceil($stopDrainWait + $terminateTimeout + 4.0);
         $adaptive = \max($base, $adaptive);
 
         return \min($adaptive, $cap);
@@ -2513,44 +2516,11 @@ class Stop extends CommandAbstract
 
     protected function validateInstanceForIpcStop(ServerInstanceInfo $info): bool
     {
-        if ($info->masterPid <= 0 || !Processer::processExists($info->masterPid)) {
-            return false;
-        }
-
-        $expectedName = MasterProcess::getMasterProcessName($info->name);
-        $cmd = Processer::getProcessCommandLine($info->masterPid);
-        if ($cmd === '') {
-            return false;
-        }
-
-        if (!\str_contains($cmd, $expectedName) && !\str_contains($cmd, '--name=' . $expectedName)) {
-            return false;
-        }
-
-        $cp = $info->controlPort;
-        if ($cp <= 0) {
-            return false;
-        }
-
-        $inspect = $this->inspectRecoverablePortOccupant($cp);
-        if (!($inspect['in_use'] ?? false)) {
-            return false;
-        }
-
-        $ownerPid = (int) ($inspect['pid'] ?? 0);
-        if ($ownerPid <= 0) {
-            return false;
-        }
-
-        $scope = (string) ($inspect['scope'] ?? '');
-        $own = MasterProcess::getProjectScopeToken();
-        if ($scope !== '' && $scope !== $own) {
-            return false;
-        }
-
-        return $ownerPid === $info->masterPid
-            || \str_contains(Processer::getProcessCommandLine($ownerPid), $expectedName)
-            || $this->isRecoverableManagedPort($cp, $inspect, $info);
+        // Do not run command-line/port ownership scans on the normal IPC path.
+        // The control connection and protocol response are the authority; if the
+        // endpoint is stale or foreign, sendStopViaIpcAndWait() fails quickly and
+        // the caller falls back to local cleanup.
+        return $info->masterPid > 0 && $info->controlPort > 0;
     }
 
     protected function ipcAppendStopTraceHint(string $instanceName): void

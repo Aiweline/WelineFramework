@@ -4,6 +4,22 @@
 "Notification could not be marked as read.","Notification could not be marked as read."
 "Notification Detail","Notification Detail"
 "Please log in to continue.","Please log in to continue."
+请先登录后再配置通知渠道。,请先登录后再配置通知渠道。
+通知渠道配置已保存。,通知渠道配置已保存。
+"Unsupported notification provider operation: %{1}","Unsupported notification provider operation: %{1}"
+"Notification Query","Notification Query"
+"Provides frontend notification operations through the worker API.","Provides frontend notification operations through the worker API."
+"Mark a notification owned by the current customer as read.","Mark a notification owned by the current customer as read."
+"订单 {1} 已提交","订单 {1} 已提交"
+订单已提交,订单已提交
+我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。,我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。
+站内通知,"On-site Notifications"
+通知渠道和联系方式不能为空。,"Notification channel and contact method cannot be empty."
+该通知渠道暂不支持客户配置。,"This notification channel does not currently support customer configuration."
+请输入有效的通知邮箱。,"Enter a valid notification email."
+邮箱,邮箱
+订单通知,订单通知
+您的订单已提交，我们会继续同步后续状态。,您的订单已提交，我们会继续同步后续状态。
 Unread,Unread
 Read,Read
 "Notification not found.","Notification not found."
@@ -40,11 +56,35 @@ View,View
 "Basic Information","Basic Information"
 Content,Content
 "Already marked as read.","Already marked as read."
+消息通知,Notifications
+订单进度、支付结果、售后提醒和账户消息都会出现在这里。,"Order updates, payment results, after-sales reminders, and account messages will appear here."
+全部消息,"All Messages"
+未读,Unread
+标记已读,"Mark as Read"
+当前还没有消息。后续订单、支付、配送和售后事件产生后，会自动出现在这里。,"There are no messages yet. Future order, payment, delivery, and after-sales events will appear here automatically."
+通知渠道设置,"Notification Channel Settings"
+配置订单、支付、配送和售后通知的接收方式，结账页会优先使用这里保存的偏好。,"Configure how you receive order, payment, delivery, and after-sales notifications. Checkout will use the preferences saved here first."
+已可用于订单通知。,"Available for order notifications."
+请先在下方添加该渠道的联系方式。,"Add contact details for this channel below first."
+添加通知联系方式,"Add Notification Contact"
+外部渠道需要先绑定联系方式，才能参与提醒投递。,"External channels need contact details before they can receive reminders."
+渠道,Channel
+选择渠道,"Select Channel"
+联系方式,"Contact Method"
+邮箱、手机号或渠道地址,"Email, phone number, or channel address"
+保存后，结账与订单相关流程会优先使用这里启用的通知渠道。,"After saving, checkout and order-related flows will use the notification channels enabled here first."
+保存通知设置,"Save Notification Settings"
+投递说明,"Delivery Notes"
+先启用渠道，再补齐联系人，避免订单消息只能停留在站内。,"Enable channels and add contacts so order messages do not stay only in the on-site inbox."
+推荐组合,"Recommended Setup"
+站内通知适合保底留痕，建议默认开启。,"On-site notifications are useful as a reliable record and are recommended to stay enabled by default."
+邮件适合订单确认、支付结果和售后进度提醒。,"Email is suitable for order confirmations, payment results, and after-sales progress reminders."
+"Telegram、Webhook 等外部渠道需要先配置联系人才能启用。","External channels such as Telegram and Webhook require contacts before they can be enabled."
+已保存联系人,"Saved Contacts"
+通知设置,"Notification Settings"
+管理订单、支付与售后消息提醒,"Manage order, payment, and after-sales notifications"
 "Stay Updated","Stay Updated"
 "Notification Center","Notification Center"
 "Open Center","Open Center"
 "Alerts and updates in one place","Alerts and updates in one place"
 "Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center.","Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center."
-通知设置,"Notification Settings"
-管理订单、支付与售后消息提醒,"Manage order, payment, and after-sales notifications"
-保存通知设置,"Save Notification Settings"

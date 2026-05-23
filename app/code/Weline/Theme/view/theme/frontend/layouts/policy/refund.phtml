@@ -191,29 +191,30 @@ $meta = $this->getData('meta') ?? [];
     .refund-policy.policy-main {
         width: 100%;
         flex: 1;
-        padding: 2rem 0;
+        padding: var(--weline-layout-spacing-xl, 2rem) 0;
     }
 
     .policy-default-content {
         width: 100%;
-        padding: 2rem 0 3rem;
+        padding: var(--weline-layout-spacing-xl, 2rem) 0 var(--weline-layout-spacing-2xl, 3rem);
     }
 
     .policy-header {
         text-align: left;
-        margin-bottom: 2rem;
+        margin-bottom: var(--weline-layout-spacing-xl, 2rem);
     }
 
     .policy-title {
-        font-size: 2rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111);
+        font-size: var(--weline-layout-font-size-3xl, 1.75rem);
+        font-weight: var(--weline-layout-font-weight-semibold, 600);
+        color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
         margin: 0 0 0.75rem 0;
     }
 
     .policy-description {
-        font-size: 0.95rem;
-        color: var(--color-text-secondary, #565959);
+        font-size: var(--weline-layout-font-size-base, 1rem);
+        line-height: var(--weline-layout-line-height-relaxed, 1.75);
+        color: var(--weline-layout-text-secondary, var(--color-text-secondary, #565959));
         margin: 0;
     }
 
@@ -222,16 +223,16 @@ $meta = $this->getData('meta') ?? [];
     }
 
     .policy-section .section-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111);
+        font-size: var(--weline-layout-font-size-xl, 1.25rem);
+        font-weight: var(--weline-layout-font-weight-semibold, 600);
+        color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
         margin: 0 0 0.75rem 0;
     }
 
     .policy-section .section-text {
-        font-size: 0.95rem;
-        color: var(--color-text-muted, #333);
-        line-height: 1.7;
+        font-size: var(--weline-layout-font-size-base, 1rem);
+        color: var(--weline-layout-text-secondary, var(--color-text-muted, #333));
+        line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin: 0 0 0.75rem 0;
     }
 
@@ -242,27 +243,27 @@ $meta = $this->getData('meta') ?? [];
     }
 
     .policy-list li {
-        font-size: 0.95rem;
-        color: var(--color-text-muted, #333);
-        line-height: 1.7;
+        font-size: var(--weline-layout-font-size-base, 1rem);
+        color: var(--weline-layout-text-secondary, var(--color-text-muted, #333));
+        line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin-bottom: 0.5rem;
     }
 
     @media (max-width: 768px) {
         .refund-policy.policy-main {
-            padding: 1.5rem 0;
+            padding: var(--weline-layout-spacing-lg, 1.5rem) 0;
         }
 
         .policy-default-content {
-            padding: 1.5rem 0 2rem;
+            padding: var(--weline-layout-spacing-lg, 1.5rem) 0 var(--weline-layout-spacing-xl, 2rem);
         }
 
         .policy-title {
-            font-size: 1.6rem;
+            font-size: var(--weline-layout-font-size-2xl, 1.5rem);
         }
 
         .policy-section .section-title {
-            font-size: 1.1rem;
+            font-size: var(--weline-layout-font-size-lg, 1.125rem);
         }
 
         .policy-list {
@@ -270,7 +271,7 @@ $meta = $this->getData('meta') ?? [];
         }
 
         .policy-list li {
-            font-size: 0.9rem;
+            font-size: var(--weline-layout-font-size-sm, 0.875rem);
         }
     }
     </style>

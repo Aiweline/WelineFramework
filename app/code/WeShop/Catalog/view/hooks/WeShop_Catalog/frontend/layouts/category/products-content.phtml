@@ -16,6 +16,7 @@
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Request;
 use WeShop\Catalog\Service\CategoryProductListHtmlCache;
+use WeShop\Catalog\Service\CategoryService;
 use WeShop\Product\Service\ConfigurableProductService;
 
 /** @var Request $request */
@@ -28,6 +29,8 @@ if (is_string($contentHtmlOverride) && $contentHtmlOverride !== '') {
 
 /** @var ConfigurableProductService $configurableService */
 $configurableService = ObjectManager::getInstance(ConfigurableProductService::class);
+/** @var CategoryService $categoryService */
+$categoryService = ObjectManager::getInstance(CategoryService::class);
 
 $category = $request->getData('category') ?? $this->getData('category') ?? [];
 $products = $request->getData('products') ?? $this->getData('products') ?? [];
@@ -63,7 +66,7 @@ if (!empty($products)) {
     $configurableMap = $configurableService->getConfigurableMap($browseProductIdsForDom);
     ?>
     <div class="category-products">
-        <h2 class="section-title"><?= htmlspecialchars($category['name'] ?? __('商品列表')) ?></h2>
+        <h2 class="section-title"><?= htmlspecialchars($categoryService->localizeCategoryDisplayName((string)($category['name'] ?? '')) ?: (string)__('商品列表')) ?></h2>
         <p class="products-count"><?= sprintf(__('共 %d 件商品'), count($products)) ?></p>
         
         <div

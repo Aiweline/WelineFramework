@@ -43,7 +43,7 @@ class IpcPing extends CommandAbstract
             return;
         }
 
-        $msg = ControlMessage::command(ControlMessage::ACTION_STATUS, '', []);
+        $msg = ControlMessage::command(ControlMessage::ACTION_STATUS, '', [], $info->controlToken);
         $t0 = \microtime(true);
         @\fwrite($conn, $msg);
         \stream_set_blocking($conn, false);

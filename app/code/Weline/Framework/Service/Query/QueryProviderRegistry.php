@@ -302,8 +302,42 @@ class QueryProviderRegistry
         }
 
         $scope = $this->descriptorCacheScope();
-        if (!isset(self::$operationDescriptorCache[$scope])) {
-            $this->getAllDescriptors();
+        $cached = self::$operationDescriptorCache[$scope][$providerName][$operationName] ?? null;
+        if (\is_array($cached)) {
+            return $cached;
+        }
+
+        $provider = $this->getProvider($providerName);
+        if (!$provider instanceof QueryProviderInterface) {
+            return null;
+        }
+
+        $descriptor = $provider->getDescriptor();
+        if (!\is_array($descriptor)) {
+            self::$operationDescriptorCache[$scope][$providerName] = [];
+            return null;
+        }
+
+        $resolvedProviderName = (string)($descriptor['provider'] ?? $provider->getProviderName());
+        if ($resolvedProviderName === '') {
+            $resolvedProviderName = $providerName;
+        }
+
+        $operationIndex = [];
+        foreach (($descriptor['operations'] ?? []) as $operationDescriptor) {
+            if (!\is_array($operationDescriptor)) {
+                continue;
+            }
+            $name = (string)($operationDescriptor['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $operationIndex[$name] = $operationDescriptor;
+        }
+
+        self::$operationDescriptorCache[$scope][$resolvedProviderName] = $operationIndex;
+        if ($resolvedProviderName !== $providerName) {
+            self::$operationDescriptorCache[$scope][$providerName] = $operationIndex;
         }
 
         $descriptor = self::$operationDescriptorCache[$scope][$providerName][$operationName] ?? null;

@@ -8,6 +8,12 @@
  * @hook-sort-order 999
  * @hook-solo false
  */
+use Weline\Customer\Service\AccountSidebarContentGate;
+
+if (!AccountSidebarContentGate::accepts('orders')) {
+    return;
+}
+
 if (!empty($GLOBALS['__weline_order_account_sidebar_content_rendered'])) {
     return;
 }

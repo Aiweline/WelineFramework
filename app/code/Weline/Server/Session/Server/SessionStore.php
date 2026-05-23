@@ -68,6 +68,9 @@ final class SessionStore
     /** 是否有未持久化的更改 */
     private bool $dirty = false;
 
+    /** Whether this store should persist to disk. Memory cache sidecars disable this. */
+    private bool $persistEnabled = true;
+
     /** 关键操作后强制持久化 */
     private bool $persistOnCritical;
     
@@ -128,6 +131,10 @@ final class SessionStore
         $this->persistInterval = (int)($config['persist_interval'] ?? 30);
         $this->persistOnWrites = (int)($config['persist_on_writes'] ?? 100);
         $this->persistOnCritical = (bool)($config['persist_on_critical'] ?? true);
+        $persistEnabled = $config['persist_enabled'] ?? true;
+        $this->persistEnabled = \is_bool($persistEnabled)
+            ? $persistEnabled
+            : !\in_array(\strtolower(\trim((string)$persistEnabled)), ['', '0', 'false', 'no', 'off'], true);
         
         $basePath = $config['persist_path'] ?? (\defined('BP') ? BP . 'var/session/' : '/tmp/wls_session/');
         if (!\is_dir($basePath)) {
@@ -168,6 +175,11 @@ final class SessionStore
      */
     public function loadFromFile(): bool
     {
+        if (!$this->persistEnabled) {
+            $this->log('Persistence disabled, starting fresh');
+            return false;
+        }
+
         if (!\is_file($this->persistPath)) {
             $this->log('No persist file found, starting fresh');
             return false;
@@ -222,6 +234,13 @@ final class SessionStore
     public function persistToFile(): bool
     {
         $startTime = \microtime(true);
+
+        if (!$this->persistEnabled) {
+            $this->dirty = false;
+            $this->writesSinceLastPersist = 0;
+            $this->changedSessionIds = [];
+            return true;
+        }
 
         if (!$this->dirty && \count($this->store) === 0) {
             return true;
@@ -304,6 +323,10 @@ final class SessionStore
      */
     public function checkPersist(): bool
     {
+        if (!$this->persistEnabled) {
+            return false;
+        }
+
         if (!$this->dirty) {
             return false;
         }

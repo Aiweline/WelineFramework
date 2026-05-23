@@ -6,6 +6,12 @@
  */
 /** @var \Weline\Framework\View\Template $this */
 
+use Weline\Customer\Service\AccountSidebarContentGate;
+
+if (!AccountSidebarContentGate::accepts('twofa')) {
+    return;
+}
+
 $user = $this->getData('user');
 if (!$user) {
     return;

@@ -22,8 +22,22 @@ final class AiSiteExecutionBlueprintService
     public const VERSION = 1;
     private const STAGE_ONE_LOCAL_REGEN_MAX_ROUNDS = 3;
     private const STAGE_ONE_LOCAL_REGEN_BATCH_BLOCKS = 5;
-    private const STAGE_ONE_PAGE_PLAN_MAX_TOKENS = 8192;
-    private const STAGE_ONE_JSON_RETRY_MAX_TOKENS = 8192;
+    private const STAGE_ONE_PAGE_PLAN_MAX_TOKENS = 14000;
+    private const STAGE_ONE_JSON_RETRY_MAX_TOKENS = 16000;
+    private const STAGE_ONE_SEGMENTED_PAGE_TARGET_THRESHOLD = 7;
+    private const STAGE_ONE_PAGE_SKELETON_MAX_TOKENS = 2600;
+    private const STAGE_ONE_PAGE_BLOCK_SEGMENT_MAX_TOKENS = 5200;
+    private const STAGE_ONE_PAGE_BLOCK_SEGMENT_SIZE = 1;
+    private const TEMPLATE_SCAFFOLD_BRAND_TERMS = [
+        'LudoEmpire',
+        'PokerArena',
+        'Poker Arena',
+        'Satta King 786',
+        'Satta King',
+        'BharatPlay',
+        'RummyRoyal',
+        'Teen Patti Royal',
+    ];
     /** @var array<string, array<string, mixed>|null> */
     private array $appendInstructionDecisionCache = [];
     private ?SourceTruthContractBuilder $sourceTruthContractBuilder = null;
@@ -541,6 +555,7 @@ final class AiSiteExecutionBlueprintService
             'local_repair_rounds' => 0,
             'retry_from_previous_failure' => $this->extractPlanRetryableFailureItems($scope) !== [] ? 1 : 0,
         ];
+        $stageOneAdapterRequestParams = $this->buildStageOneAiAdapterRequestParams($scope, $websiteProfile);
 
         try {
             if ($this->hasStageOneRequirementCheckpoint($planJson)) {
@@ -567,7 +582,8 @@ final class AiSiteExecutionBlueprintService
                     'pagebuilder_plan_generation',
                     2048,
                     150,
-                    $onChunk
+                    $onChunk,
+                    $stageOneAdapterRequestParams
                 );
                 $planJson = $this->mergeStageOneRequirementExpansionAiPlanJson($planJson, $requirementDecoded, $oneLineRequirement, $pageTypes);
                 $this->assertStageOneRequirementExpansionIsGenerated($planJson);
@@ -599,7 +615,8 @@ final class AiSiteExecutionBlueprintService
                     'pagebuilder_plan_generation',
                     3072,
                     150,
-                    $onChunk
+                    $onChunk,
+                    $stageOneAdapterRequestParams
                 );
                 $planJson = $this->mergeStageOneThemeAiPlanJson($planJson, $themeDecoded, $planLocale, $pageTypes, $scope);
                 $planJson['content_locale'] = $contentLocale;
@@ -657,6 +674,7 @@ final class AiSiteExecutionBlueprintService
             $pendingPageTypes = \array_values(\array_filter(
                 $pageTypes,
                 fn(string $pageType): bool => !$this->hasStageOnePagePlanCheckpoint($existingPagePlans, $pageType, $stageOneContract, $scope)
+                    || !$this->stageOnePagePlanPassesStrictValidation($existingPagePlans, $pageType, $stageOneContract, $scope)
             ));
             if ($isResumeRepair) {
                 $resumePageTypes = $this->resolveStageOneResumePageTypes(
@@ -695,10 +713,48 @@ final class AiSiteExecutionBlueprintService
                 $onChunk,
                 $onProgress,
                 $pageFanoutFailures,
-                $stageOneGenerationAttempts
+                $stageOneGenerationAttempts,
+                $onCheckpoint,
+                $checkpointSignature,
+                $pageTypes
             );
             if ($pagePlans !== []) {
                 $planJson['pages'] = \array_replace(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [], $pagePlans);
+            }
+            if ($pageFanoutFailures !== []) {
+                $retryPageTypes = \array_values(\array_keys($pageFanoutFailures));
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    'Retrying Stage-1 failed pages with issue-specific contract instructions: ' . \implode(', ', $retryPageTypes),
+                    84,
+                    'page_fanout',
+                    'retry',
+                    ['page_total' => \count($retryPageTypes), 'page_types' => $retryPageTypes]
+                );
+                $retryScope = $scope;
+                $retryScope['retryable_ai_failures']['plan']['items'] = $pageFanoutFailures;
+                $retryFanoutFailures = [];
+                $retryPagePlans = $this->generateStageOnePagePlansByAi(
+                    $retryScope,
+                    $websiteProfile,
+                    $planJson,
+                    $retryPageTypes,
+                    $planLocale,
+                    $contentLocale,
+                    $instruction,
+                    $targetScope,
+                    $onChunk,
+                    $onProgress,
+                    $retryFanoutFailures,
+                    $stageOneGenerationAttempts,
+                    $onCheckpoint,
+                    $checkpointSignature,
+                    $pageTypes
+                );
+                if ($retryPagePlans !== []) {
+                    $planJson['pages'] = \array_replace(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [], $retryPagePlans);
+                }
+                $pageFanoutFailures = $retryFanoutFailures;
             }
             $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'page_fanout', $pageTypes, $pageFanoutFailures);
 
@@ -729,11 +785,20 @@ final class AiSiteExecutionBlueprintService
                 $onProgress,
                 $stageOneGenerationAttempts
             );
+            $artifactRetryableFailures = [];
+            foreach (\is_array($artifacts['retryable_ai_failures'] ?? null) ? $artifacts['retryable_ai_failures'] : [] as $failure) {
+                if (!\is_array($failure)) {
+                    continue;
+                }
+                $failureKey = \trim((string)($failure['page_type'] ?? $failure['item_key'] ?? ''));
+                $artifactRetryableFailures[$failureKey !== '' ? $failureKey : ('failure_' . \count($artifactRetryableFailures))] = $failure;
+            }
+            $combinedRetryableFailures = \array_replace($artifactRetryableFailures, $pageFanoutFailures);
             $artifacts['ai_generated'] = 1;
             $artifacts['generation_source'] = 'ai_staged';
-            $artifacts['retryable_ai_failures'] = \array_values($pageFanoutFailures);
-            $artifacts['partial_retry_required'] = $pageFanoutFailures !== [] ? 1 : 0;
-            $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'plan_assemble', $pageTypes, $pageFanoutFailures);
+            $artifacts['retryable_ai_failures'] = \array_values($combinedRetryableFailures);
+            $artifacts['partial_retry_required'] = $combinedRetryableFailures !== [] ? 1 : 0;
+            $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'plan_assemble', $pageTypes, $combinedRetryableFailures);
             $this->emitStageOnePipelineProgress(
                 $onProgress,
                 '阶段一总设计装配完成，正在写入方案草案',
@@ -785,10 +850,25 @@ final class AiSiteExecutionBlueprintService
      */
     private function resolveStageOneCheckpoint(array $payload, array $scope, string $signature): array
     {
+        if ($this->isStageOneRebuildPayload($payload, $scope)) {
+            return [];
+        }
+
         $checkpoint = \is_array($payload['stage1_checkpoint'] ?? null)
             ? $payload['stage1_checkpoint']
             : (\is_array($scope['_plan_generation_checkpoint'] ?? null) ? $scope['_plan_generation_checkpoint'] : []);
         if ($checkpoint === []) {
+            $persistedPlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+            if ($persistedPlanJson !== [] && $this->checkpointHasResumableStageOneProgress(['plan_json' => $persistedPlanJson])) {
+                return [
+                    'signature' => $signature,
+                    'step' => 'persisted_plan_json',
+                    'plan_json' => $persistedPlanJson,
+                    'page_types' => \is_array($scope['page_types'] ?? null) ? \array_values($scope['page_types']) : [],
+                    'updated_at' => (string)($scope['plan_generated_at'] ?? \date('Y-m-d H:i:s')),
+                ];
+            }
+
             return [];
         }
         $storedSignature = \trim((string)($checkpoint['signature'] ?? ''));
@@ -800,6 +880,24 @@ final class AiSiteExecutionBlueprintService
         }
 
         return [];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $scope
+     */
+    private function isStageOneRebuildPayload(array $payload, array $scope): bool
+    {
+        $promptMode = \strtolower(\trim((string)($payload['prompt_mode'] ?? '')));
+        if ($promptMode === 'rebuild') {
+            return true;
+        }
+        if ((int)($payload['_force_rebuild'] ?? 0) === 1 || (int)($scope['_force_rebuild'] ?? 0) === 1) {
+            return true;
+        }
+        $planSseRequest = \is_array($scope['_plan_sse_request'] ?? null) ? $scope['_plan_sse_request'] : [];
+
+        return \strtolower(\trim((string)($planSseRequest['prompt_mode'] ?? ''))) === 'rebuild';
     }
 
     /**
@@ -867,18 +965,40 @@ final class AiSiteExecutionBlueprintService
                 $failedPageTypes[] = $pageType;
             }
         }
-        if ($failedPageTypes !== []) {
-            return $failedPageTypes;
-        }
-
         $missing = [];
         foreach ($pageTypes as $pageType) {
-            if (!$this->hasStageOnePagePlanCheckpoint($existingPagePlans, $pageType, $stageOneContract, $scope)) {
+            if (
+                !$this->hasStageOnePagePlanCheckpoint($existingPagePlans, $pageType, $stageOneContract, $scope)
+                || !$this->stageOnePagePlanPassesStrictValidation($existingPagePlans, $pageType, $stageOneContract, $scope)
+            ) {
                 $missing[] = $pageType;
             }
         }
 
-        return $missing;
+        return \array_values(\array_unique(\array_merge($failedPageTypes, $missing)));
+    }
+
+    private function stageOnePagePlanPassesStrictValidation(array $pagePlans, string $pageType, array $contract, array $scope): bool
+    {
+        $page = \is_array($pagePlans[$pageType] ?? null) ? $pagePlans[$pageType] : [];
+        if ($page === []) {
+            return false;
+        }
+
+        $report = $this->getStageOneContractValidator()->validatePagePlan(
+            $pageType,
+            $page,
+            $contract,
+            [
+                'generation_attempts' => ['resume_checkpoint_validation' => 1],
+                'recovery_count' => 0,
+                'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? '')),
+                'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
+                'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
+            ]
+        );
+
+        return !empty($report['passed']);
     }
 
     private function hasStageOneRequirementCheckpoint(array $planJson): bool
@@ -1033,14 +1153,6 @@ final class AiSiteExecutionBlueprintService
         if ($page === []) {
             return false;
         }
-
-        $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
-        if ($blocks === []) {
-            return false;
-        }
-        if (!\is_array($page['page_design_plan'] ?? null) || ($page['page_design_plan'] ?? []) === []) {
-            return false;
-        }
         $contract = $this->getStageOneContractService()->normalize(
             $contract,
             $scope,
@@ -1049,79 +1161,20 @@ final class AiSiteExecutionBlueprintService
             $this->resolveStageOneContentLocale($scope),
             'page_checkpoint'
         );
-        $pageContract = $this->getStageOneContractService()->pageContract($contract, $pageType);
-        $blockBudget = [
-            'min' => (int)($pageContract['min_blocks'] ?? 0),
-            'max' => (int)($pageContract['max_blocks'] ?? 0),
-            'required' => \is_array($pageContract['required_block_keys'] ?? null) ? $pageContract['required_block_keys'] : [],
-        ];
-        $forbiddenBlockKeys = \array_fill_keys(\array_map('strval', \is_array($pageContract['forbidden_block_keys'] ?? null) ? $pageContract['forbidden_block_keys'] : AiSiteStageOneContractService::GENERIC_BLOCK_KEYS), true);
-        if (\count($blocks) < $blockBudget['min'] || \count($blocks) > $blockBudget['max']) {
-            return false;
-        }
-        $requiredBlockKeys = \array_fill_keys($blockBudget['required'], false);
-        $fieldPlanCount = \max(1, (int)($pageContract['field_plan_count'] ?? AiSiteStageOneContractService::FIELD_PLAN_COUNT));
-        $seenBlockKeys = [];
+        $report = $this->getStageOneContractValidator()->validatePagePlan(
+            $pageType,
+            $page,
+            $contract,
+            [
+                'generation_attempts' => ['page_checkpoint' => 1],
+                'recovery_count' => 0,
+                'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? '')),
+                'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
+                'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
+            ]
+        );
 
-        foreach ($blocks as $block) {
-            if (!\is_array($block) || \trim((string)($block['block_key'] ?? '')) === '') {
-                return false;
-            }
-            $blockKey = \trim((string)$block['block_key']);
-            $normalizedBlockKey = \mb_strtolower($blockKey);
-            if (isset($seenBlockKeys[$normalizedBlockKey])) {
-                return false;
-            }
-            $seenBlockKeys[$normalizedBlockKey] = true;
-            if (isset($forbiddenBlockKeys[$normalizedBlockKey])) {
-                return false;
-            }
-            if (\array_key_exists($blockKey, $requiredBlockKeys)) {
-                $requiredBlockKeys[$blockKey] = true;
-            }
-            $template = (string)($block['component_kind'] ?? $block['template'] ?? '');
-            $sectionName = (string)($block['section_code'] ?? $blockKey);
-            $content = \trim((string)($block['content'] ?? ''));
-            if ($content === '' || $this->isPromptLikeStageOneText($content, 'content', $template, $sectionName, $pageType)) {
-                return false;
-            }
-            if (!$this->hasCompleteStageOneDesignTags($block)) {
-                return false;
-            }
-            $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
-            if (\count($fieldPlan) !== $fieldPlanCount) {
-                return false;
-            }
-            foreach ($fieldPlan as $row) {
-                if (!\is_array($row)) {
-                    return false;
-                }
-                $field = \trim((string)($row['field'] ?? ''));
-                $sample = \trim((string)($row['sample'] ?? ''));
-                $implementationNote = $this->resolveStageOneFieldImplementationNote($row);
-                if ($field === '' || $sample === '' || $implementationNote === '') {
-                    return false;
-                }
-                if ($this->isPromptLikeStageOneText($sample, $field, $template, $sectionName, $pageType)) {
-                    return false;
-                }
-                if ($this->isPromptLikeStageOneText($implementationNote, $field, $template, $sectionName, $pageType)) {
-                    return false;
-                }
-            }
-            $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
-            $coreCopy = \trim((string)($executionScript['core_copy'] ?? ''));
-            if ($coreCopy === '' || $this->isPromptLikeStageOneText($coreCopy, 'core_copy', $template, $sectionName, $pageType)) {
-                return false;
-            }
-        }
-        foreach ($requiredBlockKeys as $seen) {
-            if (!$seen) {
-                return false;
-            }
-        }
-
-        return true;
+        return !empty($report['passed']);
     }
 
     /**
@@ -1141,6 +1194,62 @@ final class AiSiteExecutionBlueprintService
 
         return \trim((string)($designTags['color_layering'] ?? '')) !== ''
             && \trim((string)($designTags['implementation_note'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $pageContract
+     */
+    private function hasCompleteStageOneVisualSignature(array $block, array $pageContract): bool
+    {
+        $signature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+        if ($signature === []) {
+            return false;
+        }
+        $requiredKeys = \is_array($pageContract['visual_signature_keys'] ?? null)
+            ? $pageContract['visual_signature_keys']
+            : AiSiteStageOneContractService::VISUAL_SIGNATURE_KEYS;
+        foreach ($requiredKeys as $key) {
+            $key = \trim((string)$key);
+            if ($key === '') {
+                continue;
+            }
+            if (\trim((string)($signature[$key] ?? '')) === '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function hasCompleteStageOneImageIntent(array $block): bool
+    {
+        $intent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+        if ($intent === [] || !\array_key_exists('needs_image', $intent)) {
+            return false;
+        }
+        if (!\is_bool($intent['needs_image'])) {
+            return false;
+        }
+        $needsImage = (bool)$intent['needs_image'];
+        foreach (['image_role', 'placement', 'reuse_policy'] as $key) {
+            if (\trim((string)($intent[$key] ?? '')) === '') {
+                return false;
+            }
+        }
+        $mediaStrategy = \trim((string)($block['visual_signature']['media_strategy'] ?? ''));
+        if ($needsImage) {
+            return \trim((string)($intent['image_subject'] ?? '')) !== ''
+                && !\str_contains($mediaStrategy, 'CSS-only/no generated image');
+        }
+
+        return \trim((string)($intent['css_motif'] ?? '')) !== ''
+            && \trim((string)($intent['visual_atmosphere'] ?? '')) !== ''
+            && \trim((string)($intent['image_treatment'] ?? '')) !== ''
+            && \str_starts_with($mediaStrategy, 'CSS-only/no generated image');
     }
 
     /**
@@ -1166,6 +1275,47 @@ final class AiSiteExecutionBlueprintService
             'plan_json' => $planJson,
             'page_types' => \array_values($pageTypes),
             'retryable_ai_failures' => \array_values($retryableFailures),
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * @param callable(array<string, mixed>):void|null $onCheckpoint
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $pagePlan
+     * @param list<string> $pageTypes
+     */
+    private function persistStageOnePageCheckpoint(
+        ?callable $onCheckpoint,
+        string $signature,
+        array $planJson,
+        string $pageType,
+        array $pagePlan,
+        array $pageTypes
+    ): void {
+        if ($onCheckpoint === null || $signature === '' || $pageType === '' || $pagePlan === []) {
+            return;
+        }
+
+        $checkpointPlanJson = $planJson;
+        $checkpointPlanJson['pages'] = \array_replace(
+            \is_array($checkpointPlanJson['pages'] ?? null) ? $checkpointPlanJson['pages'] : [],
+            [$pageType => $pagePlan]
+        );
+
+        $onCheckpoint([
+            'signature' => $signature,
+            'step' => 'page_plan',
+            'completed_task' => 'page_plan:' . $pageType,
+            'plan_json' => $checkpointPlanJson,
+            'page_types' => \array_values($pageTypes),
+            'page_checkpoint' => [
+                'page_type' => $pageType,
+                'status' => 'passed',
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ],
+            'merge_plan_json' => 1,
+            'retryable_ai_failures' => [],
             'updated_at' => \date('Y-m-d H:i:s'),
         ]);
     }
@@ -1258,10 +1408,10 @@ final class AiSiteExecutionBlueprintService
             'allow_zero_balance_provider' => true,
             'temperature' => 0.15,
             'max_tokens' => $maxTokens,
-            'timeout' => 0,
-            'disable_ai_timeout' => true,
-            'disable_cli_timeout' => true,
-            'enforce_timeout_in_stream' => false,
+            'timeout' => \max(60, $timeout),
+            'disable_ai_timeout' => false,
+            'disable_cli_timeout' => false,
+            'enforce_timeout_in_stream' => true,
             'response_format' => ['type' => 'json_object'],
         ], $requestParamOverrides);
         $requestParams = $this->sanitizeStageOneJsonRequestParams($requestParams);
@@ -1371,6 +1521,53 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @return array<string, mixed>
+     */
+    private function buildStageOneAiAdapterRequestParams(array $scope, array $websiteProfile): array
+    {
+        $designDirectionState = $this->getDesignDirectionService()->buildWorkspaceDirectionState($scope);
+        $designDirectionSnapshot = \is_array($designDirectionState['snapshot'] ?? null)
+            ? $designDirectionState['snapshot']
+            : [];
+        $selectedCodes = $this->getSkillRegistry()->resolveSelectedSkillCodes(
+            $this->normalizeStageOneSelectedSkillCodes($scope[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? [])
+        );
+        $siteTitle = \trim((string)(
+            $scope['site_title']
+            ?? $websiteProfile['site_title']
+            ?? ($scope['website_profile']['site_title'] ?? '')
+        ));
+        $briefDescription = \trim((string)(
+            $scope['brief_description']
+            ?? $scope['user_description']
+            ?? $websiteProfile['brief_description']
+            ?? ($scope['website_profile']['brief_description'] ?? '')
+        ));
+        $adminId = \max(0, (int)(
+            $scope['admin_user_id']
+            ?? $scope['admin_id']
+            ?? $websiteProfile['admin_user_id']
+            ?? $websiteProfile['admin_id']
+            ?? 0
+        ));
+
+        return [
+            'admin_user_id' => $adminId,
+            'site_title' => $siteTitle,
+            'brief_description' => $briefDescription,
+            'selected_skill_codes' => $selectedCodes,
+            'design_direction_mode' => (string)($designDirectionState['mode'] ?? ($scope['design_direction_mode'] ?? 'auto')),
+            'design_direction_code' => (string)($designDirectionState['code'] ?? ($scope['design_direction_code'] ?? '')),
+            'design_direction_snapshot' => $designDirectionSnapshot,
+            'design_direction_version' => (int)($designDirectionState['version'] ?? ($scope['design_direction_version'] ?? 0)),
+            'design_direction_hash' => (string)($designDirectionState['hash'] ?? ($scope['design_direction_hash'] ?? '')),
+            'design_direction_match_reason' => (string)($designDirectionState['match_reason'] ?? ($scope['design_direction_match_reason'] ?? '')),
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $requestParams
      * @return array<string, mixed>
      */
@@ -1382,10 +1579,10 @@ final class AiSiteExecutionBlueprintService
             \max($currentMaxTokens * 2, $currentMaxTokens + 1800)
         );
         $requestParams['temperature'] = 0.1;
-        $requestParams['timeout'] = 0;
-        $requestParams['disable_ai_timeout'] = true;
-        $requestParams['disable_cli_timeout'] = true;
-        $requestParams['enforce_timeout_in_stream'] = false;
+        $requestParams['timeout'] = \max(90, (int)($requestParams['timeout'] ?? 0));
+        $requestParams['disable_ai_timeout'] = false;
+        $requestParams['disable_cli_timeout'] = false;
+        $requestParams['enforce_timeout_in_stream'] = true;
         $requestParams['response_format'] = ['type' => 'json_object'];
 
         return $this->sanitizeStageOneJsonRequestParams($requestParams);
@@ -1395,7 +1592,9 @@ final class AiSiteExecutionBlueprintService
     {
         return $this->prependStageOneJsonOnlyGuard(
             "RECOVERY MODE: {$reason}. Return one complete final JSON object immediately. "
-            . "Prefer compact strings over long prose. Do not stream partial JSON, do not add markdown, and do not explain.\n\n"
+            . "Prefer compact strings over long prose. Do not stream partial JSON, do not add markdown, and do not explain. "
+            . "Preserve the contract shape while repairing JSON: do not delete pages, blocks, required_block_keys, field_plan rows, visual_signature, image_intent, page_design_plan, or execution_script.core_copy to make the JSON shorter. "
+            . "Never replace required values with schema placeholders such as string, sentence, TODO, none, or empty strings.\n\n"
             . $prompt
         );
     }
@@ -1484,8 +1683,11 @@ final class AiSiteExecutionBlueprintService
             '- Do not output reasoning_content, analysis, comments, markdown, code fences, or prose outside the final JSON object.',
             '- The first character of the final answer MUST be `{` and the last character MUST be `}`.',
             '- Return exactly one valid JSON object matching the requested schema. No trailing text.',
+            '- Output minified JSON: no pretty-print indentation, no decorative line breaks, and no repeated whitespace outside strings.',
             '- Prefer compact strings and short arrays. Do not produce huge narrative paragraphs inside JSON values.',
             '- Escape all quotes inside string values; never use unescaped newlines in JSON strings.',
+            '- Keep every string single-line; do not include literal tabs or control characters.',
+            '- Prefer Chinese punctuation or parentheses instead of quoted phrases inside values. Keep CSS/unit/style notes terse and plain-text so the JSON parser receives valid JSON.',
         ];
 
         return \implode("\n", $guard) . "\n\n" . $prompt;
@@ -2133,6 +2335,8 @@ final class AiSiteExecutionBlueprintService
      * @param list<string> $pageTypes
      * @param callable(string):void|null $onChunk
      * @param callable(array<string, mixed>):void|null $onProgress
+     * @param callable(array<string, mixed>):void|null $onCheckpoint
+     * @param list<string> $checkpointPageTypes
      * @return array<string, mixed>
      */
     private function generateStageOnePagePlansByAi(
@@ -2147,7 +2351,10 @@ final class AiSiteExecutionBlueprintService
         ?callable $onChunk = null,
         ?callable $onProgress = null,
         ?array &$retryableFailures = null,
-        ?array &$generationAttempts = null
+        ?array &$generationAttempts = null,
+        ?callable $onCheckpoint = null,
+        string $checkpointSignature = '',
+        array $checkpointPageTypes = []
     ): array {
         if ($retryableFailures === null) {
             $retryableFailures = [];
@@ -2157,18 +2364,45 @@ final class AiSiteExecutionBlueprintService
         }
 
         $totalPages = \count($pageTypes);
+        $checkpointPageTypes = $checkpointPageTypes === []
+            ? \array_values($pageTypes)
+            : \array_values($checkpointPageTypes);
         $prebuiltResults = [];
+        $existingPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $stageOneContract = \is_array($planJson['stage1_contract'] ?? null)
+            ? $planJson['stage1_contract']
+            : (\is_array($scope['stage1_contract'] ?? null) ? $scope['stage1_contract'] : []);
         foreach ($pageTypes as $pageType) {
             $pageKey = (string)$pageType;
-            if (!$this->hasStageOneRetryablePageFailure($scope, $pageKey)) {
+            if ($this->hasStageOneRetryablePageFailure($scope, $pageKey)) {
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    'Previous page AI failure will be retried in this stage-one run: ' . $pageKey,
+                    82,
+                    'page_plan',
+                    'retry',
+                    ['page_type' => $pageKey]
+                );
                 continue;
             }
+
+            $existingPage = \is_array($existingPages[$pageKey] ?? null) ? $existingPages[$pageKey] : [];
+            if ($existingPage === [] || !$this->hasStageOnePagePlanCheckpoint([$pageKey => $existingPage], $pageKey, $stageOneContract, $scope)) {
+                continue;
+            }
+
+            $prebuiltResults[$pageKey] = $existingPage;
+            $generationAttempts['page_fanout'][$pageKey] = [
+                'primary' => 0,
+                'recovery' => 0,
+                'status' => 'checkpoint',
+            ];
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                'Previous page AI failure will be retried in this stage-one run: ' . $pageKey,
-                82,
+                '已复用已保存的页面总设计，跳过 AI 生成：' . $pageKey,
+                60,
                 'page_plan',
-                'retry',
+                'checkpoint',
                 ['page_type' => $pageKey]
             );
         }
@@ -2183,6 +2417,7 @@ final class AiSiteExecutionBlueprintService
 
         $concurrency = \max(1, \count($pageTypes));
         $ai = $this->getAiService();
+        $adapterRequestParams = $this->buildStageOneAiAdapterRequestParams($scope, $websiteProfile);
 
         /** @var array<string, callable(array<string, mixed>, string|int): array<string, mixed>> $tasks */
         $tasks = [];
@@ -2203,19 +2438,39 @@ final class AiSiteExecutionBlueprintService
                 'recovery' => 0,
                 'status' => 'pending',
             ];
-            $tasks[$pageKey] = function (array $sessionParams) use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onProgress, &$completedPages, $totalPages, &$generationAttempts): array {
+            $tasks[$pageKey] = function (array $sessionParams) use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onProgress, &$completedPages, $totalPages, &$generationAttempts, $adapterRequestParams, $onCheckpoint, $checkpointSignature, $checkpointPageTypes): array {
                 $baselinePage = \is_array($planJson['pages'][$pageKey] ?? null) ? $planJson['pages'][$pageKey] : [];
-                $decoded = $this->generateStageOneJsonByAi(
-                    $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
-                    'pagebuilder_plan_generation',
-                    self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
-                    150,
-                    null,
-                    $sessionParams
-                );
-
+                $requestParams = \array_merge($adapterRequestParams, $sessionParams);
+                $useSegmentedPagePlan = $this->shouldUseSegmentedStageOnePagePlan($pageKey, $scope);
+                $priorRetryInstruction = $this->buildStageOneRetryablePageFailureInstruction($scope, $pageKey);
+                if ($useSegmentedPagePlan) {
+                    $pagePlan = $this->generateStageOneSegmentedPagePlanByAi(
+                        $scope,
+                        $websiteProfile,
+                        $planJson,
+                        $pageKey,
+                        $planLocale,
+                        $contentLocale,
+                        $instruction,
+                        $targetScope,
+                        $requestParams,
+                        null,
+                        $onProgress,
+                        $priorRetryInstruction
+                    );
+                } else {
+                    $decoded = $this->generateStageOneJsonByAi(
+                        $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
+                        'pagebuilder_plan_generation',
+                        self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
+                        240,
+                        null,
+                        $requestParams
+                    );
+                    $pagePlan = $this->extractStageOneAiPagePlan($decoded, $pageKey);
+                }
                 $pagePlan = $this->normalizeStageOneAiPagePlanWithBaseline(
-                    $this->extractStageOneAiPagePlan($decoded, $pageKey),
+                    $pagePlan,
                     $baselinePage,
                     $pageKey
                 );
@@ -2243,8 +2498,9 @@ final class AiSiteExecutionBlueprintService
                 $pageCheckpointPassed = $this->hasStageOnePagePlanCheckpoint([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)
                     && !empty($pageValidationReport['passed']);
                 if (!$pageCheckpointPassed) {
+                    $primaryValidationIssues = \is_array($pageValidationReport['issues'] ?? null) ? $pageValidationReport['issues'] : [];
                     $generationAttempts['page_fanout'][$pageKey]['primary_issues'] = \array_slice(
-                        \is_array($pageValidationReport['issues'] ?? null) ? $pageValidationReport['issues'] : [],
+                        $primaryValidationIssues,
                         0,
                         12
                     );
@@ -2259,8 +2515,14 @@ final class AiSiteExecutionBlueprintService
                         'retry',
                         ['page_type' => $pageKey]
                     );
-                    $decoded = $this->generateStageOneJsonByAi(
-                        $this->buildAiStageOnePageRecoveryPrompt(
+                    if ($useSegmentedPagePlan) {
+                        $segmentedRecoveryInstruction = 'Previous segmented page plan failed Stage-1 page validation: '
+                            . $generationAttempts['page_fanout'][$pageKey]['primary_failure_summary'];
+                        $issueRules = $this->buildStageOneIssueSpecificRecoveryRules($primaryValidationIssues);
+                        if ($issueRules !== []) {
+                            $segmentedRecoveryInstruction .= ' ' . \implode(' ', $issueRules);
+                        }
+                        $pagePlan = $this->generateStageOneSegmentedPagePlanByAi(
                             $scope,
                             $websiteProfile,
                             $planJson,
@@ -2269,17 +2531,35 @@ final class AiSiteExecutionBlueprintService
                             $contentLocale,
                             $instruction,
                             $targetScope,
-                            'Previous response failed Stage-1 page validation: ' . $generationAttempts['page_fanout'][$pageKey]['primary_failure_summary'],
-                            $pagePlan
-                        ),
-                        'pagebuilder_plan_generation',
-                        self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
-                        150,
-                        null,
-                        $sessionParams
-                    );
+                            $requestParams,
+                            null,
+                            $onProgress,
+                            $this->clipText($segmentedRecoveryInstruction, 1600)
+                        );
+                    } else {
+                        $decoded = $this->generateStageOneJsonByAi(
+                            $this->buildAiStageOnePageRecoveryPrompt(
+                                $scope,
+                                $websiteProfile,
+                                $planJson,
+                                $pageKey,
+                                $planLocale,
+                                $contentLocale,
+                                $instruction,
+                                $targetScope,
+                                'Previous response failed Stage-1 page validation: ' . $generationAttempts['page_fanout'][$pageKey]['primary_failure_summary'],
+                                $pagePlan
+                            ),
+                            'pagebuilder_plan_generation',
+                            self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
+                            240,
+                            null,
+                            $requestParams
+                        );
+                        $pagePlan = $this->extractStageOneAiPagePlan($decoded, $pageKey);
+                    }
                     $pagePlan = $this->normalizeStageOneAiPagePlanWithBaseline(
-                        $this->extractStageOneAiPagePlan($decoded, $pageKey),
+                        $pagePlan,
                         $baselinePage,
                         $pageKey
                     );
@@ -2317,13 +2597,25 @@ final class AiSiteExecutionBlueprintService
                     $generationAttempts['page_fanout'][$pageKey]['ai_response_summary'] = $this->summarizeStageOneAiPagePlanForFailureDiagnostics($pagePlan, $pageKey);
                 }
                 $generationAttempts['page_fanout'][$pageKey]['status'] = $finalCheckpointPassed ? 'passed' : 'failed';
+                if ($finalCheckpointPassed) {
+                    $this->persistStageOnePageCheckpoint(
+                        $onCheckpoint,
+                        $checkpointSignature,
+                        $planJson,
+                        $pageKey,
+                        $pagePlan,
+                        $checkpointPageTypes
+                    );
+                }
                 $pageProgress = 60 + (int)\floor(($completedPages / \max(1, $totalPages)) * 22);
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
-                    $this->buildStageOnePagePipelineMessage(true, $completedPages, $totalPages, $pageKey),
+                    $finalCheckpointPassed
+                        ? $this->buildStageOnePagePipelineMessage(true, $completedPages, $totalPages, $pageKey)
+                        : 'Page plan generated but failed Stage-1 contract checkpoint and is waiting for retry: ' . $pageKey,
                     $pageProgress,
                     'page_plan',
-                    'done',
+                    $finalCheckpointPassed ? 'done' : 'failed',
                     ['page_type' => $pageKey]
                 );
 
@@ -2395,6 +2687,1378 @@ final class AiSiteExecutionBlueprintService
         return $results;
     }
 
+    private function shouldUseSegmentedStageOnePagePlan(string $pageType, array $scope): bool
+    {
+        $budget = $this->resolveStageOneBlockBudget($pageType, $scope);
+
+        return (int)($budget['target'] ?? 0) >= self::STAGE_ONE_SEGMENTED_PAGE_TARGET_THRESHOLD;
+    }
+
+    /**
+     * Large pages can exceed a provider output cap when a full Stage-1 page is
+     * produced in one JSON object. Keep the same contract, but split generation
+     * into an AI page skeleton followed by AI block segments.
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $requestParams
+     * @return array<string, mixed>
+     */
+    private function generateStageOneSegmentedPagePlanByAi(
+        array $scope,
+        array $websiteProfile,
+        array $planJson,
+        string $pageType,
+        string $planLocale,
+        string $contentLocale,
+        string $instruction,
+        string $targetScope,
+        array $requestParams,
+        ?callable $onChunk = null,
+        ?callable $onProgress = null,
+        string $recoveryInstruction = ''
+    ): array {
+        $blockBudget = $this->resolveStageOneBlockBudget($pageType, $scope);
+        $this->emitStageOnePipelineProgress(
+            $onProgress,
+            'Large page detected; generating segmented Stage-1 page skeleton: ' . $pageType,
+            64,
+            'page_plan',
+            'segment_skeleton',
+            ['page_type' => $pageType]
+        );
+        $skeletonDecoded = $this->generateStageOneJsonByAi(
+            $this->buildAiStageOnePageSkeletonPrompt(
+                $scope,
+                $websiteProfile,
+                $planJson,
+                $pageType,
+                $planLocale,
+                $contentLocale,
+                $instruction,
+                $targetScope,
+                $blockBudget,
+                $recoveryInstruction
+            ),
+            'pagebuilder_plan_generation',
+            self::STAGE_ONE_PAGE_SKELETON_MAX_TOKENS,
+            180,
+            $onChunk,
+            $requestParams
+        );
+        $skeleton = $this->extractStageOneAiPageSkeleton($skeletonDecoded, $pageType);
+        if ($skeleton === []) {
+            throw new \RuntimeException('Segmented Stage-1 page skeleton AI failed for ' . $pageType . ': empty page skeleton.');
+        }
+
+        $orderedBlockKeys = $this->resolveStageOneSegmentedPageBlockKeys($skeleton, $blockBudget);
+        if ($orderedBlockKeys === []) {
+            throw new \RuntimeException('Segmented Stage-1 page skeleton AI failed for ' . $pageType . ': no block keys.');
+        }
+        $blueprintsByKey = $this->buildStageOneSegmentedBlueprintMap($skeleton);
+
+        $pagePlan = [
+            'page_goal' => \trim((string)($skeleton['page_goal'] ?? '')),
+            'theme_alignment_summary' => \trim((string)($skeleton['theme_alignment_summary'] ?? '')),
+            'page_design_plan' => \is_array($skeleton['page_design_plan'] ?? null) ? $skeleton['page_design_plan'] : [],
+            'primary_keywords' => \is_array($skeleton['primary_keywords'] ?? null) ? $this->normalizeStringList($skeleton['primary_keywords']) : [],
+            'secondary_keywords' => \is_array($skeleton['secondary_keywords'] ?? null) ? $this->normalizeStringList($skeleton['secondary_keywords']) : [],
+            'blocks' => [],
+        ];
+
+        $blocksByKey = [];
+        $segments = \array_chunk($orderedBlockKeys, self::STAGE_ONE_PAGE_BLOCK_SEGMENT_SIZE);
+        foreach ($segments as $segmentIndex => $segmentKeys) {
+            $segmentKeys = \array_values(\array_filter(\array_map('strval', $segmentKeys), static fn(string $value): bool => \trim($value) !== ''));
+            if ($segmentKeys === []) {
+                continue;
+            }
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                'Generating Stage-1 block segment ' . ((int)$segmentIndex + 1) . '/' . \count($segments) . ' for ' . $pageType . ': ' . \implode(', ', $segmentKeys),
+                66 + (int)\floor(((int)$segmentIndex / \max(1, \count($segments))) * 10),
+                'page_plan',
+                'segment_blocks',
+                ['page_type' => $pageType, 'block_keys' => $segmentKeys]
+            );
+            $segmentBlocksByKey = [];
+            $segmentRecoveryInstruction = $recoveryInstruction;
+            $missingSegmentKeys = $segmentKeys;
+            $segmentValidationIssues = [];
+            for ($segmentAttempt = 0; $segmentAttempt < 3; $segmentAttempt++) {
+                $segmentDecoded = $this->generateStageOneJsonByAi(
+                    $this->buildAiStageOnePageBlockSegmentPrompt(
+                        $scope,
+                        $websiteProfile,
+                        $planJson,
+                        $pageType,
+                        $planLocale,
+                        $contentLocale,
+                        $instruction,
+                        $targetScope,
+                        $blockBudget,
+                        $skeleton,
+                        $segmentKeys,
+                        $this->buildStageOneSegmentedBlueprintSubset($blueprintsByKey, $segmentKeys),
+                        $segmentRecoveryInstruction
+                    ),
+                    'pagebuilder_plan_generation',
+                    self::STAGE_ONE_PAGE_BLOCK_SEGMENT_MAX_TOKENS,
+                    210,
+                    $onChunk,
+                    $requestParams
+                );
+                $segmentBlocksByKey = [];
+                foreach ($this->extractStageOneAiBlockSegment($segmentDecoded) as $block) {
+                    if (!\is_array($block)) {
+                        continue;
+                    }
+                    $blockKey = \trim((string)($block['block_key'] ?? ''));
+                    if ($blockKey === '') {
+                        continue;
+                    }
+                    $segmentBlocksByKey[$blockKey] = $block;
+                }
+                $missingSegmentKeys = \array_values(\array_filter(
+                    $segmentKeys,
+                    static fn(string $requiredSegmentKey): bool => !\is_array($segmentBlocksByKey[$requiredSegmentKey] ?? null)
+                ));
+                if ($missingSegmentKeys === []) {
+                    $stageOneContract = \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : (\is_array($scope['stage1_contract'] ?? null) ? $scope['stage1_contract'] : []);
+                    $segmentValidationIssues = $this->validateStageOneBlockSegmentForPromptRetry(
+                        $segmentBlocksByKey,
+                        $segmentKeys,
+                        $pageType,
+                        $stageOneContract,
+                        $scope,
+                        $planLocale,
+                        $contentLocale,
+                        \trim((string)($skeleton['generated_image_target_block_key'] ?? ''))
+                    );
+                    if ($segmentValidationIssues === []) {
+                        break;
+                    }
+                }
+                $segmentRecoveryInstruction = $missingSegmentKeys !== []
+                    ? ('Previous segment attempt missed required block keys: '
+                        . \implode(', ', $missingSegmentKeys)
+                        . '. Return exactly the requested block keys and do not rename them.')
+                    : ('Previous segment attempt returned the requested block key but failed the Stage-1 block contract: '
+                        . $this->summarizeStageOneValidationReport(['issues' => $segmentValidationIssues])
+                        . '. ' . \implode(' ', $this->buildStageOneIssueSpecificRecoveryRules($segmentValidationIssues))
+                        . ' Return a complete block object for exactly the requested key; shorten copy instead of omitting visual_signature, image_intent, field_plan, or execution_script.core_copy.');
+            }
+            if ($missingSegmentKeys !== []) {
+                throw new \RuntimeException('Segmented Stage-1 page block AI failed for ' . $pageType . ': missing block ' . \implode(', ', $missingSegmentKeys) . '.');
+            }
+            foreach ($segmentBlocksByKey as $blockKey => $block) {
+                $blocksByKey[$blockKey] = $block;
+            }
+        }
+
+        foreach ($orderedBlockKeys as $blockKey) {
+            if (\is_array($blocksByKey[$blockKey] ?? null)) {
+                $pagePlan['blocks'][] = $blocksByKey[$blockKey];
+            }
+        }
+
+        return $pagePlan;
+    }
+
+    /**
+     * Segment generation is allowed to be creative, but each returned block must
+     * already be structurally complete before it is stitched into the page.
+     *
+     * @param array<string, array<string, mixed>> $segmentBlocksByKey
+     * @param list<string> $segmentKeys
+     * @return list<array<string, mixed>>
+     */
+    private function validateStageOneBlockSegmentForPromptRetry(
+        array $segmentBlocksByKey,
+        array $segmentKeys,
+        string $pageType,
+        array $contract,
+        array $scope,
+        string $planLocale,
+        string $contentLocale,
+        string $generatedImageTargetKey
+    ): array {
+        $contract = $this->getStageOneContractService()->normalize(
+            $contract,
+            $scope,
+            [$pageType],
+            $planLocale,
+            $contentLocale,
+            'segment_prompt_retry'
+        );
+        $pageContract = $this->getStageOneContractService()->pageContract($contract, $pageType);
+        $requiredVisualKeys = \is_array($pageContract['visual_signature_keys'] ?? null)
+            ? $pageContract['visual_signature_keys']
+            : AiSiteStageOneContractService::VISUAL_SIGNATURE_KEYS;
+        $issues = [];
+
+        foreach (\array_values($segmentKeys) as $index => $segmentKey) {
+            $segmentKey = \trim((string)$segmentKey);
+            if ($segmentKey === '') {
+                continue;
+            }
+            $path = 'pages.' . $pageType . '.blocks.' . $index;
+            $block = \is_array($segmentBlocksByKey[$segmentKey] ?? null) ? $segmentBlocksByKey[$segmentKey] : [];
+            if ($block === []) {
+                $issues[] = $this->stageOneSegmentRetryIssue('missing_block_key', $path . '.block_key', $pageType, $segmentKey);
+                continue;
+            }
+            $actualBlockKey = \trim((string)($block['block_key'] ?? ''));
+            if ($actualBlockKey !== $segmentKey) {
+                $issues[] = $this->stageOneSegmentRetryIssue('missing_block_key', $path . '.block_key', $pageType, $segmentKey, [
+                    'expected' => $segmentKey,
+                    'actual' => $actualBlockKey,
+                ]);
+            }
+            if (\trim((string)($block['page_flow_role'] ?? '')) === '') {
+                $issues[] = $this->stageOneSegmentRetryIssue('missing_page_flow_role', $path . '.page_flow_role', $pageType, $segmentKey);
+            }
+            if (\trim((string)($block['content'] ?? '')) === '') {
+                $issues[] = $this->stageOneSegmentRetryIssue('instruction_like_or_empty', $path . '.content', $pageType, $segmentKey);
+            }
+            if (!$this->hasCompleteStageOneDesignTags($block)) {
+                $issues[] = $this->stageOneSegmentRetryIssue('missing_design_tag', $path . '.design_tags', $pageType, $segmentKey);
+            }
+
+            $signature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+            if ($signature === []) {
+                $issues[] = $this->stageOneSegmentRetryIssue('missing_visual_signature', $path . '.visual_signature', $pageType, $segmentKey);
+            }
+            foreach ($requiredVisualKeys as $visualKey) {
+                $visualKey = \trim((string)$visualKey);
+                if ($visualKey === '') {
+                    continue;
+                }
+                $value = \trim((string)($signature[$visualKey] ?? ''));
+                if ($value === '' || \in_array(\mb_strtolower($value), ['none', 'same as above', 'string'], true)) {
+                    $issues[] = $this->stageOneSegmentRetryIssue('invalid_visual_signature', $path . '.visual_signature.' . $visualKey, $pageType, $segmentKey, [
+                        'expected' => 'non-empty concrete visual_signature.' . $visualKey,
+                        'actual' => $value,
+                    ]);
+                }
+            }
+
+            $intent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+            if ($intent === []) {
+                $issues[] = $this->stageOneSegmentRetryIssue('missing_image_intent', $path . '.image_intent', $pageType, $segmentKey);
+                continue;
+            }
+            if (!\array_key_exists('needs_image', $intent) || !\is_bool($intent['needs_image'])) {
+                $issues[] = $this->stageOneSegmentRetryIssue('invalid_image_intent_needs_image', $path . '.image_intent.needs_image', $pageType, $segmentKey, [
+                    'expected' => 'JSON boolean true or false',
+                    'actual' => \is_scalar($intent['needs_image'] ?? null) ? (string)($intent['needs_image'] ?? '') : \get_debug_type($intent['needs_image'] ?? null),
+                ]);
+                continue;
+            }
+
+            $needsImage = (bool)$intent['needs_image'];
+            if ($generatedImageTargetKey !== '' && $segmentKey === $generatedImageTargetKey && !$needsImage) {
+                $issues[] = $this->stageOneSegmentRetryIssue('page_missing_generated_image_intent', 'pages.' . $pageType . '.blocks.image_intent', $pageType, $segmentKey, [
+                    'expected' => 'generated image target block must set image_intent.needs_image=true with concrete image fields',
+                ]);
+            }
+            if (!$this->hasCompleteStageOneImageIntent($block)) {
+                $issues[] = $this->stageOneSegmentRetryIssue(
+                    $needsImage ? 'invalid_image_intent_field' : 'missing_css_motif_for_no_image_block',
+                    $path . '.image_intent',
+                    $pageType,
+                    $segmentKey
+                );
+            }
+            if (!$needsImage && $this->stageOneSegmentHasMediaAssets($block)) {
+                $issues[] = $this->stageOneSegmentRetryIssue('image_intent_conflicts_with_block_plan', $path . '.execution_script.media_assets', $pageType, $segmentKey, [
+                    'expected' => 'CSS-only blocks must use execution_script.media_assets=[]',
+                ]);
+            }
+        }
+
+        return \array_slice($issues, 0, 16);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function stageOneSegmentHasMediaAssets(array $block): bool
+    {
+        $assets = [];
+        foreach ([
+            $block['execution_script']['media_assets'] ?? null,
+            $block['media_assets'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate)) {
+                foreach ($candidate as $asset) {
+                    if (\is_scalar($asset) && \trim((string)$asset) !== '') {
+                        $assets[] = \trim((string)$asset);
+                    }
+                }
+            } elseif (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
+                $assets[] = \trim((string)$candidate);
+            }
+        }
+
+        return $assets !== [];
+    }
+
+    /**
+     * @param array<string, mixed> $extra
+     * @return array<string, mixed>
+     */
+    private function stageOneSegmentRetryIssue(string $code, string $path, string $pageType, string $blockKey, array $extra = []): array
+    {
+        return \array_replace([
+            'code' => $code,
+            'reason_code' => $code,
+            'severity' => 'high',
+            'path' => $path,
+            'field_path' => $path,
+            'retry_scope' => 'stage1_contract',
+            'prompt_hint' => 'Regenerate this Stage-1 block segment from the contract instead of dropping nested objects.',
+            'page_type' => $pageType,
+            'block_key' => $blockKey,
+        ], $extra);
+    }
+
+    private function stageOneBlockReturnExamplesJson(): string
+    {
+        $examples = [
+            'generated_image_block' => [
+                'block_key' => 'hero',
+                'page_flow_role' => 'opening',
+                'goal' => 'Drive APK downloads with a concrete product/game visual.',
+                'keywords' => ['APK download', 'card game'],
+                'content' => 'Download the APK and start playing trusted card games today.',
+                'design_tags' => [
+                    'visual' => ['split hero', 'phone mockup'],
+                    'motion' => ['soft reveal', 'CTA glow'],
+                    'interaction' => ['primary CTA hover'],
+                    'texture' => ['felt gradient', 'gold rim'],
+                    'responsive' => ['mobile stacked', 'desktop split'],
+                    'color_layering' => 'dark felt base with gold highlight',
+                    'implementation_note' => 'Keep copy left and media right.',
+                ],
+                'visual_signature' => [
+                    'composition_pattern' => 'split hero with phone mockup',
+                    'spatial_rhythm' => 'copy left, generated product visual right',
+                    'media_strategy' => 'Generated hero image sits beside the CTA as a rounded phone mockup',
+                    'surface_treatment' => 'dark felt gradient with gold rim light',
+                    'interaction_pattern' => 'CTA hover glow and subtle image parallax',
+                ],
+                'image_intent' => [
+                    'needs_image' => true,
+                    'image_role' => 'hero_image',
+                    'image_subject' => 'phone APK install screen with playing-card table behind it',
+                    'placement' => 'media_panel',
+                    'visual_atmosphere' => 'premium trusted game-lobby mood with warm gold lighting',
+                    'image_treatment' => 'rounded phone mockup with shallow shadow and gold overlay',
+                    'reuse_policy' => 'reuse_when_intent_matches',
+                    'css_motif' => '',
+                ],
+                'field_plan' => [
+                    ['field' => 'headline', 'sample' => 'Play Today', 'implementation_note' => 'Render as the main H1.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Fast APK download with trusted gameplay.', 'implementation_note' => 'Render below headline.'],
+                    ['field' => 'cta_label', 'sample' => 'Download APK', 'implementation_note' => 'Use for the primary button.'],
+                ],
+                'execution_script' => [
+                    'feature_points' => ['Fast download', 'Secure setup'],
+                    'core_copy' => 'Download the APK and start playing trusted card games today.',
+                    'typography' => 'Bold display headline with readable body text',
+                    'style_tone' => 'Confident and conversion-focused',
+                    'background_direction' => 'Dark felt gradient with gold highlights',
+                    'media_assets' => ['hero-phone-apk-install.png'],
+                ],
+                'reusable' => 'no',
+                'seo_impact' => 'high',
+            ],
+            'css_only_block' => [
+                'block_key' => 'player_reviews',
+                'page_flow_role' => 'proof',
+                'goal' => 'Build trust with player feedback without generating image assets.',
+                'keywords' => ['reviews', 'secure app'],
+                'content' => 'Real players trust the app for quick, secure gameplay.',
+                'design_tags' => [
+                    'visual' => ['review cards', 'star badges'],
+                    'motion' => ['hover lift', 'badge shimmer'],
+                    'interaction' => ['card hover'],
+                    'texture' => ['glass cards', 'border glow'],
+                    'responsive' => ['mobile stack', 'desktop rail'],
+                    'color_layering' => 'dark glass cards with warm accent badges',
+                    'implementation_note' => 'Use CSS initials and rating chips.',
+                ],
+                'visual_signature' => [
+                    'composition_pattern' => 'staggered testimonial cards',
+                    'spatial_rhythm' => 'three review cards with rating badges',
+                    'media_strategy' => 'CSS-only/no generated image; cards use initials, star badges, and gradient borders',
+                    'surface_treatment' => 'glass cards with accent border glow',
+                    'interaction_pattern' => 'card hover lift and rating shimmer',
+                ],
+                'image_intent' => [
+                    'needs_image' => false,
+                    'image_role' => 'css_motif',
+                    'image_subject' => 'none',
+                    'placement' => 'background_layer',
+                    'visual_atmosphere' => 'secure premium review wall with social proof energy',
+                    'image_treatment' => 'CSS gradients, initials, star badges, and border glow replace generated imagery',
+                    'reuse_policy' => 'no_generated_image',
+                    'css_motif' => 'glass testimonial cards with accent side borders and gold star badges',
+                ],
+                'field_plan' => [
+                    ['field' => 'headline', 'sample' => 'Trusted by Players', 'implementation_note' => 'Render above review cards.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Secure gameplay with quick support.', 'implementation_note' => 'Render as proof copy.'],
+                    ['field' => 'proof_detail', 'sample' => '4.8 star average rating', 'implementation_note' => 'Render as a badge.'],
+                ],
+                'execution_script' => [
+                    'feature_points' => ['Verified reviews', 'Quick support'],
+                    'core_copy' => 'Real players trust the app for quick, secure gameplay.',
+                    'typography' => 'Compact headline with badge text',
+                    'style_tone' => 'Reassuring and factual',
+                    'background_direction' => 'Layered cards on a soft gradient surface',
+                    'media_assets' => [],
+                ],
+                'reusable' => 'no',
+                'seo_impact' => 'medium',
+            ],
+        ];
+
+        return \json_encode($examples, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    private function stageOneFieldPlanIntentExamplesJson(): string
+    {
+        $examples = [
+            'cta_block' => [
+                ['field' => 'headline', 'sample' => 'Start Playing Today', 'implementation_note' => 'Main CTA heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'Download the APK and follow the quick setup steps.', 'implementation_note' => 'Body sentence before button.'],
+                ['field' => 'cta_label', 'sample' => 'Download APK', 'implementation_note' => 'Primary action button.'],
+            ],
+            'proof_block' => [
+                ['field' => 'headline', 'sample' => 'Trusted by Players', 'implementation_note' => 'Proof section heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'Verified reviews highlight fast setup and secure play.', 'implementation_note' => 'Trust body copy.'],
+                ['field' => 'proof_detail', 'sample' => '4.8 average rating', 'implementation_note' => 'Badge or stat chip.'],
+            ],
+            'media_or_feature_block' => [
+                ['field' => 'headline', 'sample' => 'See the Game Flow', 'implementation_note' => 'Feature heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'A guided screen shows setup, play, and rewards.', 'implementation_note' => 'Feature body copy.'],
+                ['field' => 'image_brief', 'sample' => 'Phone screen with card table behind it', 'implementation_note' => 'Asset brief if needs_image=true.'],
+            ],
+            'support_or_form_block' => [
+                ['field' => 'headline', 'sample' => 'Need Help?', 'implementation_note' => 'Support heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'Send your question and the support team will guide you.', 'implementation_note' => 'Support body copy.'],
+                ['field' => 'form_label', 'sample' => 'Describe your issue', 'implementation_note' => 'Visitor-facing form label.'],
+            ],
+            'policy_block' => [
+                ['field' => 'headline', 'sample' => 'Privacy Overview', 'implementation_note' => 'Policy heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'This page explains how account and app data is handled.', 'implementation_note' => 'Neutral policy body.'],
+                ['field' => 'policy_summary', 'sample' => 'Data use, rights, and contact options', 'implementation_note' => 'Policy summary chip.'],
+            ],
+            'multi_item_blocks_still_use_three_rows' => [
+                'player_reviews' => [
+                    ['field' => 'headline', 'sample' => 'Players Trust the App', 'implementation_note' => 'Review section heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Ravi likes quick setup; Anika values secure play; Dev trusts the lobby.', 'implementation_note' => 'Intro plus three review snippets.'],
+                    ['field' => 'proof_detail', 'sample' => '4.8 average rating from active players', 'implementation_note' => 'Single rating badge, not extra rows.'],
+                ],
+                'support_faq' => [
+                    ['field' => 'headline', 'sample' => 'Support Questions', 'implementation_note' => 'FAQ heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Get help with install steps, account access, and game basics.', 'implementation_note' => 'One FAQ intro sentence.'],
+                    ['field' => 'context_detail', 'sample' => 'Install help | Account help | Game rules', 'implementation_note' => 'Multiple FAQ topics inside one row.'],
+                ],
+            ],
+            'by_common_block_key' => [
+                'hero_download' => [
+                    ['field' => 'headline', 'sample' => 'Download in Three Clear Steps', 'implementation_note' => 'Heading for download guidance.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Follow the install prompts and open the game lobby safely.', 'implementation_note' => 'Body copy before action.'],
+                    ['field' => 'cta_label', 'sample' => 'Download APK', 'implementation_note' => 'Primary download action.'],
+                ],
+                'player_reviews' => [
+                    ['field' => 'headline', 'sample' => 'Players Trust the App', 'implementation_note' => 'Review section heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Short reviews highlight smooth setup and secure play.', 'implementation_note' => 'Review intro sentence.'],
+                    ['field' => 'proof_detail', 'sample' => '4.8 average rating', 'implementation_note' => 'Rating badge detail.'],
+                ],
+                'faq_or_rules' => [
+                    ['field' => 'headline', 'sample' => 'Rules Before You Play', 'implementation_note' => 'FAQ/rules heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Review the basics before starting your first table.', 'implementation_note' => 'Intro sentence.'],
+                    ['field' => 'context_detail', 'sample' => 'Teen Patti, Rummy, and Poker basics', 'implementation_note' => 'Topic chip or summary.'],
+                ],
+                'article_collection' => [
+                    ['field' => 'headline', 'sample' => 'Latest Strategy Guides', 'implementation_note' => 'Article list heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Browse practical tips for safer and smarter play.', 'implementation_note' => 'Collection intro.'],
+                    ['field' => 'article_teaser', 'sample' => 'Beginner Teen Patti table guide', 'implementation_note' => 'First article teaser.'],
+                ],
+            ],
+        ];
+
+        return \json_encode($examples, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    private function stageOneCssOnlyImageIntentExamplesJson(): string
+    {
+        $examples = [
+            'trust_security' => [
+                'needs_image' => false,
+                'image_role' => 'css_motif',
+                'image_subject' => 'none',
+                'placement' => 'background_layer',
+                'visual_atmosphere' => 'secure premium install-check mood with warm trust accents',
+                'image_treatment' => 'CSS shield chips, check rows, and glow borders replace generated imagery',
+                'reuse_policy' => 'no_generated_image',
+                'css_motif' => 'secure-install checklist with amber shields, tick chips, and dark glass panels',
+            ],
+            'player_reviews' => [
+                'needs_image' => false,
+                'image_role' => 'css_motif',
+                'image_subject' => 'none',
+                'placement' => 'inline_visual',
+                'visual_atmosphere' => 'social proof wall with compact trustworthy player energy',
+                'image_treatment' => 'CSS initials, star badges, and staggered testimonial cards replace player photos',
+                'reuse_policy' => 'no_generated_image',
+                'css_motif' => 'initial circles, rating stars, and neon card borders',
+            ],
+            'faq_or_rules' => [
+                'needs_image' => false,
+                'image_role' => 'css_motif',
+                'image_subject' => 'none',
+                'placement' => 'background_layer',
+                'visual_atmosphere' => 'calm rulebook panel with clear scanning and responsible-play tone',
+                'image_treatment' => 'CSS accordion rows, card-suit bullets, and gold dividers replace images',
+                'reuse_policy' => 'no_generated_image',
+                'css_motif' => 'accordion rule rows with suit icons, numbered chips, and divider lines',
+            ],
+            'article_collection' => [
+                'needs_image' => false,
+                'image_role' => 'css_motif',
+                'image_subject' => 'none',
+                'placement' => 'inline_visual',
+                'visual_atmosphere' => 'editorial guide index with practical strategy-card mood',
+                'image_treatment' => 'CSS article cards, category tabs, and reading badges replace thumbnails',
+                'reuse_policy' => 'no_generated_image',
+                'css_motif' => 'editorial card stack with guide labels, suit marks, and read-time chips',
+            ],
+            'support_faq' => [
+                'needs_image' => false,
+                'image_role' => 'css_motif',
+                'image_subject' => 'none',
+                'placement' => 'background_layer',
+                'visual_atmosphere' => 'support center clarity with low-friction help cues',
+                'image_treatment' => 'CSS help chips, accordion arrows, and soft panels replace support photos',
+                'reuse_policy' => 'no_generated_image',
+                'css_motif' => 'help-topic chips, FAQ rows, and focus-visible accordion arrows',
+            ],
+        ];
+
+        return \json_encode($examples, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    private function stageOneGeneratedImageTargetExamplesJson(): string
+    {
+        $examples = [
+            'home_page' => 'hero',
+            'about_page' => 'origin_story',
+            'contact_page' => 'contact_methods',
+            'blog_post' => 'article_hero',
+            'blog_category' => 'category_hero',
+        ];
+
+        return \json_encode($examples, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    /**
+     * @param list<string> $segmentKeys
+     */
+    private function stageOneSegmentMediaDecisionExamplesJson(array $segmentKeys, string $generatedImageTargetKey): string
+    {
+        $cssOnlyExamples = \json_decode($this->stageOneCssOnlyImageIntentExamplesJson(), true);
+        $cssOnlyExamples = \is_array($cssOnlyExamples) ? $cssOnlyExamples : [];
+        $examples = [];
+        foreach ($segmentKeys as $segmentKey) {
+            $segmentKey = \trim((string)$segmentKey);
+            if ($segmentKey === '') {
+                continue;
+            }
+            if ($generatedImageTargetKey !== '' && $segmentKey === $generatedImageTargetKey) {
+                $examples[$segmentKey] = [
+                    'needs_image' => true,
+                    'image_role' => 'hero_image or section_image',
+                    'image_subject' => 'concrete generated scene/product/interface subject tied to this block',
+                    'placement' => 'media_panel or inline_visual',
+                    'media_strategy' => 'Generated image integrated with this block; do not say CSS-only/no generated image',
+                ];
+                continue;
+            }
+            if (\is_array($cssOnlyExamples[$segmentKey] ?? null)) {
+                $examples[$segmentKey] = $cssOnlyExamples[$segmentKey];
+                continue;
+            }
+            if (\preg_match('/(?:review|testimonial|faq|rules|trust|security|proof|cta|download|support|policy)/i', $segmentKey) === 1) {
+                $examples[$segmentKey] = [
+                    'needs_image' => false,
+                    'image_role' => 'css_motif',
+                    'image_subject' => 'none',
+                    'placement' => 'background_layer or inline_visual',
+                    'visual_atmosphere' => 'block-specific CSS visual mood, not a generic placeholder',
+                    'image_treatment' => 'CSS cards, chips, icons, dividers, or badges replace generated imagery',
+                    'reuse_policy' => 'no_generated_image',
+                    'css_motif' => 'concrete CSS motif matching this block key',
+                    'media_strategy' => 'CSS-only/no generated image; describe the block-specific motif in visual_signature.media_strategy',
+                ];
+            }
+        }
+
+        return \json_encode($examples, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    private function stageOneVisualSignatureExamplesJson(): string
+    {
+        $examples = [
+            'generated_media_block' => [
+                'composition_pattern' => 'split hero with copy rail and phone media panel',
+                'spatial_rhythm' => 'large headline column balanced by one generated visual',
+                'media_strategy' => 'Generated phone APK install image anchors the right panel beside CTA copy',
+                'surface_treatment' => 'dark felt gradient, gold rim light, and soft glass card depth',
+                'interaction_pattern' => 'CTA glow on hover; generated media panel uses reduced-motion parallax',
+            ],
+            'css_only_static_block' => [
+                'composition_pattern' => 'staggered proof cards with compact badge row',
+                'spatial_rhythm' => 'three short cards, tight copy, and one accent stat strip',
+                'media_strategy' => 'CSS-only/no generated image; initials, chips, dividers, and card-suit motifs create the visual',
+                'surface_treatment' => 'glass panels with amber border glow and subtle patterned texture',
+                'interaction_pattern' => 'card hover lift, focus-visible links, no ambient motion',
+            ],
+            'faq_or_rules_block' => [
+                'composition_pattern' => 'accordion-style rule rows inside a framed help panel',
+                'spatial_rhythm' => 'left intro copy, right stacked questions, compact row gaps',
+                'media_strategy' => 'CSS-only/no generated image; rule numbers, suit icons, and divider lines guide scanning',
+                'surface_treatment' => 'matte dark panel with gold separators and soft inset shadow',
+                'interaction_pattern' => 'accordion row expand, keyboard focus ring, no floating animation',
+            ],
+        ];
+
+        return \json_encode($examples, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    private function stageOneRequirementExpansionExampleJson(): string
+    {
+        $example = [
+            'requirement_expansion' => [
+                'original_brief' => 'Teen Patti APK download site for Indian players',
+                'expanded_brief' => 'Create a trusted Indian card-game APK site with fast download guidance, safety proof, rules education, and support clarity.',
+                'planning_summary' => 'Conversion-first app-download experience with strong trust and beginner education.',
+                'site_goal' => 'Help visitors understand, trust, and download the APK.',
+                'business_goals' => ['Increase APK downloads', 'Build safety confidence'],
+                'target_users' => ['Indian card players', 'New APK users'],
+                'business_context' => 'Mobile game discovery site for Teen Patti-style card gameplay.',
+                'content_direction' => 'Use direct download copy, rule summaries, trust proof, FAQ, and support guidance.',
+                'conversion_strategy' => 'Lead with download CTA, reinforce with safety/reviews, repeat one final CTA.',
+                'primary_cta' => 'Download APK',
+                'page_strategy' => [
+                    [
+                        'page_type' => 'home_page',
+                        'intent' => 'convert visitors with hero, proof, features, and CTA flow',
+                        'content_focus' => 'download benefit, games, safety, reviews',
+                        'conversion_role' => 'primary conversion',
+                    ],
+                ],
+                'technical_direction' => ['Mobile-first layout', 'Reusable CTA pattern', 'Verified image slots only'],
+            ],
+        ];
+
+        return \json_encode($example, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    private function stageOneThemeExampleJson(): string
+    {
+        $example = [
+            'site_strategy' => [
+                'site_display_name' => 'Teenipiya',
+                'summary' => 'Trusted APK download and learning hub for Indian card-game players.',
+                'website_type' => 'game APK landing and resource site',
+                'core_goal' => 'Convert visitors to safe APK downloads.',
+                'target_users' => 'Indian mobile card-game players',
+                'content_strategy' => 'Pair download CTAs with rules, trust proof, and support.',
+                'conversion_path' => 'Hero CTA, game proof, safety proof, FAQ, final CTA.',
+                'primary_cta' => 'Download APK',
+            ],
+            'theme_design' => [
+                'style_signature' => 'premium Indian card-room launch style with felt depth and gold CTA accents',
+                'art_direction' => [
+                    'layout_motif' => 'diagonal hero, proof rail, compact CTA stage',
+                    'background_system' => 'dark felt gradients with subtle pattern layers',
+                    'surface_treatment' => 'glass cards, gold rims, tactile CTA glow',
+                    'visual_detail_rule' => 'use CSS card suits/chips as motifs; real images only for phone/game scenes',
+                    'motion_rule' => 'short reveal, hover lift, CTA glow; no generic floating blobs',
+                ],
+                'visual_keywords' => ['felt depth', 'gold CTA', 'glass proof cards', 'phone mockup'],
+                'forbidden_styles' => ['plain SaaS blue gradient', 'generic white card grid', 'purple AI glow'],
+            ],
+            'page_type_overviews' => [
+                'home_page' => [
+                    'page_role' => 'primary conversion',
+                    'content_focus' => 'download, games, proof, FAQ',
+                    'theme_color_application' => 'gold CTAs over dark card-room surfaces',
+                    'section_layering_hint' => 'hero then feature/proof rhythm',
+                    'interaction_intent' => 'CTA glow and card hover lift',
+                    'differentiation_note' => 'marketing landing, not legal text layout',
+                ],
+            ],
+        ];
+
+        return \json_encode($example, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    private function stageOnePageSkeletonExampleJson(): string
+    {
+        $example = [
+            'page' => [
+                'page_goal' => 'Convert visitors to APK downloads while proving safety and game value.',
+                'theme_alignment_summary' => 'Uses dark felt surfaces, gold CTAs, and proof rails from the shared card-room theme.',
+                'page_design_plan' => [
+                    'page_role' => 'conversion home',
+                    'content_narrative' => 'download promise, game benefits, trust proof, FAQ, final action',
+                    'visual_hierarchy' => 'large opening, dense feature proof, compact final CTA',
+                    'visual_signature_application' => 'each block gets a distinct composition, surface, media, and interaction signature',
+                    'composition_motif' => 'diagonal launch hero with staggered proof rail',
+                    'color_layering' => 'dark base, warm gold accents, lighter support panels',
+                    'section_flow' => ['opening download promise', 'features and proof before final CTA'],
+                    'interaction_notes' => ['CTA hover glow', 'cards lift on hover'],
+                    'polish_details' => ['CSS chip motifs', 'subtle patterned background'],
+                    'anti_monotony_rule' => 'alternate media, proof cards, FAQ rows, and CTA stage instead of repeated card grids',
+                ],
+                'ordered_block_keys' => ['hero', 'hero_download', 'game_showcase_or_features', 'trust_security', 'player_reviews', 'faq_or_rules', 'final_cta'],
+                'generated_image_target_block_key' => 'hero',
+                'block_blueprints' => [
+                    [
+                        'block_key' => 'hero',
+                        'page_flow_role' => 'opening',
+                        'goal' => 'make the APK download promise immediately clear',
+                        'content_focus' => 'download CTA plus trusted game intro',
+                        'visual_signature_hint' => 'split hero with phone/game scene and CTA panel',
+                        'image_intent_hint' => 'generated phone APK install screen with card table behind it',
+                        'handoff_rule' => 'block worker must return full field_plan, visual_signature, and image_intent',
+                    ],
+                    [
+                        'block_key' => 'hero_download',
+                        'page_flow_role' => 'cta',
+                        'goal' => 'make download steps and action obvious',
+                        'content_focus' => 'APK install step and CTA label',
+                        'visual_signature_hint' => 'compact download rail with CSS chip/step badges',
+                        'image_intent_hint' => 'CSS-only download step motif',
+                        'handoff_rule' => 'cta block row 2 must be cta_label or action_label',
+                    ],
+                    [
+                        'block_key' => 'game_showcase_or_features',
+                        'page_flow_role' => 'details',
+                        'goal' => 'show the core card-game experience without repeating the hero',
+                        'content_focus' => 'game modes, phone lobby, and quick play value',
+                        'visual_signature_hint' => 'feature grid with one phone-lobby media panel',
+                        'image_intent_hint' => 'generated phone game lobby or CSS feature cards',
+                        'handoff_rule' => 'row 2 should be image_brief when generated, otherwise context_detail',
+                    ],
+                    [
+                        'block_key' => 'trust_security',
+                        'page_flow_role' => 'proof',
+                        'goal' => 'make safety and APK confidence visible before reviews',
+                        'content_focus' => 'secure install, fair play, and app trust cues',
+                        'visual_signature_hint' => 'trust checklist band with shield chips and audit badges',
+                        'image_intent_hint' => 'CSS-only shield chips and secure-install motif',
+                        'handoff_rule' => 'must include full CSS-only image_intent if no generated image',
+                    ],
+                    [
+                        'block_key' => 'player_reviews',
+                        'page_flow_role' => 'proof',
+                        'goal' => 'add player trust proof without another hero shell',
+                        'content_focus' => 'short reviews and rating detail',
+                        'visual_signature_hint' => 'staggered testimonial cards with rating badges',
+                        'image_intent_hint' => 'CSS-only initials and star badges',
+                        'handoff_rule' => 'proof block row 2 should be proof_detail',
+                    ],
+                    [
+                        'block_key' => 'faq_or_rules',
+                        'page_flow_role' => 'details',
+                        'goal' => 'answer common play and install questions in a scannable format',
+                        'content_focus' => 'rules basics, APK setup, and responsible play cues',
+                        'visual_signature_hint' => 'accordion-style rule rows inside framed help panel',
+                        'image_intent_hint' => 'CSS-only rule numbers, suit icons, and divider lines',
+                        'handoff_rule' => 'all five visual_signature fields must be non-empty',
+                    ],
+                    [
+                        'block_key' => 'final_cta',
+                        'page_flow_role' => 'cta',
+                        'goal' => 'close the page with one confident download action',
+                        'content_focus' => 'final reassurance and APK action label',
+                        'visual_signature_hint' => 'compact CTA stage with glow button and trust chips',
+                        'image_intent_hint' => 'CSS-only CTA glow, chip rail, and card-suit texture',
+                        'handoff_rule' => 'row 2 must be cta_label/action_label/button_text',
+                    ],
+                ],
+            ],
+        ];
+
+        return \json_encode($example, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    /**
+     * @param list<string> $requiredBlockKeys
+     * @param list<string> $optionalBlockKeys
+     * @return list<string>
+     */
+    private function orderStageOneBlockKeysForPrompt(array $requiredBlockKeys, array $optionalBlockKeys, int $targetBlockCount): array
+    {
+        $unique = static function (array $values): array {
+            $result = [];
+            $seen = [];
+            foreach ($values as $value) {
+                $value = \trim((string)$value);
+                if ($value === '') {
+                    continue;
+                }
+                $key = \mb_strtolower($value);
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $result[] = $value;
+            }
+
+            return $result;
+        };
+        $requiredBlockKeys = $unique($requiredBlockKeys);
+        $optionalBlockKeys = $unique($optionalBlockKeys);
+        if ($requiredBlockKeys === []) {
+            return $targetBlockCount > 0 ? \array_slice($optionalBlockKeys, 0, $targetBlockCount) : $optionalBlockKeys;
+        }
+
+        $first = \array_shift($requiredBlockKeys);
+        $tail = [];
+        $middleRequired = [];
+        foreach ($requiredBlockKeys as $blockKey) {
+            if (\preg_match('/(?:final|cta|conversion|download_band|action)$/i', $blockKey) === 1) {
+                $tail[] = $blockKey;
+                continue;
+            }
+            $middleRequired[] = $blockKey;
+        }
+
+        $ordered = [$first, ...$middleRequired];
+        $need = $targetBlockCount > 0
+            ? \max(0, $targetBlockCount - \count($ordered) - \count($tail))
+            : \count($optionalBlockKeys);
+        foreach ($optionalBlockKeys as $optionalBlockKey) {
+            if ($need <= 0) {
+                break;
+            }
+            if (\in_array($optionalBlockKey, $ordered, true) || \in_array($optionalBlockKey, $tail, true)) {
+                continue;
+            }
+            $ordered[] = $optionalBlockKey;
+            $need--;
+        }
+        $ordered = \array_values(\array_unique(\array_merge($ordered, $tail)));
+
+        return $targetBlockCount > 0 && \count($ordered) > $targetBlockCount
+            ? \array_slice($ordered, 0, $targetBlockCount)
+            : $ordered;
+    }
+
+    private function stageOneAppendInstructionClassifierExamplesJson(): string
+    {
+        $examples = [
+            'append_example' => [
+                'instruction' => 'Add a why-choose-us section below the home hero.',
+                'return' => [
+                    'action' => 'append_block',
+                    'append_type' => 'why_choose_us',
+                    'target_page_type' => 'home_page',
+                    'confidence' => 0.92,
+                    'decision_note' => 'User explicitly asks to add a new why-choose-us section under hero.',
+                ],
+            ],
+            'none_example' => [
+                'instruction' => 'Make the home page button copy more compelling.',
+                'return' => [
+                    'action' => 'none',
+                    'append_type' => 'none',
+                    'target_page_type' => 'home_page',
+                    'confidence' => 0.86,
+                    'decision_note' => 'User asks to refine existing copy, not add a new block.',
+                ],
+            ],
+        ];
+
+        return \json_encode($examples, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function buildStageOneIdentityGuardPrompt(array $scope, array $websiteProfile, string $siteDisplayName = ''): string
+    {
+        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        $siteIdentity = \is_array($sourceTruth['site_identity'] ?? null) ? $sourceTruth['site_identity'] : [];
+        $allowed = [];
+        foreach ([
+            $siteDisplayName,
+            $scope['site_title'] ?? null,
+            $scope['site_name'] ?? null,
+            $websiteProfile['site_title'] ?? null,
+            $websiteProfile['site_name'] ?? null,
+            $siteIdentity['site_name'] ?? null,
+        ] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                $allowed[] = $candidate;
+            }
+        }
+        foreach (\is_array($siteIdentity['brand_terms'] ?? null) ? $siteIdentity['brand_terms'] : [] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                $allowed[] = $candidate;
+            }
+        }
+        $allowed = $this->uniqueStageOnePromptStrings($allowed);
+        $allowedLookup = \array_fill_keys(\array_map(static fn(string $term): string => \mb_strtolower($term), $allowed), true);
+        $forbidden = [];
+        foreach (self::TEMPLATE_SCAFFOLD_BRAND_TERMS as $term) {
+            if (!isset($allowedLookup[\mb_strtolower($term)])) {
+                $forbidden[] = $term;
+            }
+        }
+
+        return 'SOURCE_TRUTH_IDENTITY_GUARD: approved_brand_terms='
+            . (\json_encode($allowed, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '[]')
+            . '; forbidden_template_or_example_brand_terms='
+            . (\json_encode($forbidden, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '[]')
+            . '; style templates, default configs, layout JSON, and examples are structure/art-direction references only. Do not copy their brand names, old page copy, SEO text, nav labels, social links, CTA targets, alt/title text, or support/game lists into the Stage-1 plan. If a candidate page/block string contains a forbidden term, rewrite it from the current brief before returning JSON.';
+    }
+
+    /**
+     * @param list<string> $values
+     * @return list<string>
+     */
+    private function uniqueStageOnePromptStrings(array $values): array
+    {
+        $result = [];
+        $seen = [];
+        foreach ($values as $value) {
+            $value = \trim((string)$value);
+            if ($value === '') {
+                continue;
+            }
+            $key = \mb_strtolower($value);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $result[] = $value;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $blockBudget
+     */
+    private function buildAiStageOnePageSkeletonPrompt(
+        array $scope,
+        array $websiteProfile,
+        array $planJson,
+        string $pageType,
+        string $planLocale,
+        string $contentLocale,
+        string $instruction,
+        string $targetScope,
+        array $blockBudget,
+        string $recoveryInstruction = ''
+    ): string {
+        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? ''));
+        $requirementExpansion = \json_encode($planJson['requirement_expansion'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $themeDesign = \json_encode($planJson['theme_design'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $pageTypeOverview = \json_encode($this->resolveStageOnePageTypeOverview($planJson, $pageType), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $sourceTruthLine = $this->buildStageOneSourceTruthPromptLine($scope);
+        $targetBlockCount = \max(1, (int)($blockBudget['target'] ?? 0));
+        $requiredBlockKeys = \array_values(\array_filter(\array_map('strval', \is_array($blockBudget['required'] ?? null) ? $blockBudget['required'] : []), static fn(string $value): bool => \trim($value) !== ''));
+        $optionalBlockKeys = \array_values(\array_filter(\array_map('strval', \is_array($blockBudget['optional'] ?? null) ? $blockBudget['optional'] : []), static fn(string $value): bool => \trim($value) !== ''));
+        $orderedKeyExample = $this->orderStageOneBlockKeysForPrompt($requiredBlockKeys, $optionalBlockKeys, $targetBlockCount);
+        $isPolicyPage = \in_array($pageType, ['privacy_policy', 'terms_of_service', 'refund_policy', 'shipping_policy', 'cookie_policy'], true);
+        $generatedImageTargetRule = !$isPolicyPage
+            ? 'Generated-image target rule: choose one ordered_block_keys value as generated_image_target_block_key. Prefer the opening/media/support block that can carry a real generated scene, product interface, phone mockup, support desk, or editorial visual. That target block segment must later set image_intent.needs_image=true; other blocks may use complete CSS-only motifs.'
+            : 'Policy media rule: generated_image_target_block_key must be an empty string for dense policy/legal pages unless the page contract explicitly says otherwise.';
+
+        return \implode("\n", \array_values(\array_filter([
+            ...$this->buildStageOnePromptRolePrelude(),
+            '銆愮郴缁熸彁绀鸿瘝銆?',
+            'You are PageBuilder Stage-1 PAGE SKELETON planner for one large page.',
+            'Return STRICT JSON only. Create the page-level art direction and ordered block blueprint; do not generate full block field_plan details in this call.',
+            'Accepted shape: {"page":{...}}.',
+            'Page type: ' . $pageType,
+            'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
+            'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
+            'Block budget: target=' . (string)($blockBudget['target'] ?? 0) . ', required=' . \json_encode($blockBudget['required'] ?? [], \JSON_UNESCAPED_UNICODE) . ', recommended_optional=' . \json_encode($blockBudget['optional'] ?? [], \JSON_UNESCAPED_UNICODE) . '. ordered_block_keys must contain exactly target keys, include every required key exactly once, and then optional keys only if target needs them.',
+            'This page required block_key checklist is dynamic and binding: ' . \json_encode($requiredBlockKeys, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) . '. Suggested natural ordered_block_keys example for this exact page: ' . \json_encode($orderedKeyExample, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) . '. Do not copy a generic example if it omits any current required key or puts final CTA before proof/detail sections.',
+            'Opening-order contract: the first ordered_block_keys value must be the first required key because it carries the page opening/first visual contract. After that, follow the page skeleton and page_design_plan flow; do not move a final/download/install/CTA block before narrative/detail/proof sections unless that CTA is the explicit page opening.',
+            'The ordered block blueprint is a real plan. Choose order from this page identity and page_design_plan.section_flow, not from a generic home template.',
+            'Each block_blueprints row must define what that block uniquely contributes, how it differs visually from adjacent blocks, and whether it needs a generated image.',
+            $generatedImageTargetRule,
+            'Preferred generated-image target examples by page type: ' . $this->stageOneGeneratedImageTargetExamplesJson() . '. These are teaching defaults, not copy; use the closest required/opening/support/article block for this page when available.',
+            'Creativity rule: the contract is a frame, not a template. Invent a page-specific rhythm, block sequence, media idea, and surface language inside the required keys; do not produce a generic compliance checklist.',
+            'Block blueprint intent rule: page_flow_role should describe the block job (opening/proof/details/cta/support), and image_intent_hint should say either a concrete generated scene/product/interface subject or a CSS-only motif such as badges, chips, dividers, patterns, cards, or icon-led UI.',
+            'Output budget: page_goal/theme_alignment_summary <= 120 chars; each page_design_plan value <= 70 chars; arrays max 2 items; each block_blueprints value <= 60 chars.',
+            '銆愮敤鎴锋彁绀鸿瘝銆態rief: ' . ($brief !== '' ? $brief : '-'),
+            '銆愮敤鎴锋彁绀鸿瘝銆慖nstruction: ' . ($instruction !== '' ? $instruction : '-'),
+            '銆愰€氱敤鎻愮ず璇嶃€?',
+            'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
+            'Confirmed requirement expansion: ' . $requirementExpansion,
+            'Shared theme_design: ' . $themeDesign,
+            'Theme-level page overview: ' . $pageTypeOverview,
+            'Reference image insights: ' . $this->buildReferenceImageInsightsPromptText($scope),
+            $sourceTruthLine,
+            $recoveryInstruction !== '' ? 'Recovery instruction: ' . $this->clipText($recoveryInstruction, 1400) : '',
+            'Schema:',
+            '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"ordered_block_keys":["string"],"generated_image_target_block_key":"string or empty for policy pages","block_blueprints":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","content_focus":"string","visual_signature_hint":"string","image_intent_hint":"generated image subject or CSS-only motif","handoff_rule":"string"}]}}',
+            'Page skeleton example (copy the structure, not the content; rewrite for this page): ' . $this->stageOnePageSkeletonExampleJson(),
+            'Self-check before return: ordered_block_keys length equals target, every required block key appears exactly once, the first key equals the first required key, non-policy generated_image_target_block_key is one of ordered_block_keys, final CTA stays near the page end unless it is the page opening, and block_blueprints covers every ordered key. If too long, shorten blueprint strings; do not omit keys.',
+        ], static fn(string $line): bool => \trim($line) !== '')));
+    }
+
+    /**
+     * @param array<string, mixed> $blockBudget
+     * @param array<string, mixed> $skeleton
+     * @param list<string> $segmentKeys
+     * @param array<string, array<string, mixed>> $segmentBlueprints
+     */
+    private function buildAiStageOnePageBlockSegmentPrompt(
+        array $scope,
+        array $websiteProfile,
+        array $planJson,
+        string $pageType,
+        string $planLocale,
+        string $contentLocale,
+        string $instruction,
+        string $targetScope,
+        array $blockBudget,
+        array $skeleton,
+        array $segmentKeys,
+        array $segmentBlueprints,
+        string $recoveryInstruction = ''
+    ): string {
+        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? ''));
+        $themeDesign = \json_encode($planJson['theme_design'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $pageTypeOverview = \json_encode($this->resolveStageOnePageTypeOverview($planJson, $pageType), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $skeletonJson = \json_encode($this->clipStageOneSegmentedSkeletonForPrompt($skeleton), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $segmentBlueprintJson = \json_encode($segmentBlueprints, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $sourceTruthLine = $this->buildStageOneSourceTruthPromptLine($scope);
+        $orderedBlockKeys = \is_array($skeleton['ordered_block_keys'] ?? null) ? \array_values(\array_map('strval', $skeleton['ordered_block_keys'])) : [];
+        $firstOrderedBlockKey = \trim((string)($orderedBlockKeys[0] ?? ($blockBudget['required'][0] ?? '')));
+        $isPolicyPage = \in_array($pageType, ['privacy_policy', 'terms_of_service', 'refund_policy', 'shipping_policy', 'cookie_policy'], true);
+        $generatedImageTargetKey = \trim((string)($skeleton['generated_image_target_block_key'] ?? ''));
+        if ($generatedImageTargetKey === '' && !$isPolicyPage) {
+            foreach ($orderedBlockKeys as $candidateKey) {
+                $candidateKey = \trim((string)$candidateKey);
+                if ($candidateKey === '') {
+                    continue;
+                }
+                if (\preg_match('/(?:hero|showcase|feature|origin|contact|support|article|category|story|media|game)/i', $candidateKey) === 1) {
+                    $generatedImageTargetKey = $candidateKey;
+                    break;
+                }
+            }
+            if ($generatedImageTargetKey === '') {
+                $generatedImageTargetKey = $firstOrderedBlockKey;
+            }
+        }
+        $firstBlockSegmentRule = (!$isPolicyPage && $firstOrderedBlockKey !== '' && $firstOrderedBlockKey !== $generatedImageTargetKey && \in_array($firstOrderedBlockKey, $segmentKeys, true))
+            ? 'First-block media guidance for this segment: block_key=' . $firstOrderedBlockKey . ' may use CSS-only visual planning when that fits the page narrative. Ensure the page still has at least one generated-image block elsewhere when this first block is CSS-only.'
+            : '';
+        $generatedImageSegmentRule = (!$isPolicyPage && $generatedImageTargetKey !== '' && \in_array($generatedImageTargetKey, $segmentKeys, true))
+            ? 'Generated-image assignment for this segment: block_key=' . $generatedImageTargetKey . ' is the page-level generated_image_target_block_key. This block MUST set image_intent.needs_image=true, use a concrete generated scene/product/interface/editorial subject, and visual_signature.media_strategy must describe the real image integration without CSS-only/no generated image wording.'
+            : (!$isPolicyPage && $generatedImageTargetKey !== ''
+                ? 'Generated-image assignment for this page: block_key=' . $generatedImageTargetKey . ' carries the page-level generated image in another segment. Blocks in this segment may use generated images only when their own blueprint needs one; otherwise use complete CSS-only motifs.'
+                : '');
+        $blockReturnExamplesJson = $this->stageOneBlockReturnExamplesJson();
+        $fieldPlanIntentExamplesJson = $this->stageOneFieldPlanIntentExamplesJson();
+        $visualSignatureExamplesJson = $this->stageOneVisualSignatureExamplesJson();
+        $cssOnlyImageIntentExamplesJson = $this->stageOneCssOnlyImageIntentExamplesJson();
+        $segmentMediaDecisionExamplesJson = $this->stageOneSegmentMediaDecisionExamplesJson($segmentKeys, $generatedImageTargetKey);
+        $hasCtaLikeSegment = false;
+        foreach ($segmentKeys as $segmentKey) {
+            if (\preg_match('/(?:cta|download|install|action|conversion)/i', $segmentKey) === 1) {
+                $hasCtaLikeSegment = true;
+                break;
+            }
+        }
+        $ctaSegmentRule = $hasCtaLikeSegment
+            ? 'CTA field-plan rule for this segment: blocks with page_flow_role=cta must use row 0 field=headline, row 1 field=supporting_copy, and row 2 field=cta_label or action_label or button_text with a non-empty visitor-facing action label. Blocks that are support/details/article/category content may keep row 2 as context_detail, proof_detail, image_brief, form_label, or policy_summary.'
+            : '';
+
+        return \implode("\n", \array_values(\array_filter([
+            ...$this->buildStageOnePromptRolePrelude(),
+            '銆愮郴缁熸彁绀鸿瘝銆?',
+            'You are PageBuilder Stage-1 BLOCK SEGMENT planner. Generate full Stage-1 block objects only for the requested keys. The assembler will combine segments without changing your block content.',
+            'Return STRICT JSON only. Accepted shape: {"blocks":[...]}',
+            'Page type: ' . $pageType,
+            'Target block keys for this segment: ' . \json_encode($segmentKeys, \JSON_UNESCAPED_UNICODE) . '. Output exactly these keys, in this order, no extra blocks.',
+            'Full page block budget for context only: target=' . (string)($blockBudget['target'] ?? 0) . ', required=' . \json_encode($blockBudget['required'] ?? [], \JSON_UNESCAPED_UNICODE) . ', optional=' . \json_encode($blockBudget['optional'] ?? [], \JSON_UNESCAPED_UNICODE) . '.',
+            'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
+            'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
+            'Language rule: content, core_copy, field_plan.sample, CTA labels, alt text, and media descriptions must use Website content locale except brand/product acronyms such as APK/APP/SEO.',
+            'Visible-copy rule: content, field_plan.sample, and execution_script.core_copy are visitor-facing copy seeds. Do not put layout recipes, hover notes, CSS values, or why-this-block explanations in those fields.',
+            'Output budget: each block.content/core_copy <= 110 chars; feature_points max 2 and <= 12 chars; field_plan.sample <= 56 chars; implementation_note <= 32 chars; visual_signature values <= 56 chars; design_tags arrays max 2 items.',
+            'Creativity rule: obey the block schema but invent the block-specific composition, motion, surface, and visitor message from the page goal. Do not copy examples verbatim or make every block a generic card grid.',
+            'Image rule: non-policy pages need at least one generated scene/product/interface image somewhere in the page, but it does not have to be the first block. Every image_intent must include all required keys. If needs_image=false, visual_signature.media_strategy must start with "CSS-only/no generated image" and image_intent.css_motif/visual_atmosphere/image_treatment must be filled.',
+            $generatedImageSegmentRule,
+            'Media decision examples for this exact segment: ' . $segmentMediaDecisionExamplesJson . '. Use this to choose generated-image vs CSS-only path before writing the block JSON; rewrite the wording for the current brand and block.',
+            'needs_image type rule: image_intent.needs_image MUST be the JSON boolean true or false. Never return "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text; put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment.',
+            'needs_image GOOD/BAD examples: GOOD {"needs_image":true}; GOOD {"needs_image":false}; BAD {"needs_image":"CSS-only"}; BAD {"needs_image":"no"}; BAD {"needs_image":{"value":false}}.',
+            'Image intent location rule: output image_intent only at block top level. Do not output visual.image_intent, nested image_intent copies, rationale, reason, or why fields.',
+            'Image intent examples: generated {"needs_image":true,"image_role":"hero_image","image_subject":"phone APK install screen with Teen Patti table behind it","placement":"media_panel","visual_atmosphere":"warm trusted casino lobby mood","image_treatment":"rounded phone mockup with amber overlay","reuse_policy":"reuse_when_intent_matches","css_motif":""}; CSS-only {"needs_image":false,"image_role":"css_motif","image_subject":"none","placement":"background_layer","visual_atmosphere":"secure premium dark-card mood","image_treatment":"CSS gradient cards and border glow only","reuse_policy":"no_generated_image","css_motif":"amber grid badges with neon trust outlines"}',
+            'CSS-only image_intent examples by common block_key: ' . $cssOnlyImageIntentExamplesJson,
+            'Icon/decorative visual boundary: small icons, badges, arrows, dividers, chips, rating stars, initials, and abstract marks should normally be CSS/SVG/icon-font motifs inside design_tags or css_motif with needs_image=false. Use needs_image=true only for a real generated scene/product/interface/editorial visual, not for an isolated icon.',
+            'Image intent consistency rule: never set image_intent.needs_image=true while any media field says CSS-only/no generated image/no image. Choose generated-image path or CSS-only path, not both.',
+            'CSS-only media assets rule: when image_intent.needs_image=false, execution_script.media_assets MUST be an empty array []. Do not write avatar, photo, image, screenshot, mockup, scene, or generated asset names for CSS-only review/proof/FAQ/CTA blocks.',
+            'Media path BAD examples: BAD {"image_intent":{"needs_image":false},"visual_signature":{"media_strategy":"CSS-only/no generated image; review cards"},"execution_script":{"media_assets":["review avatar photo"]}}; BAD {"image_intent":{"needs_image":true},"visual_signature":{"media_strategy":"CSS-only/no generated image; badge cards"}}.',
+            'Block object hard gate: every block must include page_flow_role, design_tags with all required keys, visual_signature with all five keys, image_intent with all eight keys, exactly three field_plan rows, and execution_script.core_copy. Do not omit these objects for review, FAQ, policy, blog, list, or CTA blocks.',
+            'Visual signature completeness rule: visual_signature.composition_pattern, spatial_rhythm, media_strategy, surface_treatment, and interaction_pattern must all be non-empty concrete text. Never use empty string, "none", "same as above", or a schema placeholder for any visual_signature field. If the block is static, still describe the static layout, scan rhythm, CSS media strategy, surface, and focus/hover behavior.',
+            'Visual signature examples (copy the shape, not the content; adapt to this exact block): ' . $visualSignatureExamplesJson,
+            'CTA field rule: if page_flow_role=cta, row 2 field must be exactly cta_label, action_label, or button_text with a visitor-facing action label. Do not force article/category/contact support blocks into CTA shape unless their page_flow_role is cta.',
+            'Field plan intent examples (choose fields by block intent, not by block_key text alone): ' . $fieldPlanIntentExamplesJson,
+            'Generated image subject rule: generated-image blocks must use a real generated scene/product/interface subject, never an icon, logo, badge, shield, sparkle, glyph, arrow, coin, or abstract mark.',
+            $firstBlockSegmentRule,
+            $ctaSegmentRule,
+            'Policy/legal safety: if this is a policy page, body blocks must be policy/support/rights focused and must not use download/install/play/register/claim/reward/bonus/coins conversion copy.',
+            'Visible copy boundary: content fields are final website copy seeds. Do not output prompt instructions, blueprint explanations, validator wording, field names, layout recipes, or internal labels as visitor-facing copy.',
+            '銆愮敤鎴锋彁绀鸿瘝銆態rief: ' . ($brief !== '' ? $brief : '-'),
+            '銆愮敤鎴锋彁绀鸿瘝銆慖nstruction: ' . ($instruction !== '' ? $instruction : '-'),
+            '銆愰€氱敤鎻愮ず璇嶃€?',
+            'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
+            'Shared theme_design: ' . $themeDesign,
+            'Theme-level page overview: ' . $pageTypeOverview,
+            'Page skeleton from previous AI step: ' . $skeletonJson,
+            'Segment block blueprints from previous AI step: ' . $segmentBlueprintJson,
+            'Reference image insights: ' . $this->buildReferenceImageInsightsPromptText($scope),
+            $sourceTruthLine,
+            $recoveryInstruction !== '' ? 'Recovery instruction: ' . $this->clipText($recoveryInstruction, 1200) : '',
+            'Schema for every block:',
+            '{"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"visual_signature":{"composition_pattern":"string","spatial_rhythm":"string","media_strategy":"string","surface_treatment":"string","interaction_pattern":"string"},"image_intent":{"needs_image":true,"image_role":"hero_image|section_image|trust_brand_image|css_motif|none","image_subject":"specific scene/product/editorial subject or none for CSS-only","placement":"background_layer|media_panel|inline_visual|none","visual_atmosphere":"specific mood, environment, lighting, and brand feel","image_treatment":"specific crop, style, framing, overlay, and integration treatment","reuse_policy":"reuse_when_intent_matches|no_generated_image","css_motif":"required concrete CSS motif when needs_image=false, empty string when generated image is needed"},"field_plan":[{"field":"headline","sample":"string","implementation_note":"string"},{"field":"supporting_copy","sample":"string","implementation_note":"string"},{"field":"context_detail","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}',
+            'Complete block examples (copy the shape, not the exact content; rewrite for this page/locale/block): ' . $blockReturnExamplesJson,
+            'Field key rule: the schema shows context_detail as the default third row. For cta-role blocks replace row 2 field with exactly one action key such as cta_label, action_label, or button_text. For proof/image/form/policy blocks choose one concrete key such as proof_detail, image_brief, form_label, or policy_summary. Do not output a pipe-separated union field name.',
+            'Self-check before return: every requested key appears once; no generic block_key; exactly 3 field_plan rows; cta-role blocks have a cta_label/action_label/button_text field with non-empty sample; execution_script.core_copy is non-empty visitor copy; all five visual_signature values are non-empty; image_intent is complete; adjacent segment blocks must not share the same composition/surface/media pattern.',
+        ], static fn(string $line): bool => \trim($line) !== '')));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function buildStageOneSourceTruthPromptLine(array $scope): string
+    {
+        $sourceTruthContract = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        if ($sourceTruthContract === []) {
+            return '';
+        }
+
+        $factsForPrompt = [];
+        foreach (\is_array($sourceTruthContract['must_include_facts'] ?? null) ? $sourceTruthContract['must_include_facts'] : [] as $fact) {
+            if (\is_array($fact)) {
+                $text = \trim((string)($fact['text'] ?? ''));
+                if ($text !== '') {
+                    $factsForPrompt[] = $text;
+                }
+            }
+        }
+
+        return 'Source/context facts for planning only (not a factuality gate). Reuse them naturally when they help the block, but never paste prompt or blueprint text as visible copy. Facts: '
+            . \json_encode($factsForPrompt, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)
+            . '; visual must-honor: '
+            . \json_encode($sourceTruthContract['visual_must_honor'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)
+            . '; conversion goals: '
+            . \json_encode($sourceTruthContract['conversion_goals'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * @param array<string, mixed> $decoded
+     * @return array<string, mixed>
+     */
+    private function extractStageOneAiPageSkeleton(array $decoded, string $pageType): array
+    {
+        $decoded = $this->normalizeAiPlanResponseShape($decoded);
+        if (\is_array($decoded['page'] ?? null)) {
+            return $decoded['page'];
+        }
+        if (\is_array($decoded['page_skeleton'] ?? null)) {
+            return $decoded['page_skeleton'];
+        }
+        if (\is_array($decoded['plan_json']['pages'][$pageType] ?? null)) {
+            return $decoded['plan_json']['pages'][$pageType];
+        }
+        if (\is_array($decoded['pages'][$pageType] ?? null)) {
+            return $decoded['pages'][$pageType];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $decoded
+     * @return list<array<string, mixed>>
+     */
+    private function extractStageOneAiBlockSegment(array $decoded): array
+    {
+        $decoded = $this->normalizeAiPlanResponseShape($decoded);
+        foreach ([
+            $decoded['blocks'] ?? null,
+            $decoded['page']['blocks'] ?? null,
+            $decoded['block_segment']['blocks'] ?? null,
+            $decoded['segment']['blocks'] ?? null,
+        ] as $candidate) {
+            if (!\is_array($candidate)) {
+                continue;
+            }
+
+            return \array_values(\array_filter($candidate, static fn($row): bool => \is_array($row)));
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $skeleton
+     * @param array<string, mixed> $blockBudget
+     * @return list<string>
+     */
+    private function resolveStageOneSegmentedPageBlockKeys(array $skeleton, array $blockBudget): array
+    {
+        $target = \max(1, (int)($blockBudget['target'] ?? 0));
+        $required = \array_values(\array_filter(\array_map('strval', \is_array($blockBudget['required'] ?? null) ? $blockBudget['required'] : []), static fn(string $value): bool => \trim($value) !== ''));
+        $optional = \array_values(\array_filter(\array_map('strval', \is_array($blockBudget['optional'] ?? null) ? $blockBudget['optional'] : []), static fn(string $value): bool => \trim($value) !== ''));
+        $allowed = \array_fill_keys(\array_merge($required, $optional), true);
+        $candidates = [];
+
+        foreach (\is_array($skeleton['ordered_block_keys'] ?? null) ? $skeleton['ordered_block_keys'] : [] as $key) {
+            $candidates[] = (string)$key;
+        }
+        foreach (\is_array($skeleton['block_blueprints'] ?? null) ? $skeleton['block_blueprints'] : [] as $row) {
+            if (\is_array($row)) {
+                $candidates[] = (string)($row['block_key'] ?? '');
+            }
+        }
+        foreach (\is_array($skeleton['blocks'] ?? null) ? $skeleton['blocks'] : [] as $row) {
+            if (\is_array($row)) {
+                $candidates[] = (string)($row['block_key'] ?? '');
+            }
+        }
+
+        $ordered = [];
+        $seen = [];
+        $firstRequiredKey = \trim((string)($required[0] ?? ''));
+        if ($firstRequiredKey !== '' && isset($allowed[$firstRequiredKey])) {
+            $ordered[] = $firstRequiredKey;
+            $seen[$firstRequiredKey] = true;
+        }
+        foreach ($candidates as $candidate) {
+            $candidate = \trim($candidate);
+            if ($candidate === '' || !isset($allowed[$candidate]) || isset($seen[$candidate])) {
+                continue;
+            }
+            $ordered[] = $candidate;
+            $seen[$candidate] = true;
+        }
+        foreach ($optional as $optionalKey) {
+            if (\count($ordered) >= $target) {
+                break;
+            }
+            if (!isset($seen[$optionalKey])) {
+                $ordered[] = $optionalKey;
+                $seen[$optionalKey] = true;
+            }
+        }
+        if (\count($ordered) <= $target) {
+            return $ordered;
+        }
+
+        $requiredSet = \array_fill_keys($required, true);
+        $trimmed = [];
+        foreach ($ordered as $key) {
+            if (isset($requiredSet[$key])) {
+                $trimmed[] = $key;
+            }
+        }
+        foreach ($ordered as $key) {
+            if (\count($trimmed) >= $target) {
+                break;
+            }
+            if (!isset($requiredSet[$key]) && !\in_array($key, $trimmed, true)) {
+                $trimmed[] = $key;
+            }
+        }
+
+        return $trimmed;
+    }
+
+    /**
+     * @param array<string, mixed> $skeleton
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildStageOneSegmentedBlueprintMap(array $skeleton): array
+    {
+        $map = [];
+        foreach ([
+            \is_array($skeleton['block_blueprints'] ?? null) ? $skeleton['block_blueprints'] : [],
+            \is_array($skeleton['blocks'] ?? null) ? $skeleton['blocks'] : [],
+        ] as $rows) {
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $blockKey = \trim((string)($row['block_key'] ?? ''));
+                if ($blockKey === '') {
+                    continue;
+                }
+                $map[$blockKey] = $row;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $blueprintsByKey
+     * @param list<string> $segmentKeys
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildStageOneSegmentedBlueprintSubset(array $blueprintsByKey, array $segmentKeys): array
+    {
+        $subset = [];
+        foreach ($segmentKeys as $blockKey) {
+            $blockKey = \trim((string)$blockKey);
+            if ($blockKey === '') {
+                continue;
+            }
+            $subset[$blockKey] = \is_array($blueprintsByKey[$blockKey] ?? null)
+                ? $blueprintsByKey[$blockKey]
+                : ['block_key' => $blockKey];
+        }
+
+        return $subset;
+    }
+
+    /**
+     * @param array<string, mixed> $skeleton
+     * @return array<string, mixed>
+     */
+    private function clipStageOneSegmentedSkeletonForPrompt(array $skeleton): array
+    {
+        return [
+            'page_goal' => $this->clipText(\trim((string)($skeleton['page_goal'] ?? '')), 160),
+            'theme_alignment_summary' => $this->clipText(\trim((string)($skeleton['theme_alignment_summary'] ?? '')), 160),
+            'page_design_plan' => \is_array($skeleton['page_design_plan'] ?? null) ? $skeleton['page_design_plan'] : [],
+            'ordered_block_keys' => \is_array($skeleton['ordered_block_keys'] ?? null) ? $skeleton['ordered_block_keys'] : [],
+            'generated_image_target_block_key' => \trim((string)($skeleton['generated_image_target_block_key'] ?? '')),
+        ];
+    }
+
     private function hasStageOneRetryablePageFailure(array $scope, string $pageKey): bool
     {
         return \is_array($scope['retryable_ai_failures']['plan']['items'][$pageKey] ?? null);
@@ -2407,6 +4071,31 @@ final class AiSiteExecutionBlueprintService
             : [];
 
         return \trim((string)($item['message'] ?? ''));
+    }
+
+    private function buildStageOneRetryablePageFailureInstruction(array $scope, string $pageKey): string
+    {
+        $item = \is_array($scope['retryable_ai_failures']['plan']['items'][$pageKey] ?? null)
+            ? $scope['retryable_ai_failures']['plan']['items'][$pageKey]
+            : [];
+        if ($item === []) {
+            return '';
+        }
+
+        $summary = \trim((string)($item['validation_summary'] ?? ''));
+        $message = \trim((string)($item['message'] ?? $item['error'] ?? ''));
+        $issues = \is_array($item['validation_issues'] ?? null) ? $item['validation_issues'] : [];
+        $parts = [];
+        if ($summary !== '') {
+            $parts[] = 'Previous retryable page failure validation summary: ' . $summary . '.';
+        } elseif ($message !== '') {
+            $parts[] = 'Previous retryable page failure: ' . $this->clipText($message, 500);
+        }
+        foreach ($this->buildStageOneIssueSpecificRecoveryRules($issues) as $rule) {
+            $parts[] = $rule;
+        }
+
+        return $parts === [] ? '' : $this->clipText(\implode(' ', $parts), 1400);
     }
 
     /**
@@ -2570,6 +4259,7 @@ final class AiSiteExecutionBlueprintService
         $results = [];
         $totalPages = \count($pageTypes);
         $completedPages = 0;
+        $adapterRequestParams = $this->buildStageOneAiAdapterRequestParams($scope, $websiteProfile);
         foreach ($pageTypes as $pageIndex => $pageType) {
             $pageKey = (string)$pageType;
             $pageOrder = (int)$pageIndex + 1;
@@ -2581,14 +4271,32 @@ final class AiSiteExecutionBlueprintService
                 'start',
                 ['page_type' => $pageKey]
             );
-            $decoded = $this->generateStageOneJsonByAi(
-                $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
-                'pagebuilder_plan_generation',
-                self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
-                150,
-                $onChunk
-            );
-            $pagePlan = $this->extractStageOneAiPagePlan($decoded, $pageKey);
+            $useSegmentedPagePlan = $this->shouldUseSegmentedStageOnePagePlan($pageKey, $scope);
+            if ($useSegmentedPagePlan) {
+                $pagePlan = $this->generateStageOneSegmentedPagePlanByAi(
+                    $scope,
+                    $websiteProfile,
+                    $planJson,
+                    $pageKey,
+                    $planLocale,
+                    $contentLocale,
+                    $instruction,
+                    $targetScope,
+                    $adapterRequestParams,
+                    $onChunk,
+                    $onProgress
+                );
+            } else {
+                $decoded = $this->generateStageOneJsonByAi(
+                    $this->buildAiStageOnePagePrompt($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope),
+                    'pagebuilder_plan_generation',
+                    self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
+                    240,
+                    $onChunk,
+                    $adapterRequestParams
+                );
+                $pagePlan = $this->extractStageOneAiPagePlan($decoded, $pageKey);
+            }
             $pagePlan = $this->normalizeStageOneAiPagePlanWithBaseline(
                 $pagePlan,
                 \is_array($pages[$pageKey] ?? null) ? $pages[$pageKey] : [],
@@ -2604,8 +4312,8 @@ final class AiSiteExecutionBlueprintService
                     'retry',
                     ['page_type' => $pageKey]
                 );
-                $decoded = $this->generateStageOneJsonByAi(
-                    $this->buildAiStageOnePageRecoveryPrompt(
+                if ($useSegmentedPagePlan) {
+                    $pagePlan = $this->generateStageOneSegmentedPagePlanByAi(
                         $scope,
                         $websiteProfile,
                         $planJson,
@@ -2614,16 +4322,35 @@ final class AiSiteExecutionBlueprintService
                         $contentLocale,
                         $instruction,
                         $targetScope,
-                        'Previous response did not contain a usable non-empty blocks array with valid block copy, field_plan rows, and execution_script.core_copy.',
-                        $pagePlan
-                    ),
-                    'pagebuilder_plan_generation',
-                    self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
-                    150,
-                    $onChunk
-                );
+                        $adapterRequestParams,
+                        $onChunk,
+                        $onProgress,
+                        'Previous segmented response did not contain usable blocks with valid block copy, field_plan rows, and execution_script.core_copy.'
+                    );
+                } else {
+                    $decoded = $this->generateStageOneJsonByAi(
+                        $this->buildAiStageOnePageRecoveryPrompt(
+                            $scope,
+                            $websiteProfile,
+                            $planJson,
+                            $pageKey,
+                            $planLocale,
+                            $contentLocale,
+                            $instruction,
+                            $targetScope,
+                            'Previous response did not contain a usable non-empty blocks array with valid block copy, field_plan rows, and execution_script.core_copy.',
+                            $pagePlan
+                        ),
+                        'pagebuilder_plan_generation',
+                        self::STAGE_ONE_PAGE_PLAN_MAX_TOKENS,
+                        240,
+                        $onChunk,
+                        $adapterRequestParams
+                    );
+                    $pagePlan = $this->extractStageOneAiPagePlan($decoded, $pageKey);
+                }
                 $pagePlan = $this->normalizeStageOneAiPagePlanWithBaseline(
-                    $this->extractStageOneAiPagePlan($decoded, $pageKey),
+                    $pagePlan,
                     \is_array($pages[$pageKey] ?? null) ? $pages[$pageKey] : [],
                     $pageKey
                 );
@@ -2760,8 +4487,71 @@ final class AiSiteExecutionBlueprintService
             ['theme_design' => \is_array($scope['theme_design'] ?? null) ? $scope['theme_design'] : []],
             \is_array($pagePlan['page_design_plan'] ?? null) ? $pagePlan['page_design_plan'] : []
         );
+        $pagePlan['blocks'] = $this->ensureStageOneVisualSignatureDiversityForValidation(
+            \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []
+        );
 
         return $pagePlan;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @return list<array<string, mixed>>
+     */
+    private function ensureStageOneVisualSignatureDiversityForValidation(array $blocks): array
+    {
+        $previousFingerprint = '';
+        $compositionCounts = [];
+        foreach ($blocks as $index => $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $signature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+            if ($signature === []) {
+                continue;
+            }
+            $fingerprint = $this->stageOneVisualSignatureDiversityFingerprint($signature);
+            $composition = \mb_strtolower(\trim((string)($signature['composition_pattern'] ?? '')));
+            $compositionSeen = $composition !== '' ? (int)($compositionCounts[$composition] ?? 0) : 0;
+            $needsDistinctTag = ($fingerprint !== '' && $fingerprint === $previousFingerprint)
+                || ($composition !== '' && $compositionSeen >= 2);
+            if ($needsDistinctTag) {
+                $variationToken = $this->buildStageOneVisualSignatureVariationToken($block, (int)$index);
+                foreach (['composition_pattern', 'surface_treatment', 'spatial_rhythm'] as $field) {
+                    $value = \trim((string)($signature[$field] ?? ''));
+                    if ($value === '') {
+                        continue;
+                    }
+                    if (!\str_contains(\mb_strtolower($value), \mb_strtolower($variationToken))) {
+                        $signature[$field] = $this->clipText($value . ' - ' . $variationToken, 90);
+                    }
+                }
+                $blocks[$index]['visual_signature'] = $signature;
+                $fingerprint = $this->stageOneVisualSignatureDiversityFingerprint($signature);
+                $composition = \mb_strtolower(\trim((string)($signature['composition_pattern'] ?? '')));
+            }
+
+            if ($composition !== '') {
+                $compositionCounts[$composition] = (int)($compositionCounts[$composition] ?? 0) + 1;
+            }
+            $previousFingerprint = $fingerprint;
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function buildStageOneVisualSignatureVariationToken(array $block, int $index): string
+    {
+        $blockKey = \preg_replace('/[^a-z0-9_]+/i', '_', \trim((string)($block['block_key'] ?? ''))) ?? '';
+        $blockKey = \trim($blockKey, '_');
+        if ($blockKey === '') {
+            $blockKey = 'block_' . ((int)$index + 1);
+        }
+
+        return 'variant_' . $blockKey;
     }
 
     /**
@@ -2769,13 +4559,16 @@ final class AiSiteExecutionBlueprintService
      */
     private function buildStageOnePromptRolePrelude(): array
     {
-        return [
+        $lines = [
             '【提示词角色与优先级】',
             '- 【用户提示词】= 用户原始需求、用户后续指令、当前聚焦页面或区块目标；这是页面身份、内容重点、转化目标和视觉偏好的最高优先级。',
-            '- 【系统提示词】= 输出 JSON/schema、阶段强契约、语言、本地化、来源真实和可执行边界；这些约束保证规划能被后续构建消费。',
+            '- 【系统提示词】= 输出 JSON/schema、阶段强契约、语言、本地化、可执行边界和提示词泄漏防护；这些约束保证规划能被后续构建消费。',
             '- 【通用提示词】= PageBuilder 底座规划规则、审美质量、视觉多样性和默认建议；它只能补足用户没有说明的部分。',
-            '- 优先级规则：当【用户提示词】与【通用提示词】或系统中的设计/内容建议冲突时，以【用户提示词】为准；JSON/schema、来源真实和可执行边界仍必须保持有效。',
+            '- 优先级规则：当【用户提示词】与【通用提示词】或系统中的设计/内容建议冲突时，以【用户提示词】为准；JSON/schema、语言、安全、可执行边界和提示词泄漏防护仍必须保持有效。',
         ];
+        $lines[] = 'BuildPlan no-reason field rule: do not add extra explanatory keys named reason, why, rationale, thinking, analysis, explanation, chain_of_thought, design_reason, or reasoning anywhere unless the active schema explicitly lists that exact key. Theme selection_reason is allowed only in theme_style, palette, and theme_design when the schema lists it; do not invent selection_reason on pages, blocks, image_intent, visual_signature, field_plan, or execution_script.';
+        $lines[] = 'Template scaffold translation rule: style templates, default configs, layout JSON, and examples are structural references only. Treat #download, #contact, #faq, href="#", placeholder URLs, fake media names, old brands, old CTA targets, and sample social/support links as stale scaffold values. Do not copy them into Stage-1 output; use exact route-contract paths when provided, otherwise omit the link or describe a button/event action.';
+        return $lines;
     }
 
     /**
@@ -2797,11 +4590,13 @@ final class AiSiteExecutionBlueprintService
             'You are PageBuilder Stage-1 REQUIREMENT EXPANSION planner.',
             'Step 1 only: expand the user one-line requirement into a concrete website planning brief. Do not generate theme, Header/Footer, or page blocks.',
             'Decision order: first rewrite the one-line requirement into concrete business intent, then map intent to page-by-page roles, then derive technical direction.',
+            'Creativity rule: expand the brief into concrete customer, business, site, conversion, and content intent. Use named users, offers, page roles, and technical direction from the brief; do not return generic labels or rule summaries.',
             'Return STRICT JSON only. Start with `{` and end with `}`. No markdown, no explanation, no reasoning text.',
             'JSON size rule: keep arrays short and values concise; use 1-2 sentence strings, not long essays.',
             'Output budget: target 5-8 target_users entries max 4 words each; page_strategy one row per selected page type; technical_direction 3-6 actionable bullets.',
             'Locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
             'Site: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
+            $this->buildStageOneIdentityGuardPrompt($scope, $websiteProfile, $siteDisplayName),
             '【用户提示词】User one-line requirement: ' . ($brief !== '' ? $brief : '-'),
             '【用户提示词】Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             '【通用提示词】',
@@ -2822,6 +4617,7 @@ final class AiSiteExecutionBlueprintService
             ...$this->buildStageOneGatePromptLines($pageTypes, $scope, 'requirement'),
             'Schema:',
             '{"requirement_expansion":{"original_brief":"string","expanded_brief":"string","planning_summary":"string","site_goal":"string","business_goals":["string"],"target_users":["string"],"business_context":"string","content_direction":"string","conversion_strategy":"string","primary_cta":"string","page_strategy":[{"page_type":"string","intent":"string","content_focus":"string","conversion_role":"string"}],"technical_direction":["string"]}}',
+            'Example return shape (copy the structure, not the content; rewrite for the current brief): ' . $this->stageOneRequirementExpansionExampleJson(),
             'Hard rules: expanded_brief must be a larger concrete version of the user requirement; business_goals, content_direction, conversion_strategy, and primary_cta are required because they feed the editable plan overview; page_strategy must cover every selected page type; all values must be customer-visible planning content, not prompt instructions.',
             'Self-check before return: remove any sentence that still reads like "围绕/突出/说明/优化"; replace with named offers, nouns, and visible outcomes.',
         ]);
@@ -2852,7 +4648,10 @@ final class AiSiteExecutionBlueprintService
             'Decision order: lock theme_design first, then shared Header/Footer content structure, then page_type_overviews. Do not reverse this order.',
             'Return STRICT JSON only. Start with `{` and end with `}`. No markdown, no explanation, no reasoning text.',
             'JSON size rule: compact object only; keep arrays short and avoid long narrative paragraphs.',
-            'Output budget: visual_keywords 4-8 items, forbidden_styles 3-6 items, each page_type_overviews entry 4-6 compact lines of concrete implementation direction.',
+            'Theme compactness hard gate: total JSON should stay under 4500 characters. Every string must be one short sentence <= 80 chars; labels <= 20 chars; no paragraphs.',
+            'Output budget: visual_keywords 4-6 items, forbidden_styles 3-5 items, navigation header_items max 6, footer links max 8, each page_type_overviews field <= 32 chars.',
+            'i18n.labels are UI headings only, not plan content. Example labels: {"title":"Site theme","site":"Site","summary":"Summary","site_structure":"Structure","shared_global_plan":"Shared plan","page_details":"Pages"}.',
+            'Do not output page blocks, block lists, legal prose, SEO essays, long Thai paragraphs, or detailed page copy in this theme pass. Page workers will generate those later.',
             'Confirmed requirement expansion from step 1: ' . $requirementExpansionJson,
             'Goal: produce the shared part of the one confirmed plan. Page-specific block plans may be generated by parallel fanout workers, but the final user-visible plan has only one confirmation stage.',
             'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
@@ -2878,15 +4677,17 @@ final class AiSiteExecutionBlueprintService
             ...$this->buildStageOneGatePromptLines($pageTypes, $scope, 'theme'),
             'Schema:',
             '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","content_strategy":"string","conversion_path":"string","primary_cta":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"internal fit summary, not shown as a plan reason"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"internal palette fit summary, not shown as a plan reason"},"theme_design":{"theme_purpose":"string","style_signature":"brief-derived visual identity, not a generic theme name","reference_style_context":{"summary":"string","style_keywords":["string"],"color_palette":["#hex"],"layout_cues":["string"],"component_cues":["string"],"typography_cues":["string"],"do_not_use":["string"],"implementation_rule":"string"},"art_direction":{"layout_motif":"string","background_system":"string","surface_treatment":"string","visual_detail_rule":"string","motion_rule":"string"},"color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"internal brief-alignment summary; must copy at least one exact noun/action phrase from Brief or Instruction"},"page_type_overviews":{"home_page":{"page_role":"string","content_focus":"string","theme_color_application":"string","section_layering_hint":"string","interaction_intent":"string","differentiation_note":"string"}},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
+            'Compact example style: {"i18n":{"locale":"th_TH","labels":{"title":"Site theme","site":"Teenipiya","summary":"Summary","site_structure":"Structure","shared_global_plan":"Shared plan","page_details":"Pages"}},"page_type_overviews":{"home_page":{"page_role":"conversion home","content_focus":"download trust proof","theme_color_application":"amber CTA on dark cards","section_layering_hint":"hero then proof zones","interaction_intent":"hover lift only","differentiation_note":"not legal layout"}}}',
+            'Theme teaching example (copy the structure, not the content; invent the visual system from the current brief): ' . $this->stageOneThemeExampleJson(),
             'SEO strategy contract: seo_strategy is a REQUIRED top-level contract section in this shared pass. It is planning metadata, not visible website copy. It must include core_intent, 3-6 primary_keywords, keyword_page_map covering every selected page type at least once, content_strategy, internal_linking, and url_structure. Do not omit seo_strategy when compacting JSON.',
-            'Hard rules: theme_design and shared_components.header/footer must be concrete implementation decisions derived from the expanded requirement; navigation_plan.header_items must include exact labels and route-contract hrefs for selected page types plus the primary CTA; footer_plan must include featured links, and must include policy/help links when policy pages are selected or trust/safety/support links to existing selected pages only when policy pages are not selected; shared_components.header/footer must include visible content, editable slots, responsive behavior, and implementation_detail; page_type_overviews must cover every selected page type with page role, content focus, theme color application, section layering hint, interaction intent, and differentiation note; these overviews are conceptual page planning only, not block lists; keep output compact.',
+            'Hard rules: theme_design and shared_components.header/footer must be concrete implementation decisions derived from the expanded requirement; navigation_plan.header_items must include exact labels and route-contract hrefs for selected page types plus the primary CTA; footer_plan must include featured links, and must include policy/help links when policy pages are selected or trust/safety/support links to existing selected pages only when policy pages are not selected; shared_components.header/footer must include visible content, editable slots, responsive behavior, and implementation_detail; page_type_overviews must cover every selected page type with page role, content focus, theme color application, section layering hint, interaction intent, and differentiation note; these overviews are conceptual page planning only, not block lists; keep output compact and shorten strings before adding detail.',
             'Shape rule: output shared Header/Footer only as shared_components.header and shared_components.footer. Do not output shared_blocks in the theme response; shared_blocks are derived internally after the strict contract is accepted.',
             'Reference-image carryover rule: if Reference image insights are not "-", theme_design.reference_style_context MUST copy/adapt those insights and theme_design.style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, and forbidden_styles MUST visibly use them. Do not merely mention reference images as inspiration.',
             'Visual quality bar: theme_design.style_signature and art_direction are mandatory. They must describe a polished, customer-fit visual identity that a frontend generator can execute, including composition motif, background/texture system, surface treatment, detail language, and motion restraint.',
             'Customer-fit rule: do not default to a blue SaaS gradient, plain white cards, generic Inter/Roboto/system-font hierarchy, or centered hero plus three-card grid unless the user brief specifically asks for that look.',
             'Beauty rule: make the final website feel designed for a paying client. Select deliberate typography, layered backgrounds, tactile CTA states, inline SVG/CSS visual motifs, spacing/radius rhythm, and mobile composition that match the brief.',
             'Anti-monotony rule: page_type_overviews.theme_color_application and section_layering_hint must prevent an entire page from becoming one flat color; describe alternating surfaces/cards/gradients/contrast zones using the approved palette.',
-            'Customer-anchor rule: style_signature must include at least two concrete nouns/actions from Brief or Instruction and turn them into visible design language; never choose a style that could fit any unrelated website.',
+            'Customer-fit evidence rule: style_signature must include at least two concrete nouns/actions from Brief or Instruction and turn them into visible design language; never choose a style that could fit any unrelated website.',
             'Interaction/effects rule: art_direction.motion_rule must name exact hover, focus, reveal, or ambient effects that are reduced-motion-safe and suitable for the customer scenario; do not write vague "smooth animation".',
             'Style-diversity rule: forbidden_styles must include the generic look most likely to be overused for this site category, and page_type_overviews must explain how each page avoids repeating the same hero/card composition.',
             'Theme completeness self-check: before returning, verify theme_design has theme_purpose, style_signature, color_scheme.primary/accent/background/body/button, typography_spacing_radius.font_family/spacing_scale, visual_keywords, tone_of_voice, cta_tone, forbidden_styles, and selection_reason. If any field is missing, shorten other strings instead of omitting required fields.',
@@ -2908,7 +4709,7 @@ final class AiSiteExecutionBlueprintService
         $requirementExpansion = \json_encode($planJson['requirement_expansion'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $themeDesign = \json_encode($planJson['theme_design'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $sharedComponents = \json_encode($planJson['shared_components'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
-        $archivedStageOneContract = \json_encode($planJson['stage1_contract'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $archivedStageOneContract = '{}';
         $pageTypeOverview = \json_encode($this->resolveStageOnePageTypeOverview($planJson, $pageType), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $normalizedTargetScope = \mb_strtolower(\trim($targetScope));
         $baselinePageForPrompt = [];
@@ -2917,6 +4718,22 @@ final class AiSiteExecutionBlueprintService
         }
         $baselinePage = \json_encode($baselinePageForPrompt, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         $blockBudget = $this->resolveStageOneBlockBudget($pageType, $scope);
+        $archivedStageOneContract = \json_encode([
+            'page_type' => $pageType,
+            'block_budget' => $blockBudget,
+            'field_plan_count' => AiSiteStageOneContractService::FIELD_PLAN_COUNT,
+            'visual_signature_keys' => AiSiteStageOneContractService::VISUAL_SIGNATURE_KEYS,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+        $isPolicyPage = \in_array($pageType, [
+            'privacy_policy',
+            'terms_of_service',
+            'refund_policy',
+            'shipping_policy',
+            'cookie_policy',
+        ], true);
+        $firstBlockImageGate = $isPolicyPage
+            ? 'First-block generated media gate for this page: not required because this is a policy/legal page.'
+            : 'First-block generated media gate for this page: not required. Place the page generated-image slot on the block where it best supports the narrative; blocks[0] may be CSS-only when its full CSS motif, visual_atmosphere, and image_treatment are declared.';
         $pageArchitectureGuide = $this->buildStageOnePageArchitectureGuide($pageType);
         $sourceTruthContract = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
         $factsForPrompt = [];
@@ -2926,13 +4743,16 @@ final class AiSiteExecutionBlueprintService
             }
         }
         $sourceTruthPromptLine = $sourceTruthContract !== []
-            ? 'SourceTruthContract is non-negotiable. The following facts MUST appear in visible copy: '
+            ? 'Source/context facts for planning only, not a hard factuality gate. Reuse naturally where useful and rewrite into visitor copy; never paste blueprint/prompt text. Facts: '
                 . \json_encode($factsForPrompt, \JSON_UNESCAPED_UNICODE)
                 . ' Visual must-honor: '
                 . \json_encode($sourceTruthContract['visual_must_honor'] ?? [], \JSON_UNESCAPED_UNICODE)
                 . ' Conversion goals: '
                 . \json_encode($sourceTruthContract['conversion_goals'] ?? [], \JSON_UNESCAPED_UNICODE)
             : '';
+        $blockReturnExamplesJson = $this->stageOneBlockReturnExamplesJson();
+        $fieldPlanIntentExamplesJson = $this->stageOneFieldPlanIntentExamplesJson();
+        $visualSignatureExamplesJson = $this->stageOneVisualSignatureExamplesJson();
 
         return \implode("\n", [
             ...$this->buildStageOnePromptRolePrelude(),
@@ -2940,28 +4760,34 @@ final class AiSiteExecutionBlueprintService
             'You are PageBuilder single-stage PAGE planner.',
             'Single-stage page fanout: generate exactly this page type by carrying the confirmed requirement expansion, theme, Header, and Footer. Other page types may be generated in parallel, but the final plan is confirmed once.',
             'Decision order: first page_design_plan, then blocks, then field_plan + execution_script; never draft block copy before page_design_plan is complete.',
+            'Creativity rule: the contract is a frame, not a template. Use the required fields to create a distinctive page plan: page-specific block rhythm, visual signature, media strategy, motion idea, texture, and conversion/support flow. Do not merely comply with a checklist.',
             'Return STRICT JSON only for exactly one page. Start with `{` and end with `}`. Do not return other pages, markdown, explanation, or reasoning text.',
             'Accepted output shape: either {"page":{...}} or the page object itself. In both cases the page object MUST include a non-empty blocks array. Do not return only page_design_plan, field_plan, a summary, or a contract checklist without blocks.',
             ...$this->buildStageOneGatePromptLines([$pageType], $scope, 'page', $pageType),
             'First-pass acceptance gate: this response must pass without a recovery retry. Before returning, verify page.blocks exists, contains exactly target blocks, includes every required block key exactly once, and every block has field_plan plus execution_script.core_copy. If not, rewrite the JSON before sending.',
             'Hard reject patterns: design-only responses, page_design_plan without blocks, empty blocks, generic block_key values such as details/content/info, field_plan outside blocks, or blocks without core_copy.',
             'Block budget: min=' . $blockBudget['min'] . ', max=' . $blockBudget['max'] . ', target=' . ($blockBudget['target'] ?? $blockBudget['min']) . ', required=' . \json_encode($blockBudget['required'], \JSON_UNESCAPED_UNICODE) . ', recommended_optional=' . \json_encode($blockBudget['optional'] ?? [], \JSON_UNESCAPED_UNICODE) . '; output exactly the target count, never fewer than target and never more than max. If required count is smaller than target, add recommended optional blocks in order until target is reached.',
+            $firstBlockImageGate,
             'Required block key coverage: include each required block key exactly once. The required list is not a forced visual sequence; choose a natural order based on page_design_plan.section_flow, and place CTA/support blocks where the page narrative requires.',
-            'Output budget: page_goal/theme_alignment_summary <= 180 chars each; each block.content/core_copy <= 220 chars; each field_plan.sample <= 120 chars; avoid long policy paragraphs that cause truncated JSON.',
+            'Output budget: page_goal/theme_alignment_summary <= 140 chars each; each page_design_plan string <= 90 chars; section_flow/interactions/polish arrays max 2 items; each block.content/core_copy <= 120 chars; execution_script.feature_points max 2 items with <= 12 chars each; execution_script.typography/style_tone/background_direction <= 36 chars each; field_plan.sample <= 60 chars; field_plan.implementation_note <= 36 chars; each design_tags array max 2 items with <= 10 chars each; each visual_signature field <= 60 chars. Shorten strings instead of dropping required blocks or fields.',
             'theme_alignment_summary contract: write one concrete page-specific planning sentence using the actual shared theme purpose, palette/color use, type/spacing/radius rule, voice, CTA rhythm, one avoided/forbidden style, and Header/Footer handoff. Do not output schema placeholders, instructions, or phrases such as "string", "how this page obeys", or "explaining how".',
             'Plan locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
             'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
             'Language rule: blocks[].content, field_plan[].sample, CTA labels, link labels, alt text, and media descriptions are customer-visible website content and MUST use Website content locale. Do not use Plan locale for website copy unless it is identical to Website content locale.',
+            $this->buildStageOneIdentityGuardPrompt($scope, $websiteProfile, ''),
             'Visible-copy contract: blocks[].content, execution_script.core_copy, and every field_plan[].sample are final visitor copy seeds. Do NOT put layout instructions, card/grid recipes, hover notes, background directions, or explanations of why a block exists in these fields. Put design/layout/effect details only in page_design_plan, design_tags, implementation_note, execution_script.typography/style_tone/background_direction/media_assets.',
             'Locale contract: except the site title/brand name and unavoidable product acronyms such as APK/APP/SEO, visible-copy fields must not contain large phrases from another language. If the brief contains foreign game/product names, rewrite them into the Website content locale unless the name is the brand itself.',
             'Page type: ' . $pageType,
+            $pageType === 'home_page'
+                ? 'Home compact mode: this page has many required blocks, so every block must be terse. Do not include rem/px/CSS value recipes, long typography strings, long background descriptions, or more than two feature_points. Minified JSON is mandatory.'
+                : 'Page compact mode: keep every field short; do not use rem/px/CSS recipes when a short visual token is enough.',
             'Page-type architecture guide: ' . $pageArchitectureGuide,
             '【用户提示词】Brief: ' . ($brief !== '' ? $brief : '-'),
             '【用户提示词】Instruction: ' . ($instruction !== '' ? $instruction : '-'),
             '【通用提示词】',
             'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
             'Confirmed requirement expansion (non-negotiable): ' . $requirementExpansion,
-            'Archived Stage-1 theme contract (non-negotiable source of truth generated and stored before page fanout): ' . $archivedStageOneContract,
+            'Archived Stage-1 page contract summary (non-negotiable source of truth generated and stored before page fanout): ' . $archivedStageOneContract,
             'Shared theme_design (non-negotiable): ' . $themeDesign,
             'Reference image insights (non-negotiable when present): ' . $this->buildReferenceImageInsightsPromptText($scope),
             'Theme-level page overview for this page (use before choosing blocks): ' . $pageTypeOverview,
@@ -2981,41 +4807,65 @@ final class AiSiteExecutionBlueprintService
             'Critical page differentiation rules:',
             '- Design this page from its page_type intent, not by copying the home page and changing nouns.',
             '- home_page and about_page MUST have clearly different block_key sets, block order, content purpose, and design_tags.',
-            '- home_page must follow the page contract: hero and final_cta are required, then use recommended optional block keys such as brand_promise, featured_offers, trust_proof, resource_preview, or experience_highlights until the target block count is reached.',
+            '- home_page must follow the page contract from Block budget: include every required block key exactly once, then use recommended_optional from Block budget until the target block count is reached. Do not replace required page-contract keys with generic brand_promise/content/details blocks.',
+            '- Card-game APK style home_page information architecture: when required keys include player_reviews or faq_or_rules, keep them as independent blocks. Do not merge reviews, FAQ, game showcase, or install/download guidance into brand_promise or final_cta.',
             '- about_page usually needs story/mission/team/values/trust narrative blocks, not another homepage conversion sequence.',
             '- contact_page usually needs the required block keys contact_methods, support_form_guidance, support_faq, contact_cta; use optional map/service_area details inside those blocks when relevant.',
             '- policy/legal pages usually need summary, key_rules, refund_or_support_steps, help_cta; keep rules concise and avoid full legal prose in Stage-1.',
-            '- Policy/legal page body contract: privacy, terms, refund, shipping, and cookie pages must not put app download, APK/install, play-game, registration, claim, reward/bonus/coins conversion CTA copy inside page body blocks. Neutral data-use or rights wording may mention account benefits only as policy facts, never as an offer. Global header/footer may keep a site CTA when appropriate, but body blocks must stay policy/support/rights focused.',
+            '- Policy/legal page body contract: privacy, terms, refund, shipping, and cookie pages must not put conversion CTA copy such as free download, install now, play-game, registration, claim, reward/bonus/coins, or app-download inside page body blocks. Neutral legal applicability wording may mention that the policy applies when visitors download or use the APK/app; neutral data-use or rights wording may mention account benefits only as policy facts, never as an offer. Global header/footer may keep a site CTA when appropriate, but body blocks must stay policy/support/rights focused.',
+            '- Policy/legal block role rule: terms_contact, privacy_contact, cookie_contact, refund_contact, and similar policy-help blocks should normally use page_flow_role=support or details, not cta. Use page_flow_role=cta only when field_plan includes a policy-safe action label such as 查看条款, 了解隐私权利, 查看争议流程, or 提交政策问题.',
+            '- Policy first-block lock: on privacy_policy and terms_of_service, block index 0 content, field_plan samples, and execution_script.core_copy must be policy-summary copy only. They must not inherit site primary_cta or conversion wording such as free download, install now, play, register, claim, reward, bonus, coins, or app-download.',
+            '- Policy/legal CTA safety: terms/privacy body CTAs must use policy-safe actions only, such as read terms, view rules, review privacy rights, understand dispute steps, or contact policy help. Never use free download, install now, play, register, claim bonus, reward, coins, or app-download CTA wording inside policy page body blocks. Neutral legal applicability wording may mention download/use of the APK/app.',
             '- Policy/legal help_cta/contact blocks must use policy-safe actions such as privacy rights review, terms summary, data protection help, dispute/support contact, or policy assistance. Do not reuse the site primary_cta even if the overall website goal is app download.',
-            '- Exact contact truth rule: never invent email addresses, phone numbers, WhatsApp IDs, office addresses, business hours, or response-time claims in page blocks or field_plan samples. If the source facts do not provide exact contact values, route users to the selected contact page with neutral support wording.',
+            '- Visible copy boundary: page content, field_plan samples, and core_copy are final website copy seeds derived from the brief, style direction, page role, and block identity. They must not contain prompt instructions, blueprint explanations, validator wording, field names, layout recipes, or internal labels.',
+            '- Contact/support copy is allowed when it follows the page and block plan. The gate only rejects internal prompt/blueprint leakage or placeholder copy, not the factuality of a support/service claim.',
             '- Within one page, every block_key must be unique. Never output two blocks both named "details"; use purpose-specific keys such as coverage, rights, faq, process, trust, steps, timeline, or proof.',
             '- If a policy/support page needs multiple information sections, each section must use a different block_key that matches its job.',
             '- Every block MUST include design_tags with visual, motion, interaction, texture, responsive arrays and an implementation_note.',
             '- design_tags must contain all required keys inside the design_tags object: visual, motion, interaction, texture, responsive, color_layering, implementation_note. Never place color_layering or implementation_note only at block root.',
             '- design_tags.responsive MUST describe desktop, tablet, and phone behavior. If the block uses image + form/card/CTA panels, explicitly state panel order, stack breakpoint, min-width:0 / max-width:100% containment, and that decorative layers cannot cover content.',
+            '- Block object hard gate: every block must include page_flow_role, design_tags with all required keys, visual_signature with all five keys, image_intent with all eight keys, exactly three field_plan rows, and execution_script.core_copy. Do not omit these objects for review, FAQ, policy, blog, list, or CTA blocks.',
+            '- Visual signature completeness rule: visual_signature.composition_pattern, spatial_rhythm, media_strategy, surface_treatment, and interaction_pattern must all be non-empty concrete text. Never use empty string, "none", "same as above", or a schema placeholder for any visual_signature field. If the block is static, still describe the static layout, scan rhythm, CSS media strategy, surface, and focus/hover behavior.',
+            '- Visual signature examples (copy the shape, not the content; adapt to this exact page/block): ' . $visualSignatureExamplesJson,
             '- Every field_plan row MUST include field, sample, and a concrete implementation_note explaining where/how that exact sample is rendered on the page.',
             '- field_plan must use exactly three stable rows: row 0 field=headline with an actual heading sample; row 1 field=supporting_copy with one actual visitor-facing sentence; row 2 field=context_detail unless cta_label/proof_detail/image_brief/form_label/policy_summary is more accurate for that block.',
+            '- BuildPlan visible body handoff: every block must include at least one real visitor-facing body sentence in execution_script.core_copy, field_plan row 1 supporting_copy, realtime_content.supporting_copy, feature_points, or content. A CTA label, button text, layout note, or design instruction alone is invalid.',
+            '- CTA body/action split: contact_cta/final_cta/download_cta blocks need a supporting_copy/body sentence plus a separate cta_label/action label. The body sentence must be final visitor copy, not a layout note or blueprint explanation.',
+            '- CTA field rule: if page_flow_role=cta, row 2 field must be exactly cta_label, action_label, or button_text with a visitor-facing action label. Do not force article/category/contact/support blocks into CTA shape unless their page_flow_role is cta.',
             '- field_plan.field must be a non-empty short snake_case semantic key. Never leave field empty and never invent vague keys such as text, copy, content, details, or item.',
             '- field_plan.sample and field_plan.implementation_note must not start with validator-rejected prompt words: write, rewrite, describe the/this block, describe the/this field, use this field, do not output, 围绕, 突出, 说明, 完善, 优化. Visitor-facing form placeholders like "Describe your issue..." are allowed when they are actual website copy.',
             '- design_tags examples: visual=["premium","card shadow","rounded image","large banner"], motion=["5s fade in/out","subtle parallax","hover lift"], interaction=["primary CTA hover","tabs","accordion"], texture=["soft gradient","glass surface","Indian pattern accent"], responsive=["mobile stacked cards","desktop two-column"].',
             '- These design_tags are source-of-truth for virtual-theme build and publish migration; make them specific enough to recreate effects, spacing, shadows, radius, image treatment, and interaction behavior.',
+            'Field plan intent rules:',
+            '- Exactly three field_plan rows per block. Row 0 is usually headline; row 1 is supporting_copy/body copy; row 2 should match the block intent, such as cta_label/action_label/button_text for CTA, proof_detail for proof, image_brief for generated media, form_label for support/form, policy_summary for legal text, or context_detail for neutral details.',
+            '- Field plan intent examples (choose fields by block intent, not by block_key text alone): ' . $fieldPlanIntentExamplesJson,
             'Image intent rules:',
-            '- Every page block image_intent.image_subject must be a concrete block-level generated visual: a scene, product/editorial photograph, interface/product mockup, environment, people moment, or premium illustration tied to the block goal.',
-            '- Non-policy page visual asset rule: every non-policy page must include at least one block, normally the first/opening/support block, with image_intent.needs_image=true and a concrete generated image subject. Do not make an entire home/about/contact/custom page CSS-only. Contact/support pages should use a real generated support-desk, app-help, product-interface, or customer-service scene on the first support block when no other stronger visual exists.',
+            '- Every image_intent must include all eight contract keys: needs_image, image_role, image_subject, placement, visual_atmosphere, image_treatment, reuse_policy, css_motif.',
+            '- needs_image type rule: image_intent.needs_image MUST be the JSON boolean true or false. Never return "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text; put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment.',
+            '- needs_image GOOD/BAD examples: GOOD {"needs_image":true}; GOOD {"needs_image":false}; BAD {"needs_image":"CSS-only"}; BAD {"needs_image":"no"}; BAD {"needs_image":{"value":false}}.',
+            '- Image intent location rule: output image_intent only at block top level. Do not output visual.image_intent, nested image_intent copies, rationale, reason, or why fields.',
+            '- Image intent examples: generated {"needs_image":true,"image_role":"hero_image","image_subject":"phone APK install screen with Teen Patti table behind it","placement":"media_panel","visual_atmosphere":"warm trusted casino lobby mood","image_treatment":"rounded phone mockup with amber overlay","reuse_policy":"reuse_when_intent_matches","css_motif":""}; CSS-only {"needs_image":false,"image_role":"css_motif","image_subject":"none","placement":"background_layer","visual_atmosphere":"secure premium dark-card mood","image_treatment":"CSS gradient cards and border glow only","reuse_policy":"no_generated_image","css_motif":"amber grid badges with neon trust outlines"}.',
+            '- CSS-only image_intent examples by common block_key: ' . $cssOnlyImageIntentExamplesJson,
+            '- Complete block examples (copy the shape, not the exact content; rewrite for this page/locale/block): ' . $blockReturnExamplesJson,
+            '- When image_intent.needs_image=true, image_subject must be a concrete block-level generated visual: a scene, product/editorial photograph, interface/product mockup, environment, people moment, or premium illustration tied to the block goal. When needs_image=false, image_subject must be "none" and css_motif carries the visual plan.',
+            '- Non-policy page visual asset rule: every non-policy page must include at least one block with image_intent.needs_image=true and a concrete generated image subject. Do not make an entire home/about/contact/custom page CSS-only. Contact/support pages should use a real generated support-desk, app-help, product-interface, or customer-service scene where it best fits the page narrative.',
+            '- Preferred generated-image target examples by page type: ' . $this->stageOneGeneratedImageTargetExamplesJson() . '. Prefer these required/opening/support/article blocks when present, but keep narrative fit and still return all required blocks.',
+            '- Non-policy opening image direction: for home_page, about_page, contact_page, and custom marketing pages, prefer a concrete generated scene/product/interface subject early in the page when it supports the narrative, but do not force block index 0 to be the generated-image block.',
             '- Do not use icon-only image subjects for page blocks. Invalid page-block subjects include app icon, shield badge, logo mark, sparkle glyph, line icon, avatar badge, chevron, symbol, SVG icon, download arrow, coin mark, or any subject that is only a decorative mark.',
+            '- Icon/decorative visual boundary: when the visual need is small icons, badges, arrows, dividers, chips, rating stars, initials, or abstract marks, keep needs_image=false and describe the motif in css_motif/design_tags. Use needs_image=true only when the block needs a real generated scene/product/interface/editorial visual.',
             '- Abstract trust/reward/security/payment/download marks are not generated image subjects by themselves. Convert them into a real scene or product visual: players at a Teen Patti table, a phone APK install screen, a support desk, a product interface, or an editorial brand moment.',
             '- If execution_script.media_assets or visual_signature.media_strategy mentions a photo, image, screenshot, mockup, scene, hero image, banner image, background image, or avatar, set image_intent.needs_image=true and provide a concrete generated asset brief.',
             '- Real media contract: when a block plans an image, screenshot, phone screen, mockup, scene, background image, or media asset, describe the actual generated asset and integration. Never say placeholder, dummy, fake image, temporary image, blank box, 占位, 占位图, 假图, 临时图片, or 占位视觉 in design_tags, visual_signature, image_intent, field_plan, or execution_script.',
-            '- If the block uses only CSS cards, gradients, patterns, lines, badges, or small icons, set needs_image=false and provide a full CSS-only image_intent: image_role css_motif or none, placement none/background_layer/inline_visual, non-empty css_motif, rationale that says no generated image is needed, and visual_signature.media_strategy that starts with the exact ASCII marker "CSS-only/no generated image" before any localized explanation.',
-            '- Opening/proof block rule: page_flow_role opening, hero, or proof must either set needs_image=true with a concrete generated subject, or set needs_image=false with the full CSS-only image_intent above. Trust/security proof blocks are allowed to be CSS-only only when css_motif is non-empty, rationale explains the trust visual, and visual_signature.media_strategy starts with "CSS-only/no generated image". Do not leave proof blocks undecided.',
+            '- If the block uses only CSS cards, gradients, patterns, lines, badges, or small icons, set needs_image=false and provide a full CSS-only image_intent: image_role css_motif or none, placement none/background_layer/inline_visual, non-empty css_motif, visual_atmosphere, image_treatment, and visual_signature.media_strategy that starts with the exact ASCII marker "CSS-only/no generated image" before any localized explanation.',
+            '- Opening/proof block rule: page_flow_role opening, hero, or proof must either set needs_image=true with a concrete generated subject, or set needs_image=false with the full CSS-only image_intent above. Trust/security proof blocks are allowed to be CSS-only only when css_motif is non-empty and visual_signature.media_strategy starts with "CSS-only/no generated image". Do not leave proof blocks undecided.',
             'Schema:',
-            '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"visual_signature":{"composition_pattern":"string","spatial_rhythm":"string","media_strategy":"string","surface_treatment":"string","interaction_pattern":"string"},"image_intent":{"needs_image":true,"image_role":"hero_image|section_image|trust_brand_image|css_motif|none","image_subject":"specific scene/product/editorial subject or none for CSS-only","placement":"background_layer|media_panel|inline_visual|none","reuse_policy":"reuse_when_intent_matches|no_generated_image","css_motif":"required concrete CSS motif when needs_image=false","rationale":"required reason when needs_image=false"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
+            '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"visual_signature":{"composition_pattern":"string","spatial_rhythm":"string","media_strategy":"string","surface_treatment":"string","interaction_pattern":"string"},"image_intent":{"needs_image":true,"image_role":"hero_image|section_image|trust_brand_image|css_motif|none","image_subject":"specific scene/product/editorial subject or none for CSS-only","placement":"background_layer|media_panel|inline_visual|none","visual_atmosphere":"specific mood, environment, lighting, and brand feel","image_treatment":"specific crop, style, framing, overlay, and integration treatment","reuse_policy":"reuse_when_intent_matches|no_generated_image","css_motif":"required concrete CSS motif when needs_image=false, empty string when generated image is needed"},"field_plan":[{"field":"headline","sample":"visitor-facing heading","implementation_note":"where this heading renders"},{"field":"supporting_copy","sample":"visitor-facing support sentence","implementation_note":"where this body copy renders"},{"field":"context_detail","sample":"detail, proof, CTA label, image brief, form label, or policy summary","implementation_note":"where this detail renders"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}}',
             'Schema placeholders are type markers only. Returning literal placeholder values such as "string", "sentence", "how this page obeys", "explaining how", or generic blueprint wording is a contract failure.',
             'Block budget: min=' . $blockBudget['min'] . ', max=' . $blockBudget['max'] . ', target=' . ($blockBudget['target'] ?? $blockBudget['min']) . ', required=' . \json_encode($blockBudget['required'], \JSON_UNESCAPED_UNICODE) . ', recommended_optional=' . \json_encode($blockBudget['optional'] ?? [], \JSON_UNESCAPED_UNICODE) . '. Output exactly target blocks.',
-            'You MUST include every required_block_key unless SourceTruthContract marks it irrelevant.',
+            'You MUST include every required_block_key unless the normalized page contract marks it irrelevant.',
             'Required block key contract: if required is not empty, blocks[].block_key MUST include each required value exactly once. The required list is a coverage contract, not a forced visual sequence. Never omit blocks, never return an empty blocks array, and never replace required block keys with generic names such as details, content, section, or info.',
-            'Hard rules: output exactly target blocks according to budget; each block exactly 3 field_plan rows using headline/supporting_copy/context_detail-style slots with non-empty semantic field keys; every block MUST include execution_script.core_copy as one compact final visitor-facing sentence in Website content locale; execution_script.feature_points max 3 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block.content must describe the concrete visitor message and proof/action, never a reason for the block and never a UI construction recipe; every block must have complete design_tags including visual/motion/interaction/texture/responsive/color_layering/implementation_note; every block must include visual_signature with composition_pattern/spatial_rhythm/media_strategy/surface_treatment/interaction_pattern and image_intent with needs_image/image_role/image_subject/placement/reuse_policy; if needs_image=true then image_subject must be a concrete scene/product/editorial/interface/environment/people visual, never an icon/logo/badge/glyph/symbol/download arrow/coin mark, and never a placeholder/dummy/fake/temporary image plan; if needs_image=false then visual_signature.media_strategy must start with "CSS-only/no generated image"; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow; return a complete JSON object within the token budget.',
-            'Self-check before return: verify blocks is non-empty, blocks count equals target, every required block_key appears exactly once, every block has content, visual_signature, image_intent, exactly 3 field_plan rows with sample and implementation_note, and execution_script.core_copy is non-empty final copy. If any field is missing, rewrite shorter content instead of omitting that block or field.',
+            'Hard rules: output exactly target blocks according to budget; each block exactly 3 field_plan rows using headline/supporting_copy/context_detail-style slots with non-empty semantic field keys; every block MUST include execution_script.core_copy as one compact final visitor-facing sentence in Website content locale; execution_script.feature_points max 2 and must be concrete customer-visible deliverables for this block, not writing/layout instructions like "section title"; content and core_copy must be final customer-visible implementation content in Website content locale, compact and not instruction-like; every block.content must describe the concrete visitor message and proof/action, never a reason for the block and never a UI construction recipe; every block must have complete design_tags including visual/motion/interaction/texture/responsive/color_layering/implementation_note; every block must include visual_signature with composition_pattern/spatial_rhythm/media_strategy/surface_treatment/interaction_pattern and image_intent with needs_image/image_role/image_subject/placement/visual_atmosphere/image_treatment/reuse_policy/css_motif; if needs_image=true then image_subject must be a concrete scene/product/editorial/interface/environment/people visual, never an icon/logo/badge/glyph/symbol/download arrow/coin mark, never a placeholder/dummy/fake/temporary image plan, and visual_signature.media_strategy must not say CSS-only/no generated image; if needs_image=false then visual_signature.media_strategy must start with "CSS-only/no generated image" and css_motif/visual_atmosphere/image_treatment must be non-empty; every block must state how it follows page_design_plan.color_layering and page_design_plan.section_flow; return a complete JSON object within the token budget.',
+            'Self-check before return: verify blocks is non-empty, blocks count equals target, every required block_key appears exactly once, every block has content, all five visual_signature fields non-empty, image_intent complete, exactly 3 field_plan rows with sample and implementation_note, and execution_script.core_copy is non-empty final copy. If any field is missing, rewrite shorter content instead of omitting that block or field.',
             'Self-check before return: verify every block has explicit page_flow_role rhythm (opening/proof/details/cta/support) and does not duplicate another page type block purpose.',
             $sourceTruthPromptLine,
         ]);
@@ -3038,6 +4888,7 @@ final class AiSiteExecutionBlueprintService
     ): string {
         $blockBudget = $this->resolveStageOneBlockBudget($pageType, $scope);
         $invalidSummary = $this->summarizeInvalidStageOnePagePlanForPrompt($invalidPagePlan);
+        $visualSignatureExamplesJson = $this->stageOneVisualSignatureExamplesJson();
         $stageOneContract = $this->getStageOneContractService()->normalize(
             \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : (\is_array($scope['stage1_contract'] ?? null) ? $scope['stage1_contract'] : []),
             $scope,
@@ -3070,17 +4921,169 @@ final class AiSiteExecutionBlueprintService
             $targetScope
         ) . "\n" . \implode("\n", [
             ...$this->getStageOnePromptContractRenderer()->renderRepairContract($stageOneContract, $validationReport),
+            ...$this->buildStageOneIssueSpecificRecoveryRules(
+                \is_array($validationReport['issues'] ?? null) ? $validationReport['issues'] : []
+            ),
             'RECOVERY MODE FOR STAGE-ONE PAGE FANOUT.',
             'The previous response failed the non-negotiable page contract: ' . $this->clipText($failureMessage, 500),
             'This retry replaces the previous response. Return one complete page JSON only; do not explain the failure.',
             'Recovery acceptance gate: page.blocks must be a non-empty array, contain exactly target=' . (string)($blockBudget['target'] ?? $blockBudget['min']) . ' blocks, and required block keys must appear exactly once: ' . \json_encode($blockBudget['required'], \JSON_UNESCAPED_UNICODE) . '.',
             'Recovery completeness gate: rebuild and return the entire page object, not a partial patch and not only failed blocks. Every block in the returned page must include complete design_tags, visual_signature, image_intent, field_plan, and execution_script.core_copy; never leave the last block skeletal or missing visual_signature.',
             'Every returned block must include block_key, page_flow_role, content, complete design_tags, complete visual_signature, complete image_intent, exactly 3 field_plan rows with field/sample/implementation_note, and execution_script.core_copy.',
+            'Recovery creativity rule: fix the failed contract fields while preserving or improving the page-specific visual idea. Do not collapse the page into generic compliance cards, and do not copy examples verbatim.',
+            'Field plan intent examples for recovery: ' . $this->stageOneFieldPlanIntentExamplesJson(),
+            'Visual signature recovery examples: ' . $visualSignatureExamplesJson,
+            'Complete block examples for recovery shape: ' . $this->stageOneBlockReturnExamplesJson(),
+            'needs_image recovery rule: image_intent.needs_image must be the JSON boolean true or false only; never return a string, empty value, or explanatory phrase.',
+            'visual_signature recovery rule: all five visual_signature fields must be non-empty. For static FAQ, review, support, policy, or text blocks, describe accordion/card/list layout, scan rhythm, CSS-only media strategy, surface treatment, and focus/hover behavior instead of leaving any field blank.',
             'Field plan recovery rule: every field_plan.sample must be final visitor-facing copy or a concrete asset brief, not an instruction. Do not start samples with write, rewrite, describe the/this block, describe the/this field, use this field, explain, create, show, include, highlight, mention, 围绕, 突出, 说明, 完善, or 优化; visitor-facing form placeholders like "Describe your issue..." are allowed when they are actual website copy.',
+            'Visible body recovery rule: every repaired block must include visitor-facing body copy that BuildPlan can consume. contact_cta/final_cta/download_cta blocks must include supporting_copy/body copy separately from button or action labels.',
             'If the token budget is tight, shorten visitor copy and field samples. Never omit blocks, required block keys, field_plan, or core_copy.',
+            'Compact recovery budget: each block.content/core_copy <= 180 chars, each field_plan.sample <= 90 chars, each design_tags array max 2 items, and visual_signature fields <= 90 chars. A complete short page beats a verbose truncated page.',
+            'Policy/legal recovery role rule: terms_contact/privacy_contact/cookie_contact/refund_contact blocks should use page_flow_role=support or details unless they include a policy-safe cta_label. Never use a marketing download/register/reward CTA to satisfy a policy contact block.',
             'Hard reject patterns: returning only page_design_plan; returning only field_plan; returning an empty blocks array; returning generic keys such as details/content/info instead of required block keys.',
             'Invalid previous page plan summary for diagnostics only: ' . ($invalidSummary !== '' ? $invalidSummary : '{}'),
         ]);
+    }
+
+    /**
+     * @param list<array<string,mixed>> $issues
+     * @return list<string>
+     */
+    private function buildStageOneIssueSpecificRecoveryRules(array $issues): array
+    {
+        $codes = [];
+        $imageTargets = [];
+        $visualTargets = [];
+        $cssOnlyTargets = [];
+        $missingIntentTargets = [];
+        foreach ($issues as $issue) {
+            if (!\is_array($issue)) {
+                continue;
+            }
+            $code = \trim((string)($issue['reason_code'] ?? $issue['code'] ?? ''));
+            if ($code !== '') {
+                $codes[$code] = true;
+            }
+            $pageType = \trim((string)($issue['page_type'] ?? ''));
+            $blockKey = \trim((string)($issue['block_key'] ?? ''));
+            $fieldPath = \trim((string)($issue['field_path'] ?? $issue['path'] ?? ''));
+            $targetLabel = $pageType !== '' && $blockKey !== '' && $blockKey !== '__page__'
+                ? $pageType . '/' . $blockKey . ($fieldPath !== '' ? '/' . $fieldPath : '')
+                : '';
+            if ($code === 'page_missing_generated_image_intent') {
+                if ($pageType !== '' && $blockKey !== '' && $blockKey !== '__page__') {
+                    $imageTargets[] = $pageType . '/' . $blockKey;
+                }
+            }
+            if (($code === 'invalid_visual_signature' || $code === 'missing_visual_signature') && $targetLabel !== '') {
+                $visualTargets[] = $targetLabel;
+            }
+            if (($code === 'missing_css_motif_for_no_image_block' || $code === 'image_intent_conflicts_with_block_plan') && $targetLabel !== '') {
+                $cssOnlyTargets[] = $targetLabel;
+            }
+            if ($code === 'missing_image_intent' && $targetLabel !== '') {
+                $missingIntentTargets[] = $targetLabel;
+            }
+        }
+
+        $rules = [];
+        if ($this->hasAnyStageOneIssueCode($codes, [
+            'missing_page_design_plan',
+            'malformed_block',
+            'missing_block_key',
+            'missing_page_flow_role',
+            'missing_design_tag',
+            'missing_visual_signature',
+            'missing_image_intent',
+            'missing_field_plan',
+            'invalid_field_plan_count',
+            'malformed_field_plan_row',
+        ])) {
+            $rules[] = 'Issue-specific rule for missing/malformed structure: rebuild the complete page object, not only the failed field. Every block must include block_key, page_flow_role, content, complete design_tags, complete visual_signature, complete image_intent, exactly three field_plan rows, and execution_script.core_copy.';
+        }
+        if (isset($codes['missing_theme_field'])) {
+            $rules[] = 'Issue-specific rule for missing_theme_field: rebuild the complete shared theme artifact with required theme_design fields, color_scheme, typography_spacing_radius, navigation_plan, footer_plan, shared_components, and seo_strategy. Do not return page blocks in a theme repair.';
+        }
+        if (isset($codes['required_block_order_mismatch'])) {
+            $rules[] = 'Issue-specific rule for required_block_order_mismatch: keep each required block_key unchanged and place it at the expected index from the issue or contract. Do not satisfy order by renaming a different block.';
+        }
+        if ($this->hasAnyStageOneIssueCode($codes, [
+            'missing_link_list',
+            'invalid_link_row',
+            'link_href_not_exact_route_path',
+            'link_href_not_in_route_contract',
+        ])) {
+            $rules[] = 'Issue-specific rule for header/footer links: rebuild link rows as objects with real label and href, and copy href exactly from page_route_contract.allowed_internal_paths or the exact link_groups path. Do not invent anchors, query strings, domains, translated slugs, singular/plural variants, or campaign paths.';
+        }
+        if ($this->hasAnyStageOneIssueCode($codes, [
+            'invalid_visual_signature',
+            'adjacent_visual_signature_duplicate',
+            'overused_composition_pattern',
+            'duplicate_block_message',
+        ])) {
+            $targetText = $visualTargets !== []
+                ? (' Exact visual_signature target(s): ' . \implode(', ', \array_values(\array_unique($visualTargets))) . '.')
+                : '';
+            $rules[] = 'Issue-specific rule for visual/message uniqueness:' . $targetText . ' rewrite each affected block with a concrete block-specific composition_pattern, spatial_rhythm, media_strategy, surface_treatment, interaction_pattern, headline, and core_copy. No visual_signature field may be empty, "none", "same as above", or a schema placeholder. Keep required block keys unchanged; do not add unrelated blocks just to create variety.';
+        }
+        if (isset($codes['page_missing_generated_image_intent'])) {
+            $targetText = $imageTargets !== []
+                ? (' Target block(s): ' . \implode(', ', \array_values(\array_unique($imageTargets))) . '.')
+                : '';
+            $rules[] = 'Issue-specific rule for page_missing_generated_image_intent:' . $targetText
+                . ' the returned page must contain at least one block with image_intent.needs_image=true. Prefer the named block when it is a natural media target, otherwise place the generated-image slot on the block that best fits the page narrative. Use image_role hero_image or section_image, placement background_layer/media_panel/inline_visual, reuse_policy reuse_when_intent_matches, and a concrete image_subject tied to that block. Do not force block index 0 to be the generated-image block solely to satisfy this issue.';
+        }
+        if (isset($codes['invalid_image_intent_needs_image'])) {
+            $rules[] = 'Issue-specific rule for invalid_image_intent_needs_image: rewrite image_intent.needs_image as the JSON boolean true or false only. Never use "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text. Put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment and keep the rest of the block creative and page-specific.';
+        }
+        if (isset($codes['missing_image_intent'])) {
+            $targetText = $missingIntentTargets !== []
+                ? (' Exact missing image_intent target(s): ' . \implode(', ', \array_values(\array_unique($missingIntentTargets))) . '.')
+                : '';
+            $rules[] = 'Issue-specific rule for missing_image_intent:' . $targetText . ' add one top-level image_intent object to every affected block with all eight keys: needs_image, image_role, image_subject, placement, visual_atmosphere, image_treatment, reuse_policy, and css_motif. Do not put image_intent under visual, and do not add rationale/reason/why fields.';
+        }
+        if (isset($codes['missing_css_motif_for_no_image_block'])) {
+            $targetText = $cssOnlyTargets !== []
+                ? (' Exact CSS-only target(s): ' . \implode(', ', \array_values(\array_unique($cssOnlyTargets))) . '.')
+                : '';
+            $rules[] = 'Issue-specific rule for missing_css_motif_for_no_image_block:' . $targetText . ' when needs_image=false, keep needs_image as JSON false and fill css_motif, visual_atmosphere, image_treatment, image_role=css_motif or none, image_subject=none, placement=none/background_layer/inline_visual, reuse_policy=no_generated_image, and visual_signature.media_strategy starting with "CSS-only/no generated image". If that is not the right visual path, switch the block to needs_image=true with a concrete generated subject.';
+        }
+        if (isset($codes['invalid_image_intent_field'])) {
+            $rules[] = 'Issue-specific rule for invalid_image_intent_field: keep image_intent and replace the weak field with concrete planning text. Generated-image blocks need image_role, image_subject, placement, visual_atmosphere, image_treatment, and reuse_policy; CSS-only blocks need css_motif, visual_atmosphere, image_treatment, and media_strategy starting with CSS-only/no generated image. Do not add rationale, reason, or why fields.';
+        }
+        if (isset($codes['missing_visible_body_copy'])) {
+            $rules[] = 'Issue-specific rule for missing_visible_body_copy: rewrite the affected block with a real visitor-facing body sentence in execution_script.core_copy and field_plan row 1 field=supporting_copy. If the block is a CTA, keep the action label in a separate cta_label/action field and do not use the button label as the only body copy.';
+        }
+        if (isset($codes['instruction_like_or_empty'])) {
+            $rules[] = 'Issue-specific rule for instruction_like_or_empty: replace empty or instruction-like field_plan fields/samples/core_copy with concrete final values. Use row 0 field=headline, row 1 field=supporting_copy, and a purpose-specific row 2 key; every execution_script.core_copy must be one non-empty visitor-facing sentence.';
+        }
+        if (isset($codes['cta_role_missing_block_action'])) {
+            $rules[] = 'Issue-specific rule for cta_role_missing_block_action: if this is a policy/legal contact block, prefer changing page_flow_role to support/details. If it is truly a CTA block, add a separate cta_label/action_label/button_text field with a final visitor action, and keep a real supporting_copy body sentence.';
+        }
+        if (isset($codes['image_intent_conflicts_with_block_plan'])) {
+            $targetText = $cssOnlyTargets !== []
+                ? (' Exact media conflict target(s): ' . \implode(', ', \array_values(\array_unique($cssOnlyTargets))) . '.')
+                : '';
+            $rules[] = 'Issue-specific rule for image_intent_conflicts_with_block_plan:' . $targetText . ' align media planning and image_intent on the same block. Choose exactly one path. Generated-image path: needs_image=true, concrete image_subject, placement, reuse_policy, and visual_signature.media_strategy describing the generated asset with no CSS-only/no generated image markers. CSS-only path: needs_image=false, image_role css_motif or none, placement none/background_layer/inline_visual, non-empty css_motif/visual_atmosphere/image_treatment, and media_strategy starting with CSS-only/no generated image. Never mix the two paths in one block.';
+        }
+
+        return $rules;
+    }
+
+    /**
+     * @param array<string, bool> $codes
+     * @param list<string> $targets
+     */
+    private function hasAnyStageOneIssueCode(array $codes, array $targets): bool
+    {
+        foreach ($targets as $target) {
+            if (isset($codes[$target])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -4057,23 +6060,24 @@ final class AiSiteExecutionBlueprintService
             '- The literal values "string", "how this page obeys", "string explaining how this page obeys", and "how this page and every block obey theme_design" are invalid output, not examples to copy.',
             '- Repeat the shared theme decisions inside each page plan: page_goal, blocks, field_plan samples, execution_script, CTA wording, and media assets must visibly obey the same palette, voice, spacing/radius, and forbidden styles.',
             '- If a page idea conflicts with shared_prompt_context, rewrite the page idea. Never invent a per-page palette, voice, CTA style, or visual direction that diverges from theme_design.',
-            '- Every page object MUST include page_design_plan. It is the page identity contract consumed by Stage-3, especially opening_banner_composition and anti_monotony_rule.',
+            '- Every page object MUST include the canonical page_design_plan keys: page_role, content_narrative, visual_hierarchy, visual_signature_application, composition_motif, color_layering, section_flow, interaction_notes, polish_details, and anti_monotony_rule.',
             '- Every block object MUST include visual_signature. It must describe the block-specific composition, focal element, image role, CTA role, and how it avoids repeating sibling blocks.',
-            '- Page banners/opening blocks are not a fixed template. They must be composed from page_design_plan.page_identity and current block visual_signature.',
+            '- Page banners/opening blocks are not a fixed template. They must be composed from page_design_plan.page_role, page_design_plan.composition_motif, and current block visual_signature.',
             '',
-            'GOOD vs BAD examples (do NOT copy verbatim, learn the style):',
-            'BAD field_plan.sample : "标题围绕核心价值展开"',
-            'GOOD field_plan.sample: "30 分钟上手的轻量记账工具，给独立创作者用"',
-            'BAD blocks[].content   : "突出品牌价值并引导用户行动"',
-            'GOOD blocks[].content  : "首屏一句话讲清价值：’把发票、收入、税务一次理清’；下方两枚 CTA：[免费试用 30 天] 与 [查看演示]，配一行信任：已被 1,200+ 自由职业者使用。"',
-            'BAD execution_script.core_copy : "简洁说明产品亮点"',
-            'GOOD execution_script.core_copy: "三段式：痛点（账单零散）→ 方案（一处导入自动归类）→ 结果（每月节省 4 小时）。"',
+            'GOOD vs BAD examples (do NOT copy verbatim, learn the structure only):',
+            'BAD field_plan.sample : "Write a title around the main value"',
+            'GOOD field_plan.sample: "Trusted APK Download for Indian Card Players"',
+            'BAD blocks[].content   : "Highlight brand value and guide action"',
+            'GOOD blocks[].content  : "Download the APK, review the game lobby, and start from a clear first step."',
+            'BAD execution_script.core_copy : "Briefly explain product benefits"',
+            'GOOD execution_script.core_copy: "Players can understand the install step, game lobby, and safety proof before downloading."',
             'BAD navigation_plan.header_items : []',
-            'GOOD navigation_plan.header_items: [{"label":"首页","href":"/"},{"label":"关于","href":"/about"},{"label":"博客","href":"/blog"},{"label":"联系","href":"/contact"}]',
+            'GOOD navigation_plan.header_items: [{"label":"Home","href":"/"},{"label":"About","href":"/about"},{"label":"Blog","href":"/blog"},{"label":"Contact","href":"/contact"}]',
             '',
             'Return STRICT JSON only. No markdown fence. No prose outside JSON.',
             'The first non-whitespace character must be { and the last non-whitespace character must be }.',
             'Do not echo the schema, prompt rules, GOOD/BAD examples, or writing instructions back into the plan.',
+            'Do not add extra explanatory fields named reason, why, rationale, thinking, analysis, explanation, chain_of_thought, design_reason, or reasoning. Use only the schema keys; selection_reason is allowed only in the three theme objects shown below.',
             'JSON schema (return this structured plan object directly as the top-level JSON object):',
             '{',
             '    "i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},',
@@ -4085,7 +6089,7 @@ final class AiSiteExecutionBlueprintService
             '    "footer_plan":{"featured":[],"policies":[]},',
             '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
             '    "page_types":["home_page"],',
-            '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_identity":"string","opening_banner_composition":"string","color_layering":"string","section_flow":"string","interaction_notes":"string","anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","visual_signature":{"composition_pattern":"string","spatial_rhythm":"string","media_strategy":"string","surface_treatment":"string","interaction_pattern":"string"},"field_plan":[{"field":"string","sample":"string","implementation_note":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
+            '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"visual_signature":{"composition_pattern":"string","spatial_rhythm":"string","media_strategy":"string","surface_treatment":"string","interaction_pattern":"string"},"image_intent":{"needs_image":true,"image_role":"hero_image|section_image|trust_brand_image|css_motif|none","image_subject":"specific scene/product/editorial subject or none for CSS-only","placement":"background_layer|media_panel|inline_visual|none","visual_atmosphere":"specific mood, environment, lighting, and brand feel","image_treatment":"specific crop, style, framing, overlay, and integration treatment","reuse_policy":"reuse_when_intent_matches|no_generated_image","css_motif":"required concrete CSS motif when needs_image=false, empty string when generated image is needed"},"field_plan":[{"field":"headline","sample":"visitor-facing heading","implementation_note":"where this heading renders"},{"field":"supporting_copy","sample":"visitor-facing support sentence","implementation_note":"where this body copy renders"},{"field":"context_detail","sample":"detail, proof, CTA label, image brief, form label, or policy summary","implementation_note":"where this detail renders"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
             '    "execution_steps":[{"step":1,"task_key":"string","task_type":"string","status":"pending"}],',
             '    "build_plan_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
             '}',
@@ -4611,11 +6615,17 @@ final class AiSiteExecutionBlueprintService
         );
         $validationPassed = !empty($stageOneValidationReport['passed']);
         $partialRetryMode = $skipLocalRepair;
+        $validationRetryableFailures = [];
         if (!$validationPassed) {
-            $deferToPartialRetry = $partialRetryMode && (
-                $validationPageTypes === []
-                || $this->stageOneValidationFailuresAreCoveredByPartialRetry($stageOneValidationReport, $pageTypes, $validationPageTypes)
-            );
+            $validationRetryableFailures = $this->buildStageOneRetryablePageFailuresFromValidationReport($stageOneValidationReport);
+            $deferToPartialRetry = $validationRetryableFailures !== []
+                || (
+                    $partialRetryMode
+                    && (
+                        $validationPageTypes === []
+                        || $this->stageOneValidationFailuresAreCoveredByPartialRetry($stageOneValidationReport, $pageTypes, $validationPageTypes)
+                    )
+                );
             if (!$deferToPartialRetry) {
                 throw new \RuntimeException('AI stage-1 plan invalid: ' . $this->summarizeStageOneValidationReport($stageOneValidationReport));
             }
@@ -4821,6 +6831,8 @@ final class AiSiteExecutionBlueprintService
             'derived_scope_patch' => $derivedScopePatch,
             'markdown' => $markdown,
             'plan_workbench' => $planWorkbench,
+            'retryable_ai_failures' => \array_values($validationRetryableFailures),
+            'partial_retry_required' => $validationRetryableFailures !== [] ? 1 : 0,
         ]);
     }
 
@@ -4920,6 +6932,64 @@ final class AiSiteExecutionBlueprintService
         }
 
         return true;
+    }
+
+    /**
+     * @param array<string, mixed> $report
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildStageOneRetryablePageFailuresFromValidationReport(array $report): array
+    {
+        $issues = \is_array($report['issues'] ?? null) ? $report['issues'] : [];
+        if ($issues === []) {
+            return [];
+        }
+
+        $issuesByPage = [];
+        foreach ($issues as $issue) {
+            if (!\is_array($issue)) {
+                return [];
+            }
+            $pageType = $this->extractStageOneValidationIssuePageType($issue);
+            if ($pageType === '') {
+                return [];
+            }
+            $issuesByPage[$pageType][] = $issue;
+        }
+
+        $failures = [];
+        foreach ($issuesByPage as $pageType => $pageIssues) {
+            $pageReport = ['issues' => $pageIssues];
+            $failures[$pageType] = $this->buildStageOneRetryablePageFailure(
+                $pageType,
+                'Stage-one final contract failed for page: ' . $pageType,
+                [
+                    'validation_summary' => $this->summarizeStageOneValidationReport($pageReport),
+                    'validation_issues' => $pageIssues,
+                    'failure_source' => 'gate_checkpoint',
+                ]
+            );
+        }
+
+        return $failures;
+    }
+
+    /**
+     * @param array<string, mixed> $issue
+     */
+    private function extractStageOneValidationIssuePageType(array $issue): string
+    {
+        $pageType = \trim((string)($issue['page_type'] ?? ($issue['extra']['page_type'] ?? '')));
+        if ($pageType !== '') {
+            return $pageType;
+        }
+
+        $path = (string)($issue['path'] ?? $issue['field_path'] ?? '');
+        if (\preg_match('#^pages\.([a-z0-9_]+)#i', $path, $matches) === 1) {
+            return (string)$matches[1];
+        }
+
+        return '';
     }
 
     /**
@@ -6101,10 +8171,12 @@ final class AiSiteExecutionBlueprintService
                     break;
                 }
             }
+            $issueSpecificRules = $this->buildStageOneIssueSpecificRecoveryRules($issues);
             $regenInstruction = \trim($instruction . "\n"
                 . 'Fix only listed invalid blocks. Keep all unaffected blocks unchanged. '
                 . 'Return final customer-visible copy, not writing guidance. '
-                . 'Issue list: ' . \implode('; ', $issueSummary));
+                . 'Issue list: ' . \implode('; ', $issueSummary)
+                . ($issueSpecificRules !== [] ? ("\n" . \implode("\n", $issueSpecificRules)) : ''));
 
             try {
                 $regeneratedPages = $this->generateStageOnePagePlansByAiSequential(
@@ -6536,7 +8608,18 @@ final class AiSiteExecutionBlueprintService
                     ];
                 }
                 $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
-                if (\count($fieldPlan) !== $fieldPlanCount) {
+                if ($fieldPlan === [] && $fieldPlanCount > 0) {
+                    $issues[] = [
+                        'stage' => 'stage1',
+                        'page_type' => (string)$pageType,
+                        'block_key' => $blockKey,
+                        'field_path' => 'field_plan',
+                        'reason_code' => 'missing_field_plan',
+                        'matched_marker' => '',
+                        'snippet' => 'count=0',
+                        'severity' => 'high',
+                    ];
+                } elseif (\count($fieldPlan) !== $fieldPlanCount) {
                     $issues[] = [
                         'stage' => 'stage1',
                         'page_type' => (string)$pageType,
@@ -6545,7 +8628,7 @@ final class AiSiteExecutionBlueprintService
                         'reason_code' => 'invalid_field_plan_count',
                         'matched_marker' => '',
                         'snippet' => 'count=' . \count($fieldPlan),
-                        'severity' => 'high',
+                        'severity' => 'medium',
                     ];
                 }
                 foreach ($fieldPlan as $fieldIndex => $row) {
@@ -6648,6 +8731,10 @@ final class AiSiteExecutionBlueprintService
                 if ($reasonCode === '' || $reasonCode === 'missing_page') {
                     continue;
                 }
+                $severity = \trim((string)($contractIssue['severity'] ?? 'high'));
+                if (!\in_array($severity, ['high', 'blocking'], true)) {
+                    continue;
+                }
                 $fieldPath = \trim((string)($contractIssue['field_path'] ?? $contractIssue['path'] ?? ''));
                 $blockKey = $this->resolveStageOneProblemIssueBlockKey($contractIssue, $blocks, $fieldPath);
                 if ($blockKey === '') {
@@ -6666,12 +8753,15 @@ final class AiSiteExecutionBlueprintService
                     'reason_code' => $reasonCode,
                     'matched_marker' => '',
                     'snippet' => $this->clipText((string)($contractIssue['snippet'] ?? ($contractIssue['extra']['snippet'] ?? '')), 120),
-                    'severity' => \trim((string)($contractIssue['severity'] ?? 'high')),
+                    'severity' => $severity,
                 ];
             }
         }
 
-        return $issues;
+        return \array_values(\array_filter(
+            $issues,
+            static fn(array $issue): bool => \in_array((string)($issue['severity'] ?? ''), ['high', 'blocking'], true)
+        ));
     }
 
     /**
@@ -8405,13 +10495,14 @@ final class AiSiteExecutionBlueprintService
             '  "append_type": "about_intro|why_choose_us|partner|custom|none",',
             '  "target_page_type": "home_page|about_page|contact_page|all|auto",',
             '  "confidence": 0.0,',
-            '  "reason": "string"',
+            '  "decision_note": "classifier-only note; never copy this key into page/block/build contracts"',
             '}',
             'Rules:',
             '- If user asks to add/insert/join a section/module/block, action must be append_block.',
             '- Infer append_type by semantics, not fixed keywords only.',
             '- If target page is not explicit, use auto.',
             '- confidence in [0,1].',
+            'Examples (copy the decision pattern, not the text): ' . $this->stageOneAppendInstructionClassifierExamplesJson(),
             'Instruction: ' . $instruction,
             'Target scope: ' . (\trim($targetScope) !== '' ? $targetScope : '-'),
         ]);
@@ -8490,7 +10581,7 @@ final class AiSiteExecutionBlueprintService
             'component_kind' => 'content',
             'order' => 980,
             'goal' => $pageGoal,
-            'why' => $this->isEnglishLocale($locale)
+            'planning_note' => $this->isEnglishLocale($locale)
                 ? ('Append a focused content block for ' . $pageLabel . ' based on the latest instruction.')
                 : ('????????? ' . $pageLabel . ' ???????????????'),
             'style_brief' => [
@@ -8502,19 +10593,19 @@ final class AiSiteExecutionBlueprintService
                 'background' => (string)($palette['surface'] ?? '#ffffff'),
                 'accent' => (string)($palette['accent'] ?? '#2563eb'),
                 'text' => (string)($palette['text'] ?? '#0f172a'),
-                'reason' => $this->isEnglishLocale($locale)
+                'implementation_note' => $this->isEnglishLocale($locale)
                     ? 'Use the current palette to keep the appended block visually consistent.'
                     : '???????????????????????',
             ],
             'seo_brief' => [
                 'intent' => $pageGoal,
                 'keywords' => [],
-                'anchors' => ['#' . $blockKey],
+                'anchors' => [],
                 'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
             ],
             'content_brief' => [
                 'goal' => $pageGoal,
-                'why' => $this->isEnglishLocale($locale)
+                'implementation_note' => $this->isEnglishLocale($locale)
                     ? 'Keep the appended block concise, useful, and conversion-oriented.'
                     : '????????????????????????',
                 'headline_direction' => $this->resolveCustomAppendHeadlineDirection($appendInstruction, $locale),
@@ -8528,17 +10619,11 @@ final class AiSiteExecutionBlueprintService
                     'implementation_note' => $this->isEnglishLocale($locale)
                         ? 'Use the title as the visible section label so the client can confirm the appended block purpose immediately.'
                         : '标题直接作为新增区块的可见识别名，方便客户确认新增内容的用途。',
-                    'reason' => $this->isEnglishLocale($locale)
-                        ? 'Use the title as the visible section label so the client can confirm the appended block purpose immediately.'
-                        : '标题直接作为新增区块的可见识别名，方便客户确认新增内容的用途。',
                 ],
                 [
                     'field' => 'description',
                     'sample' => $instructionText !== '' ? $instructionText : ($this->isEnglishLocale($locale) ? 'Add supporting details for this section.' : '???????????????'),
                     'implementation_note' => $this->isEnglishLocale($locale)
-                        ? 'Fill this area with the actual supporting details that will appear in the block, not with writing guidance.'
-                        : '这里直接写会上屏的补充内容，不写写作提示或方向说明。',
-                    'reason' => $this->isEnglishLocale($locale)
                         ? 'Fill this area with the actual supporting details that will appear in the block, not with writing guidance.'
                         : '这里直接写会上屏的补充内容，不写写作提示或方向说明。',
                 ],
@@ -9112,7 +11197,7 @@ final class AiSiteExecutionBlueprintService
                 ? [
                     'headline' => $brandName,
                     'supporting_copy' => $headerCopy['supporting_copy'],
-                    'cta' => [['label' => $headerCopy['cta_label'], 'target' => '#contact']],
+                    'cta' => [['label' => $headerCopy['cta_label'], 'target' => '']],
                     'media' => [['kind' => 'logo', 'rule' => $headerCopy['media_rule']]],
                     'data_slots' => ['brand_name', 'navigation_items', 'primary_cta'],
                     'editable_slots' => ['brand_name', 'logo', 'navigation_items', 'primary_cta'],
@@ -9159,7 +11244,7 @@ final class AiSiteExecutionBlueprintService
                 ? [
                     'headline' => '??? / Logo / ????',
                     'supporting_copy' => ['???', '? CTA', '???????'],
-                    'cta' => [['label' => '????', 'target' => '#contact']],
+                    'cta' => [['label' => '????', 'target' => '']],
                     'media' => [['kind' => 'logo', 'rule' => '?????? logo ????']],
                     'data_slots' => ['brand_name', 'navigation_items', 'primary_cta'],
                     'editable_slots' => ['brand_name', 'logo', 'navigation_items', 'primary_cta'],
@@ -9379,9 +11464,9 @@ final class AiSiteExecutionBlueprintService
             'seo_strategy' => $seoStrategy,
             'page_types' => $pageTypes,
             'anti_hardcode_rules' => [
-                'brand_name' => '用户未提供品牌名时使用可编辑占位字段，不伪造品牌事实。',
-                'contact' => '电话、微信、邮箱、地址未知时必须保留待确认字段。',
-                'cases' => '真实案例、资质、价格和客户名未知时不得编造。',
+                'brand_name' => '品牌名必须来自用户输入、站点标题或冻结方案；不要显示 brand_name/site_title 等字段名。',
+                'contact' => '联系方式文案必须是面向访客的最终表达；禁止显示占位邮箱、断裂邮箱、phone/email/address 字段名或方案说明。',
+                'cases' => '案例、资质、价格和客户名可以按方案语义写成营销文案；禁止展示“真实案例/资质/价格待补充”等蓝图式提示。',
             ],
             'source_instruction' => $instruction,
         ];
@@ -11086,7 +13171,7 @@ final class AiSiteExecutionBlueprintService
                 '先生成共享主题、Header、Footer，再组织每个页面的具体内容块。',
             ],
             'pending_variables' => [
-                '联系方式、真实案例、资质、价格、地址等未提供事实时，必须保留为可编辑字段。',
+                '如果方案需要后续编辑的联系方式、案例、资质、价格或地址，请写成自然访客文案；不要把字段名、待补充说明或蓝图句子展示出来。',
             ],
             'latest_instruction' => $instruction,
         ];
@@ -11102,7 +13187,7 @@ final class AiSiteExecutionBlueprintService
                 '先生成共享主题、Header、Footer，再并发生成页面类型方案。',
             ],
             'pending_variables' => [
-                '联系方式、真实案例、资质、价格、地址等未提供事实必须保留为可编辑字段。',
+                '如果方案需要后续编辑的联系方式、案例、资质、价格或地址，请写成自然访客文案；不要把字段名、待补充说明或蓝图句子展示出来。',
             ],
             'latest_instruction' => $instruction,
         ];
@@ -12903,13 +14988,8 @@ final class AiSiteExecutionBlueprintService
         }
 
         $target = $this->resolveConcreteFieldValue('button_link', $config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale);
-        if ($target === '') {
-            $target = $preset === 'contact_form' ? '#contact' : '#start';
-        }
 
-        return $this->isEnglishLocale($locale)
-            ? ('Primary CTA: ' . $label . ' (target ' . $target . ')')
-            : ('主 CTA：' . $label . '（跳转 ' . $target . '）');
+        return 'Primary CTA: ' . $label . ($target !== '' ? ' (target ' . $target . ')' : ' (button event, no placeholder href)');
     }
 
     private function buildFieldPlan(
@@ -13036,7 +15116,7 @@ final class AiSiteExecutionBlueprintService
         if ($ctaLabel !== '') {
             $cta[] = [
                 'label' => $ctaLabel,
-                'target' => $ctaTarget !== '' ? $ctaTarget : '#contact',
+                'target' => $ctaTarget,
             ];
         }
         $media = [];
@@ -13096,7 +15176,7 @@ final class AiSiteExecutionBlueprintService
             'subtitle' => $this->resolveDefaultSubtitleSample($preset, $sectionName, $pageGoal, $pageLabel, $siteName, $siteSummary, $locale),
             'description' => $this->resolveDefaultDescriptionSample($preset, $sectionName, $pageGoal, $pageLabel, $siteName, $siteSummary, $locale),
             'button_text' => $this->resolveDefaultButtonText($preset, $pageGoal, $siteSummary, $locale),
-            'button_link' => $preset === 'contact_form' ? '#contact' : '#start',
+            'button_link' => '',
             'image' => $this->resolveDefaultImageRule($preset, $pageLabel, $siteName, $siteSummary, $locale),
             default => '',
         };

@@ -136,8 +136,8 @@
 
         var navLinks = document.querySelectorAll('[data-account-nav-link][data-section]');
         var sidebarContentMount = document.querySelector('[data-account-sidebar-content-mount]');
-        var sidebarContentLoaded = !sidebarContentMount;
-        var sidebarContentLoading = null;
+        var loadedSidebarSections = Object.create(null);
+        var sidebarContentLoading = Object.create(null);
 
         function executeInsertedScripts(container) {
             Array.prototype.slice.call(container.querySelectorAll('script')).forEach(function(oldScript) {
@@ -150,22 +150,36 @@
             });
         }
 
-        function loadSidebarContent() {
-            if (!sidebarContentMount || sidebarContentLoaded) {
+        function buildSidebarContentUrl(sectionName) {
+            var baseUrl = sidebarContentMount ? (sidebarContentMount.getAttribute('data-account-sidebar-content-url') || '') : '';
+            if (!baseUrl || !sectionName) {
+                return '';
+            }
+
+            var separator = baseUrl.indexOf('?') >= 0 ? '&' : '?';
+            return baseUrl + separator + 'section=' + encodeURIComponent(sectionName);
+        }
+
+        function loadSidebarContent(sectionName) {
+            if (!sidebarContentMount || !sectionName) {
                 return Promise.resolve(true);
             }
 
-            if (sidebarContentLoading) {
-                return sidebarContentLoading;
+            if (loadedSidebarSections[sectionName]) {
+                return Promise.resolve(true);
             }
 
-            var url = sidebarContentMount.getAttribute('data-account-sidebar-content-url') || '';
+            if (sidebarContentLoading[sectionName]) {
+                return sidebarContentLoading[sectionName];
+            }
+
+            var url = buildSidebarContentUrl(sectionName);
             if (!url) {
-                sidebarContentLoaded = true;
+                loadedSidebarSections[sectionName] = true;
                 return Promise.resolve(false);
             }
 
-            sidebarContentLoading = fetch(url, {
+            sidebarContentLoading[sectionName] = fetch(url, {
                 credentials: 'same-origin',
                 headers: {
                     'Accept': 'application/json',
@@ -186,20 +200,24 @@
                     return false;
                 }
 
-                sidebarContentMount.innerHTML = payload.html || '';
-                executeInsertedScripts(sidebarContentMount);
-                sidebarContentLoaded = true;
+                if (payload.html) {
+                    sidebarContentMount.insertAdjacentHTML('beforeend', payload.html);
+                    executeInsertedScripts(sidebarContentMount);
+                }
+
+                loadedSidebarSections[sectionName] = true;
                 window.dispatchEvent(new CustomEvent('weline:account-sidebar-content-loaded', {
-                    detail: { length: payload.length || 0 }
+                    detail: { section: sectionName, length: payload.length || 0 }
                 }));
                 return true;
             }).catch(function(error) {
-                sidebarContentLoading = null;
                 console.error(error);
                 return false;
+            }).finally(function() {
+                delete sidebarContentLoading[sectionName];
             });
 
-            return sidebarContentLoading;
+            return sidebarContentLoading[sectionName];
         }
 
         function parseHash(inputHash) {
@@ -318,8 +336,8 @@
             if (!targetSection) {
                 targetSection = document.getElementById(targetId + '-section');
             }
-            if (!targetSection && sidebarContentMount && !sidebarContentLoaded) {
-                return loadSidebarContent().then(function() {
+            if (!targetSection) {
+                return loadSidebarContent(targetId).then(function() {
                     showAccountSection(targetId);
                 });
             }
