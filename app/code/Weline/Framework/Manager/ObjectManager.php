@@ -1315,6 +1315,52 @@ class ObjectManager implements ManagerInterface
      * 
      * 兼容性：如果文件不存在，回退到运行时反射（FPM/WLS 均兼容）
      */
+    /**
+     * Explicitly loads process-global generated runtime metadata for WLS preload.
+     *
+     * @return array<string, int>
+     */
+    public static function preloadRuntimeMetadata(): array
+    {
+        self::loadPrecompiledMetadata();
+        self::loadCompiledFactories();
+        self::loadGeneratedPluginRegistry();
+
+        $safeClasses = [];
+        $safeClassFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_safe_classes.php';
+        if (\is_file($safeClassFile)) {
+            $loaded = include $safeClassFile;
+            if (\is_array($loaded)) {
+                $safeClasses = $loaded;
+            }
+        }
+
+        return [
+            'reflection_metadata' => \is_array(self::$precompiledMetadata) ? \count(self::$precompiledMetadata) : 0,
+            'compiled_factories' => \is_array(self::$compiledFactories) ? \count(self::$compiledFactories) : 0,
+            'plugin_classes' => \is_array(self::$generatedPluginRegistry['class_to_plugins'] ?? null)
+                ? \count(self::$generatedPluginRegistry['class_to_plugins'])
+                : 0,
+            'reflection_safe_classes' => self::countNestedScalarValues($safeClasses),
+        ];
+    }
+
+    private static function countNestedScalarValues(array $rows): int
+    {
+        $count = 0;
+        foreach ($rows as $row) {
+            if (\is_array($row)) {
+                $count += self::countNestedScalarValues($row);
+                continue;
+            }
+            if (\is_scalar($row)) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
     private static function loadPrecompiledMetadata(): void
     {
         if (self::$precompiledLoaded) {

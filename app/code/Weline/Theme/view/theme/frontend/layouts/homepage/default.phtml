@@ -198,7 +198,7 @@ $colors = $this->getData('colors') ?? [];
     /* 默认内容样式 */
     .homepage-default-content {
         width: 100%;
-        padding: 3rem 0;
+        padding: var(--weline-layout-spacing-2xl, 3rem) 0;
     }
     
     /* 默认部件容器样式 */
@@ -222,17 +222,17 @@ $colors = $this->getData('colors') ?? [];
     
     /* 推荐产品区域 */
     .section-featured {
-        background: var(--frontend-color-bg-secondary, #f8f9fa);
+        background: var(--weline-layout-surface-secondary, var(--frontend-color-bg-secondary, #f8f9fa));
     }
     
     /* 分类网格区域 */
     .section-categories {
-        background: var(--frontend-color-bg-primary, #ffffff);
+        background: var(--weline-layout-surface-primary, var(--frontend-color-bg-primary, #ffffff));
     }
     
     /* 新品上市区域 */
     .section-new-arrivals {
-        background: var(--frontend-color-bg-secondary, #f8f9fa);
+        background: var(--weline-layout-surface-secondary, var(--frontend-color-bg-secondary, #f8f9fa));
     }
     
     /* 促销横幅区域 */
@@ -242,27 +242,27 @@ $colors = $this->getData('colors') ?? [];
     
     /* 畅销商品区域 */
     .section-bestsellers {
-        background: var(--frontend-color-bg-primary, #ffffff);
+        background: var(--weline-layout-surface-primary, var(--frontend-color-bg-primary, #ffffff));
     }
     
     /* 品牌展示区域 */
     .section-brands {
-        background: var(--frontend-color-bg-secondary, #f8f9fa);
-        padding: 2.5rem 0;
+        background: var(--weline-layout-surface-secondary, var(--frontend-color-bg-secondary, #f8f9fa));
+        padding: calc(var(--weline-layout-spacing-xl, 2rem) + var(--weline-layout-spacing-sm, 0.5rem)) 0;
     }
     
     /* 信任徽章区域 */
     .section-trust {
-        background: var(--frontend-color-bg-primary, #ffffff);
-        padding: 2rem 0;
-        border-top: 1px solid var(--frontend-color-border-light, #e9ecef);
+        background: var(--weline-layout-surface-primary, var(--frontend-color-bg-primary, #ffffff));
+        padding: var(--weline-layout-spacing-xl, 2rem) 0;
+        border-top: 1px solid var(--weline-layout-border-color, var(--frontend-color-border-light, #e9ecef));
     }
     
     /* 容器 */
     .container {
-        max-width: 1400px;
+        max-width: var(--weline-layout-content-max-width, 1400px);
         margin: 0 auto;
-        padding: 0 20px;
+        padding: 0 var(--weline-layout-content-padding-inline, 20px);
     }
     
     /* 编辑模式样式已移至 editor-mode.css */
@@ -304,7 +304,7 @@ $colors = $this->getData('colors') ?? [];
     /* 网格容器 */
     .weline-grid {
         display: grid;
-        gap: 20px;
+        gap: var(--weline-layout-spacing-xl, 1.25rem);
     }
     
     .weline-grid-2 { grid-template-columns: repeat(2, 1fr); }
@@ -315,12 +315,12 @@ $colors = $this->getData('colors') ?? [];
     
     /* Section 区块容器 */
     .weline-section {
-        padding: 2rem 0;
+        padding: var(--weline-layout-spacing-xl, 2rem) 0;
     }
     
-    .weline-section-sm { padding: 1rem 0; }
-    .weline-section-lg { padding: 4rem 0; }
-    .weline-section-xl { padding: 6rem 0; }
+    .weline-section-sm { padding: var(--weline-layout-spacing-md, 1rem) 0; }
+    .weline-section-lg { padding: var(--weline-layout-spacing-3xl, 4rem) 0; }
+    .weline-section-xl { padding: calc(var(--weline-layout-spacing-3xl, 4rem) + var(--weline-layout-spacing-xl, 2rem)) 0; }
     
     /* 嵌套 Slot 容器（用于行列内部） */
     [data-wslot-container] {
@@ -329,14 +329,14 @@ $colors = $this->getData('colors') ?? [];
     }
     
     body.editor-mode [data-wslot-container] {
-        border: 1px dashed #d1d5db;
-        border-radius: 4px;
+        border: 1px dashed var(--weline-layout-border-color, #d1d5db);
+        border-radius: var(--weline-layout-radius-md, 4px);
         padding: 8px;
     }
     
     body.editor-mode [data-wslot-container]:hover {
-        border-color: #6366f1;
-        background-color: rgba(99, 102, 241, 0.03);
+        border-color: var(--color-accent, #6366f1);
+        background-color: var(--color-accent-light, rgba(99, 102, 241, 0.03));
     }
     
     /* ========================================
@@ -358,7 +358,7 @@ $colors = $this->getData('colors') ?? [];
     
     @media (max-width: 768px) {
         .homepage-default-content {
-            padding: 2rem 0;
+            padding: var(--weline-layout-spacing-xl, 2rem) 0;
         }
         
         .slot-placeholder {
@@ -367,7 +367,7 @@ $colors = $this->getData('colors') ?? [];
         }
         
         .slot-placeholder .placeholder-icon {
-            font-size: 36px;
+            font-size: var(--weline-layout-font-size-4xl, 2rem);
         }
         
         .weline-grid-2,
@@ -386,9 +386,9 @@ $colors = $this->getData('colors') ?? [];
             max-width: 100%;
         }
         
-        .weline-section { padding: 1.5rem 0; }
-        .weline-section-lg { padding: 2.5rem 0; }
-        .weline-section-xl { padding: 4rem 0; }
+        .weline-section { padding: var(--weline-layout-spacing-lg, 1.5rem) 0; }
+        .weline-section-lg { padding: calc(var(--weline-layout-spacing-xl, 2rem) + var(--weline-layout-spacing-sm, 0.5rem)) 0; }
+        .weline-section-xl { padding: var(--weline-layout-spacing-3xl, 4rem) 0; }
     }
     
     @media (max-width: 480px) {

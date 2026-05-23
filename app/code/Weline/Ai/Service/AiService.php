@@ -27,6 +27,8 @@ use Weline\Ai\Service\Provider\ImageGenerationResponseNormalizer;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\ConfigResolver;
 use Weline\Ai\Service\Skill\AdapterSkillResolver;
+use Weline\Ai\Service\Style\AdapterStyleResolver;
+use Weline\Ai\Service\Style\StyleService;
 use Weline\Ai\Interface\AgentInterface;
 use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Helper\ErrorMessageHelper;
@@ -370,6 +372,8 @@ class AiService
             }
         }
 
+        $params['admin_user_id'] = $userId;
+
         // 4. 场景适配器处理
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
@@ -523,6 +527,8 @@ class AiService
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
             throw new Exception($reason);
         }
+
+        $params['admin_user_id'] = $params['admin_user_id'] ?? null;
 
         // 2. 场景适配器处理
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
@@ -848,6 +854,7 @@ class AiService
         }
 
         $prompt = $this->injectAdapterSkills($prompt, $scenarioCode, $params);
+        $prompt = $this->injectAdapterStyles($prompt, $scenarioCode, $params);
 
         return $adapter->adaptPrompt($prompt, $params);
     }
@@ -866,13 +873,38 @@ class AiService
         $resolver = ObjectManager::getInstance(AdapterSkillResolver::class);
         $resolved = $resolver->resolveSkillBindings($scenarioCode, $this->extractTemporarySkillCodes($params));
         if (empty($resolved['items'])) {
+            $this->logSkillStyleTrace('skill_injection.skipped', [
+                'scenario' => $scenarioCode,
+                'reason' => 'no_resolved_items',
+            ]);
             return $prompt;
         }
 
         $guide = $resolver->buildPromptGuideText($resolved['items']);
         if ($guide === '') {
+            $this->logSkillStyleTrace('skill_injection.skipped', [
+                'scenario' => $scenarioCode,
+                'reason' => 'empty_guide',
+                'codes' => $resolved['codes'] ?? [],
+            ]);
             return $prompt;
         }
+
+        $this->logSkillStyleTrace('skill_injection.applied', [
+            'scenario' => $scenarioCode,
+            'codes' => $resolved['codes'] ?? [],
+            'bindings' => \array_map(static function (array $item): array {
+                return [
+                    'code' => (string)($item['code'] ?? ''),
+                    'binding_source' => (string)($item['binding_source'] ?? ''),
+                    'locked' => !empty($item['locked']) ? 1 : 0,
+                    'manual' => !empty($item['manual']) ? 1 : 0,
+                    'temporary' => !empty($item['temporary']) ? 1 : 0,
+                ];
+            }, $resolved['items']),
+            'guide_chars' => \strlen($guide),
+            'prompt_chars_before' => \strlen($prompt),
+        ]);
 
         $prompt = \ltrim($prompt);
         return $prompt === '' ? $guide : $guide . "\n\n" . $prompt;
@@ -911,6 +943,148 @@ class AiService
         }
 
         return $codes;
+    }
+
+    private function injectAdapterStyles(string $prompt, string $scenarioCode, array $params): string
+    {
+        if (!empty($params['disable_style_prompt_injection'])) {
+            return $prompt;
+        }
+        if (\str_contains($prompt, 'AI STYLE CONTRACT')
+            || \str_contains($prompt, 'CTX_AI_STYLE')
+            || \str_contains($prompt, 'AI ADAPTER STYLE CAPABILITY')) {
+            return $prompt;
+        }
+
+        $styleService = ObjectManager::getInstance(StyleService::class);
+        if ($this->extractStyleMode($params, $styleService) === StyleService::MODE_NONE) {
+            return $prompt;
+        }
+
+        $snapshotSource = 'snapshot';
+        $snapshot = $styleService->normalizeSnapshot($this->extractStyleSnapshot($params));
+        if ($snapshot === []) {
+            /** @var AdapterStyleResolver $resolver */
+            $resolver = ObjectManager::getInstance(AdapterStyleResolver::class);
+            $adminId = \max(0, (int)($params['admin_user_id'] ?? $params['admin_id'] ?? $params['user_id'] ?? 0));
+            $resolved = $resolver->resolvePreferredStyle(
+                $scenarioCode,
+                $this->extractStyleTitle($params),
+                $this->extractStyleBrief($params, $prompt),
+                $adminId
+            );
+            if (empty($resolved['matched']) || !\is_array($resolved['item'] ?? null)) {
+                $this->logSkillStyleTrace('style_injection.skipped', [
+                    'scenario' => $scenarioCode,
+                    'reason' => 'no_matched_style',
+                    'mode' => $this->extractStyleMode($params, $styleService),
+                    'match_reason' => (string)($resolved['reason'] ?? ''),
+                ]);
+                return $prompt;
+            }
+            $snapshot = $styleService->buildSnapshot($resolved['item'], (string)($resolved['reason'] ?? ''));
+            $snapshotSource = (string)($resolved['source'] ?? 'resolved');
+        }
+
+        $guide = \trim($styleService->buildStageThreePromptAddon([
+            'design_direction_snapshot' => $snapshot,
+        ]));
+        if ($guide === '') {
+            $this->logSkillStyleTrace('style_injection.skipped', [
+                'scenario' => $scenarioCode,
+                'reason' => 'empty_guide',
+                'style_code' => (string)($snapshot['code'] ?? ''),
+            ]);
+            return $prompt;
+        }
+
+        $this->logSkillStyleTrace('style_injection.applied', [
+            'scenario' => $scenarioCode,
+            'source' => $snapshotSource,
+            'style_code' => (string)($snapshot['code'] ?? ''),
+            'style_name' => (string)($snapshot['name'] ?? ''),
+            'style_version' => (int)($snapshot['version'] ?? 0),
+            'style_hash' => (string)($snapshot['hash'] ?? ''),
+            'guide_chars' => \strlen($guide),
+            'prompt_chars_before' => \strlen($prompt),
+        ]);
+
+        $prompt = \ltrim($prompt);
+        return $prompt === '' ? $guide : $guide . "\n\n" . $prompt;
+    }
+
+    private function extractStyleMode(array $params, StyleService $styleService): string
+    {
+        foreach ([
+            $params['design_direction_mode'] ?? null,
+            $params['style_mode'] ?? null,
+            $params['scope']['design_direction_mode'] ?? null,
+            $params['contract_context']['design_direction_mode'] ?? null,
+        ] as $candidate) {
+            if (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
+                return $styleService->normalizeMode((string)$candidate);
+            }
+        }
+
+        return StyleService::MODE_AUTO;
+    }
+
+    private function extractStyleTitle(array $params): string
+    {
+        foreach ([
+            $params['site_title'] ?? null,
+            $params['title'] ?? null,
+            $params['scope']['site_title'] ?? null,
+            $params['contract_context']['site_title'] ?? null,
+        ] as $candidate) {
+            if (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
+                return \trim((string)$candidate);
+            }
+        }
+
+        return '';
+    }
+
+    private function extractStyleBrief(array $params, string $prompt): string
+    {
+        foreach ([
+            $params['brief_description'] ?? null,
+            $params['user_description'] ?? null,
+            $params['brief'] ?? null,
+            $params['scope']['brief_description'] ?? null,
+            $params['scope']['user_description'] ?? null,
+            $params['contract_context']['brief_description'] ?? null,
+        ] as $candidate) {
+            if (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
+                return \trim((string)$candidate);
+            }
+        }
+
+        return \function_exists('mb_substr') ? \mb_substr($prompt, 0, 4000) : \substr($prompt, 0, 4000);
+    }
+
+    private function extractStyleSnapshot(array $params): mixed
+    {
+        foreach ([
+            $params['design_direction_snapshot'] ?? null,
+            $params['style_snapshot'] ?? null,
+            $params['scope']['design_direction_snapshot'] ?? null,
+            $params['contract_context']['design_direction_snapshot'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function logSkillStyleTrace(string $event, array $context = []): void
+    {
+        SkillStyleTrace::log($event, $context);
     }
 
     /**

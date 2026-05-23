@@ -54,6 +54,17 @@
 设置语言失败：%{1},言語設定に失敗しました：%{1}
 客服消息翻译,カスタマーサービスメッセージ翻訳
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,カスタマーサービスモジュールは、このイベントを通じて翻訳サービスをリクエストします。イベントデータには、翻訳対象のテキスト、ソース言語、ターゲット言語などが含まれます。翻訳モジュールはこのイベントを監視し、翻訳サービスを提供できます。
+"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
+"Session and message content are required.","Session and message content are required."
+"Session ID is required.","Session ID is required."
+"Language code is required.","Language code is required."
+"Language updated.","Language updated."
+"Please enter a valid email address.","Please enter a valid email address."
+"Session token is required.","Session token is required."
+"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
+"Verification email has been sent.","Verification email has been sent."
+"Customer Service Query","Customer Service Query"
+"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
 "客服服务 - 邮箱绑定验证","カスタマーサービス - メールアドレス紐付け確認"
 客服系统,カスタマーサービスシステム
 客服服务,カスタマーサービス
@@ -61,8 +72,6 @@
 设置,設定
 收起,最小化
 我的语言,マイ言語
-简体中文,簡体字中国語
-繁體中文,繁体字中国語
 显示模式,表示モード
 仅显示译文,翻訳のみ表示
 原文+译文,原文+翻訳
@@ -104,8 +113,8 @@
 分钟,分
 最长,最長
 秒,秒
-客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
 欢迎使用客服服务,欢迎使用客服服务
+客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
 鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 "AI 智能客服",AIカスタマーサービス
 鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
@@ -159,6 +168,7 @@ ID,ID
 启用客服服务,カスタマーサービスを有効化
 启用,启用
 默认客服语言,デフォルト担当者言語
+简体中文,簡体字中国語
 English,English
 默认客户语言,デフォルト顧客言語
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。",サービス担当者がオンラインでない場合、AIによる顧客メッセージの自動返信を有効にできます。

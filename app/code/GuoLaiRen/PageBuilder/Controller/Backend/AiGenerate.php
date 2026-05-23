@@ -917,6 +917,16 @@ class AiGenerate extends BackendController
             $prompt .= '  "' . $config['key'] . '": "visitor-ready field value",' . "\n";
         }
         $prompt = \rtrim($prompt, ",\n") . "\n}\n\n";
+        $prompt .= "Example return pattern (copy the keys and JSON shape, not the wording):\n{\n";
+        $exampleCount = 0;
+        foreach ($textConfigs as $config) {
+            $prompt .= '  "' . $config['key'] . '": "Finished visitor-facing copy for this field",' . "\n";
+            $exampleCount++;
+            if ($exampleCount >= 3) {
+                break;
+            }
+        }
+        $prompt = \rtrim($prompt, ",\n") . "\n}\n\n";
         $prompt .= "Field rules:\n";
         $prompt .= "- Preserve link-list syntax when an existing value uses Label=>/path lines.\n";
         $prompt .= "- Keep generated values concise enough for component fields.\n";
@@ -1085,6 +1095,17 @@ class AiGenerate extends BackendController
         }
         $prompt = rtrim($prompt, ",\n") . "\n";
         $prompt .= "}\n\n";
+        $prompt .= "Example return pattern (copy the listed keys and JSON shape, not this wording):\n{\n";
+        $exampleCount = 0;
+        foreach ($textConfigs as $config) {
+            $prompt .= '  "' . $config['key'] . '": "Finished visitor-facing copy for this field",' . "\n";
+            $exampleCount++;
+            if ($exampleCount >= 3) {
+                break;
+            }
+        }
+        $prompt = rtrim($prompt, ",\n") . "\n";
+        $prompt .= "}\n\n";
 
         $prompt .= "要求：\n";
         $prompt .= "1. 所有配置项的值必须符合页面主题和组件用途\n";
@@ -1245,6 +1266,16 @@ class AiGenerate extends BackendController
         }
 
         $prompt .= "}\n\n";
+        $prompt .= "Example return pattern (copy JSON shape, not this wording):\n";
+        $prompt .= "{\n";
+        $prompt .= '  "title": "Finished page title",' . "\n";
+        $prompt .= '  "meta_title": "Finished SEO title within the limit",' . "\n";
+        $prompt .= '  "meta_description": "Finished SEO description written for visitors and search results.",' . "\n";
+        $prompt .= '  "meta_keywords": "keyword one, keyword two, keyword three"';
+        if ($pageType !== 'home' && $pageType !== 'homepage') {
+            $prompt .= ",\n" . '  "content": "<section><h1>Finished heading</h1><p>Finished visitor-facing page copy.</p></section>"';
+        }
+        $prompt .= "\n}\n\n";
         $prompt .= "要求：\n";
         $prompt .= "1. 所有内容必须符合页面描述的主题\n";
         $prompt .= "2. SEO内容要优化，包含相关关键词\n";
@@ -1308,6 +1339,17 @@ class AiGenerate extends BackendController
         $prompt .= "{\n";
         foreach ($textConfigs as $config) {
             $prompt .= '  "' . $config['key'] . '": "根据页面信息和配置项说明生成合适的内容",' . "\n";
+        }
+        $prompt = rtrim($prompt, ",\n") . "\n";
+        $prompt .= "}\n\n";
+        $prompt .= "Example return pattern (copy the listed keys and JSON shape, not this wording):\n{\n";
+        $exampleCount = 0;
+        foreach ($textConfigs as $config) {
+            $prompt .= '  "' . $config['key'] . '": "Finished visitor-facing copy for this field",' . "\n";
+            $exampleCount++;
+            if ($exampleCount >= 3) {
+                break;
+            }
         }
         $prompt = rtrim($prompt, ",\n") . "\n";
         $prompt .= "}\n\n";

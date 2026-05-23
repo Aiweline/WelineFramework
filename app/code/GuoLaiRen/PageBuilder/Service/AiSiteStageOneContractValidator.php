@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
+use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContentManifestLinter;
+
 final class AiSiteStageOneContractValidator
 {
     public function __construct(
@@ -67,8 +69,13 @@ final class AiSiteStageOneContractValidator
 
         foreach (['page_goal', 'theme_alignment_summary'] as $field) {
             $value = \trim((string)($pagePlan[$field] ?? ''));
-            if ($value === '' || $this->isPromptLikeText($value)) {
-                $issues[] = $this->issue('instruction_like_or_empty', 'pages.' . $pageType . '.' . $field, 'high', [
+            if ($value === '') {
+                $issues[] = $this->issue('instruction_like_or_empty', 'pages.' . $pageType . '.' . $field, 'medium', [
+                    'page_type' => $pageType,
+                    'snippet' => $this->clip($value),
+                ]);
+            } elseif ($this->isPromptLikeText($value)) {
+                $issues[] = $this->issue('instruction_like_or_empty', 'pages.' . $pageType . '.' . $field, 'medium', [
                     'page_type' => $pageType,
                     'snippet' => $this->clip($value),
                 ]);
@@ -143,9 +150,24 @@ final class AiSiteStageOneContractValidator
                 $requiredBlockKeys[$blockKey] = true;
             }
 
+            $pageFlowRole = $this->normalizeRoleToken((string)($block['page_flow_role'] ?? ''));
+            if ($pageFlowRole === '') {
+                $issues[] = $this->issue('missing_page_flow_role', $path . '.page_flow_role', 'high', [
+                    'page_type' => $pageType,
+                    'block_key' => $blockKey,
+                    'expected' => 'Stage-1 must declare the exact block identity/page flow role. BuildPlan must not infer it from block_key, section type, page type, or legacy defaults.',
+                ]);
+            }
+
             $content = \trim((string)($block['content'] ?? ''));
-            if ($content === '' || $this->isPromptLikeText($content)) {
-                $issues[] = $this->issue('instruction_like_or_empty', $path . '.content', 'high', [
+            if ($content === '') {
+                $issues[] = $this->issue('instruction_like_or_empty', $path . '.content', 'medium', [
+                    'page_type' => $pageType,
+                    'block_key' => $blockKey,
+                    'snippet' => $this->clip($content),
+                ]);
+            } elseif ($this->isPromptLikeText($content)) {
+                $issues[] = $this->issue('instruction_like_or_empty', $path . '.content', 'medium', [
                     'page_type' => $pageType,
                     'block_key' => $blockKey,
                     'snippet' => $this->clip($content),
@@ -155,6 +177,7 @@ final class AiSiteStageOneContractValidator
             $this->validateDesignTags($block, $pageContract, $path, $pageType, $blockKey, $issues);
             $this->validateFieldPlan($block, $pageContract, $path, $pageType, $blockKey, $issues);
             $this->validateExecutionScript($block, $path, $pageType, $blockKey, $issues);
+            $this->validateBuildPlanVisibleBodyCopy($block, $path, $pageType, $blockKey, $issues);
             $this->validateBlockSourceTruthAndPolicyCopy($block, $path, $pageType, $blockKey, $context, $issues);
             $this->validateBlockContentDiversity($block, $path, $pageType, $blockKey, $contentFingerprints, $issues);
             $visualSignatures[] = [
@@ -178,8 +201,8 @@ final class AiSiteStageOneContractValidator
                 ]);
             }
         }
-        $this->validateVisualSignatureDiversity($visualSignatures, $pageType, $issues);
-        $this->validatePageImageCoverage($blocks, $requiredImageBlockKeys, $pageType, $issues);
+        $this->validateVisualSignatureDiversity($visualSignatures, $pageType, $pageContract, $issues);
+        $this->validatePageImageCoverage($blocks, $requiredImageBlockKeys, $pageContract, $pageType, $issues);
 
         return $this->report($pagePlan, $contract, $issues, $context);
     }
@@ -343,7 +366,7 @@ final class AiSiteStageOneContractValidator
             $value = $designTags[$tagKey] ?? null;
             $ok = \is_array($value) ? $value !== [] : \trim((string)$value) !== '';
             if (!$ok) {
-                $issues[] = $this->issue('missing_design_tag', $path . '.design_tags.' . $tagKey, 'high', [
+                $issues[] = $this->issue('missing_design_tag', $path . '.design_tags.' . $tagKey, 'medium', [
                     'page_type' => $pageType,
                     'block_key' => $blockKey,
                 ]);
@@ -360,8 +383,15 @@ final class AiSiteStageOneContractValidator
     {
         $fieldPlan = \is_array($block['field_plan'] ?? null) ? \array_values($block['field_plan']) : [];
         $expectedCount = (int)($pageContract['field_plan_count'] ?? AiSiteStageOneContractService::FIELD_PLAN_COUNT);
-        if (\count($fieldPlan) !== $expectedCount) {
-            $issues[] = $this->issue('invalid_field_plan_count', $path . '.field_plan', 'high', [
+        if ($fieldPlan === [] && $expectedCount > 0) {
+            $issues[] = $this->issue('missing_field_plan', $path . '.field_plan', 'high', [
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+                'expected' => $expectedCount,
+                'actual' => 0,
+            ]);
+        } elseif (\count($fieldPlan) !== $expectedCount) {
+            $issues[] = $this->issue('invalid_field_plan_count', $path . '.field_plan', 'medium', [
                 'page_type' => $pageType,
                 'block_key' => $blockKey,
                 'expected' => $expectedCount,
@@ -379,8 +409,15 @@ final class AiSiteStageOneContractValidator
             }
             foreach (['field', 'sample', 'implementation_note'] as $field) {
                 $value = \trim((string)($row[$field] ?? ''));
-                if ($value === '' || $this->isPromptLikeText($value)) {
-                    $issues[] = $this->issue('instruction_like_or_empty', $path . '.field_plan.' . $index . '.' . $field, $field === 'implementation_note' ? 'medium' : 'high', [
+                if ($value === '') {
+                    $issues[] = $this->issue('instruction_like_or_empty', $path . '.field_plan.' . $index . '.' . $field, $field === 'field' ? 'high' : 'medium', [
+                        'page_type' => $pageType,
+                        'block_key' => $blockKey,
+                        'field_index' => $index,
+                        'snippet' => $this->clip($value),
+                    ]);
+                } elseif ($this->isPromptLikeText($value)) {
+                    $issues[] = $this->issue('instruction_like_or_empty', $path . '.field_plan.' . $index . '.' . $field, 'medium', [
                         'page_type' => $pageType,
                         'block_key' => $blockKey,
                         'field_index' => $index,
@@ -400,12 +437,33 @@ final class AiSiteStageOneContractValidator
         $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
         $coreCopy = \trim((string)($executionScript['core_copy'] ?? ''));
         if ($coreCopy === '' || $this->isPromptLikeText($coreCopy)) {
-            $issues[] = $this->issue('instruction_like_or_empty', $path . '.execution_script.core_copy', 'high', [
+            $issues[] = $this->issue('instruction_like_or_empty', $path . '.execution_script.core_copy', 'medium', [
                 'page_type' => $pageType,
                 'block_key' => $blockKey,
                 'snippet' => $this->clip($coreCopy),
             ]);
         }
+    }
+
+    /**
+     * Keep Stage-1 validation aligned with BuildPlan extraction. The builder does not have a
+     * local copy fallback, so a block that only contains layout/planning text must be repaired
+     * before confirmation.
+     *
+     * @param array<string, mixed> $block
+     * @param list<array<string, mixed>> $issues
+     */
+    private function validateBuildPlanVisibleBodyCopy(array $block, string $path, string $pageType, string $blockKey, array &$issues): void
+    {
+        if ($this->blockHasBuildPlanVisibleBodyCopy($block)) {
+            return;
+        }
+
+        $issues[] = $this->issue('missing_visible_body_copy', $path . '.field_plan', 'medium', [
+            'page_type' => $pageType,
+            'block_key' => $blockKey,
+            'expected' => 'Every Stage-1 block must provide visitor-visible body copy that BuildPlan can consume: execution_script.core_copy, a field_plan supporting_copy/body/copy row, realtime_content.supporting_copy, feature_points, or block.content. Layout/planning instructions do not count.',
+        ]);
     }
 
     /**
@@ -421,35 +479,17 @@ final class AiSiteStageOneContractValidator
         array $context,
         array &$issues
     ): void {
-        $sourceText = $this->normalizeSourceTextForExactContactChecks($context);
         $visibleTexts = $this->collectBlockVisibleTexts($block, $path);
         foreach ($visibleTexts as $row) {
             $text = (string)($row['text'] ?? '');
             if ($text === '') {
                 continue;
             }
-            $fieldPath = (string)($row['path'] ?? $path);
-            if ($this->containsInventedExactContact($text, $sourceText)) {
-                $issues[] = $this->issue('invented_exact_contact', $fieldPath, 'high', [
-                    'page_type' => $pageType,
-                    'block_key' => $blockKey,
-                    'snippet' => $this->clip($text),
-                    'expected' => 'Use only exact contact values present in source truth, or point to the selected contact page without inventing emails, phones, WhatsApp IDs, or support hours.',
-                ]);
-            }
-            if ($this->isPolicyPageType($pageType) && $this->isPolicyUnsafeVisibleCopy($text, (string)($row['field_name'] ?? ''))) {
-                $issues[] = $this->issue('policy_page_body_unsafe_cta', $fieldPath, 'high', [
-                    'page_type' => $pageType,
-                    'block_key' => $blockKey,
-                    'snippet' => $this->clip($text),
-                    'expected' => 'Policy page body blocks must stay policy, support, consent, rights, or dispute focused and must not reuse download/install/play/reward conversion copy.',
-                ]);
-            }
         }
 
         $role = $this->normalizeRoleToken((string)($block['page_flow_role'] ?? ''));
         if ($role === 'cta' && !$this->blockHasExplicitActionCopy($block)) {
-            $issues[] = $this->issue('cta_role_missing_block_action', $path . '.field_plan', 'high', [
+            $issues[] = $this->issue('cta_role_missing_block_action', $path . '.field_plan', 'medium', [
                 'page_type' => $pageType,
                 'block_key' => $blockKey,
                 'expected' => 'A cta role block must include its own cta_label, action_label, button_text, form_label, submit_label, or realtime_content.ctas value.',
@@ -464,7 +504,7 @@ final class AiSiteStageOneContractValidator
     private function collectBlockVisibleTexts(array $block, string $path): array
     {
         $texts = [];
-        foreach (['content', 'goal'] as $field) {
+        foreach (['content'] as $field) {
             $value = \trim((string)($block[$field] ?? ''));
             if ($value !== '') {
                 $texts[] = ['text' => $value, 'path' => $path . '.' . $field, 'field_name' => $field];
@@ -506,79 +546,6 @@ final class AiSiteStageOneContractValidator
     }
 
     /**
-     * @param array<string, mixed> $context
-     */
-    private function normalizeSourceTextForExactContactChecks(array $context): string
-    {
-        $source = [
-            'brief_description' => $context['brief_description'] ?? '',
-            'source_truth_contract' => $context['source_truth_contract'] ?? [],
-            'source_of_truth' => $context['source_of_truth'] ?? [],
-            'user_requirements' => $context['user_requirements'] ?? [],
-        ];
-
-        return \mb_strtolower((string)\json_encode($source, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR));
-    }
-
-    private function containsInventedExactContact(string $value, string $sourceText): bool
-    {
-        if (\trim($value) === '') {
-            return false;
-        }
-        if (\preg_match_all('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/iu', $value, $emails) > 0) {
-            foreach ($emails[0] ?? [] as $email) {
-                if (!\str_contains($sourceText, \mb_strtolower((string)$email))) {
-                    return true;
-                }
-            }
-        }
-        if (\preg_match_all('/(?<!\d)(?:\+?\d[\d\s().-]{6,}\d)(?!\d)/u', $value, $phones) > 0) {
-            $sourceDigits = \preg_replace('/\D+/', '', $sourceText) ?? '';
-            foreach ($phones[0] ?? [] as $phone) {
-                $digits = \preg_replace('/\D+/', '', (string)$phone) ?? '';
-                if (\strlen($digits) >= 8 && !\str_contains($sourceDigits, $digits)) {
-                    return true;
-                }
-            }
-        }
-        if ($this->containsSupportHoursClaim($value) && !$this->containsSupportHoursClaim($sourceText)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    private function containsSupportHoursClaim(string $value): bool
-    {
-        return \preg_match('/(?:24\s*\/\s*7|24\s*(?:h|hours?)|\x{0032}\x{0034}\s*\x{5C0F}\x{65F6}|\x{4E8C}\x{5341}\x{56DB}\x{5C0F}\x{65F6}|\x{5168}\x{5929}\x{5019}|\x{5168}\x{65F6})/iu', $value) === 1;
-    }
-
-    private function isPolicyUnsafeVisibleCopy(string $value, string $fieldName): bool
-    {
-        $normalized = \mb_strtolower(\trim((string)\preg_replace('/\s+/u', ' ', $value)));
-        if ($normalized === '') {
-            return false;
-        }
-
-        $downloadPattern = '/\b(?:download|apk|install)\b|\x{4E0B}\x{8F7D}|\x{5B89}\x{88C5}/iu';
-        if (\preg_match($downloadPattern, $normalized) === 1) {
-            return true;
-        }
-
-        $rewardConversionPattern = '/\b(?:claim|bonus|coins?)\b|\x{9886}\x{53D6}.{0,12}(?:\x{5956}\x{52B1}|\x{5956}\x{91D1}|\x{7B79}\x{7801})|\x{6CE8}\x{518C}\x{5373}\x{9001}/iu';
-        if (\preg_match($rewardConversionPattern, $normalized) === 1) {
-            return true;
-        }
-
-        $actionField = \preg_match('/(?:cta|button|action|submit|form_label)/iu', $fieldName) === 1;
-        if (!$actionField) {
-            return false;
-        }
-
-        return \preg_match('/\b(?:app|play|casino|rummy|ludo|teen\s*patti|reward|bonus|coins?)\b|\x{6E38}\x{620F}|\x{5F00}\x{59CB}|\x{9886}\x{53D6}|\x{5956}\x{52B1}|\x{5956}\x{91D1}|\x{7B79}\x{7801}/iu', $normalized) === 1;
-    }
-
-    /**
      * @param array<string, mixed> $block
      */
     private function blockHasExplicitActionCopy(array $block): bool
@@ -608,6 +575,76 @@ final class AiSiteStageOneContractValidator
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function blockHasBuildPlanVisibleBodyCopy(array $block): bool
+    {
+        $execution = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+        $candidates = [
+            $execution['core_copy'] ?? null,
+            $this->extractStageOneFieldPlanText($block, ['description', 'body', 'copy', 'subtitle', 'supporting_copy', 'intro', 'paragraph']),
+        ];
+
+        $realtime = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
+        if (\is_array($realtime['supporting_copy'] ?? null)) {
+            $candidates[] = \implode(' ', \array_map('strval', $realtime['supporting_copy']));
+        }
+
+        if (\is_array($execution['feature_points'] ?? null)) {
+            $candidates[] = \implode(' ', \array_map('strval', $execution['feature_points']));
+        }
+
+        $candidates[] = $block['content'] ?? null;
+
+        foreach ($candidates as $candidate) {
+            if (!$this->isSafeBuildPlanVisibleCopy($candidate)) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param list<string> $fieldNames
+     */
+    private function extractStageOneFieldPlanText(array $block, array $fieldNames): string
+    {
+        $wanted = \array_fill_keys(\array_map('strtolower', $fieldNames), true);
+        foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
+            if (!\is_array($field)) {
+                continue;
+            }
+            $name = \strtolower(\trim((string)($field['field'] ?? $field['name'] ?? '')));
+            if (!isset($wanted[$name])) {
+                continue;
+            }
+            $text = \trim((string)($field['sample'] ?? $field['value'] ?? $field['text'] ?? ''));
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '';
+    }
+
+    private function isSafeBuildPlanVisibleCopy(mixed $value): bool
+    {
+        if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+            return false;
+        }
+        $text = \trim((string)\preg_replace('/\s+/u', ' ', (string)$value));
+        if ($text === '' || $this->isPromptLikeText($text)) {
+            return false;
+        }
+
+        return !BuildPlanContentManifestLinter::isPlanningOrImplementationCopy($text);
     }
 
     private function isPolicyPageType(string $pageType): bool
@@ -644,7 +681,7 @@ final class AiSiteStageOneContractValidator
             }
             $key = $field . ':' . $fingerprint;
             if (isset($fingerprints[$key]) && $fingerprints[$key] !== $blockKey) {
-                $issues[] = $this->issue('duplicate_block_message', $path . '.' . ($field === 'core_copy' ? 'execution_script.core_copy' : $field), 'high', [
+                $issues[] = $this->issue('duplicate_block_message', $path . '.' . ($field === 'core_copy' ? 'execution_script.core_copy' : $field), 'medium', [
                     'page_type' => $pageType,
                     'block_key' => $blockKey,
                     'duplicate_of' => $fingerprints[$key],
@@ -709,6 +746,9 @@ final class AiSiteStageOneContractValidator
             }
             $value = $this->normalizeSignatureText($signature[$key] ?? null);
             $normalized[$key] = $value;
+            if ($key === 'interaction_pattern' && $value === '') {
+                continue;
+            }
             if ($value === '' || $this->isPromptLikeText($value)) {
                 $issues[] = $this->issue('invalid_visual_signature', $path . '.visual_signature.' . $key, 'high', [
                     'page_type' => $pageType,
@@ -763,13 +803,13 @@ final class AiSiteStageOneContractValidator
         }
 
         if ($needsImage) {
-            foreach (['image_role', 'image_subject', 'placement', 'reuse_policy'] as $field) {
+            foreach (['image_role', 'image_subject', 'placement', 'visual_atmosphere', 'image_treatment', 'reuse_policy'] as $field) {
                 $value = $this->normalizeSignatureText($intent[$field] ?? null);
                 if ($value === '' || $this->isPromptLikeText($value)) {
                     $issues[] = $this->issue('invalid_image_intent_field', $path . '.image_intent.' . $field, 'high', [
                         'page_type' => $pageType,
                         'block_key' => $blockKey,
-                        'expected' => 'concrete image role, subject, placement, and reuse policy',
+                        'expected' => 'concrete image role, subject, placement, visual atmosphere, image treatment, and reuse policy',
                     ]);
                 }
             }
@@ -782,16 +822,26 @@ final class AiSiteStageOneContractValidator
                     'actual' => $this->clip($subject),
                 ]);
             }
+            if ($this->blockDeclaresCssOnlyVisual($block)) {
+                $issues[] = $this->issue('image_intent_conflicts_with_block_plan', $path . '.image_intent.needs_image', 'high', [
+                    'page_type' => $pageType,
+                    'block_key' => $blockKey,
+                    'expected' => 'needs_image=true requires visual_signature.media_strategy to describe the real generated image asset and must not declare CSS-only/no generated image',
+                    'actual' => 'image_intent.needs_image=true but media planning declares CSS-only/no generated image',
+                ]);
+            }
             return;
         }
 
-        $cssMotif = $this->normalizeSignatureText($intent['css_motif'] ?? null);
-        $rationale = $this->normalizeSignatureText($intent['rationale'] ?? null);
-        if (($cssMotif === '' || $this->isPromptLikeText($cssMotif)) && ($rationale === '' || $this->isPromptLikeText($rationale))) {
-            $issues[] = $this->issue('missing_css_motif_for_no_image_block', $path . '.image_intent.css_motif', 'high', [
-                'page_type' => $pageType,
-                'block_key' => $blockKey,
-            ]);
+        foreach (['css_motif', 'visual_atmosphere', 'image_treatment'] as $field) {
+            $value = $this->normalizeSignatureText($intent[$field] ?? null);
+            if ($value === '' || $this->isPromptLikeText($value)) {
+                $issues[] = $this->issue('missing_css_motif_for_no_image_block', $path . '.image_intent.' . $field, 'high', [
+                    'page_type' => $pageType,
+                    'block_key' => $blockKey,
+                    'expected' => 'needs_image=false must still declare css_motif, visual_atmosphere, and image_treatment so build does not guess the visual companion',
+                ]);
+            }
         }
 
         $imageConflict = $this->detectNoImageIntentPlanConflict($block);
@@ -808,23 +858,24 @@ final class AiSiteStageOneContractValidator
     /**
      * @param list<array<string,mixed>> $blocks
      * @param list<string> $requiredImageBlockKeys
+     * @param array<string,mixed> $pageContract
      * @param list<array<string,mixed>> $issues
      */
-    private function validatePageImageCoverage(array $blocks, array $requiredImageBlockKeys, string $pageType, array &$issues): void
+    private function validatePageImageCoverage(array $blocks, array $requiredImageBlockKeys, array $pageContract, string $pageType, array &$issues): void
     {
         if (!$this->pageShouldRequireGeneratedVisual($pageType, $blocks)) {
             return;
         }
+        $firstBlock = \is_array($blocks[0] ?? null) ? $blocks[0] : [];
+        $firstBlockKey = \trim((string)($firstBlock['block_key'] ?? ''));
         if ($requiredImageBlockKeys !== []) {
             return;
         }
 
-        $firstBlock = \is_array($blocks[0] ?? null) ? $blocks[0] : [];
-        $firstBlockKey = \trim((string)($firstBlock['block_key'] ?? ''));
         $issues[] = $this->issue('page_missing_generated_image_intent', 'pages.' . $pageType . '.blocks.image_intent', 'high', [
             'page_type' => $pageType,
             'block_key' => $firstBlockKey !== '' ? $firstBlockKey : '__page__',
-            'expected' => 'At least one real generated image slot on non-policy pages, normally the opening block, with image_intent.needs_image=true and a concrete scene/product/interface subject.',
+            'expected' => 'At least one real generated image slot on non-policy pages, with image_intent.needs_image=true and a concrete scene/product/interface subject.',
         ]);
     }
 
@@ -869,7 +920,7 @@ final class AiSiteStageOneContractValidator
 
         $role = $this->normalizeSignatureText($block['page_flow_role'] ?? null);
         if (\in_array($role, ['opening', 'hero', 'proof'], true)) {
-            return 'opening/proof block declared without an image or CSS-only visual rationale';
+            return 'opening/proof block declared without an image or CSS-only visual plan';
         }
 
         $mediaText = $this->normalizeSignatureText([
@@ -892,14 +943,16 @@ final class AiSiteStageOneContractValidator
         $intent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
         $text = $this->normalizeSignatureText([
             $intent['css_motif'] ?? null,
-            $intent['rationale'] ?? null,
             $block['visual_signature']['media_strategy'] ?? null,
         ]);
         if ($text === '') {
             return false;
         }
 
-        if (\preg_match('/\b(?:css-only|css only|no image|without image|no generated image|gradient|pattern|motif|shape|decorative css|css illustration|css icon)\b/u', $text) === 1) {
+        if (\preg_match('/\b(?:css-only|css only|no image|without image|no generated image|no[_-]?generated[_-]?image|decorative css|css illustration|css icon)\b/u', $text) === 1) {
+            return true;
+        }
+        if (\str_contains($text, 'css绘制') || \str_contains($text, 'css 绘制')) {
             return true;
         }
 
@@ -916,8 +969,7 @@ final class AiSiteStageOneContractValidator
             || \str_contains($text, '不需要生成图片')
             || \str_contains($text, '无图片')
             || \str_contains($text, '无需图片')
-            || \str_contains($text, '不用图片')
-            || \str_contains($text, '轻量');
+            || \str_contains($text, '不用图片');
 
         return $hasChineseCssMarker && $hasChineseNoImageMarker;
     }
@@ -998,6 +1050,11 @@ final class AiSiteStageOneContractValidator
             return false;
         }
 
+        $negatedPlaceholderPattern = '/(?:\b(?:avoid|reject|forbid|without|no|not|never|do\s+not|don\'t)\b.{0,24}(?:placeholder|dummy|fake|temporary|blank|gray\s+box|grey\s+box)|(?:\x{907F}\x{514D}|\x{4E0D}\x{4F7F}\x{7528}|\x{4E0D}\x{8981}|\x{7981}\x{6B62}|\x{62D2}\x{7EDD}).{0,16}(?:\x{5360}\x{4F4D}|\x{5047}\x{56FE}|\x{4E34}\x{65F6}|\x{6682}\x{65F6}))/iu';
+        if (\preg_match($negatedPlaceholderPattern, $text) === 1) {
+            return false;
+        }
+
         return \preg_match('/(?:\bplaceholder\b|\bdummy\b|\blorem\b|\bfake\s+(?:image|photo|media|asset|screenshot)\b|\btemporary\s+(?:image|photo|media|asset|screenshot)\b|\bblank\s+(?:image|photo|media|asset|screenshot|box)\b|\bgray\s+box\b|\bgrey\s+box\b|\x{5360}\x{4F4D}|\x{5047}\x{56FE}|\x{4E34}\x{65F6}(?:\x{56FE}\x{7247}|\x{56FE}\x{50CF}|\x{7D20}\x{6750}|\x{89C6}\x{89C9})|\x{6682}\x{65F6}(?:\x{56FE}\x{7247}|\x{56FE}\x{50CF}|\x{7D20}\x{6750}|\x{89C6}\x{89C9}))/iu', $text) === 1;
     }
 
@@ -1018,18 +1075,38 @@ final class AiSiteStageOneContractValidator
      * @param list<array<string, mixed>> $visualSignatures
      * @param list<array<string, mixed>> $issues
      */
-    private function validateVisualSignatureDiversity(array $visualSignatures, string $pageType, array &$issues): void
+    private function validateVisualSignatureDiversity(array $visualSignatures, string $pageType, array $pageContract, array &$issues): void
     {
+        $uniquenessScope = \trim((string)($pageContract['visual_signature_uniqueness_scope'] ?? 'same_page_adjacent_blocks'));
+        $adjacentSeverity = \trim((string)($pageContract['visual_signature_duplicate_severity'] ?? 'medium'));
+        if ($adjacentSeverity === '') {
+            $adjacentSeverity = 'medium';
+        }
+        if (\in_array($adjacentSeverity, ['high', 'blocking'], true)) {
+            $adjacentSeverity = 'medium';
+        }
+        $checkAdjacent = \in_array($uniquenessScope, ['same_page_adjacent_blocks', 'same_page_adjacent_blocks_soft'], true);
+        $checkCompositionOveruse = !empty($pageContract['forbid_repeated_composition_patterns_within_page'])
+            || \trim((string)($pageContract['composition_overuse_severity'] ?? '')) !== '';
+        $compositionOveruseSeverity = \trim((string)($pageContract['composition_overuse_severity'] ?? 'medium'));
+        if ($compositionOveruseSeverity === '') {
+            $compositionOveruseSeverity = 'medium';
+        }
+        if (\in_array($compositionOveruseSeverity, ['high', 'blocking'], true)) {
+            $compositionOveruseSeverity = 'medium';
+        }
+
         $previousFingerprint = '';
         $compositionCounts = [];
         foreach ($visualSignatures as $row) {
             $signature = \is_array($row['signature'] ?? null) ? $row['signature'] : [];
             $fingerprint = $this->visualSignatureFingerprint($signature, ['composition_pattern', 'surface_treatment', 'media_strategy']);
-            if ($fingerprint !== '' && $fingerprint === $previousFingerprint) {
-                $issues[] = $this->issue('adjacent_visual_signature_duplicate', 'pages.' . $pageType . '.blocks.' . (int)($row['index'] ?? 0) . '.visual_signature', 'high', [
+            if ($checkAdjacent && $fingerprint !== '' && $fingerprint === $previousFingerprint) {
+                $issues[] = $this->issue('adjacent_visual_signature_duplicate', 'pages.' . $pageType . '.blocks.' . (int)($row['index'] ?? 0) . '.visual_signature', $adjacentSeverity, [
                     'page_type' => $pageType,
                     'block_key' => (string)($row['block_key'] ?? ''),
                     'fingerprint' => $fingerprint,
+                    'contract_scope' => $uniquenessScope,
                 ]);
             }
             $previousFingerprint = $fingerprint;
@@ -1040,11 +1117,14 @@ final class AiSiteStageOneContractValidator
             }
         }
 
+        if (!$checkCompositionOveruse) {
+            return;
+        }
         foreach ($compositionCounts as $composition => $count) {
             if ($count <= 2) {
                 continue;
             }
-            $issues[] = $this->issue('overused_composition_pattern', 'pages.' . $pageType . '.blocks.visual_signature.composition_pattern', 'medium', [
+            $issues[] = $this->issue('overused_composition_pattern', 'pages.' . $pageType . '.blocks.visual_signature.composition_pattern', $compositionOveruseSeverity, [
                 'page_type' => $pageType,
                 'composition_pattern' => $composition,
                 'count' => $count,
@@ -1064,10 +1144,10 @@ final class AiSiteStageOneContractValidator
             return [true, ((int)$value) === 1];
         }
         $normalized = \mb_strtolower(\trim((string)$value));
-        if (\in_array($normalized, ['true', 'yes', 'y', '1', 'required', 'needed'], true)) {
+        if (\in_array($normalized, ['true', 'yes', 'y', '1', 'required', 'needed', 'generated_image', 'needs_generated_image'], true)) {
             return [true, true];
         }
-        if (\in_array($normalized, ['false', 'no', 'n', '0', 'none', 'not_needed'], true)) {
+        if (\in_array($normalized, ['false', 'no', 'n', '0', 'none', 'not_needed', 'no_image', 'no-image', 'no_generated_image', 'no-generated-image', 'css_only', 'css-only'], true)) {
             return [true, false];
         }
 

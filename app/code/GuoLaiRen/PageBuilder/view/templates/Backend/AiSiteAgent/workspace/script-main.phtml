@@ -1,5 +1,53 @@
 <?php /* hash:d02798f185922e147dbacfbc43303abe-723582 */ ?>
 <?php /* hash:f3acfd53b82ff09422af17e0e9819382-302632 */ ?>
+<?php
+$state = \is_array($state ?? null) ? $state : [];
+$scope = \is_array($scope ?? null) ? $scope : [];
+$pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
+$selectedPageTypesSafe = \is_array($selectedPageTypesSafe ?? null) ? $selectedPageTypesSafe : [];
+$activeOperation = \is_array($activeOperation ?? null) ? $activeOperation : [];
+$activeOperationStatus = (string)($activeOperationStatus ?? '');
+$currentStage = (string)($currentStage ?? '');
+$publicId = (string)($publicId ?? '');
+$guidedUi = (bool)($guidedUi ?? false);
+$displayPagesByType = \is_array($displayPagesByType ?? null) ? $displayPagesByType : [];
+$pageTypesUserCustomized = (bool)($pageTypesUserCustomized ?? false);
+$previewFullUrl = (string)($previewFullUrl ?? '');
+$visualPreviewUrl = (string)($visualPreviewUrl ?? '');
+$visualEditUrl = (string)($visualEditUrl ?? '');
+$embeddedVisualUrl = (string)($embeddedVisualUrl ?? '');
+$previewPageType = (string)($previewPageType ?? ($state['preview_page_type'] ?? ''));
+$previewPageId = (int)($previewPageId ?? ($state['preview_page_id'] ?? 0));
+$buildTaskSummary = \is_array($buildTaskSummary ?? null) ? $buildTaskSummary : [];
+$initialVirtualPagesByTypeState = \is_array($initialVirtualPagesByTypeState ?? null) ? $initialVirtualPagesByTypeState : [];
+$pbAiPhaseOnePlanPresent = (bool)($pbAiPhaseOnePlanPresent ?? false);
+$mergeScopeUrl = (string)($mergeScopeUrl ?? '');
+$replaceScopeUrl = (string)($replaceScopeUrl ?? '');
+$setStageUrl = (string)($setStageUrl ?? '');
+$startPlanUrl = (string)($startPlanUrl ?? '');
+$confirmPlanUrl = (string)($confirmPlanUrl ?? '');
+$planSseUrl = (string)($planSseUrl ?? '');
+$skillListUrl = (string)($skillListUrl ?? '');
+$skillSaveUrl = (string)($skillSaveUrl ?? '');
+$skillDisableUrl = (string)($skillDisableUrl ?? '');
+$designDirectionListUrl = (string)($designDirectionListUrl ?? '');
+$designDirectionMatchUrl = (string)($designDirectionMatchUrl ?? '');
+$sortPlanBlocksUrl = (string)($sortPlanBlocksUrl ?? '');
+$mutatePlanBlockUrl = (string)($mutatePlanBlockUrl ?? '');
+$refinePlanPageUrl = (string)($refinePlanPageUrl ?? '');
+$resumeBuildUrl = (string)($resumeBuildUrl ?? '');
+$runVirtualThemeUrl = (string)($runVirtualThemeUrl ?? '');
+$startRegeneratePageUrl = (string)($startRegeneratePageUrl ?? '');
+$startRefineComponentUrl = (string)($startRefineComponentUrl ?? '');
+$startPatchBlockUrl = (string)($startPatchBlockUrl ?? '');
+$retryAiOperationUrl = (string)($retryAiOperationUrl ?? '');
+$updateBlockConfigUrl = (string)($updateBlockConfigUrl ?? '');
+$switchPreviewPageUrl = (string)($switchPreviewPageUrl ?? '');
+$publishCheckUrl = (string)($publishCheckUrl ?? '');
+$guidedUrl = (string)($guidedUrl ?? '');
+$domainPurchaseSseUrl = (string)($domainPurchaseSseUrl ?? '');
+$domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchaseState : [];
+?>
 <script>
 (function () {
     'use strict';
@@ -284,7 +332,7 @@
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_stage_one_plan')) {
             return !!workspaceState.has_stage_one_plan || !!workspaceState.plan_confirmed;
         }
-        return !!workspaceState.plan_confirmed || !!workspaceState.has_execution_blueprint;
+        return !!workspaceState.plan_confirmed;
     }
 
     /**
@@ -312,21 +360,8 @@
             : {};
         var hasBuildTaskEvidence = Number(taskSummary.total || taskSummary.pending || taskSummary.done || 0) > 0;
         var meta = buildPlan.contract_meta && typeof buildPlan.contract_meta === 'object' ? buildPlan.contract_meta : {};
-        var executionBlueprint = pickFirstNonEmptyPlanObject(
-            state.execution_blueprint,
-            state.execution_blueprint_draft,
-            scope.execution_blueprint,
-            scope.execution_blueprint_draft,
-            planBlock.execution_blueprint
-        );
-        var planJson = pickFirstNonEmptyPlanObject(
-            state.plan_json,
-            state.plan_structured,
-            scope.plan_json,
-            scope.plan_structured,
-            planBlock.json,
-            planBlock.structured
-        );
+        var executionBlueprint = {};
+        var planJson = {};
         var displayPlan = {};
         var displayKind = '';
         if (hasNonEmptyPlanArtifact(projection)) {
@@ -335,20 +370,12 @@
         } else if (hasNonEmptyPlanArtifact(buildPlan)) {
             displayPlan = buildPlan;
             displayKind = 'build_plan';
-        } else if (hasNonEmptyPlanArtifact(executionBlueprint)) {
-            displayPlan = executionBlueprint;
-            displayKind = 'execution_blueprint';
-        } else if (hasNonEmptyPlanArtifact(planJson)) {
-            displayPlan = planJson;
-            displayKind = 'plan_json';
         } else if (hasNonEmptyPlanArtifact(taskSummary)) {
             displayPlan = taskSummary;
             displayKind = 'task_summary';
         }
         var hasEvidence = hasNonEmptyPlanArtifact(buildPlan)
             || hasNonEmptyPlanArtifact(projection)
-            || hasNonEmptyPlanArtifact(executionBlueprint)
-            || hasNonEmptyPlanArtifact(planJson)
             || !!state.has_build_plan_v2
             || !!scope.has_build_plan_v2
             || ((!!state.build_plan_confirmed || !!scope.build_plan_confirmed || !!buildPlanConfirmedState) && hasBuildTaskEvidence);
@@ -574,6 +601,139 @@
         }
     }
 
+    function isPlanFailureStatusForWorkspaceUi(status) {
+        return ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(normalizeQueueStatusForPrompt(status)) !== -1;
+    }
+
+    function isPlanSuccessStatusForWorkspaceUi(status) {
+        return ['done', 'complete', 'completed'].indexOf(normalizeQueueStatusForPrompt(status)) !== -1;
+    }
+
+    function collectPlanOperationCandidatesFromWorkspaceState(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var candidates = [];
+        if (state.active_operation && typeof state.active_operation === 'object') {
+            candidates.push({ source: 'active_operation', value: state.active_operation, requirePlanOperation: true });
+        }
+        if (scope.active_operation && typeof scope.active_operation === 'object') {
+            candidates.push({ source: 'scope.active_operation', value: scope.active_operation, requirePlanOperation: true });
+        }
+        [state.active_operations, scope.active_operations].forEach(function (operations) {
+            if (operations && typeof operations === 'object' && operations.plan && typeof operations.plan === 'object') {
+                candidates.push({ source: 'active_operations.plan', value: operations.plan, requirePlanOperation: false });
+            }
+        });
+        if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
+            candidates.push({ source: 'plan_queue_info', value: state.plan_queue_info, requirePlanOperation: false });
+        }
+        if (scope.plan_queue_info && typeof scope.plan_queue_info === 'object') {
+            candidates.push({ source: 'scope.plan_queue_info', value: scope.plan_queue_info, requirePlanOperation: false });
+        }
+        return candidates;
+    }
+
+    function findPlanFailureOperationFromWorkspaceState(workspaceState) {
+        var candidates = collectPlanOperationCandidatesFromWorkspaceState(workspaceState);
+        for (var i = 0; i < candidates.length; i += 1) {
+            var item = candidates[i] || {};
+            var operation = item.value && typeof item.value === 'object' ? item.value : {};
+            var operationName = String(operation.operation || operation.stage || '').trim().toLowerCase();
+            if (item.requirePlanOperation && operationName !== 'plan') {
+                continue;
+            }
+            var status = readQueueStatusForPrompt(operation);
+            if (!isPlanFailureStatusForWorkspaceUi(status)) {
+                continue;
+            }
+            return operation;
+        }
+        return null;
+    }
+
+    function findPlanSuccessOperationFromWorkspaceState(workspaceState) {
+        var candidates = collectPlanOperationCandidatesFromWorkspaceState(workspaceState);
+        for (var i = 0; i < candidates.length; i += 1) {
+            var item = candidates[i] || {};
+            var operation = item.value && typeof item.value === 'object' ? item.value : {};
+            var operationName = String(operation.operation || operation.stage || '').trim().toLowerCase();
+            if (item.requirePlanOperation && operationName !== 'plan') {
+                continue;
+            }
+            var status = readQueueStatusForPrompt(operation);
+            if (!isPlanSuccessStatusForWorkspaceUi(status)) {
+                continue;
+            }
+            return operation;
+        }
+        return null;
+    }
+
+    function resolvePlanFailureMessageFromWorkspaceState(workspaceState, operation) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var op = operation && typeof operation === 'object' ? operation : {};
+        var planError = state.plan_generation_last_error && typeof state.plan_generation_last_error === 'object'
+            ? state.plan_generation_last_error
+            : {};
+        var scopePlanError = scope.plan_generation_last_error && typeof scope.plan_generation_last_error === 'object'
+            ? scope.plan_generation_last_error
+            : {};
+        var snapshot = op.snapshot && typeof op.snapshot === 'object' ? op.snapshot : {};
+        var message = String(
+            op.message
+            || op.error_message
+            || op.error
+            || snapshot.message
+            || snapshot.error_message
+            || snapshot.error
+            || planError.message
+            || planError.error_message
+            || scopePlanError.message
+            || scopePlanError.error_message
+            || messages.networkError
+            || ''
+        ).trim();
+        return normalizePlanFailureMessage(message);
+    }
+
+    function syncPlanTerminalFailureUiFromWorkspaceState(workspaceState) {
+        var failedOperation = findPlanFailureOperationFromWorkspaceState(workspaceState);
+        if (!failedOperation) {
+            return false;
+        }
+        var message = resolvePlanFailureMessageFromWorkspaceState(workspaceState, failedOperation);
+        planSseRunning = false;
+        planStartRequestPending = false;
+        isOperationRunning = false;
+        setPlanModeStatus(message, 'error');
+        setPlanModalProgress(message, 100, false, 'error');
+        renderQueueUiState('plan', { state: 'failed', message: message, percent: 100 }, { updateStatus: false });
+        setPlanRetryButtonVisible(true);
+        syncConfirmPlanButtonEnabled();
+        syncPlanRebuildButtonVisibility();
+        return true;
+    }
+
+    function syncPlanTerminalSuccessUiFromWorkspaceState(workspaceState) {
+        var doneOperation = findPlanSuccessOperationFromWorkspaceState(workspaceState);
+        if (!doneOperation) {
+            return false;
+        }
+        var message = String(doneOperation.message || messages.planModeDone || messages.planGenerated || '').trim();
+        planSseRunning = false;
+        planStartRequestPending = false;
+        isOperationRunning = false;
+        setPlanGenerationActionLock(false);
+        setPlanModeStatus(message);
+        setPlanModalProgress(message, 100, (hasCurrentPhaseOnePlanDraft() || lastPhaseOnePlanPresent), 'done');
+        renderQueueUiState('plan', { state: 'completed', message: message, percent: 100 }, { updateStatus: false });
+        setPlanRetryButtonVisible(false);
+        syncConfirmPlanButtonEnabled();
+        syncPlanRebuildButtonVisibility();
+        return true;
+    }
+
     function hydrateWorkspaceFromState(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
@@ -598,6 +758,9 @@
         if (workspaceState.active_operation && typeof workspaceState.active_operation === 'object') {
             currentActiveOperationState = workspaceState.active_operation;
             isOperationRunning = isQueueUiBusyStatus(currentActiveOperationState.status || currentActiveOperationState.state);
+        }
+        if (!syncPlanTerminalFailureUiFromWorkspaceState(workspaceState)) {
+            syncPlanTerminalSuccessUiFromWorkspaceState(workspaceState);
         }
         if (workspaceState.virtual_pages_by_type && typeof workspaceState.virtual_pages_by_type === 'object') {
             mergeVirtualPagesByTypeState(workspaceState.virtual_pages_by_type);
@@ -812,7 +975,7 @@
                 rerenderCurrentPlanPreview();
             }
             if (typeof setPlanRetryButtonVisible === 'function') {
-                setPlanRetryButtonVisible(true);
+                setPlanRetryButtonVisible(false);
             }
             if (typeof autoSaveScope === 'function') {
                 autoSaveScope();
@@ -854,8 +1017,8 @@
         switched: <?= \json_encode((string)__('预览页已切换'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewUnreachable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         visualPreviewFrameTitle: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        targetDomainRequiredLabel: <?= \json_encode((string)__('目标域名（可选）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        targetDomainRequiredPlaceholder: <?= \json_encode((string)__('可稍后填写要绑定的目标域名'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        targetDomainRequiredLabel: <?= \json_encode((string)__('目标域名（必填）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        targetDomainRequiredPlaceholder: <?= \json_encode((string)__('请先填写要绑定的目标域名'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         noPageType: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         schemeRebuildButton: <?= \json_encode((string)__('方案重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSchemeRebuildConfirmTitle: <?= \json_encode((string)__('重建整个方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -870,7 +1033,7 @@
         buildFailureLocaleContract: <?= \json_encode((string)__('生成组件未满足网站内容语言契约，请检查内容语言与方案文案是否一致。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         briefRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         siteTitleRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainRequiredForPlanAction: <?= \json_encode((string)__('请先填写网站标题和一句话描述，再确认&更新方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRequiredForPlanAction: <?= \json_encode((string)__('请先填写目标域名，再生成或更新建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         domainRequiredForBuild: <?= \json_encode((string)__('请先填写目标域名，再执行发布或域名相关操作。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStartUnavailable: <?= \json_encode((string)__('建站方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSaving: <?= \json_encode((string)__('正在保存方案草稿...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1088,11 +1251,44 @@
         return ['done', 'complete', 'completed', 'error', 'failed', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(normalizeQueueStatusForPrompt(status)) !== -1;
     }
 
+    function isTruthyQueueFlagForUi(value) {
+        if (value === true || value === 1) {
+            return true;
+        }
+        var normalized = String(value || '').trim().toLowerCase();
+        return normalized === '1' || normalized === 'true' || normalized === 'yes';
+    }
+
+    function isQueueTerminalRecoveryForUi(info) {
+        if (!info || typeof info !== 'object') {
+            return false;
+        }
+        var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        var semanticStatus = normalizeQueueStatusForPrompt(info.semantic_status || snapshot.semantic_status || '');
+        if (semanticStatus === 'stale' || isQueueStatusTerminalForUi(semanticStatus)) {
+            return true;
+        }
+        if (isTruthyQueueFlagForUi(info.queue_terminal_recovered || snapshot.queue_terminal_recovered)) {
+            return true;
+        }
+        if (isTruthyQueueFlagForUi(info.finished || snapshot.finished)) {
+            return true;
+        }
+        return isTruthyQueueFlagForUi(info.retry_allowed || snapshot.retry_allowed)
+            && (semanticStatus === 'stale' || isQueueStatusTerminalForUi(semanticStatus));
+    }
+
     function readQueueStatusForPrompt(info) {
         if (!info || typeof info !== 'object') {
             return normalizeQueueStatusForPrompt(info);
         }
         var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        if (isQueueTerminalRecoveryForUi(info)) {
+            var semanticStatus = normalizeQueueStatusForPrompt(info.semantic_status || snapshot.semantic_status || '');
+            return semanticStatus && (semanticStatus === 'stale' || isQueueStatusTerminalForUi(semanticStatus))
+                ? semanticStatus
+                : 'cancelled';
+        }
         var directStatus = normalizeQueueStatusForPrompt(info.status || info.queue_status || info.state || '');
         var snapshotStatus = normalizeQueueStatusForPrompt(snapshot.status || snapshot.job_status || snapshot.queue_status || '');
         if (isQueueStatusTerminalForUi(directStatus) || isQueueStatusRunningForUi(directStatus)) {
@@ -3669,7 +3865,7 @@
     }
 
     function isTargetDomainRequiredForPlanActionSatisfied() {
-        return true;
+        return getTargetDomainTrimmed() !== '';
     }
 
     function setTargetDomainFieldInvalid(on) {
@@ -4289,8 +4485,6 @@
                 signature = String(
                     (planData && planData.source_contract_id)
                     || (buildPlanArtifacts.buildPlan && buildPlanArtifacts.buildPlan.contract_meta && buildPlanArtifacts.buildPlan.contract_meta.id)
-                    || (buildPlanArtifacts.executionBlueprint && buildPlanArtifacts.executionBlueprint.signature)
-                    || (stateForBuildPlan.execution_blueprint_confirmed_signature)
                     || ''
                 );
                 locale = String((stateForBuildPlan.scope && stateForBuildPlan.scope.plan_locale) || '');
@@ -4307,11 +4501,7 @@
                     markdown: markdown
                 };
             } else if (planType === 'build_plan') {
-                if (buildPlanArtifacts.displayKind === 'execution_blueprint') {
-                    planRenderedContent.innerHTML = buildPlanPreviewHtml('', { execution_blueprint: planData });
-                } else if (buildPlanArtifacts.displayKind === 'plan_json') {
-                    planRenderedContent.innerHTML = buildPlanPreviewHtml('', { structured: planData, json: planData });
-                } else if (
+                if (
                     buildPlanArtifacts.displayKind === 'projection'
                     && planData
                     && typeof planData === 'object'
@@ -5857,11 +6047,19 @@
         var s = String(url);
         try {
             var u = new URL(s, window.location.href);
-            u.searchParams.set('_pb_pv', String(Date.now()));
+            if (forceReload) {
+                u.searchParams.set('_pb_pv', String(Date.now()));
+            } else {
+                u.searchParams.delete('_pb_pv');
+            }
             frame.setAttribute('src', u.toString());
         } catch (e) {
-            var sep = s.indexOf('?') >= 0 ? '&' : '?';
-            frame.setAttribute('src', s + sep + '_pb_pv=' + encodeURIComponent(String(Date.now())));
+            if (forceReload) {
+                var sep = s.indexOf('?') >= 0 ? '&' : '?';
+                frame.setAttribute('src', s + sep + '_pb_pv=' + encodeURIComponent(String(Date.now())));
+            } else {
+                frame.setAttribute('src', normalizedTarget || s);
+            }
         }
         // T31：iframe 加载完成后重写预览内链接，便于在视觉编辑模式内跳转。
         frame.onload = function () {
@@ -6398,28 +6596,68 @@
         return code;
     }
 
+    function normalizeBlockLookupToken(pageType, value) {
+        var token = String(value || '').trim().toLowerCase();
+        if (!token) {
+            return '';
+        }
+        if (token.indexOf('content/') === 0) {
+            token = token.slice('content/'.length);
+        }
+        token = token.replace(/[\/._\-\s]+/g, '_').replace(/^_+|_+$/g, '');
+        var pageToken = String(pageType || '').trim().toLowerCase().replace(/[\/._\-\s]+/g, '_').replace(/^_+|_+$/g, '');
+        if (pageToken && token.indexOf(pageToken + '_') === 0) {
+            token = token.slice(pageToken.length + 1);
+        }
+        return token;
+    }
+
+    function blockLookupTokens(pageType, value) {
+        var raw = String(value || '').trim();
+        var normalized = normalizeBlockComponentCode(raw).replace(/\//g, '-');
+        var lookup = normalizeBlockLookupToken(pageType, raw);
+        return [raw, normalized, lookup].filter(function (token, index, list) {
+            return token && list.indexOf(token) === index;
+        });
+    }
+
     function blockMatchesComponentCode(pageType, block, componentCode) {
         if (!block || typeof block !== 'object') {
             return false;
         }
-        var blockId = String(block.block_id || '').trim();
         var requested = String(componentCode || '').trim();
-        if (!blockId || !requested) {
+        if (!requested) {
             return false;
         }
-        if (blockId === requested) {
-            return true;
-        }
-
-        var normalizedBlockId = normalizeBlockComponentCode(blockId);
-        var normalizedRequested = normalizeBlockComponentCode(requested);
-        if (normalizedBlockId === normalizedRequested || normalizedBlockId.replace(/\//g, '-') === normalizedRequested.replace(/\//g, '-')) {
-            return true;
+        var requestedTokens = blockLookupTokens(pageType, requested);
+        var blockCandidates = [
+            block.block_id,
+            block.component_code,
+            block._pb_server_component_code,
+            block.code,
+            block.component,
+            block.block_key,
+            block.section_code,
+            block.instance_id
+        ];
+        for (var i = 0; i < blockCandidates.length; i += 1) {
+            var candidate = String(blockCandidates[i] || '').trim();
+            if (!candidate) {
+                continue;
+            }
+            var candidateTokens = blockLookupTokens(pageType, candidate);
+            for (var candidateIndex = 0; candidateIndex < candidateTokens.length; candidateIndex += 1) {
+                if (requestedTokens.indexOf(candidateTokens[candidateIndex]) !== -1) {
+                    return true;
+                }
+            }
         }
 
         var requestedRegion = resolveSharedComponentRegionFromCode(pageType, requested);
         return requestedRegion !== ''
-            && resolveSharedComponentRegionFromCode(pageType, blockId) === requestedRegion;
+            && blockCandidates.some(function (candidate) {
+                return resolveSharedComponentRegionFromCode(pageType, String(candidate || '')) === requestedRegion;
+            });
     }
 
     function findVirtualBlockInList(pageType, blocks, componentCode) {
@@ -6454,6 +6692,13 @@
             });
         });
         return hasText;
+    }
+
+    function fieldSchemaHasConfigurableFields(fieldSchema) {
+        return Object.keys(fieldSchema || {}).some(function (groupKey) {
+            var group = fieldSchema[groupKey] || {};
+            return group && typeof group === 'object' && Object.keys(group.fields || {}).length > 0;
+        });
     }
 
     function renderBlockEditorAiGenerateBar(container, blockConfig) {
@@ -6494,6 +6739,13 @@
 
     function updateVirtualBlockState(pageType, block) {
         if (!pageType || !block || typeof block !== 'object') {
+            return;
+        }
+        if (
+            String(block.type || '') === 'virtual_theme_component'
+            && String(block.html || '').trim() === ''
+            && !fieldSchemaHasConfigurableFields(block.field_schema || {})
+        ) {
             return;
         }
         if (!virtualPagesByTypeState || typeof virtualPagesByTypeState !== 'object') {
@@ -6964,6 +7216,65 @@
         }
     }
 
+    function escapeEmbeddedPreviewSelectorValue(value) {
+        var raw = String(value || '');
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(raw);
+        }
+        return raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    }
+
+    function findEmbeddedPreviewBlockWrapper(doc, pageType, block) {
+        if (!doc || !block || typeof block !== 'object') {
+            return null;
+        }
+        var page = escapeEmbeddedPreviewSelectorValue(pageType);
+        var candidates = [
+            String(block.block_id || ''),
+            String(block.component_code || ''),
+            String(block._pb_server_component_code || ''),
+            String(block.code || ''),
+            String(block.component || ''),
+            String(block.instance_id || '')
+        ].filter(function (value, index, list) {
+            return value && list.indexOf(value) === index;
+        });
+        var attrs = ['data-component', 'data-component-code', 'data-block-id', 'data-block-key', 'data-section-code', 'data-task-key'];
+        var wrappers = ['.pb-ai-block-wrapper', '.tpmst-component-wrapper', '.pb-component-wrapper'];
+        for (var candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+            var id = escapeEmbeddedPreviewSelectorValue(candidates[candidateIndex]);
+            for (var attrIndex = 0; attrIndex < attrs.length; attrIndex += 1) {
+                var selectorParts = [];
+                for (var wrapperIndex = 0; wrapperIndex < wrappers.length; wrapperIndex += 1) {
+                    selectorParts.push(wrappers[wrapperIndex] + '[data-page-type="' + page + '"][' + attrs[attrIndex] + '="' + id + '"]');
+                }
+                var matchedWrapper = doc.querySelector(selectorParts.join(','));
+                if (matchedWrapper) {
+                    return matchedWrapper;
+                }
+            }
+        }
+        return null;
+    }
+
+    function resolveUpdatedBlockFromResponse(pageType, blockId, responseData) {
+        if (responseData && responseData.block && typeof responseData.block === 'object') {
+            return responseData.block;
+        }
+        var workspaceState = responseData && responseData.data && typeof responseData.data === 'object'
+            ? responseData.data
+            : null;
+        var virtualPages = workspaceState && workspaceState.virtual_pages_by_type && typeof workspaceState.virtual_pages_by_type === 'object'
+            ? workspaceState.virtual_pages_by_type
+            : null;
+        var pageState = virtualPages && virtualPages[pageType] && typeof virtualPages[pageType] === 'object'
+            ? virtualPages[pageType]
+            : null;
+        return pageState && Array.isArray(pageState.blocks)
+            ? findVirtualBlockInList(pageType, pageState.blocks, blockId)
+            : null;
+    }
+
     function replaceCurrentBlockHtml(pageType, block) {
         var frame = getEmbeddedPreviewFrame();
         if (!frame || !block || typeof block !== 'object') {
@@ -6978,15 +7289,18 @@
         if (!doc) {
             return false;
         }
-        var selector = '.pb-ai-block-wrapper[data-page-type="' + pageType + '"][data-component="' + String(block.block_id || '') + '"]';
-        var wrapper = doc.querySelector(selector);
+        var wrapper = findEmbeddedPreviewBlockWrapper(doc, pageType, block);
         if (!wrapper) {
             var sharedRegion = resolveSharedComponentRegionFromCode(pageType, String(block.block_id || ''));
             var candidates = sharedRegion
-                ? doc.querySelectorAll('.pb-ai-block-wrapper[data-page-type="' + pageType + '"]')
+                ? doc.querySelectorAll('.pb-ai-block-wrapper[data-page-type="' + pageType + '"], .tpmst-component-wrapper[data-page-type="' + pageType + '"], .pb-component-wrapper[data-page-type="' + pageType + '"]')
                 : [];
             for (var i = 0; i < candidates.length; i += 1) {
-                if (resolveSharedComponentRegionFromCode(pageType, candidates[i].getAttribute('data-component') || '') === sharedRegion) {
+                var candidateCode = candidates[i].getAttribute('data-component')
+                    || candidates[i].getAttribute('data-component-code')
+                    || candidates[i].getAttribute('data-block-id')
+                    || '';
+                if (resolveSharedComponentRegionFromCode(pageType, candidateCode) === sharedRegion) {
                     wrapper = candidates[i];
                     break;
                 }
@@ -7268,14 +7582,15 @@
         return String(code || '').trim().replace(/^content\//, '').replace(/\//g, '-');
     }
 
-    function workspaceVisualComponentCodesMatch(left, right) {
+    function workspaceVisualComponentCodesMatch(left, right, pageType) {
         var leftRaw = String(left || '').trim();
         var rightRaw = String(right || '').trim();
         if (!leftRaw || !rightRaw) {
             return false;
         }
         return leftRaw === rightRaw
-            || normalizeWorkspaceVisualComponentLookupCode(leftRaw) === normalizeWorkspaceVisualComponentLookupCode(rightRaw);
+            || normalizeWorkspaceVisualComponentLookupCode(leftRaw) === normalizeWorkspaceVisualComponentLookupCode(rightRaw)
+            || normalizeBlockLookupToken(pageType, leftRaw) === normalizeBlockLookupToken(pageType, rightRaw);
     }
 
     function getWorkspaceVisualPageTypeLayout(pageType) {
@@ -7295,22 +7610,44 @@
             : {};
     }
 
-    function findWorkspaceVisualLayoutItem(pageType, componentCode, blockId, region) {
+    function findWorkspaceVisualLayoutItem(pageType, componentCode, blockId, region, index) {
         var layout = getWorkspaceVisualPageTypeLayout(pageType);
         var normalizedRegion = String(region || '').trim().toLowerCase();
         if ((normalizedRegion === 'header' || normalizedRegion === 'footer') && layout[normalizedRegion] && typeof layout[normalizedRegion] === 'object') {
             return layout[normalizedRegion];
         }
         var content = Array.isArray(layout.content) ? layout.content : [];
+        var expectedIndex = parseInt(String(index == null ? '' : index), 10);
+        if (!isFinite(expectedIndex) || expectedIndex < 0) {
+            expectedIndex = -1;
+        }
+        function itemMatches(item) {
+            if (!item || typeof item !== 'object') {
+                return false;
+            }
+            var code = String(item.code || item.component || item.component_code || '').trim();
+            var instanceId = String(item.instance_id || item.block_id || item.block_key || '').trim();
+            return workspaceVisualComponentCodesMatch(code, componentCode, pageType)
+                || workspaceVisualComponentCodesMatch(code, blockId, pageType)
+                || workspaceVisualComponentCodesMatch(instanceId, componentCode, pageType)
+                || workspaceVisualComponentCodesMatch(instanceId, blockId, pageType);
+        }
+        if (expectedIndex >= 0 && expectedIndex < content.length) {
+            var indexedItem = content[expectedIndex];
+            if (itemMatches(indexedItem)) {
+                return indexedItem;
+            }
+        }
         for (var i = 0; i < content.length; i += 1) {
             var item = content[i];
-            if (!item || typeof item !== 'object') {
-                continue;
-            }
-            var code = String(item.code || item.component || '').trim();
-            if (workspaceVisualComponentCodesMatch(code, componentCode) || workspaceVisualComponentCodesMatch(code, blockId)) {
+            if (itemMatches(item)) {
                 return item;
             }
+        }
+        if (expectedIndex >= 0 && expectedIndex < content.length && normalizedRegion === 'content') {
+            return content[expectedIndex] && typeof content[expectedIndex] === 'object'
+                ? content[expectedIndex]
+                : {};
         }
         return {};
     }
@@ -7318,8 +7655,18 @@
     function buildWorkspaceVisualFallbackFieldSchema(config) {
         var fields = {};
         var keys = Object.keys(config || {}).filter(function (key) {
+            if (String(key).indexOf('_pb_static_text_original.') === 0) {
+                return false;
+            }
             var value = config[key];
             return value === null || ['string', 'number', 'boolean'].indexOf(typeof value) !== -1;
+        });
+        keys = keys.filter(function (key) {
+            if (String(key).indexOf('_pb_static_image_original.') === 0) {
+                return false;
+            }
+            var preferredKey = getWorkspaceVisualPreferredAliasKey(key);
+            return !preferredKey || !Object.prototype.hasOwnProperty.call(config, preferredKey);
         });
         keys.sort(function (left, right) {
             function priority(key) {
@@ -7360,14 +7707,326 @@
 
     function buildWorkspaceVisualFallbackBlock(context, layoutItem) {
         var config = cloneJson(layoutItem && typeof layoutItem === 'object' ? (layoutItem.config || {}) : {});
+        var layoutCode = String((layoutItem && (layoutItem.code || layoutItem.component || layoutItem.component_code)) || '').trim();
+        var layoutBlockId = String((layoutItem && (layoutItem.instance_id || layoutItem.block_id || layoutItem.block_key)) || '').trim();
+        var componentCode = String(context.component_code || layoutCode || context.block_id || '').trim();
+        var blockId = String(context.block_id || layoutBlockId || componentCode || '').trim();
         return {
-            block_id: context.block_id || context.component_code,
-            component_code: context.component_code || context.block_id,
+            block_id: blockId,
+            component_code: componentCode,
             type: 'virtual_theme_component',
             title: String((layoutItem && (layoutItem.name || layoutItem.label || layoutItem.code || layoutItem.component)) || context.component_code || context.block_id),
+            region: context.region || (layoutItem && layoutItem.region) || 'content',
+            index: context.index,
             config: config,
             field_schema: buildWorkspaceVisualFallbackFieldSchema(config)
         };
+    }
+
+    function normalizeWorkspaceVisualStaticText(value) {
+        return String(value == null ? '' : value)
+            .replace(/\u00a0/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function isWorkspaceVisualStaticTextCandidate(text) {
+        text = normalizeWorkspaceVisualStaticText(text);
+        if (text.length < 2 || text.length > 180) {
+            return false;
+        }
+        if (/^[\d\s.,:%/#|()[\]{}+-]+$/.test(text)) {
+            return false;
+        }
+        if (/^(edit|move up|move down|ai|save|cancel)$/i.test(text)) {
+            return false;
+        }
+        return true;
+    }
+
+    function describeWorkspaceVisualStaticTextNode(node, index) {
+        var tagName = String(node && node.tagName ? node.tagName.toLowerCase() : 'text');
+        var className = String(node && node.className && typeof node.className === 'string' ? node.className : '')
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .join('.');
+        var suffix = className ? (tagName + '.' + className) : tagName;
+        return 'visible text ' + String(index + 1).padStart(2, '0') + ' (' + suffix + ')';
+    }
+
+    function collectWorkspaceVisualElementTextItems(wrapper) {
+        if (!wrapper || !wrapper.querySelectorAll) {
+            return [];
+        }
+        var items = [];
+        var seen = {};
+        var elements = wrapper.querySelectorAll('h1,h2,h3,h4,h5,h6,p,a,button,li,span,strong,em,small,div');
+        Array.prototype.forEach.call(elements, function (node) {
+            if (!node || !node.textContent || (node.closest && node.closest('.component-actions,.pb-ai-embedded-toolbar,#pb-ai-embedded-action-dock,script,style'))) {
+                return;
+            }
+            var style = node.ownerDocument && node.ownerDocument.defaultView
+                ? node.ownerDocument.defaultView.getComputedStyle(node)
+                : null;
+            if (style && (style.display === 'none' || style.visibility === 'hidden')) {
+                return;
+            }
+
+            var directText = '';
+            Array.prototype.forEach.call(node.childNodes || [], function (child) {
+                if (child && child.nodeType === 3) {
+                    directText += ' ' + child.textContent;
+                }
+            });
+            var text = normalizeWorkspaceVisualStaticText(directText);
+            if (!text && node.children && node.children.length === 0) {
+                text = normalizeWorkspaceVisualStaticText(node.textContent);
+            }
+            if (!isWorkspaceVisualStaticTextCandidate(text) || seen[text]) {
+                return;
+            }
+            seen[text] = true;
+            items.push({
+                text: text,
+                node: node
+            });
+        });
+        return items.slice(0, 40);
+    }
+
+    function buildWorkspaceVisualStaticTextFields(context, block) {
+        var frame = getEmbeddedPreviewFrame();
+        var doc = null;
+        try {
+            doc = frame && frame.contentDocument ? frame.contentDocument : null;
+        } catch (error) {
+            doc = null;
+        }
+        if (!doc) {
+            return { config: {}, schema: {} };
+        }
+
+        var lookupBlock = Object.assign({}, block || {}, {
+            block_id: context && context.block_id ? context.block_id : (block && block.block_id),
+            component_code: context && context.component_code ? context.component_code : (block && block.component_code),
+            _pb_server_component_code: context && context.component_code ? context.component_code : (block && block._pb_server_component_code)
+        });
+        var wrapper = findEmbeddedPreviewBlockWrapper(doc, context.page_type, lookupBlock);
+        if (!wrapper) {
+            return { config: {}, schema: {} };
+        }
+
+        var config = {};
+        var fields = {};
+        collectWorkspaceVisualElementTextItems(wrapper).forEach(function (item, index) {
+            var token = 't' + String(index + 1).padStart(2, '0');
+            var key = 'visible_text.' + token;
+            var originalKey = '_pb_static_text_original.' + token;
+            config[key] = item.text;
+            config[originalKey] = item.text;
+            fields[token] = {
+                key: key,
+                type: item.text.length > 70 ? 'textarea' : 'text',
+                label: describeWorkspaceVisualStaticTextNode(item.node, index),
+                static_original_key: originalKey,
+                static_original: item.text
+            };
+        });
+
+        if (Object.keys(fields).length === 0) {
+            return { config: {}, schema: {} };
+        }
+
+        return {
+            config: config,
+            schema: {
+                visible_text: {
+                    label: 'Visible text',
+                    fields: fields
+                }
+            }
+        };
+    }
+
+    function normalizeWorkspaceVisualStaticImageValue(value) {
+        return String(value == null ? '' : value)
+            .replace(/^url\((['"]?)(.*?)\1\)$/i, '$2')
+            .trim();
+    }
+
+    function isWorkspaceVisualStaticImageCandidate(value) {
+        value = normalizeWorkspaceVisualStaticImageValue(value);
+        if (!value || value === 'none' || value === 'about:blank') {
+            return false;
+        }
+        if (/^(?:blob:|javascript:)/i.test(value)) {
+            return false;
+        }
+        if (/^data:image\/svg\+xml/i.test(value) && value.length > 1000) {
+            return false;
+        }
+        return /^(?:https?:\/\/|\/|\.\/|\.\.\/|data:image\/)/i.test(value);
+    }
+
+    function extractWorkspaceVisualCssUrl(value) {
+        value = String(value || '').trim();
+        var match = value.match(/url\((['"]?)(.*?)\1\)/i);
+        return match ? normalizeWorkspaceVisualStaticImageValue(match[2]) : '';
+    }
+
+    function describeWorkspaceVisualStaticImageNode(node, index, sourceType) {
+        var tagName = String(node && node.tagName ? node.tagName.toLowerCase() : 'image');
+        var className = String(node && node.className && typeof node.className === 'string' ? node.className : '')
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .join('.');
+        var suffix = className ? (tagName + '.' + className) : tagName;
+        return 'visible image ' + String(index + 1).padStart(2, '0') + ' (' + String(sourceType || suffix) + ')';
+    }
+
+    function pushWorkspaceVisualImageItem(items, seen, node, value, sourceType) {
+        value = normalizeWorkspaceVisualStaticImageValue(value);
+        if (!isWorkspaceVisualStaticImageCandidate(value) || seen[value]) {
+            return;
+        }
+        seen[value] = true;
+        items.push({
+            value: value,
+            node: node,
+            sourceType: sourceType
+        });
+    }
+
+    function collectWorkspaceVisualElementImageItems(wrapper) {
+        if (!wrapper || !wrapper.querySelectorAll) {
+            return [];
+        }
+        var items = [];
+        var seen = {};
+        Array.prototype.forEach.call(wrapper.querySelectorAll('img,source,video'), function (node) {
+            if (!node || (node.closest && node.closest('.component-actions,.pb-ai-embedded-toolbar,#pb-ai-embedded-action-dock,script,style'))) {
+                return;
+            }
+            var style = node.ownerDocument && node.ownerDocument.defaultView
+                ? node.ownerDocument.defaultView.getComputedStyle(node)
+                : null;
+            if (style && (style.display === 'none' || style.visibility === 'hidden')) {
+                return;
+            }
+            if (node.tagName && node.tagName.toLowerCase() === 'source') {
+                var srcset = String(node.getAttribute('srcset') || '').split(',')[0].trim().split(/\s+/)[0] || '';
+                pushWorkspaceVisualImageItem(items, seen, node, srcset, 'source srcset');
+                return;
+            }
+            pushWorkspaceVisualImageItem(items, seen, node, node.getAttribute('src') || node.currentSrc || node.src || '', 'img src');
+            pushWorkspaceVisualImageItem(items, seen, node, node.getAttribute('poster') || '', 'video poster');
+        });
+
+        Array.prototype.forEach.call(wrapper.querySelectorAll('*'), function (node) {
+            if (!node || (node.closest && node.closest('.component-actions,.pb-ai-embedded-toolbar,#pb-ai-embedded-action-dock,script,style'))) {
+                return;
+            }
+            var view = node.ownerDocument && node.ownerDocument.defaultView ? node.ownerDocument.defaultView : window;
+            var style = view.getComputedStyle ? view.getComputedStyle(node) : null;
+            if (!style || style.display === 'none' || style.visibility === 'hidden') {
+                return;
+            }
+            var inlineBg = node.style && node.style.backgroundImage ? extractWorkspaceVisualCssUrl(node.style.backgroundImage) : '';
+            var computedBg = extractWorkspaceVisualCssUrl(style.backgroundImage || '');
+            pushWorkspaceVisualImageItem(items, seen, node, inlineBg || computedBg, 'background image');
+        });
+
+        return items.slice(0, 30);
+    }
+
+    function buildWorkspaceVisualStaticImageFields(context, block) {
+        var frame = getEmbeddedPreviewFrame();
+        var doc = null;
+        try {
+            doc = frame && frame.contentDocument ? frame.contentDocument : null;
+        } catch (error) {
+            doc = null;
+        }
+        if (!doc) {
+            return { config: {}, schema: {} };
+        }
+
+        var lookupBlock = Object.assign({}, block || {}, {
+            block_id: context && context.block_id ? context.block_id : (block && block.block_id),
+            component_code: context && context.component_code ? context.component_code : (block && block.component_code),
+            _pb_server_component_code: context && context.component_code ? context.component_code : (block && block._pb_server_component_code)
+        });
+        var wrapper = findEmbeddedPreviewBlockWrapper(doc, context.page_type, lookupBlock);
+        if (!wrapper) {
+            return { config: {}, schema: {} };
+        }
+
+        var config = {};
+        var fields = {};
+        collectWorkspaceVisualElementImageItems(wrapper).forEach(function (item, index) {
+            var token = 'i' + String(index + 1).padStart(2, '0');
+            var key = 'visible_image.' + token;
+            var originalKey = '_pb_static_image_original.' + token;
+            config[key] = item.value;
+            config[originalKey] = item.value;
+            fields[token] = {
+                key: key,
+                type: 'image',
+                label: describeWorkspaceVisualStaticImageNode(item.node, index, item.sourceType),
+                static_original_key: originalKey,
+                static_original: item.value
+            };
+        });
+
+        if (Object.keys(fields).length === 0) {
+            return { config: {}, schema: {} };
+        }
+
+        return {
+            config: config,
+            schema: {
+                visible_image: {
+                    label: 'Visible images',
+                    fields: fields
+                }
+            }
+        };
+    }
+
+    function mergeWorkspaceVisualFieldSchemas(primarySchema, secondarySchema) {
+        var merged = {};
+        [primarySchema || {}, secondarySchema || {}].forEach(function (schema) {
+            Object.keys(schema).forEach(function (groupKey) {
+                var group = schema[groupKey] || {};
+                if (!merged[groupKey]) {
+                    merged[groupKey] = {
+                        label: group.label || groupKey,
+                        fields: {}
+                    };
+                }
+                Object.keys(group.fields || {}).forEach(function (fieldKey) {
+                    merged[groupKey].fields[fieldKey] = group.fields[fieldKey];
+                });
+            });
+        });
+        return merged;
+    }
+
+    function getWorkspaceVisualPreferredAliasKey(key) {
+        var aliasMap = {
+            'content.cta_text': 'cta.text',
+            'cta_text': 'cta.text',
+            'button_text': 'cta.text',
+            'button.label': 'cta.text',
+            'content.cta_url': 'cta.url',
+            'cta_url': 'cta.url',
+            'button_url': 'cta.url',
+            'button.url': 'cta.url',
+            'button.href': 'cta.url'
+        };
+        return aliasMap[String(key || '')] || '';
     }
 
     function resolveWorkspacePageStyleCode(pageType) {
@@ -7419,6 +8078,43 @@
             }
         }
         return null;
+    }
+
+    function workspaceVisualConfigAliasGroups() {
+        return [
+            ['cta.text', 'content.cta_text', 'cta_text', 'button_text', 'button.label'],
+            ['cta.url', 'content.cta_url', 'cta_url', 'button_url', 'button.url', 'button.href']
+        ];
+    }
+
+    function syncWorkspaceVisualConfigAliases(config, originalValues, fieldOrder) {
+        var originals = originalValues && typeof originalValues === 'object' ? originalValues : {};
+        var order = Array.isArray(fieldOrder) ? fieldOrder.slice().reverse() : [];
+        workspaceVisualConfigAliasGroups().forEach(function (group) {
+            var changedKey = '';
+            for (var i = 0; i < order.length; i += 1) {
+                var key = order[i];
+                if (group.indexOf(key) === -1 || !Object.prototype.hasOwnProperty.call(config, key)) {
+                    continue;
+                }
+                var originalValue = Object.prototype.hasOwnProperty.call(originals, key) ? originals[key] : '';
+                if (String(config[key] == null ? '' : config[key]) !== String(originalValue == null ? '' : originalValue)) {
+                    changedKey = key;
+                    break;
+                }
+            }
+            if (!changedKey) {
+                changedKey = Object.prototype.hasOwnProperty.call(config, group[0]) ? group[0] : '';
+            }
+            if (!changedKey) {
+                return;
+            }
+            var changedValue = config[changedKey];
+            group.forEach(function (key) {
+                config[key] = changedValue;
+            });
+        });
+        return config;
     }
 
     function saveWorkspaceVirtualBlockConfig(context, blockConfig) {
@@ -7484,6 +8180,8 @@
 
     function collectComponentConfigModalValues(modalElement) {
         var config = {};
+        var originalValues = {};
+        var fieldOrder = [];
         if (!modalElement) {
             return config;
         }
@@ -7495,6 +8193,7 @@
             if (!key) {
                 return;
             }
+            fieldOrder.push(key);
             var value = input.value;
             if (input.type === 'color' && input.id) {
                 var textInput = document.getElementById(input.id + '_text');
@@ -7506,6 +8205,9 @@
                 value = input.getAttribute('data-ai-generated-value') || value;
             }
             config[key] = value;
+            originalValues[key] = input.hasAttribute('data-original-value')
+                ? input.getAttribute('data-original-value')
+                : (input.defaultValue != null ? input.defaultValue : '');
         });
         if (modalElement.__pbAiGeneratedConfig && typeof modalElement.__pbAiGeneratedConfig === 'object') {
             Object.keys(modalElement.__pbAiGeneratedConfig).forEach(function (key) {
@@ -7518,7 +8220,7 @@
                 }
             });
         }
-        return config;
+        return syncWorkspaceVisualConfigAliases(config, originalValues, fieldOrder);
     }
 
     async function openWorkspaceVisualComponentConfigModal(payload) {
@@ -7529,22 +8231,50 @@
 
         toast('info', <?= \json_encode((string)__('加载区块字段...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
 
+        var layoutItem = findWorkspaceVisualLayoutItem(context.page_type, context.component_code, context.block_id, context.region, context.index);
         var currentBlock = findVirtualBlock(context.page_type, context.block_id) || findVirtualBlock(context.page_type, context.component_code);
         if (!currentBlock || typeof currentBlock !== 'object') {
-            var layoutItem = findWorkspaceVisualLayoutItem(context.page_type, context.component_code, context.block_id, context.region);
             if (layoutItem && typeof layoutItem === 'object' && Object.keys(layoutItem).length > 0) {
                 currentBlock = buildWorkspaceVisualFallbackBlock(context, layoutItem);
             }
+        } else if (
+            !fieldSchemaHasConfigurableFields(currentBlock.field_schema || {})
+            && layoutItem
+            && typeof layoutItem === 'object'
+            && Object.keys(layoutItem.config || {}).length > 0
+        ) {
+            var layoutBackedBlock = buildWorkspaceVisualFallbackBlock(context, layoutItem);
+            if (currentBlock.config && typeof currentBlock.config === 'object' && Object.keys(currentBlock.config).length > 0) {
+                layoutBackedBlock.config = cloneJson(currentBlock.config);
+            }
+            layoutBackedBlock.block_id = currentBlock.block_id || layoutBackedBlock.block_id;
+            layoutBackedBlock.component_code = currentBlock.component_code || currentBlock._pb_server_component_code || layoutBackedBlock.component_code;
+            currentBlock = layoutBackedBlock;
         }
         if (!currentBlock || typeof currentBlock !== 'object') {
             throw new Error(messages.editUnavailable);
         }
         context.block_id = String(currentBlock.block_id || context.block_id || context.component_code).trim();
+        context.component_code = String(currentBlock.component_code || currentBlock._pb_server_component_code || context.component_code || context.block_id).trim();
+        context.region = String(context.region || currentBlock.region || '').trim();
+        if ((context.index === 0 || !isFinite(context.index)) && currentBlock.index != null) {
+            context.index = parseInt(String(currentBlock.index), 10) || 0;
+        }
         var styleCode = resolveWorkspacePageStyleCode(context.page_type);
         var currentConfig = cloneJson(currentBlock.config || {});
         var fields = currentBlock.field_schema && typeof currentBlock.field_schema === 'object'
             ? cloneJson(currentBlock.field_schema)
             : {};
+        var staticTextFields = buildWorkspaceVisualStaticTextFields(context, currentBlock);
+        if (staticTextFields && staticTextFields.config && Object.keys(staticTextFields.config).length > 0) {
+            currentConfig = Object.assign({}, currentConfig, staticTextFields.config);
+            fields = mergeWorkspaceVisualFieldSchemas(staticTextFields.schema, fields);
+        }
+        var staticImageFields = buildWorkspaceVisualStaticImageFields(context, currentBlock);
+        if (staticImageFields && staticImageFields.config && Object.keys(staticImageFields.config).length > 0) {
+            currentConfig = Object.assign({}, currentConfig, staticImageFields.config);
+            fields = mergeWorkspaceVisualFieldSchemas(fields, staticImageFields.schema);
+        }
         var componentName = String(currentBlock.title || currentBlock.label || currentBlock.name || context.component_code || context.block_id);
         styleCode = String(styleCode || '').trim();
         if (!styleCode) {
@@ -7618,9 +8348,13 @@
 
                     formHtml += '<div class="config-field" style="margin-bottom:14px;">';
                     formHtml += '<label style="display:block; margin-bottom:4px; font-size:13px; opacity:0.7;">' + escapeHtml(String(field.label || fieldKey)) + '</label>';
+                    if (field.static_original_key) {
+                        var staticOriginalValue = field.static_original != null ? String(field.static_original) : displayValue;
+                        formHtml += '<input type="hidden" data-field="' + escapeHtml(String(field.static_original_key)) + '" data-original-value="' + escapeHtml(staticOriginalValue) + '" value="' + escapeHtml(staticOriginalValue) + '">';
+                    }
 
                     if (fieldType === 'select' && field.options) {
-                        formHtml += '<select id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" class="form-select form-select-sm" style="width:100%;">';
+                        formHtml += '<select id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" data-original-value="' + escapeHtml(displayValue) + '" class="form-select form-select-sm" style="width:100%;">';
                         if (Array.isArray(field.options)) {
                             field.options.forEach(function (optionValue) {
                                 var normalizedOptionValue = String(optionValue);
@@ -7636,18 +8370,18 @@
                         }
                         formHtml += '</select>';
                     } else if (fieldType === 'textarea') {
-                        formHtml += '<textarea id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" class="form-control form-control-sm" rows="3" style="width:100%;">' + escapeHtml(displayValue) + '</textarea>';
+                        formHtml += '<textarea id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" data-original-value="' + escapeHtml(displayValue) + '" class="form-control form-control-sm" rows="3" style="width:100%;">' + escapeHtml(displayValue) + '</textarea>';
                     } else if (fieldType === 'color') {
                         var colorValue = String(displayValue || '');
                         var colorHex = /^#[0-9A-Fa-f]{6}$/.test(colorValue) ? colorValue : '#000000';
                         formHtml += '<div style="display:flex; gap:8px; align-items:center;">';
-                        formHtml += '<input type="color" id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" value="' + escapeHtml(colorHex) + '" style="width:40px; height:32px; border-radius:4px; padding:2px; cursor:pointer;">';
+                        formHtml += '<input type="color" id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" data-original-value="' + escapeHtml(colorValue) + '" value="' + escapeHtml(colorHex) + '" style="width:40px; height:32px; border-radius:4px; padding:2px; cursor:pointer;">';
                         formHtml += '<input type="text" id="' + inputId + '_text" value="' + escapeHtml(colorValue) + '" class="form-control form-control-sm" style="flex:1;" placeholder="#000000">';
                         formHtml += '</div>';
                     } else if (fieldType === 'image') {
-                        formHtml += '<input type="text" id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" value="' + escapeHtml(displayValue) + '" class="form-control form-control-sm" style="width:100%;" placeholder="<?= __('图片URL') ?>">';
+                        formHtml += '<input type="text" id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" data-original-value="' + escapeHtml(displayValue) + '" value="' + escapeHtml(displayValue) + '" class="form-control form-control-sm" style="width:100%;" placeholder="<?= __('图片URL') ?>">';
                     } else {
-                        formHtml += '<input type="text" id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" value="' + escapeHtml(displayValue) + '" class="form-control form-control-sm" style="width:100%;">';
+                        formHtml += '<input type="text" id="' + inputId + '" data-field="' + escapeHtml(fullKey) + '" data-original-value="' + escapeHtml(displayValue) + '" value="' + escapeHtml(displayValue) + '" class="form-control form-control-sm" style="width:100%;">';
                     }
 
                     formHtml += '</div>';
@@ -7976,12 +8710,14 @@
                 throw new Error(String((saveResult && saveResult.message) || <?= \json_encode((string)__('保存失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
             }
 
+            var previewPatched = false;
             if (saveResult.data && typeof saveResult.data === 'object') {
                 hydrateWorkspaceFromState(saveResult.data);
             }
-            if (saveResult.block && typeof saveResult.block === 'object') {
-                updateVirtualBlockState(context.page_type, saveResult.block);
-                replaceCurrentBlockHtml(context.page_type, saveResult.block);
+            var refreshedBlock = resolveUpdatedBlockFromResponse(context.page_type, context.block_id, saveResult);
+            if (refreshedBlock && typeof refreshedBlock === 'object') {
+                updateVirtualBlockState(context.page_type, refreshedBlock);
+                previewPatched = replaceCurrentBlockHtml(context.page_type, refreshedBlock);
                 bindEmbeddedPreviewFrameBridge();
             }
 
@@ -7994,7 +8730,9 @@
                 }
             }
             toast('success', <?= \json_encode((string)__('保存成功'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
-            refreshEmbeddedPreviewPreservingScroll();
+            if (!previewPatched) {
+                refreshEmbeddedPreviewPreservingScroll();
+            }
             return true;
         } catch (error) {
             if (result.confirmButton) {
@@ -8185,16 +8923,22 @@
             if (submitBtn) {
                 submitBtn.disabled = false;
             }
-            if (!data || !data.success || !data.block) {
+            var refreshedBlock = resolveUpdatedBlockFromResponse(blockEditorState.pageType, blockEditorState.blockId, data);
+            if (!data || !data.success) {
                 toast('error', (data && data.message) ? String(data.message) : messages.networkError);
                 return;
             }
-            updateVirtualBlockState(blockEditorState.pageType, data.block);
-            if (data.data && data.data.virtual_pages_by_type) {
-                        mergeVirtualPagesByTypeState(data.data.virtual_pages_by_type);
+            var previewPatched = false;
+            if (data.data && typeof data.data === 'object') {
+                hydrateWorkspaceFromState(data.data);
+            } else if (data.data && data.data.virtual_pages_by_type) {
+                mergeVirtualPagesByTypeState(data.data.virtual_pages_by_type);
             }
-            replaceCurrentBlockHtml(blockEditorState.pageType, data.block);
-            bindEmbeddedPreviewFrameBridge();
+            if (refreshedBlock && typeof refreshedBlock === 'object') {
+                updateVirtualBlockState(blockEditorState.pageType, refreshedBlock);
+                previewPatched = replaceCurrentBlockHtml(blockEditorState.pageType, refreshedBlock);
+                bindEmbeddedPreviewFrameBridge();
+            }
             if (modalEl) {
                 var modalInstance = resolveBootstrapModalInstance(modalEl);
                 if (modalInstance && typeof modalInstance.hide === 'function') {
@@ -8202,6 +8946,9 @@
                 }
             }
             toast('success', messages.editSaved);
+            if (!previewPatched) {
+                refreshEmbeddedPreviewPreservingScroll();
+            }
         }).catch(function () {
             if (submitBtn) {
                 submitBtn.disabled = false;
@@ -8984,6 +9731,10 @@
                         if (!actionButton || !actionHost.contains(actionButton)) {
                             return;
                         }
+                        var action = String(actionButton.getAttribute('data-pb-action') || '');
+                        if (action === 'edit-block' || action === 'open-editor') {
+                            return;
+                        }
                         var actionWrapper = actionButton.closest(wrapperSelector);
                         var actionPayload = buildEmbeddedPreviewPayload(actionWrapper, actionButton);
                         if (!actionPayload || !actionPayload.component) {
@@ -8995,7 +9746,6 @@
                         if (typeof event.stopImmediatePropagation === 'function') {
                             event.stopImmediatePropagation();
                         }
-                        var action = String(actionButton.getAttribute('data-pb-action') || '');
                         if (dispatchEmbeddedPreviewActionPayload(action, actionPayload)) {
                             return;
                         }
@@ -9024,14 +9774,6 @@
                 if (!button) {
                     return;
                 }
-                if (event) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    if (typeof event.stopImmediatePropagation === 'function') {
-                        event.stopImmediatePropagation();
-                    }
-                }
-
                 var wrapper = button.closest(wrapperSelector);
                 var payload = buildEmbeddedPreviewPayload(wrapper, button);
                 if (!payload || !payload.component) {
@@ -9040,13 +9782,23 @@
                 }
 
                 var action = String(button.getAttribute('data-pb-action') || '');
+                if (action === 'edit-block' || action === 'open-editor') {
+                    return;
+                }
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (typeof event.stopImmediatePropagation === 'function') {
+                        event.stopImmediatePropagation();
+                    }
+                }
                 dispatchEmbeddedPreviewActionPayload(action, payload);
             }
 
             function handleEmbeddedPreviewActionPointerDown(event) {
                 var button = (event && event.currentTarget) ? event.currentTarget : this;
                 var action = String(button && button.getAttribute ? button.getAttribute('data-pb-action') || '' : '');
-                if (['refine', 'regenerate-block', 'edit-block', 'open-editor'].indexOf(action) === -1) {
+                if (['refine', 'regenerate-block'].indexOf(action) === -1) {
                     return;
                 }
                 handleEmbeddedPreviewActionClick(event);
@@ -9056,6 +9808,10 @@
                 var source = event && event.target && event.target.nodeType === 3 ? event.target.parentElement : (event ? event.target : null);
                 var actionButton = source && source.closest ? source.closest('.component-actions [data-pb-action]') : null;
                 if (!actionButton) {
+                    return;
+                }
+                var action = String(actionButton.getAttribute('data-pb-action') || '');
+                if (action === 'edit-block' || action === 'open-editor') {
                     return;
                 }
                 handleEmbeddedPreviewActionClick.call(actionButton, event);
@@ -9071,6 +9827,10 @@
             }
 
             doc.querySelectorAll('.component-actions [data-pb-action]').forEach(function (button) {
+                var action = String(button.getAttribute('data-pb-action') || '');
+                if (action === 'edit-block' || action === 'open-editor') {
+                    return;
+                }
                 if (button.dataset.pbWorkspaceActionBound !== '1') {
                     button.addEventListener('pointerdown', handleEmbeddedPreviewActionPointerDown, true);
                     button.addEventListener('pointerup', handleEmbeddedPreviewActionPointerDown, true);
@@ -9132,6 +9892,9 @@
                 return;
             }
             if (payload.type === 'pb-component-action') {
+                if (String(payload.action || '') === 'edit-block' || String(payload.action || '') === 'open-editor') {
+                    return;
+                }
                 dispatchEmbeddedPreviewActionPayload(String(payload.action || ''), payload);
                 return;
             }
@@ -13125,10 +13888,16 @@
                 candidates.push(operations.plan);
             }
         });
+        if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
+            candidates.push(state.plan_queue_info);
+        }
+        if (scope.plan_queue_info && typeof scope.plan_queue_info === 'object') {
+            candidates.push(scope.plan_queue_info);
+        }
         return candidates.some(function (operation) {
             var op = String(operation.operation || '').trim();
-            var status = String(operation.status || '').trim().toLowerCase();
-            return op === 'plan' && ['error', 'failed', 'fail', 'stop', 'stopped'].indexOf(status) !== -1;
+            var status = readQueueStatusForPrompt(operation);
+            return (op === 'plan' || op === '') && isPlanFailureStatusForWorkspaceUi(status);
         });
     }
 
@@ -13793,7 +14562,7 @@
             ? currentActiveOperationState
             : {};
         var operation = String(active.operation || '').toLowerCase();
-        var status = String(active.status || '').toLowerCase();
+        var status = readQueueStatusForPrompt(active);
         return operation === 'build' && isQueueStatusRunningForUi(status);
     }
 
@@ -14320,7 +15089,7 @@
             if (!hasDraft) {
                 return 'rebuild';
             }
-            return String(currentPlanMode || 'refine') === 'rebuild' ? 'rebuild' : 'refine';
+            return '';
         }
         var isResumeRepair = resolveInitialPlanPromptMode() === PLAN_PROMPT_MODE_RESUME;
         var planProgressMessage = forceRebuild

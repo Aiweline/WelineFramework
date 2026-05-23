@@ -295,13 +295,13 @@ endif;
 
     function select_language(lang) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_LANG', lang, 7, {path: '/{{area}}', domain: window.location.host});
+        setCookie('WELINE_USER_LANG', lang, 7, {path: '/'});
         window.location.href = inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || '')
     }
 
     function select_currency(currency_code) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_CURRENCY', currency_code, 7, {path: '/', domain: window.location.host});
+        setCookie('WELINE_USER_CURRENCY', currency_code, 7, {path: '/'});
         window.location.href = inject_path(window.location.pathname, currency_code, 'currency') + sanitizeSwitchSearch(window.location.search || '')
     }
 

@@ -15,6 +15,15 @@
 
 /** @var \Weline\Framework\View\Template $this */
 
+use Weline\Framework\Manager\ObjectManager;
+use WeShop\Catalog\Service\CategoryService;
+
+/** @var CategoryService $categoryService */
+$categoryService = ObjectManager::getInstance(CategoryService::class);
+$localizeCategoryName = static function (string $name) use ($categoryService): string {
+    return $categoryService->localizeCategoryDisplayName($name);
+};
+
 // 分类数据通常由 WeShop\Catalog\Controller\Frontend\Category\View 分配：$this->assign('category', $categoryData);
 // 优先从模板数据中获取，如果没有则回退到 Request->categories.current
 $category = $this->getData('category') ?? null;
@@ -56,7 +65,7 @@ if (is_array($breadcrumbs)) {
         if (!is_array($bc)) {
             continue;
         }
-        $text = (string)($bc['name'] ?? '');
+        $text = $localizeCategoryName((string)($bc['name'] ?? ''));
         if ($text === '') {
             continue;
         }
@@ -82,7 +91,7 @@ if ($currentHandle !== '') {
     $pathParts[] = rawurlencode($currentHandle);
 }
 $items[] = [
-    'text' => (string)($category['name'] ?? ''),
+    'text' => $localizeCategoryName((string)($category['name'] ?? '')),
     'url'  => '', // 当前分类不加链接，作为激活项
 ];
 

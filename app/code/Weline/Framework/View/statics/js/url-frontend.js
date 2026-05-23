@@ -437,7 +437,7 @@
      */
     window.select_language = function (lang) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_LANG', lang, 7, { path: '/' + config.area, domain: window.location.host });
+        setCookie('WELINE_USER_LANG', lang, 7, { path: '/' });
         window.location.href = inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || '');
     };
 
@@ -446,7 +446,7 @@
      */
     window.select_currency = function (currencyCode) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_CURRENCY', currencyCode, 7, { path: '/', domain: window.location.host });
+        setCookie('WELINE_USER_CURRENCY', currencyCode, 7, { path: '/' });
         window.location.href = inject_path(window.location.pathname, currencyCode, 'currency') + sanitizeSwitchSearch(window.location.search || '');
     };
 

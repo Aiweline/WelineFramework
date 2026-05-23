@@ -20,6 +20,11 @@
 收集筛选选项的产品计数,收集筛选选项的产品计数
 筛选缓存清除,筛选缓存清除
 筛选缓存被清除时触发,筛选缓存被清除时触发
+"Unsupported filter provider operation: %{1}","Unsupported filter provider operation: %{1}"
+"Filter Query","Filter Query"
+"Provides frontend category filter operations through the worker API.","Provides frontend category filter operations through the worker API."
+"Return available options for one filter.","Return available options for one filter."
+"Return filter option counts.","Return filter option counts."
 筛选容器,筛选容器
 筛选区域的主容器，包含所有筛选组件,筛选区域的主容器，包含所有筛选组件
 筛选头部,筛选头部

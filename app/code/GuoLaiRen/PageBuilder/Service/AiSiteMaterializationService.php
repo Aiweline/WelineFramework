@@ -43,6 +43,15 @@ class AiSiteMaterializationService
 
         $pageTypes = $this->normalizeMaterializationPageTypes($pageTypes);
         $layouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($pageTypeLayouts, $pageTypes);
+        $layouts = $this->applyWebsiteIdentityToLayouts($layouts, $websiteProfile);
+        foreach ($layouts as $layoutPageType => $layout) {
+            $layouts[$layoutPageType] = $this->scopeCompatibilityService->localizeSharedLayoutConfigForScope($layout, [
+                'website_profile' => $websiteProfile,
+                'content_locale' => $websiteProfile['content_locale'] ?? $websiteProfile['default_locale'] ?? '',
+                'default_locale' => $websiteProfile['default_locale'] ?? '',
+                'brief_description' => $websiteProfile['brief_description'] ?? '',
+            ], (string)$layoutPageType);
+        }
         $virtualPages = $this->scopeCompatibilityService->normalizeVirtualPagesByType($virtualPagesByType, $pageTypes);
         $homePageId = $this->resolveExistingHomePageId($websiteId, $pageTypes);
         $pagesByType = [];
@@ -96,7 +105,7 @@ class AiSiteMaterializationService
                 ->setData(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
                 ->setData(Page::schema_fields_LOGO, $pageLogo)
                 ->setData(Page::schema_fields_ICON, $pageIcon)
-                ->setData(Page::schema_fields_META_TITLE, $this->resolveMaterializedText($virtualPage['meta_title'] ?? null, $defaults['meta_title']))
+                ->setData(Page::schema_fields_META_TITLE, $this->sanitizeMaterializedTitle($this->resolveMaterializedText($virtualPage['meta_title'] ?? null, $defaults['meta_title']), $defaults['meta_title']))
                 ->setData(Page::schema_fields_META_DESCRIPTION, $this->resolveMaterializedText($virtualPage['meta_description'] ?? null, $defaults['meta_description']))
                 ->setData(Page::schema_fields_META_KEYWORDS, $this->resolveMaterializedText($virtualPage['meta_keywords'] ?? null, $defaults['meta_keywords']))
                 ->setData(Page::schema_fields_AI_DESCRIPTION, $this->resolveMaterializedText($virtualPage['ai_description'] ?? null, (string)($websiteProfile['brief_description'] ?? '')));
@@ -204,7 +213,7 @@ class AiSiteMaterializationService
                 ->setData(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
                 ->setData(Page::schema_fields_LOGO, $pageLogo)
                 ->setData(Page::schema_fields_ICON, $pageIcon)
-                ->setData(Page::schema_fields_META_TITLE, $this->resolveMaterializedText($virtualPage['meta_title'] ?? null, $defaults['meta_title']))
+                ->setData(Page::schema_fields_META_TITLE, $this->sanitizeMaterializedTitle($this->resolveMaterializedText($virtualPage['meta_title'] ?? null, $defaults['meta_title']), $defaults['meta_title']))
                 ->setData(Page::schema_fields_META_DESCRIPTION, $this->resolveMaterializedText($virtualPage['meta_description'] ?? null, $defaults['meta_description']))
                 ->setData(Page::schema_fields_META_KEYWORDS, $this->resolveMaterializedText($virtualPage['meta_keywords'] ?? null, $defaults['meta_keywords']))
                 ->setData(Page::schema_fields_AI_DESCRIPTION, $this->resolveMaterializedText($virtualPage['ai_description'] ?? null, (string)($websiteProfile['brief_description'] ?? '')));
@@ -378,8 +387,9 @@ class AiSiteMaterializationService
      */
     private function buildPageDefaults(string $pageType, array $websiteProfile): array
     {
-        $siteTitle = \trim((string)($websiteProfile['site_title'] ?? ''));
-        $pageLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
+        $siteTitle = $this->sanitizeMaterializedTitle((string)($websiteProfile['site_title'] ?? ''), 'Website');
+        $locale = \trim((string)($websiteProfile['content_locale'] ?? $websiteProfile['default_locale'] ?? ''));
+        $pageLabel = $this->localizeMaterializedPageLabel($pageType, $locale) ?: (string)(Page::getPageTypes()[$pageType] ?? $pageType);
         $seo = \is_array($websiteProfile['seo'] ?? null) ? $websiteProfile['seo'] : [];
 
         $name = $pageType === Page::TYPE_HOME ? $siteTitle : $pageLabel;
@@ -398,6 +408,61 @@ class AiSiteMaterializationService
             'meta_description' => (string)($seo['meta_description'] ?? $websiteProfile['brief_description'] ?? ''),
             'meta_keywords' => (string)($seo['meta_keywords'] ?? ''),
         ];
+    }
+
+    private function sanitizeMaterializedTitle(string $value, string $fallback = ''): string
+    {
+        $title = \preg_replace('/\b(?:website\s*profile|websiteProfile|site\s*profile|profile_json|scope_json|target_domain)\b/iu', '', $value) ?? $value;
+        $title = \preg_replace('/\s+/u', ' ', \trim($title)) ?? \trim($title);
+        if ($title !== '') {
+            return $title;
+        }
+
+        $fallback = \preg_replace('/\b(?:website\s*profile|websiteProfile|site\s*profile|profile_json|scope_json|target_domain)\b/iu', '', $fallback) ?? $fallback;
+        $fallback = \preg_replace('/\s+/u', ' ', \trim($fallback)) ?? \trim($fallback);
+        return $fallback !== '' ? $fallback : 'Website';
+    }
+
+    private function localizeMaterializedPageLabel(string $pageType, string $locale): string
+    {
+        $family = match (true) {
+            \preg_match('/^th(?:[_-]|$)/i', $locale) === 1 => 'th',
+            \preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', $locale) === 1 => 'hi',
+            \preg_match('/^(zh|zh[_-]hans|zh[_-]cn|zh[_-]sg)/i', $locale) === 1 => 'zh',
+            default => 'en',
+        };
+        $labels = [
+            'en' => [
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+            ],
+            'th' => [
+                Page::TYPE_HOME => 'หน้าแรก',
+                Page::TYPE_ABOUT => 'เกี่ยวกับเรา',
+                Page::TYPE_CONTACT => 'ติดต่อเรา',
+                Page::TYPE_PRIVACY_POLICY => 'นโยบายความเป็นส่วนตัว',
+                Page::TYPE_TERMS_OF_SERVICE => 'ข้อกำหนดการใช้บริการ',
+            ],
+            'hi' => [
+                Page::TYPE_HOME => 'होम',
+                Page::TYPE_ABOUT => 'हमारे बारे में',
+                Page::TYPE_CONTACT => 'संपर्क करें',
+                Page::TYPE_PRIVACY_POLICY => 'गोपनीयता नीति',
+                Page::TYPE_TERMS_OF_SERVICE => 'सेवा की शर्तें',
+            ],
+            'zh' => [
+                Page::TYPE_HOME => '首页',
+                Page::TYPE_ABOUT => '关于我们',
+                Page::TYPE_CONTACT => '联系我们',
+                Page::TYPE_PRIVACY_POLICY => '隐私政策',
+                Page::TYPE_TERMS_OF_SERVICE => '服务条款',
+            ],
+        ];
+
+        return (string)($labels[$family][$pageType] ?? '');
     }
 
     private function resolveUniqueHandle(int $websiteId, string $desiredHandle, int $currentPageId = 0): string
@@ -432,6 +497,62 @@ class AiSiteMaterializationService
 
         // Page.logo/icon columns are varchar(255). Long inline data URIs break publish-time materialization.
         return \strlen($value) <= 255 ? $value : '';
+    }
+
+    /**
+     * @param array<string, array<string,mixed>> $layouts
+     * @param array<string,mixed> $websiteProfile
+     * @return array<string, array<string,mixed>>
+     */
+    private function applyWebsiteIdentityToLayouts(array $layouts, array $websiteProfile): array
+    {
+        $logo = $this->normalizePageAssetPath((string)($websiteProfile['logo'] ?? ''));
+        if ($logo === '') {
+            return $layouts;
+        }
+
+        foreach ($layouts as $pageType => $layout) {
+            if (!\is_string($pageType) || !\is_array($layout)) {
+                continue;
+            }
+            if (\is_array($layout['header']['config'] ?? null)) {
+                $layout['header']['config'] = $this->applyLogoToComponentConfig($layout['header']['config'], $logo);
+            }
+            if (\is_array($layout['footer']['config'] ?? null)) {
+                $layout['footer']['config'] = $this->applyLogoToComponentConfig($layout['footer']['config'], $logo);
+            }
+            $layouts[$pageType] = $layout;
+        }
+
+        return $layouts;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function applyLogoToComponentConfig(array $config, string $logo): array
+    {
+        foreach (['logo.url', 'logo.image', 'identity.shared_logo_asset', 'brand.logo'] as $key) {
+            if (\trim((string)($config[$key] ?? '')) === '') {
+                $config[$key] = $logo;
+            }
+        }
+        if (\is_array($config['logo'] ?? null)) {
+            foreach (['url', 'image'] as $key) {
+                if (\trim((string)($config['logo'][$key] ?? '')) === '') {
+                    $config['logo'][$key] = $logo;
+                }
+            }
+        }
+        if (\is_array($config['identity'] ?? null) && \trim((string)($config['identity']['shared_logo_asset'] ?? '')) === '') {
+            $config['identity']['shared_logo_asset'] = $logo;
+        }
+        if (\is_array($config['brand'] ?? null) && \trim((string)($config['brand']['logo'] ?? '')) === '') {
+            $config['brand']['logo'] = $logo;
+        }
+
+        return $config;
     }
 
     /**

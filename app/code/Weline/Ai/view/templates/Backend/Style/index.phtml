@@ -1,0 +1,891 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array<int,array<string,mixed>> $styles
+ * @var array<int,array<string,mixed>> $adapters
+ */
+$styles = \is_array($styles ?? null) ? $styles : [];
+$adapters = \is_array($adapters ?? null) ? $adapters : [];
+$catalogUrl = $this->getBackendUrl('ai/backend/style/post-catalog');
+$saveUrl = $this->getBackendUrl('ai/backend/style/post-save');
+$cloneUrl = $this->getBackendUrl('ai/backend/style/post-clone-builtin');
+$matchUrl = $this->getBackendUrl('ai/backend/style/post-match');
+$bindUrl = $this->getBackendUrl('ai/backend/style/post-bind-adapter-style');
+$unbindUrl = $this->getBackendUrl('ai/backend/style/post-unbind-adapter-style');
+$arrayFields = [
+    'industry_tags' => 'Industry tags',
+    'match_keywords' => 'Match keywords',
+    'visual_keywords' => 'Visual keywords',
+    'layout_patterns' => 'Layout patterns',
+    'image_strategy' => 'Image strategy',
+    'forbidden_patterns' => 'Forbidden patterns',
+    'qa_rules' => 'QA rules',
+];
+$objectFields = [
+    'color_system' => 'Color system JSON',
+    'block_rules' => 'Block rules JSON',
+    'example_refs' => 'Example refs JSON',
+];
+?>
+<?php if (empty($embed)): ?>
+    <?= $this->fetch('Weline_Ai::templates/Backend/Manager/tabs.phtml', ['activeTab' => 'style']) ?>
+<?php endif; ?>
+
+<style>
+    .weline-ai-style-page .style-shell {
+        min-height: 720px;
+    }
+    .weline-ai-style-page .style-table-wrap {
+        max-height: 650px;
+        overflow: auto;
+    }
+    .weline-ai-style-page .style-row {
+        cursor: pointer;
+    }
+    .weline-ai-style-page .style-row.is-selected {
+        background: rgba(13, 110, 253, 0.08);
+    }
+    .weline-ai-style-page .style-detail-card {
+        position: sticky;
+        top: 12px;
+    }
+    .weline-ai-style-page .style-editor {
+        min-height: 92px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+    .weline-ai-style-page .style-editor.is-large {
+        min-height: 145px;
+    }
+    .weline-ai-style-page .style-chip {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid rgba(108, 117, 125, 0.25);
+        border-radius: 999px;
+        padding: 2px 8px;
+        margin: 2px 4px 2px 0;
+        font-size: 11px;
+        color: #495057;
+        background: #f8f9fa;
+    }
+    .weline-ai-style-page .style-empty {
+        border: 1px dashed rgba(108, 117, 125, 0.35);
+        border-radius: 12px;
+        padding: 32px;
+        text-align: center;
+        color: #6c757d;
+        background: #fbfcfd;
+    }
+    .weline-ai-style-page .style-muted-line {
+        max-width: 520px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+
+<div class="container-fluid py-3 weline-ai-style-page">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+        <div>
+            <h4 class="mb-1"><i class="mdi mdi-palette-outline me-1"></i>AI Styles</h4>
+            <div class="text-muted small">Govern module, custom, matched, and adapter-bound visual style directions.</div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-style-new">
+                <i class="mdi mdi-plus me-1"></i>New custom style
+            </button>
+            <button class="btn btn-outline-primary btn-sm" type="button" id="ai-style-refresh">
+                <i class="mdi mdi-refresh me-1"></i>Refresh catalog
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-3 style-shell">
+        <div class="col-xl-8">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted mb-1" for="ai-style-adapter">Adapter binding context</label>
+                            <select class="form-select form-select-sm" id="ai-style-adapter"></select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1" for="ai-style-search">Search</label>
+                            <input class="form-control form-control-sm" id="ai-style-search" type="search" placeholder="code / name / keyword">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-status-filter">Status</label>
+                            <select class="form-select form-select-sm" id="ai-style-status-filter">
+                                <option value="">All</option>
+                                <option value="active">Active</option>
+                                <option value="disabled">Disabled</option>
+                                <option value="missing">Missing</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1" for="ai-style-source-filter">Source</label>
+                            <select class="form-select form-select-sm" id="ai-style-source-filter">
+                                <option value="">All</option>
+                                <option value="module">Module/system/builtin</option>
+                                <option value="custom">Custom</option>
+                                <option value="missing">Missing</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2" id="ai-style-adapter-summary"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <strong>Style catalog</strong>
+                    <span class="small text-muted" id="ai-style-status"><?= \count($styles) ?> styles</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="style-table-wrap">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light position-sticky top-0">
+                            <tr>
+                                <th style="width: 210px;">Code</th>
+                                <th>Style</th>
+                                <th style="width: 135px;">Source</th>
+                                <th style="width: 100px;">Status</th>
+                                <th style="width: 135px;">Binding</th>
+                                <th style="width: 120px;">Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody id="ai-style-table-body">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">Loading style catalog...</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="card style-detail-card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <strong id="ai-style-detail-title">Style detail</strong>
+                    <span class="small text-muted" id="ai-style-detail-mode">No selection</span>
+                </div>
+                <div class="card-body">
+                    <div id="ai-style-empty" class="style-empty">
+                        Select a style from the catalog, or create a new custom style.
+                    </div>
+
+                    <form id="ai-style-form" class="d-none">
+                        <div class="d-flex flex-wrap gap-1 mb-2" id="ai-style-badges"></div>
+
+                        <div class="row g-2">
+                            <div class="col-md-7">
+                                <label class="form-label small text-muted mb-1" for="ai-style-code">Code</label>
+                                <input type="text" class="form-control form-control-sm" id="ai-style-code" placeholder="style-code">
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label small text-muted mb-1" for="ai-style-edit-status">Status</label>
+                                <select class="form-select form-select-sm" id="ai-style-edit-status">
+                                    <option value="active">active</option>
+                                    <option value="disabled">disabled</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mt-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-name">Name</label>
+                            <input type="text" class="form-control form-control-sm" id="ai-style-name" placeholder="Readable style name">
+                        </div>
+
+                        <div class="mt-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-description">Description</label>
+                            <textarea class="form-control form-control-sm" id="ai-style-description" rows="2" placeholder="What this style should guide"></textarea>
+                        </div>
+
+                        <?php foreach ($arrayFields as $field => $label): ?>
+                            <div class="mt-2">
+                                <label class="form-label small text-muted mb-1" for="ai-style-<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>"><?= \htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></label>
+                                <textarea class="form-control form-control-sm style-editor" id="ai-style-<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" data-style-array="<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" rows="3" placeholder="One item per line, or JSON array"></textarea>
+                            </div>
+                        <?php endforeach; ?>
+
+                        <?php foreach ($objectFields as $field => $label): ?>
+                            <div class="mt-2">
+                                <label class="form-label small text-muted mb-1" for="ai-style-<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>"><?= \htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></label>
+                                <textarea class="form-control form-control-sm style-editor is-large" id="ai-style-<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" data-style-object="<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" rows="4" placeholder='{"hero":"direction"}'></textarea>
+                            </div>
+                        <?php endforeach; ?>
+
+                        <div class="mt-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-cta">CTA style</label>
+                            <textarea class="form-control form-control-sm" id="ai-style-cta" rows="2"></textarea>
+                        </div>
+
+                        <div class="mt-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-supplemental">Supplemental prompt</label>
+                            <textarea class="form-control form-control-sm" id="ai-style-supplemental" rows="2"></textarea>
+                            <div class="form-text">Custom styles must include structured fields; supplemental notes alone are not enough.</div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <button class="btn btn-success btn-sm" type="button" id="ai-style-save-btn">Save</button>
+                            <button class="btn btn-outline-success btn-sm" type="button" data-style-status-action="active">Enable</button>
+                            <button class="btn btn-outline-danger btn-sm" type="button" data-style-status-action="disabled">Disable</button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-style-clone-btn">Clone as custom</button>
+                        </div>
+
+                        <div class="border-top pt-2 mt-3">
+                            <div class="small text-muted mb-2">Adapter binding for selected context</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-primary btn-sm" type="button" id="ai-style-bind-btn">Bind to adapter</button>
+                                <button class="btn btn-outline-danger btn-sm" type="button" id="ai-style-unbind-btn">Unbind manual binding</button>
+                            </div>
+                            <div class="small text-muted mt-2" id="ai-style-binding-help"></div>
+                        </div>
+
+                        <div class="small mt-2" id="ai-style-form-status"></div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><strong>Match style by brief</strong></div>
+                <div class="card-body">
+                    <label class="form-label small text-muted mb-1" for="ai-style-match-title">Site title</label>
+                    <input class="form-control form-control-sm mb-2" id="ai-style-match-title" type="text" placeholder="Teen Patti APK">
+                    <label class="form-label small text-muted mb-1" for="ai-style-match-brief">Brief</label>
+                    <textarea class="form-control form-control-sm mb-2" id="ai-style-match-brief" rows="3" placeholder="Describe the site and target market"></textarea>
+                    <button class="btn btn-primary btn-sm" type="button" id="ai-style-match-btn">Match style</button>
+                    <div class="small mt-2" id="ai-style-match-status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var catalogUrl = <?= \json_encode($catalogUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var saveUrl = <?= \json_encode($saveUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var cloneUrl = <?= \json_encode($cloneUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var matchUrl = <?= \json_encode($matchUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var bindUrl = <?= \json_encode($bindUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var unbindUrl = <?= \json_encode($unbindUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var initialItems = <?= \json_encode($styles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '[]' ?>;
+    var initialAdapters = <?= \json_encode($adapters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '[]' ?>;
+
+    var state = {
+        items: Array.isArray(initialItems) ? initialItems : [],
+        adapters: Array.isArray(initialAdapters) ? initialAdapters : [],
+        selectedCode: '',
+        selectedAdapter: '',
+        draft: null
+    };
+
+    var els = {
+        adapter: document.getElementById('ai-style-adapter'),
+        adapterSummary: document.getElementById('ai-style-adapter-summary'),
+        search: document.getElementById('ai-style-search'),
+        statusFilter: document.getElementById('ai-style-status-filter'),
+        sourceFilter: document.getElementById('ai-style-source-filter'),
+        tableBody: document.getElementById('ai-style-table-body'),
+        listStatus: document.getElementById('ai-style-status'),
+        empty: document.getElementById('ai-style-empty'),
+        form: document.getElementById('ai-style-form'),
+        detailTitle: document.getElementById('ai-style-detail-title'),
+        detailMode: document.getElementById('ai-style-detail-mode'),
+        badges: document.getElementById('ai-style-badges'),
+        code: document.getElementById('ai-style-code'),
+        name: document.getElementById('ai-style-name'),
+        status: document.getElementById('ai-style-edit-status'),
+        description: document.getElementById('ai-style-description'),
+        cta: document.getElementById('ai-style-cta'),
+        supplemental: document.getElementById('ai-style-supplemental'),
+        save: document.getElementById('ai-style-save-btn'),
+        clone: document.getElementById('ai-style-clone-btn'),
+        bind: document.getElementById('ai-style-bind-btn'),
+        unbind: document.getElementById('ai-style-unbind-btn'),
+        bindingHelp: document.getElementById('ai-style-binding-help'),
+        formStatus: document.getElementById('ai-style-form-status'),
+        matchTitle: document.getElementById('ai-style-match-title'),
+        matchBrief: document.getElementById('ai-style-match-brief'),
+        matchBtn: document.getElementById('ai-style-match-btn'),
+        matchStatus: document.getElementById('ai-style-match-status')
+    };
+
+    function post(url, data) {
+        var body = new URLSearchParams();
+        Object.keys(data || {}).forEach(function (key) {
+            var value = data[key];
+            if (value && typeof value === 'object') {
+                body.append(key, JSON.stringify(value));
+            } else {
+                body.append(key, String(value == null ? '' : value));
+            }
+        });
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+            body: body.toString()
+        }).then(function (res) {
+            return res.json();
+        });
+    }
+
+    function clearNode(node) {
+        while (node && node.firstChild) {
+            node.removeChild(node.firstChild);
+        }
+    }
+
+    function text(tag, value, className) {
+        var node = document.createElement(tag);
+        if (className) {
+            node.className = className;
+        }
+        node.textContent = value || '';
+        return node;
+    }
+
+    function badge(value, className) {
+        var span = document.createElement('span');
+        span.className = 'badge ' + (className || 'text-bg-secondary');
+        span.textContent = value || '';
+        return span;
+    }
+
+    function chip(value) {
+        var span = document.createElement('span');
+        span.className = 'style-chip';
+        span.textContent = value || '';
+        return span;
+    }
+
+    function setStatus(el, message, isError) {
+        if (!el) {
+            return;
+        }
+        el.className = 'small mt-2 ' + (isError ? 'text-danger' : 'text-success');
+        el.textContent = message || '';
+    }
+
+    function toList(value) {
+        if (Array.isArray(value)) {
+            return value;
+        }
+        if (value && typeof value === 'object') {
+            return Object.keys(value).map(function (key) {
+                var item = value[key];
+                return typeof item === 'string' ? item : JSON.stringify(item);
+            });
+        }
+        if (typeof value === 'string' && value !== '') {
+            return [value];
+        }
+        return [];
+    }
+
+    function flatten(value) {
+        return toList(value).join(' ');
+    }
+
+    function parseLines(value) {
+        var raw = String(value || '').trim();
+        if (raw === '') {
+            return [];
+        }
+        try {
+            var parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                return parsed;
+            }
+        } catch (e) {}
+        return raw.split(/\r?\n/).map(function (line) {
+            return line.trim();
+        }).filter(Boolean);
+    }
+
+    function parseObject(value) {
+        var raw = String(value || '').trim();
+        if (raw === '') {
+            return {};
+        }
+        try {
+            var parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                return parsed;
+            }
+        } catch (e) {}
+        return parseLines(raw);
+    }
+
+    function formatStructured(value) {
+        if (Array.isArray(value)) {
+            return value.map(function (item) {
+                return typeof item === 'string' ? item : JSON.stringify(item);
+            }).join("\n");
+        }
+        if (value && typeof value === 'object') {
+            return JSON.stringify(value, null, 2);
+        }
+        return String(value || '');
+    }
+
+    function selectedAdapterCode() {
+        return els.adapter ? String(els.adapter.value || '') : '';
+    }
+
+    function currentAdapter() {
+        var code = selectedAdapterCode();
+        return state.adapters.find(function (adapter) {
+            return String(adapter.code || '') === code;
+        }) || null;
+    }
+
+    function sourceGroup(style) {
+        var sourceType = String(style.source_type || style.source || '');
+        if (sourceType === 'system' || sourceType === 'module' || sourceType === 'builtin') {
+            return 'module';
+        }
+        if (sourceType === 'custom') {
+            return 'custom';
+        }
+        if (sourceType === 'missing') {
+            return 'missing';
+        }
+        return sourceType;
+    }
+
+    function findSelectedStyle() {
+        if (state.selectedCode === '__new__') {
+            return state.draft;
+        }
+        return state.items.find(function (item) {
+            return String(item.code || '') === state.selectedCode;
+        }) || null;
+    }
+
+    function renderAdapters() {
+        clearNode(els.adapter);
+        if (!state.adapters.length) {
+            var fallback = document.createElement('option');
+            fallback.value = 'pagebuilder_component_generation';
+            fallback.textContent = 'pagebuilder_component_generation';
+            els.adapter.appendChild(fallback);
+            state.selectedAdapter = fallback.value;
+            return;
+        }
+
+        state.adapters.forEach(function (adapter) {
+            var option = document.createElement('option');
+            option.value = adapter.code || '';
+            option.textContent = (adapter.name || adapter.code || '') + ' (' + (adapter.code || '') + ')';
+            els.adapter.appendChild(option);
+        });
+
+        var preferred = state.adapters.find(function (adapter) {
+            return adapter.code === 'pagebuilder_component_generation';
+        }) || state.adapters.find(function (adapter) {
+            return adapter.code === 'pagebuilder_plan_generation';
+        }) || state.adapters[0];
+        state.selectedAdapter = preferred.code || '';
+        els.adapter.value = state.selectedAdapter;
+    }
+
+    function renderAdapterSummary() {
+        var adapter = currentAdapter();
+        if (!adapter) {
+            els.adapterSummary.textContent = 'Adapter context unavailable.';
+            return;
+        }
+        var defaults = Array.isArray(adapter.default_style_codes) ? adapter.default_style_codes : [];
+        var manual = Array.isArray(adapter.manual_style_codes) ? adapter.manual_style_codes : [];
+        els.adapterSummary.textContent = 'Default: ' + (defaults.length ? defaults.join(', ') : 'none')
+            + ' | Manual: ' + (manual.length ? manual.join(', ') : 'none');
+    }
+
+    function filteredItems() {
+        var q = String(els.search.value || '').trim().toLowerCase();
+        var status = String(els.statusFilter.value || '');
+        var source = String(els.sourceFilter.value || '');
+        var items = state.items.slice();
+        if (state.draft) {
+            items.unshift(state.draft);
+        }
+        return items.filter(function (style) {
+            var haystack = [
+                style.code || '',
+                style.name || '',
+                style.description || '',
+                style.source || '',
+                style.source_type || '',
+                style.source_module || '',
+                flatten(style.industry_tags),
+                flatten(style.match_keywords),
+                flatten(style.visual_keywords),
+                flatten(style.layout_patterns)
+            ].join(' ').toLowerCase();
+            if (q !== '' && haystack.indexOf(q) === -1) {
+                return false;
+            }
+            if (status !== '' && String(style.status || '') !== status) {
+                return false;
+            }
+            if (source !== '' && sourceGroup(style) !== source) {
+                return false;
+            }
+            return true;
+        });
+    }
+
+    function renderTable() {
+        var items = filteredItems();
+        clearNode(els.tableBody);
+        if (!items.length) {
+            var emptyRow = document.createElement('tr');
+            var td = document.createElement('td');
+            td.colSpan = 6;
+            td.className = 'text-center text-muted py-4';
+            td.textContent = 'No styles match the current filters.';
+            emptyRow.appendChild(td);
+            els.tableBody.appendChild(emptyRow);
+            els.listStatus.textContent = '0 / ' + state.items.length + ' styles';
+            return;
+        }
+
+        items.forEach(function (style) {
+            var code = style._draft ? '__new__' : String(style.code || '');
+            var tr = document.createElement('tr');
+            tr.className = 'style-row' + (code === state.selectedCode ? ' is-selected' : '');
+            tr.dataset.code = code;
+
+            var codeTd = document.createElement('td');
+            codeTd.appendChild(text('code', style._draft ? '(new custom style)' : style.code || ''));
+            var chipWrap = document.createElement('div');
+            toList(style.industry_tags).slice(0, 3).forEach(function (item) {
+                chipWrap.appendChild(chip(item));
+            });
+            codeTd.appendChild(chipWrap);
+            tr.appendChild(codeTd);
+
+            var nameTd = document.createElement('td');
+            nameTd.appendChild(text('div', style.name || style.code || 'Untitled style', 'fw-semibold'));
+            nameTd.appendChild(text('div', style.description || '', 'small text-muted style-muted-line'));
+            tr.appendChild(nameTd);
+
+            var sourceTd = document.createElement('td');
+            sourceTd.appendChild(text('div', style.source_module || style.source || style.source_type || '', 'small'));
+            sourceTd.appendChild(text('div', style.source_type || '', 'small text-muted'));
+            tr.appendChild(sourceTd);
+
+            var statusTd = document.createElement('td');
+            var statusClass = style.status === 'active' ? 'text-bg-success' : (style.status === 'missing' ? 'text-bg-danger' : 'text-bg-secondary');
+            statusTd.appendChild(badge(style.status || 'new', statusClass));
+            tr.appendChild(statusTd);
+
+            var bindingTd = document.createElement('td');
+            if (style.adapter_default) {
+                bindingTd.appendChild(badge('default', 'text-bg-primary'));
+            } else if (style.manual) {
+                bindingTd.appendChild(badge('manual', 'text-bg-info'));
+            } else if (style.temporary) {
+                bindingTd.appendChild(badge('temporary', 'text-bg-light text-dark'));
+            } else {
+                bindingTd.appendChild(text('span', '-', 'small text-muted'));
+            }
+            tr.appendChild(bindingTd);
+
+            var actionTd = document.createElement('td');
+            var manageBtn = document.createElement('button');
+            manageBtn.type = 'button';
+            manageBtn.className = 'btn btn-outline-primary btn-sm';
+            manageBtn.textContent = 'Manage';
+            actionTd.appendChild(manageBtn);
+            tr.appendChild(actionTd);
+
+            els.tableBody.appendChild(tr);
+        });
+
+        els.listStatus.textContent = String(items.length) + ' / ' + state.items.length + ' styles';
+    }
+
+    function setFieldsDisabled(disabled) {
+        [els.name, els.status, els.description, els.cta, els.supplemental].forEach(function (input) {
+            input.disabled = disabled;
+        });
+        document.querySelectorAll('[data-style-array], [data-style-object]').forEach(function (input) {
+            input.disabled = disabled;
+        });
+    }
+
+    function renderDetail() {
+        var style = findSelectedStyle();
+        if (!style) {
+            els.empty.classList.remove('d-none');
+            els.form.classList.add('d-none');
+            els.detailTitle.textContent = 'Style detail';
+            els.detailMode.textContent = 'No selection';
+            return;
+        }
+
+        var readonly = !!style.readonly || sourceGroup(style) === 'module' || sourceGroup(style) === 'missing';
+        els.empty.classList.add('d-none');
+        els.form.classList.remove('d-none');
+        els.detailTitle.textContent = style._draft ? 'New custom style' : 'Manage ' + (style.code || '');
+        els.detailMode.textContent = readonly ? 'Readonly' : (style.exists ? 'Editable' : 'New');
+
+        clearNode(els.badges);
+        els.badges.appendChild(badge(style.status || 'new', style.status === 'active' ? 'text-bg-success' : 'text-bg-secondary'));
+        els.badges.appendChild(badge(style.source_type || 'custom', 'text-bg-light text-dark'));
+        if (style.adapter_default) {
+            els.badges.appendChild(badge('default binding', 'text-bg-primary'));
+        }
+        if (style.manual) {
+            els.badges.appendChild(badge('manual binding', 'text-bg-info'));
+        }
+        if (readonly) {
+            els.badges.appendChild(badge('readonly', 'text-bg-dark'));
+        }
+
+        els.code.value = style._draft ? '' : String(style.code || '');
+        els.name.value = String(style.name || '');
+        els.status.value = String(style.status || 'active') === 'disabled' ? 'disabled' : 'active';
+        els.description.value = String(style.description || '');
+        els.cta.value = String(style.cta_style || '');
+        els.supplemental.value = String(style.supplemental_prompt || '');
+
+        document.querySelectorAll('[data-style-array]').forEach(function (input) {
+            var field = input.getAttribute('data-style-array') || '';
+            input.value = formatStructured(style[field] || []);
+        });
+        document.querySelectorAll('[data-style-object]').forEach(function (input) {
+            var field = input.getAttribute('data-style-object') || '';
+            input.value = formatStructured(style[field] || {});
+        });
+
+        els.code.readOnly = readonly || (!!style.exists && !style._draft);
+        setFieldsDisabled(readonly);
+        els.save.disabled = readonly;
+        document.querySelectorAll('[data-style-status-action]').forEach(function (btn) {
+            btn.disabled = readonly || style._draft || String(style.status || '') === String(btn.getAttribute('data-style-status-action') || '');
+        });
+        els.clone.disabled = !style.code || sourceGroup(style) === 'custom' || sourceGroup(style) === 'missing';
+
+        var active = String(style.status || '') === 'active';
+        els.bind.disabled = !active || !style.code || !!style.adapter_default || !!style.manual || !style.exists;
+        els.unbind.disabled = !style.manual || !!style.adapter_default;
+        if (style.adapter_default) {
+            els.bindingHelp.textContent = 'This style is declared by adapter code as a default binding and cannot be unbound here.';
+        } else if (style.manual) {
+            els.bindingHelp.textContent = 'This style is manually bound to the selected adapter. You can remove only this manual binding.';
+        } else if (!active) {
+            els.bindingHelp.textContent = 'Only active styles can be bound to adapters.';
+        } else {
+            els.bindingHelp.textContent = 'Bind this style as a long-term manual adapter style for the selected context.';
+        }
+    }
+
+    function selectStyle(code) {
+        state.selectedCode = code || '';
+        renderTable();
+        renderDetail();
+        setStatus(els.formStatus, '', false);
+    }
+
+    function newStyle() {
+        state.draft = {
+            _draft: true,
+            exists: false,
+            readonly: false,
+            source: 'custom',
+            source_type: 'custom',
+            status: 'active',
+            code: '',
+            name: '',
+            description: '',
+            industry_tags: [],
+            match_keywords: [],
+            visual_keywords: [],
+            color_system: {},
+            layout_patterns: [],
+            image_strategy: [],
+            forbidden_patterns: [],
+            block_rules: {},
+            qa_rules: [],
+            example_refs: [],
+            cta_style: '',
+            supplemental_prompt: ''
+        };
+        state.selectedCode = '__new__';
+        renderTable();
+        renderDetail();
+        els.code.focus();
+    }
+
+    function collectPayload(statusOverride) {
+        var payload = {
+            code: els.code.value || '',
+            name: els.name.value || '',
+            description: els.description.value || '',
+            status: statusOverride || els.status.value || 'active',
+            cta_style: els.cta.value || '',
+            supplemental_prompt: els.supplemental.value || ''
+        };
+        document.querySelectorAll('[data-style-array]').forEach(function (input) {
+            payload[input.getAttribute('data-style-array') || ''] = parseLines(input.value);
+        });
+        document.querySelectorAll('[data-style-object]').forEach(function (input) {
+            payload[input.getAttribute('data-style-object') || ''] = parseObject(input.value);
+        });
+        return payload;
+    }
+
+    function refreshCatalog() {
+        var adapterCode = selectedAdapterCode();
+        els.listStatus.textContent = 'Loading...';
+        return post(catalogUrl, {
+            adapter_code: adapterCode,
+            include_inactive: 1
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || 'Catalog load failed');
+            }
+            state.items = Array.isArray(payload.items) ? payload.items : [];
+            state.draft = null;
+            var stillExists = state.items.some(function (item) {
+                return String(item.code || '') === state.selectedCode;
+            });
+            if (!stillExists && state.items.length) {
+                state.selectedCode = String(state.items[0].code || '');
+            }
+            renderAdapterSummary();
+            renderTable();
+            renderDetail();
+        }).catch(function (err) {
+            els.listStatus.textContent = err && err.message ? err.message : 'Catalog load failed';
+        });
+    }
+
+    function saveCurrent(statusOverride) {
+        setStatus(els.formStatus, 'Saving...', false);
+        return post(saveUrl, collectPayload(statusOverride)).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || 'Save failed');
+            }
+            state.selectedCode = payload.item && payload.item.code ? String(payload.item.code) : String(els.code.value || '');
+            setStatus(els.formStatus, 'Saved.', false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.formStatus, err && err.message ? err.message : 'Save failed', true);
+        });
+    }
+
+    function cloneSelected() {
+        var style = findSelectedStyle();
+        if (!style || !style.code) {
+            return;
+        }
+        setStatus(els.formStatus, 'Cloning...', false);
+        return post(cloneUrl, {code: style.code}).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || 'Clone failed');
+            }
+            state.selectedCode = payload.item && payload.item.code ? String(payload.item.code) : '';
+            setStatus(els.formStatus, 'Cloned as custom style.', false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.formStatus, err && err.message ? err.message : 'Clone failed', true);
+        });
+    }
+
+    function bindSelected(bind) {
+        var style = findSelectedStyle();
+        if (!style || !style.code) {
+            return;
+        }
+        setStatus(els.formStatus, bind ? 'Binding style...' : 'Removing binding...', false);
+        return post(bind ? bindUrl : unbindUrl, {
+            adapter_code: selectedAdapterCode(),
+            style_code: style.code
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || (bind ? 'Bind failed' : 'Unbind failed'));
+            }
+            setStatus(els.formStatus, bind ? 'Style bound to adapter.' : 'Manual binding removed.', false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.formStatus, err && err.message ? err.message : (bind ? 'Bind failed' : 'Unbind failed'), true);
+        });
+    }
+
+    function matchStyle() {
+        setStatus(els.matchStatus, 'Matching...', false);
+        return post(matchUrl, {
+            adapter_code: selectedAdapterCode(),
+            site_title: els.matchTitle.value || '',
+            brief_description: els.matchBrief.value || ''
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || 'Match failed');
+            }
+            var item = payload.item || payload.style || payload.direction || null;
+            if (item && item.code) {
+                state.selectedCode = String(item.code);
+                setStatus(els.matchStatus, 'Matched ' + item.code + ' (score ' + String(payload.score || 0) + ').', false);
+                renderTable();
+                renderDetail();
+                return;
+            }
+            setStatus(els.matchStatus, payload.reason || 'No matching style found.', true);
+        }).catch(function (err) {
+            setStatus(els.matchStatus, err && err.message ? err.message : 'Match failed', true);
+        });
+    }
+
+    renderAdapters();
+    renderAdapterSummary();
+    if (state.items.length) {
+        state.selectedCode = String(state.items[0].code || '');
+    }
+    refreshCatalog();
+
+    document.getElementById('ai-style-refresh').addEventListener('click', refreshCatalog);
+    document.getElementById('ai-style-new').addEventListener('click', newStyle);
+    els.adapter.addEventListener('change', function () {
+        state.selectedAdapter = selectedAdapterCode();
+        refreshCatalog();
+    });
+    [els.search, els.statusFilter, els.sourceFilter].forEach(function (input) {
+        input.addEventListener('input', renderTable);
+        input.addEventListener('change', renderTable);
+    });
+    els.tableBody.addEventListener('click', function (event) {
+        var row = event.target.closest('tr[data-code]');
+        if (!row) {
+            return;
+        }
+        selectStyle(row.dataset.code || '');
+    });
+    els.save.addEventListener('click', function () {
+        saveCurrent('');
+    });
+    document.querySelectorAll('[data-style-status-action]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            saveCurrent(btn.getAttribute('data-style-status-action') || '');
+        });
+    });
+    els.clone.addEventListener('click', cloneSelected);
+    els.bind.addEventListener('click', function () {
+        bindSelected(true);
+    });
+    els.unbind.addEventListener('click', function () {
+        bindSelected(false);
+    });
+    els.matchBtn.addEventListener('click', matchStyle);
+})();
+</script>

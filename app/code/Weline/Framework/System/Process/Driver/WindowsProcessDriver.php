@@ -474,7 +474,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
         // 使用 Where-Object -like 替代 WQL LIKE，避免复杂的引号嵌套问题
         if ($this->isPowerShellAvailable()) {
             $escapedName = \str_replace("'", "''", $pname);
-            $psCmd = 'powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like \'*' . $escapedName . '*\' } | Select-Object -First 1 -ExpandProperty ProcessId" 2>NUL';
+            $psCmd = 'powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -match \'^php(?:-cgi)?\.exe$\' -and $_.CommandLine -like \'*' . $escapedName . '*\' } | Select-Object -First 1 -ExpandProperty ProcessId" 2>NUL';
             $output = [];
             $exitCode = 0;
             $this->executeCommand($psCmd, $output, $exitCode);
@@ -482,7 +482,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
             if ($exitCode === 0) {
                 foreach ($output as $line) {
                     $pid = $this->sanitizePid($line);
-                    if ($pid > 0) {
+                    if ($pid > 0 && $this->isPhpProcessPid($pid)) {
                         return $pid;
                     }
                 }
@@ -501,7 +501,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
             
             foreach ($output as $line) {
                 $pid = $this->sanitizePid($line);
-                if ($pid > 0) {
+                if ($pid > 0 && $this->isPhpProcessPid($pid)) {
                     return $pid;
                 }
             }
@@ -514,7 +514,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
         foreach ($output as $line) {
             if (\stripos($line, $pname) !== false) {
                 $parts = \str_getcsv($line, ',', '"', '');
-                if (\count($parts) > 1) {
+                if (\count($parts) > 1 && $this->isPhpProcessName((string) ($parts[0] ?? ''))) {
                     $pid = $this->sanitizePid($parts[1]);
                     if ($pid > 0) {
                         return $pid;
@@ -527,7 +527,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
         foreach ($output as $line) {
             if (\stripos($line, 'php') !== false && \stripos($line, $pname) !== false) {
                 $parts = \str_getcsv($line, ',', '"', '');
-                if (\count($parts) > 1) {
+                if (\count($parts) > 1 && $this->isPhpProcessName((string) ($parts[0] ?? ''))) {
                     $pid = $this->sanitizePid($parts[1]);
                     if ($pid > 0) {
                         return $pid;
@@ -537,6 +537,24 @@ class WindowsProcessDriver extends AbstractProcessDriver
         }
         
         return 0;
+    }
+
+    private function isPhpProcessPid(int $pid): bool
+    {
+        if (!$this->isValidPid($pid)) {
+            return false;
+        }
+
+        $info = $this->getProcessInfo($pid);
+
+        return $this->isPhpProcessName((string) ($info['name'] ?? ''));
+    }
+
+    private function isPhpProcessName(string $name): bool
+    {
+        $name = \strtolower(\trim($name));
+
+        return \in_array($name, ['php', 'php.exe', 'php-cgi.exe'], true);
     }
     
     /**

@@ -130,6 +130,12 @@
 "与 biz_key 二选一","与 biz_key 二选一"
 定位键,定位键
 "字段补丁；也可顶层传 name/status/content 等","字段补丁；也可顶层传 name/status/content 等"
+"Force takeover a queue without executing it in the current request.","Force takeover a queue without executing it in the current request."
+queue_id,queue_id
+biz_key,biz_key
+"Terminate old PID if needed","Terminate old PID if needed"
+"system_scheduler or manual_cli","system_scheduler or manual_cli"
+"Takeover reason","Takeover reason"
 "删除队列（queue_id 或 biz_key；运行中需 force）","删除队列（queue_id 或 biz_key；运行中需 force）"
 主键,主键
 "为 true 时允许删除运行中任务","为 true 时允许删除运行中任务"

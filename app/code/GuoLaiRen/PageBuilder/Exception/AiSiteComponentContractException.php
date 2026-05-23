@@ -66,16 +66,16 @@ final class AiSiteComponentContractException extends \RuntimeException
 
             $segments = ['- [' . $rule . ']'];
             if ($field !== '') {
-                $segments[] = '字段=' . $field;
+                $segments[] = 'field=' . $field;
             }
             if ($expected !== '') {
-                $segments[] = '期望=' . $expected;
+                $segments[] = 'expected=' . $expected;
             }
             if ($found !== '') {
-                $segments[] = '实际=' . $found;
+                $segments[] = 'found=' . $found;
             }
             if ($hint !== '') {
-                $segments[] = '修复=' . $hint;
+                $segments[] = 'fix=' . $hint;
             }
             $lines[] = \implode(' | ', $segments);
             if (\count($lines) >= $maxLines) {

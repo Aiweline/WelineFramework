@@ -94,7 +94,7 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
             ],
             'stage_guides' => [
                 'prepare' => [
-                    'description' => (string)__('先完成站点简介、目标域名、注册商选择等准备信息，然后把流程交给 PageBuilder。'),
+                    'description' => (string)__('先完成站点简介、目标域名、注册商选择等准备信息；目标域名补齐前不进入方案生成，然后把流程交给 PageBuilder。'),
                     'ai_recommendation' => (string)__('AI 会先整理网站级资料输入，进入 PageBuilder 后再一次性生成草稿站点、虚拟主题、页面和可视化预览。'),
                     'confirm_label' => (string)__('确认准备信息并进入 PageBuilder'),
                     'scope_patch' => [

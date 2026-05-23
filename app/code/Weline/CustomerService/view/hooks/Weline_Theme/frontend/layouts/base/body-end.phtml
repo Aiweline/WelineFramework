@@ -6,6 +6,7 @@
  */
 
 use Weline\CustomerService\Service\WidgetTranslationService;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
 
@@ -36,13 +37,17 @@ $showGuestBindPrompt = !$isLoggedIn;
 /** @var WidgetTranslationService $widgetTranslationService */
 $widgetTranslationService = ObjectManager::getInstance(WidgetTranslationService::class);
 $supportedLocales = $widgetTranslationService->getSupportedLocales();
-$widgetTranslations = $widgetTranslationService->getWidgetTranslations();
+$currentLocale = State::getLangLocal() ?: 'zh_Hans_CN';
+$widgetTranslations = $widgetTranslationService->getWidgetTranslationsForLocales([
+    $currentLocale,
+    'zh_Hans_CN',
+]);
 
 $customerServiceAssetVersion = '20260518-cart-overlay';
 ?>
 <link rel="stylesheet" href="@static(Weline_CustomerService::css/customer-service.css)?v=<?= $customerServiceAssetVersion ?>">
 <div id="customer-service-widget" class="customer-service-widget" data-editor-interactive>
-    <div id="cs-chat-button" class="cs-chat-button" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.toggleChat(); else console.warn('[CustomerService] Widget not loaded yet')">
+    <div id="cs-chat-button" class="cs-chat-button" onclick="if(typeof CustomerServiceWidget !== 'undefined') CustomerServiceWidget.toggleChat(); else if(window.__WelineLoadCustomerServiceWidget) window.__WelineLoadCustomerServiceWidget(true); else console.warn('[CustomerService] Widget not loaded yet')">
         <svg class="cs-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
             <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
@@ -197,19 +202,53 @@ function initCustomerServiceWidget() {
     }
 }
 </script>
-<script src="@static(Weline_CustomerService::js/customer-service.js)?v=<?= $customerServiceAssetVersion ?>" onload="initCustomerServiceWidget()"></script>
 <script>
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-        if (typeof CustomerServiceWidget !== 'undefined' && typeof initCustomerServiceWidget === 'function') {
+(function () {
+    'use strict';
+
+    var customerServiceScriptUrl = '@static(Weline_CustomerService::js/customer-service.js)?v=<?= $customerServiceAssetVersion ?>';
+    var customerServiceScriptLoading = false;
+
+    function loadCustomerServiceWidget(openAfterLoad) {
+        if (typeof CustomerServiceWidget !== 'undefined') {
             initCustomerServiceWidget();
+            if (openAfterLoad && typeof CustomerServiceWidget.toggleChat === 'function') {
+                CustomerServiceWidget.toggleChat();
+            }
+            return;
         }
-    });
-} else {
-    setTimeout(function() {
-        if (typeof CustomerServiceWidget !== 'undefined' && typeof initCustomerServiceWidget === 'function') {
+        if (customerServiceScriptLoading) {
+            return;
+        }
+        customerServiceScriptLoading = true;
+        var script = document.createElement('script');
+        script.src = customerServiceScriptUrl;
+        script.onload = function () {
             initCustomerServiceWidget();
+            if (openAfterLoad && typeof CustomerServiceWidget !== 'undefined' && typeof CustomerServiceWidget.toggleChat === 'function') {
+                CustomerServiceWidget.toggleChat();
+            }
+        };
+        document.head.appendChild(script);
+    }
+
+    function scheduleCustomerServiceWidget() {
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(function () {
+                loadCustomerServiceWidget(false);
+            }, { timeout: 6000 });
+            return;
         }
-    }, 100);
-}
+        setTimeout(function () {
+            loadCustomerServiceWidget(false);
+        }, 3000);
+    }
+
+    window.__WelineLoadCustomerServiceWidget = loadCustomerServiceWidget;
+    if (document.readyState === 'complete') {
+        scheduleCustomerServiceWidget();
+    } else {
+        window.addEventListener('load', scheduleCustomerServiceWidget, { once: true });
+    }
+})();
 </script>

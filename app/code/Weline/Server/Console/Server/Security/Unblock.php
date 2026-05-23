@@ -67,7 +67,12 @@ class Unblock extends CommandAbstract
         if ($ip !== null && $ip !== '') {
             $payload['ip'] = $ip;
         }
-        $command = ControlMessage::command(ControlMessage::ACTION_SECURITY_UNBLOCK, '', $payload);
+        $command = ControlMessage::command(
+            ControlMessage::ACTION_SECURITY_UNBLOCK,
+            '',
+            $payload,
+            (string)($info['control_token'] ?? '')
+        );
         $written = @\fwrite($conn, $command);
         @\stream_set_blocking($conn, true);
         @\stream_set_timeout($conn, 3);

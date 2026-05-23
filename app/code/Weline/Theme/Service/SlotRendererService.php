@@ -9,6 +9,7 @@ use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\View\Template;
 use Weline\Server\Service\MemoryStateFacade;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
@@ -51,6 +52,8 @@ class SlotRendererService
     private static array $widgetOutputCache = [];
     private static ?MemoryStateFacade $runtimeCache = null;
     private static bool $runtimeCacheResolved = false;
+    private static ?\WeakMap $fiberRenderYieldAt = null;
+    private const WLS_RENDER_YIELD_MIN_INTERVAL_US = 10000;
     
     // 孤儿部件（找不到对应slot的部件）
     private array $orphanWidgets = [];
@@ -1149,9 +1152,15 @@ class SlotRendererService
     private function traceCall(string $name, callable $callback, array $meta = []): mixed
     {
         if (!RequestLifecycleTrace::isEnabled()) {
-            return $callback();
+            self::cooperativeRenderYield();
+            try {
+                return $callback();
+            } finally {
+                self::cooperativeRenderYield();
+            }
         }
 
+        self::cooperativeRenderYield();
         $start = microtime(true);
         RequestLifecycleTrace::pushCurrentParent($name);
         try {
@@ -1159,7 +1168,34 @@ class SlotRendererService
         } finally {
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan($name, (microtime(true) - $start) * 1000, 'theme', null, $meta);
+            self::cooperativeRenderYield();
         }
+    }
+
+    private static function cooperativeRenderYield(): void
+    {
+        if (!Runtime::isPersistent() || !SchedulerSystem::isSchedulerActive()) {
+            return;
+        }
+
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber) {
+            return;
+        }
+
+        $now = \microtime(true);
+        self::$fiberRenderYieldAt ??= new \WeakMap();
+        $lastYieldAt = (float)(self::$fiberRenderYieldAt[$fiber] ?? 0.0);
+        if ($lastYieldAt <= 0.0) {
+            self::$fiberRenderYieldAt[$fiber] = $now;
+            return;
+        }
+        if ($lastYieldAt > 0.0 && (($now - $lastYieldAt) * 1000000) < self::WLS_RENDER_YIELD_MIN_INTERVAL_US) {
+            return;
+        }
+
+        self::$fiberRenderYieldAt[$fiber] = $now;
+        SchedulerSystem::yield();
     }
     
     /**

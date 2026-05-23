@@ -2,14 +2,10 @@
 增加数量,"Increase quantity"
 删除商品,"Remove item"
 购物车是空的,"Your cart is empty"
-开始购物,"Start shopping"
-浏览器直连购物车 REST API 已弃用，请使用前台 Worker API。,"Direct browser cart REST API is deprecated. Use the frontend worker API."
-WeShop 页眉迷你购物车,"WeShop Header mini cart"
-WeShop 主题页眉中的迷你购物车区域。,"Mini shopping cart area in the WeShop theme header."
-页眉迷你购物车商品列表,"Header mini cart product list"
-页眉下拉迷你购物车中的商品列表区域。,"Product list area in the header dropdown mini cart."
+开始购物,"Start Shopping"
+"浏览器直连购物车 REST API 已弃用，请使用前台 Worker API。","Direct browser cart REST API is deprecated. Use the frontend worker API."
 请求方法不允许。,"Request method is not allowed."
-无效的商品 ID。,"Invalid product ID."
+"无效的商品 ID。","Invalid product ID."
 商品不存在。,"Product does not exist."
 商品已下架。,"Product is disabled."
 请选择商品规格。,"Please choose product options."
@@ -18,9 +14,9 @@ WeShop 主题页眉中的迷你购物车区域。,"Mini shopping cart area in th
 已成功加入购物车。,"Added to cart successfully."
 加入购物车失败：%{1},"Add to cart failed: %{1}"
 无法加载商品规格：%{1},"Unable to load product options: %{1}"
-浏览器直连购物车 API 已弃用，请使用前台 Worker API。,"Direct browser cart API is deprecated. Use the frontend worker API."
+"浏览器直连购物车 API 已弃用，请使用前台 Worker API。","Direct browser cart API is deprecated. Use the frontend worker API."
 商品,Product
-请先登录,"Please login first"
+请先登录,"Please log in first"
 无效的购物车项,"Invalid cart item"
 商品已从购物车移除,"Item removed from cart"
 无效的数量,"Invalid quantity"
@@ -58,15 +54,18 @@ WeShop 主题页眉中的迷你购物车区域。,"Mini shopping cart area in th
 迷你购物车已加载,"Mini Cart Loaded"
 "在迷你购物车数据加载完成后触发，用于 AJAX 请求响应。","Triggered after the mini cart data finishes loading, used for AJAX request responses."
 "Cart 查询器不支持的操作：%{1}","Operations not supported by Cart query: %{1}"
-"Cart count loaded successfully.","Cart count loaded successfully."
+购物车数量加载成功。,购物车数量加载成功。
 购物车查询,"Cart query"
 提供购物车读取与总额计算能力,"Provides shopping cart reading and total calculation capabilities"
-"Frontend cart add operation","Frontend cart add operation"
-"Frontend product options operation","Frontend product options operation"
-"Frontend mini cart items operation","Frontend mini cart items operation"
-"Frontend cart count operation","Frontend cart count operation"
-"Frontend cart update operation","Frontend cart update operation"
-"Frontend cart remove operation","Frontend cart remove operation"
+"通过 Weline_Cart 根路由渲染前台购物车页面","通过 Weline_Cart 根路由渲染前台购物车页面"
+前台购物车加购操作,前台购物车加购操作
+前台商品规格读取操作,前台商品规格读取操作
+前台迷你购物车商品列表操作,前台迷你购物车商品列表操作
+前台购物车数量读取操作,前台购物车数量读取操作
+前台购物车更新操作,前台购物车更新操作
+前台购物车移除操作（移至回收站）,前台购物车移除操作（移至回收站）
+前台购物车回收站读取操作,前台购物车回收站读取操作
+前台购物车回收站恢复操作,前台购物车回收站恢复操作
 获取客户购物车商品列表,"Get customer shopping cart product list"
 计算客户购物车总额,"Calculate customer cart total"
 清空客户购物车,"Clear customer shopping cart"
@@ -168,10 +167,10 @@ WeShop 主题页眉中的迷你购物车区域。,"Mini shopping cart area in th
 在迷你购物车底部操作后渲染快捷支付或外部支付入口。,"Render express checkout or external payment entry after mini cart footer actions."
 迷你购物车空状态,"Mini Cart Empty State"
 迷你购物车空状态显示区域。,"Mini Cart Empty State Display Area."
-"WeShop Header 迷你购物车","WeShop Header mini shopping cart"
-"WeShop 主题 Header 中的迷你购物车区域。","WeShop theme Mini shopping cart area in Header."
-"Header 迷你购物车商品列表","Header mini shopping cart product list"
-"Header 下拉迷你购物车中的商品列表区域。","Header Drop down the product list area in the mini shopping cart."
+"WeShop 页眉迷你购物车","WeShop Header mini cart"
+"WeShop 主题页眉中的迷你购物车区域。","Mini shopping cart area in the WeShop theme header."
+页眉迷你购物车商品列表,"Header mini cart product list"
+页眉下拉迷你购物车中的商品列表区域。,"Product list area in the header dropdown mini cart."
 购物车商品列表前（兼容）,"Before cart item list (compatible)"
 购物车商品列表后（兼容）,"After cart item list (compatible)"
 购物车单个商品后（兼容）,"After individual cart item (compatible)"
@@ -182,20 +181,22 @@ WeShop 主题页眉中的迷你购物车区域。,"Mini shopping cart area in th
 迷你购物车商品列表前（兼容）,"Before Mini Cart Product List (Compatible)"
 迷你购物车商品列表后（兼容）,"After Mini Cart Product List (Compatible)"
 商品不可用。,"Product is unavailable."
-请选择商品规格。,"Please select product options."
 所选商品配置不可用。,"The selected product configuration is unavailable."
 库存不足，可售数量：%{1},"Insufficient stock. Available quantity: %{1}"
 商品规格加载成功。,"Product options loaded successfully."
 无效的购物车项。,"Invalid cart item."
 无效的数量。,"Invalid quantity."
 购物车更新成功。,"Cart updated successfully."
-商品已从购物车成功移除。,"Item removed from cart successfully."
+商品已移至购物车回收站。,"Item moved to cart trash."
+商品已恢复至购物车。,"Item restored to cart."
+购物车回收站加载成功。,"Cart trash loaded successfully."
 迷你购物车加载成功。,"Mini cart loaded successfully."
-请先登录,"Please log in first"
+"商品 #%{1}","商品 #%{1}"
 规格,Option
-购物车项不存在,"Cart item does not exist"
-无权更新此购物车项,"No permission to update this cart item"
-无权移除此购物车项,"No permission to remove this cart item"
+商品不存在或不可用。,"Product does not exist or is unavailable."
+购物车项目已在垃圾箱中,购物车项目已在垃圾箱中
+购物车项目不存在,购物车项目不存在
+无权%{1}此购物车项目,无权%{1}此购物车项目
 购物车,"Shopping Cart"
 打开购物车,"Open cart"
 加入购物车,"Add to Cart"
@@ -208,50 +209,60 @@ WeShop 主题页眉中的迷你购物车区域。,"Mini shopping cart area in th
 已加入购物车,"Added to cart"
 添加购物车失败,"Failed to add to cart"
 已添加,Added
-购物车页,"Shopping Cart"
-取消全选,"Deselect all items"
-价格,Price
-您的购物车是空的,"Your cart is empty"
+"WeShop 购物车","WeShop 购物车"
+"共 %{1} 件商品，确认后即可进入结账。","%{1} items in your cart. Review them before checkout."
+购物车还是空的，先去挑选商品。,购物车还是空的，先去挑选商品。
+购物车垃圾箱,购物车垃圾箱
+最近移除,最近移除
+可快速恢复到购物车,可快速恢复到购物车
+垃圾箱暂无商品。移除购物车商品后会出现在这里。,垃圾箱暂无商品。移除购物车商品后会出现在这里。
+暂无图片,暂无图片
+"数量 %{1}","数量 %{1}"
+恢复,恢复
 继续购物,"Continue Shopping"
+购物车为空,购物车为空
+把喜欢的商品加入购物车后，可以在这里统一结账。,把喜欢的商品加入购物车后，可以在这里统一结账。
+去逛逛,去逛逛
 有货,"In Stock"
-库存紧张,"Low Stock"
-符合免运费条件,"Eligible for FREE Shipping"
-删除,Delete
-稍后购买,"Save for later"
+库存不足,库存不足
+商品已失效,商品已失效
+支持配送,支持配送
+调整数量,调整数量
+商品数量,商品数量
+移除,Remove
+稍后再买,稍后再买
+单价,单价
 订单摘要,"Order Summary"
-"商品（%{1}）：","Items (%{1}):"
-"运费与手续费：","Shipping & handling:"
-折扣:,Discount:
-"预估税费：","Estimated tax:"
-"订单合计：","Order Total:"
-有优惠码？,"Have a promo code?"
+"%{1} 件","%{1} 件"
+商品小计,商品小计
+配送费,配送费
+优惠,优惠
+预估税费,预估税费
+应付合计,应付合计
+优惠码,"Promo code"
 输入优惠码,"Enter code"
 应用,Apply
-去结算,"Proceed to Checkout"
-您可能还喜欢,"You May Also Like"
-加入购物车,"Add to Cart"
-更新购物车时出错,"Error updating cart"
-移除商品时出错,"Error removing item"
-前台 Worker API 暂不支持稍后购买。,"Save for later is not available through the frontend worker API yet."
-前台 Worker API 暂不支持优惠码。,"Promo code is not available through the frontend worker API yet."
+去结账,"Proceed to checkout"
+结账时可选择配送地址、配送方式和支付方式。,"Choose your shipping address, shipping method, and payment method at checkout."
+为你推荐,"Recommended for you"
+猜你喜欢,"You may also like"
+查看更多,"View more"
+购物车页,"Shopping Cart"
 "购物车中有 %{1} 件商品","%{1} items in your cart"
-数量,Quantity
+价格,Price
 合计,Total
 销售方,"Sold by"
-缺货,"Out of Stock"
-移除,Remove
+稍后购买,"Save for later"
 输入优惠券代码,"Enter coupon code"
 小计,Subtotal
 运费,Shipping
 结算时计算,"Calculated at checkout"
 税费,Tax
+去结算,"Proceed to Checkout"
 安全结账,"Secure Checkout"
 免费退货,"Free Returns"
-开始购物,"Start Shopping"
-查看购物车,"View cart"
+您的购物车是空的,"Your cart is empty"
 您还没有向购物车添加任何商品。,"Looks like you haven't added anything to your cart yet."
-商品已移至购物车回收站。,"Item moved to cart trash."
-商品已恢复至购物车。,"Item restored to cart."
-购物车回收站加载成功。,"Cart trash loaded successfully."
-商品不存在或不可用。,"Product does not exist or is unavailable."
-请选择商品规格。,"Please choose product options."
+查看购物车,"View cart"
+关闭购物车,关闭购物车
+运费和税费将在结算时计算,"Shipping and taxes are calculated at checkout"

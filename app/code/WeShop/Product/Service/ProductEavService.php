@@ -102,6 +102,24 @@ class ProductEavService
             }
         }
 
+        if ($result === []) {
+            $attributesWithValues = [];
+            foreach ($this->getEntityAttributes($productEntity->getId()) as $attribute) {
+                $attributeData = $this->loadAttributeValue($attribute, $productId);
+                if ($attributeData !== null && $attributeData['value'] !== null) {
+                    $attributesWithValues[] = $attributeData;
+                }
+            }
+
+            if ($attributesWithValues !== []) {
+                $result[] = [
+                    'group_id' => 0,
+                    'group_name' => '默认属性组',
+                    'attributes' => $attributesWithValues,
+                ];
+            }
+        }
+
         return $result;
     }
 
@@ -216,6 +234,20 @@ class ProductEavService
             ->where(EavAttribute::schema_fields_eav_entity_id, $entityId)
             ->where(EavAttribute::schema_fields_set_id, $setId)
             ->where(EavAttribute::schema_fields_group_id, $groupId)
+            ->where(EavAttribute::schema_fields_is_enable, 1)
+            ->select()
+            ->fetchArray();
+
+        return is_array($attributes) ? $attributes : [];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getEntityAttributes(int $entityId): array
+    {
+        $attributes = $this->eavAttribute->reset()
+            ->where(EavAttribute::schema_fields_eav_entity_id, $entityId)
             ->where(EavAttribute::schema_fields_is_enable, 1)
             ->select()
             ->fetchArray();

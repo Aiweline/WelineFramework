@@ -8,6 +8,7 @@ $activeTab = $activeTab ?? 'model';
 $modelUrl = $this->getBackendUrl('ai/backend/model');
 $adapterUrl = $this->getBackendUrl('ai/backend/adapter');
 $skillUrl = $this->getBackendUrl('ai/backend/skill');
+$styleUrl = $this->getBackendUrl('ai/backend/style');
 $providerUrl = $this->getBackendUrl('ai/backend/provider');
 ?>
 <style>
@@ -32,6 +33,11 @@ $providerUrl = $this->getBackendUrl('ai/backend/provider');
         <li class="nav-item">
             <a class="nav-link <?= $activeTab === 'skill' ? 'active' : '' ?>" href="<?= htmlspecialchars($skillUrl) ?>">
                 <i class="mdi mdi-shape-outline me-1"></i><lang>Skills</lang>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= $activeTab === 'style' ? 'active' : '' ?>" href="<?= htmlspecialchars($styleUrl) ?>">
+                <i class="mdi mdi-palette-outline me-1"></i><lang>风格</lang>
             </a>
         </li>
         <li class="nav-item">

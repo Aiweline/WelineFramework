@@ -42,7 +42,7 @@ final class SourceTruthCoverageLinter
 
         foreach ($missedFacts as $factId => $factText) {
             $findings[] = [
-                'severity' => $coverage < self::MIN_COVERAGE ? 'error' : 'warning',
+                'severity' => 'warning',
                 'category' => 'content_quality',
                 'contract_type' => 'source_truth',
                 'message' => "Missing must-include fact [{$factId}]: {$factText}",
@@ -64,7 +64,7 @@ final class SourceTruthCoverageLinter
         $forbiddenHits = $this->findForbiddenHits($sourceTruth, $allCopy);
         foreach ($forbiddenHits as $hit) {
             $findings[] = [
-                'severity' => 'error',
+                'severity' => 'warning',
                 'category' => 'content_quality',
                 'contract_type' => 'source_truth',
                 'message' => "Forbidden style detected: {$hit}",
@@ -121,7 +121,7 @@ final class SourceTruthCoverageLinter
         $findings = [];
         foreach ($missedFacts as $factId => $factText) {
             $findings[] = [
-                'severity' => $coverage < self::MIN_COVERAGE ? 'error' : 'warning',
+                'severity' => 'warning',
                 'category' => 'content_quality',
                 'contract_type' => 'source_truth',
                 'message' => "Missing must-include fact [{$factId}]: {$factText}",
@@ -142,7 +142,7 @@ final class SourceTruthCoverageLinter
 
         foreach ($this->findForbiddenHits($sourceTruth, $allCopy) as $hit) {
             $findings[] = [
-                'severity' => 'error',
+                'severity' => 'warning',
                 'category' => 'content_quality',
                 'contract_type' => 'source_truth',
                 'message' => "Forbidden style detected: {$hit}",

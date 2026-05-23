@@ -369,22 +369,106 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 $workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publish'], true)
     ? $currentStage
     : 'plan';
-$workspaceTplData = \get_defined_vars();
+$workspaceTplData = [
+    'session' => $session,
+    'state' => $state,
+    'scope' => $scope,
+    'scopePreview' => $scopePreview,
+    'publicId' => $publicId,
+    'currentStage' => $currentStage,
+    'workspaceRenderStage' => $workspaceRenderStage,
+    'websiteProfile' => $websiteProfile,
+    'guidedUi' => $guidedUi,
+    'guidedUrl' => $guidedUrl,
+    'guidedSteps' => $guidedSteps,
+    'activeStepIndex' => $activeStepIndex,
+    'guidedWorkspaceSiteTitle' => $guidedWorkspaceSiteTitle,
+    'guidedWorkspaceBrief' => $guidedWorkspaceBrief,
+    'guidedWorkspaceDefaultLocale' => $guidedWorkspaceDefaultLocale,
+    'guidedWorkspacePlanLocale' => $guidedWorkspacePlanLocale,
+    'guidedScopeDefaults' => $guidedScopeDefaults,
+    'guidedSessionSummary' => $guidedSessionSummary,
+    'selectedPageTypesSafe' => $selectedPageTypesSafe,
+    'commonPageTypes' => $commonPageTypes ?? [],
+    'extraPageTypes' => $extraPageTypes ?? [],
+    'pageTypeLabels' => $pageTypeLabels ?? [],
+    'pbAiGuidedFakeMode' => $pbAiGuidedFakeMode,
+    'pbAiPhaseOnePlanPresent' => $pbAiPhaseOnePlanPresent,
+    'pbAiTargetDomainHelpTitle' => $pbAiTargetDomainHelpTitle,
+    'designDirectionLabel' => $designDirectionLabel,
+    'designDirectionReason' => $designDirectionReason,
+    'designDirectionSnapshot' => $designDirectionSnapshot,
+    'domainPurchaseState' => $domainPurchaseState,
+    'domainStatusBadgeClass' => $domainStatusBadgeClass,
+    'recommendedDomainList' => $recommendedDomainList,
+    'recommendedRegistrarLabel' => $recommendedRegistrarLabel,
+    'registrarSelectOptionsJson' => $registrarSelectOptionsJson,
+    'purchaseDialogJsUrl' => $purchaseDialogJsUrl,
+    'activeOperation' => $activeOperation ?? [],
+    'activeOperationStatus' => $activeOperationStatus ?? '',
+    'buildTaskSummary' => $buildTaskSummary ?? [],
+    'buildTaskGroups' => $buildTaskGroups ?? [],
+    'workspaceEventPreviewList' => $workspaceEventPreviewList ?? [],
+    'previewPageType' => $previewPageType ?? '',
+    'virtualThemeId' => $virtualThemeId ?? 0,
+    'draftWebsiteId' => $draftWebsiteId ?? 0,
+    'embeddedVisualUrl' => $embeddedVisualUrl ?? '',
+    'backUrl' => $backUrl,
+    'mergeScopeUrl' => $mergeScopeUrl,
+    'replaceScopeUrl' => $replaceScopeUrl,
+    'setStageUrl' => $setStageUrl,
+    'startPlanUrl' => $startPlanUrl,
+    'skillListUrl' => $skillListUrl,
+    'skillSaveUrl' => $skillSaveUrl,
+    'skillDisableUrl' => $skillDisableUrl,
+    'designDirectionListUrl' => $designDirectionListUrl,
+    'designDirectionSaveUrl' => $designDirectionSaveUrl,
+    'designDirectionDisableUrl' => $designDirectionDisableUrl,
+    'designDirectionCloneBuiltinUrl' => $designDirectionCloneBuiltinUrl,
+    'designDirectionMatchUrl' => $designDirectionMatchUrl,
+    'designDirectionManageUrl' => $designDirectionManageUrl,
+    'confirmPlanUrl' => $confirmPlanUrl,
+    'sortPlanBlocksUrl' => $sortPlanBlocksUrl,
+    'mutatePlanBlockUrl' => $mutatePlanBlockUrl,
+    'refinePlanPageUrl' => $refinePlanPageUrl,
+    'planSseUrl' => $planSseUrl,
+    'resumeBuildUrl' => $resumeBuildUrl,
+    'runVirtualThemeUrl' => $runVirtualThemeUrl,
+    'startRegeneratePageUrl' => $startRegeneratePageUrl,
+    'startRefineComponentUrl' => $startRefineComponentUrl,
+    'startPatchBlockUrl' => $startPatchBlockUrl,
+    'retryAiOperationUrl' => $retryAiOperationUrl,
+    'updateBlockConfigUrl' => $updateBlockConfigUrl,
+    'startPublishUrl' => $startPublishUrl,
+    'operationSseUrl' => $operationSseUrl,
+    'switchPreviewPageUrl' => $switchPreviewPageUrl,
+    'workspaceSnapshotUrl' => $workspaceSnapshotUrl,
+    'publishCheckUrl' => $publishCheckUrl,
+    'recommendDomainUrl' => $recommendDomainUrl,
+    'checkDomainUrl' => $checkDomainUrl,
+    'startDomainPurchaseUrl' => $startDomainPurchaseUrl,
+    'domainPurchaseSseUrl' => $domainPurchaseSseUrl,
+    'stageOptions' => $stageOptions,
+];
+$workspaceModalData = [
+    'workspaceRenderStage' => $workspaceRenderStage,
+    'workspaceIsPlanStage' => $workspaceRenderStage === 'plan',
+];
     // 阶段一仅加载阶段一前端资源，避免提前注入构建阶段前端入口。
 ?>
-<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml', $workspaceTplData) ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml') ?>
 <?php if ($workspaceRenderStage === 'plan'): ?>
-<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-plan.phtml', $workspaceTplData) ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-plan.phtml') ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/layout.phtml', $workspaceTplData) ?>
 <?php elseif ($workspaceRenderStage === 'visual_edit'): ?>
-<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-visual-edit.phtml', $workspaceTplData) ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-visual-edit.phtml') ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/layout.phtml', $workspaceTplData) ?>
 <?php else: ?>
-<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-publish.phtml', $workspaceTplData) ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/style-publish.phtml') ?>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/layout.phtml', $workspaceTplData) ?>
 <?php endif; ?>
 
-<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/modals.phtml', $workspaceTplData) ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/modals.phtml', $workspaceModalData) ?>
 
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-main.phtml', $workspaceTplData) ?>
 <?php if ($workspaceRenderStage === 'plan'): ?>

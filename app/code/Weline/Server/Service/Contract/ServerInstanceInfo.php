@@ -35,6 +35,7 @@ class ServerInstanceInfo
         public readonly string $startedAt,
         public readonly int $startedTimestamp,
         public readonly array $services,
+        public readonly string $controlToken = '',
     ) {}
 
     /**

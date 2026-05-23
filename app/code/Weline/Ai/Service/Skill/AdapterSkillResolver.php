@@ -7,6 +7,7 @@ namespace Weline\Ai\Service\Skill;
 use Weline\Ai\Interface\AdapterSkillBindingInterface;
 use Weline\Ai\Model\AiSkill;
 use Weline\Ai\Service\AdapterScanner;
+use Weline\Ai\Service\SkillStyleTrace;
 use Weline\Framework\Manager\ObjectManager;
 
 final class AdapterSkillResolver
@@ -75,11 +76,21 @@ final class AdapterSkillResolver
             $itemsByCode[$code] = $this->decorate($existing, !empty($existing['locked']), !empty($existing['manual']), true, $source);
         }
 
-        return [
+        $result = [
             'codes' => \array_values(\array_keys($itemsByCode)),
             'items' => \array_values($itemsByCode),
             'warnings' => $warnings,
         ];
+        $this->logSkillStyleTrace('skill_binding.resolved', [
+            'adapter' => $adapterCode,
+            'codes' => $result['codes'],
+            'locked_codes' => $lockedCodes,
+            'manual_codes' => $manualCodes,
+            'temporary_codes' => $temporaryCodes,
+            'warnings' => $warnings,
+        ]);
+
+        return $result;
     }
 
     /**
@@ -123,11 +134,20 @@ final class AdapterSkillResolver
         }
 
         \ksort($itemsByCode);
-        return [
+        $result = [
             'items' => \array_values($itemsByCode),
             'default_skill_codes' => $lockedCodes,
             'warnings' => $warnings,
         ];
+        $this->logSkillStyleTrace('skill_catalog.built', [
+            'adapter' => $adapterCode,
+            'default_skill_codes' => $lockedCodes,
+            'temporary_codes' => $temporaryCodes,
+            'item_count' => \count($result['items']),
+            'warnings' => $warnings,
+        ]);
+
+        return $result;
     }
 
     /**
@@ -193,6 +213,14 @@ final class AdapterSkillResolver
         }
 
         return $text;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function logSkillStyleTrace(string $event, array $context = []): void
+    {
+        SkillStyleTrace::log($event, $context);
     }
 
     private function adapterScanner(): AdapterScanner

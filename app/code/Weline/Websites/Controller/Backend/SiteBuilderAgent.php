@@ -11,6 +11,7 @@ use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Ai\Service\Style\StyleService;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Model\AiSiteBuilderEvent;
 use Weline\Websites\Model\AiSiteBuilderSession;
@@ -1197,11 +1198,16 @@ class SiteBuilderAgent extends BackendController
         $sse->sendEvent('progress', ['message' => (string)__('解析简报与页面类型')]);
 
         $draft = $this->buildVirtualThemeDraftFallback($scope, $selectedPageTypes);
+        $stylePatch = $this->resolveWebsiteAiStylePatch($scope, 'website_builder');
+        $styleSnapshot = \is_array($stylePatch['design_direction_snapshot'] ?? null) ? $stylePatch['design_direction_snapshot'] : [];
+        if ($styleSnapshot !== [] && \trim((string)($draft['theme_style_direction'] ?? '')) === '') {
+            $draft['theme_style_direction'] = (string)($styleSnapshot['name'] ?? $styleSnapshot['code'] ?? '');
+        }
         if (\class_exists(\Weline\Ai\Service\AiService::class)) {
             try {
                 /** @var \Weline\Ai\Service\AiService $ai */
                 $ai = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
-                $prompt = \implode("\n", [
+                $promptLines = [
                     'You are a website theme planner.',
                     'Return only one JSON object.',
                     'Fields: virtual_theme_name(string), theme_style_direction(string), theme_color_scheme(string), page_type_layouts(object), component_template(string).',
@@ -1209,8 +1215,15 @@ class SiteBuilderAgent extends BackendController
                     'Header/Footer must be fixed and non-editable by business rule.',
                     'Brief: ' . $brief,
                     'Page types: ' . \implode(',', \array_map('strval', $selectedPageTypes)),
-                ]);
-                $aiRaw = (string)$ai->generate($prompt, null, 'pagebuilder_component_generation', null, [], $adminId, true);
+                ];
+                if ($styleSnapshot !== []) {
+                    $promptLines[] = 'AI style snapshot: ' . \json_encode($styleSnapshot, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+                    $promptLines[] = 'Use the AI style snapshot as the visual direction contract, but do not copy reference-site content or invent contact facts.';
+                }
+                $prompt = \implode("\n", $promptLines);
+                $aiRaw = (string)$ai->generate($prompt, null, 'pagebuilder_component_generation', null, [
+                    'disable_style_prompt_injection' => true,
+                ], $adminId, true);
                 $decoded = $this->extractFirstJsonObject($aiRaw);
                 if ($decoded !== []) {
                     $draft = \array_replace($draft, \array_intersect_key($decoded, $draft));
@@ -2170,7 +2183,11 @@ class SiteBuilderAgent extends BackendController
                 ];
             }
 
-            $themeDirection = $this->resolveWebsiteThemeDirection($brief, $scope);
+            $stylePatch = $this->resolveWebsiteAiStylePatch($scope, 'website_builder');
+            $styleSnapshot = \is_array($stylePatch['design_direction_snapshot'] ?? null) ? $stylePatch['design_direction_snapshot'] : [];
+            $themeDirection = $styleSnapshot !== []
+                ? (string)($styleSnapshot['name'] ?? $styleSnapshot['code'] ?? $this->resolveWebsiteThemeDirection($brief, $scope))
+                : $this->resolveWebsiteThemeDirection($brief, $scope);
             return [
                 'summary' => (string)__('AI 建议先用“%{theme}”方向生成默认页面，再补齐每个页面的主要内容区块。', [
                     'theme' => $themeDirection,
@@ -2183,12 +2200,13 @@ class SiteBuilderAgent extends BackendController
                 'patch' => [
                     'journey_stage' => 'generate',
                     'theme_direction' => $themeDirection,
+                    'theme_style_direction' => $themeDirection,
                     'theme_generation_mode' => 'ai_new_theme',
                     'content_generation_mode' => 'ai_sections',
                     'header_footer_locked' => 1,
                     'recommended_pages' => $pages,
                     'page_types' => $pages,
-                ],
+                ] + $stylePatch,
             ];
         }
 
@@ -2366,6 +2384,28 @@ class SiteBuilderAgent extends BackendController
         }
 
         return (string)__('简洁可信的品牌官网风格');
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function resolveWebsiteAiStylePatch(array $scope, string $adapterCode): array
+    {
+        try {
+            $styleScope = \array_replace($scope, [
+                'design_direction_mode' => (string)($scope['design_direction_mode'] ?? StyleService::MODE_AUTO),
+                'site_title' => (string)($scope['site_title'] ?? ''),
+                'brief_description' => (string)($scope['brief_description'] ?? $scope['user_description'] ?? ''),
+            ]);
+
+            return $this->getAiStyleService()->resolveSelectionForScope($styleScope, $this->getAdminId(), false, $adapterCode);
+        } catch (\Throwable $throwable) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('Website AI style resolve failed: ' . $throwable->getMessage());
+            }
+            return [];
+        }
     }
 
     /**
@@ -3571,6 +3611,13 @@ class SiteBuilderAgent extends BackendController
     {
         /** @var VirtualThemeWorkbenchService $service */
         $service = ObjectManager::getInstance(VirtualThemeWorkbenchService::class);
+        return $service;
+    }
+
+    private function getAiStyleService(): StyleService
+    {
+        /** @var StyleService $service */
+        $service = ObjectManager::getInstance(StyleService::class);
         return $service;
     }
 

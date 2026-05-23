@@ -40,6 +40,7 @@ class ServiceContext
         public readonly ?int $workerPort = null,
         /** 浏览器/对外展示的访问主机名（可与实际 bind 的 host 不同，例如 bind 127.0.0.1 而展示 *.weline.test） */
         public readonly ?string $publicHost = null,
+        public readonly string $controlToken = '',
     ) {}
 
     /**
@@ -60,6 +61,7 @@ class ServiceContext
             mode: $this->mode,
             daemon: $this->daemon,
             debug: $this->debug,
+            controlToken: $this->controlToken,
             windowMode: $this->windowMode,
             envConfig: $this->envConfig,
             httpRedirectPort: $this->httpRedirectPort,
@@ -86,6 +88,7 @@ class ServiceContext
             mode: $this->mode,
             daemon: $this->daemon,
             debug: $this->debug,
+            controlToken: $this->controlToken,
             windowMode: $this->windowMode,
             envConfig: $this->envConfig,
             httpRedirectPort: $this->httpRedirectPort,

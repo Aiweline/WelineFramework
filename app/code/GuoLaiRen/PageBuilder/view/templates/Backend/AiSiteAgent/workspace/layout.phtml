@@ -1,5 +1,5 @@
 <style>
-    /* AI 建站契约：阶段一以标题、需求与设计方向为主；目标域名仅作为可选发布信息。 */
+    /* AI 建站契约：阶段一先收齐站点标题、目标域名与需求，再生成建站方案。 */
     .pb-ai-expert-main-grid > [class*="col-"] {
         display: flex;
         flex-direction: column;
@@ -152,8 +152,13 @@
     #pb-ai-retry-build-failures,
     .pb-ai-retry-build-failures-slot {
         position: relative;
-        z-index: 20;
+        z-index: 120;
         pointer-events: auto !important;
+    }
+    #pb-ai-publish-stage-entry-card [data-pb-ai-publish-failure-list] {
+        max-height: 260px;
+        overflow: auto;
+        padding-right: .25rem;
     }
     .pb-ai-task-ai-indicator {
         display: inline-flex;
@@ -581,6 +586,14 @@
         100% { transform: translateY(0); box-shadow: 0 0 0 rgba(34, 197, 94, 0); }
     }
 </style>
+<?php
+$workspaceSectionData = [
+    'state' => $state,
+    'scope' => $scope,
+    'selectedPageTypesSafe' => $selectedPageTypesSafe,
+    'guidedUi' => $guidedUi,
+];
+?>
 <?php if ($guidedUi): ?>
 <script type="application/json" id="pb-ai-guided-scope-defaults"><?= htmlspecialchars((string)\json_encode($guidedScopeDefaults, \JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?></script>
 <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-guided.phtml') ?>
@@ -693,6 +706,12 @@ $pbAiStageGuide = match ((string)$currentStage) {
     $activeOperationStatus = \trim((string)($activeOperationStatus ?? $pbAiActiveOperationStatus));
     $pbAiLatestBuildFailed = !empty($state['latest_build_failed'] ?? false) || !empty($state['publish_blocked_by_latest_ai_failure'] ?? false);
     $pbAiPublishDisabled = $pbAiLatestBuildFailed || empty($state['can_publish']) || \in_array($activeOperationStatus, ['queued', 'running'], true);
+    $workspaceSectionData = [
+        'state' => $state,
+        'scope' => $scope,
+        'selectedPageTypesSafe' => $selectedPageTypesSafe,
+        'guidedUi' => $guidedUi,
+    ];
     ?>
     <div class="pb-guided-body">
     <div class="pb-guided-panel">
@@ -705,7 +724,7 @@ $pbAiStageGuide = match ((string)$currentStage) {
                             <i class="mdi mdi-account-voice text-primary"></i>
                             <?= htmlspecialchars((string)__('建站需求'), ENT_QUOTES, 'UTF-8') ?>
                         </h5>
-                        <p class="text-muted small mb-3"><?= htmlspecialchars((string)__('填写网站名称、定位、设计方向和页面范围，AI 会据此生成可落地的建站方案。'), ENT_QUOTES, 'UTF-8') ?></p>
+                        <p class="text-muted small mb-3"><?= htmlspecialchars((string)__('填写网站名称、目标域名、定位、设计方向和页面范围，AI 会据此生成可落地的建站方案。'), ENT_QUOTES, 'UTF-8') ?></p>
                         <div class="row g-3">
                         <div class="col-md-8">
                             <label class="form-label" for="pb-ai-site-title"><?= htmlspecialchars((string)__('网站名称'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -716,7 +735,7 @@ $pbAiStageGuide = match ((string)$currentStage) {
                         <div class="col-md-4">
                             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
                                 <div class="d-flex align-items-center gap-1 min-w-0">
-                                    <label class="form-label mb-0" for="pb-ai-target-domain"><?= htmlspecialchars((string)__('目标域名（可选）'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    <label class="form-label mb-0" for="pb-ai-target-domain"><?= htmlspecialchars((string)__('目标域名（必填）'), ENT_QUOTES, 'UTF-8') ?></label>
                                     <button type="button" class="btn btn-link p-0 text-muted lh-1 align-middle border-0 shadow-none" style="min-width:auto;" id="pb-ai-target-domain-help" title="<?= htmlspecialchars($pbAiTargetDomainHelpTitle, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($pbAiTargetDomainHelpTitle, ENT_QUOTES, 'UTF-8') ?>">
                                         <i class="mdi mdi-help-circle-outline" style="font-size:1.15rem;" aria-hidden="true"></i>
                                     </button>
@@ -727,7 +746,7 @@ $pbAiStageGuide = match ((string)$currentStage) {
                             </div>
                             <input class="form-control pb-ai-target-domain-sync" id="pb-ai-target-domain" type="text" list="pb-ai-target-domain-options"
                                    value="<?= htmlspecialchars((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                   placeholder="@lang{可稍后填写要绑定的目标域名}">
+                                   placeholder="@lang{请先填写要绑定的目标域名}">
                             <datalist id="pb-ai-target-domain-options">
                                 <?php foreach ($recommendedDomainList as $recommendedDomain): ?>
                                     <option value="<?= htmlspecialchars((string)$recommendedDomain, ENT_QUOTES, 'UTF-8') ?>"></option>
@@ -948,9 +967,9 @@ $pbAiStageGuide = match ((string)$currentStage) {
                         </button>
                     </div>
 
-                    <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-head.phtml', \get_defined_vars()) ?>
+                    <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-head.phtml', $workspaceSectionData) ?>
 
-                    <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml', \get_defined_vars()) ?>
+                    <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml', $workspaceSectionData) ?>
                 </div>
             </div>
         </div>
@@ -966,7 +985,7 @@ $pbAiStageGuide = match ((string)$currentStage) {
                     </div>
                 </div>
             </div>
-            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml', \get_defined_vars()) ?>
+            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml', $workspaceSectionData) ?>
         </div>
         <?php elseif ($currentStage === 'publish'): ?>
         <div class="pb-guided-main">
@@ -1461,11 +1480,11 @@ $pbAiStageGuide = match ((string)$currentStage) {
 <div class="row g-4 pb-ai-expert-main-grid">
     <div class="col-12 col-xxl-4 col-xl-5 pb-ai-expert-plan-col">
         <?php if ($stageView === 'plan'): ?>
-            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-card.phtml', \get_defined_vars()) ?>
+            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-card.phtml', $workspaceSectionData) ?>
         <?php elseif ($stageView === 'visual_edit'): ?>
-            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml', \get_defined_vars()) ?>
+            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml', $workspaceSectionData) ?>
         <?php else: ?>
-            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/publish-card.phtml', \get_defined_vars()) ?>
+            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/publish-card.phtml', $workspaceSectionData) ?>
         <?php endif; ?>
 
         <details class="card border-0 shadow-sm mt-3">
@@ -1562,7 +1581,7 @@ $pbAiStageGuide = match ((string)$currentStage) {
 
 <?php if ($renderDetachedPlanPanel): ?>
     <div class="pb-ai-expert-stage-panel-wrap">
-        <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml', \get_defined_vars()) ?>
+        <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml', $workspaceSectionData) ?>
     </div>
 <?php /* legacy workspace branch disabled */ ?>
 

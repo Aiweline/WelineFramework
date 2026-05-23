@@ -78,6 +78,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function isLoggedIn(): bool
     {
+        if (!$this->canReadExistingSession()) {
+            return false;
+        }
+
         $loginKey = $this->session->get($this->areaConfig->getLoginKey());
         $loginIdKey = $this->session->get($this->areaConfig->getLoginIdKey());
         
@@ -139,6 +143,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function getUserId(): int|string|null
     {
+        if (!$this->canReadExistingSession()) {
+            return null;
+        }
+
         $id = $this->session->get($this->areaConfig->getLoginIdKey());
         
         if ($id === null || $id === '') {
@@ -153,6 +161,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function getUsername(): ?string
     {
+        if (!$this->canReadExistingSession()) {
+            return null;
+        }
+
         $username = $this->session->get($this->areaConfig->getLoginKey());
         
         if ($username === null || $username === '') {
@@ -175,6 +187,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function get(string $key): mixed
     {
+        if (!$this->canReadExistingSession()) {
+            return null;
+        }
+
         return $this->session->get($key);
     }
 
@@ -295,10 +311,35 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function getData(string $name = ''): mixed
     {
+        if (!$this->canReadExistingSession()) {
+            return $name === '' ? [] : null;
+        }
+
         if ($name === '') {
             return $this->session->all();
         }
         return $this->session->get($name);
+    }
+
+    private function canReadExistingSession(): bool
+    {
+        if ($this->session->isStarted()) {
+            return true;
+        }
+
+        $cookieHeader = '';
+        if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)) {
+            $cookieHeader = (string)(
+                \Weline\Framework\Env\WelineEnv::server('HTTP_COOKIE', '')
+                ?: \Weline\Framework\Env\WelineEnv::get('server.http_cookie', '')
+            );
+        }
+        if ($cookieHeader !== '' && \stripos($cookieHeader, 'WELINE_SESSID=') !== false) {
+            return true;
+        }
+
+        return isset($_COOKIE['WELINE_SESSID'])
+            && \trim((string)$_COOKIE['WELINE_SESSID']) !== '';
     }
 
     /**

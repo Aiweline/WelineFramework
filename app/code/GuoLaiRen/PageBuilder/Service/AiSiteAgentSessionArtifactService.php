@@ -13,6 +13,10 @@ use Weline\Framework\Manager\ObjectManager;
 class AiSiteAgentSessionArtifactService
 {
     private const REF_KEY = '_artifact_refs';
+    private const STORAGE_INLINE = 'session_artifact_v1';
+    private const STORAGE_EXTERNAL_FILE = 'session_artifact_file_v1';
+    private const EXTERNAL_PAYLOAD_THRESHOLD_BYTES = 2097152;
+
     private bool $artifactTableEnsured = false;
 
     /**
@@ -138,7 +142,7 @@ class AiSiteAgentSessionArtifactService
     /**
      * @param array<string, mixed> $scope
      * @param list<string> $touchedArtifactKeys
-     * @return array{scope: array<string, mixed>, artifacts: list<array{stage_code:string, artifact_key:string, payload:mixed, hash:string, bytes:int}>}
+     * @return array{scope: array<string, mixed>, artifacts: list<array{stage_code:string, artifact_key:string, payload_json:string, hash:string, bytes:int, storage:string}>}
      */
     public function prepareScopeForStorage(int $sessionId, array $scope, array $touchedArtifactKeys = []): array
     {
@@ -174,7 +178,7 @@ class AiSiteAgentSessionArtifactService
                 $previousHash = \trim((string)($existingRef['hash'] ?? ''));
                 if ($previousHash !== '' && \hash_equals($previousHash, $hash)) {
                     $refs[$stageCode][$artifactKey] = \array_replace($existingRef, [
-                        'storage' => 'session_artifact_v1',
+                        'storage' => $bytes > self::EXTERNAL_PAYLOAD_THRESHOLD_BYTES ? self::STORAGE_EXTERNAL_FILE : self::STORAGE_INLINE,
                         'stage_code' => $stageCode,
                         'artifact_key' => $artifactKey,
                         'hash' => $hash,
@@ -184,8 +188,9 @@ class AiSiteAgentSessionArtifactService
                     unset($json, $value);
                     continue;
                 }
+                $storage = $bytes > self::EXTERNAL_PAYLOAD_THRESHOLD_BYTES ? self::STORAGE_EXTERNAL_FILE : self::STORAGE_INLINE;
                 $refs[$stageCode][$artifactKey] = [
-                    'storage' => 'session_artifact_v1',
+                    'storage' => $storage,
                     'stage_code' => $stageCode,
                     'artifact_key' => $artifactKey,
                     'hash' => $hash,
@@ -195,12 +200,13 @@ class AiSiteAgentSessionArtifactService
                 $artifacts[] = [
                     'stage_code' => $stageCode,
                     'artifact_key' => $artifactKey,
-                    'payload' => $value,
+                    'payload_json' => $json,
                     'hash' => $hash,
                     'bytes' => $bytes,
+                    'storage' => $storage,
                 ];
                 $scope = $this->setPathValue($scope, $definition['path'], $definition['empty']);
-                unset($json, $value);
+                unset($value);
                 continue;
             }
 
@@ -370,7 +376,7 @@ class AiSiteAgentSessionArtifactService
     }
 
     /**
-     * @param list<array{stage_code:string, artifact_key:string, payload:mixed}> $artifacts
+     * @param list<array{stage_code:string, artifact_key:string, payload_json?:string, payload?:mixed, hash?:string, bytes?:int, storage?:string}> $artifacts
      */
     public function persistArtifacts(int $sessionId, array $artifacts): void
     {
@@ -395,10 +401,25 @@ class AiSiteAgentSessionArtifactService
                 $artifact->setData(AiSiteAgentSessionArtifact::schema_fields_CREATE_TIME, $now);
             }
             $artifact->setData(AiSiteAgentSessionArtifact::schema_fields_UPDATE_TIME, $now);
-            $artifact->setPayloadValue($artifactData['payload'] ?? []);
+            $payloadJson = (string)($artifactData['payload_json'] ?? '');
+            $payloadHash = \trim((string)($artifactData['hash'] ?? ''));
+            $payloadBytes = (int)($artifactData['bytes'] ?? 0);
+            if ($payloadJson !== '') {
+                if ($payloadBytes > self::EXTERNAL_PAYLOAD_THRESHOLD_BYTES) {
+                    $relativePath = $this->writeExternalPayloadDocument($sessionId, $stageCode, $artifactKey, $payloadHash, $payloadJson);
+                    $payloadJson = $this->encodeValueDocument([
+                        AiSiteAgentSessionArtifact::EXTERNAL_PAYLOAD_FILE_KEY => $relativePath,
+                        'hash' => $payloadHash,
+                        'bytes' => $payloadBytes,
+                    ]);
+                }
+                $artifact->setPayloadDocumentJson($payloadJson, $payloadHash, $payloadBytes > 0 ? $payloadBytes : null);
+            } else {
+                $artifact->setPayloadValue($artifactData['payload'] ?? []);
+            }
             $artifact->save();
             $artifact->clearData()->clearQuery();
-            unset($artifact);
+            unset($artifact, $payloadJson);
         }
     }
 
@@ -568,6 +589,40 @@ class AiSiteAgentSessionArtifactService
         if ($stmt) {
             $stmt->execute(['session_id' => $sessionId]);
         }
+    }
+
+    private function writeExternalPayloadDocument(
+        int $sessionId,
+        string $stageCode,
+        string $artifactKey,
+        string $payloadHash,
+        string $payloadJson
+    ): string {
+        $hash = \preg_match('/^[a-f0-9]{40}$/i', $payloadHash) === 1 ? \strtolower($payloadHash) : \sha1($payloadJson);
+        $stageCode = $this->sanitizeStorageSegment($stageCode);
+        $artifactKey = $this->sanitizeStorageSegment($artifactKey);
+        $directory = BP . 'var' . \DIRECTORY_SEPARATOR . 'pagebuilder' . \DIRECTORY_SEPARATOR
+            . 'session-artifacts' . \DIRECTORY_SEPARATOR . $sessionId . \DIRECTORY_SEPARATOR . $stageCode;
+        if (!\is_dir($directory)) {
+            \mkdir($directory, 0775, true);
+        }
+
+        $filename = $artifactKey . '-' . $hash . '.json';
+        $path = $directory . \DIRECTORY_SEPARATOR . $filename;
+        if (!\is_file($path)) {
+            $temporaryPath = $path . '.tmp.' . \getmypid() . '.' . \bin2hex(\random_bytes(4));
+            \file_put_contents($temporaryPath, $payloadJson, \LOCK_EX);
+            \rename($temporaryPath, $path);
+        }
+
+        return 'var/pagebuilder/session-artifacts/' . $sessionId . '/' . $stageCode . '/' . $filename;
+    }
+
+    private function sanitizeStorageSegment(string $value): string
+    {
+        $segment = (string)\preg_replace('/[^a-zA-Z0-9_.-]+/', '_', \trim($value));
+
+        return $segment !== '' ? $segment : 'artifact';
     }
 
     private function loadArtifactModel(int $sessionId, string $stageCode, string $artifactKey): AiSiteAgentSessionArtifact

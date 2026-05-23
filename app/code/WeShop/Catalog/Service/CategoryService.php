@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace WeShop\Catalog\Service;
 
 use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
@@ -46,6 +49,10 @@ class CategoryService
      * @var array<string, array{expires_at: float, data: array}>
      */
     private static array $categoryIndexCache = [];
+
+    /** @var array<string, array<string, string>> */
+    private static array $moduleI18nWordsCache = [];
+
     private static ?MemoryStateFacade $runtimeCache = null;
     private static bool $runtimeCacheResolved = false;
 
@@ -168,13 +175,13 @@ class CategoryService
 
     public function getHeaderSearchCategoryOptions(int $parentId = 0): array
     {
-        $cacheKey = (string)$parentId;
+        $cacheKey = $parentId . '|' . $this->categoryDisplayLocaleCacheContext();
         $now = microtime(true);
         $cached = self::$headerSearchOptionsCache[$cacheKey] ?? null;
         if ($cached && $cached['expires_at'] > $now) {
             return $cached['data'];
         }
-        $runtimeCacheKey = 'category.header_search_options.' . $cacheKey;
+        $runtimeCacheKey = 'category.header_search_options.' . sha1($cacheKey);
         $runtimeCached = $this->runtimeCacheGet($runtimeCacheKey);
         if (is_array($runtimeCached)) {
             self::$headerSearchOptionsCache[$cacheKey] = [
@@ -234,7 +241,7 @@ class CategoryService
     public function getHeaderNavigationData(string $categoryBaseUrl, int $parentId = 0): array
     {
         $categoryBaseUrl = rtrim($categoryBaseUrl, '/') . '/';
-        $cacheKey = $parentId . '|' . md5($categoryBaseUrl);
+        $cacheKey = $parentId . '|' . md5($categoryBaseUrl) . '|' . $this->categoryDisplayLocaleCacheContext();
         $now = microtime(true);
         $cached = self::$headerNavigationCache[$cacheKey] ?? null;
         if ($cached && $cached['expires_at'] > $now) {
@@ -347,9 +354,16 @@ class CategoryService
         ];
     }
 
-    private function localizeCategoryDisplayName(string $name): string
+    /**
+     * 前台分类展示名（顶栏、面包屑、侧栏、卡片等），与数据库存储名解耦。
+     */
+    public function localizeCategoryDisplayName(string $name): string
     {
         $name = trim($name);
+        if ($name === '') {
+            return '';
+        }
+
         $map = [
             'Consumer Electronics' => '消费电子',
             'Smart Devices' => '智能设备',
@@ -367,7 +381,112 @@ class CategoryService
             'Shop by Category' => '按分类选购',
         ];
 
-        return $map[$name] ?? $name;
+        $phraseKey = $map[$name] ?? $name;
+        $translated = (string) \__($phraseKey);
+        if ($translated !== $phraseKey) {
+            return $translated;
+        }
+
+        $lang = State::getLangLocal();
+        foreach (['WeShop_Catalog', 'Weline_Theme'] as $moduleName) {
+            $fromModule = $this->resolveModuleI18nWord($moduleName, $phraseKey, $lang);
+            if ($fromModule !== null) {
+                return $fromModule;
+            }
+        }
+
+        return $phraseKey;
+    }
+
+    /**
+     * 递归本地化分类记录中的 name / breadcrumbs / children，供分类页模板使用。
+     */
+    public function localizeCategoryRecordForStorefront(array $record): array
+    {
+        if (isset($record['name'])) {
+            $record['name'] = $this->localizeCategoryDisplayName((string) $record['name']);
+        }
+
+        if (!empty($record['breadcrumbs']) && is_array($record['breadcrumbs'])) {
+            foreach ($record['breadcrumbs'] as $index => $breadcrumb) {
+                if (is_array($breadcrumb)) {
+                    $record['breadcrumbs'][$index] = $this->localizeCategoryRecordForStorefront($breadcrumb);
+                }
+            }
+        }
+
+        foreach (['children', 'children_tree'] as $childrenKey) {
+            if (empty($record[$childrenKey]) || !is_array($record[$childrenKey])) {
+                continue;
+            }
+            foreach ($record[$childrenKey] as $index => $child) {
+                if (is_array($child)) {
+                    $record[$childrenKey][$index] = $this->localizeCategoryRecordForStorefront($child);
+                }
+            }
+        }
+
+        return $record;
+    }
+
+    private function resolveModuleI18nWord(string $moduleName, string $word, string $lang): ?string
+    {
+        $cacheKey = $lang . '|' . $moduleName;
+        if (!isset(self::$moduleI18nWordsCache[$cacheKey])) {
+            self::$moduleI18nWordsCache[$cacheKey] = $this->loadModuleI18nCsv($moduleName, $lang);
+        }
+
+        $translate = self::$moduleI18nWordsCache[$cacheKey][$word] ?? null;
+        if (!is_string($translate) || $translate === '' || $translate === $word) {
+            return null;
+        }
+
+        return $translate;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function loadModuleI18nCsv(string $moduleName, string $lang): array
+    {
+        $words = [];
+        try {
+            $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+            $csvFile = ($moduleInfo['base_path'] ?? '') . '/i18n/' . $lang . '.csv';
+            if (!is_file($csvFile)) {
+                return $words;
+            }
+
+            $handle = @fopen($csvFile, 'r');
+            if ($handle === false) {
+                return $words;
+            }
+
+            while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
+                if (!isset($data[0], $data[1])) {
+                    continue;
+                }
+                $source = trim((string) $data[0]);
+                $target = trim((string) $data[1]);
+                if ($source === '' || $target === '' || $target === $source) {
+                    continue;
+                }
+                $words[$source] = $target;
+            }
+
+            fclose($handle);
+        } catch (\Throwable) {
+        }
+
+        return $words;
+    }
+
+    private function categoryDisplayLocaleCacheContext(): string
+    {
+        return KeyBuilder::environmentHash([
+            'scope' => 'catalog-category-display',
+            'lang' => State::getLangLocal(),
+        ]);
     }
     
     /**

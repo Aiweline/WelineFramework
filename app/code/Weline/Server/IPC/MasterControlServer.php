@@ -24,6 +24,7 @@ class MasterControlServer implements ControlPlaneServerInterface
 {
     /** 当前 Master 允许接入的实例编码 */
     private string $expectedInstanceCode = '';
+    private string $expectedControlToken = '';
 
     // ========== Worker 状态常量 ==========
 
@@ -120,6 +121,11 @@ class MasterControlServer implements ControlPlaneServerInterface
     public function setExpectedInstanceCode(string $instanceCode): void
     {
         $this->expectedInstanceCode = \trim($instanceCode);
+    }
+
+    public function setExpectedControlToken(string $controlToken): void
+    {
+        $this->expectedControlToken = \trim($controlToken);
     }
 
     public function setWindowsNativeSocketBridgeEnabled(bool $enabled): void
@@ -414,6 +420,16 @@ class MasterControlServer implements ControlPlaneServerInterface
         }
     }
 
+    private function isAuthorizedControlCommand(array $msg): bool
+    {
+        if ($this->expectedControlToken === '') {
+            return true;
+        }
+
+        $token = \trim((string)($msg['control_token'] ?? ''));
+        return $token !== '' && \hash_equals($this->expectedControlToken, $token);
+    }
+
     private function normalizeLifecyclePeerHost(string $peerName): string
     {
         $peerName = \trim($peerName);
@@ -479,6 +495,10 @@ class MasterControlServer implements ControlPlaneServerInterface
         }
         $parts = [];
         foreach ($payload as $k => $v) {
+            if ((string)$k === 'control_token') {
+                $parts[] = "{$k}=[redacted]";
+                continue;
+            }
             if (\is_array($v)) {
                 $parts[] = "{$k}=" . \json_encode($v, JSON_UNESCAPED_UNICODE);
             } else {
@@ -674,6 +694,17 @@ class MasterControlServer implements ControlPlaneServerInterface
 
     private function dispatchDecodedControlMessage(int $clientId, array $msg): void
     {
+        if (($msg['type'] ?? '') === ControlMessage::TYPE_COMMAND && !$this->isAuthorizedControlCommand($msg)) {
+            $this->clients[$clientId]['role'] = self::ROLE_CONTROL;
+            $this->ipcLog("[IPC-Master] REJECT unauthorized control command from " . $this->formatClientTag($clientId));
+            $this->sendTo(
+                $clientId,
+                ControlMessage::commandResult(false, [], 'Unauthorized control command.')
+            );
+            $this->removeClient($clientId, 'control_auth_failed');
+            return;
+        }
+
         $this->classifyClientFromMessage($clientId, $msg);
         $type = $msg['type'] ?? 'unknown';
         $tag  = $this->formatClientTag($clientId);

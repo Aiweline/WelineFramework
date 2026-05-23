@@ -42,8 +42,22 @@ final class BuildPlanContentManifestLinter
         if ($primaryLocale !== '' && $i18nPrimaryLocale !== '' && $primaryLocale !== $i18nPrimaryLocale) {
             $errors[] = 'content_manifest.primary_locale must match i18n.primary_locale';
         }
-        $sourceText = $this->normalizeSourceTextForExactContactChecks($contract);
-
+        $allowedLatinWords = $this->buildAllowedLatinWords($contract);
+        $effectiveLocale = $primaryLocale !== '' ? $primaryLocale : $i18nPrimaryLocale;
+        foreach ($items as $key => $value) {
+            if ($this->looksLikePlaceholder($value)) {
+                $errors[] = 'content_manifest item has placeholder copy: ' . $key;
+            }
+            if ($this->looksLikePlanningOrImplementationCopy($value)) {
+                $errors[] = 'content_manifest item has planning or implementation copy: ' . $key;
+            }
+            if ($this->looksLikeLocaleLeak($value, $effectiveLocale, $key, $allowedLatinWords)) {
+                $errors[] = 'content_manifest item has locale leakage: ' . $key;
+            }
+        }
+        if ($this->ctaCopyIsAllGeneric($items)) {
+            $errors[] = 'content_manifest CTA copy is too generic across multiple actions';
+        }
         foreach ($this->normalizeRecordSet($contract['pages'] ?? [], ['page_id', 'id']) as $pageId => $page) {
             foreach (['title_key', 'description_key'] as $field) {
                 $key = \trim((string)($page[$field] ?? ''));
@@ -60,41 +74,6 @@ final class BuildPlanContentManifestLinter
                     $errors[] = 'Block ' . $blockId . ' references missing content key: ' . $key;
                 }
             }
-        }
-
-        foreach ($items as $key => $value) {
-            if ($this->looksLikePlaceholder($value)) {
-                $errors[] = 'content_manifest.items contains placeholder copy: ' . $key;
-            }
-            if ($this->looksLikePlanningOrImplementationCopy($value)) {
-                $errors[] = 'content_manifest.items contains planning or implementation copy: ' . $key;
-            }
-            if ($this->looksLikeLocaleLeak($value, $primaryLocale, $key)) {
-                $errors[] = 'content_manifest.items contains non-locale visible copy: ' . $key;
-            }
-            if ($this->containsInventedExactContact($value, $sourceText)) {
-                $errors[] = 'content_manifest.items contains exact contact value not present in source truth: ' . $key;
-            }
-        }
-
-        foreach ($blocksById as $blockId => $block) {
-            $pageType = \trim((string)($block['page_type'] ?? ''));
-            if (!$this->isPolicyPageType($pageType)) {
-                continue;
-            }
-            foreach ($this->stringList($block['content_keys'] ?? []) as $key) {
-                $value = $items[$key] ?? '';
-                if ($value === '') {
-                    continue;
-                }
-                if ($this->isPolicyUnsafeContentKey($key, $value)) {
-                    $errors[] = 'Policy page block ' . $blockId . ' contains app/download/reward CTA copy: ' . $key;
-                }
-            }
-        }
-
-        if ($this->ctaCopyIsAllGeneric($items)) {
-            $errors[] = 'CTA copy cannot all be generic learn-more text';
         }
 
         return [
@@ -299,7 +278,10 @@ final class BuildPlanContentManifestLinter
         return self::isPlanningOrImplementationCopy($value);
     }
 
-    private function looksLikeLocaleLeak(string $value, string $locale, string $key): bool
+    /**
+     * @param array<string, true> $allowedLatinWords
+     */
+    private function looksLikeLocaleLeak(string $value, string $locale, string $key, array $allowedLatinWords = []): bool
     {
         $locale = \strtolower(\trim($locale));
         if ($locale === '' || $value === '' || \in_array($key, ['site.name'], true)) {
@@ -307,97 +289,13 @@ final class BuildPlanContentManifestLinter
         }
 
         if ($this->isCjkLocale($locale)) {
-            return $this->hasDominantLatinCopy($value);
+            return $this->hasDominantLatinCopy($value, $allowedLatinWords);
         }
         if (!$this->isCjkLocale($locale)) {
             return $this->hasMeaningfulCjkCopy($value);
         }
 
         return false;
-    }
-
-    private function isPolicyPageType(string $pageType): bool
-    {
-        return \in_array($pageType, [
-            'privacy_policy',
-            'terms_of_service',
-            'refund_policy',
-            'shipping_policy',
-            'cookie_policy',
-        ], true);
-    }
-
-    /**
-     * @param array<string,mixed> $contract
-     */
-    private function normalizeSourceTextForExactContactChecks(array $contract): string
-    {
-        $source = [
-            'source_of_truth' => $contract['source_of_truth'] ?? [],
-            'source_truth_contract' => $contract['source_truth_contract'] ?? [],
-            'user_requirements' => $contract['user_requirements'] ?? [],
-        ];
-
-        return \mb_strtolower((string)\json_encode($source, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR));
-    }
-
-    private function containsInventedExactContact(string $value, string $sourceText): bool
-    {
-        if (\trim($value) === '') {
-            return false;
-        }
-        if (\preg_match_all('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/iu', $value, $emails) > 0) {
-            foreach ($emails[0] ?? [] as $email) {
-                if (!\str_contains($sourceText, \mb_strtolower((string)$email))) {
-                    return true;
-                }
-            }
-        }
-        if (\preg_match_all('/(?<!\d)(?:\+?\d[\d\s().-]{6,}\d)(?!\d)/u', $value, $phones) > 0) {
-            $sourceDigits = \preg_replace('/\D+/', '', $sourceText) ?? '';
-            foreach ($phones[0] ?? [] as $phone) {
-                $digits = \preg_replace('/\D+/', '', (string)$phone) ?? '';
-                if (\strlen($digits) >= 8 && !\str_contains($sourceDigits, $digits)) {
-                    return true;
-                }
-            }
-        }
-        if ($this->containsSupportHoursClaim($value) && !$this->containsSupportHoursClaim($sourceText)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    private function containsSupportHoursClaim(string $value): bool
-    {
-        return \preg_match('/(?:24\s*\/\s*7|24\s*(?:h|hours?)|\x{0032}\x{0034}\s*\x{5C0F}\x{65F6}|\x{4E8C}\x{5341}\x{56DB}\x{5C0F}\x{65F6}|\x{5168}\x{5929}\x{5019}|\x{5168}\x{65F6})/iu', $value) === 1;
-    }
-
-    private function isPolicyUnsafeContentKey(string $key, string $value): bool
-    {
-        $normalized = \mb_strtolower(\trim((string)\preg_replace('/\s+/u', ' ', $value)));
-        if ($normalized === '') {
-            return false;
-        }
-
-        $isCtaKey = \preg_match('/(?:^|\.)cta$|cta(?:_|-)?(?:text|label|copy)?$/iu', $key) === 1;
-        if ($isCtaKey) {
-            return \preg_match(
-                '/\b(?:download|apk|app|install|play|bonus|reward|casino|rummy|ludo|teen\s*patti|claim|coins?)\b|\x{4E0B}\x{8F7D}|\x{5B89}\x{88C5}|\x{9886}\x{53D6}|\x{5956}\x{52B1}|\x{5956}\x{91D1}|\x{7B79}\x{7801}|\x{6E38}\x{620F}|\x{5F00}\x{59CB}|\x{6CE8}\x{518C}\x{5373}\x{9001}/iu',
-                $normalized
-            ) === 1;
-        }
-
-        $downloadPattern = '/\b(?:download|apk|install)\b|\x{4E0B}\x{8F7D}|\x{5B89}\x{88C5}/iu';
-        if (\preg_match($downloadPattern, $normalized) === 1) {
-            return true;
-        }
-
-        return \preg_match(
-            '/\b(?:claim|bonus|coins?)\b|\x{9886}\x{53D6}.{0,12}(?:\x{5956}\x{52B1}|\x{5956}\x{91D1}|\x{7B79}\x{7801})|\x{6CE8}\x{518C}\x{5373}\x{9001}/iu',
-            $normalized
-        ) === 1;
     }
 
     private function isCjkLocale(string $locale): bool
@@ -413,9 +311,15 @@ final class BuildPlanContentManifestLinter
             || \str_starts_with($locale, 'ko-');
     }
 
-    private function hasDominantLatinCopy(string $value): bool
+    /**
+     * @param array<string, true> $allowedLatinWords
+     */
+    private function hasDominantLatinCopy(string $value, array $allowedLatinWords = []): bool
     {
-        $allowed = \array_fill_keys(['apk', 'app', 'seo', 'ios', 'android', 'upi', 'ssl', 'vip', 'faq', 'url', 'www'], true);
+        $allowed = \array_replace(
+            \array_fill_keys(['apk', 'app', 'seo', 'ios', 'android', 'upi', 'ssl', 'vip', 'faq', 'url', 'www'], true),
+            $allowedLatinWords
+        );
         \preg_match_all('/\b[A-Za-z][A-Za-z0-9\'-]{2,}\b/u', $value, $matches);
         $words = [];
         $nonProperWords = [];
@@ -459,6 +363,41 @@ final class BuildPlanContentManifestLinter
 
         return \count($nonProperWords) >= 8
             && $letterCount >= \max(40, (int)\ceil($cjkCount * 0.75));
+    }
+
+    /**
+     * BuildPlan visible copy can legitimately contain source-provided brand,
+     * product, and game names in Latin characters inside CJK copy.
+     *
+     * @param array<string, mixed> $contract
+     * @return array<string, true>
+     */
+    private function buildAllowedLatinWords(array $contract): array
+    {
+        $source = [
+            'source_of_truth' => $contract['source_of_truth']['user_requirements'] ?? $contract['source_of_truth'] ?? [],
+            'site_brief' => $contract['site_brief'] ?? [],
+            'design_manifest' => $contract['design_manifest'] ?? [],
+        ];
+        $text = (string)\json_encode($source, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+        \preg_match_all('/\b[A-Za-z][A-Za-z0-9\'-]{2,}\b/u', $text, $matches);
+
+        $allowed = [];
+        foreach ($matches[0] ?? [] as $word) {
+            $rawWord = \trim((string)$word, " \t\n\r\0\x0B'\"-");
+            $normalized = \strtolower($rawWord);
+            if ($normalized === '') {
+                continue;
+            }
+            if (
+                \preg_match('/^[A-Z][A-Za-z0-9\'-]*$/', $rawWord) === 1
+                || \preg_match('/^[A-Z0-9]{2,}$/', $rawWord) === 1
+            ) {
+                $allowed[$normalized] = true;
+            }
+        }
+
+        return $allowed;
     }
 
     private function countCjkCharacters(string $value): int

@@ -117,14 +117,54 @@ class AiSiteAgentQueueObserverStreamService
         }
 
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
-        $queueStatus = \trim((string)($queueInfo['snapshot']['status'] ?? ''));
+        $queueSnapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
+        $queueStatus = \trim((string)($queueSnapshot['status'] ?? ''));
+        $semanticStatus = \strtolower(\trim((string)($queueInfo['semantic_status'] ?? $queueSnapshot['semantic_status'] ?? '')));
+        $queueRecoveredForRetry = !empty($queueInfo['queue_terminal_recovered'])
+            || !empty($queueSnapshot['queue_terminal_recovered'])
+            || !empty($queueInfo['retry_allowed'])
+            || !empty($queueSnapshot['retry_allowed'])
+            || \in_array($semanticStatus, ['cancelled', 'canceled', 'stale'], true);
         if ($activeStatus === 'done' && $queueStatus !== 'done') {
+            return $activeOperation;
+        }
+        if ($queueRecoveredForRetry) {
+            $queueId = (int)($queueInfo['queue_id'] ?? $queueSnapshot['queue_id'] ?? 0);
+            if ($queueId > 0) {
+                $activeOperation['queue_id'] = $queueId;
+            }
+            $activeOperation['status'] = 'cancelled';
+            $activeOperation['semantic_status'] = 'cancelled';
+            $activeOperation['message'] = \trim((string)($queueInfo['message'] ?? $queueInfo['process'] ?? '')) !== ''
+                ? \trim((string)($queueInfo['message'] ?? $queueInfo['process'] ?? ''))
+                : 'Linked queue process ended without a terminal queue status; retry is allowed.';
+            $activeOperation['retry_allowed'] = 1;
+            $activeOperation['queue_terminal_recovered'] = 1;
+            $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
+            $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
+
             return $activeOperation;
         }
         if (\in_array($queueStatus, ['pending', 'queued', 'running'], true)) {
             $activeOperation['status'] = $queueStatus === 'running' ? 'running' : 'queued';
             $queueId = (int)($queueInfo['queue_id'] ?? $queueInfo['snapshot']['queue_id'] ?? 0);
             $queuePid = (int)($queueInfo['pid'] ?? $queueInfo['snapshot']['pid'] ?? 0);
+            if (
+                $queueStatus === 'running'
+                && ($queuePid <= 0 || !\Weline\Framework\System\Process\Processer::isRunningByPid($queuePid))
+            ) {
+                $activeOperation['status'] = 'cancelled';
+                $activeOperation['message'] = 'Linked queue process ended without a terminal queue status; retry is allowed.';
+                $activeOperation['retry_allowed'] = 1;
+                $activeOperation['queue_terminal_recovered'] = 1;
+                if ($queueId > 0) {
+                    $activeOperation['queue_id'] = $queueId;
+                }
+                $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
+                $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
+
+                return $activeOperation;
+            }
             if ($queueId > 0) {
                 $activeOperation['queue_id'] = $queueId;
             }
@@ -287,6 +327,31 @@ class AiSiteAgentQueueObserverStreamService
         $queuePanelInfo = $helperService->buildPanelPayload($queueRow, $queueSnapshot);
         $tokenUsage = \is_array($queueSnapshot['token_usage'] ?? null) ? $queueSnapshot['token_usage'] : [];
         $process = \trim((string)($queueRow['process'] ?? ''));
+        if (
+            \in_array($queueStatus, ['running', 'processing'], true)
+            && ($queuePid <= 0 || !\Weline\Framework\System\Process\Processer::isRunningByPid($queuePid))
+        ) {
+            $queueStatus = 'cancelled';
+            $process = $process !== ''
+                ? $process
+                : 'Linked queue process ended without a terminal queue status; retry is allowed.';
+            $queueSnapshot['status'] = 'cancelled';
+            $queueSnapshot['queue_status'] = 'cancelled';
+            $queueSnapshot['job_status'] = 'cancelled';
+            $queueSnapshot['semantic_status'] = 'cancelled';
+            $queueSnapshot['retry_allowed'] = 1;
+            $queueSnapshot['queue_terminal_recovered'] = 1;
+            $queueSnapshot['finished'] = 1;
+            $queuePanelInfo['status'] = 'cancelled';
+            $queuePanelInfo['queue_status'] = 'cancelled';
+            $queuePanelInfo['job_status'] = 'cancelled';
+            $queuePanelInfo['semantic_status'] = 'cancelled';
+            $queuePanelInfo['retry_allowed'] = 1;
+            $queuePanelInfo['queue_terminal_recovered'] = 1;
+            if (\is_array($queuePanelInfo['snapshot'] ?? null)) {
+                $queuePanelInfo['snapshot'] = \array_replace($queuePanelInfo['snapshot'], $queueSnapshot);
+            }
+        }
 
         if ($queueStatus !== '' && $lastQueueStatus !== '' && $queueStatus !== $lastQueueStatus) {
             $sse->sendEvent('info', [

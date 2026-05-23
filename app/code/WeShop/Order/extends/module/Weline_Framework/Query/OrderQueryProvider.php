@@ -4,20 +4,27 @@ declare(strict_types=1);
 
 namespace WeShop\Order\Extends\Module\Weline_Framework\Query;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Server\Service\MemoryStateFacade;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Model\OrderItem;
+use WeShop\Order\Service\AccountOrdersListApiService;
 use WeShop\Order\Service\OrderService;
 
 class OrderQueryProvider implements QueryProviderInterface
 {
-    private const FRONTEND_SUMMARY_CACHE_TTL = 5;
+    private const FRONTEND_SUMMARY_CACHE_TTL = 60;
 
     /** @var array<int, array{expires_at:float, data:array<string, mixed>}> */
     private static array $frontendUnpaidSummaryCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
 
     public function __construct(
         private readonly OrderService $orderService,
@@ -41,6 +48,7 @@ class OrderQueryProvider implements QueryProviderInterface
             'dashboard' => $this->getFrontendDashboardOrders($params),
             'unpaidSummary' => $this->getFrontendUnpaidSummary(),
             'cancel' => $this->cancel($params),
+            'accountListFragment' => $this->getFrontendAccountListFragment($params),
             default => throw new \InvalidArgumentException((string) __('订单查询器不支持的操作：%{1}', [$operation])),
         };
     }
@@ -145,7 +153,11 @@ class OrderQueryProvider implements QueryProviderInterface
      */
     private function getFrontendUnpaidSummary(): array
     {
+        $profileStart = \microtime(true);
         $customerId = $this->getFrontendCustomerId();
+        $this->recordProviderProfile('order.unpaid_summary.customer_context', $profileStart, [
+            'customer_id' => $customerId,
+        ]);
         if ($customerId <= 0) {
             return [
                 'success' => false,
@@ -155,17 +167,44 @@ class OrderQueryProvider implements QueryProviderInterface
                     'unpaid_orders' => [],
                     'order_count' => 0,
                     'unpaid_count' => 0,
-                    'redirect_url' => $this->getUrl()->getUrl('customer/account/login'),
+                    'redirect_url' => '/customer/account/login',
                 ],
             ];
         }
 
         $now = \microtime(true);
+        $profileStart = \microtime(true);
         $cached = self::$frontendUnpaidSummaryCache[$customerId] ?? null;
         if (\is_array($cached) && ($cached['expires_at'] ?? 0.0) >= $now) {
+            $this->recordProviderProfile('order.unpaid_summary.local_cache', $profileStart, [
+                'status' => 'hit',
+            ]);
             return $cached['data'];
         }
+        $this->recordProviderProfile('order.unpaid_summary.local_cache', $profileStart, [
+            'status' => 'miss',
+        ]);
 
+        $sharedCacheKey = 'order.unpaid_summary.' . $customerId;
+        $profileStart = \microtime(true);
+        $sharedSummary = $this->runtimeCacheGet($sharedCacheKey);
+        if (\is_array($sharedSummary)) {
+            $this->recordProviderProfile('order.unpaid_summary.runtime_cache_get', $profileStart, [
+                'status' => 'hit',
+            ]);
+            self::$frontendUnpaidSummaryCache[$customerId] = [
+                'expires_at' => $now + self::FRONTEND_SUMMARY_CACHE_TTL,
+                'data' => $sharedSummary,
+            ];
+            return $sharedSummary;
+        }
+        $this->recordProviderProfile('order.unpaid_summary.runtime_cache_get', $profileStart, [
+            'status' => 'miss',
+        ]);
+
+        $profileStart = \microtime(true);
+        $unpaidCount = $this->orderService->getUnpaidOrderCount($customerId);
+        $this->recordProviderProfile('order.unpaid_summary.order_count', $profileStart);
         $summary = [
             'success' => true,
             'message' => (string)__('Orders loaded.'),
@@ -173,7 +212,7 @@ class OrderQueryProvider implements QueryProviderInterface
                 'recent_orders' => [],
                 'unpaid_orders' => [],
                 'order_count' => 0,
-                'unpaid_count' => $this->orderService->getUnpaidOrderCount($customerId),
+                'unpaid_count' => $unpaidCount,
             ],
         ];
 
@@ -181,8 +220,29 @@ class OrderQueryProvider implements QueryProviderInterface
             'expires_at' => $now + self::FRONTEND_SUMMARY_CACHE_TTL,
             'data' => $summary,
         ];
+        $profileStart = \microtime(true);
+        $this->runtimeCacheSet($sharedCacheKey, $summary, self::FRONTEND_SUMMARY_CACHE_TTL);
+        $this->recordProviderProfile('order.unpaid_summary.runtime_cache_set', $profileStart);
 
         return $summary;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getFrontendAccountListFragment(array $params): array
+    {
+        $customerId = $this->getFrontendCustomerId();
+        if ($customerId <= 0) {
+            return [
+                'success' => false,
+                'message' => (string) __('请先登录。'),
+                'redirect_url' => $this->getUrl()->getUrl('customer/account/login'),
+            ];
+        }
+
+        return ObjectManager::getInstance(AccountOrdersListApiService::class)
+            ->buildPayload($customerId, $params);
     }
 
     private function cancel(array $params): array
@@ -229,10 +289,87 @@ class OrderQueryProvider implements QueryProviderInterface
     {
         if ($customerId !== null && $customerId > 0) {
             unset(self::$frontendUnpaidSummaryCache[$customerId]);
+            self::runtimeCacheDelete('order.unpaid_summary.' . $customerId);
             return;
         }
 
         self::$frontendUnpaidSummaryCache = [];
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get('weshop_order_runtime', $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set('weshop_order_runtime', $key, $value, max(1, $ttl));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeCacheDelete(string $key): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->delete('weshop_order_runtime', $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$runtimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => 'weshop_order_runtime',
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private static function cachePolicy(): RuntimeCachePolicy
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class);
     }
 
     private function getFrontendCustomerId(): int
@@ -245,6 +382,27 @@ class OrderQueryProvider implements QueryProviderInterface
     private function getUrl(): Url
     {
         return $this->url ?? ObjectManager::getInstance(Url::class);
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function recordProviderProfile(string $name, float $startedAt, array $meta = []): void
+    {
+        $profile = RequestContext::get('query_bin.provider_profile');
+        if (!\is_array($profile)) {
+            $profile = [];
+        }
+
+        $step = [
+            'name' => $name,
+            'duration_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+        ];
+        if ($meta !== []) {
+            $step['meta'] = $meta;
+        }
+        $profile[] = $step;
+        RequestContext::set('query_bin.provider_profile', $profile);
     }
 
     private function orderToArray(Order $order): array
@@ -335,6 +493,21 @@ class OrderQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Cancel customer order',
+                ],
+                [
+                    'name' => 'accountListFragment',
+                    'description' => __('返回当前前台客户账户订单列表 JSON（供 Weline.Api 客户端渲染，勿返回 HTML）。'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        'order_status' => ['type' => 'string', 'required' => false],
+                        'order_page' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 1000],
+                        'order_page_size' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 50],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Account orders list HTML fragment',
                 ],
             ],
         ];

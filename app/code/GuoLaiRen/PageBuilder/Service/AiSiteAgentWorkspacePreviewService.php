@@ -66,6 +66,7 @@ final class AiSiteAgentWorkspacePreviewService
         $locale = \trim($requestedLocale !== '' ? $requestedLocale : (string)($virtualPage['locale'] ?? State::getLang()));
         $locale = $locale !== '' ? $locale : State::getLang();
         $layout = $this->virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
+        $layout = $this->scopeCompatibilityService->localizeSharedLayoutConfigForScope($layout, $scope, $pageType);
         $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
         $materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);
         $materializedBlocks = \is_array($materializedPreview['blocks'] ?? null) ? $materializedPreview['blocks'] : [];
@@ -79,6 +80,11 @@ final class AiSiteAgentWorkspacePreviewService
             $virtualPages[$pageType] = $virtualPage;
         }
         $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
+        $pageTitle = $this->sanitizeVisitorTitle((string)($virtualPage['title'] ?? ''), $scope);
+        $metaTitle = $this->sanitizeVisitorTitle((string)($virtualPage['meta_title'] ?? ''), $scope);
+        if ($metaTitle === '') {
+            $metaTitle = $pageTitle;
+        }
 
         /** @var Page $page */
         $page = ObjectManager::make(Page::class);
@@ -88,13 +94,13 @@ final class AiSiteAgentWorkspacePreviewService
             Page::schema_fields_PARENT_ID => $pageType === Page::TYPE_HOME ? 0 : 1,
             Page::schema_fields_LAYOUT_PAGE_ID => 0,
             Page::schema_fields_STATUS => Page::STATUS_DRAFT,
-            Page::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
-            Page::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
+            Page::schema_fields_TITLE => $pageTitle,
+            Page::schema_fields_NAME => $pageTitle,
             Page::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
             Page::schema_fields_STYLE => $styleCode,
             Page::schema_fields_TYPE => $pageType,
             Page::schema_fields_CONTENT => '',
-            Page::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
+            Page::schema_fields_META_TITLE => $metaTitle,
             Page::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
             Page::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
             Page::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
@@ -208,6 +214,94 @@ final class AiSiteAgentWorkspacePreviewService
             ->fetchArray();
 
         return \is_array($rows[0] ?? null) ? $rows[0] : [];
+    }
+
+    private function sanitizeVisitorTitle(string $value, array $scope): string
+    {
+        $title = \preg_replace('/\b(?:website\s*profile|websiteProfile|site\s*profile|profile_json|scope_json|target_domain)\b/iu', '', $value) ?? $value;
+        $title = \preg_replace('/\s+/u', ' ', \trim($title)) ?? \trim($title);
+        $localized = $this->localizeGenericVisitorTitle($title, $scope);
+        if ($localized !== '') {
+            return $localized;
+        }
+        if ($title !== '') {
+            return $title;
+        }
+
+        foreach ([
+            $scope['site_title'] ?? null,
+            $scope['website_profile']['site_title'] ?? null,
+            $scope['site_name'] ?? null,
+            $scope['website_profile']['brand_name'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $candidateTitle = \preg_replace('/\b(?:website\s*profile|websiteProfile|site\s*profile|profile_json|scope_json|target_domain)\b/iu', '', (string)$candidate) ?? (string)$candidate;
+            $candidateTitle = \preg_replace('/\s+/u', ' ', \trim($candidateTitle)) ?? \trim($candidateTitle);
+            if ($candidateTitle !== '') {
+                return $candidateTitle;
+            }
+        }
+
+        return 'Website';
+    }
+
+    private function localizeGenericVisitorTitle(string $title, array $scope): string
+    {
+        $key = match (\strtolower(\trim($title))) {
+            'home', 'homepage' => 'home',
+            'about', 'about us' => 'about',
+            'contact', 'contact us' => 'contact',
+            'privacy policy', 'privacy' => 'privacy_policy',
+            'terms of service', 'terms' => 'terms_of_service',
+            default => '',
+        };
+        if ($key === '') {
+            return '';
+        }
+
+        $locale = \trim((string)(
+            $scope['content_locale']
+                ?? $scope['website_profile']['content_locale']
+                ?? $scope['default_locale']
+                ?? $scope['default_language']
+                ?? $scope['website_profile']['default_locale']
+                ?? ''
+        ));
+
+        if (\preg_match('/^th(?:[_-]|$)/i', $locale) === 1) {
+            return match ($key) {
+                'home' => 'หน้าแรก',
+                'about' => 'เกี่ยวกับเรา',
+                'contact' => 'ติดต่อเรา',
+                'privacy_policy' => 'นโยบายความเป็นส่วนตัว',
+                'terms_of_service' => 'ข้อกำหนดการใช้บริการ',
+                default => '',
+            };
+        }
+        if (\preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', $locale) === 1) {
+            return match ($key) {
+                'home' => 'होम',
+                'about' => 'हमारे बारे में',
+                'contact' => 'संपर्क करें',
+                'privacy_policy' => 'गोपनीयता नीति',
+                'terms_of_service' => 'सेवा की शर्तें',
+                default => '',
+            };
+        }
+        if (\preg_match('/^(zh|zh[_-]hans|zh[_-]cn|zh[_-]sg)/i', $locale) === 1) {
+            return match ($key) {
+                'home' => '首页',
+                'about' => '关于我们',
+                'contact' => '联系我们',
+                'privacy_policy' => '隐私政策',
+                'terms_of_service' => '服务条款',
+                default => '',
+            };
+        }
+
+        return '';
     }
 
     /**

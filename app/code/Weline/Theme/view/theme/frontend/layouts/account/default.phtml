@@ -33,7 +33,7 @@ $this->assign('meta', $meta);
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
-    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="minimal"/>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
     <style>
@@ -132,7 +132,7 @@ $this->assign('meta', $meta);
     <if condition="meta.showHeader">
         <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::account::header-before</w:hook>
-        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="minimal" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
         <w:hook>Weline_Theme::frontend::layouts::account::header-after</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     </if>
@@ -193,7 +193,7 @@ $this->assign('meta', $meta);
     <if condition="meta.showFooter">
         <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::account::footer-before</w:hook>
-        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="minimal" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
         <w:hook>Weline_Theme::frontend::layouts::account::footer-after</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
     </if>

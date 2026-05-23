@@ -20,7 +20,10 @@
  * @param show_price {default=true,type="bool",label="显示价格"}
  */
 
-$title = $this->getData('title') ?? __('最近浏览');
+use Weline\Theme\Helper\WidgetI18n;
+
+$titleSource = trim((string)($this->getData('title') ?? '')) ?: '最近浏览';
+$widgetTitle = WidgetI18n::label($titleSource, '最近浏览');
 $limit = max(1, (int)($this->getData('limit') ?? 6));
 $columns = (string)($this->getData('columns') ?? '6');
 $layout = (string)($this->getData('layout') ?? 'carousel');
@@ -69,7 +72,9 @@ try {
         $products[] = [
             'id' => $productId,
             'name' => (string)($product['name'] ?? ''),
-            'url' => $handle !== '' ? '/product/' . rawurlencode($handle) : '/product/view?id=' . $productId,
+            'url' => $handle !== ''
+                ? $this->getUrl('product/' . $handle)
+                : $this->getUrl('weshop/product/view', ['id' => $productId]),
             'image' => (string)($product['image'] ?? $product['thumbnail'] ?? $placeholder),
             'price' => (float)($product['price'] ?? 0),
         ];
@@ -78,7 +83,7 @@ try {
     $products = [];
 }
 
-$widgetInstanceKey = (string)($this->getData('_widget_instance_key') ?: sha1(json_encode([$title, $limit, $columns, $layout, $showPrice]) ?: 'recently-viewed'));
+$widgetInstanceKey = (string)($this->getData('_widget_instance_key') ?: sha1(json_encode([$titleSource, $limit, $columns, $layout, $showPrice]) ?: 'recently-viewed'));
 $widgetId = 'recently-viewed-' . substr(preg_replace('/[^a-zA-Z0-9_-]/', '', $widgetInstanceKey) ?: sha1($widgetInstanceKey), 0, 12);
 
 if (empty($products)) {
@@ -90,7 +95,7 @@ if (empty($products)) {
     <div class="widget-header">
         <h2 class="widget-title">
             <i class="ri-history-line" aria-hidden="true"></i>
-            <?= htmlspecialchars((string)$title, ENT_QUOTES, 'UTF-8') ?>
+            <?= htmlspecialchars($widgetTitle, ENT_QUOTES, 'UTF-8') ?>
         </h2>
     </div>
 

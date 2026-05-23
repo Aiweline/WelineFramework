@@ -28,4 +28,11 @@
           action="ai/backend/skill"
           icon="mdi mdi-shape-outline"
           order="30"/>
+    <menu source="Weline_Ai::ai_style_list"
+          name="ai_style_governance"
+          title="AI 风格"
+          parent="Weline_Backend::ai_group"
+          action="ai/backend/style"
+          icon="mdi mdi-palette-outline"
+          order="35"/>
 </menus>

@@ -19,12 +19,19 @@ This skill owns post-session knowledge extraction for WelineFramework work. It t
 - `dev/ai/global-constraints.md`
 - `dev/ai/skills/_index.md`
 - `dev/ai/skills/文档知识库工程师-技能索引与知识库/SKILL.md`
-- Current thread messages, automation memory, and any relevant rollout summaries or memory extracts.
+- Current thread messages, repo-level instruction context such as injected `AGENTS.md` excerpts, automation memory, and any relevant rollout summaries or memory extracts.
 
 # Responsibilities
 
 - Scan the conversation and isolate statements where the user explicitly raised the engineering bar, corrected a wrong direction, or clarified the real framework boundary.
+- Treat user-explicit framework practices and process mistakes that were later corrected into the framework-native way as first-class learning candidates, even when the correction happened inside the handling workflow rather than inside product code.
+- Treat explicit user complaints, frustration, or "don't do this again" wording as high-priority correction signals; extract the engineering rule underneath the emotion instead of dismissing it as tone.
+- Treat repo instructions surfaced inside the current session as valid correction signals when they explicitly tighten execution standards or reject a previously common shortcut.
 - Separate one-off project detail from reusable framework practice.
+- Classify each lesson by ownership before editing files:
+  - cross-role stable rule -> `dev/ai/global-constraints.md`,
+  - specialist execution rule -> the owning specialist skill,
+  - already-documented rule restated in-session -> update memory and only tighten the owning skill if the session exposed an operational wording gap.
 - Rewrite the lesson as a stable rule that another agent can apply on a future task.
 - Preserve the evidence chain: what was assumed first, what later proved correct, and why the corrected rule is reusable.
 - Land the result in an AI-facing skill or knowledge file instead of leaving it only in a final report.
@@ -37,6 +44,9 @@ Only promote a lesson into self-learning knowledge when all three conditions hol
 2. A later correction was explicit, either from the user or from stronger verification evidence.
 3. The corrected form is reusable beyond the one exact file or branch.
 
+Explicit user complaints or direct corrections count as strong evidence for condition 2 even when the session did not contain a long technical back-and-forth, as long as the corrected framework practice is clear by the end.
+Workflow mistakes that were later corrected into a clean framework practice also count as promotable evidence when the reusable default action is explicit by the end of the session.
+
 Do not promote:
 
 - Purely local file paths without a reusable pattern.
@@ -47,6 +57,8 @@ Do not promote:
 
 1. Read the current session and mark candidate moments:
    - user corrections,
+   - user complaints or repeated dissatisfaction tied to a concrete engineering mistake,
+   - injected repo rules or automation-context instructions,
    - rejected implementations,
    - failed verifications that changed the conclusion standard,
    - final framework-native patterns that replaced a brittle patch.
@@ -62,7 +74,21 @@ Do not promote:
    - `when X happens, verify Y before concluding Z`
 5. Group rules by theme such as auth boundary, generated artifacts, runtime verification, hook boundary, cron registration, or visible UX requirements.
 6. If multiple examples express the same rule, keep one concise canonical rule and attach the strongest evidence example.
-7. Write or update an AI-facing skill so future agents can load the rule set directly.
+7. Decide the landing target:
+   - update `global-constraints.md` only for repository-wide rules,
+   - update one or more specialist skills for role-specific execution guidance,
+   - skip file edits when the rule already exists and the session only reconfirmed it with no newly exposed wording gap.
+8. Write or update the AI-facing skill or knowledge file so future agents can load the rule set directly.
+
+# Session Interpretation Heuristics
+
+- Treat the current session as more than the chat transcript. The effective input includes the user request, injected `AGENTS.md` instructions, automation metadata, and loaded memory for the same automation.
+- If the strongest correction comes from session-provided repo rules rather than back-and-forth chat, it still counts as explicit correction evidence.
+- If the user explicitly says a complaint, correction, or repeated mistake should be remembered, update the owning skill and automation memory even when no repository-wide rule changes.
+- If the user explicitly asks to extract "what the user clearly mentioned" together with "what the handling process first got wrong and later corrected," record both streams and normalize them into one reusable rule set rather than keeping only user quotations.
+- Do not record the complaint wording itself as policy; record the corrected execution standard that would have prevented the complaint.
+- When the session only reaffirms an already-documented global rule, prefer updating automation memory over duplicating the rule in another file.
+- Only tighten specialist skills on reconfirmation runs when their current wording still leaves room for the old mistake.
 
 # Canonical Rule Shapes
 
@@ -94,6 +120,18 @@ Use one of these shapes when rewriting lessons:
 - Do not claim hot reload, HTTP verification, or live browser success when the relevant WLS instance is not actually running.
 - If the dedicated non-`9501` WLS test port is occupied or unstable, stop at targeted static or unit verification and report the runtime gap explicitly instead of implying end-to-end proof.
 - When the user is asking about visible SEO, i18n, layout, or interactive behavior, source inspection and HTTP success are only prechecks; the reusable conclusion must come from live browser HTML or DOM evidence.
+
+## Browser-first visible verification and test timing
+
+- When the session clarifies that a change is browser-visible and the local site can be served, treat Codex in-app Browser smoke verification as the acceptance boundary; HTTP checks, route tests, and source inspection stay as prechecks only.
+- When the session corrects premature test-writing behavior, move the lesson into QA or E2E execution guidance: first complete the visible flow, then Browser-smoke it, and only after that add or solidify regression tests.
+- If the same browser-first or no-premature-test rule was already present in `global-constraints.md`, record the reconfirmation in automation memory and only edit the owning specialist skill when the workflow wording still allows the old mistake.
+
+## Complaint-driven self-learning ownership
+
+- When the user explicitly says complaints, corrections, or wrong-first-then-fixed behavior must be remembered, treat that instruction as a standing requirement of the self-learning workflow rather than a one-off reminder.
+- For these runs, the owning skill must preserve three things together: the initial mistake, the correction trigger, and the future default action that avoids repeating the mistake.
+- If the only new lesson in the session is "remember user corrections and complaints systematically," update the session-review skill and automation memory instead of manufacturing unrelated framework rules.
 
 ## Cron and command conclusion standard
 
@@ -167,6 +205,8 @@ For each extracted lesson, prefer this compact template:
 # Validation
 
 - Check that every promoted rule has a concrete correction source.
+- Check whether the correction source was chat content, injected repo instructions, or stronger runtime evidence, and record that distinction accurately.
+- Check whether the user expressed dissatisfaction or a direct "remember this" instruction; if so, ensure the final learning artifact captures the underlying rule explicitly.
 - Check that every rule is phrased as reusable guidance, not a diary entry.
 - Check that the resulting skill stays concise and high-signal.
 - Check that the final rule does not conflict with `dev/ai/global-constraints.md`.

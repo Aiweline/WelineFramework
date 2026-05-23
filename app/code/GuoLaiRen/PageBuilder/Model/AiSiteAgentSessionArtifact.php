@@ -14,6 +14,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_session_stage', columns: ['agent_session_id', 'stage_code'], comment: 'Stage artifact lookup')]
 class AiSiteAgentSessionArtifact extends Model
 {
+    public const EXTERNAL_PAYLOAD_FILE_KEY = '_external_artifact_file';
+
     public const schema_table = 'guolairen_page_builder_ai_site_agent_artifact';
     public const schema_primary_key = 'ai_site_agent_artifact_id';
 
@@ -86,7 +88,12 @@ class AiSiteAgentSessionArtifact extends Model
             return [];
         }
 
-        return $decoded['value'];
+        $value = $decoded['value'];
+        if (\is_array($value) && isset($value[self::EXTERNAL_PAYLOAD_FILE_KEY])) {
+            return $this->readExternalPayloadValue((string)$value[self::EXTERNAL_PAYLOAD_FILE_KEY]);
+        }
+
+        return $value;
     }
 
     public function setPayloadValue(mixed $payload): static
@@ -101,10 +108,53 @@ class AiSiteAgentSessionArtifact extends Model
             $json = '{"value":[]}';
         }
 
+        return $this->setPayloadDocumentJson($json);
+    }
+
+    public function setPayloadDocumentJson(string $json, ?string $hash = null, ?int $bytes = null): static
+    {
+        if (\trim($json) === '') {
+            $json = '{"value":[]}';
+        }
+
         $this->setData(self::schema_fields_PAYLOAD_JSON, $json);
-        $this->setData(self::schema_fields_PAYLOAD_HASH, \sha1($json));
-        $this->setData(self::schema_fields_PAYLOAD_BYTES, \strlen($json));
+        $this->setData(self::schema_fields_PAYLOAD_HASH, $hash !== null && $hash !== '' ? $hash : \sha1($json));
+        $this->setData(self::schema_fields_PAYLOAD_BYTES, $bytes ?? \strlen($json));
 
         return $this;
+    }
+
+    private function readExternalPayloadValue(string $relativePath): mixed
+    {
+        $relativePath = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, \ltrim($relativePath, '/\\'));
+        if ($relativePath === '' || \str_contains($relativePath, '..') || !\defined('BP')) {
+            return [];
+        }
+
+        $base = BP . 'var' . \DIRECTORY_SEPARATOR . 'pagebuilder' . \DIRECTORY_SEPARATOR . 'session-artifacts';
+        $path = BP . $relativePath;
+        $baseReal = \realpath($base);
+        $pathReal = \realpath($path);
+        if (!\is_string($baseReal) || !\is_string($pathReal)) {
+            return [];
+        }
+
+        $basePrefix = \rtrim($baseReal, \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR;
+        if (!\str_starts_with($pathReal, $basePrefix) || !\is_file($pathReal)) {
+            return [];
+        }
+
+        $raw = \file_get_contents($pathReal);
+        if (!\is_string($raw) || \trim($raw) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        return \is_array($decoded) && \array_key_exists('value', $decoded) ? $decoded['value'] : [];
     }
 }

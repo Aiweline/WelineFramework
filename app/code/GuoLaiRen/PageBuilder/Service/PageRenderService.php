@@ -25,6 +25,7 @@ use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\View\Template;
 
 class PageRenderService
@@ -125,6 +126,22 @@ class PageRenderService
         ?string $tempStyleCode = null,
         ?int $virtualThemeId = null
     ): string {
+        $profileStart = \microtime(true);
+        $profileLast = $profileStart;
+        $profile = [
+            'page_id' => (int)$page->getId(),
+            'mode' => $mode,
+            'locale' => (string)($locale ?? ''),
+            'render_mode' => (string)$page->getData(Page::schema_fields_RENDER_MODE),
+            'style' => (string)($tempStyleCode ?: ($page->getData('style') ?: 'default')),
+        ];
+        $profileMark = static function (string $name) use (&$profile, &$profileLast, $profileStart): void {
+            $now = \microtime(true);
+            $profile[$name . '_ms'] = \round(($now - $profileLast) * 1000, 2);
+            $profileLast = $now;
+            $profile['elapsed_ms'] = \round(($now - $profileStart) * 1000, 2);
+        };
+
         // 重置模板变量
         $this->templateVars = [];
         if ($virtualThemeId !== null && $virtualThemeId > 0) {
@@ -139,6 +156,7 @@ class PageRenderService
         
         // 构建样式配置
         $finalSettings = $this->buildStyleSettings($page, $styleCode, $currentLocale, $tempStyleCode);
+        $profileMark('style_settings');
         
         // 检查是否为虚拟页面（id=0，用于模板预览等场景）
         $isVirtualPage = !$page->getId();
@@ -148,6 +166,7 @@ class PageRenderService
         // 预览时传入 tempStyleCode，使“无自定义布局”时按当前预览样式加载默认 header/footer，避免页面 DB 为 default 时仍显示 default 头部
         $forBackend = ($mode === self::MODE_VISUAL);
         $layoutConfig = $this->layoutOwnerResolver->getFullLayoutConfig($page, $forBackend, $tempStyleCode);
+        $profileMark('layout_config');
         
         // 获取布局拥有者页面ID（用于可视化编辑时传递给脚本）
         $layoutOwnerPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageId($page);
@@ -156,9 +175,11 @@ class PageRenderService
         // 获取布局页面信息（如果使用外部布局页面）
         $layoutPageInfo = $isVirtualPage ? null : $this->layoutOwnerResolver->getLayoutPageInfo($page);
         $this->assign('layout_page_info', $layoutPageInfo);
+        $profileMark('layout_owner_info');
         
         // 获取本地化内容（虚拟页面跳过数据库查询）
         $localizedContent = $isVirtualPage ? null : $this->getLocalizedContent($page, $currentLocale);
+        $profileMark('localized_content');
         
         // 设置模板变量
         $this->assign('page', $page);
@@ -176,6 +197,7 @@ class PageRenderService
         // 虚拟页面返回空数组，避免数据库查询
         $navigationPages = $isVirtualPage ? [] : $page->getNavigationPages([], 10);
         $this->assign('navigation_pages', $navigationPages);
+        $profileMark('navigation_pages');
         
         // 如果是博客类型页面或布局中包含博客组件，加载博客数据
         // 虚拟页面跳过博客数据加载
@@ -183,6 +205,7 @@ class PageRenderService
         if (!$isVirtualPage && ($page->isBlogType() || $hasBlogComponent)) {
             $this->loadBlogData($page);
         }
+        $profileMark('blog_data');
         
         // 渲染 header/content/footer
         $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
@@ -194,6 +217,7 @@ class PageRenderService
         $layoutInfo = $this->getLayoutInfoForPageType($styleCode, $pageType);
         $this->assign('page_type', $pageType);
         $this->assign('layout_info', $layoutInfo);
+        $profileMark('layout_info');
         
         // 如果页面没有自定义布局配置，加载该页面类型的默认布局配置
         // 注意：需要检查区域是否真的有有效组件，而不仅仅是非空数组
@@ -227,6 +251,7 @@ class PageRenderService
             // 更新布局配置
             $this->assign('layout_config', $layoutConfig);
         }
+        $profileMark('default_layout_merge');
         
         if (!$hasCustomLayout && $pageType) {
             // 加载页面类型的默认布局配置
@@ -240,6 +265,7 @@ class PageRenderService
                 $this->assign('using_default_layout', true);
             }
         }
+        $profileMark('default_layout_fallback');
         
         // 检查是否使用组件化渲染
         $useComponentRendering = !empty($layoutConfig) && (
@@ -250,25 +276,90 @@ class PageRenderService
         
         // 调试信息
         $debugInfo = $this->buildDebugInfo($useComponentRendering, $layoutConfig);
+        $profileMark('debug_info');
         
         if ($useComponentRendering) {
             // 使用组件化渲染
             $headerHtml = $this->renderRegion('header', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
+            $profileMark('render_header');
             $contentHtml = $this->renderRegion('content', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode, $localizedContent);
+            $profileMark('render_content');
             $footerHtml = $this->renderRegion('footer', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
+            $profileMark('render_footer');
         } else {
             // 使用传统渲染方式
             $headerHtml = $this->fetch("{$stylePath}/header.phtml");
+            $profileMark('render_header');
             $contentHtml = $this->renderTraditionalContent($page, $stylePath, $localizedContent);
+            $profileMark('render_content');
             $footerHtml = $this->fetch("{$stylePath}/footer.phtml");
+            $profileMark('render_footer');
         }
         
         // 插入自定义代码
         $headerHtml = $this->injectHeaderCustomCode($headerHtml, $page);
         $footerHtml = $this->injectFooterCustomCode($footerHtml, $page);
+        $profileMark('custom_code');
         
         // 根据模式处理输出
-        return $this->finalizeOutput($headerHtml, $contentHtml, $footerHtml, $debugInfo, $page, $styleCode, $mode, $virtualThemeId);
+        $html = $this->finalizeOutput($headerHtml, $contentHtml, $footerHtml, $debugInfo, $page, $styleCode, $mode, $virtualThemeId);
+        $profileMark('finalize_output');
+        $profile['total_ms'] = \round((\microtime(true) - $profileStart) * 1000, 2);
+        $profile['html_bytes'] = \strlen($html);
+        $profile['component_counts'] = [
+            'header' => $this->countRegionComponents($layoutConfig['header'] ?? []),
+            'content' => $this->countRegionComponents($layoutConfig['content'] ?? []),
+            'footer' => $this->countRegionComponents($layoutConfig['footer'] ?? []),
+        ];
+        if (\class_exists(RequestContext::class, false) && RequestContext::isInitialized()) {
+            RequestContext::set('pagebuilder.render.profile', $profile);
+        }
+        if (($profile['total_ms'] ?? 0) >= 250) {
+            $this->logSlowRenderProfile($profile);
+        }
+
+        return $html;
+    }
+
+    /**
+     * @param array<string, mixed> $profile
+     */
+    private function logSlowRenderProfile(array $profile): void
+    {
+        $stageMs = [];
+        foreach ($profile as $key => $value) {
+            if (!\is_scalar($value) || !\str_ends_with((string)$key, '_ms')) {
+                continue;
+            }
+            $ms = (float)$value;
+            if ($ms < 5.0) {
+                continue;
+            }
+            $stageMs[(string)$key] = $ms;
+        }
+        \arsort($stageMs);
+
+        $payload = [
+            'page_id' => (int)($profile['page_id'] ?? 0),
+            'mode' => (string)($profile['mode'] ?? ''),
+            'locale' => (string)($profile['locale'] ?? ''),
+            'render_mode' => (string)($profile['render_mode'] ?? ''),
+            'style' => (string)($profile['style'] ?? ''),
+            'total_ms' => (float)($profile['total_ms'] ?? 0),
+            'html_bytes' => (int)($profile['html_bytes'] ?? 0),
+            'component_counts' => $profile['component_counts'] ?? [],
+            'slowest' => \array_slice($stageMs, 0, 10, true),
+        ];
+
+        \error_log('[PageBuilderRenderPerf] render ' . \json_encode(
+            $payload,
+            \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE
+        ));
+    }
+
+    private function countRegionComponents(mixed $regionConfig): int
+    {
+        return \count($this->normalizeRegionConfig('', $regionConfig));
     }
     
     /**
@@ -994,7 +1085,8 @@ class PageRenderService
                         $escapedPageType = htmlspecialchars((string)$page->getData(Page::schema_fields_TYPE), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
                         // 存储组件实际所属的模板代码（用于跨模板组件编辑）
                         $escapedStyleCode = htmlspecialchars($useTemplateCode, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-                        $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-page-type=\"{$escapedPageType}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\" tabindex=\"0\">{$componentHtml}</div>";
+                        $configScript = $this->buildVisualEditorComponentConfigScript(\is_array($config) ? $config : []);
+                        $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-component-code=\"{$escapedCode}\" data-block-id=\"{$escapedCode}\" data-page-type=\"{$escapedPageType}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\" tabindex=\"0\">" . $this->buildVisualEditorComponentActionsHtml() . $configScript . "{$componentHtml}</div>";
                     }
                     $html .= $componentHtml;
                     $html .= "<!-- Component {$code} rendered successfully -->\n";
@@ -1052,8 +1144,9 @@ class PageRenderService
             return "<!-- Component {$code} resolved via Weline_Theme virtual theme but template is empty -->\n";
         }
 
+        $defaultConfig = $component->getDefaultConfig();
         $componentConfig = $this->sanitizeSharedIdentityAssetConfig(
-            \array_replace($component->getDefaultConfig(), $config),
+            $this->expandDottedComponentConfigValues(\array_replace($defaultConfig, $config)),
             $region
         );
         $vars = \array_replace($this->templateVars, $componentConfig, [
@@ -1068,6 +1161,7 @@ class PageRenderService
 
         try {
             $componentHtml = $this->renderPhtmlString($templateContent, $vars);
+            $componentHtml = $this->applyVirtualThemeConfigOverridesToStaticHtml($componentHtml, $defaultConfig, $componentConfig);
         } catch (\Throwable $throwable) {
             return '<!-- Error rendering virtual theme component ' . \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
                 . ': ' . \htmlspecialchars($throwable->getMessage(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . " -->\n";
@@ -1077,10 +1171,246 @@ class PageRenderService
             $escapedCode = \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
             $escapedRegion = \htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
             $escapedPageType = \htmlspecialchars((string)$page->getData(Page::schema_fields_TYPE), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-            $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-page-type=\"{$escapedPageType}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"virtual-theme\" tabindex=\"0\">{$componentHtml}</div>";
+            $configScript = $this->buildVisualEditorComponentConfigScript($componentConfig);
+            $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-component-code=\"{$escapedCode}\" data-block-id=\"{$escapedCode}\" data-page-type=\"{$escapedPageType}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"virtual-theme\" tabindex=\"0\">" . $this->buildVisualEditorComponentActionsHtml() . $configScript . "{$componentHtml}</div>";
         }
 
         return $marker . $componentHtml . "\n<!-- Component {$code} rendered successfully -->\n";
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function expandDottedComponentConfigValues(array $config): array
+    {
+        foreach ($this->virtualThemeConfigAliasGroups() as $group) {
+            $value = $this->firstScalarComponentConfigValue($config, $group, true);
+            if ($value === null) {
+                continue;
+            }
+            foreach ($group as $key) {
+                $config[$key] = $value;
+            }
+        }
+
+        foreach ($config as $key => $value) {
+            $key = (string)$key;
+            if (!\str_contains($key, '.')) {
+                continue;
+            }
+            $this->setNestedComponentConfigValue($config, $key, $value);
+        }
+
+        return $config;
+    }
+
+    /**
+     * Some AI-generated virtual-theme templates still contain hard-coded copy
+     * even though the editable field values are saved in layout config. Replace
+     * those original literals in the rendered HTML so block edits are visible
+     * immediately without regenerating the component.
+     *
+     * @param array<string,mixed> $referenceConfig
+     * @param array<string,mixed> $currentConfig
+     */
+    private function applyVirtualThemeConfigOverridesToStaticHtml(
+        string $html,
+        array $referenceConfig,
+        array $currentConfig
+    ): string {
+        if ($html === '') {
+            return $html;
+        }
+
+        $pairs = [];
+        foreach ($this->virtualThemeConfigAliasGroups() as $group) {
+            $oldValue = $this->firstScalarComponentConfigValue($referenceConfig, $group, true);
+            $newValue = $this->firstScalarComponentConfigValue($currentConfig, $group, true);
+            $this->addVirtualThemeConfigReplacementPair($pairs, $oldValue, $newValue);
+        }
+
+        $referenceFlat = $this->flattenComponentConfig($referenceConfig);
+        $currentFlat = $this->flattenComponentConfig($currentConfig);
+        foreach ($currentFlat as $key => $newValue) {
+            $key = (string)$key;
+            if (!\str_starts_with($key, 'visible_text.')) {
+                continue;
+            }
+            $token = \substr($key, \strlen('visible_text.'));
+            $oldValue = $currentFlat['_pb_static_text_original.' . $token] ?? null;
+            $this->addVirtualThemeConfigReplacementPair($pairs, $oldValue, $newValue);
+        }
+        foreach ($currentFlat as $key => $newValue) {
+            $key = (string)$key;
+            if (!\str_starts_with($key, 'visible_image.')) {
+                continue;
+            }
+            $token = \substr($key, \strlen('visible_image.'));
+            $oldValue = $currentFlat['_pb_static_image_original.' . $token] ?? null;
+            $this->addVirtualThemeConfigReplacementPair($pairs, $oldValue, $newValue);
+        }
+        foreach ($currentFlat as $key => $newValue) {
+            if (!$this->isVirtualThemeTextReplacementKey((string)$key)) {
+                continue;
+            }
+            if (!\array_key_exists($key, $referenceFlat)) {
+                continue;
+            }
+            $this->addVirtualThemeConfigReplacementPair($pairs, $referenceFlat[$key], $newValue);
+        }
+
+        if ($pairs === []) {
+            return $html;
+        }
+
+        \uksort($pairs, static fn(string $left, string $right): int => \strlen($right) <=> \strlen($left));
+        foreach ($pairs as $oldValue => $newValue) {
+            $html = \str_replace($oldValue, $newValue, $html);
+            $escapedOld = \htmlspecialchars($oldValue, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+            if ($escapedOld !== $oldValue) {
+                $html = \str_replace(
+                    $escapedOld,
+                    \htmlspecialchars($newValue, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8'),
+                    $html
+                );
+            }
+        }
+
+        return $html;
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private function virtualThemeConfigAliasGroups(): array
+    {
+        return [
+            ['content.title', 'content.heading', 'content.headline', 'title', 'heading', 'headline'],
+            ['content.subtitle', 'content.subheading', 'subtitle', 'subheading'],
+            ['content.description', 'content.body', 'description', 'body', 'text'],
+            ['cta.text', 'content.cta_text', 'cta_text', 'button_text', 'button.label'],
+            ['cta.url', 'content.cta_url', 'cta_url', 'button_url', 'button.url', 'button.href'],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @param list<string> $keys
+     */
+    private function firstScalarComponentConfigValue(array $config, array $keys, bool $preferNonEmpty = false): mixed
+    {
+        $first = null;
+        $hasFirst = false;
+        foreach ($keys as $key) {
+            if (!\array_key_exists($key, $config)) {
+                continue;
+            }
+            $value = $config[$key];
+            if (!\is_scalar($value) && !$value instanceof \Stringable) {
+                continue;
+            }
+            if (!$hasFirst) {
+                $first = $value;
+                $hasFirst = true;
+            }
+            if (!$preferNonEmpty || \trim((string)$value) !== '') {
+                return $value;
+            }
+        }
+
+        return $hasFirst ? $first : null;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function setNestedComponentConfigValue(array &$config, string $key, mixed $value): void
+    {
+        $parts = \array_values(\array_filter(\explode('.', $key), static fn(string $part): bool => $part !== ''));
+        if (\count($parts) < 2) {
+            return;
+        }
+
+        $cursor = &$config;
+        $lastIndex = \count($parts) - 1;
+        foreach ($parts as $index => $part) {
+            if ($index === $lastIndex) {
+                $cursor[$part] = $value;
+                return;
+            }
+            if (!isset($cursor[$part]) || !\is_array($cursor[$part])) {
+                $cursor[$part] = [];
+            }
+            $cursor = &$cursor[$part];
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function flattenComponentConfig(array $config, string $prefix = ''): array
+    {
+        $flat = [];
+        foreach ($config as $key => $value) {
+            $flatKey = $prefix === '' ? (string)$key : $prefix . '.' . (string)$key;
+            if (\is_array($value)) {
+                $flat = \array_replace($flat, $this->flattenComponentConfig($value, $flatKey));
+                continue;
+            }
+            $flat[$flatKey] = $value;
+        }
+
+        return $flat;
+    }
+
+    /**
+     * @param array<string,string> $pairs
+     */
+    private function addVirtualThemeConfigReplacementPair(array &$pairs, mixed $oldValue, mixed $newValue): void
+    {
+        if ((!is_scalar($oldValue) && !$oldValue instanceof \Stringable)
+            || (!is_scalar($newValue) && !$newValue instanceof \Stringable)
+        ) {
+            return;
+        }
+
+        $oldString = (string)$oldValue;
+        $newString = (string)$newValue;
+        if ($oldString === $newString || \trim($oldString) === '' || \strlen($oldString) < 3) {
+            return;
+        }
+        if (\preg_match('/^[\s\/.#_-]+$/', $oldString) === 1) {
+            return;
+        }
+
+        $pairs[$oldString] = $newString;
+    }
+
+    private function isVirtualThemeTextReplacementKey(string $key): bool
+    {
+        $key = \strtolower(\trim($key));
+        if ($key === ''
+            || \str_starts_with($key, 'style.')
+            || \str_starts_with($key, 'layout.')
+            || \str_contains($key, 'color')
+            || \str_contains($key, 'image')
+            || \str_contains($key, 'icon')
+        ) {
+            return false;
+        }
+
+        foreach ([
+            'content.', 'title', 'heading', 'headline', 'subtitle', 'description',
+            'body', 'text', 'cta', 'button', 'label', 'badge', 'kpi', 'proof', 'stat',
+        ] as $token) {
+            if (\str_contains($key, $token)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1147,7 +1477,7 @@ class PageRenderService
         }
 
         $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
-        if (!\str_contains($lowerPath, $expectedToken) || !\str_ends_with($lowerPath, '.png')) {
+        if (!\str_contains($lowerPath, $expectedToken) || (!\str_ends_with($lowerPath, '.png') && !\str_ends_with($lowerPath, '.svg'))) {
             return true;
         }
 
@@ -1156,11 +1486,16 @@ class PageRenderService
             return true;
         }
         $bytes = @\file_get_contents($absolutePath);
-        if (!\is_string($bytes) || $bytes === '' || \strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) !== 0) {
+        if (!\is_string($bytes) || $bytes === '') {
             return true;
         }
 
-        return !$this->pngAppearsToHaveTransparentBackground($bytes);
+        $assetRole = $role === 'logo' ? 'logo' : 'icon';
+        return !AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset(
+            $bytes,
+            \str_ends_with($lowerPath, '.svg') ? 'image/svg+xml' : 'image/png',
+            $assetRole
+        );
     }
 
     private function pngAppearsToHaveTransparentBackground(string $bytes): bool
@@ -1502,10 +1837,25 @@ class PageRenderService
             $resolver = new \Weline\Seo\Service\Head\PageSeoContextResolver($providerRegistry);
             $renderer = new \Weline\Seo\Service\Head\HeadRenderer($resolver, $providerRegistry);
             $html = $renderer->render($template, ['slot' => 'head']);
-            return \trim(\is_string($html) ? $html : '');
+            return \trim(\trim(\is_string($html) ? $html : '') . "\n" . $this->buildIdentityHeadHtml($page));
         } catch (\Throwable) {
+            return $this->buildIdentityHeadHtml($page);
+        }
+    }
+
+    private function buildIdentityHeadHtml(Page $page): string
+    {
+        $icon = \trim((string)($page->getData(Page::schema_fields_ICON) ?? ''));
+        if ($icon === '' || $this->identityAssetUrlIsInvalidForRole($icon, 'icon')) {
             return '';
         }
+
+        $type = \str_ends_with(\strtolower($icon), '.svg') ? 'image/svg+xml' : 'image/png';
+        $href = \htmlspecialchars($icon, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $typeAttr = \htmlspecialchars($type, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+
+        return '<link rel="icon" href="' . $href . '" type="' . $typeAttr . '">' . "\n"
+            . '<link rel="shortcut icon" href="' . $href . '" type="' . $typeAttr . '">';
     }
 
     private function resolveCurrentLocale(): string
@@ -1685,7 +2035,7 @@ class PageRenderService
         foreach (\array_keys($query) as $key) {
             $normalized = \strtolower(\trim((string)$key));
             if ($normalized === '_'
-                || \in_array($normalized, ['ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'], true)
+                || \in_array($normalized, ['ai_perf', 'browser_perf', 'codex_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'], true)
                 || \str_starts_with($normalized, 'utm_')
                 || \str_starts_with($normalized, 'mtm_')
                 || \str_starts_with($normalized, 'pk_')) {
@@ -1806,9 +2156,49 @@ class PageRenderService
      */
     private function getComponentActionInlineDispatchJs(): string
     {
-        return <<<'JS'
-return (window.__pbDispatchComponentActionFromButton ? window.__pbDispatchComponentActionFromButton(this, event) : (function(target, e) { if (!target) { return true; } if (e && typeof e.preventDefault === 'function') { e.preventDefault(); } var wrapper = target.closest ? target.closest('.pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper') : null; if (!wrapper || !window.parent || window.parent === window) { return true; } var currentPageType = ''; try { currentPageType = new URLSearchParams(window.location.search).get('page_type') || ''; } catch (err) { currentPageType = ''; } var payload = { type: 'pb-component-action', action: target.getAttribute('data-pb-action') || '', component: wrapper.getAttribute('data-component') || wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-block-id') || '', component_code: wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-component') || wrapper.getAttribute('data-block-id') || '', block_id: wrapper.getAttribute('data-block-id') || wrapper.getAttribute('data-ai-block-id') || wrapper.getAttribute('data-component') || '', page_type: wrapper.getAttribute('data-page-type') || currentPageType, region: wrapper.getAttribute('data-region') || '', index: wrapper.getAttribute('data-index') || '' }; try { if (window.parent.PbAiWorkspacePreview && typeof window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction === 'function' && window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)) { if (e && typeof e.stopPropagation === 'function') { e.stopPropagation(); } if (e && typeof e.stopImmediatePropagation === 'function') { e.stopImmediatePropagation(); } return false; } } catch (err) {} window.parent.postMessage(payload, '*'); return false; })(this, event));
+return <<<'JS'
+return (window.__pbDispatchComponentActionFromButton ? window.__pbDispatchComponentActionFromButton(this, event) : (function(target, e) { if (!target) { return true; } if (e && typeof e.preventDefault === 'function') { e.preventDefault(); } var wrapper = target.closest ? target.closest('.pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper') : null; if (!wrapper) { return true; } var currentPageType = ''; try { currentPageType = new URLSearchParams(window.location.search).get('page_type') || ''; } catch (err) { currentPageType = ''; } var payload = { type: 'pb-component-action', action: target.getAttribute('data-pb-action') || '', component: wrapper.getAttribute('data-component') || wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-block-id') || '', component_code: wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-component') || wrapper.getAttribute('data-block-id') || '', block_id: wrapper.getAttribute('data-block-id') || wrapper.getAttribute('data-ai-block-id') || wrapper.getAttribute('data-component') || '', page_type: wrapper.getAttribute('data-page-type') || currentPageType, region: wrapper.getAttribute('data-region') || '', index: wrapper.getAttribute('data-index') || '' }; if (payload.action === 'edit-block' && window.__pbOpenStandaloneComponentEditor && window.__pbOpenStandaloneComponentEditor(payload, wrapper, e)) { if (e && typeof e.stopPropagation === 'function') { e.stopPropagation(); } if (e && typeof e.stopImmediatePropagation === 'function') { e.stopImmediatePropagation(); } return false; } if (!window.parent || window.parent === window) { return true; } try { if (window.parent.PbAiWorkspacePreview && typeof window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction === 'function' && window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)) { if (e && typeof e.stopPropagation === 'function') { e.stopPropagation(); } if (e && typeof e.stopImmediatePropagation === 'function') { e.stopImmediatePropagation(); } return false; } } catch (err) {} window.parent.postMessage(payload, '*'); return false; })(this, event));
 JS;
+    }
+
+    private function buildVisualEditorComponentActionsHtml(): string
+    {
+        $actionDispatch = \htmlspecialchars($this->getComponentActionInlineDispatchJs(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $dispatchAttrs = ' onclick="' . $actionDispatch . '"'
+            . ' onpointerdown="' . $actionDispatch . '"'
+            . ' onmousedown="' . $actionDispatch . '"'
+            . ' ontouchstart="' . $actionDispatch . '"';
+
+        return '<div class="component-actions" aria-label="Component actions">'
+            . '<button type="button" data-pb-action="refine"' . $dispatchAttrs . '>Refine</button>'
+            . '<button type="button" data-pb-action="regenerate-block"' . $dispatchAttrs . '>AI Rebuild</button>'
+            . '<button type="button" data-pb-action="edit-block"' . $dispatchAttrs . '>Edit</button>'
+            . '<button type="button" data-pb-action="move-up"' . $dispatchAttrs . '>Move up</button>'
+            . '<button type="button" data-pb-action="move-down"' . $dispatchAttrs . '>Move down</button>'
+            . '</div>';
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function buildVisualEditorComponentConfigScript(array $config): string
+    {
+        try {
+            $json = \json_encode(
+                $config,
+                \JSON_UNESCAPED_UNICODE
+                | \JSON_INVALID_UTF8_SUBSTITUTE
+                | \JSON_HEX_TAG
+                | \JSON_HEX_APOS
+                | \JSON_HEX_AMP
+                | \JSON_HEX_QUOT
+                | \JSON_THROW_ON_ERROR
+            );
+        } catch (\JsonException) {
+            $json = '{}';
+        }
+
+        return '<script type="application/json" class="pb-component-config-json">' . $json . '</script>';
     }
 
     /**
@@ -1858,7 +2248,13 @@ JS;
         // 组件化模式：构建完整 HTML
         $pageTitle = $page ? ($page->getData('title') ?: 'Preview') : 'Preview';
         $templateHelper = Template::getInstance();
-        $baseCssUrl = $templateHelper->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css');
+        $baseCssSource = 'GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css';
+        $baseCssUrl = $templateHelper->templateStaticExists($baseCssSource)
+            ? $templateHelper->fetchTemplateStatic($baseCssSource)
+            : '';
+        $baseCssTag = $baseCssUrl !== ''
+            ? '<link rel="stylesheet" href="' . htmlspecialchars($baseCssUrl, ENT_QUOTES, 'UTF-8') . '">'
+            : '';
         
         return '<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1866,7 +2262,7 @@ JS;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>' . htmlspecialchars($pageTitle) . '</title>
-    <link rel="stylesheet" href="' . $baseCssUrl . '">
+    ' . $baseCssTag . '
     ' . $dropZoneStyles . '
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2041,6 +2437,12 @@ JS;
             .pb-component-wrapper .component-actions:hover {
                 display: flex !important;
             }
+            html.pb-standalone-visual-preview .tpmst-component-wrapper > .component-actions,
+            html.pb-standalone-visual-preview .pb-component-wrapper > .component-actions,
+            body.pb-standalone-visual-preview .tpmst-component-wrapper > .component-actions,
+            body.pb-standalone-visual-preview .pb-component-wrapper > .component-actions {
+                display: flex !important;
+            }
             .tpmst-component-wrapper.selected > .component-actions,
             .pb-component-wrapper.selected > .component-actions {
                 position: sticky !important;
@@ -2149,6 +2551,217 @@ JS;
                     font-size: 11px !important;
                 }
             }
+            .pb-standalone-editor-overlay {
+                position: fixed;
+                inset: 0;
+                z-index: 200000;
+                display: flex;
+                align-items: stretch;
+                justify-content: flex-end;
+                background: rgba(15, 23, 42, 0.42);
+                backdrop-filter: blur(3px);
+                -webkit-backdrop-filter: blur(3px);
+            }
+            .pb-standalone-editor-panel {
+                width: min(560px, calc(100vw - 24px));
+                height: calc(100vh - 24px);
+                margin: 12px;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                color: #111827;
+                background: #ffffff;
+                border-radius: 16px;
+                box-shadow: 0 24px 72px rgba(15, 23, 42, 0.32);
+                font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            }
+            .pb-standalone-editor-header,
+            .pb-standalone-editor-footer {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 14px 16px;
+                border-bottom: 1px solid #e5e7eb;
+            }
+            .pb-standalone-editor-footer {
+                border-top: 1px solid #e5e7eb;
+                border-bottom: 0;
+                justify-content: flex-end;
+            }
+            .pb-standalone-editor-title {
+                min-width: 0;
+                margin: 0;
+                font-size: 16px;
+                font-weight: 700;
+                line-height: 1.35;
+            }
+            .pb-standalone-editor-body {
+                flex: 1;
+                overflow: auto;
+                padding: 16px;
+            }
+            .pb-standalone-editor-field {
+                margin-bottom: 14px;
+            }
+            .pb-standalone-editor-label {
+                display: block;
+                margin-bottom: 6px;
+                color: #64748b;
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+            }
+            .pb-standalone-editor-input,
+            .pb-standalone-editor-textarea {
+                width: 100%;
+                box-sizing: border-box;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                padding: 9px 10px;
+                color: #111827;
+                background: #ffffff;
+                font: inherit;
+                font-size: 13px;
+                line-height: 1.5;
+            }
+            .pb-standalone-editor-textarea {
+                min-height: 92px;
+                resize: vertical;
+            }
+            .pb-standalone-editor-close,
+            .pb-standalone-editor-cancel,
+            .pb-standalone-editor-save,
+            .pb-standalone-editor-ai-button {
+                border: 0;
+                border-radius: 8px;
+                padding: 9px 14px;
+                cursor: pointer;
+                font-weight: 700;
+            }
+            .pb-standalone-editor-close {
+                width: 34px;
+                height: 34px;
+                padding: 0;
+                color: #64748b;
+                background: #f1f5f9;
+                font-size: 20px;
+                line-height: 1;
+            }
+            .pb-standalone-editor-cancel {
+                color: #334155;
+                background: #e2e8f0;
+            }
+            .pb-standalone-editor-save {
+                color: #ffffff;
+                background: #10b981;
+            }
+            .pb-standalone-editor-ai-button {
+                color: #ffffff;
+                background: #2563eb;
+                white-space: nowrap;
+            }
+            .pb-standalone-editor-save:disabled,
+            .pb-standalone-editor-ai-button:disabled {
+                opacity: 0.55;
+                cursor: wait;
+            }
+            .pb-standalone-editor-message {
+                min-height: 18px;
+                margin-right: auto;
+                color: #64748b;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            .pb-standalone-editor-message.error {
+                color: #dc2626;
+            }
+            .pb-standalone-editor-empty {
+                padding: 14px;
+                color: #64748b;
+                background: #f8fafc;
+                border: 1px dashed #cbd5e1;
+                border-radius: 10px;
+                font-size: 13px;
+            }
+            .pb-standalone-editor-ai-panel {
+                margin-bottom: 16px;
+                padding: 14px;
+                border: 1px solid rgba(37, 99, 235, 0.18);
+                border-radius: 12px;
+                background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(14, 165, 233, 0.10));
+            }
+            .pb-standalone-editor-ai-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin-bottom: 10px;
+            }
+            .pb-standalone-editor-ai-hint {
+                color: #475569;
+                font-size: 12px;
+                font-weight: 700;
+                line-height: 1.45;
+            }
+            .pb-standalone-editor-ai-prompt {
+                width: 100%;
+                min-height: 66px;
+                box-sizing: border-box;
+                margin-bottom: 10px;
+                border: 1px solid #bfdbfe;
+                border-radius: 8px;
+                padding: 9px 10px;
+                color: #111827;
+                background: #ffffff;
+                font: inherit;
+                font-size: 13px;
+                line-height: 1.5;
+                resize: vertical;
+            }
+            .pb-standalone-editor-ai-terminal {
+                overflow: hidden;
+                border: 1px solid rgba(148, 163, 184, 0.35);
+                border-radius: 10px;
+                background: rgba(15, 23, 42, 0.94);
+                color: #e2e8f0;
+            }
+            .pb-standalone-editor-ai-terminal-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 8px 10px;
+                border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+                font-size: 12px;
+                font-weight: 700;
+            }
+            .pb-standalone-editor-ai-status {
+                opacity: 0.72;
+                font-weight: 600;
+            }
+            .pb-standalone-editor-ai-log {
+                max-height: 160px;
+                overflow: auto;
+                padding: 10px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                font-size: 12px;
+                line-height: 1.55;
+            }
+            .pb-standalone-editor-ai-line {
+                margin-bottom: 6px;
+                word-break: break-word;
+            }
+            .pb-standalone-editor-ai-line.error {
+                color: #fca5a5;
+            }
+            .pb-standalone-editor-ai-line.done {
+                color: #86efac;
+            }
+            .pb-standalone-editor-generated {
+                border-color: #2563eb !important;
+                box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18) !important;
+            }
         </style>';
     }
     
@@ -2166,6 +2779,35 @@ JS;
                 window.__PAGEBUILDER_PAGE_ID__ = ' . $pageId . ';
                 // 布局拥有者页面ID（API调用时使用此ID）
                 window.__PAGEBUILDER_LAYOUT_OWNER_PAGE_ID__ = ' . $layoutOwnerPageId . ';
+                var pbStandalonePreview = !window.parent || window.parent === window;
+                var pbVirtualEditorEnabled = false;
+                try {
+                    var pbEditorQuery = new URLSearchParams(window.location.search);
+                    var pbVirtualThemeId = parseInt(pbEditorQuery.get("virtual_theme_id") || "0", 10) || 0;
+                    var pbHasVirtualThemeWrapper = !!document.querySelector(
+                        ".tpmst-component-wrapper[data-style-code=\"virtual-theme\"], .pb-component-wrapper[data-style-code=\"virtual-theme\"]"
+                    );
+                    pbVirtualEditorEnabled = pbEditorQuery.get("visual_editor") === "1"
+                        && (pbVirtualThemeId > 0 || pbHasVirtualThemeWrapper);
+                } catch (err) {
+                    pbVirtualEditorEnabled = false;
+                }
+                if (pbStandalonePreview && pbVirtualEditorEnabled) {
+                    document.documentElement.classList.add("pb-standalone-visual-preview");
+                    if (document.body) {
+                        document.body.classList.add("pb-standalone-visual-preview");
+                    }
+                }
+                try {
+                    var savedScrollY = window.sessionStorage.getItem("pbStandaloneEditorScrollY");
+                    if (savedScrollY !== null) {
+                        window.sessionStorage.removeItem("pbStandaloneEditorScrollY");
+                        window.setTimeout(function() {
+                            window.scrollTo(0, parseInt(savedScrollY, 10) || 0);
+                        }, 80);
+                    }
+                } catch (err) {
+                }
                 
                 // 初始化拖拽区域
                 document.querySelectorAll(".pb-slot").forEach(function(slot) {
@@ -2210,24 +2852,14 @@ JS;
                     });
                 });
 
-                function dispatchComponentAction(target, e) {
-                    if (!target) {
-                        return true;
-                    }
-                    if (e && typeof e.preventDefault === "function") {
-                        e.preventDefault();
-                    }
-                    var wrapper = target.closest(".pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper");
-                    if (!wrapper || !window.parent || window.parent === window) {
-                        return true;
-                    }
+                function buildComponentActionPayload(target, wrapper) {
                     var currentPageType = "";
                     try {
                         currentPageType = new URLSearchParams(window.location.search).get("page_type") || "";
                     } catch (err) {
                         currentPageType = "";
                     }
-                    var payload = {
+                    return {
                         type: "pb-component-action",
                         action: target.getAttribute("data-pb-action") || "",
                         component: wrapper.getAttribute("data-component") || wrapper.getAttribute("data-component-code") || wrapper.getAttribute("data-block-id") || "",
@@ -2237,6 +2869,673 @@ JS;
                         region: wrapper.getAttribute("data-region") || "",
                         index: wrapper.getAttribute("data-index") || ""
                     };
+                }
+
+                function readWrapperComponentConfig(wrapper) {
+                    var script = null;
+                    var child = wrapper ? wrapper.firstElementChild : null;
+                    while (child) {
+                        if (child.classList && child.classList.contains("pb-component-config-json")) {
+                            script = child;
+                            break;
+                        }
+                        child = child.nextElementSibling;
+                    }
+                    if (!script) {
+                        return {};
+                    }
+                    try {
+                        var parsed = JSON.parse(script.textContent || "{}");
+                        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+                    } catch (err) {
+                        return {};
+                    }
+                }
+
+                function cloneEditorConfig(value) {
+                    try {
+                        return JSON.parse(JSON.stringify(value || {}));
+                    } catch (err) {
+                        return {};
+                    }
+                }
+
+                function flattenEditorScalarFields(value, prefix, fields) {
+                    if (value && typeof value === "object") {
+                        Object.keys(value).forEach(function(key) {
+                            var path = prefix ? prefix + "." + key : key;
+                            flattenEditorScalarFields(value[key], path, fields);
+                        });
+                        return fields;
+                    }
+                    if (value === null || typeof value === "undefined") {
+                        return fields;
+                    }
+                    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+                        fields.push({
+                            key: prefix,
+                            value: String(value)
+                        });
+                    }
+                    return fields;
+                }
+
+                function isStandaloneEditableFieldKey(key) {
+                    var lower = String(key || "").toLowerCase();
+                    if (!lower || lower.charAt(0) === "_" || lower.indexOf("._") !== -1) {
+                        return false;
+                    }
+                    var blockedPrefixes = ["style.", "layout.", "runtime.", "debug.", "metadata.", "system.", "visual."];
+                    for (var i = 0; i < blockedPrefixes.length; i++) {
+                        if (lower.indexOf(blockedPrefixes[i]) === 0) {
+                            return false;
+                        }
+                    }
+                    if (lower.indexOf("style_") === 0 || lower.indexOf("layout_") === 0 || lower.indexOf("visual_") === 0) {
+                        return false;
+                    }
+                    var allowedTokens = [
+                        "content", "title", "heading", "headline", "subtitle", "subheading", "description",
+                        "body", "text", "intro", "cta", "button", "label", "badge", "proof", "stat",
+                        "kpi", "feature", "card", "item", "media", "image", "photo", "picture", "icon",
+                        "alt", "src", "url", "href", "logo", "avatar"
+                    ];
+                    for (var j = 0; j < allowedTokens.length; j++) {
+                        if (lower.indexOf(allowedTokens[j]) !== -1) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+
+                function sortStandaloneEditorFields(left, right) {
+                    var order = ["title", "heading", "headline", "subtitle", "description", "body", "text", "intro", "cta", "button", "image", "media", "proof", "stat", "kpi", "feature", "card", "item"];
+                    function score(field) {
+                        var key = String(field.key || "").toLowerCase();
+                        for (var i = 0; i < order.length; i++) {
+                            if (key.indexOf(order[i]) !== -1) {
+                                return i;
+                            }
+                        }
+                        return order.length;
+                    }
+                    var diff = score(left) - score(right);
+                    return diff !== 0 ? diff : String(left.key || "").localeCompare(String(right.key || ""));
+                }
+
+                function appendVisibleFallbackFields(wrapper, fields) {
+                    var existingValues = {};
+                    fields.forEach(function(field) {
+                        var value = String(field.value || "").trim();
+                        if (value) {
+                            existingValues[value] = true;
+                        }
+                    });
+                    var textIndex = 1;
+                    var walker = document.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT, {
+                        acceptNode: function(node) {
+                            var parent = node.parentElement;
+                            if (!parent || !parent.closest) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            if (parent.closest(".component-actions, .pb-component-config-json, .pb-standalone-editor-overlay, script, style")) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            var value = String(node.nodeValue || "").replace(/\s+/g, " ").trim();
+                            if (value.length < 2 || existingValues[value]) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            return NodeFilter.FILTER_ACCEPT;
+                        }
+                    });
+                    var node;
+                    while ((node = walker.nextNode())) {
+                        var text = String(node.nodeValue || "").replace(/\s+/g, " ").trim();
+                        var token = "text_" + textIndex;
+                        fields.push({
+                            key: "visible_text." + token,
+                            value: text,
+                            originalKey: "_pb_static_text_original." + token,
+                            originalValue: text
+                        });
+                        existingValues[text] = true;
+                        textIndex++;
+                    }
+
+                    var imageIndex = 1;
+                    wrapper.querySelectorAll("img").forEach(function(image) {
+                        if (image.closest && image.closest(".component-actions, .pb-standalone-editor-overlay")) {
+                            return;
+                        }
+                        var src = String(image.getAttribute("src") || "").trim();
+                        var alt = String(image.getAttribute("alt") || "").trim();
+                        if (src && !existingValues[src]) {
+                            fields.push({
+                                key: "visible_image.image_" + imageIndex + "_url",
+                                value: src,
+                                originalKey: "_pb_static_image_original.image_" + imageIndex + "_url",
+                                originalValue: src
+                            });
+                            existingValues[src] = true;
+                        }
+                        if (alt && !existingValues[alt]) {
+                            fields.push({
+                                key: "visible_image.image_" + imageIndex + "_alt",
+                                value: alt,
+                                originalKey: "_pb_static_image_original.image_" + imageIndex + "_alt",
+                                originalValue: alt
+                            });
+                            existingValues[alt] = true;
+                        }
+                        imageIndex++;
+                    });
+                    return fields;
+                }
+
+                function getStandaloneEditorFields(config, wrapper) {
+                    var fields = flattenEditorScalarFields(config || {}, "", [])
+                        .filter(function(field) {
+                            return isStandaloneEditableFieldKey(field.key);
+                        });
+                    fields = appendVisibleFallbackFields(wrapper, fields);
+                    if (fields.length === 0) {
+                        fields = flattenEditorScalarFields(config || {}, "", [])
+                            .filter(function(field) {
+                                return String(field.key || "").charAt(0) !== "_";
+                            });
+                    }
+                    var seen = {};
+                    fields = fields.filter(function(field) {
+                        if (!field.key || seen[field.key]) {
+                            return false;
+                        }
+                        seen[field.key] = true;
+                        return true;
+                    });
+                    fields.sort(sortStandaloneEditorFields);
+                    return fields;
+                }
+
+                function setEditorConfigValue(config, key, value) {
+                    if (!config || typeof config !== "object" || !key) {
+                        return;
+                    }
+                    config[key] = value;
+                    var parts = String(key).split(".");
+                    if (parts.length < 2) {
+                        return;
+                    }
+                    var cursor = config;
+                    for (var i = 0; i < parts.length; i++) {
+                        var part = parts[i];
+                        if (i === parts.length - 1) {
+                            cursor[part] = value;
+                            return;
+                        }
+                        if (!cursor[part] || typeof cursor[part] !== "object") {
+                            var nextPart = parts[i + 1];
+                            cursor[part] = String(parseInt(nextPart, 10)) === nextPart ? [] : {};
+                        }
+                        cursor = cursor[part];
+                    }
+                }
+
+                function createStandaloneEditorEl(tag, className, text) {
+                    var el = document.createElement(tag);
+                    if (className) {
+                        el.className = className;
+                    }
+                    if (typeof text !== "undefined") {
+                        el.textContent = String(text);
+                    }
+                    return el;
+                }
+
+                function shouldUseStandaloneTextarea(key, value) {
+                    var lower = String(key || "").toLowerCase();
+                    return String(value || "").length > 90
+                        || String(value || "").indexOf("\n") !== -1
+                        || lower.indexOf("description") !== -1
+                        || lower.indexOf("body") !== -1
+                        || lower.indexOf("intro") !== -1
+                        || lower.indexOf("html") !== -1;
+                }
+
+                function resolveStandaloneUpdateBlockUrl() {
+                    var path = window.location.pathname.replace(/\/workspace-preview\/?$/, "/post-update-block-config");
+                    if (path === window.location.pathname) {
+                        path = window.location.pathname.replace("workspace-preview", "post-update-block-config");
+                    }
+                    return window.location.origin + path;
+                }
+
+                function resolveStandaloneComponentConfigStreamUrl() {
+                    var path = window.location.pathname.replace(/\/pagebuilder\/backend\/ai-site-agent\/workspace-preview\/?$/, "/pagebuilder/backend/aigenerate/componentconfigstream");
+                    if (path === window.location.pathname) {
+                        path = window.location.pathname.replace("/pagebuilder/backend/ai-site-agent/workspace-preview", "/pagebuilder/backend/aigenerate/componentconfigstream");
+                    }
+                    if (path === window.location.pathname) {
+                        return "";
+                    }
+                    return window.location.origin + path;
+                }
+
+                function collectStandaloneEditorConfig(rawConfig, body) {
+                    var nextConfig = cloneEditorConfig(rawConfig);
+                    body.querySelectorAll("[data-field-key]").forEach(function(input) {
+                        setEditorConfigValue(nextConfig, input.getAttribute("data-field-key") || "", input.value);
+                        var originalKey = input.getAttribute("data-original-key") || "";
+                        if (originalKey) {
+                            setEditorConfigValue(nextConfig, originalKey, input.getAttribute("data-original-value") || "");
+                        }
+                    });
+                    return nextConfig;
+                }
+
+                function appendStandaloneAiLog(container, text, type) {
+                    if (!container) {
+                        return;
+                    }
+                    var line = createStandaloneEditorEl("div", "pb-standalone-editor-ai-line " + String(type || "info"));
+                    var time = createStandaloneEditorEl("span", "", "[" + new Date().toLocaleTimeString("zh-CN", { hour12: false }) + "] ");
+                    time.style.opacity = "0.58";
+                    line.appendChild(time);
+                    line.appendChild(document.createTextNode(String(text || "")));
+                    container.appendChild(line);
+                    container.scrollTop = container.scrollHeight;
+                }
+
+                function setStandaloneAiStatus(statusEl, text) {
+                    if (statusEl) {
+                        statusEl.textContent = String(text || "");
+                    }
+                }
+
+                function findStandaloneEditorInput(body, fieldKey) {
+                    var target = String(fieldKey || "");
+                    var inputs = body.querySelectorAll("[data-field-key]");
+                    for (var i = 0; i < inputs.length; i++) {
+                        if (String(inputs[i].getAttribute("data-field-key") || "") === target) {
+                            return inputs[i];
+                        }
+                    }
+                    return null;
+                }
+
+                function stringifyStandaloneGeneratedValue(value) {
+                    if (Array.isArray(value)) {
+                        return value.map(function(item) {
+                            return item == null ? "" : String(item);
+                        }).join("\n");
+                    }
+                    if (value && typeof value === "object") {
+                        try {
+                            return JSON.stringify(value);
+                        } catch (err) {
+                            return "";
+                        }
+                    }
+                    return value == null ? "" : String(value);
+                }
+
+                function applyStandaloneGeneratedConfig(body, data) {
+                    var filledCount = 0;
+                    Object.keys(data || {}).forEach(function(key) {
+                        if (!key || String(key).charAt(0) === "_") {
+                            return;
+                        }
+                        var input = findStandaloneEditorInput(body, key);
+                        if (!input) {
+                            return;
+                        }
+                        input.value = stringifyStandaloneGeneratedValue(data[key]);
+                        input.classList.add("pb-standalone-editor-generated");
+                        input.setAttribute("data-ai-generated-value", "1");
+                        input.dispatchEvent(new Event("input", { bubbles: true }));
+                        input.dispatchEvent(new Event("change", { bubbles: true }));
+                        window.setTimeout(function() {
+                            input.classList.remove("pb-standalone-editor-generated");
+                        }, 1800);
+                        filledCount++;
+                    });
+                    return filledCount;
+                }
+
+                async function submitStandaloneEditorAiGenerate(payload, wrapper, rawConfig, body, aiBtn, terminalContent, terminalStatus, aiPromptEl, retryCount) {
+                    var streamUrl = resolveStandaloneComponentConfigStreamUrl();
+                    var query = new URLSearchParams(window.location.search);
+                    var componentCode = payload.component_code || payload.component || payload.block_id || "";
+                    var currentRetryCount = parseInt(retryCount || 0, 10) || 0;
+                    if (!streamUrl || !componentCode) {
+                        appendStandaloneAiLog(terminalContent, "Missing component generation context.", "error");
+                        return;
+                    }
+                    var originalText = aiBtn ? aiBtn.textContent : "";
+                    if (aiBtn) {
+                        aiBtn.disabled = true;
+                        aiBtn.textContent = "Generating...";
+                    }
+                    if (terminalContent && currentRetryCount <= 0) {
+                        terminalContent.innerHTML = "";
+                    }
+                    setStandaloneAiStatus(terminalStatus, "Connecting...");
+                    appendStandaloneAiLog(terminalContent, currentRetryCount > 0 ? "Reconnecting to AI generator..." : "Connecting to AI generator...", "info");
+
+                    var streamTimeoutId = null;
+                    function clearStreamTimeout() {
+                        if (streamTimeoutId) {
+                            window.clearTimeout(streamTimeoutId);
+                            streamTimeoutId = null;
+                        }
+                    }
+                    function restoreButton() {
+                        if (aiBtn) {
+                            aiBtn.disabled = false;
+                            aiBtn.textContent = originalText || "AI Generate";
+                        }
+                        setStandaloneAiStatus(terminalStatus, "Disconnected");
+                    }
+
+                    try {
+                        var aiPromptValue = aiPromptEl && aiPromptEl.value ? String(aiPromptEl.value).trim() : "";
+                        var formData = new FormData();
+                        formData.append("public_id", query.get("public_id") || "");
+                        formData.append("page_type", payload.page_type || query.get("page_type") || "");
+                        formData.append("style_code", wrapper.getAttribute("data-style-code") || query.get("style_code") || "virtual-theme");
+                        formData.append("component_code", componentCode);
+                        formData.append("region", payload.region || "content");
+                        formData.append("index", String(payload.index || 0));
+                        formData.append("ai_prompt", aiPromptValue);
+                        formData.append("current_config", JSON.stringify(collectStandaloneEditorConfig(rawConfig, body)));
+
+                        var abortController = typeof AbortController !== "undefined" ? new AbortController() : null;
+                        streamTimeoutId = window.setTimeout(function() {
+                            if (abortController) {
+                                abortController.abort();
+                            }
+                        }, 190000);
+
+                        var response = await fetch(streamUrl, {
+                            method: "POST",
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest",
+                                "Accept": "text/event-stream"
+                            },
+                            credentials: "same-origin",
+                            signal: abortController ? abortController.signal : undefined,
+                            body: formData
+                        });
+                        if (!response.ok) {
+                            throw new Error(response.statusText || "AI generation request failed.");
+                        }
+                        if (!response.body) {
+                            throw new Error("This browser cannot read the AI stream.");
+                        }
+
+                        var reader = response.body.getReader();
+                        var decoder = new TextDecoder();
+                        var buffer = "";
+                        var completed = false;
+
+                        function handleEvent(eventName, eventData) {
+                            if (eventName) {
+                                clearStreamTimeout();
+                            }
+                            var eventPayload = {};
+                            try {
+                                eventPayload = eventData ? JSON.parse(eventData) : {};
+                            } catch (parseError) {
+                                eventPayload = {};
+                            }
+                            if (eventName === "start" || eventName === "progress") {
+                                if (eventPayload.message) {
+                                    appendStandaloneAiLog(terminalContent, eventPayload.message, "info");
+                                    setStandaloneAiStatus(terminalStatus, "Connected");
+                                }
+                                return;
+                            }
+                            if (eventName === "context" && eventPayload.display_text) {
+                                appendStandaloneAiLog(terminalContent, eventPayload.display_text, "info");
+                                return;
+                            }
+                            if ((eventName === "thinking" || eventName === "chunk") && eventPayload.content) {
+                                appendStandaloneAiLog(terminalContent, eventPayload.content, "info");
+                                return;
+                            }
+                            if (eventName === "done") {
+                                if (completed && !eventPayload.data) {
+                                    return;
+                                }
+                                completed = true;
+                                var generatedData = eventPayload.data || {};
+                                var filledCount = applyStandaloneGeneratedConfig(body, generatedData);
+                                appendStandaloneAiLog(terminalContent, filledCount > 0 ? ("Generated values applied: " + filledCount) : "AI returned no matching fields for this block.", filledCount > 0 ? "done" : "error");
+                                restoreButton();
+                                return;
+                            }
+                            if (eventName === "error" || eventName === "stream_error") {
+                                completed = true;
+                                restoreButton();
+                                throw new Error(String(eventPayload.message || "AI generation failed."));
+                            }
+                        }
+
+                        while (true) {
+                            var readResult = await reader.read();
+                            if (readResult && readResult.value) {
+                                buffer += decoder.decode(readResult.value, { stream: true });
+                            } else if (readResult && readResult.done) {
+                                buffer += decoder.decode();
+                            }
+                            buffer = buffer.replace(/\r\n/g, "\n");
+                            var parts = buffer.split("\n\n");
+                            buffer = parts.pop() || "";
+                            parts.forEach(function(part) {
+                                var eventName = "";
+                                var eventData = "";
+                                part.split("\n").forEach(function(line) {
+                                    if (line.indexOf("event:") === 0) {
+                                        eventName = line.replace(/^event:\s*/, "").trim();
+                                    } else if (line.indexOf("data:") === 0) {
+                                        var dataLine = line.replace(/^data:\s*/, "");
+                                        eventData = eventData ? (eventData + "\n" + dataLine) : dataLine;
+                                    }
+                                });
+                                if (eventName) {
+                                    handleEvent(eventName, eventData);
+                                }
+                            });
+                            if (readResult && readResult.done) {
+                                break;
+                            }
+                        }
+                        if (!completed) {
+                            clearStreamTimeout();
+                            restoreButton();
+                            if (currentRetryCount < 1) {
+                                appendStandaloneAiLog(terminalContent, "AI stream ended before completion. Retrying once...", "info");
+                                return submitStandaloneEditorAiGenerate(payload, wrapper, rawConfig, body, aiBtn, terminalContent, terminalStatus, aiPromptEl, currentRetryCount + 1);
+                            }
+                            appendStandaloneAiLog(terminalContent, "AI stream ended before completion. Please retry.", "error");
+                        }
+                    } catch (error) {
+                        clearStreamTimeout();
+                        restoreButton();
+                        appendStandaloneAiLog(terminalContent, String(error && error.message ? error.message : "AI generation request failed."), "error");
+                    }
+                }
+
+                function openStandaloneComponentEditor(payload, wrapper) {
+                    if (!pbVirtualEditorEnabled) {
+                        return false;
+                    }
+                    if (!wrapper || !payload || String(payload.action || "") !== "edit-block") {
+                        return false;
+                    }
+                    var existing = document.querySelector(".pb-standalone-editor-overlay");
+                    if (existing && existing.parentNode) {
+                        existing.parentNode.removeChild(existing);
+                    }
+                    var rawConfig = readWrapperComponentConfig(wrapper);
+                    var fields = getStandaloneEditorFields(rawConfig, wrapper);
+                    var overlay = createStandaloneEditorEl("div", "pb-standalone-editor-overlay");
+                    var panel = createStandaloneEditorEl("div", "pb-standalone-editor-panel");
+                    var header = createStandaloneEditorEl("div", "pb-standalone-editor-header");
+                    var title = createStandaloneEditorEl("h2", "pb-standalone-editor-title", "Edit block field - " + (payload.component_code || payload.block_id || payload.component || ""));
+                    var closeBtn = createStandaloneEditorEl("button", "pb-standalone-editor-close", "x");
+                    closeBtn.type = "button";
+                    header.appendChild(title);
+                    header.appendChild(closeBtn);
+
+                    var body = createStandaloneEditorEl("div", "pb-standalone-editor-body");
+                    var aiPanel = createStandaloneEditorEl("div", "pb-standalone-editor-ai-panel");
+                    var aiHead = createStandaloneEditorEl("div", "pb-standalone-editor-ai-head");
+                    var aiHint = createStandaloneEditorEl("div", "pb-standalone-editor-ai-hint", "AI can supplement the current block fields from page context.");
+                    var aiBtn = createStandaloneEditorEl("button", "pb-standalone-editor-ai-button", "AI Generate");
+                    aiBtn.type = "button";
+                    aiHead.appendChild(aiHint);
+                    aiHead.appendChild(aiBtn);
+                    var aiPrompt = createStandaloneEditorEl("textarea", "pb-standalone-editor-ai-prompt");
+                    aiPrompt.rows = 2;
+                    aiPrompt.placeholder = "Optional: tell AI how to adjust this block.";
+                    aiPrompt.value = rawConfig && rawConfig._ai_prompt != null ? String(rawConfig._ai_prompt) : "";
+                    aiPrompt.setAttribute("data-field-key", "_ai_prompt");
+                    var aiTerminal = createStandaloneEditorEl("div", "pb-standalone-editor-ai-terminal");
+                    var aiTerminalHead = createStandaloneEditorEl("div", "pb-standalone-editor-ai-terminal-head");
+                    var aiTerminalTitle = createStandaloneEditorEl("span", "", "Generation process");
+                    var aiTerminalStatus = createStandaloneEditorEl("span", "pb-standalone-editor-ai-status", "Disconnected");
+                    var aiTerminalLog = createStandaloneEditorEl("div", "pb-standalone-editor-ai-log");
+                    aiTerminalHead.appendChild(aiTerminalTitle);
+                    aiTerminalHead.appendChild(aiTerminalStatus);
+                    aiTerminal.appendChild(aiTerminalHead);
+                    aiTerminal.appendChild(aiTerminalLog);
+                    aiPanel.appendChild(aiHead);
+                    aiPanel.appendChild(aiPrompt);
+                    aiPanel.appendChild(aiTerminal);
+                    body.appendChild(aiPanel);
+                    if (fields.length === 0) {
+                        body.appendChild(createStandaloneEditorEl("div", "pb-standalone-editor-empty", "No editable text or image fields were found for this block."));
+                    }
+                    fields.forEach(function(field) {
+                        var wrap = createStandaloneEditorEl("div", "pb-standalone-editor-field");
+                        var label = createStandaloneEditorEl("label", "pb-standalone-editor-label", field.key);
+                        var input = shouldUseStandaloneTextarea(field.key, field.value)
+                            ? createStandaloneEditorEl("textarea", "pb-standalone-editor-textarea")
+                            : createStandaloneEditorEl("input", "pb-standalone-editor-input");
+                        if (input.tagName.toLowerCase() === "input") {
+                            input.type = "text";
+                        } else {
+                            input.rows = 4;
+                        }
+                        input.value = field.value;
+                        input.setAttribute("data-field-key", field.key);
+                        if (field.originalKey) {
+                            input.setAttribute("data-original-key", field.originalKey);
+                            input.setAttribute("data-original-value", field.originalValue || "");
+                        }
+                        wrap.appendChild(label);
+                        wrap.appendChild(input);
+                        body.appendChild(wrap);
+                    });
+
+                    var footer = createStandaloneEditorEl("div", "pb-standalone-editor-footer");
+                    var message = createStandaloneEditorEl("div", "pb-standalone-editor-message");
+                    var cancelBtn = createStandaloneEditorEl("button", "pb-standalone-editor-cancel", "Cancel");
+                    var saveBtn = createStandaloneEditorEl("button", "pb-standalone-editor-save", "Save");
+                    cancelBtn.type = "button";
+                    saveBtn.type = "button";
+                    footer.appendChild(message);
+                    footer.appendChild(cancelBtn);
+                    footer.appendChild(saveBtn);
+                    panel.appendChild(header);
+                    panel.appendChild(body);
+                    panel.appendChild(footer);
+                    overlay.appendChild(panel);
+                    document.body.appendChild(overlay);
+
+                    function close() {
+                        if (overlay.parentNode) {
+                            overlay.parentNode.removeChild(overlay);
+                        }
+                    }
+                    closeBtn.addEventListener("click", close);
+                    cancelBtn.addEventListener("click", close);
+                    overlay.addEventListener("click", function(event) {
+                        if (event.target === overlay) {
+                            close();
+                        }
+                    });
+                    aiBtn.addEventListener("click", function() {
+                        submitStandaloneEditorAiGenerate(payload, wrapper, rawConfig, body, aiBtn, aiTerminalLog, aiTerminalStatus, aiPrompt);
+                    });
+                    saveBtn.addEventListener("click", function() {
+                        var nextConfig = collectStandaloneEditorConfig(rawConfig, body);
+                        var params = new URLSearchParams();
+                        var query = new URLSearchParams(window.location.search);
+                        params.set("public_id", query.get("public_id") || "");
+                        params.set("page_type", payload.page_type || query.get("page_type") || "");
+                        params.set("block_id", payload.block_id || payload.component || payload.component_code || "");
+                        params.set("component_code", payload.component_code || payload.component || payload.block_id || "");
+                        params.set("region", payload.region || "");
+                        params.set("index", payload.index || "");
+                        params.set("block_config", JSON.stringify(nextConfig));
+                        saveBtn.disabled = true;
+                        message.classList.remove("error");
+                        message.textContent = "Saving...";
+                        fetch(resolveStandaloneUpdateBlockUrl(), {
+                            method: "POST",
+                            credentials: "same-origin",
+                            headers: {
+                                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                                "X-Requested-With": "XMLHttpRequest"
+                            },
+                            body: params
+                        }).then(function(response) {
+                            return response.json();
+                        }).then(function(data) {
+                            if (!data || data.success === false) {
+                                throw new Error(String(data && data.message ? data.message : "Save failed"));
+                            }
+                            try {
+                                window.sessionStorage.setItem("pbStandaloneEditorScrollY", String(window.scrollY || 0));
+                            } catch (err) {
+                            }
+                            window.location.reload();
+                        }).catch(function(error) {
+                            saveBtn.disabled = false;
+                            message.classList.add("error");
+                            message.textContent = String(error && error.message ? error.message : "Save failed");
+                        });
+                    });
+                    return true;
+                }
+
+                window.__pbOpenStandaloneComponentEditor = openStandaloneComponentEditor;
+
+                function dispatchComponentAction(target, e) {
+                    if (!target) {
+                        return true;
+                    }
+                    if (e && typeof e.preventDefault === "function") {
+                        e.preventDefault();
+                    }
+                    var wrapper = target.closest(".pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper");
+                    if (!wrapper) {
+                        return true;
+                    }
+                    var payload = buildComponentActionPayload(target, wrapper);
+                    if (openStandaloneComponentEditor(payload, wrapper)) {
+                        if (e && typeof e.stopPropagation === "function") {
+                            e.stopPropagation();
+                        }
+                        if (e && typeof e.stopImmediatePropagation === "function") {
+                            e.stopImmediatePropagation();
+                        }
+                        return false;
+                    }
+                    if (!window.parent || window.parent === window) {
+                        return true;
+                    }
                     try {
                         if (
                             window.parent.PbAiWorkspacePreview

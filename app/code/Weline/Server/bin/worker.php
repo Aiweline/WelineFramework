@@ -177,6 +177,18 @@ if (!isset($isMaintenanceWorker)) {
 if ($isMaintenanceWorker && !\defined('WLS_MAINTENANCE_WORKER')) {
     \define('WLS_MAINTENANCE_WORKER', true);
 }
+$_SERVER['WLS_PROCESS_ROLE'] = $isMaintenanceWorker ? 'maintenance' : 'worker';
+$_ENV['WLS_PROCESS_ROLE'] = $_SERVER['WLS_PROCESS_ROLE'];
+@\putenv('WLS_PROCESS_ROLE=' . $_SERVER['WLS_PROCESS_ROLE']);
+$_SERVER['WLS_INSTANCE'] = $instanceName;
+$_ENV['WLS_INSTANCE'] = $instanceName;
+@\putenv('WLS_INSTANCE=' . $instanceName);
+$_SERVER['WLS_WORKER_ID'] = (string)$workerId;
+$_ENV['WLS_WORKER_ID'] = (string)$workerId;
+@\putenv('WLS_WORKER_ID=' . (string)$workerId);
+$_SERVER['WLS_PORT'] = (string)$port;
+$_ENV['WLS_PORT'] = (string)$port;
+@\putenv('WLS_PORT=' . (string)$port);
 
 // 定义前端模式常量（供 WlsRuntime 使用）
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
@@ -192,6 +204,18 @@ if (!\defined('WLS_DEV_MODE')) {
 unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
 
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
+
+if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
+    function wlsResetLongRunningExecutionLimit(): void
+    {
+        if (\function_exists('ini_set') && (string)@\ini_get('max_execution_time') !== '0') {
+            @\ini_set('max_execution_time', '0');
+        }
+        if (\function_exists('set_time_limit')) {
+            @\set_time_limit(0);
+        }
+    }
+}
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
 use Weline\Server\Log\Error\ErrorBootstrap;
@@ -400,21 +424,19 @@ try {
     WlsLogger::info_("[Memory] Memory service address configured {$memoryHost}:{$memoryPort}");
     // 启动期禁止同步预热连接，避免阻塞 IPC READY；消费者令牌由 Master 管理。
     try {
-        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, [
-            'token_file_name' => $sessionTokenFileName,
-            'min_idle' => 0,
-            'connect_timeout' => 0.2,
-            'timeout' => 0.5,
-            'log_pool_lifecycle' => false,
+        \Weline\Server\Service\SharedRuntimeConnectionWarmup::primeWorkerPools($workerId, $instanceName, [
+            'session' => [
+                'host' => $sessionHost,
+                'port' => $sessionPort,
+                'token_file_name' => $sessionTokenFileName,
+            ],
+            'memory' => [
+                'host' => $memoryHost,
+                'port' => $memoryPort,
+                'token_file_name' => $memoryTokenFileName,
+            ],
         ]);
-        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($memoryHost, $memoryPort, [
-            'token_file_name' => $memoryTokenFileName,
-            'min_idle' => 0,
-            'connect_timeout' => 0.2,
-            'timeout' => 0.5,
-            'log_pool_lifecycle' => false,
-        ]);
-        WlsLogger::info_('[ConnectionPool] Session/Memory startup prewarm disabled (min_idle=0); lazy connect in request fibers');
+        WlsLogger::info_('[ConnectionPool] Session/Memory pools primed without blocking; async prewarm runs after IPC loop starts');
     } catch (\Throwable $e) {
         WlsLogger::warning_('[ConnectionPool] 预热失败，将在首次请求时自动重试: ' . $e->getMessage());
     }
@@ -454,6 +476,7 @@ $asyncBizAdapters = new \Weline\Server\Runtime\Async\AsyncBizAdapters();
 
 // 活跃 Fiber 列表：connId => Fiber
 $activeFibers = [];
+$fiberTickBudgetMs = (float)(\Weline\Framework\App\Env::get('wls.worker.fiber_tick_budget_ms', 8) ?: 8);
 \Weline\Framework\Runtime\WlsConcurrency::setOtherSuspendedFiberCountProvider(
     static function () use (&$activeFibers): int {
         return \count($activeFibers);
@@ -825,7 +848,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$waitingForAck, $workerId, &$activeFibers, &$ipcClient, $port, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $isMaintenanceWorker): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$activeFibers, &$ipcClient, $port, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $isMaintenanceWorker): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR 等）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -897,6 +920,10 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $shouldExit = true;
                     $ipcDraining = true;
                     $drainStartTime = \time();
+                    $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
+                    if ($dt > 0) {
+                        $maxDrainTime = \max(1, \min(7200, $dt));
+                    }
                     // 关键修复：reload 时不立即关闭 socket，继续接受新连接并快速响应
                     // 这样可以避免连接在内核队列中自旋等待，直到新 Worker 启动
                     // socket 会在排水完成或超时后才关闭
@@ -965,6 +992,10 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $shouldExit = true;
                     $ipcDraining = true;
                     $drainStartTime = \time();
+                    $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
+                    if ($dt > 0) {
+                        $maxDrainTime = \max(1, \min(7200, $dt));
+                    }
                     // 关闭监听 socket（不再接受新连接）
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
@@ -1018,6 +1049,13 @@ if ($controlPort > 0 || $supervisorEnabled) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN:
                     $ipcReceivedShutdown = true;
                     $shouldExit = true;
+                    $ipcDraining = true;
+                    $maxDrainTime = 1;
+                    $drainStartTime = \time() - $maxDrainTime;
+                    if ($socket && \is_resource($socket)) {
+                        @\fclose($socket);
+                        $socket = null;
+                    }
                     WlsLogger::info_("收到 shutdown 命令，准备退出");
                     break;
             }
@@ -1270,10 +1308,8 @@ $gracefulExit = function (string $reason = '', bool $waitForRequests = true) use
         WlsLogger::info_("已发送 exited 消息给 Master");
     }
     
-    // 使用进程管理器清理 PID 文件
-    if ($processName) {
-        \Weline\Framework\System\Process\Processer::destroy('--name=' . $processName);
-    }
+    // Master owns process-record cleanup; child exit must not block on shared
+    // PID/name/port index locks.
     
     WlsLogger::info_("Worker 已退出");
     exit(0);
@@ -1310,10 +1346,15 @@ $maxConsecutiveErrors = 100; // 连续 100 次错误才考虑重启（给予足�
 
 // 进入事件循环后向 Master 上报一次（IPC 重连后会再次上报）
 $workerLoopStartedSent = false;
+$sharedRuntimeConnectionWarmupStarted = false;
+$sharedRuntimeConnectionWarmupNotBefore = \microtime(true) + \max(0.05, \min(1.0, $workerId * 0.05));
+$deferredWorkerBootstrapWarmupStarted = false;
+$deferredWorkerBootstrapWarmupNotBefore = \microtime(true) + \max(0.25, \min(4.0, $workerId * 0.25));
 
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
+    wlsResetLongRunningExecutionLimit();
     if (\function_exists('pcntl_signal_dispatch')) {
         \pcntl_signal_dispatch();
     }
@@ -1402,7 +1443,85 @@ while (true) {
         $workerLoopStartedSent = true;
     }
 
-    // ========== ACK 等待超时检测（启动确认协议） ==========
+    if (!$sharedRuntimeConnectionWarmupStarted
+        && !$isMaintenanceWorker
+        && isset($sessionHost, $sessionPort, $memoryHost, $memoryPort)
+        && ($workerLoopStartedSent || $workerLoopCount > 1)
+        && !$ipcReceivedShutdown
+        && \microtime(true) >= $sharedRuntimeConnectionWarmupNotBefore
+    ) {
+        $sharedRuntimeConnectionWarmupStarted = true;
+        $fiberScheduler->registerFiber();
+        $sharedRuntimeConnectionWarmupFiber = new \Fiber(static function () use (
+            $workerId,
+            $instanceName,
+            $sessionHost,
+            $sessionPort,
+            $sessionTokenFileName,
+            $memoryHost,
+            $memoryPort,
+            $memoryTokenFileName,
+            $fiberScheduler
+        ): void {
+            try {
+                WlsLogger::info_("[ConnectionPoolWarmup] async shared-state prewarm start worker={$workerId}");
+                $stats = \Weline\Server\Service\SharedRuntimeConnectionWarmup::warmWorkerPools($workerId, $instanceName, [
+                    'session' => [
+                        'host' => $sessionHost,
+                        'port' => $sessionPort,
+                        'token_file_name' => $sessionTokenFileName,
+                    ],
+                    'memory' => [
+                        'host' => $memoryHost,
+                        'port' => $memoryPort,
+                        'token_file_name' => $memoryTokenFileName,
+                    ],
+                ]);
+                WlsLogger::info_('[ConnectionPoolWarmup] async shared-state prewarm done worker=' . $workerId . ' stats=' . \json_encode($stats, JSON_UNESCAPED_SLASHES));
+            } catch (\Throwable $e) {
+                WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm failed worker={$workerId}: " . $e->getMessage());
+            } finally {
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $sharedRuntimeConnectionWarmupFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm start failed worker={$workerId}: " . $e->getMessage());
+        }
+    }
+
+    // ========== Deferred worker bootstrap warmup ==========
+    if (!$deferredWorkerBootstrapWarmupStarted
+        && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        && ($workerLoopStartedSent || $workerLoopCount > 3)
+        && !$ipcReceivedShutdown
+        && \microtime(true) >= $deferredWorkerBootstrapWarmupNotBefore
+    ) {
+        $deferredWorkerBootstrapWarmupStarted = true;
+        $fiberScheduler->registerFiber();
+        $deferredWarmupFiber = new \Fiber(static function () use ($runtime, $workerId, $fiberScheduler): void {
+            try {
+                \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(\min(4000, \max(50, $workerId * 250)));
+                WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup start worker={$workerId}");
+                $runtime->runDeferredWorkerBootstrapWarmup();
+                WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup done worker={$workerId}");
+            } catch (\Throwable $e) {
+                WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup failed worker={$workerId}: " . $e->getMessage());
+            } finally {
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $deferredWarmupFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup start failed worker={$workerId}: " . $e->getMessage());
+        }
+    }
+
+    // ========== ACK wait timeout check ==========
     if ($waitingForAck && $ipcClient && $ipcClient->isConnected()) {
         $ackElapsed = \microtime(true) - $readySentTime;
         if ($ackElapsed >= $ackTimeout) {
@@ -1421,6 +1540,28 @@ while (true) {
     // 检查是否需要优雅退出（排水模式）
     if ($shouldExit) {
         if ($ipcDraining) {
+            if (!empty($longLivedConnections)) {
+                foreach (\array_keys($longLivedConnections) as $cid) {
+                    if (isset($connections[$cid]) && \is_resource($connections[$cid])) {
+                        @\fclose($connections[$cid]);
+                    }
+                    if (isset($activeFibers[$cid])) {
+                        $fiberScheduler->cancelTimersForFiber($activeFibers[$cid]['fiber']);
+                        $fiberScheduler->unregisterFiber();
+                    }
+                    unset(
+                        $connections[$cid],
+                        $requestBuffers[$cid],
+                        $connectionLastActivity[$cid],
+                        $requestLogged[$cid],
+                        $writeBuffers[$cid],
+                        $writableConnections[$cid],
+                        $pendingClose[$cid],
+                        $longLivedConnections[$cid],
+                        $activeFibers[$cid]
+                    );
+                }
+            }
             // ========== 排水模式：快速清理连接，加速退出 ==========
             $drainElapsed = $drainStartTime > 0 ? (\time() - $drainStartTime) : 0;
 
@@ -1556,6 +1697,7 @@ while (true) {
     // 重要：长连接（SSE/WebSocket）不应该参与读事件检测，因为客户端不会发送数据
     // 如果把 SSE 连接放在读数组中，stream_select 会一直等到超时（最长100ms），造成延迟累积
     $readSockets = [];
+    $readableClientCount = 0;
     if ($socket && \is_resource($socket)) {
         $readSockets[] = $socket;
     }
@@ -1563,6 +1705,7 @@ while (true) {
     foreach ($connections as $connId => $conn) {
         if (!isset($longLivedConnections[$connId])) {
             $readSockets[] = $conn;
+            $readableClientCount++;
         }
     }
 
@@ -1585,7 +1728,8 @@ while (true) {
     $except = [];
 
     // EventLoop + CoroutineRuntime：统一等待语义（select/event 后端可切换）
-    $changed = $coroutineRuntime->wait($read, $write, $except, 100000);
+    $loopWaitUsec = ($readableClientCount > 0 || $write !== []) ? 1000 : 100000;
+    $changed = $coroutineRuntime->wait($read, $write, $except, $loopWaitUsec);
     // #endregion
 
     // 调度器 tick：处理到期定时器，resume 前恢复该 Fiber 的请求级上下文
@@ -1593,13 +1737,14 @@ while (true) {
         function (\Fiber $fiber) use (&$activeFibers): void {
             \Weline\Server\Runtime\WorkerFiberContextTracker::restore($activeFibers, $fiber);
         },
-        null,
+        $fiberTickBudgetMs > 0.0 ? $fiberTickBudgetMs : null,
         function (\Fiber $fiber) use (&$activeFibers): void {
             $activeFibers = \Weline\Server\Runtime\WorkerFiberContextTracker::capture(
                 $activeFibers,
                 $fiber,
                 static fn () => \Weline\Framework\Runtime\WlsFiberContext::capture()
             );
+            wlsResetLongRunningExecutionLimit();
         }
     );
     
@@ -2603,6 +2748,7 @@ function wlsDispatchRequestFiberStep(
     ) {
         wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
         try {
+            \Weline\Framework\Runtime\SchedulerSystem::yield();
             if ($isSseProtocolRequest) {
                 \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
                     static function (string $data) use (
@@ -2677,6 +2823,7 @@ function wlsDispatchRequestFiberStep(
             throw $e;
         } finally {
             wlsFiberRequestContextLeave();
+            wlsResetLongRunningExecutionLimit();
         }
     });
 
@@ -3241,7 +3388,7 @@ function sendResponseAndCleanup(
         ));
     }
 
-    WlsLogger::flush_(true);
+    WlsLogger::tick_();
 
     if (!$isSseMode && $responseFullyWritten) {
         wlsDrainPostResponseTasks();
@@ -3824,6 +3971,8 @@ function handleRequest(
         $response = \Weline\Framework\Http\Response::fromContent($errorBody, $statusCode, 'application/json; charset=utf-8');
         
         return $response->toHttpString(false);
+    } finally {
+        wlsResetLongRunningExecutionLimit();
     }
 }
 
@@ -3988,7 +4137,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     // 静态文件扩展名列表
     static $staticExtensions = [
         'css', 'js', 'map',
-        'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp',
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp',
         'woff', 'woff2', 'eot', 'ttf', 'otf',
         'mp4', 'mp3', 'webm', 'ogg', 'm3u8',
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
@@ -4011,6 +4160,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         'png' => 'image/png',
         'gif' => 'image/gif',
         'webp' => 'image/webp',
+        'avif' => 'image/avif',
         'svg' => 'image/svg+xml',
         'ico' => 'image/x-icon',
         'bmp' => 'image/bmp',
@@ -4113,6 +4263,25 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     
     // 文件不存在，交给框架处理（可能是动态生成的资源）
     if ($filename === null) {
+        foreach ($candidateUris as $candidateUri) {
+            if (\Weline\Server\Service\StaticRequestBypassDecider::shouldReturnFastMissingStatic($candidateUri)) {
+                \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache([
+                    'status' => 'missing',
+                    'uri' => $uriPath,
+                    'candidate' => $candidateUri,
+                ]);
+                $body = 'Static file not found';
+                $bodyLength = \strlen($body);
+                return "HTTP/1.1 404 Not Found\r\n" .
+                    "Content-Type: text/plain; charset=utf-8\r\n" .
+                    "Content-Length: {$bodyLength}\r\n" .
+                    "Cache-Control: no-store\r\n" .
+                    "Connection: close\r\n" .
+                    "X-WLS-Static-Missing: fastpath\r\n" .
+                    "\r\n" .
+                    $body;
+            }
+        }
         return null;
     }
     

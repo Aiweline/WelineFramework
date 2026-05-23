@@ -123,6 +123,13 @@ final class BuildPlanContractValidatorTest extends TestCase
                     'block_id' => 'home.hero',
                     'page_id' => 'home',
                     'block_type' => 'hero',
+                    'page_flow_role' => 'opening',
+                    'visual_signature' => [
+                        'composition_pattern' => 'split hero',
+                        'spatial_rhythm' => 'copy left media right',
+                        'media_strategy' => 'integrated product image',
+                        'surface_treatment' => 'clean product surface',
+                    ],
                     'content_keys' => ['home.hero.title', 'home.hero.cta'],
                     'task_ids' => ['task.hero'],
                 ],
@@ -133,8 +140,19 @@ final class BuildPlanContractValidatorTest extends TestCase
                     'task_kind' => 'block_build',
                     'executor' => 'AiSiteBuildQueue',
                     'input_scope' => ['page_id' => 'home', 'block_id' => 'home.hero'],
+                    'runtime_context' => [
+                        'target' => ['page_id' => 'home', 'block_id' => 'home.hero'],
+                        'block_contract' => ['content_keys' => ['home.hero.title', 'home.hero.cta']],
+                    ],
+                    'output_contract' => [
+                        'format' => 'pagebuilder_component_payload',
+                        'required_outputs' => ['html', 'css', 'render_data'],
+                    ],
                     'policy_slices' => ['layout.4_8_spacing', 'image.integrated_not_pasted'],
                     'context_budget' => ['max_tokens' => 1800],
+                    'acceptance' => [
+                        'checks' => ['no_placeholder_or_prompt_copy'],
+                    ],
                     'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'],
                     'depends_on' => [],
                 ],

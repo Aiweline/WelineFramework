@@ -161,7 +161,15 @@ class Topbar extends \Weline\Framework\View\Block
     public function getUser(): BackendUser|AbstractModel
     {
         if (empty($this->user)) {
-            $this->user = $this->session->getLoginUser();
+            $user = $this->session->getLoginUser();
+            if ($user instanceof BackendUser) {
+                $this->user = $user;
+            } else {
+                $fallback = ObjectManager::getInstance(BackendUser::class);
+                $fallback->setData('username', 'Guest');
+                $fallback->setData('email', '');
+                $this->user = $fallback;
+            }
         }
         return $this->user;
     }

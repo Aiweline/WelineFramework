@@ -345,6 +345,11 @@ API接口,"API Endpoints"
 API用户登录,"API User Login"
 用户名,Username
 密码,Password
+状态,Status
+请求时间,"Request Time"
+已隐藏,已隐藏
+"个 WLS/内部诊断头","个 WLS/内部诊断头"
+点击查看,点击查看
 正式环境调试模式已开启,"Production debugging mode is enabled"
 目前接口直达正式环境，请谨慎操作！所有请求将直接修改正式环境数据，可能造成不可逆的损失。,"Requests are currently sent directly to production. Proceed carefully! All requests modify production data directly and may cause irreversible loss."
 接口描述,"API Description"
@@ -366,16 +371,31 @@ Authorization头,"Authorization Header"
 X-API-Token头,"X-API-Token Header"
 请求示例,"Request Example"
 复制路径,"Copy Path"
+复制调用,复制调用
 复制请求体,"Copy Request Body"
 复制响应体,"Copy Response Body"
+调用,调用
 路径,Path
 请求体,"Request Body"
 响应体,"Response Body"
+"Frontend Worker 试调","Frontend Worker 试调"
+"通过 Weline.Api.resource() 调用，不暴露 REST URL 或 query-bin 实现地址","通过 Weline.Api.resource() 调用，不暴露 REST URL 或 query-bin 实现地址"
+发送请求,"Send Request"
+"Worker Operation","Worker Operation"
+Provider,Provider
+Operation,Operation
+调用代码,调用代码
+"请输入 JSON 格式的请求参数","请输入 JSON 格式的请求参数"
+响应信息,"Response Info"
+响应头,"Response Headers"
+Header名称,"Header Name"
+Header值,"Header Value"
+复制,Copy
+格式化,Format
 在线测试,"Online Test"
 编辑请求参数并发送测试请求,"Edit request parameters and send a test request"
 此接口需要登录，请先登录,"This API requires login, please login first"
 登录后发起请求,"Login to Send Request"
-发送请求,"Send Request"
 语言和货币,"Language and Currency"
 路径切换,"Path Switching"
 参数切换,"Parameter Switching"
@@ -388,25 +408,19 @@ X-API-Token头,"X-API-Token Header"
 参数值,"Parameter Value"
 添加参数,"Add Parameter"
 导入示例请求头,"Import Example Request Headers"
-Header名称,"Header Name"
-Header值,"Header Value"
 添加请求头,"Add Request Header"
 导入示例请求体,"Import Example Request Body"
 请输入JSON格式的请求体,"Enter a JSON request body"
-响应信息,"Response Info"
-响应头,"Response Headers"
-复制,Copy
-格式化,Format
 请先选择一个API接口,"Select an API endpoint first"
+请求参数格式错误，请输入有效的JSON,请求参数格式错误，请输入有效的JSON
+请求中...,请求中...
 后端,Backend
 前端,Frontend
 此接口需要登录，请先登录%{1}API账户后再发起请求,"This endpoint requires login. Log in to the %{1} API account before sending the request."
 请求体格式错误，请输入有效的JSON,"Request body format error. Enter valid JSON."
-状态,Status
 状态码,"Status Code"
 响应Code,"Response Code"
 响应消息,"Response Message"
-请求时间,"Request Time"
 响应大小,"Response Size"
 请求失败,"Request Failed"
 已复制到剪贴板,"Copied to clipboard"

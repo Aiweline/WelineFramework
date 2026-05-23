@@ -303,7 +303,10 @@ final class SessionServer
         $this->store->forcePersist();
 
         foreach ($this->clients as $clientId => $client) {
-            @\fclose($client['socket']);
+            $socket = $client['socket'] ?? null;
+            if (\is_resource($socket)) {
+                @\fclose($socket);
+            }
         }
         $this->clients = [];
 
@@ -349,13 +352,21 @@ final class SessionServer
         $this->ensureAuthTokenFile();
 
         $read = [$this->serverSocket];
-        foreach ($this->clients as $client) {
-            if (\is_resource($client['socket'])) {
-                $read[] = $client['socket'];
+        $write = [];
+        foreach ($this->clients as $clientId => $client) {
+            $socket = $client['socket'] ?? null;
+            if (\is_resource($socket)) {
+                $read[] = $socket;
+                if ((string)($client['write_buffer'] ?? '') !== '') {
+                    $write[] = $socket;
+                }
+                continue;
             }
+
+            unset($this->clients[$clientId]);
         }
 
-        $write = null;
+        $write = $write !== [] ? $write : null;
         $except = null;
         $tvSec = (int)($timeoutUsec / 1000000);
         $tvUsec = $timeoutUsec % 1000000;
@@ -383,6 +394,15 @@ final class SessionServer
             }
         }
 
+        if (\is_array($write)) {
+            foreach ($write as $socket) {
+                $clientId = $this->getClientId($socket);
+                if ($clientId !== null) {
+                    $this->flushClientWriteBuffer($clientId);
+                }
+            }
+        }
+
         $this->doMaintenance();
 
         return $processed;
@@ -404,6 +424,7 @@ final class SessionServer
         $this->clients[$clientId] = [
             'socket' => $clientSocket,
             'buffer' => '',
+            'write_buffer' => '',
             'addr' => $peerName ?? 'unknown',
             'authenticated' => $this->authToken === null,
             'consumer_code' => '',
@@ -428,7 +449,11 @@ final class SessionServer
             return 0;
         }
 
-        $socket = $this->clients[$clientId]['socket'];
+        $socket = $this->clients[$clientId]['socket'] ?? null;
+        if (!\is_resource($socket)) {
+            unset($this->clients[$clientId]);
+            return 0;
+        }
         $data = @\fread($socket, 65536);
 
         // 非阻塞模式下空读不一定是断连，需结合 feof 判断。
@@ -659,13 +684,45 @@ final class SessionServer
             return false;
         }
 
-        $socket = $this->clients[$clientId]['socket'];
+        $socket = $this->clients[$clientId]['socket'] ?? null;
         if (!\is_resource($socket)) {
+            unset($this->clients[$clientId]);
             return false;
         }
 
-        $written = @\fwrite($socket, $message);
-        return $written !== false;
+        $this->clients[$clientId]['write_buffer'] = (string)($this->clients[$clientId]['write_buffer'] ?? '') . $message;
+        return $this->flushClientWriteBuffer($clientId);
+    }
+
+    private function flushClientWriteBuffer(int $clientId): bool
+    {
+        if (!isset($this->clients[$clientId])) {
+            return false;
+        }
+
+        $socket = $this->clients[$clientId]['socket'] ?? null;
+        if (!\is_resource($socket)) {
+            unset($this->clients[$clientId]);
+            return false;
+        }
+
+        $buffer = (string)($this->clients[$clientId]['write_buffer'] ?? '');
+        while ($buffer !== '') {
+            $written = @\fwrite($socket, \substr($buffer, 0, 65536));
+            if ($written === false) {
+                $this->disconnectClient($clientId);
+                return false;
+            }
+            if ($written === 0) {
+                $this->clients[$clientId]['write_buffer'] = $buffer;
+                return true;
+            }
+
+            $buffer = (string)\substr($buffer, $written);
+        }
+
+        $this->clients[$clientId]['write_buffer'] = '';
+        return true;
     }
 
     /**
@@ -677,9 +734,12 @@ final class SessionServer
             return;
         }
 
-        $addr = $this->clients[$clientId]['addr'];
+        $addr = $this->clients[$clientId]['addr'] ?? 'unknown';
         $consumerCode = (string) ($this->clients[$clientId]['consumer_code'] ?? '');
-        @\fclose($this->clients[$clientId]['socket']);
+        $socket = $this->clients[$clientId]['socket'] ?? null;
+        if (\is_resource($socket)) {
+            @\fclose($socket);
+        }
         unset($this->clients[$clientId]);
 
         if ($consumerCode !== '') {
@@ -695,7 +755,8 @@ final class SessionServer
     private function getClientId($socket): ?int
     {
         foreach ($this->clients as $clientId => $client) {
-            if ($client['socket'] === $socket) {
+            $clientSocket = $client['socket'] ?? null;
+            if (\is_resource($clientSocket) && $clientSocket === $socket) {
                 return $clientId;
             }
         }
@@ -913,7 +974,10 @@ final class SessionServer
                 continue;
             }
 
-            @\fclose($this->clients[$clientId]['socket']);
+            $socket = $this->clients[$clientId]['socket'] ?? null;
+            if (\is_resource($socket)) {
+                @\fclose($socket);
+            }
             unset($this->clients[$clientId]);
         }
     }
@@ -1023,10 +1087,12 @@ final class SessionServer
 
         if (\hash_equals($this->authToken, $token)) {
             $this->clients[$clientId]['authenticated'] = true;
-            $this->logDebug("Client authenticated: {$this->clients[$clientId]['addr']} (id={$clientId})");
+            $addr = (string)($this->clients[$clientId]['addr'] ?? 'unknown');
+            $this->logDebug("Client authenticated: {$addr} (id={$clientId})");
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Authenticated'));
         } else {
-            $this->log("Client auth failed: {$this->clients[$clientId]['addr']} (id={$clientId}) - Expected len=" . \strlen($this->authToken) . ", Got len=" . \strlen($token) . ", Match=" . ($this->authToken === $token ? 'Y' : 'N'));
+            $addr = (string)($this->clients[$clientId]['addr'] ?? 'unknown');
+            $this->log("Client auth failed: {$addr} (id={$clientId}) - Expected len=" . \strlen($this->authToken) . ", Got len=" . \strlen($token) . ", Match=" . ($this->authToken === $token ? 'Y' : 'N'));
             $this->sendToClient($clientId, SessionProtocol::encodeError('Invalid token', 'AUTH_FAILED'));
             $this->disconnectClient($clientId);
         }
@@ -1410,6 +1476,10 @@ final class SessionServer
 
     private function ensureCurrentProcessOwnsListenPort(): bool
     {
+        if ($this->hasActiveListenSocket()) {
+            return true;
+        }
+
         $now = \microtime(true);
         if (($now - $this->lastListenOwnerCheckAt) < 2.0) {
             return true;
@@ -1434,12 +1504,21 @@ final class SessionServer
 
     private function isCurrentProcessListenOwner(bool $refresh): bool
     {
+        if ($this->hasActiveListenSocket()) {
+            return true;
+        }
+
         $ownerPid = $this->resolveListenOwnerPid($refresh);
         if ($ownerPid <= 0) {
             return true;
         }
 
         return $ownerPid === \getmypid();
+    }
+
+    private function hasActiveListenSocket(): bool
+    {
+        return \is_resource($this->serverSocket);
     }
 
     private function resolveListenOwnerPid(bool $refresh): int

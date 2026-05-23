@@ -58,10 +58,10 @@ final class SourceTruthContractValidator
             $errors[] = 'site_identity.site_name is required';
         }
 
-        $facts = \is_array($contract['must_include_facts'] ?? null) ? $contract['must_include_facts'] : [];
-        if ($facts === []) {
-            $errors[] = 'must_include_facts must not be empty';
+        if (!\array_key_exists('must_include_facts', $contract) || !\is_array($contract['must_include_facts'])) {
+            $errors[] = 'must_include_facts must be an array';
         }
+        $facts = \is_array($contract['must_include_facts'] ?? null) ? $contract['must_include_facts'] : [];
         foreach ($facts as $i => $fact) {
             if (!\is_array($fact)) {
                 $errors[] = "must_include_facts[{$i}] must be an object";

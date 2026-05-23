@@ -20,6 +20,7 @@
 请提供验证码,请提供验证码
 双因素身份验证已禁用,双因素身份验证已禁用
 备份码已重新生成,备份码已重新生成
+"Code data loaded.","Code data loaded."
 "The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
 "Please enter the verification code.","Please enter the verification code."
 "Verification code is incorrect.","Verification code is incorrect."
@@ -162,6 +163,8 @@ Android设备安装步骤：,Android设备安装步骤：
 我们的验证器是一个PWA（渐进式Web应用），可以像原生应用一样安装到您的设备上。,我们的验证器是一个PWA（渐进式Web应用），可以像原生应用一样安装到您的设备上。
 提示：,提示：
 建议将验证器保存到桌面，方便随时使用。安装后可以离线使用，无需每次打开浏览器。,建议将验证器保存到桌面，方便随时使用。安装后可以离线使用，无需每次打开浏览器。
+鎻愮ず,鎻愮ず
+纭畾,纭畾
 无法访问摄像头,无法访问摄像头
 错误,错误
 无效的二维码格式,无效的二维码格式

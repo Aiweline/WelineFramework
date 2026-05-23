@@ -110,6 +110,12 @@ class Url implements UrlInterface
         }
 
         // 优化：使用语言缓存，避免重复数据库查询
+        self::ensureParserValidationMetadataLoaded();
+        if (self::hasAuthoritativeParserValidationMetadata() && !isset(self::$knownParserLanguageCodes[\strtolower($code)])) {
+            self::traceLanguageValidation('static_deny', $code, $uri, ['parser_key' => $parserCacheKey]);
+            return false;
+        }
+
         $cache = w_cache('i18n');
         $checkCacheKey = self::validationCacheKey('lang_check', $code);
         $checkResult = $cache->get($checkCacheKey);
@@ -209,6 +215,11 @@ class Url implements UrlInterface
         }
         
         // 优化：使用货币缓存，避免重复数据库查询
+        self::ensureParserValidationMetadataLoaded();
+        if (self::hasAuthoritativeParserValidationMetadata() && !isset(self::$knownParserCurrencyCodes[$codeUpper])) {
+            return false;
+        }
+
         $cache = w_cache('currency');
         $currencyCacheKey = self::validationCacheKey('currency_code', $codeUpper);
         $currency = $cache->get($currencyCacheKey);
@@ -270,6 +281,43 @@ class Url implements UrlInterface
         return $result;
     }
 
+    private static function ensureParserValidationMetadataLoaded(): void
+    {
+        if (self::$parserValidationMetadataLoaded) {
+            return;
+        }
+
+        try {
+            $currencyCodes = self::loadKnownCurrencyCodes();
+            $languageCodes = self::loadKnownLanguageCodes();
+
+            self::$knownParserCurrencyCodes = [];
+            foreach ($currencyCodes as $currencyCode) {
+                $currencyCode = \strtoupper((string)$currencyCode);
+                if ($currencyCode !== '') {
+                    self::$knownParserCurrencyCodes[$currencyCode] = true;
+                }
+            }
+
+            self::$knownParserLanguageCodes = [];
+            foreach ($languageCodes as $languageCode) {
+                $languageCode = (string)$languageCode;
+                if ($languageCode !== '') {
+                    self::$knownParserLanguageCodes[\strtolower($languageCode)] = true;
+                }
+            }
+
+            self::$parserValidationMetadataLoaded = true;
+        } catch (\Throwable) {
+        }
+    }
+
+    private static function hasAuthoritativeParserValidationMetadata(): bool
+    {
+        return self::$parserValidationMetadataLoaded
+            && (self::$knownParserCurrencyCodes !== [] || self::$knownParserLanguageCodes !== []);
+    }
+
     private static function validationCacheKey(string $prefix, string $code): string
     {
         return $prefix . ':v4:' . self::currentWebsiteValidationScope() . ':' . strtolower($code);
@@ -305,6 +353,21 @@ class Url implements UrlInterface
             $scopes = self::knownWebsiteValidationScopes();
             $currencyCodes = self::loadKnownCurrencyCodes();
             $languageCodes = self::loadKnownLanguageCodes();
+            self::$knownParserCurrencyCodes = [];
+            foreach ($currencyCodes as $currencyCode) {
+                $currencyCode = \strtoupper((string)$currencyCode);
+                if ($currencyCode !== '') {
+                    self::$knownParserCurrencyCodes[$currencyCode] = true;
+                }
+            }
+            self::$knownParserLanguageCodes = [];
+            foreach ($languageCodes as $languageCode) {
+                $languageCode = (string)$languageCode;
+                if ($languageCode !== '') {
+                    self::$knownParserLanguageCodes[\strtolower($languageCode)] = true;
+                }
+            }
+            self::$parserValidationMetadataLoaded = true;
 
             foreach ($scopes as $scope => $defaults) {
                 $defaultCurrency = (string)($defaults['currency'] ?? '');
@@ -992,6 +1055,11 @@ class Url implements UrlInterface
     public static $parserSites = [];
     public static $parserCurrencies = [];
     public static $parserLanguages = [];
+    private static bool $parserValidationMetadataLoaded = false;
+    /** @var array<string, bool> */
+    private static array $knownParserCurrencyCodes = [];
+    /** @var array<string, bool> */
+    private static array $knownParserLanguageCodes = [];
     public static $parserMatchs = [];
     public static array $parserSiteMatchs = [];
     private static array $parserSiteMatchUrlCache = [];
@@ -1597,7 +1665,7 @@ class Url implements UrlInterface
                 $has_language = false;
                 if ($pre_path_1) {
                     # 检查头路径$pre_path_1是否是货币
-                    if (strlen($pre_path_1) === 3) {
+                    if (strlen($pre_path_1) === 3 && ctype_upper($pre_path_1)) {
                         $has_currency = self::detectCurrency($url, $pre_path_1);
                         if ($has_currency) {
                             $data['currency'] = $pre_path_1;
@@ -1624,7 +1692,7 @@ class Url implements UrlInterface
                     }
 
                     # 检查第二个路径是否是货币
-                    if (!$has_currency && strlen($pre_path_2) === 3) {
+                    if (!$has_currency && strlen($pre_path_2) === 3 && ctype_upper($pre_path_2)) {
                         $has_currency = self::detectCurrency($url, $pre_path_2);
                         if ($has_currency) {
                             $data['currency'] = $pre_path_2;
@@ -1864,6 +1932,9 @@ class Url implements UrlInterface
         self::$parserSites = [];
         self::$parserCurrencies = [];
         self::$parserLanguages = [];
+        self::$parserValidationMetadataLoaded = false;
+        self::$knownParserCurrencyCodes = [];
+        self::$knownParserLanguageCodes = [];
         self::$parserSiteMatchs = [];
         self::$parserSiteMatchUrlCache = [];
         self::$parserMatchs = [];

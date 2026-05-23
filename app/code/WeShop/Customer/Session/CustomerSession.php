@@ -133,11 +133,16 @@ class CustomerSession implements AuthenticatedSessionInterface
 
     public function getData(string $name = ''): mixed
     {
-        if ($name === '') {
-            return $this->getFrontendSession()->getSession()->all();
+        $frontendSession = $this->getFrontendSession();
+        if (\method_exists($frontendSession, 'getData')) {
+            return $frontendSession->getData($name);
         }
 
-        return $this->getFrontendSession()->getSession()->get($name);
+        if ($name === '') {
+            return $frontendSession->getSession()->all();
+        }
+
+        return $frontendSession->getSession()->get($name);
     }
 
     public function setData(string $name, mixed $value): static
