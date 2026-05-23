@@ -116,6 +116,7 @@ class GlobalsEmulator
         $server['WELINE_AREA_ROUTE'] = '';
         $server['WELINE_WEBSITE_URL'] = '';
         $server['WELINE_URL_PARSED'] = false;
+        $this->applyCookieRouteVariant($server);
 
         foreach ($request->getHeaders() as $name => $value) {
             $serverKey = 'HTTP_' . \strtoupper(\str_replace('-', '_', (string)$name));
@@ -133,6 +134,19 @@ class GlobalsEmulator
         );
 
         return $server;
+    }
+
+    private function applyCookieRouteVariant(array &$server): void
+    {
+        $lang = (string)($_COOKIE['WELINE_USER_LANG'] ?? $_COOKIE['WELINE-WEBSITE-LANG'] ?? '');
+        if ($lang !== '') {
+            $server['WELINE_USER_LANG'] = \str_replace('-', '_', \trim($lang));
+        }
+
+        $currency = \strtoupper(\trim((string)($_COOKIE['WELINE_USER_CURRENCY'] ?? $_COOKIE['WELINE_WEBSITE_CURRENCY'] ?? '')));
+        if ($currency !== '' && \preg_match('/^[A-Z]{3}$/', $currency)) {
+            $server['WELINE_USER_CURRENCY'] = $currency;
+        }
     }
 
     public function reset(): void

@@ -15,6 +15,8 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Router\FullPageCacheCoordinator;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Server\Service\MemoryStateFacade;
@@ -23,6 +25,10 @@ class View extends BaseController
 {
     protected ?string $layoutType = 'category';
     private const VIEW_PAYLOAD_CACHE_TTL = 300;
+    private const VIEW_PAYLOAD_CACHE_MAX_ITEMS = 96;
+    private const VIEW_PAYLOAD_CACHE_RETAIN_ITEMS = 48;
+    private const VIEW_PAYLOAD_FULL_HTML_MAX_ITEMS = 24;
+    private const VIEW_PAYLOAD_FULL_HTML_RETAIN_ITEMS = 12;
     private const CONTENT_TEMPLATE = 'WeShop_Catalog::templates/Frontend/Category/content.phtml';
     private const CONTENT_HTML_OVERRIDE_KEY = 'weshop_category_content_html_override';
 
@@ -31,9 +37,13 @@ class View extends BaseController
     private static ?MemoryStateFacade $runtimeCache = null;
     private static bool $runtimeCacheResolved = false;
     private static string $lastRuntimeCacheGetStatus = 'none';
+    /** @var list<array{name:string, duration_ms:float, meta:array<string, mixed>}> */
+    private array $categoryProfileSteps = [];
 
     public function index(): string
     {
+        $this->categoryProfileSteps = [];
+        RequestContext::set('category.view.profile', []);
         $this->request->addModule('WeShop_Catalog');
         $this->request->addModule('WeShop_Filters');
 
@@ -46,7 +56,18 @@ class View extends BaseController
         $cachedView = $this->getViewPayloadCache($viewCacheKey);
         if (is_array($cachedView) && isset($cachedView['html'])) {
             $this->applyCachedViewPayload($cachedView);
-            return $this->renderCategoryLayoutWithContent((string)$cachedView['html']);
+            if ($this->canUseFullHtmlViewCache() && isset($cachedView['full_html']) && is_string($cachedView['full_html']) && $cachedView['full_html'] !== '') {
+                $this->setPerfHeader('X-WLS-Category-View-Cache-Full-Html', 'hit');
+                return $cachedView['full_html'];
+            }
+
+            $fullHtml = $this->renderCategoryLayoutWithContent((string)$cachedView['html']);
+            if ($this->canUseFullHtmlViewCache()) {
+                $cachedView['full_html'] = $fullHtml;
+                $this->rememberViewPayloadCache($viewCacheKey, $cachedView);
+                $this->setPerfHeader('X-WLS-Category-View-Cache-Full-Html', 'stored-from-content-cache');
+            }
+            return $fullHtml;
         }
 
         $category = $this->traceControllerStep(
@@ -99,6 +120,7 @@ class View extends BaseController
             fn () => $this->buildBreadcrumbs($categoryService, $categoryData),
             ['category_id' => (int) $category->getId()]
         );
+        $categoryData = $categoryService->localizeCategoryRecordForStorefront($categoryData);
 
         if (!is_array($categoriesCtx) || empty($categoriesCtx['current']['category_id'])) {
             $this->traceControllerStep(
@@ -118,9 +140,7 @@ class View extends BaseController
             ['category_id' => (int) $category->getId()]
         );
 
-        $query = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
-            ? $this->request->getQuery()
-            : [];
+        $query = $this->getSemanticCategoryQuery();
         $filters = $this->traceControllerStep(
             'category::collect_filters',
             fn () => $this->collectBrowseFilters($query),
@@ -242,7 +262,7 @@ class View extends BaseController
                 'filter_count' => count($facetFilters),
             ]
         );
-        $this->rememberViewPayloadCache($viewCacheKey, [
+        $payload = [
             'html' => $html,
             'assigns' => [
                 'title' => $categoryData['name'],
@@ -262,9 +282,16 @@ class View extends BaseController
                 'pagination' => (string) ($browse['pagination_html'] ?? ''),
                 'pagination_data' => $paginationData,
             ],
-        ]);
+        ];
 
-        return $this->renderCategoryLayoutWithContent($html);
+        $fullHtml = $this->renderCategoryLayoutWithContent($html);
+        if ($this->canUseFullHtmlViewCache()) {
+            $payload['full_html'] = $fullHtml;
+            $this->setPerfHeader('X-WLS-Category-View-Cache-Full-Html', 'stored');
+        }
+        $this->rememberViewPayloadCache($viewCacheKey, $payload);
+
+        return $fullHtml;
     }
 
     private function renderCategoryLayoutWithContent(string $contentHtml): string
@@ -296,6 +323,7 @@ class View extends BaseController
     {
         $start = microtime(true);
         $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $this->cooperativeControllerYield();
         if ($traceEnabled) {
             RequestLifecycleTrace::pushCurrentParent($name);
         }
@@ -304,6 +332,7 @@ class View extends BaseController
             return $callback();
         } finally {
             $durationMs = (microtime(true) - $start) * 1000;
+            $this->recordCategoryProfileStep($name, $durationMs, $meta);
             $this->setPerfHeader('X-WLS-Category-Step-' . $this->normalizePerfHeaderName($name), sprintf('%.2f', $durationMs));
             if ($traceEnabled) {
                 RequestLifecycleTrace::popCurrentParent();
@@ -315,7 +344,57 @@ class View extends BaseController
                     $meta
                 );
             }
+            $this->cooperativeControllerYield();
         }
+    }
+
+    private function cooperativeControllerYield(): void
+    {
+        if (!Runtime::isPersistent()
+            || !\Weline\Framework\Runtime\SchedulerSystem::isSchedulerActive()
+            || !\Fiber::getCurrent()) {
+            return;
+        }
+
+        static $fiberYieldAt = null;
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber) {
+            return;
+        }
+        if (!$fiberYieldAt instanceof \WeakMap) {
+            $fiberYieldAt = new \WeakMap();
+        }
+
+        $now = microtime(true);
+        $lastYieldAt = (float)($fiberYieldAt[$fiber] ?? 0.0);
+        if ($lastYieldAt <= 0.0) {
+            $fiberYieldAt[$fiber] = $now;
+            return;
+        }
+        if (($now - $lastYieldAt) < 0.01) {
+            return;
+        }
+
+        $fiberYieldAt[$fiber] = $now;
+        \Weline\Framework\Runtime\SchedulerSystem::yield();
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function recordCategoryProfileStep(string $name, float $durationMs, array $meta = []): void
+    {
+        $this->categoryProfileSteps[] = [
+            'name' => $name,
+            'duration_ms' => round($durationMs, 2),
+            'meta' => $meta,
+        ];
+
+        if (count($this->categoryProfileSteps) > 40) {
+            $this->categoryProfileSteps = array_slice($this->categoryProfileSteps, -40);
+        }
+
+        RequestContext::set('category.view.profile', $this->categoryProfileSteps);
     }
 
     /**
@@ -346,12 +425,15 @@ class View extends BaseController
 
         $runtimeStart = microtime(true);
         $runtimeCached = $this->runtimeCacheGet('category.view.' . $key);
-        $this->setPerfHeader('X-WLS-Category-View-Cache-Get-Ms', sprintf('%.2f', (microtime(true) - $runtimeStart) * 1000));
+        $runtimeDurationMs = (microtime(true) - $runtimeStart) * 1000;
+        $this->setPerfHeader('X-WLS-Category-View-Cache-Get-Ms', sprintf('%.2f', $runtimeDurationMs));
+        $this->recordCategoryProfileStep('category::runtime_cache_get', $runtimeDurationMs, [
+            'status' => self::$lastRuntimeCacheGetStatus,
+            'full_html_scope' => $this->fullHtmlViewCacheScope(),
+        ]);
         if (is_array($runtimeCached)) {
             $this->setPerfHeader('X-WLS-Category-View-Cache', 'shared');
-            if (count(self::$viewPayloadCache) > 96) {
-                self::$viewPayloadCache = array_slice(self::$viewPayloadCache, -48, null, true);
-            }
+            $this->trimViewPayloadLocalCache($runtimeCached);
             $ttl = $this->viewPayloadCacheTtl();
             self::$viewPayloadCache[$key] = [
                 'expires_at' => $now + $ttl,
@@ -369,9 +451,7 @@ class View extends BaseController
      */
     private function rememberViewPayloadCache(string $key, array $payload): void
     {
-        if (count(self::$viewPayloadCache) > 96) {
-            self::$viewPayloadCache = array_slice(self::$viewPayloadCache, -48, null, true);
-        }
+        $this->trimViewPayloadLocalCache($payload);
 
         $ttl = $this->viewPayloadCacheTtl();
         self::$viewPayloadCache[$key] = [
@@ -379,19 +459,21 @@ class View extends BaseController
             'data' => $payload,
         ];
         $this->runtimeCacheSet('category.view.' . $key, $payload, $ttl);
+        $this->recordCategoryProfileStep('category::runtime_cache_store', 0.0, [
+            'has_full_html' => isset($payload['full_html']),
+            'full_html_scope' => $this->fullHtmlViewCacheScope(),
+        ]);
     }
 
     private function buildViewPayloadCacheKey(mixed $handle, int $categoryId): string
     {
-        $query = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
-            ? $this->request->getQuery()
-            : [];
+        $query = $this->getSemanticCategoryQuery();
         ksort($query);
-        $uri = function_exists('w_env_request_uri') ? (string)w_env_request_uri() : '';
+        $uri = $this->getSemanticCategoryRequestUri($query);
         $host = function_exists('w_env_http_host') ? (string)w_env_http_host() : '';
 
         return sha1((string)json_encode([
-            'v' => 11,
+            'v' => 18,
             'handle' => (string)($handle ?? ''),
             'category_id' => $categoryId,
             'query' => $query,
@@ -400,6 +482,7 @@ class View extends BaseController
             'currency' => State::getCurrency(),
             'host' => $host,
             'uri' => $uri,
+            'html_scope' => $this->fullHtmlViewCacheScope(),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
     }
 
@@ -485,6 +568,102 @@ class View extends BaseController
     private static function cachePolicy(): RuntimeCachePolicy
     {
         return ObjectManager::getInstance(RuntimeCachePolicy::class);
+    }
+
+    private function canUseFullHtmlViewCache(): bool
+    {
+        return $this->fullHtmlViewCacheScope() !== null;
+    }
+
+    /**
+     * Full HTML includes header/account shell state. Public requests follow FPC
+     * rules; logged-in requests get a session-scoped private key instead.
+     */
+    private function fullHtmlViewCacheScope(): ?string
+    {
+        if (!$this->isSafeFullHtmlCacheRequest()) {
+            return null;
+        }
+
+        try {
+            $coordinator = ObjectManager::getInstance(FullPageCacheCoordinator::class);
+            if (!$coordinator instanceof FullPageCacheCoordinator) {
+                return 'public';
+            }
+
+            if (!$coordinator->hasLoggedInFrontendSessionForCache()) {
+                return 'public';
+            }
+
+            if (!$coordinator->canUsePrivateSessionCachedResponse()) {
+                return null;
+            }
+
+            $sessionId = $this->frontendSessionIdFromRequest();
+            return $sessionId === '' ? null : 'private-session:' . sha1($sessionId);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function isSafeFullHtmlCacheRequest(): bool
+    {
+        $method = strtoupper((string)($this->request->getMethod() ?: ($_SERVER['REQUEST_METHOD'] ?? 'GET')));
+        if ($method !== 'GET') {
+            return false;
+        }
+
+        foreach (['preview', 'visual_editor', 'editor_mode', 'workspace_preview', 'debug_hooks', 'no_cache', 'nocache'] as $key) {
+            $value = (string)$this->request->getGet($key, '');
+            if ($value !== '' && $value !== '0') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function frontendSessionIdFromRequest(): string
+    {
+        $sessionId = (string)($_COOKIE['WELINE_SESSID'] ?? '');
+        if ($sessionId !== '') {
+            return $sessionId;
+        }
+
+        $cookieHeader = (string)($_SERVER['HTTP_COOKIE'] ?? '');
+        if ($cookieHeader === '' && function_exists('w_env')) {
+            $cookieHeader = (string)w_env('server.http_cookie', '');
+        }
+        if ($cookieHeader === '') {
+            return '';
+        }
+
+        foreach (explode(';', $cookieHeader) as $cookiePair) {
+            $parts = explode('=', trim($cookiePair), 2);
+            if (count($parts) === 2 && trim($parts[0]) === 'WELINE_SESSID') {
+                return trim(urldecode($parts[1]));
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function trimViewPayloadLocalCache(array $payload): void
+    {
+        $maxItems = isset($payload['full_html'])
+            ? self::VIEW_PAYLOAD_FULL_HTML_MAX_ITEMS
+            : self::VIEW_PAYLOAD_CACHE_MAX_ITEMS;
+        if (count(self::$viewPayloadCache) <= $maxItems) {
+            return;
+        }
+
+        $retainItems = isset($payload['full_html'])
+            ? self::VIEW_PAYLOAD_FULL_HTML_RETAIN_ITEMS
+            : self::VIEW_PAYLOAD_CACHE_RETAIN_ITEMS;
+        self::$viewPayloadCache = array_slice(self::$viewPayloadCache, -$retainItems, null, true);
     }
 
     private function buildBreadcrumbs(CategoryService $categoryService, array $categoryData): array
@@ -650,13 +829,90 @@ class View extends BaseController
             return false;
         }
 
-        if (in_array($key, ['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'], true)) {
+        if (in_array($key, ['_', 'ai_perf', 'browser_perf', 'codex_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'], true)) {
             return true;
         }
 
         return str_starts_with($key, 'utm_')
             || str_starts_with($key, 'mtm_')
-            || str_starts_with($key, 'pk_');
+            || str_starts_with($key, 'pk_')
+            || str_starts_with($key, 'codex_');
+    }
+
+    /**
+     * Keep non-business tracking/debug parameters out of category data queries
+     * and view-cache keys. FPC may still vary by full URL, but category render
+     * should not rebuild products/layout just because a campaign/debug param is
+     * present.
+     *
+     * @return array<string, mixed>
+     */
+    private function getSemanticCategoryQuery(): array
+    {
+        $query = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
+            ? $this->request->getQuery()
+            : [];
+
+        $semantic = [];
+        foreach ($query as $key => $value) {
+            if (!is_string($key) || $this->isIgnorablePaginationQueryParam($key)) {
+                continue;
+            }
+            $semantic[$key] = $value;
+        }
+
+        return $semantic;
+    }
+
+    /**
+     * @param array<string, mixed> $semanticQuery
+     */
+    private function getSemanticCategoryRequestUri(array $semanticQuery): string
+    {
+        $uri = function_exists('w_env_request_uri') ? (string)w_env_request_uri() : '';
+        if ($uri === '') {
+            return '';
+        }
+
+        $path = (string)(parse_url($uri, PHP_URL_PATH) ?: $uri);
+        $query = $this->buildScalarQueryForCache($semanticQuery);
+        if ($query === '') {
+            return $path;
+        }
+
+        return $path . '?' . $query;
+    }
+
+    /**
+     * @param array<string, mixed> $query
+     */
+    private function buildScalarQueryForCache(array $query): string
+    {
+        $normalized = [];
+        foreach ($query as $key => $value) {
+            if (!is_string($key) || $value === null || $value === '') {
+                continue;
+            }
+
+            if (is_array($value)) {
+                $items = array_values(array_filter(
+                    array_map(static fn (mixed $item): string => trim((string)$item), $value),
+                    static fn (string $item): bool => $item !== ''
+                ));
+                if ($items === []) {
+                    continue;
+                }
+                $normalized[$key] = implode(',', $items);
+                continue;
+            }
+
+            if (is_scalar($value)) {
+                $normalized[$key] = (string)$value;
+            }
+        }
+
+        ksort($normalized);
+        return http_build_query($normalized, '', '&', PHP_QUERY_RFC3986);
     }
 
     /**
@@ -667,7 +923,9 @@ class View extends BaseController
     {
         $filters = [];
         foreach ($query as $key => $value) {
-            if (in_array($key, ['id', 'handle', 'page', 'page_size', 'limit', 'sort', 'order', 'q'], true)) {
+            if (in_array($key, ['id', 'handle', 'page', 'page_size', 'limit', 'sort', 'order', 'q'], true)
+                || $this->isIgnorablePaginationQueryParam((string)$key)
+            ) {
                 continue;
             }
 

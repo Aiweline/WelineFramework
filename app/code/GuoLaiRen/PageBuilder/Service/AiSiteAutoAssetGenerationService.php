@@ -85,6 +85,21 @@ class AiSiteAutoAssetGenerationService
                 }
 
                 $manifest = $this->manifestService->markGenerating($manifest, $slotId);
+                $profileIdentityAsset = $this->materializeProfileIdentityAsset(
+                    $scope,
+                    $session,
+                    $manifest,
+                    $slotId,
+                    $slot,
+                    'auto_build'
+                );
+                if ($profileIdentityAsset !== []) {
+                    $scope = $profileIdentityAsset['scope'];
+                    $manifest = $profileIdentityAsset['manifest'];
+                    $scope = $this->clearAssetImageGenerationFailureForSlot($scope, $slotId);
+                    $generatedSlots[] = $slotId;
+                    continue;
+                }
 
                 $result = $this->generateImage($prompt, $adminId, $slot);
 
@@ -262,6 +277,27 @@ class AiSiteAutoAssetGenerationService
             }
 
             $manifest = $this->manifestService->markGenerating($manifest, $slotId);
+            $profileIdentityAsset = $this->materializeProfileIdentityAsset(
+                $scope,
+                $session,
+                $manifest,
+                $slotId,
+                $slot,
+                'inline_block'
+            );
+            if ($profileIdentityAsset !== []) {
+                $scope = $profileIdentityAsset['scope'];
+                $manifest = $profileIdentityAsset['manifest'];
+                $scope = $this->clearAssetImageGenerationFailureForSlot($scope, $slotId);
+
+                return [
+                    'scope' => $scope,
+                    'slot_id' => $slotId,
+                    'final_url' => (string)$profileIdentityAsset['final_url'],
+                    'generated' => true,
+                ];
+            }
+
             $lastImageThrowable = null;
             $result = [];
             $image = [];
@@ -516,7 +552,7 @@ class AiSiteAutoAssetGenerationService
             }
             $result = ($this->imageGenerator)($prompt, $adminId, $slotId);
         } else {
-            $identityParams = $this->buildIdentityImageGenerationParams($slotId);
+            $identityParams = $this->buildIdentityImageGenerationParams($slotId, $slot);
             $result = \w_query('ai', 'generateImage', [
                 'prompt' => $prompt,
                 'scenario_code' => 'pagebuilder_ai_site_assets',
@@ -1283,6 +1319,7 @@ class AiSiteAutoAssetGenerationService
         return match ($mimeType) {
             'image/jpeg', 'image/jpg' => 'jpg',
             'image/webp' => 'webp',
+            'image/svg+xml', 'image/svg' => 'svg',
             default => 'png',
         };
     }
@@ -1290,9 +1327,9 @@ class AiSiteAutoAssetGenerationService
     /**
      * @return array<string,string>
      */
-    private function buildIdentityImageGenerationParams(string $slotId): array
+    private function buildIdentityImageGenerationParams(string $slotId, array $slot = []): array
     {
-        if (!$this->isTransparentIdentityAssetSlot($slotId, [])) {
+        if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
             return [];
         }
 
@@ -1305,6 +1342,150 @@ class AiSiteAutoAssetGenerationService
     }
 
     /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $manifest
+     * @param array<string,mixed> $slot
+     * @return array{scope:array<string,mixed>,manifest:array<string,mixed>,final_url:string}|array{}
+     */
+    private function materializeProfileIdentityAsset(
+        array $scope,
+        AiSiteAgentSession $session,
+        array $manifest,
+        string $slotId,
+        array $slot,
+        string $mode
+    ): array {
+        $profileAsset = $this->resolveProfileIdentityAssetBytes($scope, $slotId, $slot);
+        if ($profileAsset === []) {
+            return [];
+        }
+
+        $bytes = (string)$profileAsset['bytes'];
+        $mimeType = (string)$profileAsset['mime_type'];
+        $relativePath = $this->buildTargetPath($scope, $session, $slotId, $bytes, $mimeType);
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath);
+        $directory = \dirname($absolutePath);
+        if (!\is_dir($directory) && !\mkdir($directory, 0755, true) && !\is_dir($directory)) {
+            throw new \RuntimeException('Failed to create image asset directory: ' . $directory);
+        }
+        if (\file_put_contents($absolutePath, $bytes) === false) {
+            throw new \RuntimeException('Failed to write image asset file: ' . $absolutePath);
+        }
+
+        $finalUrl = '/' . \str_replace('\\', '/', $relativePath);
+        $variant = [
+            'url' => $finalUrl,
+            'mime_type' => $mimeType,
+            'path' => $relativePath,
+            'mode' => $mode,
+            'model' => 'website_profile_identity_svg',
+            'revised_prompt' => '',
+        ];
+        $manifest = $this->manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
+        $scope = $this->manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
+        $scope['asset_manifest'] = $manifest;
+        $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+        $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
+
+        return [
+            'scope' => $scope,
+            'manifest' => $manifest,
+            'final_url' => $finalUrl,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $slot
+     * @return array{bytes:string,mime_type:string}|array{}
+     */
+    private function resolveProfileIdentityAssetBytes(array $scope, string $slotId, array $slot): array
+    {
+        if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
+            return [];
+        }
+
+        $isIcon = \str_contains(\strtolower($slotId), 'site-title-icon')
+            || \in_array(\strtolower(\trim((string)($slot['field'] ?? ''))), ['icon', 'favicon', 'site.icon'], true);
+        $role = $isIcon ? 'icon' : 'logo';
+        $candidates = $isIcon
+            ? [
+                $scope['website_profile']['icon'] ?? null,
+                $scope['website_profile']['favicon'] ?? null,
+                $scope['icon'] ?? null,
+                $scope['favicon'] ?? null,
+            ]
+            : [
+                $scope['website_profile']['logo'] ?? null,
+                $scope['logo'] ?? null,
+            ];
+
+        foreach ($candidates as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $value = \trim((string)$candidate);
+            if ($value === '') {
+                continue;
+            }
+            $resolved = $this->decodeProfileIdentityAssetValue($value, $role);
+            if ($resolved !== []) {
+                return $resolved;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @return array{bytes:string,mime_type:string}|array{}
+     */
+    private function decodeProfileIdentityAssetValue(string $value, string $role): array
+    {
+        if (\preg_match('#^data:([^;]+);base64,(.+)$#s', $value, $matches) === 1) {
+            $mimeType = \strtolower(\trim((string)$matches[1]));
+            $bytes = \base64_decode((string)$matches[2], true);
+            if (
+                \is_string($bytes)
+                && AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, $mimeType, $role)
+            ) {
+                return ['bytes' => $bytes, 'mime_type' => $mimeType];
+            }
+
+            return [];
+        }
+
+        if (AiSiteIdentityAssetTransparencyValidator::looksLikeSvg($value)) {
+            if (AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($value, 'image/svg+xml', $role)) {
+                return ['bytes' => $value, 'mime_type' => 'image/svg+xml'];
+            }
+
+            return [];
+        }
+
+        $path = \parse_url($value, \PHP_URL_PATH);
+        $path = \is_string($path) && $path !== '' ? $path : $value;
+        $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
+        if (!\str_starts_with($path, '/pub/media/')) {
+            return [];
+        }
+        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
+        if (!\is_file($absolutePath)) {
+            return [];
+        }
+        $bytes = @\file_get_contents($absolutePath);
+        if (!\is_string($bytes) || $bytes === '') {
+            return [];
+        }
+        $mimeType = $this->mimeTypeForIdentityAssetPath($path);
+        if (AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, $mimeType, $role)) {
+            return ['bytes' => $bytes, 'mime_type' => $mimeType];
+        }
+
+        return [];
+    }
+
+    /**
      * @param array<string,mixed> $slot
      */
     private function assertIdentityAssetTransparentPng(string $slotId, array $slot, string $bytes, string $mimeType): void
@@ -1312,11 +1493,9 @@ class AiSiteAutoAssetGenerationService
         if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
             return;
         }
-        if (!$this->isPngImageBytes($bytes) || !\str_contains(\strtolower($mimeType), 'png')) {
-            throw new \RuntimeException('Identity logo/icon generation must return a PNG file with transparent alpha background.');
-        }
-        if (!$this->pngAppearsToHaveTransparentBackground($bytes)) {
-            throw new \RuntimeException('Identity logo/icon generation must use a transparent alpha background; solid, white, card, or screenshot backgrounds are invalid.');
+        $role = \str_contains(\strtolower($slotId), 'site-title-icon') ? 'icon' : 'logo';
+        if (!AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, $mimeType, $role)) {
+            throw new \RuntimeException('Identity logo/icon generation must return a transparent PNG or safe transparent SVG asset.');
         }
     }
 
@@ -1343,7 +1522,21 @@ class AiSiteAutoAssetGenerationService
             return true;
         }
 
-        return !$this->isPngImageBytes($bytes) || !$this->pngAppearsToHaveTransparentBackground($bytes);
+        $role = \str_contains(\strtolower($slotId), 'site-title-icon') ? 'icon' : 'logo';
+        return !AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, $this->mimeTypeForIdentityAssetPath($path), $role);
+    }
+
+    private function mimeTypeForIdentityAssetPath(string $path): string
+    {
+        $lowerPath = \strtolower($path);
+        if (\str_ends_with($lowerPath, '.svg')) {
+            return 'image/svg+xml';
+        }
+        if (\str_ends_with($lowerPath, '.png')) {
+            return 'image/png';
+        }
+
+        return '';
     }
 
     /**

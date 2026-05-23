@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache;
 
+use Weline\Framework\App\State;
+
 class KeyBuilder
 {
     /**
@@ -62,6 +64,87 @@ class KeyBuilder
         }
         
         return self::build($identity, $key . $contextStr);
+    }
+
+    /**
+     * Build a key for environment-sensitive, non-global caches.
+     *
+     * Use this for rendered output and presentation data that changes with the
+     * current storefront environment. Do not use it for global structural caches
+     * such as routes, config, schema, or module metadata.
+     *
+     * @param array<string, mixed> $context
+     * @param array<string, bool> $dimensions
+     */
+    public static function buildEnvironmentScoped(
+        string $identity,
+        string $key,
+        array $context = [],
+        array $dimensions = []
+    ): string {
+        return self::buildWithContext($identity, $key, self::environmentContext($context, $dimensions));
+    }
+
+    /**
+     * Return a short stable hash for environment-sensitive caches.
+     *
+     * This is useful when callers already have an internal cache-key scheme and
+     * only need to append the active language/currency/site context.
+     *
+     * @param array<string, mixed> $context
+     * @param array<string, bool> $dimensions
+     */
+    public static function environmentHash(array $context = [], array $dimensions = []): string
+    {
+        return \sha1(self::stableEncode(self::environmentContext($context, $dimensions)));
+    }
+
+    /**
+     * Build the default environment context for rendered output.
+     *
+     * Dimensions are opt-out to keep the common output-cache path safe while
+     * allowing narrower scopes, for example language-only caches.
+     *
+     * @param array<string, mixed> $context
+     * @param array<string, bool> $dimensions
+     * @return array<string, mixed>
+     */
+    public static function environmentContext(array $context = [], array $dimensions = []): array
+    {
+        $dimensions = \array_merge([
+            'area' => true,
+            'website' => true,
+            'host' => true,
+            'base_url' => true,
+            'lang' => true,
+            'lang_local' => true,
+            'currency' => true,
+        ], $dimensions);
+
+        $environment = ['schema' => 'env-cache-v1'];
+        if (!empty($dimensions['area'])) {
+            $environment['area'] = self::getAreaKey();
+        }
+        if (!empty($dimensions['website'])) {
+            $environment['website'] = (string)(\w_env('website_code', '') ?: \w_env('website.id', '') ?: '');
+        }
+        if (!empty($dimensions['host'])) {
+            $environment['host'] = (string)\w_env('server.http_host', '');
+        }
+        if (!empty($dimensions['base_url'])) {
+            $environment['base_url'] = self::resolveBaseUrlForEnvironmentContext();
+        }
+        if (!empty($dimensions['lang'])) {
+            $environment['lang'] = (string)State::getLang();
+        }
+        if (!empty($dimensions['lang_local'])) {
+            $environment['lang_local'] = (string)State::getLangLocal();
+        }
+        if (!empty($dimensions['currency'])) {
+            $environment['currency'] = (string)State::getCurrency();
+        }
+
+        return self::normalizeContextValue(\array_replace($environment, $context));
     }
 
     /**
@@ -142,6 +225,62 @@ class KeyBuilder
     public static function getAreaKey(): string
     {
         return \w_env('area', 'frontend');
+    }
+
+    private static function resolveBaseUrlForEnvironmentContext(): string
+    {
+        $baseUrl = (string)\w_env('base_url', '');
+        if ($baseUrl !== '') {
+            return $baseUrl;
+        }
+
+        $scheme = (string)\w_env('request.scheme', '');
+        $host = (string)\w_env('server.http_host', '');
+        if ($scheme !== '' && $host !== '') {
+            return $scheme . '://' . $host;
+        }
+
+        return $host;
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private static function normalizeContextValue(mixed $value): mixed
+    {
+        if ($value === null || \is_scalar($value)) {
+            return $value;
+        }
+
+        if (\is_array($value)) {
+            $normalized = [];
+            foreach ($value as $key => $item) {
+                $normalized[(string)$key] = self::normalizeContextValue($item);
+            }
+            \ksort($normalized);
+            return $normalized;
+        }
+
+        if (\is_object($value)) {
+            if (\method_exists($value, 'getId')) {
+                return ['class' => $value::class, 'id' => (string)$value->getId()];
+            }
+            return ['class' => $value::class];
+        }
+
+        return (string)\gettype($value);
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private static function stableEncode(mixed $value): string
+    {
+        return \json_encode(
+            self::normalizeContextValue($value),
+            \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+        ) ?: '';
     }
 
     /**

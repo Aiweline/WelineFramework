@@ -393,7 +393,7 @@
         apiBatch: '<?= $this->getBackendUrl("*/backend/queue/api-batch") ?>',
         snapshotUrl: '<?= $this->getBackendUrl("*/backend/queue/snapshot") ?>',
         baseUrl: '<?= $this->getBackendUrl("*/backend/queue") ?>',
-        pollIntervalMs: 3000,
+        pollIntervalMs: 10000,
         actionRefreshDelayMs: 600,
         text: {
             deleteConfirm: '<?= addslashes(__("确定要删除队列「%{1}」吗？此操作不可恢复。")) ?>',

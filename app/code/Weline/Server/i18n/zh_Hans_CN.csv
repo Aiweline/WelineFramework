@@ -811,11 +811,6 @@ unknown,unknown
 "● on (env.php)","● on (env.php)"
 "○ off (env.php)","○ off (env.php)"
 端口：,端口：
-全局共享依赖：,全局共享依赖：
-"Session Server","Session Server"
-"Memory Service","Memory Service"
-disabled,disabled
-不可用,不可用
 "查看 Weline Server 运行状态","查看 Weline Server 运行状态"
 "查看服务器实例状态，树形展示所有 Worker 进程","查看服务器实例状态，树形展示所有 Worker 进程"
 实例名称（默认显示所有实例）,实例名称（默认显示所有实例）
@@ -837,11 +832,12 @@ disabled,disabled
 "控制端口已接受 STOP，继续复核残留进程 ✓","控制端口已接受 STOP，继续复核残留进程 ✓"
 "Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.","Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup."
 "实例元数据已标记停止并保留 ✓","实例元数据已标记停止并保留 ✓"
+"实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。"
 "实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。","实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。"
 "快速清场模式：跳过 IPC 排水，并发终止旧实例子进程...","快速清场模式：跳过 IPC 排水，并发终止旧实例子进程..."
+"实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。"
 "实例 [%{1}] 已停止（-f 强制模式） ✓","实例 [%{1}] 已停止（-f 强制模式） ✓"
 "实例 [%{1}] 已停止（快速清场） ✓","实例 [%{1}] 已停止（快速清场） ✓"
-"实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。"
 "-f --ipc：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程...","-f --ipc：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程..."
 "发送 STOP 命令给 Master (通过 IPC)...","发送 STOP 命令给 Master (通过 IPC)..."
 "所有子进程已完整退出 ✓","所有子进程已完整退出 ✓"
@@ -864,6 +860,11 @@ disabled,disabled
 "残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}","残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}"
 "已清理 %{1} 个残留进程（复核结束）","已清理 %{1} 个残留进程（复核结束）"
 "已处理 %{1} 个进程","已处理 %{1} 个进程"
+"Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）...","Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）..."
+"已发送终止信号 %{1} 个已知子进程","已发送终止信号 %{1} 个已知子进程"
+"Fast-local cleanup still has residual process ids: %{1}","Fast-local cleanup still has residual process ids: %{1}"
+"Fast-local cleanup terminated %{1} residual processes.","Fast-local cleanup terminated %{1} residual processes."
+"Fast-local cleanup found no residual processes.","Fast-local cleanup found no residual processes."
 "STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。","STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。"
 "启动锁已释放 ✓","启动锁已释放 ✓"
 "Master STOP 追踪文件末条事件：%{1}","Master STOP 追踪文件末条事件：%{1}"
@@ -1026,10 +1027,6 @@ HTTPS,HTTPS
 内存服务持久化失败,内存服务持久化失败
 内存服务垃圾回收已执行,内存服务垃圾回收已执行
 "内存服务垃圾回收执行失败，请检查 Memory Service 连接状态","内存服务垃圾回收执行失败，请检查 Memory Service 连接状态"
-请先登录后台,请先登录后台
-仅开发模式可用，当前部署模式：%{1},仅开发模式可用，当前部署模式：%{1}
-"请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）","请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）"
-"已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效","已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效"
 服务器监控,服务器监控
 "请先输入压测目标 URL，例如 http://127.0.0.1:9981/_wls/health。","请先输入压测目标 URL，例如 http://127.0.0.1:9981/_wls/health。"
 压测完成,压测完成
@@ -1212,6 +1209,9 @@ WLS错误扫描,WLS错误扫描
 "最大挂起 Fiber 数，0=不限制","最大挂起 Fiber 数，0=不限制"
 "通知各 Worker 立即释放闲置 Fiber","通知各 Worker 立即释放闲置 Fiber"
 "广播 PageBuilder 单页失效到各 Worker（handle 静态缓存 + ObjectManager）","广播 PageBuilder 单页失效到各 Worker（handle 静态缓存 + ObjectManager）"
+"读取 WLS 攻击统计","读取 WLS 攻击统计"
+统计天数,统计天数
+"为当前后台浏览器设置 WLS 健康检查放行 Cookie","为当前后台浏览器设置 WLS 健康检查放行 Cookie"
 域名不能为空,域名不能为空
 "PFX 文件内容无效（Base64 解码失败）","PFX 文件内容无效（Base64 解码失败）"
 "PFX/P12 解析失败，请确认文件与密码正确","PFX/P12 解析失败，请确认文件与密码正确"
@@ -1228,6 +1228,7 @@ WLS错误扫描,WLS错误扫描
 "The requested domain is not a valid local hostname","The requested domain is not a valid local hostname"
 "Only managed local wildcard domains are allowed for local wildcard certificate issuance","Only managed local wildcard domains are allowed for local wildcard certificate issuance"
 "Failed to ensure the managed local wildcard certificate","Failed to ensure the managed local wildcard certificate"
+请先登录后台,请先登录后台
 本地域名证书不允许删除,本地域名证书不允许删除
 "Session 销毁失败，请稍后重试","Session 销毁失败，请稍后重试"
 "Session 持久化失败","Session 持久化失败"
@@ -1296,6 +1297,9 @@ DDoS攻击,DDoS攻击
 等待控制命令响应超时（%{1}s）。,等待控制命令响应超时（%{1}s）。
 "启动命令已提交，但未返回有效 PID，请稍后刷新状态确认。","启动命令已提交，但未返回有效 PID，请稍后刷新状态确认。"
 "启动命令已提交，Master PID: %{1}","启动命令已提交，Master PID: %{1}"
+仅开发模式可用，当前部署模式：%{1},仅开发模式可用，当前部署模式：%{1}
+"请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）","请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）"
+"已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效","已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效"
 请求处理错误：%{1},请求处理错误：%{1}
 "Master 初始化开始 (Orchestrator 模式)","Master 初始化开始 (Orchestrator 模式)"
 "实例名称: %{1}","实例名称: %{1}"
@@ -1454,6 +1458,12 @@ DDoS攻击,DDoS攻击
 已可用,已可用
 "proc_open 函数已启用","proc_open 函数已启用"
 "找到 disable_functions 行，删除 proc_open","找到 disable_functions 行，删除 proc_open"
+"重载未正常结束：未收到完整回执（可能因 IPC 抢占中止、内部提前返回或控制连接异常）","重载未正常结束：未收到完整回执（可能因 IPC 抢占中止、内部提前返回或控制连接异常）"
+"已聚合 %{1} 个 Worker 的 Fiber 池统计","已聚合 %{1} 个 Worker 的 Fiber 池统计"
+"Fiber 统计已超时，返回已收到的 %{1} 个 Worker 数据","Fiber 统计已超时，返回已收到的 %{1} 个 Worker 数据"
+"维护 Worker #%{1} 启动失败","维护 Worker #%{1} 启动失败"
+"维护 Worker 未在 %{1}s 内全部 READY（IPC）","维护 Worker 未在 %{1}s 内全部 READY（IPC）"
+"维护模式已启用: Dispatcher 已切至维护池, 维护进程 %{1} 个","维护模式已启用: Dispatcher 已切至维护池, 维护进程 %{1} 个"
 "当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}","当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}"
 "[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书","[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书"
 "[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请","[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请"
@@ -1727,6 +1737,7 @@ DDoS攻击,DDoS攻击
 已最优,已最优
 查看安装指南,查看安装指南
 已连接,已连接
+不可用,不可用
 共享状态管理,共享状态管理
 "覆盖 Session 与 Memory Service 的状态、检索、清理能力","覆盖 Session 与 Memory Service 的状态、检索、清理能力"
 "Session 数","Session 数"

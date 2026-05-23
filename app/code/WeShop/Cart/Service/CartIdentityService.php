@@ -25,11 +25,16 @@ class CartIdentityService
             return $authenticatedId;
         }
 
+        $existingGuestId = $this->readGuestCartCustomerIdFromSession();
+        if ($existingGuestId > 0) {
+            return $existingGuestId;
+        }
+
         if (!$createGuest) {
             return 0;
         }
 
-        return $this->getGuestCartCustomerId();
+        return $this->createGuestCartCustomerId();
     }
 
     public function isGuest(): bool
@@ -71,11 +76,26 @@ class CartIdentityService
 
     public function getGuestCartCustomerId(): int
     {
+        $existingGuestId = $this->readGuestCartCustomerIdFromSession();
+        if ($existingGuestId > 0) {
+            return $existingGuestId;
+        }
+
+        return $this->createGuestCartCustomerId();
+    }
+
+    private function readGuestCartCustomerIdFromSession(): int
+    {
         $guestId = (int) ($this->customerSession->get(self::GUEST_CART_CUSTOMER_ID_KEY) ?? 0);
         if ($guestId >= self::GUEST_CART_MIN_ID && $guestId <= self::GUEST_CART_MAX_ID) {
             return $guestId;
         }
 
+        return 0;
+    }
+
+    private function createGuestCartCustomerId(): int
+    {
         $guestId = random_int(self::GUEST_CART_MIN_ID, self::GUEST_CART_MAX_ID);
         $this->customerSession->set(self::GUEST_CART_CUSTOMER_ID_KEY, $guestId);
         $this->customerSession->getSession()->save();

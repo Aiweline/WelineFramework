@@ -130,6 +130,12 @@
 "与 biz_key 二选一","Alternative to biz_key"
 定位键,"Locator Key"
 "字段补丁；也可顶层传 name/status/content 等","Field patch; can also pass name/status/content etc. at the top level"
+"Force takeover a queue without executing it in the current request.","Force takeover a queue without executing it in the current request."
+queue_id,queue_id
+biz_key,biz_key
+"Terminate old PID if needed","Terminate old PID if needed"
+"system_scheduler or manual_cli","system_scheduler or manual_cli"
+"Takeover reason","Takeover reason"
 "删除队列（queue_id 或 biz_key；运行中需 force）","Delete queue (queue_id or biz_key; force required if running)"
 主键,"primary key"
 "为 true 时允许删除运行中任务","When true, allow deletion of running tasks"

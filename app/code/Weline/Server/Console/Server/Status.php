@@ -99,7 +99,7 @@ class Status extends CommandAbstract
     {
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
-        return $manager->isInstanceRunning($name);
+        return $manager->hasInstance($name);
     }
     
     /**
@@ -109,7 +109,7 @@ class Status extends CommandAbstract
     {
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
-        $allInstances = $manager->getAllInstanceInfo(false);
+        $allInstances = $manager->getAllPersistedInstanceInfo();
         $processInfoMap = $this->buildProcessInfoMap($allInstances);
         $allInstances = $this->filterActiveInstances($allInstances, $processInfoMap);
 
@@ -216,7 +216,7 @@ class Status extends CommandAbstract
     protected function showInstanceStatus(string $name): void
     {
         $manager = $this->getInstanceManager();
-        $info = $manager->getInstanceInfo($name, false);
+        $info = $manager->getInstanceInfoWithIpcTimeout($name, false, 0.5);
 
         if ($info === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
@@ -415,7 +415,8 @@ class Status extends CommandAbstract
             return false;
         }
 
-        $status = (new IpcControlGateway())->getStatus($info->name, 1.5);
+        $gateway = new IpcControlGateway();
+        $status = $gateway->getStatusBrief($info->name, 0.5);
         return $status['success'] && (bool)($status['data']['running'] ?? false);
     }
 
@@ -452,14 +453,11 @@ class Status extends CommandAbstract
      * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
      * @return array{total: int, running: int, stopped: int}
      */
-    protected function getServiceStats(ServerInstanceInfo $info, array $processInfoMap, bool $includeSharedExternal = true): array
+    protected function getServiceStats(ServerInstanceInfo $info, array $processInfoMap): array
     {
         $total = 0;
         $running = 0;
         foreach ($info->services as $service) {
-            if (!$includeSharedExternal && $this->isSharedExternalService($service)) {
-                continue;
-            }
             if ($this->isSharedDependencyService($service)) {
                 continue;
             }
@@ -475,11 +473,6 @@ class Status extends CommandAbstract
             'running' => $running,
             'stopped' => $total - $running,
         ];
-    }
-
-    protected function isSharedExternalService(ServiceInfo $service): bool
-    {
-        return (bool) ($service->metadata['shared_external'] ?? false);
     }
 
     /**

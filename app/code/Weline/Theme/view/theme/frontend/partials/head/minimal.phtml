@@ -88,6 +88,7 @@ $themeConfigPayload = [
     'baseUrl' => $baseUrl,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
+    'assetVersion' => '20260522-dev-cache',
     'api' => [
         'workerUrl' => $isDev
             ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
@@ -123,5 +124,5 @@ $this->setData('envConfig', $themeConfigPayload['env']);
         }
     })();
 </script>
-<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260518-api-worker-5"></script>
+<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260522-dev-cache"></script>
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

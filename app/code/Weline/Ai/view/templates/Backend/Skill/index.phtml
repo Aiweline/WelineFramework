@@ -2,16 +2,66 @@
 /**
  * @var \Weline\Framework\View\Template $this
  * @var array<int,array<string,mixed>> $skills
+ * @var array<int,array<string,mixed>> $adapters
  */
 $skills = \is_array($skills ?? null) ? $skills : [];
+$adapters = \is_array($adapters ?? null) ? $adapters : [];
 $catalogUrl = $this->getBackendUrl('ai/backend/skill/post-catalog');
 $saveUrl = $this->getBackendUrl('ai/backend/skill/post-save');
 $importUrl = $this->getBackendUrl('ai/backend/skill/post-import-url');
-$disableUrl = $this->getBackendUrl('ai/backend/skill/post-disable');
+$bindUrl = $this->getBackendUrl('ai/backend/skill/post-bind-adapter-skill');
+$unbindUrl = $this->getBackendUrl('ai/backend/skill/post-unbind-adapter-skill');
+$exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
 ?>
 <?php if (empty($embed)): ?>
-    <?= $this->fetch('Weline_Ai::Backend/Manager/tabs.phtml', ['activeTab' => 'skill']) ?>
+    <?= $this->fetch('Weline_Ai::templates/Backend/Manager/tabs.phtml', ['activeTab' => 'skill']) ?>
 <?php endif; ?>
+
+<style>
+    .weline-ai-skill-page .skill-shell {
+        min-height: 720px;
+    }
+    .weline-ai-skill-page .skill-table-wrap {
+        max-height: 650px;
+        overflow: auto;
+    }
+    .weline-ai-skill-page .skill-row {
+        cursor: pointer;
+    }
+    .weline-ai-skill-page .skill-row.is-selected {
+        background: rgba(13, 110, 253, 0.08);
+    }
+    .weline-ai-skill-page .skill-body-editor {
+        min-height: 320px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .weline-ai-skill-page .skill-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border: 1px solid rgba(108, 117, 125, 0.25);
+        border-radius: 999px;
+        padding: 2px 8px;
+        margin: 2px 4px 2px 0;
+        font-size: 11px;
+        color: #495057;
+        background: #f8f9fa;
+    }
+    .weline-ai-skill-page .skill-empty {
+        border: 1px dashed rgba(108, 117, 125, 0.35);
+        border-radius: 12px;
+        padding: 32px;
+        text-align: center;
+        color: #6c757d;
+        background: #fbfcfd;
+    }
+    .weline-ai-skill-page .skill-detail-card {
+        position: sticky;
+        top: 12px;
+    }
+</style>
 
 <div class="container-fluid py-3 weline-ai-skill-page">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
@@ -19,43 +69,75 @@ $disableUrl = $this->getBackendUrl('ai/backend/skill/post-disable');
             <h4 class="mb-1"><i class="mdi mdi-shape-outline me-1"></i>AI Skills</h4>
             <div class="text-muted small">Govern module, custom, imported, and adapter-bound prompt skills.</div>
         </div>
-        <button class="btn btn-outline-primary btn-sm" type="button" id="ai-skill-refresh">Refresh catalog</button>
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-skill-new">
+                <i class="mdi mdi-plus me-1"></i>New custom skill
+            </button>
+            <button class="btn btn-outline-primary btn-sm" type="button" id="ai-skill-refresh">
+                <i class="mdi mdi-refresh me-1"></i>Refresh catalog
+            </button>
+        </div>
     </div>
 
-    <div class="row g-3">
-        <div class="col-lg-8">
+    <div class="row g-3 skill-shell">
+        <div class="col-xl-8">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-adapter">Adapter binding context</label>
+                            <select class="form-select form-select-sm" id="ai-skill-adapter"></select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-search">Search</label>
+                            <input class="form-control form-control-sm" id="ai-skill-search" type="search" placeholder="code / name / tag">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-status-filter">Status</label>
+                            <select class="form-select form-select-sm" id="ai-skill-status-filter">
+                                <option value="">All</option>
+                                <option value="active">Active</option>
+                                <option value="pending">Pending</option>
+                                <option value="disabled">Disabled</option>
+                                <option value="missing">Missing</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-source-filter">Source</label>
+                            <select class="form-select form-select-sm" id="ai-skill-source-filter">
+                                <option value="">All</option>
+                                <option value="module">Module/system</option>
+                                <option value="custom">Custom</option>
+                                <option value="import">Imported/platform</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2" id="ai-skill-adapter-summary"></div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header d-flex align-items-center justify-content-between">
                     <strong>Skill catalog</strong>
                     <span class="small text-muted" id="ai-skill-status"><?= count($skills) ?> skills</span>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <div class="skill-table-wrap">
                         <table class="table table-sm align-middle mb-0">
-                            <thead>
+                            <thead class="table-light position-sticky top-0">
                             <tr>
-                                <th>Code</th>
-                                <th>Name</th>
-                                <th>Source</th>
-                                <th>Status</th>
-                                <th>Binding</th>
-                                <th></th>
+                                <th style="width: 180px;">Code</th>
+                                <th>Skill</th>
+                                <th style="width: 130px;">Source</th>
+                                <th style="width: 100px;">Status</th>
+                                <th style="width: 130px;">Binding</th>
+                                <th style="width: 150px;">Actions</th>
                             </tr>
                             </thead>
                             <tbody id="ai-skill-table-body">
-                            <?php foreach ($skills as $skill): ?>
-                                <tr>
-                                    <td><code><?= htmlspecialchars((string)($skill['code'] ?? '')) ?></code></td>
-                                    <td>
-                                        <div class="fw-semibold"><?= htmlspecialchars((string)($skill['name'] ?? $skill['code'] ?? '')) ?></div>
-                                        <div class="small text-muted"><?= htmlspecialchars((string)($skill['description'] ?? '')) ?></div>
-                                    </td>
-                                    <td><?= htmlspecialchars((string)($skill['source'] ?? $skill['source_type'] ?? '')) ?></td>
-                                    <td><span class="badge text-bg-<?= (string)($skill['status'] ?? '') === 'active' ? 'success' : 'secondary' ?>"><?= htmlspecialchars((string)($skill['status'] ?? '')) ?></span></td>
-                                    <td class="small text-muted">-</td>
-                                    <td><a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars($this->getBackendUrl('ai/backend/skill/get-export') . '?code=' . rawurlencode((string)($skill['code'] ?? ''))) ?>">Export</a></td>
-                                </tr>
-                            <?php endforeach; ?>
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">Loading skill catalog...</td>
+                            </tr>
                             </tbody>
                         </table>
                     </div>
@@ -63,25 +145,80 @@ $disableUrl = $this->getBackendUrl('ai/backend/skill/post-disable');
             </div>
         </div>
 
-        <div class="col-lg-4">
-            <div class="card mb-3">
-                <div class="card-header"><strong>Import from URL</strong></div>
+        <div class="col-xl-4">
+            <div class="card skill-detail-card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <strong id="ai-skill-detail-title">Skill detail</strong>
+                    <span class="small text-muted" id="ai-skill-detail-mode">No selection</span>
+                </div>
                 <div class="card-body">
-                    <input type="url" class="form-control form-control-sm mb-2" id="ai-skill-import-url" placeholder="https://example.com/SKILL.md">
-                    <button class="btn btn-primary btn-sm" type="button" id="ai-skill-import-btn">Import as pending</button>
-                    <div class="small text-muted mt-2">Only public http/https URLs are allowed. Limit: 256KB, 8s timeout, Markdown/text/JSON.</div>
+                    <div id="ai-skill-empty" class="skill-empty">
+                        Select a skill from the catalog, or create a new custom skill.
+                    </div>
+
+                    <form id="ai-skill-form" class="d-none">
+                        <div class="d-flex flex-wrap gap-1 mb-2" id="ai-skill-badges"></div>
+
+                        <div class="mb-2">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-code">Code</label>
+                            <input type="text" class="form-control form-control-sm" id="ai-skill-code" placeholder="skill-code">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-name">Name</label>
+                            <input type="text" class="form-control form-control-sm" id="ai-skill-name" placeholder="Readable skill name">
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-1" for="ai-skill-edit-status">Status</label>
+                                <select class="form-select form-select-sm" id="ai-skill-edit-status">
+                                    <option value="active">active</option>
+                                    <option value="pending">pending</option>
+                                    <option value="disabled">disabled</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-1" for="ai-skill-version">Version</label>
+                                <input type="text" class="form-control form-control-sm" id="ai-skill-version" placeholder="1.0.0">
+                            </div>
+                        </div>
+                        <div class="mb-2 mt-2">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-description">Description</label>
+                            <textarea class="form-control form-control-sm" id="ai-skill-description" rows="2" placeholder="What this skill does"></textarea>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-body">Skill body</label>
+                            <textarea class="form-control form-control-sm skill-body-editor" id="ai-skill-body" placeholder="Markdown instructions"></textarea>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <button class="btn btn-success btn-sm" type="button" id="ai-skill-save-btn">Save</button>
+                            <button class="btn btn-outline-success btn-sm" type="button" data-skill-status-action="active">Enable</button>
+                            <button class="btn btn-outline-warning btn-sm" type="button" data-skill-status-action="pending">Set pending</button>
+                            <button class="btn btn-outline-danger btn-sm" type="button" data-skill-status-action="disabled">Disable</button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-skill-export-btn">Export</button>
+                        </div>
+
+                        <div class="border-top pt-2 mt-2">
+                            <div class="small text-muted mb-2">Adapter binding for selected context</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-primary btn-sm" type="button" id="ai-skill-bind-btn">Bind to adapter</button>
+                                <button class="btn btn-outline-danger btn-sm" type="button" id="ai-skill-unbind-btn">Unbind manual binding</button>
+                            </div>
+                            <div class="small text-muted mt-2" id="ai-skill-binding-help"></div>
+                        </div>
+
+                        <div class="small mt-2" id="ai-skill-form-status"></div>
+                    </form>
                 </div>
             </div>
 
             <div class="card">
-                <div class="card-header"><strong>Custom skill</strong></div>
+                <div class="card-header"><strong>Import skill from URL</strong></div>
                 <div class="card-body">
-                    <input type="text" class="form-control form-control-sm mb-2" id="ai-skill-code" placeholder="skill-code">
-                    <input type="text" class="form-control form-control-sm mb-2" id="ai-skill-name" placeholder="Name">
-                    <textarea class="form-control form-control-sm mb-2" id="ai-skill-description" rows="2" placeholder="Description"></textarea>
-                    <textarea class="form-control form-control-sm mb-2" id="ai-skill-body" rows="8" placeholder="Skill markdown body"></textarea>
-                    <button class="btn btn-success btn-sm" type="button" id="ai-skill-save-btn">Save active custom skill</button>
-                    <div class="small mt-2" id="ai-skill-form-status"></div>
+                    <input type="url" class="form-control form-control-sm mb-2" id="ai-skill-import-url" placeholder="https://example.com/SKILL.md">
+                    <button class="btn btn-primary btn-sm" type="button" id="ai-skill-import-btn">Import as pending</button>
+                    <div class="small text-muted mt-2">Only public http/https URLs are allowed. Limit: 256KB, 8s timeout, Markdown/text/JSON.</div>
+                    <div class="small mt-2" id="ai-skill-import-status"></div>
                 </div>
             </div>
         </div>
@@ -91,84 +228,509 @@ $disableUrl = $this->getBackendUrl('ai/backend/skill/post-disable');
 <script>
 (function () {
     'use strict';
-    var catalogUrl = <?= json_encode($catalogUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var saveUrl = <?= json_encode($saveUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var importUrl = <?= json_encode($importUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var disableUrl = <?= json_encode($disableUrl, JSON_UNESCAPED_SLASHES) ?>;
-    var tableBody = document.getElementById('ai-skill-table-body');
-    var status = document.getElementById('ai-skill-status');
-    var formStatus = document.getElementById('ai-skill-form-status');
+
+    var catalogUrl = <?= \json_encode($catalogUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var saveUrl = <?= \json_encode($saveUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var importUrl = <?= \json_encode($importUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var bindUrl = <?= \json_encode($bindUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var unbindUrl = <?= \json_encode($unbindUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var exportUrl = <?= \json_encode($exportUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var initialAdapters = <?= \json_encode($adapters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+
+    var state = {
+        items: [],
+        adapters: Array.isArray(initialAdapters) ? initialAdapters : [],
+        selectedCode: '',
+        selectedAdapter: ''
+    };
+
+    var els = {
+        adapter: document.getElementById('ai-skill-adapter'),
+        adapterSummary: document.getElementById('ai-skill-adapter-summary'),
+        search: document.getElementById('ai-skill-search'),
+        statusFilter: document.getElementById('ai-skill-status-filter'),
+        sourceFilter: document.getElementById('ai-skill-source-filter'),
+        tableBody: document.getElementById('ai-skill-table-body'),
+        listStatus: document.getElementById('ai-skill-status'),
+        empty: document.getElementById('ai-skill-empty'),
+        form: document.getElementById('ai-skill-form'),
+        detailTitle: document.getElementById('ai-skill-detail-title'),
+        detailMode: document.getElementById('ai-skill-detail-mode'),
+        badges: document.getElementById('ai-skill-badges'),
+        code: document.getElementById('ai-skill-code'),
+        name: document.getElementById('ai-skill-name'),
+        status: document.getElementById('ai-skill-edit-status'),
+        version: document.getElementById('ai-skill-version'),
+        description: document.getElementById('ai-skill-description'),
+        body: document.getElementById('ai-skill-body'),
+        save: document.getElementById('ai-skill-save-btn'),
+        exportBtn: document.getElementById('ai-skill-export-btn'),
+        bind: document.getElementById('ai-skill-bind-btn'),
+        unbind: document.getElementById('ai-skill-unbind-btn'),
+        bindingHelp: document.getElementById('ai-skill-binding-help'),
+        formStatus: document.getElementById('ai-skill-form-status'),
+        importUrl: document.getElementById('ai-skill-import-url'),
+        importBtn: document.getElementById('ai-skill-import-btn'),
+        importStatus: document.getElementById('ai-skill-import-status')
+    };
 
     function post(url, data) {
         var body = new URLSearchParams();
-        Object.keys(data || {}).forEach(function (key) { body.append(key, data[key]); });
+        Object.keys(data || {}).forEach(function (key) {
+            var value = data[key];
+            body.append(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
+        });
         return fetch(url, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
             body: body.toString()
-        }).then(function (res) { return res.json(); });
+        }).then(function (res) {
+            return res.json();
+        });
     }
 
-    function setFormStatus(text, isError) {
-        if (!formStatus) return;
-        formStatus.className = 'small mt-2 ' + (isError ? 'text-danger' : 'text-success');
-        formStatus.textContent = text || '';
+    function setStatus(el, text, isError) {
+        if (!el) {
+            return;
+        }
+        el.className = 'small mt-2 ' + (isError ? 'text-danger' : 'text-success');
+        el.textContent = text || '';
     }
 
-    function render(items) {
-        if (!tableBody) return;
-        tableBody.innerHTML = '';
-        (items || []).forEach(function (skill) {
+    function clearNode(node) {
+        while (node && node.firstChild) {
+            node.removeChild(node.firstChild);
+        }
+    }
+
+    function text(tag, value, className) {
+        var node = document.createElement(tag);
+        if (className) {
+            node.className = className;
+        }
+        node.textContent = value || '';
+        return node;
+    }
+
+    function badge(value, className) {
+        var span = document.createElement('span');
+        span.className = 'badge ' + (className || 'text-bg-secondary');
+        span.textContent = value || '';
+        return span;
+    }
+
+    function chip(value) {
+        var span = document.createElement('span');
+        span.className = 'skill-chip';
+        span.textContent = value || '';
+        return span;
+    }
+
+    function selectedAdapterCode() {
+        return els.adapter ? String(els.adapter.value || '') : '';
+    }
+
+    function findSelectedSkill() {
+        return state.items.find(function (item) {
+            return String(item.code || '') === state.selectedCode;
+        }) || null;
+    }
+
+    function currentAdapter() {
+        var code = selectedAdapterCode();
+        return state.adapters.find(function (adapter) {
+            return String(adapter.code || '') === code;
+        }) || null;
+    }
+
+    function sourceGroup(skill) {
+        var type = String(skill.source_type || skill.source || '');
+        if (type === 'module' || type === 'system') {
+            return 'module';
+        }
+        if (type === 'custom') {
+            return 'custom';
+        }
+        if (type.indexOf('import') > -1 || type === 'platform') {
+            return 'import';
+        }
+        return type;
+    }
+
+    function renderAdapters() {
+        clearNode(els.adapter);
+        if (!state.adapters.length) {
+            var empty = document.createElement('option');
+            empty.value = 'pagebuilder_component_generation';
+            empty.textContent = 'pagebuilder_component_generation';
+            els.adapter.appendChild(empty);
+            state.selectedAdapter = empty.value;
+            return;
+        }
+
+        state.adapters.forEach(function (adapter) {
+            var option = document.createElement('option');
+            option.value = adapter.code || '';
+            option.textContent = (adapter.name || adapter.code || '') + ' (' + (adapter.code || '') + ')';
+            els.adapter.appendChild(option);
+        });
+
+        var preferred = state.adapters.find(function (adapter) {
+            return adapter.code === 'pagebuilder_component_generation';
+        }) || state.adapters[0];
+        state.selectedAdapter = preferred.code || '';
+        els.adapter.value = state.selectedAdapter;
+    }
+
+    function renderAdapterSummary() {
+        var adapter = currentAdapter();
+        if (!adapter) {
+            els.adapterSummary.textContent = 'Adapter context unavailable.';
+            return;
+        }
+        var locked = Array.isArray(adapter.locked_skill_codes) ? adapter.locked_skill_codes : [];
+        var manual = Array.isArray(adapter.manual_skill_codes) ? adapter.manual_skill_codes : [];
+        els.adapterSummary.textContent = 'Locked: ' + (locked.length ? locked.join(', ') : 'none')
+            + ' | Manual: ' + (manual.length ? manual.join(', ') : 'none');
+    }
+
+    function filteredItems() {
+        var q = String(els.search.value || '').trim().toLowerCase();
+        var status = String(els.statusFilter.value || '');
+        var source = String(els.sourceFilter.value || '');
+        return state.items.filter(function (skill) {
+            var haystack = [
+                skill.code || '',
+                skill.name || '',
+                skill.description || '',
+                (Array.isArray(skill.tags) ? skill.tags.join(' ') : ''),
+                skill.source || '',
+                skill.source_module || '',
+                skill.source_platform || ''
+            ].join(' ').toLowerCase();
+            if (q !== '' && haystack.indexOf(q) === -1) {
+                return false;
+            }
+            if (status !== '' && String(skill.status || '') !== status) {
+                return false;
+            }
+            if (source !== '' && sourceGroup(skill) !== source) {
+                return false;
+            }
+            return true;
+        });
+    }
+
+    function renderTable() {
+        var items = filteredItems();
+        clearNode(els.tableBody);
+        if (!items.length) {
+            var emptyRow = document.createElement('tr');
+            var td = document.createElement('td');
+            td.colSpan = 6;
+            td.className = 'text-center text-muted py-4';
+            td.textContent = 'No skills match the current filters.';
+            emptyRow.appendChild(td);
+            els.tableBody.appendChild(emptyRow);
+            els.listStatus.textContent = '0 / ' + state.items.length + ' skills';
+            return;
+        }
+
+        items.forEach(function (skill) {
             var tr = document.createElement('tr');
-            var binding = skill.locked ? 'locked' : (skill.manual ? 'adapter' : (skill.temporary ? 'temporary' : ''));
-            tr.innerHTML = '<td><code></code></td><td><div class="fw-semibold"></div><div class="small text-muted"></div></td><td></td><td></td><td class="small text-muted"></td><td></td>';
-            tr.children[0].querySelector('code').textContent = skill.code || '';
-            tr.children[1].querySelector('.fw-semibold').textContent = skill.name || skill.code || '';
-            tr.children[1].querySelector('.small').textContent = skill.description || '';
-            tr.children[2].textContent = skill.source || skill.source_type || '';
-            tr.children[3].innerHTML = '<span class="badge ' + (skill.status === 'active' ? 'text-bg-success' : 'text-bg-secondary') + '"></span>';
-            tr.children[3].querySelector('span').textContent = skill.status || '';
-            tr.children[4].textContent = binding;
-            tr.children[5].innerHTML = '<a class="btn btn-outline-secondary btn-sm">Export</a>';
-            tr.children[5].querySelector('a').href = <?= json_encode($this->getBackendUrl('ai/backend/skill/get-export'), JSON_UNESCAPED_SLASHES) ?> + '?code=' + encodeURIComponent(skill.code || '');
-            tableBody.appendChild(tr);
+            tr.className = 'skill-row' + (skill.code === state.selectedCode ? ' is-selected' : '');
+            tr.dataset.code = skill.code || '';
+
+            var codeTd = document.createElement('td');
+            codeTd.appendChild(text('code', skill.code || ''));
+            var tagWrap = document.createElement('div');
+            (Array.isArray(skill.tags) ? skill.tags.slice(0, 3) : []).forEach(function (tag) {
+                tagWrap.appendChild(chip(tag));
+            });
+            codeTd.appendChild(tagWrap);
+            tr.appendChild(codeTd);
+
+            var nameTd = document.createElement('td');
+            nameTd.appendChild(text('div', skill.name || skill.code || '', 'fw-semibold'));
+            nameTd.appendChild(text('div', skill.description || '', 'small text-muted'));
+            tr.appendChild(nameTd);
+
+            var sourceTd = document.createElement('td');
+            sourceTd.appendChild(text('div', skill.source_module || skill.source_platform || skill.source || skill.source_type || '', 'small'));
+            sourceTd.appendChild(text('div', skill.source_type || '', 'small text-muted'));
+            tr.appendChild(sourceTd);
+
+            var statusTd = document.createElement('td');
+            var statusClass = skill.status === 'active' ? 'text-bg-success' : (skill.status === 'pending' ? 'text-bg-warning' : 'text-bg-secondary');
+            statusTd.appendChild(badge(skill.status || 'unknown', statusClass));
+            tr.appendChild(statusTd);
+
+            var bindingTd = document.createElement('td');
+            if (skill.locked) {
+                bindingTd.appendChild(badge('locked', 'text-bg-primary'));
+            } else if (skill.manual) {
+                bindingTd.appendChild(badge('manual', 'text-bg-info'));
+            } else if (skill.temporary) {
+                bindingTd.appendChild(badge('temporary', 'text-bg-light text-dark'));
+            } else {
+                bindingTd.appendChild(text('span', '-', 'small text-muted'));
+            }
+            tr.appendChild(bindingTd);
+
+            var actionTd = document.createElement('td');
+            var manageBtn = document.createElement('button');
+            manageBtn.type = 'button';
+            manageBtn.className = 'btn btn-outline-primary btn-sm';
+            manageBtn.textContent = 'Manage';
+            manageBtn.dataset.action = 'select';
+            actionTd.appendChild(manageBtn);
+            var exportLink = document.createElement('a');
+            exportLink.className = 'btn btn-outline-secondary btn-sm ms-1';
+            exportLink.textContent = 'Export';
+            exportLink.href = exportUrl + '?code=' + encodeURIComponent(skill.code || '');
+            actionTd.appendChild(exportLink);
+            tr.appendChild(actionTd);
+
+            els.tableBody.appendChild(tr);
         });
-        if (status) status.textContent = String((items || []).length) + ' skills';
+        els.listStatus.textContent = String(items.length) + ' / ' + state.items.length + ' skills';
     }
 
-    function refresh() {
-        return post(catalogUrl, { include_inactive: 1 }).then(function (payload) {
-            if (!payload || payload.success === false) throw new Error((payload && payload.message) || 'catalog failed');
-            render(payload.items || []);
-        }).catch(function (err) {
-            if (status) status.textContent = err && err.message ? err.message : 'Catalog load failed';
+    function renderDetail() {
+        var skill = findSelectedSkill();
+        if (!skill) {
+            els.empty.classList.remove('d-none');
+            els.form.classList.add('d-none');
+            els.detailTitle.textContent = 'Skill detail';
+            els.detailMode.textContent = 'No selection';
+            return;
+        }
+
+        var readonly = !!skill.readonly || !!skill.locked;
+        els.empty.classList.add('d-none');
+        els.form.classList.remove('d-none');
+        els.detailTitle.textContent = skill.code ? 'Manage ' + skill.code : 'New custom skill';
+        els.detailMode.textContent = readonly ? 'Readonly' : (skill.id ? 'Editable' : 'New');
+
+        clearNode(els.badges);
+        els.badges.appendChild(badge(skill.status || 'new', skill.status === 'active' ? 'text-bg-success' : 'text-bg-secondary'));
+        els.badges.appendChild(badge(skill.source_type || 'custom', 'text-bg-light text-dark'));
+        if (skill.locked) {
+            els.badges.appendChild(badge('locked binding', 'text-bg-primary'));
+        }
+        if (skill.manual) {
+            els.badges.appendChild(badge('manual binding', 'text-bg-info'));
+        }
+        if (readonly) {
+            els.badges.appendChild(badge('readonly', 'text-bg-dark'));
+        }
+
+        els.code.value = skill.code || '';
+        els.name.value = skill.name || '';
+        els.status.value = skill.status || 'active';
+        els.version.value = skill.version || '';
+        els.description.value = skill.description || '';
+        els.body.value = skill.body || skill.normalized_body || '';
+
+        els.code.readOnly = !!skill.id || readonly;
+        [els.name, els.status, els.version, els.description, els.body].forEach(function (input) {
+            input.disabled = readonly;
         });
+        els.save.disabled = readonly;
+
+        document.querySelectorAll('[data-skill-status-action]').forEach(function (btn) {
+            btn.disabled = readonly || !skill.id || skill.status === btn.dataset.skillStatusAction;
+        });
+
+        els.exportBtn.disabled = !skill.code;
+        var canBind = !!skill.code && skill.status === 'active' && !skill.locked && !skill.manual && !skill.readonly;
+        var canBindReadonlySkill = !!skill.code && skill.status === 'active' && !skill.locked && !skill.manual && !!skill.exists;
+        els.bind.disabled = !(canBind || canBindReadonlySkill);
+        els.unbind.disabled = !skill.manual || skill.locked;
+        if (skill.locked) {
+            els.bindingHelp.textContent = 'This skill is locked by adapter code and cannot be unbound here.';
+        } else if (skill.manual) {
+            els.bindingHelp.textContent = 'This skill is manually bound to the selected adapter. You can remove that manual binding.';
+        } else if (skill.status !== 'active') {
+            els.bindingHelp.textContent = 'Only active skills can be bound to adapters.';
+        } else {
+            els.bindingHelp.textContent = 'Bind this skill as a long-term manual adapter skill for the selected context.';
+        }
     }
 
-    document.getElementById('ai-skill-refresh')?.addEventListener('click', refresh);
-    document.getElementById('ai-skill-save-btn')?.addEventListener('click', function () {
-        setFormStatus('Saving...', false);
-        post(saveUrl, {
-            code: document.getElementById('ai-skill-code')?.value || '',
-            name: document.getElementById('ai-skill-name')?.value || '',
-            description: document.getElementById('ai-skill-description')?.value || '',
-            body: document.getElementById('ai-skill-body')?.value || '',
-            status: 'active'
+    function selectSkill(code) {
+        state.selectedCode = code || '';
+        renderTable();
+        renderDetail();
+        setStatus(els.formStatus, '', false);
+    }
+
+    function newSkill() {
+        var draft = {
+            id: 0,
+            code: '',
+            name: '',
+            description: '',
+            body: '',
+            status: 'active',
+            source: 'custom_db',
+            source_type: 'custom',
+            exists: false,
+            readonly: false,
+            tags: []
+        };
+        state.items = state.items.filter(function (item) {
+            return item.code !== '';
+        });
+        state.items.unshift(draft);
+        state.selectedCode = '';
+        renderTable();
+        renderDetail();
+        els.code.focus();
+    }
+
+    function refreshCatalog() {
+        var adapterCode = selectedAdapterCode();
+        els.listStatus.textContent = 'Loading...';
+        return post(catalogUrl, {
+            adapter_code: adapterCode,
+            include_inactive: 1
         }).then(function (payload) {
-            if (!payload || payload.success === false) throw new Error((payload && payload.message) || 'save failed');
-            setFormStatus('Saved.', false);
-            refresh();
-        }).catch(function (err) { setFormStatus(err && err.message ? err.message : 'Save failed', true); });
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || 'Catalog load failed');
+            }
+            state.items = Array.isArray(payload.items) ? payload.items : [];
+            var stillExists = state.items.some(function (item) {
+                return item.code === state.selectedCode;
+            });
+            if (!stillExists && state.items.length) {
+                state.selectedCode = state.items[0].code || '';
+            }
+            renderAdapterSummary();
+            renderTable();
+            renderDetail();
+        }).catch(function (err) {
+            els.listStatus.textContent = err && err.message ? err.message : 'Catalog load failed';
+        });
+    }
+
+    function saveCurrentSkill() {
+        setStatus(els.formStatus, 'Saving...', false);
+        return post(saveUrl, {
+            code: els.code.value || '',
+            name: els.name.value || '',
+            description: els.description.value || '',
+            body: els.body.value || '',
+            status: els.status.value || 'active',
+            version: els.version.value || ''
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || 'Save failed');
+            }
+            state.selectedCode = payload.item && payload.item.code ? payload.item.code : (els.code.value || '');
+            setStatus(els.formStatus, 'Saved.', false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.formStatus, err && err.message ? err.message : 'Save failed', true);
+        });
+    }
+
+    function setCurrentStatus(status) {
+        var skill = findSelectedSkill();
+        if (!skill || !skill.code) {
+            return;
+        }
+        setStatus(els.formStatus, 'Updating status...', false);
+        return post(saveUrl, {
+            code: skill.code,
+            name: els.name.value || skill.name || '',
+            description: els.description.value || skill.description || '',
+            body: els.body.value || skill.body || skill.normalized_body || '',
+            status: status,
+            version: els.version.value || skill.version || ''
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || 'Status update failed');
+            }
+            setStatus(els.formStatus, 'Status updated.', false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.formStatus, err && err.message ? err.message : 'Status update failed', true);
+        });
+    }
+
+    function bindCurrentSkill(bind) {
+        var skill = findSelectedSkill();
+        if (!skill || !skill.code) {
+            return;
+        }
+        setStatus(els.formStatus, bind ? 'Binding skill...' : 'Removing binding...', false);
+        return post(bind ? bindUrl : unbindUrl, {
+            adapter_code: selectedAdapterCode(),
+            skill_code: skill.code
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || (bind ? 'Bind failed' : 'Unbind failed'));
+            }
+            setStatus(els.formStatus, bind ? 'Skill bound to adapter.' : 'Manual binding removed.', false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.formStatus, err && err.message ? err.message : (bind ? 'Bind failed' : 'Unbind failed'), true);
+        });
+    }
+
+    function importSkill() {
+        setStatus(els.importStatus, 'Importing...', false);
+        return post(importUrl, {
+            url: els.importUrl.value || ''
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || 'Import failed');
+            }
+            state.selectedCode = payload.item && payload.item.code ? payload.item.code : '';
+            setStatus(els.importStatus, 'Imported as pending. Review and enable it before binding.', false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.importStatus, err && err.message ? err.message : 'Import failed', true);
+        });
+    }
+
+    renderAdapters();
+    renderAdapterSummary();
+    refreshCatalog();
+
+    document.getElementById('ai-skill-refresh').addEventListener('click', refreshCatalog);
+    document.getElementById('ai-skill-new').addEventListener('click', newSkill);
+    els.adapter.addEventListener('change', function () {
+        state.selectedAdapter = selectedAdapterCode();
+        refreshCatalog();
     });
-    document.getElementById('ai-skill-import-btn')?.addEventListener('click', function () {
-        setFormStatus('Importing...', false);
-        post(importUrl, { url: document.getElementById('ai-skill-import-url')?.value || '' }).then(function (payload) {
-            if (!payload || payload.success === false) throw new Error((payload && payload.message) || 'import failed');
-            setFormStatus('Imported as pending.', false);
-            refresh();
-        }).catch(function (err) { setFormStatus(err && err.message ? err.message : 'Import failed', true); });
+    [els.search, els.statusFilter, els.sourceFilter].forEach(function (input) {
+        input.addEventListener('input', renderTable);
+        input.addEventListener('change', renderTable);
     });
-    void disableUrl;
+    els.tableBody.addEventListener('click', function (event) {
+        var row = event.target.closest('tr[data-code]');
+        if (!row) {
+            return;
+        }
+        selectSkill(row.dataset.code || '');
+    });
+    els.save.addEventListener('click', saveCurrentSkill);
+    els.exportBtn.addEventListener('click', function () {
+        var skill = findSelectedSkill();
+        if (skill && skill.code) {
+            window.location.href = exportUrl + '?code=' + encodeURIComponent(skill.code);
+        }
+    });
+    document.querySelectorAll('[data-skill-status-action]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setCurrentStatus(btn.dataset.skillStatusAction || '');
+        });
+    });
+    els.bind.addEventListener('click', function () { bindCurrentSkill(true); });
+    els.unbind.addEventListener('click', function () { bindCurrentSkill(false); });
+    els.importBtn.addEventListener('click', importSkill);
 })();
 </script>

@@ -6,6 +6,17 @@ namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
 
 final class SourceTruthContractBuilder
 {
+    private const TEMPLATE_SCAFFOLD_BRAND_TERMS = [
+        'LudoEmpire',
+        'PokerArena',
+        'Poker Arena',
+        'Satta King 786',
+        'Satta King',
+        'BharatPlay',
+        'RummyRoyal',
+        'Teen Patti Royal',
+    ];
+
     public function __construct(
         private readonly ?ContractMetaBuilder $metaBuilder = null,
         private readonly ?PermissionMatrix $permissionMatrix = null,
@@ -40,6 +51,14 @@ final class SourceTruthContractBuilder
         $requiredBlocks = $this->resolveRequiredHomeBlocks($brief, $instruction);
 
         $siteName = \trim((string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? ''));
+        $brandTerms = $this->normalizeStringList(\array_merge(
+            [$siteName, (string)($scope['site_name'] ?? ''), (string)($websiteProfile['site_name'] ?? '')],
+            $this->extractBrandTerms($brief)
+        ));
+        $forbiddenTemplateBrands = $this->forbiddenTemplateBrandTerms($brandTerms);
+        foreach ($forbiddenTemplateBrands as $term) {
+            $forbidden[] = 'Do not use stale template/example brand as visible site identity: ' . $term;
+        }
 
         $frozenFields = [
             'site_identity',
@@ -89,7 +108,10 @@ final class SourceTruthContractBuilder
             'input_locale' => $userLocale,
             'site_identity' => [
                 'site_name' => $siteName,
-                'brand_terms' => $this->extractBrandTerms($brief),
+                'brand_terms' => $brandTerms,
+                'allowed_brand_terms' => $brandTerms,
+                'forbidden_template_brand_terms' => $forbiddenTemplateBrands,
+                'template_scaffold_rule' => 'Style template defaults/examples are structure references only; rewrite visible copy for the current brand.',
             ],
             'must_include_facts' => $facts,
             'must_include_keywords' => $keywords,
@@ -286,6 +308,10 @@ final class SourceTruthContractBuilder
         if (\preg_match('/(?:游戏|game|棋牌|card|Teen\s*Patti|rummy)/iu', $combined)) {
             $blocks[] = 'game_showcase_or_features';
         }
+        if ($downloadIntent && \preg_match('/(?:游戏|game|棋牌|card|Teen\s*Patti|rummy|APK|download|app)/iu', $combined)) {
+            $blocks[] = 'player_reviews';
+            $blocks[] = 'faq_or_rules';
+        }
         if (\preg_match('/(?:信任|trust|安全|secure|放心)/iu', $combined)) {
             $blocks[] = 'trust_security';
         }
@@ -315,6 +341,47 @@ final class SourceTruthContractBuilder
         }
 
         return $terms;
+    }
+
+    /**
+     * @param list<string> $allowedTerms
+     * @return list<string>
+     */
+    private function forbiddenTemplateBrandTerms(array $allowedTerms): array
+    {
+        $allowedLookup = \array_fill_keys(\array_map(static fn(string $term): string => \mb_strtolower($term), $allowedTerms), true);
+        $forbidden = [];
+        foreach (self::TEMPLATE_SCAFFOLD_BRAND_TERMS as $term) {
+            if (!isset($allowedLookup[\mb_strtolower($term)])) {
+                $forbidden[] = $term;
+            }
+        }
+
+        return $forbidden;
+    }
+
+    /**
+     * @param list<string> $values
+     * @return list<string>
+     */
+    private function normalizeStringList(array $values): array
+    {
+        $result = [];
+        $seen = [];
+        foreach ($values as $value) {
+            $value = \trim((string)$value);
+            if ($value === '') {
+                continue;
+            }
+            $key = \mb_strtolower($value);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $result[] = $value;
+        }
+
+        return $result;
     }
 
     /**

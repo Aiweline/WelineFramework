@@ -165,12 +165,7 @@ class WelineEnv
 
         $serverKey = self::SERVER_MAPPINGS[$key] ?? null;
         if ($serverKey !== null) {
-            $server = $context->server();
-            if (!\is_array($server)) {
-                $server = [];
-            }
-            $server[$serverKey] = $value;
-            $context->set('input.server', $server);
+            $context->set('input.server.' . $serverKey, $value);
             self::syncContextFromServerValue($context, $serverKey, $value);
         }
 
@@ -208,12 +203,7 @@ class WelineEnv
     public static function setServer(string $key, mixed $value, string $reason = ''): void
     {
         $context = Context::current();
-        $server = $context->server();
-        if (!\is_array($server)) {
-            $server = [];
-        }
-        $server[$key] = $value;
-        $context->set('input.server', $server);
+        $context->set('input.server.' . $key, $value);
         self::syncContextFromServerValue($context, $key, $value);
 
         $alias = self::serverAliasForKey($key);
@@ -693,8 +683,17 @@ class WelineEnv
             'value' => $value,
             'reason' => $reason,
             'fiber_id' => self::getFiberId(),
-            'trace' => $this->getCallerTrace(),
+            'trace' => $this->shouldCaptureOverrideTrace() ? $this->getCallerTrace() : [],
         ];
+    }
+
+    private function shouldCaptureOverrideTrace(): bool
+    {
+        if (!\class_exists(\Weline\Framework\App\Env::class, false)) {
+            return false;
+        }
+
+        return (bool)\Weline\Framework\App\Env::get('wls.debug.env_override_trace', false);
     }
 
     private function getCallerTrace(): array

@@ -234,7 +234,7 @@ final class AiSiteSkillRegistry
         $lines[] = '  * decoration-by-dataviz: invented numbers, fake stats, decorative charts representing nothing;';
         $lines[] = '  * generic three-column feature grid as the default landing structure;';
         $lines[] = '  * overused font stacks (Inter / Roboto / Arial / system-ui / Fraunces) unless the brand actually uses them.';
-        $lines[] = '- Placeholders beat fakes: when an asset (icon, photo, logo, product shot, chart) is missing, output a clearly labeled placeholder description instead of fabricating it.';
+        $lines[] = '- PageBuilder media contract overrides generic placeholder habits: when an asset (icon, photo, logo, product shot, chart) is missing, never output placeholder/fake/dummy media. Choose one explicit path instead: plan a real generated asset slot with image_intent.needs_image=true and a concrete scene/product/interface subject, or plan a complete CSS-only motif with image_intent.needs_image=false, non-empty css_motif/visual_atmosphere/image_treatment, and no placeholder language.';
         $lines[] = '- No filler content: every section must earn its place. Do not pad with dummy "Why choose us / Our values / Team" sections, fake testimonials, decorative stats, or feature grids invented to fill space.';
         $lines[] = '- Use the user voice: reuse the exact nouns, offers, numbers, and proof points from the user one-line requirement; do not replace them with abstract marketing-speak.';
         $lines[] = '- Visual rhythm: alternate heavy and light sections, give full-bleed imagery breathing room, use 1-2 background colors with intent across a page system.';

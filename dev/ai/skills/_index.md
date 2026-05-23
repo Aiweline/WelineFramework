@@ -39,6 +39,7 @@
 - 框架底层、ORM、路由、事件、命令、代码生成：`框架核心工程师-*`
 - 模块功能、服务层、配置、缓存、后台权限：`业务模块工程师-*`
 - 主题、模板、Taglib、Widget、PageBuilder：`前端主题工程师-*`
+- 主题前端交互 API、`Weline.Api.resource()/graph()/stream()`、worker 请求链路：`前端主题工程师-前端API交互`
 - 开发规范、代码质量、边界约束、验证证据：`通用工程师-开发规范与代码质量`
 - 用户可见文案、i18n、提示语和确认交互：`通用工程师-国际化与用户提示`
 - WLS、Worker、reload/restart、Session Server、SSE：`WLS运行时工程师-*`

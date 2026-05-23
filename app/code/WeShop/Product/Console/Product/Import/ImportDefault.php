@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Product\Console\Product\Import;
 
 use WeShop\Catalog\Model\Category;
+use WeShop\Customer\Model\Customer;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
 use WeShop\Review\Model\Review;
@@ -209,6 +210,8 @@ class ImportDefault extends CommandAbstract
                 '做工精良，材质优秀，价格也很合理。',
                 '收到货后马上就用了，效果很好，值得购买。',
             ];
+
+            $customerIds = $this->resolveReviewCustomerIds();
             
             $totalReviews = 0;
             
@@ -218,17 +221,19 @@ class ImportDefault extends CommandAbstract
                 
                 for ($i = 0; $i < $reviewCount; $i++) {
                     $rating = $this->getWeightedRating();
+                    $createdAt = $this->buildReviewTimestamp($productId, $i);
                     
-                    $reviewData = [
-                        Review::schema_fields_PRODUCT_ID => $productId,
-                        Review::schema_fields_CUSTOMER_ID => random_int(1, 100),
-                        Review::schema_fields_RATING => $rating,
-                        Review::schema_fields_TITLE => $sampleTitles[array_rand($sampleTitles)],
-                        Review::schema_fields_CONTENT => $sampleContents[array_rand($sampleContents)],
-                        Review::schema_fields_STATUS => Review::STATUS_APPROVED,
-                    ];
-                    
-                    $reviewModel->reset()->insert($reviewData)->fetch();
+                    $review = clone $reviewModel;
+                    $review->reset()->clearData()
+                        ->setData(Review::schema_fields_PRODUCT_ID, $productId)
+                        ->setData(Review::schema_fields_CUSTOMER_ID, $customerIds[array_rand($customerIds)])
+                        ->setData(Review::schema_fields_RATING, $rating)
+                        ->setData(Review::schema_fields_TITLE, $sampleTitles[array_rand($sampleTitles)])
+                        ->setData(Review::schema_fields_CONTENT, $sampleContents[array_rand($sampleContents)])
+                        ->setData(Review::schema_fields_STATUS, Review::STATUS_APPROVED)
+                        ->setData(Review::schema_fields_CREATED_AT, $createdAt)
+                        ->setData(Review::schema_fields_UPDATED_AT, $createdAt)
+                        ->save();
                     $totalReviews++;
                 }
             }
@@ -400,6 +405,7 @@ class ImportDefault extends CommandAbstract
                     }
                 }
             }
+            $skuList = array_values(array_unique(array_merge($skuList, $this->getLegacyApparelTestSkus())));
             
             if (empty($skuList)) {
                 return;
@@ -465,6 +471,67 @@ class ImportDefault extends CommandAbstract
         } catch (\Exception $e) {
             $this->printer->warning('删除旧产品时出错: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function resolveReviewCustomerIds(): array
+    {
+        /** @var Customer $customer */
+        $customer = ObjectManager::getInstance(Customer::class);
+        $rows = $customer->reset()
+            ->fields(Customer::schema_fields_ID)
+            ->order(Customer::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        $customerIds = [];
+        foreach ($rows as $row) {
+            $customerId = (int)($row[Customer::schema_fields_ID] ?? 0);
+            if ($customerId > 0) {
+                $customerIds[] = $customerId;
+            }
+        }
+
+        return $customerIds !== [] ? array_values(array_unique($customerIds)) : [1];
+    }
+
+    private function buildReviewTimestamp(int $productId, int $index): string
+    {
+        $daysAgo = (($productId + $index * 7) % 120) + 1;
+        $hoursAgo = (($productId + $index * 13) % 23);
+        return date('Y-m-d H:i:s', strtotime("-{$daysAgo} days -{$hoursAgo} hours"));
+    }
+
+    /**
+     * 兼容清理旧的欧美服饰测试 SKU，避免切换到汉服数据后残留旧商品。
+     *
+     * @return array<int, string>
+     */
+    private function getLegacyApparelTestSkus(): array
+    {
+        return [
+            'NIKE-AIRMAX90-BLK-42',
+            'ADIDAS-SUPERSTAR-WHT-41',
+            'UNIQLO-TEE-WHT-M',
+            'NIKE-DRIFIT-TEE-MASTER',
+            'NIKE-DRIFIT-TEE-BLK-M',
+            'NIKE-DRIFIT-TEE-BLK-L',
+            'NIKE-DRIFIT-TEE-WHT-M',
+            'NIKE-DRIFIT-TEE-WHT-L',
+            'NIKE-DRIFIT-TEE-BLU-M',
+            'LEVIS-501-MASTER',
+            'LEVIS-501-DBLUE-30-32',
+            'LEVIS-501-DBLUE-32-32',
+            'LEVIS-501-LBLUE-30-32',
+            'LEVIS-501-LBLUE-32-32',
+            'ADIDAS-UB22-MASTER',
+            'ADIDAS-UB22-BLK-42',
+            'ADIDAS-UB22-BLK-43',
+            'ADIDAS-UB22-WHT-42',
+            'ADIDAS-UB22-WHT-43',
+        ];
     }
 
     /**
@@ -969,6 +1036,7 @@ class ImportDefault extends CommandAbstract
                     'red' => ['value' => '红色', 'swatch_color' => '#CC0000'],
                     'green' => ['value' => '绿色', 'swatch_color' => '#00CC00'],
                     'gray' => ['value' => '灰色', 'swatch_color' => '#808080'],
+                    'beige' => ['value' => '米杏色', 'swatch_color' => '#D8C3A5'],
                     'dark_blue' => ['value' => '深蓝色', 'swatch_color' => '#003366'],
                     'light_blue' => ['value' => '浅蓝色', 'swatch_color' => '#66CCFF'],
                     'starlight' => ['value' => '星光色', 'swatch_color' => '#F5F5DC'],
@@ -1014,6 +1082,7 @@ class ImportDefault extends CommandAbstract
                     'plastic' => ['value' => '塑料'],
                     'titanium' => ['value' => '钛金属'],
                     'aluminum' => ['value' => '铝合金'],
+                    'brocade' => ['value' => '织锦'],
                 ],
             ],
             'brand' => [
@@ -1038,6 +1107,9 @@ class ImportDefault extends CommandAbstract
                     'tesla' => ['value' => 'Tesla'],
                     'lindt' => ['value' => 'Lindt'],
                     'nespresso' => ['value' => 'Nespresso'],
+                    'hua_chao' => ['value' => '华裳九州'],
+                    'yun_jin_studio' => ['value' => '云锦司'],
+                    'jin_xiu_ge' => ['value' => '锦绣阁'],
                 ],
             ],
         ];
@@ -1336,62 +1408,65 @@ class ImportDefault extends CommandAbstract
                 'material' => 'plastic',
             ],
 
-            // 服装类 - 运动鞋
+            // 汉服类 - 绣花布鞋
             [
-                'name' => 'Nike Air Max 90 运动鞋',
-                'sku' => 'NIKE-AIRMAX90-BLK-42',
-                'spu' => 'NIKE-AIRMAX90',
-                'handle' => 'nike-air-max-90-black-42',
-                'short_description' => 'Nike Air Max 90 经典运动鞋，黑色，42码，气垫缓震',
-                'description' => 'Nike Air Max 90是经典的运动鞋款，采用Air Max气垫技术提供卓越缓震，经典设计适合日常穿着和运动。',
-                'price' => 899.00,
-                'cost' => 500.00,
+                'name' => '云纹绣花布鞋',
+                'sku' => 'HANFU-BUXIE-RED-42',
+                'spu' => 'HANFU-BUXIE',
+                'handle' => 'hanfu-yunwen-buxie-red-42',
+                'short_description' => '传统云纹绣花布鞋，朱砂红，42码，适合汉服日常搭配',
+                'description' => '云纹绣花布鞋采用软底与包边设计，保留传统汉服鞋履的轻便与雅致，适合搭配上襦、马面裙等国风造型。',
+                'price' => 269.00,
+                'cost' => 138.00,
                 'stock' => 80,
-                'weight' => 0.8,
-                'meta_keywords' => 'Nike,耐克,运动鞋,跑步鞋',
+                'weight' => 0.45,
+                'image' => 'https://images.pexels.com/photos/36311713/pexels-photo-36311713.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'meta_keywords' => '汉服,布鞋,绣花鞋,国风',
                 'category_handles' => ['sneakers'],
-                'brand' => 'nike',
-                'color' => 'black',
+                'brand' => 'jin_xiu_ge',
+                'color' => 'red',
                 'size' => '42',
-                'material' => 'leather',
+                'material' => 'cotton',
             ],
-            // 服装类 - 运动鞋
+            // 汉服类 - 传统鞋履
             [
-                'name' => 'Adidas Originals Superstar',
-                'sku' => 'ADIDAS-SUPERSTAR-WHT-41',
-                'spu' => 'ADIDAS-SUPERSTAR',
-                'handle' => 'adidas-superstar-white-41',
-                'short_description' => 'Adidas Originals Superstar 经典贝壳头运动鞋，白色，41码',
-                'description' => 'Adidas Superstar是标志性的经典鞋款，贝壳头设计，橡胶鞋底，适合日常休闲穿着。',
-                'price' => 699.00,
-                'cost' => 400.00,
+                'name' => '海棠履绣花鞋',
+                'sku' => 'HANFU-HAITANGLV-BEI-41',
+                'spu' => 'HANFU-HAITANGLV',
+                'handle' => 'hanfu-haitanglv-beige-41',
+                'short_description' => '海棠纹绣花汉服鞋，米杏色，41码，轻便柔软',
+                'description' => '海棠履以绣花鞋面和柔软布底呈现传统气质，适合作为汉服鞋履示例商品，展示鞋类规格与国风搭配效果。',
+                'price' => 289.00,
+                'cost' => 146.00,
                 'stock' => 90,
-                'weight' => 0.75,
-                'meta_keywords' => 'Adidas,阿迪达斯,运动鞋,经典款',
+                'weight' => 0.42,
+                'image' => 'https://images.pexels.com/photos/35222104/pexels-photo-35222104.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'meta_keywords' => '汉服,绣花鞋,布鞋,传统鞋履',
                 'category_handles' => ['sneakers'],
-                'brand' => 'adidas',
-                'color' => 'white',
+                'brand' => 'jin_xiu_ge',
+                'color' => 'beige',
                 'size' => '41',
-                'material' => 'leather',
+                'material' => 'cotton',
             ],
-            // 服装类 - T恤
+            // 汉服类 - 上装
             [
-                'name' => 'Uniqlo 优衣库 圆领T恤',
-                'sku' => 'UNIQLO-TEE-WHT-M',
-                'spu' => 'UNIQLO-TEE',
-                'handle' => 'uniqlo-round-neck-tee-white-m',
-                'short_description' => 'Uniqlo 优衣库 100%纯棉圆领T恤，白色，M码，基础款',
-                'description' => 'Uniqlo基础款圆领T恤，100%纯棉材质，舒适透气，适合日常穿着，多色可选。',
-                'price' => 79.00,
-                'cost' => 30.00,
+                'name' => '月白交领上襦',
+                'sku' => 'HANFU-JIAOLING-WHT-M',
+                'spu' => 'HANFU-JIAOLING',
+                'handle' => 'hanfu-jiaoling-ruao-white-m',
+                'short_description' => '月白色交领上襦，M码，轻薄真丝感面料，适合汉服叠穿',
+                'description' => '月白交领上襦以传统交领右衽结构和飘逸袖型呈现汉服上装效果，适合作为汉服服饰示例商品，替代基础 T 恤类假数据。',
+                'price' => 239.00,
+                'cost' => 118.00,
                 'stock' => 200,
-                'weight' => 0.15,
-                'meta_keywords' => 'Uniqlo,优衣库,T恤,基础款',
+                'weight' => 0.28,
+                'image' => 'https://images.pexels.com/photos/8152155/pexels-photo-8152155.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'meta_keywords' => '汉服,上襦,交领,国风上装',
                 'category_handles' => ['t-shirts'],
-                'brand' => 'uniqlo',
+                'brand' => 'hua_chao',
                 'color' => 'white',
                 'size' => 'm',
-                'material' => 'cotton',
+                'material' => 'silk',
             ],
 
             // 家居用品 - 家具/床具
@@ -1622,231 +1697,234 @@ class ImportDefault extends CommandAbstract
 
             // ========== 可配置产品（Configurable Products）==========
 
-            // 1. T恤 - 多颜色多尺寸
+            // 1. 汉服上襦 - 多颜色多尺寸
             [
-                'name' => 'Nike Dri-FIT 运动T恤',
-                'sku' => 'NIKE-DRIFIT-TEE-MASTER',
-                'spu' => 'NIKE-DRIFIT-TEE',
-                'handle' => 'nike-dri-fit-tee',
-                'short_description' => 'Nike Dri-FIT 运动T恤，速干面料，多颜色多尺寸可选',
-                'description' => 'Nike Dri-FIT运动T恤采用速干面料技术，适合运动和日常穿着，提供多种颜色和尺寸选择。',
+                'name' => '青玉交领上襦',
+                'sku' => 'HANFU-JIAOLING-MASTER',
+                'spu' => 'HANFU-JIAOLING',
+                'handle' => 'hanfu-jiaoling-ruao',
+                'short_description' => '青玉交领上襦，真丝感面料，多颜色多尺寸可选',
+                'description' => '青玉交领上襦以汉服交领结构与轻盈面料呈现传统服饰气质，适合展示服饰颜色、尺寸与商品规格选择。',
                 'price' => 299.00,
-                'cost' => 150.00,
+                'cost' => 156.00,
                 'stock' => 0, // 可配置产品通常库存为0
-                'weight' => 0.2,
-                'meta_keywords' => 'Nike,运动T恤,速干',
+                'weight' => 0.32,
+                'image' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'meta_keywords' => '汉服,交领上襦,国风上装',
                 'category_handles' => ['t-shirts'],
-                'brand' => 'nike',
-                'material' => 'polyester',
+                'brand' => 'hua_chao',
+                'material' => 'silk',
                 'variants' => [
                     [
-                        'name' => 'Nike Dri-FIT 运动T恤 - 黑色 M',
-                        'sku' => 'NIKE-DRIFIT-TEE-BLK-M',
-                        'handle' => 'nike-dri-fit-tee-black-m',
-                        'short_description' => 'Nike Dri-FIT 运动T恤，黑色，M码',
+                        'name' => '青玉交领上襦 - 松绿色 M',
+                        'sku' => 'HANFU-JIAOLING-GRN-M',
+                        'handle' => 'hanfu-jiaoling-ruao-green-m',
+                        'short_description' => '青玉交领上襦，松绿色，M码',
                         'price' => 299.00,
-                        'cost' => 150.00,
+                        'cost' => 156.00,
                         'stock' => 50,
-                        'color' => 'black',
+                        'color' => 'green',
                         'size' => 'm',
-                        'brand' => 'nike',
-                        'material' => 'polyester',
+                        'brand' => 'hua_chao',
+                        'material' => 'silk',
                     ],
                     [
-                        'name' => 'Nike Dri-FIT 运动T恤 - 黑色 L',
-                        'sku' => 'NIKE-DRIFIT-TEE-BLK-L',
-                        'handle' => 'nike-dri-fit-tee-black-l',
-                        'short_description' => 'Nike Dri-FIT 运动T恤，黑色，L码',
+                        'name' => '青玉交领上襦 - 月白色 L',
+                        'sku' => 'HANFU-JIAOLING-WHT-L',
+                        'handle' => 'hanfu-jiaoling-ruao-white-l',
+                        'short_description' => '青玉交领上襦，月白色，L码',
                         'price' => 299.00,
-                        'cost' => 150.00,
+                        'cost' => 156.00,
                         'stock' => 45,
-                        'color' => 'black',
+                        'color' => 'white',
                         'size' => 'l',
-                        'brand' => 'nike',
-                        'material' => 'polyester',
+                        'brand' => 'hua_chao',
+                        'material' => 'silk',
                     ],
                     [
-                        'name' => 'Nike Dri-FIT 运动T恤 - 白色 M',
-                        'sku' => 'NIKE-DRIFIT-TEE-WHT-M',
-                        'handle' => 'nike-dri-fit-tee-white-m',
-                        'short_description' => 'Nike Dri-FIT 运动T恤，白色，M码',
-                        'price' => 299.00,
-                        'cost' => 150.00,
+                        'name' => '青玉交领上襦 - 绯红色 M',
+                        'sku' => 'HANFU-JIAOLING-RED-M',
+                        'handle' => 'hanfu-jiaoling-ruao-red-m',
+                        'short_description' => '青玉交领上襦，绯红色，M码',
+                        'price' => 309.00,
+                        'cost' => 162.00,
                         'stock' => 48,
-                        'color' => 'white',
+                        'color' => 'red',
                         'size' => 'm',
-                        'brand' => 'nike',
-                        'material' => 'polyester',
+                        'brand' => 'hua_chao',
+                        'material' => 'silk',
                     ],
                     [
-                        'name' => 'Nike Dri-FIT 运动T恤 - 白色 L',
-                        'sku' => 'NIKE-DRIFIT-TEE-WHT-L',
-                        'handle' => 'nike-dri-fit-tee-white-l',
-                        'short_description' => 'Nike Dri-FIT 运动T恤，白色，L码',
-                        'price' => 299.00,
-                        'cost' => 150.00,
+                        'name' => '青玉交领上襦 - 米杏色 XL',
+                        'sku' => 'HANFU-JIAOLING-BEI-XL',
+                        'handle' => 'hanfu-jiaoling-ruao-beige-xl',
+                        'short_description' => '青玉交领上襦，米杏色，XL码',
+                        'price' => 319.00,
+                        'cost' => 168.00,
                         'stock' => 42,
-                        'color' => 'white',
-                        'size' => 'l',
-                        'brand' => 'nike',
-                        'material' => 'polyester',
+                        'color' => 'beige',
+                        'size' => 'xl',
+                        'brand' => 'hua_chao',
+                        'material' => 'silk',
                     ],
                     [
-                        'name' => 'Nike Dri-FIT 运动T恤 - 蓝色 M',
-                        'sku' => 'NIKE-DRIFIT-TEE-BLU-M',
-                        'handle' => 'nike-dri-fit-tee-blue-m',
-                        'short_description' => 'Nike Dri-FIT 运动T恤，蓝色，M码',
-                        'price' => 299.00,
-                        'cost' => 150.00,
+                        'name' => '青玉交领上襦 - 黛青色 M',
+                        'sku' => 'HANFU-JIAOLING-NAVY-M',
+                        'handle' => 'hanfu-jiaoling-ruao-navy-m',
+                        'short_description' => '青玉交领上襦，黛青色，M码',
+                        'price' => 309.00,
+                        'cost' => 162.00,
                         'stock' => 40,
-                        'color' => 'blue',
+                        'color' => 'dark_blue',
                         'size' => 'm',
-                        'brand' => 'nike',
-                        'material' => 'polyester',
+                        'brand' => 'hua_chao',
+                        'material' => 'silk',
                     ],
                 ],
             ],
 
-            // 2. 牛仔裤 - 多颜色多尺寸
+            // 2. 汉服下装 - 多颜色多尺寸
             [
-                'name' => 'Levi\'s 501 经典直筒牛仔裤',
-                'sku' => 'LEVIS-501-MASTER',
-                'spu' => 'LEVIS-501',
-                'handle' => 'levis-501-classic-jeans',
-                'short_description' => 'Levi\'s 501 经典直筒牛仔裤，100%纯棉，多颜色多尺寸',
-                'description' => 'Levi\'s 501是经典直筒牛仔裤，100%纯棉材质，经典五袋设计，提供多种颜色和尺寸选择。',
+                'name' => '织金马面裙',
+                'sku' => 'HANFU-MAMIANQUN-MASTER',
+                'spu' => 'HANFU-MAMIANQUN',
+                'handle' => 'hanfu-mamianqun',
+                'short_description' => '织金马面裙，重工提花，多颜色多尺寸',
+                'description' => '织金马面裙以传统裙门结构和金线纹样呈现汉服下装特色，适合展示下装规格、颜色与搭配层次。',
                 'price' => 799.00,
-                'cost' => 400.00,
+                'cost' => 420.00,
                 'stock' => 0,
-                'weight' => 0.8,
-                'meta_keywords' => 'Levi\'s,牛仔裤,经典款',
+                'weight' => 0.75,
+                'image' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'meta_keywords' => '汉服,马面裙,国风下装',
                 'category_handles' => ['pants'],
-                'brand' => 'levis',
-                'material' => 'denim',
+                'brand' => 'yun_jin_studio',
+                'material' => 'brocade',
                 'variants' => [
                     [
-                        'name' => 'Levi\'s 501 经典直筒牛仔裤 - 深蓝色 30/32',
-                        'sku' => 'LEVIS-501-DBLUE-30-32',
-                        'handle' => 'levis-501-dark-blue-30-32',
-                        'short_description' => 'Levi\'s 501，深蓝色，腰围30英寸，内长32英寸',
+                        'name' => '织金马面裙 - 绯红色 M',
+                        'sku' => 'HANFU-MAMIANQUN-RED-M',
+                        'handle' => 'hanfu-mamianqun-red-m',
+                        'short_description' => '织金马面裙，绯红色，M码',
                         'price' => 799.00,
-                        'cost' => 400.00,
+                        'cost' => 420.00,
                         'stock' => 25,
-                        'color' => 'dark_blue',
-                        'size' => '30',
-                        'brand' => 'levis',
-                        'material' => 'denim',
+                        'color' => 'red',
+                        'size' => 'm',
+                        'brand' => 'yun_jin_studio',
+                        'material' => 'brocade',
                     ],
                     [
-                        'name' => 'Levi\'s 501 经典直筒牛仔裤 - 深蓝色 32/32',
-                        'sku' => 'LEVIS-501-DBLUE-32-32',
-                        'handle' => 'levis-501-dark-blue-32-32',
-                        'short_description' => 'Levi\'s 501，深蓝色，腰围32英寸，内长32英寸',
-                        'price' => 799.00,
-                        'cost' => 400.00,
+                        'name' => '织金马面裙 - 黛青色 L',
+                        'sku' => 'HANFU-MAMIANQUN-NAVY-L',
+                        'handle' => 'hanfu-mamianqun-navy-l',
+                        'short_description' => '织金马面裙，黛青色，L码',
+                        'price' => 809.00,
+                        'cost' => 426.00,
                         'stock' => 30,
                         'color' => 'dark_blue',
-                        'size' => '32',
-                        'brand' => 'levis',
-                        'material' => 'denim',
+                        'size' => 'l',
+                        'brand' => 'yun_jin_studio',
+                        'material' => 'brocade',
                     ],
                     [
-                        'name' => 'Levi\'s 501 经典直筒牛仔裤 - 浅蓝色 30/32',
-                        'sku' => 'LEVIS-501-LBLUE-30-32',
-                        'handle' => 'levis-501-light-blue-30-32',
-                        'short_description' => 'Levi\'s 501，浅蓝色，腰围30英寸，内长32英寸',
+                        'name' => '织金马面裙 - 竹青色 S',
+                        'sku' => 'HANFU-MAMIANQUN-GRN-S',
+                        'handle' => 'hanfu-mamianqun-green-s',
+                        'short_description' => '织金马面裙，竹青色，S码',
                         'price' => 799.00,
-                        'cost' => 400.00,
+                        'cost' => 420.00,
                         'stock' => 20,
-                        'color' => 'light_blue',
-                        'size' => '30',
-                        'brand' => 'levis',
-                        'material' => 'denim',
+                        'color' => 'green',
+                        'size' => 's',
+                        'brand' => 'yun_jin_studio',
+                        'material' => 'brocade',
                     ],
                     [
-                        'name' => 'Levi\'s 501 经典直筒牛仔裤 - 浅蓝色 32/32',
-                        'sku' => 'LEVIS-501-LBLUE-32-32',
-                        'handle' => 'levis-501-light-blue-32-32',
-                        'short_description' => 'Levi\'s 501，浅蓝色，腰围32英寸，内长32英寸',
-                        'price' => 799.00,
-                        'cost' => 400.00,
+                        'name' => '织金马面裙 - 米杏色 XL',
+                        'sku' => 'HANFU-MAMIANQUN-BEI-XL',
+                        'handle' => 'hanfu-mamianqun-beige-xl',
+                        'short_description' => '织金马面裙，米杏色，XL码',
+                        'price' => 819.00,
+                        'cost' => 432.00,
                         'stock' => 22,
-                        'color' => 'light_blue',
-                        'size' => '32',
-                        'brand' => 'levis',
-                        'material' => 'denim',
+                        'color' => 'starlight',
+                        'size' => 'xl',
+                        'brand' => 'yun_jin_studio',
+                        'material' => 'brocade',
                     ],
                 ],
             ],
 
-            // 3. 运动鞋 - 多颜色多尺寸
+            // 3. 汉服布鞋 - 多颜色多尺寸
             [
-                'name' => 'Adidas Ultraboost 22 跑鞋',
-                'sku' => 'ADIDAS-UB22-MASTER',
-                'spu' => 'ADIDAS-UB22',
-                'handle' => 'adidas-ultraboost-22',
-                'short_description' => 'Adidas Ultraboost 22 跑鞋，Boost中底，多颜色多尺寸',
-                'description' => 'Adidas Ultraboost 22采用Boost中底技术，提供卓越的能量回馈和缓震，适合跑步和日常穿着，多种颜色和尺寸可选。',
+                'name' => '云纹绣花布鞋',
+                'sku' => 'HANFU-BUXIE-MASTER',
+                'spu' => 'HANFU-BUXIE',
+                'handle' => 'hanfu-yunwen-buxie',
+                'short_description' => '云纹绣花布鞋，软底轻便，多颜色多尺寸',
+                'description' => '云纹绣花布鞋以传统云纹鞋面和轻便软底呈现汉服鞋履风格，适合展示鞋类规格、颜色与商品选项切换。',
                 'price' => 1299.00,
                 'cost' => 700.00,
                 'stock' => 0,
-                'weight' => 0.9,
-                'meta_keywords' => 'Adidas,跑鞋,Ultraboost',
+                'weight' => 0.48,
+                'image' => 'https://images.pexels.com/photos/36311713/pexels-photo-36311713.jpeg?auto=compress&cs=tinysrgb&w=900',
+                'meta_keywords' => '汉服,布鞋,绣花鞋,国风鞋履',
                 'category_handles' => ['sneakers'],
-                'brand' => 'adidas',
-                'material' => 'nylon',
+                'brand' => 'jin_xiu_ge',
+                'material' => 'cotton',
                 'variants' => [
                     [
-                        'name' => 'Adidas Ultraboost 22 - 黑色 42',
-                        'sku' => 'ADIDAS-UB22-BLK-42',
-                        'handle' => 'adidas-ultraboost-22-black-42',
-                        'short_description' => 'Adidas Ultraboost 22，黑色，42码',
+                        'name' => '云纹绣花布鞋 - 朱砂色 40',
+                        'sku' => 'HANFU-BUXIE-RED-40',
+                        'handle' => 'hanfu-yunwen-buxie-red-40',
+                        'short_description' => '云纹绣花布鞋，朱砂色，40码',
                         'price' => 1299.00,
                         'cost' => 700.00,
                         'stock' => 35,
-                        'color' => 'black',
-                        'size' => '42',
-                        'brand' => 'adidas',
-                        'material' => 'nylon',
+                        'color' => 'red',
+                        'size' => '40',
+                        'brand' => 'jin_xiu_ge',
+                        'material' => 'cotton',
                     ],
                     [
-                        'name' => 'Adidas Ultraboost 22 - 黑色 43',
-                        'sku' => 'ADIDAS-UB22-BLK-43',
-                        'handle' => 'adidas-ultraboost-22-black-43',
-                        'short_description' => 'Adidas Ultraboost 22，黑色，43码',
+                        'name' => '云纹绣花布鞋 - 米杏色 41',
+                        'sku' => 'HANFU-BUXIE-BEI-41',
+                        'handle' => 'hanfu-yunwen-buxie-beige-41',
+                        'short_description' => '云纹绣花布鞋，米杏色，41码',
                         'price' => 1299.00,
                         'cost' => 700.00,
                         'stock' => 40,
-                        'color' => 'black',
-                        'size' => '43',
-                        'brand' => 'adidas',
-                        'material' => 'nylon',
+                        'color' => 'starlight',
+                        'size' => '41',
+                        'brand' => 'jin_xiu_ge',
+                        'material' => 'cotton',
                     ],
                     [
-                        'name' => 'Adidas Ultraboost 22 - 白色 42',
-                        'sku' => 'ADIDAS-UB22-WHT-42',
-                        'handle' => 'adidas-ultraboost-22-white-42',
-                        'short_description' => 'Adidas Ultraboost 22，白色，42码',
+                        'name' => '云纹绣花布鞋 - 月白色 42',
+                        'sku' => 'HANFU-BUXIE-WHT-42',
+                        'handle' => 'hanfu-yunwen-buxie-white-42',
+                        'short_description' => '云纹绣花布鞋，月白色，42码',
                         'price' => 1299.00,
                         'cost' => 700.00,
                         'stock' => 32,
                         'color' => 'white',
                         'size' => '42',
-                        'brand' => 'adidas',
-                        'material' => 'nylon',
+                        'brand' => 'jin_xiu_ge',
+                        'material' => 'cotton',
                     ],
                     [
-                        'name' => 'Adidas Ultraboost 22 - 白色 43',
-                        'sku' => 'ADIDAS-UB22-WHT-43',
-                        'handle' => 'adidas-ultraboost-22-white-43',
-                        'short_description' => 'Adidas Ultraboost 22，白色，43码',
+                        'name' => '云纹绣花布鞋 - 竹青色 43',
+                        'sku' => 'HANFU-BUXIE-GRN-43',
+                        'handle' => 'hanfu-yunwen-buxie-green-43',
+                        'short_description' => '云纹绣花布鞋，竹青色，43码',
                         'price' => 1299.00,
                         'cost' => 700.00,
                         'stock' => 38,
-                        'color' => 'white',
+                        'color' => 'green',
                         'size' => '43',
-                        'brand' => 'adidas',
-                        'material' => 'nylon',
+                        'brand' => 'jin_xiu_ge',
+                        'material' => 'cotton',
                     ],
                 ],
             ],

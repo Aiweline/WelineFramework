@@ -165,9 +165,9 @@ class CatalogProvider implements FakeDataProviderInterface
             ],
             [
                 'handle' => 'fake-apparel',
-                'name' => 'Everyday Apparel',
-                'description' => 'Casual clothing, sneakers, and daily-wear demo products.',
-                'image' => 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+                'name' => '汉服系列',
+                'description' => '交领上襦、马面裙、披帛与绣花布鞋等国风汉服示例商品。',
+                'image' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=1200',
                 'sort_order' => 20,
             ],
             [
@@ -188,9 +188,9 @@ class CatalogProvider implements FakeDataProviderInterface
             [
                 'handle' => 'fake-daily-wear',
                 'parent_handle' => 'fake-apparel',
-                'name' => 'Daily Wear',
-                'description' => 'Comfortable everyday tops, shoes, and accessories.',
-                'image' => 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+                'name' => '汉服常服',
+                'description' => '适合日常展示的汉服上装、下装与传统鞋履示例商品。',
+                'image' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=1200',
                 'sort_order' => 21,
             ],
             [

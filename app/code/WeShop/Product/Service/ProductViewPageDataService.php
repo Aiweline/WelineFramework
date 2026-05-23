@@ -40,19 +40,27 @@ class ProductViewPageDataService
         }
 
         $product = $this->productService->getProduct($productId);
+        self::cooperativeBuildYield();
         if (!$product || !$product->getId() || !$this->isEnabled($product)) {
             return null;
         }
+        $product = clone $product;
 
         $attributes = $this->getAttributes($productId);
+        self::cooperativeBuildYield();
         $reviewsPayload = $this->getReviews($productId);
+        self::cooperativeBuildYield();
         $questions = $this->getQuestions($productId);
+        self::cooperativeBuildYield();
         $productData = $this->mapProduct($product, $attributes, $reviewsPayload);
+        self::cooperativeBuildYield();
         $configurableOptions = $this->getConfigurableOptions($productId);
         if (($configurableOptions['attributes'] ?? []) === []) {
+            self::cooperativeBuildYield();
             $configurableOptions = $this->buildConfigurableOptionsFromChildren($product);
         }
         if (($configurableOptions['attributes'] ?? []) === []) {
+            self::cooperativeBuildYield();
             $configurableOptions = $this->buildFallbackPurchasableOptions($product);
         }
         if (($configurableOptions['attributes'] ?? []) !== []) {
@@ -74,6 +82,38 @@ class ProductViewPageDataService
             'meta_description' => (string) ($product->getData(Product::schema_fields_meta_description) ?: $productData['short_description']),
             'meta_keywords' => (string) ($product->getData(Product::schema_fields_meta_keywords) ?? ''),
         ];
+    }
+
+    private static function cooperativeBuildYield(): void
+    {
+        if (!\class_exists(\Weline\Framework\Runtime\Runtime::class, false)
+            || !\Weline\Framework\Runtime\Runtime::isPersistent()
+            || !\Weline\Framework\Runtime\SchedulerSystem::isSchedulerActive()
+            || !\Fiber::getCurrent()) {
+            return;
+        }
+
+        static $fiberYieldAt = null;
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber) {
+            return;
+        }
+        if (!$fiberYieldAt instanceof \WeakMap) {
+            $fiberYieldAt = new \WeakMap();
+        }
+
+        $now = \microtime(true);
+        $lastYieldAt = (float)($fiberYieldAt[$fiber] ?? 0.0);
+        if ($lastYieldAt <= 0.0) {
+            $fiberYieldAt[$fiber] = $now;
+            return;
+        }
+        if (($now - $lastYieldAt) < 0.01) {
+            return;
+        }
+
+        $fiberYieldAt[$fiber] = $now;
+        \Weline\Framework\Runtime\SchedulerSystem::yield();
     }
 
     protected function isEnabled(Product $product): bool
@@ -143,6 +183,7 @@ class ProductViewPageDataService
         $images = $this->extractImages($product);
         $ratingDistribution = $this->buildRatingDistribution($reviewsPayload['items']);
         $priceData = $this->priceService->resolveProduct($product);
+        $attributeValueMap = $this->buildAttributeValueMap($attributes);
 
         return [
             'product_id' => (int) $product->getId(),
@@ -163,7 +204,7 @@ class ProductViewPageDataService
             'image' => (string) ($product->getData(Product::schema_fields_image) ?? ''),
             'main_image' => $images[0] ?? '',
             'images' => $images,
-            'brand' => (string) ($product->getData('brand') ?? ''),
+            'brand' => (string) ($attributeValueMap['brand'] ?? $product->getData('brand') ?? ''),
             'brand_id' => (int) ($product->getData('brand_id') ?? 0),
             'options' => $this->normalizeArrayField($product->getData('options')),
             'configurable_options' => [],
@@ -176,6 +217,27 @@ class ProductViewPageDataService
             'review_count' => (int) $reviewsPayload['total'],
             'rating_distribution' => $ratingDistribution,
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $attributes
+     * @return array<string, string>
+     */
+    protected function buildAttributeValueMap(array $attributes): array
+    {
+        $map = [];
+        foreach ($attributes as $group) {
+            $items = is_array($group['items'] ?? null) ? $group['items'] : [];
+            foreach ($items as $item) {
+                $code = trim((string)($item['code'] ?? ''));
+                $value = trim((string)($item['value'] ?? ''));
+                if ($code !== '' && $value !== '') {
+                    $map[$code] = $value;
+                }
+            }
+        }
+
+        return $map;
     }
 
     /**

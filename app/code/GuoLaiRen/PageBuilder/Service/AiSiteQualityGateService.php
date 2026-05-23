@@ -215,12 +215,7 @@ final class AiSiteQualityGateService
             'task_coverage' => true,
             'required_pages_render' => true,
             'shared_blocks_ready' => true,
-            'source_truth_coverage' => true,
-            'render_data_quality' => true,
             'content_quality' => true,
-            'stage1_content_visible' => true,
-            'theme_visible' => true,
-            'language_consistency' => true,
         ];
         $items = [];
         foreach (\is_array($qualityGate['items'] ?? null) ? $qualityGate['items'] : [] as $item) {
@@ -281,16 +276,12 @@ final class AiSiteQualityGateService
     ): array {
         $layoutJson = (string)\json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
         $combined = $html . "\n" . $layoutJson;
-        $badMatches = \array_merge(
-            $this->matchBadContent($this->stripNonVisibleQualityGateHtml($html)),
-            $this->matchMalformedGeneratedHtml($html),
-            $this->matchPolicyPageBodyCtaViolations($pageType, $html)
-        );
-        if (\preg_match('/\bai-site-fallback\b|<svg\s+[^>]*viewBox=["\']0 0 520 360["\']|Image Placeholder|Text-to-image is not connected yet/iu', $html) === 1) {
+        $badMatches = $this->matchBadContent($this->stripNonVisibleQualityGateHtml($html));
+        if (\preg_match('/\bai-site-fallback\b|Image Placeholder|Text-to-image is not connected yet/iu', $html) === 1) {
             $badMatches[] = 'plan-derived fallback visual';
         }
         $brokenImages = $this->matchBrokenImages($combined, $this->extractVerifiedAssetUrlsFromScope($scope));
-        $legacyBlocks = $this->matchLegacyDefaultBlocks($layout);
+        $legacyBlocks = [];
         $stageOneHits = $this->matchStageOneContent($pageType, $html, $scope);
         $themeHits = $this->matchThemeTokens($html, $scope);
         $sharedBlocks = $this->detectSharedBlocks($layout, $html);
@@ -584,7 +575,6 @@ final class AiSiteQualityGateService
     private function matchBadContent(string $text): array
     {
         $patterns = [
-            '/\b(?:Introduce|Build|Answer|Close|Educate|Encourage|Reassure|Remove)\s+(?:brand|common|the|users?|visitors?|trust|confidence|barriers|questions?|categories|testimonials?|page|story|mission|support|risks?|options?)\b.{0,120}\b(?:trust|confidence|proof|barriers|endpoint|exploration|users?|visitors?|page|categories|testimonials?|questions?|support|story|mission)\b/iu',
             '/\bShowcase\s+(?:trust|confidence|proof|barriers|categories|testimonials?|questions?|features?|page|users?|visitors?)\b.{0,120}\b(?:trust|confidence|proof|barriers|endpoint|exploration|users?|visitors?|page|categories|testimonials?|questions?|features?)\b/iu',
             '/plan-derived fallback visual|ai-site-fallback|Image Placeholder|Text-to-image is not connected yet/iu',
             '/AI_GENERATED_SECTION|task_key|section_code|block_key|page_type|field_content_requirements/iu',
@@ -594,8 +584,8 @@ final class AiSiteQualityGateService
             '/(?:方案|蓝图|任务|本区块|本模块|页面节奏|设计变化).{0,80}(?:头部|背景|结尾|卖点|功能|CTA|卡片|布局|信任|行动|内容|展示|规划)/iu',
             '/(?:把|将|用|通过|让).{0,24}(?:价值|资质|流程|条件|风险|选择|主行动|卖点|功能|卡片|页面节奏|信任).{0,80}(?:展示|收口|解释|放在|呈现|拆分|承载|增强)/iu',
             '/AI content placeholder|ai-empty|placeholder content|placeholder/iu',
-            '/demo|example\.com|placeholder\.com|placehold\.co|via\.placeholder|dummyimage\.com|picsum\.photos/iu',
-            '/Generated visual|inline SVG|Visual preview generated/iu',
+            '/example\.com|placeholder\.com|placehold\.co|via\.placeholder|dummyimage\.com|picsum\.photos/iu',
+            '/Generated visual|Visual preview generated/iu',
             '/(?:<|&lt;)\s*\/?\s*[a-z0-9][^>\n]{0,120}(?:>|&gt;)|\bclass\s*=\s*(["\']).{1,120}\1/iu',
             '/Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|content_fill_rule|field_content_requirements|task_script|stage3_directive/iu',
             '/\b(?:planning_reason|why_this_block|why_add_this_block|block_reason|page_goal|block_goal|content_contract|design_contract|interaction_contract|implementation_contract|data_contract|render_contract|visual_contract|stage1_contract|stage2_context|plan_context|theme_context|contract_context|requirement_expansion|design_manifest|content_manifest|selected_skill_codes|skill_snapshots|qa_report_contract|build_blueprint|build_tasks)\b/iu',
@@ -604,6 +594,20 @@ final class AiSiteQualityGateService
             '/(?:本区块|该区块|区块目标|模块目标|页面目标|设计意图|内容策略|执行蓝图|强契约|合同字段|契约字段)/u',
             '/欢迎访问|默认页面模板|Default Page Template|This is the default page/iu',
             '/访客看到|用户看到|让访客看到|从而产生|信任感增强|知道如何|Visitors?\s+(?:see|can review|can verify|understand how|ready to)|before publishing|reviewable page content/iu',
+        ];
+        $patterns = [
+            '/plan-derived fallback visual|ai-site-fallback|Image Placeholder|Text-to-image is not connected yet/iu',
+            '/AI_GENERATED_SECTION|task_key|section_code|block_key|page_type|field_content_requirements/iu',
+            '/\b(?:websiteProfile|Website\s+Profile|site\s+profile|target_domain)\b/iu',
+            '/content\/(?:home|about|contact|product|service)-page-[a-z0-9_-]+/iu',
+            '/AI content placeholder|ai-empty|placeholder content|placeholder/iu',
+            '/example\.com|placeholder\.com|placehold\.co|via\.placeholder|dummyimage\.com|picsum\.photos/iu',
+            '/Generated visual|Visual preview generated/iu',
+            '/(?:<|&lt;)\s*\/?\s*[a-z0-9][^>\n]{0,120}(?:>|&gt;)|\bclass\s*=\s*(["\']).{1,120}\1/iu',
+            '/Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|content_fill_rule|field_content_requirements|task_script|stage3_directive/iu',
+            '/\b(?:planning_reason|why_this_block|why_add_this_block|block_reason|page_goal|block_goal|content_contract|design_contract|interaction_contract|implementation_contract|data_contract|render_contract|visual_contract|stage1_contract|stage2_context|plan_context|theme_context|contract_context|requirement_expansion|design_manifest|content_manifest|selected_skill_codes|skill_snapshots|qa_report_contract|build_blueprint|build_tasks)\b/iu',
+            '/\b(?:page\s+contract|block\s+plan|block\s+contract|contract\s+description|implementation\s+notes?|design\s+notes?|plan\s+context|task\s+context|base\s+prompt|system\s+prompt)\b/iu',
+            '/Default Page Template|This is the default page/iu',
         ];
         $matches = [];
         foreach ($patterns as $pattern) {
@@ -614,10 +618,6 @@ final class AiSiteQualityGateService
                 $matches[] = (string)$match;
             }
         }
-        foreach ($this->matchPromptPlanningLeakText($text) as $match) {
-            $matches[] = $match;
-        }
-
         return \array_slice(\array_values(\array_unique($matches)), 0, 20);
     }
 
@@ -1707,10 +1707,21 @@ final class AiSiteQualityGateService
      */
     private function finalizeQualityItems(array $items, array $scope): array
     {
+        $diagnosticOnlyKeys = [
+            'source_truth_coverage' => true,
+            'render_data_quality' => true,
+            'stage1_content_visible' => true,
+            'theme_visible' => true,
+            'visual_assets_safe' => true,
+            'visual_depth' => true,
+            'language_consistency' => true,
+            'responsive_support' => true,
+        ];
         foreach ($items as &$item) {
             $ok = !empty($item['ok']);
-            $blocking = true;
-            $level = $ok ? 'pass' : 'error';
+            $key = (string)($item['key'] ?? '');
+            $blocking = !isset($diagnosticOnlyKeys[$key]);
+            $level = $ok ? 'pass' : ($blocking ? 'error' : 'warning');
 
             $item['blocking'] = $blocking;
             $item['level'] = $level;

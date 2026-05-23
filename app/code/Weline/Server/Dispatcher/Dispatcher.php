@@ -69,6 +69,16 @@ class Dispatcher
      * 是否启用攻击探测
      */
     private bool $attackDetectionEnabled = true;
+
+    /**
+     * Fast path for ordinary TLS ClientHello traffic.
+     */
+    private bool $fastTlsPathEnabled = true;
+
+    /**
+     * Bound each accept burst so active tunnels can flush between fresh connects.
+     */
+    private int $maxAcceptPerLoop = 64;
     
     /**
      * 实例名称
@@ -173,7 +183,7 @@ class Dispatcher
     /**
      * Worker 探活间隔（秒）
      */
-    private int $workerProbeInterval = 3;
+    private int $workerProbeInterval = 30;
     
     /**
      * 是否运行中
@@ -274,6 +284,7 @@ class Dispatcher
 
     /** healthy==0 && total>0 触发维护页兜底的持续时长阈值（秒） */
     private float $healthyZeroMaintenanceThresholdSec = 2.0;
+    private bool $workerHealthAuditEnabled = false;
 
     /**
      * 首字节尚未到达的 pending 维护页连接等待超时（秒）。
@@ -466,9 +477,21 @@ class Dispatcher
         if (isset($config['enforce_first_response_timeout'])) {
             $this->enforceFirstResponseTimeout = (bool)$config['enforce_first_response_timeout'];
         }
+        if (isset($config['worker_probe_interval'])) {
+            $this->workerProbeInterval = \max(3, (int)$config['worker_probe_interval']);
+        }
+        if (isset($config['worker_health_audit_enabled'])) {
+            $this->workerHealthAuditEnabled = (bool)$config['worker_health_audit_enabled'];
+        }
         
         if (isset($config['attack_detection_enabled'])) {
             $this->attackDetectionEnabled = (bool) $config['attack_detection_enabled'];
+        }
+        if (isset($config['fast_tls_path_enabled'])) {
+            $this->fastTlsPathEnabled = (bool) $config['fast_tls_path_enabled'];
+        }
+        if (isset($config['max_accept_per_loop'])) {
+            $this->maxAcceptPerLoop = \max(1, \min(256, (int)$config['max_accept_per_loop']));
         }
         if (isset($config['main_loop_unblocked_log_every'])) {
             $this->mainLoopUnblockedLogEvery = \max(0, (int) $config['main_loop_unblocked_log_every']);
@@ -1118,9 +1141,8 @@ class Dispatcher
             if ($role === ControlMessage::ROLE_WORKER) {
                 $requestedPorts = \is_array($job['ports'] ?? null) ? $job['ports'] : [];
                 $requestedWorkers = \is_array($job['workers'] ?? null) ? $job['workers'] : [];
-                if (!$this->queueJoinedWorkerHomepageWarmup($acceptedPorts, $source, $requestedPorts, $requestedWorkers)) {
-                    $this->sendWorkerPoolAckForPorts($requestedPorts, $requestedWorkers);
-                }
+                $this->sendWorkerPoolAckForPorts($requestedPorts, $requestedWorkers);
+                $this->queueJoinedWorkerHomepageWarmup($acceptedPorts, $source);
             }
 
             return;
@@ -1158,32 +1180,6 @@ class Dispatcher
                     $source . ' Worker 棣栭〉棰勭儹澶辫触锛堜笉褰卞搷宸插叆姹狅級: ' . \implode('; ', $items),
                     'WARN'
                 );
-            }
-            if ($failed !== []) {
-                $removedPorts = [];
-                foreach ($failed as $port => $reason) {
-                    $p = (int)$port;
-                    if ($p <= 0) {
-                        continue;
-                    }
-
-                    $affectedConnIds = $this->passthroughCore->removeWorkerPort($p);
-                    foreach ($affectedConnIds as $connId) {
-                        $this->closeConnection((int)$connId, 'homepage_warmup_failed');
-                    }
-                    $removedPorts[] = $p;
-                    $this->log(
-                        'Removed worker from business pool after homepage warmup failure: port=' . $p
-                        . ', reason=' . (string)$reason,
-                        'WARN'
-                    );
-                }
-                if ($removedPorts !== []) {
-                    $this->updateMaintenanceFallbackState(
-                        $this->passthroughCore->getWorkerCount() === 0,
-                        $source . ' homepage_warmup_failed removed=' . \implode(',', $removedPorts)
-                    );
-                }
             }
             if ($skipped !== []) {
                 $this->log(
@@ -1337,8 +1333,8 @@ class Dispatcher
             $source . ' 信任 Master READY 直接入池，跳过启动探活: ' . (\implode(',', $acceptedPorts) ?: '(空)'),
             'INFO'
         );
-        $this->queueJoinedWorkerHomepageWarmup($acceptedPorts, $source);
         $this->sendWorkerPoolAckForPorts($ports, $workers);
+        $this->queueJoinedWorkerHomepageWarmup($acceptedPorts, $source);
     }
 
     /**
@@ -1741,6 +1737,10 @@ class Dispatcher
 
                 // Worker 入池预热 / 黑名单探活：Fiber 分片推进，避免阻塞 IPC 与 accept
                 $this->pumpDeferredWorkerPoolJobs();
+
+                // SSL worker cold preconnect refill is incremental; never refill
+                // synchronously inside a client accept hot path.
+                $this->passthroughCore->tickSslBackendPreconnectPool(2);
                 
                 // 连接超时清理
                 $this->cleanupExpiredConnections();
@@ -1880,6 +1880,9 @@ class Dispatcher
         if ($this->ipcReceivedShutdown || !$this->running) {
             return;
         }
+        if (!$this->workerHealthAuditEnabled) {
+            return;
+        }
         
         $now = \microtime(true);
         if ($now - $this->lastWorkerProbeTime < $this->workerProbeInterval) {
@@ -1973,29 +1976,46 @@ class Dispatcher
         // 准备 socket 列表
         $readSockets = [$this->serverSocket];
         $workerSockets = [];
+        $writeSockets = [];
+        $clientWriteSockets = [];
+        $workerWriteSockets = [];
         
         // 添加所有客户端连接
         foreach ($this->clientConnections as $connId => $clientSocket) {
             // 客户端上行半关闭后，不再监听其可读事件（避免持续 EOF 触发误关连接）
-            if (!$this->passthroughCore->isClientInputClosed($clientSocket)) {
+            if (!$this->passthroughCore->isClientInputClosed($clientSocket)
+                && !$this->passthroughCore->hasWorkerBufferedData($clientSocket)) {
                 $readSockets[] = $clientSocket;
+            }
+            if ($this->passthroughCore->hasBufferedData($clientSocket)) {
+                $writeSockets[] = $clientSocket;
+                $clientWriteSockets[$this->socketId($clientSocket)] = $connId;
             }
             
             // 添加对应的 Worker 连接（如果 Worker 未关闭）
             $workerSocket = $this->passthroughCore->getWorkerSocket($clientSocket);
             if ($workerSocket !== null) {
-                $readSockets[] = $workerSocket;
-                $workerSockets[$this->socketId($workerSocket)] = $connId;
+                if ($this->passthroughCore->hasWorkerBufferedData($clientSocket)) {
+                    $writeSockets[] = $workerSocket;
+                    $workerWriteSockets[$this->socketId($workerSocket)] = $connId;
+                } else {
+                    $readSockets[] = $workerSocket;
+                    $workerSockets[$this->socketId($workerSocket)] = $connId;
+                }
             }
         }
         
-        $writeSockets = [];
         $exceptSockets = [];
         
         // socket_select 等待事件（如果有缓冲数据，缩短等待时间）
         $hasBuffers = !empty($this->passthroughCore->getPendingBufferConnIds());
+        $hasWorkerBuffers = !empty($this->passthroughCore->getPendingWorkerBufferConnIds());
+        $hasActiveConnections = !empty($this->clientConnections);
         $timeout = 0;
-        $microTimeout = $hasBuffers ? 1000 : 5000; // 有缓冲数据时 1ms，否则 5ms（优化响应速度）
+        $microTimeout = $hasBuffers ? 250 : 5000; // 活跃写缓冲用更短等待片，降低高并发转发尾延迟。
+        if ($hasActiveConnections || $hasWorkerBuffers) {
+            $microTimeout = 250;
+        }
         
         $changed = @\socket_select($readSockets, $writeSockets, $exceptSockets, $timeout, $microTimeout);
         
@@ -2029,6 +2049,26 @@ class Dispatcher
                 $this->handleClientData($socket);
             }
         }
+
+        foreach ($writeSockets as $socket) {
+            $socketId = $this->socketId($socket);
+
+            if (isset($workerWriteSockets[$socketId])) {
+                $clientConnId = $workerWriteSockets[$socketId];
+                if (isset($this->clientConnections[$clientConnId])) {
+                    $this->flushWorkerBuffer($clientConnId);
+                }
+                continue;
+            }
+
+            if (isset($clientWriteSockets[$socketId])) {
+                $clientConnId = $clientWriteSockets[$socketId];
+                if (isset($this->clientConnections[$clientConnId])) {
+                    $this->flushClientBufferForConnection($clientConnId);
+                }
+            }
+        }
+
     }
 
     /**
@@ -2052,6 +2092,9 @@ class Dispatcher
 
             // 条件：请求已经转发给 Worker，但还没有收到任何返回字节
             if ($inBytes <= 0 || $outBytes > 0) {
+                continue;
+            }
+            if ($this->passthroughCore->hasWorkerBufferedData($this->clientConnections[$connId])) {
                 continue;
             }
 
@@ -2112,10 +2155,55 @@ class Dispatcher
     /**
      * 接受新连接
      */
+    private function flushClientBufferForConnection(int $connId): void
+    {
+        if (!isset($this->clientConnections[$connId])) {
+            return;
+        }
+
+        $clientSocket = $this->clientConnections[$connId];
+        $flushed = $this->passthroughCore->flushClientBuffer($clientSocket);
+
+        if ($flushed === -1) {
+            $this->closeConnection($connId, 'receive_request_failed');
+            return;
+        }
+
+        if ($flushed > 0) {
+            $this->connectionLastActivity[$connId] = \microtime(true);
+            $this->bytesCount['out'] += $flushed;
+            if (isset($this->connectionBytes[$connId])) {
+                $this->connectionBytes[$connId]['out'] += $flushed;
+            }
+        }
+
+        if (!$this->passthroughCore->hasBufferedData($clientSocket)
+            && $this->passthroughCore->isWorkerClosedWithBuffer($clientSocket)) {
+            $this->closeConnection($connId, 'forward_to_worker_failed');
+        }
+    }
+
+    private function flushWorkerBuffer(int $connId): void
+    {
+        if (!isset($this->clientConnections[$connId])) {
+            return;
+        }
+
+        $clientSocket = $this->clientConnections[$connId];
+        $flushed = $this->passthroughCore->flushWorkerBuffer($clientSocket);
+        if ($flushed === -1) {
+            $this->closeConnection($connId, 'forward_to_worker_failed');
+            return;
+        }
+        if ($flushed > 0) {
+            $this->connectionLastActivity[$connId] = \microtime(true);
+        }
+    }
+
     private function acceptConnections(): void
     {
         $accepted = 0;
-        $maxAcceptPerLoop = 100;
+        $maxAcceptPerLoop = $this->maxAcceptPerLoop;
         
         do {
             $clientSocket = @\socket_accept($this->serverSocket);
@@ -2138,14 +2226,22 @@ class Dispatcher
                 );
             }
 
+            // Keep accept-path protocol probes non-blocking; otherwise concurrent
+            // TLS handshakes serialize into dispatcher tail latency.
+            \socket_set_nonblock($clientSocket);
+
+            $fastTlsPath = $this->httpsEnabled
+                && $this->fastTlsPathEnabled
+                && $this->isAcceptedClientTlsHandshake($clientSocket);
+
             // ACME HTTP-01 must be answered before any HTTP->HTTPS redirect or worker routing.
-            if ($this->tryServeAcmeHttp01Challenge($clientSocket, $connId, $clientIp)) {
+            if (!$fastTlsPath && $this->tryServeAcmeHttp01Challenge($clientSocket, $connId, $clientIp)) {
                 $accepted++;
                 continue;
             }
 
             // HTTPS 模式：主端口收到明文 HTTP 时，直接返回 301 到 https://同主机同路径
-            if ($this->httpsEnabled && $this->handlePlainHttpRedirect($clientSocket, $connId, $clientIp)) {
+            if (!$fastTlsPath && $this->httpsEnabled && $this->handlePlainHttpRedirect($clientSocket, $connId, $clientIp)) {
                 $accepted++;
                 continue;
             }
@@ -2168,7 +2264,7 @@ class Dispatcher
                 continue;
             }
             
-            if ($this->attackDetectionEnabled && !$isTrustedIp) {
+            if (!$fastTlsPath && $this->attackDetectionEnabled && !$isTrustedIp) {
                 // 获取 SNI（如果可用）用于攻击探测
                 $sni = $this->passthroughCore->extractSniFromSocketPublic($clientSocket);
                 
@@ -2192,12 +2288,10 @@ class Dispatcher
                 }
             }
             
-            // 设置非阻塞
-            \socket_set_nonblock($clientSocket);
-            
             // 尝试建立到 Worker 的连接（含故障转移：失败时自动尝试其他 Worker）
             if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
                 $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
+                $this->pumpNewConnectionOnce($clientSocket, $connId);
             } else {
                 $allWorkersUnavailable = $this->passthroughCore->lastNewConnectionEndedInAllWorkersDown();
                 if ($allWorkersUnavailable) {
@@ -2315,12 +2409,30 @@ class Dispatcher
     }
 
     /**
+     * The accept path has already peeked the TLS ClientHello for SNI routing.
+     * Forward the still-buffered bytes immediately instead of waiting for the
+     * next socket_select tick; this trims cold-connection tail latency without
+     * changing the passthrough protocol.
+     */
+    private function pumpNewConnectionOnce($clientSocket, int $connId): void
+    {
+        if (!isset($this->clientConnections[$connId])) {
+            return;
+        }
+
+        $this->handleClientData($clientSocket);
+    }
+
+    /**
      * @param \Socket|resource $clientSocket
      */
     private function applyClientSocketKeepAlive($clientSocket): void
     {
         try {
             @\socket_set_option($clientSocket, \SOL_SOCKET, \SO_KEEPALIVE, 1);
+            if (\defined('TCP_NODELAY')) {
+                @\socket_set_option($clientSocket, \SOL_TCP, (int)\TCP_NODELAY, 1);
+            }
             if (\defined('TCP_KEEPIDLE')) {
                 @\socket_set_option($clientSocket, \SOL_TCP, (int)\TCP_KEEPIDLE, self::CLIENT_TCP_KEEPALIVE_IDLE_SEC);
             }
@@ -2912,15 +3024,19 @@ HTML;
         return $peek !== '' && \ord($peek[0]) === 0x16;
     }
 
+    private function isAcceptedClientTlsHandshake($clientSocket): bool
+    {
+        $peek = '';
+        $peekLen = @\socket_recv($clientSocket, $peek, 5, \MSG_PEEK);
+
+        return $peekLen !== false
+            && $peekLen > 0
+            && $peek !== ''
+            && $this->isTlsHandshakePeek($peek);
+    }
+
     private function tryServeAcmeHttp01Challenge($clientSocket, int $connId, string $clientIp): bool
     {
-        $read = [$clientSocket];
-        $write = $except = [];
-        $ready = @\socket_select($read, $write, $except, 0, 5000);
-        if ($ready === false || $ready <= 0 || !\in_array($clientSocket, $read, true)) {
-            return false;
-        }
-
         $peek = '';
         $peekLen = @\socket_recv($clientSocket, $peek, 4096, \MSG_PEEK);
         if ($peekLen === false || $peekLen <= 0 || $peek === '' || $this->isTlsHandshakePeek($peek)) {
@@ -3405,7 +3521,7 @@ HTML;
         
         if ($result > 0 || $result === -2) {
             $this->connectionLastActivity[$connId] = \microtime(true);
-            if ($result > 0 && $this->isDevMode) {
+            if ($result > 0 && $this->shouldLogHotPathDiagnostics()) {
                 $this->log("Dispatcher 转发到客户端 connId: {$connId} bytes: {$result}", 'ROUTE');
             }
             if ($result > 0) {
@@ -3586,9 +3702,14 @@ HTML;
 
     private function shouldLogIngressDiagnostics(): bool
     {
-        return $this->isDevMode
-            || \Weline\Server\Log\LogConfig::isVerboseWlsLog()
+        return $this->shouldLogHotPathDiagnostics()
             || (\defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE);
+    }
+
+    private function shouldLogHotPathDiagnostics(): bool
+    {
+        return \Weline\Server\Log\LogConfig::isVerboseWlsLog()
+            || (bool)\Weline\Framework\App\Env::get('wls.debug.hot_path_logs', false);
     }
     
     /**
@@ -3731,10 +3852,8 @@ HTML;
         // 关闭服务器 socket
         @\socket_close($this->serverSocket);
         
-        // 清理 PID
-        if ($this->processName) {
-            Processer::destroy('--name=' . $this->processName);
-        }
+        // Master owns process-record cleanup; dispatcher exit must not block on
+        // shared PID/name/port index locks.
         
         $this->log('Shutting down...', 'INFO');
     }

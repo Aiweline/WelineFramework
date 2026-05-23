@@ -70,8 +70,8 @@ class CacheClear extends CommandAbstract
             }
 
             // 发送清除缓存命令
-            $message = ControlMessage::command(ControlMessage::ACTION_ROUTING_CACHE_CLEAR);
-            $this->printer->note('发送消息: ' . trim($message));
+            $message = ControlMessage::command(ControlMessage::ACTION_ROUTING_CACHE_CLEAR, '', [], $instance->controlToken);
+            $this->printer->note(__('发送路由缓存清除命令'));
             \fwrite($conn, $message);
 
             // 等待响应

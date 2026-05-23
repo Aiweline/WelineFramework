@@ -63,6 +63,7 @@ class Scale extends CommandAbstract
         // 默认使用第一个实例
         $instance = $instances[0];
         $controlPort = $instance['control_port'] ?? 0;
+        $controlToken = (string)($instance['control_token'] ?? '');
 
         if ($controlPort === 0) {
             $printer->error('Failed to get control port from running instance');
@@ -71,7 +72,7 @@ class Scale extends CommandAbstract
 
         // 查询状态
         if ($status) {
-            $this->showStatus($controlPort, $printer);
+            $this->showStatus($controlPort, $controlToken, $printer);
             return;
         }
 
@@ -83,7 +84,7 @@ class Scale extends CommandAbstract
 
         // 手动扩缩容
         if ($workers !== null) {
-            $this->scaleWorkers($controlPort, (int)$workers, $printer);
+            $this->scaleWorkers($controlPort, $controlToken, (int)$workers, $printer);
             return;
         }
 
@@ -94,7 +95,7 @@ class Scale extends CommandAbstract
     /**
      * 手动扩缩容
      */
-    private function scaleWorkers(int $controlPort, int $targetWorkers, Printing $printer): void
+    private function scaleWorkers(int $controlPort, string $controlToken, int $targetWorkers, Printing $printer): void
     {
         if ($targetWorkers < 1) {
             $printer->error('Worker count must be at least 1');
@@ -108,7 +109,8 @@ class Scale extends CommandAbstract
             $message = ControlMessage::command(
                 ControlMessage::ACTION_SCALE_WORKERS,
                 '',
-                ['target_workers' => $targetWorkers]
+                ['target_workers' => $targetWorkers],
+                $controlToken
             );
 
             $response = $gateway->sendAndWaitForResponse($message, self::IPC_TIMEOUT);
@@ -220,11 +222,11 @@ class Scale extends CommandAbstract
     /**
      * 显示扩缩容状态
      */
-    private function showStatus(int $controlPort, Printing $printer): void
+    private function showStatus(int $controlPort, string $controlToken, Printing $printer): void
     {
         try {
             $gateway = new IpcControlGateway('127.0.0.1', $controlPort);
-            $message = ControlMessage::command(ControlMessage::ACTION_SCALING_STATUS);
+            $message = ControlMessage::command(ControlMessage::ACTION_SCALING_STATUS, '', [], $controlToken);
 
             $response = $gateway->sendAndWaitForResponse($message, self::IPC_TIMEOUT);
 

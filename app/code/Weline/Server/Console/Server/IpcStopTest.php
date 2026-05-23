@@ -39,7 +39,7 @@ class IpcStopTest extends CommandAbstract
             return;
         }
 
-        $msg = ControlMessage::command(ControlMessage::ACTION_STOP_TEST, '', []);
+        $msg = ControlMessage::command(ControlMessage::ACTION_STOP_TEST, '', [], $info->controlToken);
         @\fwrite($conn, $msg);
         \stream_set_blocking($conn, true);
         \stream_set_timeout($conn, 2);

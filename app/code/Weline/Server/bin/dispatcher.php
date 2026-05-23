@@ -99,7 +99,7 @@ if (!\defined('DS')) {
 // 先完成自动加载；控制面解析与框架 bootstrap 可能较慢，主端口须尽快 listen，否则客户端会得到 ERR_CONNECTION_REFUSED（无法进入 503 启动页）。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
-// ========== 主端口尽早 listen（先于 resolveControlPort / WlsRuntime）==========
+// ========== 主端口尽早 listen（先于控制面解析）==========
 if (!\function_exists('wlsDispatcherIsIpBindAddress')) {
     function wlsDispatcherIsIpBindAddress(string $host): bool
     {
@@ -282,18 +282,6 @@ if ($controlPort > 0 || $supervisorEnabled) {
     $dispatcher->connectIpc($controlPort, false);
 }
 
-// 使用 WlsRuntime 完整初始化框架
-$runtimeError = null;
-try {
-    $runtime = new \Weline\Framework\Runtime\WlsRuntime();
-    $runtime->bootstrap();
-} catch (\Throwable $e) {
-    $runtimeError = $e->getMessage();
-    WlsLogger::getInstance()->error("框架初始化失败: " . $e->getMessage());
-    \fwrite(STDERR, "[Dispatcher] WlsRuntime bootstrap failed: {$runtimeError}\n");
-    exit(2);
-}
-
 // 读取 env 配置
 $envConfig = $_wlsEnvConfig;
 unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
@@ -336,17 +324,36 @@ $addWarmupHost = static function (string $candidate) use (&$warmupHosts, $port):
         : $candidate . ':' . $port;
     $warmupHosts[$hostHeader] = $hostHeader;
 };
-$instanceFileForWarmup = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
-if (\is_file($instanceFileForWarmup)) {
-    $instanceDataForWarmup = @\json_decode((string)@\file_get_contents($instanceFileForWarmup), true);
-    if (\is_array($instanceDataForWarmup)) {
-        $addWarmupHost((string)($instanceDataForWarmup['public_host'] ?? ''));
+$configuredWarmupHosts = $dispatcherConfig['homepage_warmup_hosts']
+    ?? $wlsConfig['homepage_warmup_hosts']
+    ?? [];
+if (\is_string($configuredWarmupHosts)) {
+    $decodedWarmupHosts = \json_decode($configuredWarmupHosts, true);
+    $configuredWarmupHosts = \is_array($decodedWarmupHosts)
+        ? $decodedWarmupHosts
+        : (\preg_split('/[,\s]+/', $configuredWarmupHosts, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+}
+if (\is_array($configuredWarmupHosts)) {
+    foreach ($configuredWarmupHosts as $configuredWarmupHost) {
+        if (\is_scalar($configuredWarmupHost)) {
+            $addWarmupHost((string)$configuredWarmupHost);
+        }
+    }
+}
+foreach ([
+    $wlsConfig['host'] ?? null,
+    $envConfig['server']['host'] ?? null,
+    $requestedHost ?? null,
+    $host ?? null,
+] as $detectedWarmupHost) {
+    if (\is_scalar($detectedWarmupHost)) {
+        $addWarmupHost((string)$detectedWarmupHost);
     }
 }
 $includeLoopbackWarmupHosts = (bool)(
     $dispatcherConfig['include_loopback_homepage_warmup_hosts']
     ?? $wlsConfig['include_loopback_homepage_warmup_hosts']
-    ?? false
+    ?? true
 );
 if ($includeLoopbackWarmupHosts || $warmupHosts === []) {
     $addWarmupHost('127.0.0.1');
@@ -429,8 +436,11 @@ if (!\function_exists('wlsDispatcherApplyWarmupPathObservers')) {
 }
 $homepageWarmupPaths = $dispatcherConfig['homepage_warmup_paths']
     ?? $wlsConfig['homepage_warmup_paths']
-    ?? ['/', '/CNY/en_US/', '/CNY/zh_Hans_CN/'];
+    ?? ['/'];
 $homepageWarmupPaths = wlsDispatcherNormalizeWarmupPaths($homepageWarmupPaths);
+$homepageWarmupVariants = $dispatcherConfig['homepage_warmup_variants']
+    ?? $wlsConfig['homepage_warmup_variants']
+    ?? [];
 $warmupPathObserversEnabled = (bool)(
     $dispatcherConfig['warmup_path_observers_enabled']
     ?? $wlsConfig['dispatcher_warmup_path_observers_enabled']
@@ -459,9 +469,17 @@ $dispatcher->configure([
     'backend_route_wait_timeout_sec' => (float)($dispatcherConfig['backend_route_wait_timeout_sec'] ?? 0.0),
     'worker_health_connect_timeout_sec' => (float)($dispatcherConfig['worker_health_connect_timeout_sec'] ?? 2.0),
     'worker_health_response_timeout_sec' => (float)($dispatcherConfig['worker_health_response_timeout_sec'] ?? 2.0),
-    'homepage_warmup_enabled' => (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? true),
+    'worker_health_audit_enabled' => (bool)($dispatcherConfig['worker_health_audit_enabled'] ?? false),
+    'fast_tls_path_enabled' => (bool)($dispatcherConfig['fast_tls_path_enabled'] ?? true),
+    'max_accept_per_loop' => (int)($dispatcherConfig['max_accept_per_loop'] ?? 64),
+    'worker_connect_select_timeout_sec' => (float)($dispatcherConfig['worker_connect_select_timeout_sec'] ?? 0.02),
+    'worker_busy_penalty_after_ms' => (float)($dispatcherConfig['worker_busy_penalty_after_ms'] ?? 120),
+    'ssl_backend_preconnect_per_worker' => (int)($dispatcherConfig['ssl_backend_preconnect_per_worker'] ?? 0),
+    'homepage_warmup_enabled' => (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? false),
     'homepage_warmup_hosts' => \array_values($warmupHosts),
     'homepage_warmup_paths' => $homepageWarmupPaths,
+    'homepage_warmup_variants' => $homepageWarmupVariants,
+    'homepage_warmup_route_gate_targets' => (int)($dispatcherConfig['homepage_warmup_route_gate_targets'] ?? $wlsConfig['homepage_warmup_route_gate_targets'] ?? 16),
     'cache' => [
         'default_ttl' => 3600,
         'connection_ttl' => 120,

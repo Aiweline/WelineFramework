@@ -26,15 +26,15 @@ This skill performs lightweight route and UI smoke validation. It is optimized f
 
 - Prove route registration and basic page reachability quickly.
 - Check for obvious backend, frontend, or API regressions.
-- Choose HTTP or browser-smoke validation proportional to the change.
+- Choose HTTP or browser-smoke validation proportional to the change, but treat browser-visible frontend work as Browser-first.
 - Catch route wiring issues before deeper acceptance work begins.
 
 # Workflow
 
 1. Identify the changed route, page, or UI surface.
-2. Determine whether HTTP-level validation is enough or whether a browser smoke is needed; if the user is discussing visible output, prefer browser proof.
+2. Determine whether HTTP-level validation is enough or whether a browser smoke is needed; if the user is discussing visible output and the local site can be served, require Codex in-app Browser proof.
 3. Refresh route registration if the change requires it.
-4. Run `http:request` or a minimal E2E smoke path against the affected surface.
+4. Run `http:request` only as a precheck when helpful, then run the minimal Browser smoke path against any browser-visible affected surface.
 5. In browser automation on this machine, prefer DOM snapshot plus narrow locator checks over assuming a generic Playwright content helper exists on the wrapped tab object.
 6. Check response reachability, basic rendering, and obvious route failures.
 7. If browser access fails while direct HTTP succeeds, separate browser trust / certificate / automation-path problems from application reachability instead of mixing them together.
@@ -48,6 +48,7 @@ This skill performs lightweight route and UI smoke validation. It is optimized f
 - Provide HTTP or E2E validation evidence where relevant.
 - Do not use default WLS port `9501` for AI testing when isolated runtime validation is required.
 - Do not claim visible behavior is fixed from HTTP alone when the user asked about rendered labels, layouts, SEO tags, or interactive UI state.
+- For browser-visible frontend changes that can be served locally, final smoke validation must use the Codex in-app Browser plugin rather than only route tests, source inspection, or command-line HTTP checks.
 - If WLS or browser automation is down, stop at "runtime blocked" or "browser blocked" and state the concrete blocker instead of converting command success into UI acceptance.
 - For SEO, i18n, and head-output work, require live HTML or DOM evidence for the final visible tags rather than treating hook presence in source as sufficient proof.
 
@@ -66,8 +67,8 @@ This skill performs lightweight route and UI smoke validation. It is optimized f
 
 # Validation
 
-- Run `php bin/w http:request ...` for direct route checks when appropriate.
-- Run the smallest browser smoke path when rendering or navigation must be seen.
+- Run `php bin/w http:request ...` for direct route checks when appropriate, but keep it as a precheck for browser-visible flows.
+- Run the smallest Codex Browser smoke path when rendering or navigation must be seen.
 - Confirm route refresh was performed if registration changed.
 - Confirm obvious 404, 405, auth, or render failures are surfaced clearly.
 - Confirm browser-visible assertions through concrete selectors, snapshot hits, or attribute checks rather than vague "page opened" statements.

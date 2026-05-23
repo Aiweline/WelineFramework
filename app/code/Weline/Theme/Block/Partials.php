@@ -11,11 +11,13 @@ namespace Weline\Theme\Block;
 
 use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
@@ -40,13 +42,21 @@ class Partials extends Block
      * @var array<string, array>
      */
     private static array $partialsMetaCache = [];
+    private static ?\WeakMap $fiberRenderYieldAt = null;
     private const PARTIAL_OUTPUT_CACHE_TTL = 300.0;
+    private const WLS_RENDER_YIELD_MIN_INTERVAL_US = 10000;
     /** @var array<string, true> */
     private const CACHEABLE_PARTIAL_TYPES = [
         'head' => true,
         'header' => true,
         'footer' => true,
         'breadcrumb' => true,
+        'loading' => true,
+        'topbar' => true,
+        'topnav' => true,
+        'sidebar' => true,
+        'right-sidebar' => true,
+        'scripts' => true,
     ];
     private const PARTIAL_OUTPUT_STALE_TTL = 600;
     private const PARTIAL_OUTPUT_REFRESH_LOCK_TTL = 10;
@@ -196,38 +206,51 @@ class Partials extends Block
 
     private function resolvePartialOutputCacheContext(string $area, string $type, string $defaultOption, array $data): ?string
     {
-        if ($area !== 'frontend' || $this->shouldBypassPartialOutputCache()) {
+        $area = \strtolower($area);
+        $type = \strtolower($type);
+        if (($area !== 'frontend' && $area !== 'backend') || $this->shouldBypassPartialOutputCache()) {
             return null;
         }
 
         try {
             $requestUri = (string)\w_env_request_uri();
-            $pathContext = $type === 'header' || $type === 'footer' ? '' : $requestUri;
+            $pathContext = $this->resolvePartialPathCacheContext($area, $type, $requestUri);
             $themeData = \is_array($data['theme'] ?? null) ? (array)$data['theme'] : [];
             $theme = $themeData['theme'] ?? null;
             $themeId = \is_object($theme) && \method_exists($theme, 'getId') ? (string)$theme->getId() : '';
+            $authContext = $area === 'backend'
+                ? $this->backendAuthCacheContext()
+                : ($type === 'header' ? $this->frontendHeaderAuthCacheContext() : '');
 
-            return \sha1(\json_encode([
+            return KeyBuilder::environmentHash([
                 'area' => $area,
                 'type' => $type,
                 'option' => $defaultOption,
                 'base_url' => (string)$this->request->getBaseUrl(),
+                'backend_base_url' => $area === 'backend' ? (string)($this->request->getUrlBuilder()->getBackendUrl('/') ?? '') : '',
                 'uri' => $pathContext,
-                'lang' => (string)State::getLang(),
-                'lang_local' => (string)State::getLangLocal(),
-                'currency' => (string)State::getCurrency(),
                 'year' => $type === 'footer' ? \date('Y') : '',
                 'theme_id' => $themeId,
                 'theme_area' => (string)($themeData['area'] ?? ''),
                 'theme_color_mode' => (string)($themeData['colorMode'] ?? ''),
                 'layout_type' => (string)($themeData['layoutType'] ?? ''),
                 'layout_option' => (string)($themeData['layoutOption'] ?? ''),
-                'auth' => $type === 'header' ? $this->frontendHeaderAuthCacheContext() : '',
+                'website_id' => $area === 'backend' ? (string)($this->request->getData('website_id') ?? $this->request->getParam('website_id', '')) : '',
+                'auth' => $authContext,
                 'data' => $this->resolvePartialCacheDataContext($type, $data),
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: $type);
+            ]);
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function resolvePartialPathCacheContext(string $area, string $type, string $requestUri): string
+    {
+        if ($area === 'frontend') {
+            return $type === 'header' || $type === 'footer' ? '' : $requestUri;
+        }
+
+        return $type === 'head' ? $requestUri : '';
     }
 
     private function resolvePartialCacheDataContext(string $type, array $data): mixed
@@ -258,7 +281,40 @@ class Partials extends Block
             return $this->normalizeHeadPartialCacheData($data);
         }
 
+        if (isset(self::CACHEABLE_PARTIAL_TYPES[$type])) {
+            return $this->normalizeChromePartialCacheData($data);
+        }
+
         return $this->normalizePartialCacheData($data);
+    }
+
+    private function normalizeChromePartialCacheData(array $data): mixed
+    {
+        $meta = \is_array($data['meta'] ?? null) ? $data['meta'] : [];
+        $layout = \is_array($data['layout'] ?? null) ? $data['layout'] : [];
+        unset(
+            $meta['content'],
+            $meta['contentRenderKey'],
+            $meta['child_html'],
+            $meta['controller'],
+            $meta['request'],
+            $meta['req'],
+            $meta['session'],
+            $layout['content'],
+            $layout['contentRenderKey'],
+            $layout['child_html'],
+            $layout['controller'],
+            $layout['request'],
+            $layout['req'],
+            $layout['session']
+        );
+
+        return $this->normalizePartialCacheData([
+            'meta' => $meta,
+            'layout' => $layout,
+            'theme' => $data['theme'] ?? null,
+            'colors' => $data['colors'] ?? null,
+        ]);
     }
 
     private function frontendHeaderAuthCacheContext(): string
@@ -276,6 +332,30 @@ class Partials extends Block
         } catch (\Throwable) {
             return 'frontend-auth:unknown';
         }
+    }
+
+    private function backendAuthCacheContext(): string
+    {
+        $cached = RequestContext::get('theme.backend_partial_auth_context', null);
+        if (\is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        try {
+            $session = SessionFactory::getInstance()->createBackendSession();
+            if (!$session->isLoggedIn()) {
+                $context = 'backend-auth:0';
+            } else {
+                $userId = \method_exists($session, 'getLoginUserID') ? (string)($session->getLoginUserID() ?? '') : '';
+                $username = \method_exists($session, 'getLoginUsername') ? (string)($session->getLoginUsername() ?? '') : '';
+                $context = 'backend-auth:1:' . \sha1($userId . '|' . $username);
+            }
+        } catch (\Throwable) {
+            $context = 'backend-auth:unknown';
+        }
+
+        RequestContext::set('theme.backend_partial_auth_context', $context);
+        return $context;
     }
 
     private function normalizeHeadPartialCacheData(array $data): mixed
@@ -886,9 +966,15 @@ class Partials extends Block
     private function traceCall(string $name, callable $callback, string $category = 'theme'): mixed
     {
         if (!RequestLifecycleTrace::isEnabled()) {
-            return $callback();
+            self::cooperativeRenderYield();
+            try {
+                return $callback();
+            } finally {
+                self::cooperativeRenderYield();
+            }
         }
 
+        self::cooperativeRenderYield();
         $start = microtime(true);
         RequestLifecycleTrace::pushCurrentParent($name);
         try {
@@ -896,6 +982,33 @@ class Partials extends Block
         } finally {
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan($name, (microtime(true) - $start) * 1000, $category);
+            self::cooperativeRenderYield();
         }
+    }
+
+    private static function cooperativeRenderYield(): void
+    {
+        if (!Runtime::isPersistent() || !SchedulerSystem::isSchedulerActive()) {
+            return;
+        }
+
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber) {
+            return;
+        }
+
+        $now = \microtime(true);
+        self::$fiberRenderYieldAt ??= new \WeakMap();
+        $lastYieldAt = (float)(self::$fiberRenderYieldAt[$fiber] ?? 0.0);
+        if ($lastYieldAt <= 0.0) {
+            self::$fiberRenderYieldAt[$fiber] = $now;
+            return;
+        }
+        if ($lastYieldAt > 0.0 && (($now - $lastYieldAt) * 1000000) < self::WLS_RENDER_YIELD_MIN_INTERVAL_US) {
+            return;
+        }
+
+        self::$fiberRenderYieldAt[$fiber] = $now;
+        SchedulerSystem::yield();
     }
 }

@@ -76,6 +76,18 @@ Required JSON shape:
   "icon_svg": "<svg ...></svg>"
 }
 
+Example return shape (copy structure, not content; locked fields still win):
+{
+  "site_title": "Teenipiya",
+  "site_tagline": "Play smarter, download with confidence",
+  "brief_description": "Teenipiya helps mobile card-game players understand gameplay, compare app benefits, and download safely.",
+  "meta_title": "Teenipiya - Trusted Teen Patti APK Guide",
+  "meta_description": "Learn Teen Patti basics, review safety details, and find a clear APK download path with Teenipiya.",
+  "meta_keywords": "Teen Patti, APK download, mobile card game",
+  "logo_svg": "<svg width=\"160\" height=\"48\" viewBox=\"0 0 160 48\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"12\" y=\"30\">Teenipiya</text></svg>",
+  "icon_svg": "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"32\" cy=\"32\" r=\"18\"/></svg>"
+}
+
 Rules:
 - Keep locked fields exactly if they are provided.
 - If the customer brief clearly names a brand/site title, site_title MUST be exactly that compact brand name. Do not append a sentence, product description, locale rule, or SEO phrase to site_title.
@@ -84,8 +96,8 @@ Rules:
 - Site tagline should be concise and marketable.
 - Brief description should be 1-2 polished sentences suitable for preview/meta/brand usage.
 - meta_title should be concise, meta_description should stay within roughly 160 characters.
-- logo_svg must be a clean inline SVG with width 160 height 48 and viewBox "0 0 160 48".
-- icon_svg must be a clean inline SVG with width 64 height 64 and viewBox "0 0 64 64".
+- logo_svg must be a clean inline SVG with width 160 height 48 and viewBox "0 0 160 48". The SVG canvas must stay transparent: do not draw a full-width/full-height white, solid, gradient, card, tile, or rounded-rectangle background.
+- icon_svg must be a clean inline SVG with width 64 height 64 and viewBox "0 0 64 64". The icon must be an isolated symbol or monogram on transparent canvas: do not draw a white box, colored square, rounded tile, gradient backdrop, badge card, screenshot frame, or background plate.
 - Visible SVG text may contain the compact site_title or a short brand mark only. Do not place long descriptions, prompt/contract words, JSON field names, or truncated requirement sentences inside SVG text.
 - SVG must not contain script, foreignObject, animation, external URLs, or embedded raster images.
 - Prefer simple geometric shapes, gradients, paths, circles, rectangles, and optional text.{$localeRule}

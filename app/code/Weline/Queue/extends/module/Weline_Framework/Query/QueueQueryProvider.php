@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Weline\Queue\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\System\Process\Processer;
 use Weline\Queue\Helper\Helper;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\Model\Queue\Type;
+use Weline\Queue\Service\QueueDispatchService;
 
 /**
  * 任务队列统一入口：模块间一律通过 w_query('queue', ...) 读写队列，避免直接依赖 Queue 模型类。
@@ -48,6 +51,7 @@ class QueueQueryProvider implements QueryProviderInterface
             'getTypeIdByClass' => $this->getTypeIdByClass($params),
             'create' => $this->createQueue($params),
             'update' => $this->updateQueue($params),
+            'takeover' => $this->takeoverQueue($params),
             'delete' => $this->deleteQueue($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Queue 查询器不支持的操作：%{1}', $operation)
@@ -261,6 +265,7 @@ class QueueQueryProvider implements QueryProviderInterface
 
         $eventData = ['queue' => $queue];
         $this->eventsManager->dispatch('Weline_Queue::add', $eventData);
+        $this->wakeSystemScheduler($queue);
 
         return [
             'success' => true,
@@ -317,6 +322,117 @@ class QueueQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $params queue_id 或 biz_key；force 可选
      * @return array{success: bool, message?: string, queue_id?: int}
      */
+    /**
+     * Release a queue row from an old worker without executing it in this call.
+     *
+     * @param array<string, mixed> $params queue_id or biz_key; force/owner/reason optional
+     * @return array{success: bool, message?: string, queue_id?: int, data?: array<string, mixed>}
+     */
+    private function takeoverQueue(array $params): array
+    {
+        $queueIdArg = (int)($params['queue_id'] ?? $params['id'] ?? 0);
+        $bizKeyArg = \trim((string)($params['biz_key'] ?? ''));
+        if ($queueIdArg <= 0 && $bizKeyArg === '') {
+            throw new \InvalidArgumentException('Please provide queue_id or biz_key.');
+        }
+
+        $queue = $this->loadQueueByIdOrBizKey($params);
+        if ((int)$queue->getId() <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Queue does not exist.',
+            ];
+        }
+
+        $queueId = (int)$queue->getId();
+        $status = \strtolower(\trim((string)$queue->getStatus()));
+        $pid = (int)($queue->getPid() ?: 0);
+        $force = !\array_key_exists('force', $params) || (bool)$params['force'];
+        $owner = \trim((string)($params['owner'] ?? 'system_scheduler'));
+        if (!\in_array($owner, ['system_scheduler', 'manual_cli'], true)) {
+            $owner = 'system_scheduler';
+        }
+        $reason = \trim((string)($params['reason'] ?? 'force_takeover'));
+        if ($reason === '') {
+            $reason = 'force_takeover';
+        }
+
+        $liveProcess = $pid > 0 && Processer::isRunningByPid($pid);
+        if ($status === Queue::status_running && $liveProcess) {
+            if (!$force) {
+                return [
+                    'success' => false,
+                    'queue_id' => $queueId,
+                    'message' => 'Queue is running; takeover requires force=true.',
+                ];
+            }
+            if (!Processer::killByPid($pid, true)) {
+                return [
+                    'success' => false,
+                    'queue_id' => $queueId,
+                    'message' => 'Failed to terminate queue process pid=' . $pid . '.',
+                ];
+            }
+        }
+
+        $content = $this->decodeQueueContent((string)$queue->getContent());
+        if ($content !== []) {
+            if (!\array_key_exists('mark_force_rebuild', $params) || (bool)$params['mark_force_rebuild']) {
+                $content['_force_rebuild'] = 1;
+            }
+            $content['_queue_takeover'] = [
+                'token' => \bin2hex(\random_bytes(12)),
+                'owner' => $owner,
+                'reason' => $reason,
+                'previous_pid' => $pid,
+                'previous_status' => $status,
+                'execute_in_request' => false,
+                'taken_over_at' => \date('Y-m-d H:i:s'),
+            ];
+            $queue->setContent($this->normalizeContentValue($content));
+        }
+
+        $auto = \array_key_exists('auto', $params) ? (bool)$params['auto'] : ($owner === 'system_scheduler');
+        $line = $owner === 'manual_cli'
+            ? 'Force takeover completed; queue is manual-owned and will not be auto-dispatched.'
+            : 'Force takeover completed; queue reset to pending for system scheduler dispatch.';
+
+        $queue->setStatus(Queue::status_pending)
+            ->setPid(0)
+            ->setFinished(false)
+            ->setAuto($auto);
+        if ((bool)($params['clear_output'] ?? false)) {
+            $queue->setResult('')
+                ->setProcess($line);
+        } else {
+            $queue->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . $line));
+        }
+        $queue->save();
+        $queue->clearData()->load($queueId);
+
+        $eventData = ['queue' => $queue];
+        $this->eventsManager->dispatch('Weline_Queue::takeover', $eventData);
+        $this->eventsManager->dispatch('Weline_Queue::edit', $eventData);
+        $this->wakeSystemScheduler($queue);
+
+        return [
+            'success' => true,
+            'queue_id' => $queueId,
+            'data' => $queue->getData(),
+            'message' => $line,
+        ];
+    }
+
+    private function wakeSystemScheduler(Queue $queue): void
+    {
+        try {
+            ObjectManager::getInstance(QueueDispatchService::class)->dispatchQueueIfEligible($queue);
+        } catch (\Throwable $e) {
+            $queue->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . 'Queue scheduler wake failed: ' . $e->getMessage()))
+                ->save();
+        }
+    }
+
     private function deleteQueue(array $params): array
     {
         $queueIdArg = (int)($params['queue_id'] ?? $params['id'] ?? 0);
@@ -467,6 +583,16 @@ class QueueQueryProvider implements QueryProviderInterface
         return (string)$value;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeQueueContent(string $content): array
+    {
+        $decoded = \json_decode($content, true);
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
     private function isValidStatus(string $status): bool
     {
         return \in_array($status, self::VALID_STATUSES, true);
@@ -548,6 +674,17 @@ class QueueQueryProvider implements QueryProviderInterface
                         ['name' => 'queue_id', 'type' => 'int', 'required' => false, 'description' => __('与 biz_key 二选一')],
                         ['name' => 'biz_key', 'type' => 'string', 'required' => false, 'description' => __('定位键')],
                         ['name' => 'patch', 'type' => 'array', 'required' => false, 'description' => __('字段补丁；也可顶层传 name/status/content 等')],
+                    ],
+                ],
+                [
+                    'name' => 'takeover',
+                    'description' => __('Force takeover a queue without executing it in the current request.'),
+                    'params' => [
+                        ['name' => 'queue_id', 'type' => 'int', 'required' => false, 'description' => __('queue_id')],
+                        ['name' => 'biz_key', 'type' => 'string', 'required' => false, 'description' => __('biz_key')],
+                        ['name' => 'force', 'type' => 'bool', 'required' => false, 'description' => __('Terminate old PID if needed')],
+                        ['name' => 'owner', 'type' => 'string', 'required' => false, 'description' => __('system_scheduler or manual_cli')],
+                        ['name' => 'reason', 'type' => 'string', 'required' => false, 'description' => __('Takeover reason')],
                     ],
                 ],
                 [

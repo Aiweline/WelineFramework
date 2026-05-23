@@ -1366,6 +1366,18 @@ class Core
                     return $cachedResponse;
                 }
 
+                if (Runtime::isPersistent()
+                    && (bool)Env::get('wls.performance.fpc_serve_stale_before_build', true)
+                ) {
+                    $cachedResponse = $fpcCoordinator->getStaleCachedResponseForRebuild($this->request->getMethod() ?: 'GET');
+                    if ($cachedResponse !== null) {
+                        $this->is_match = true;
+                        $routeProfile['fpc'] = 'stale_before_build';
+                        $routeProfilePublish('fpc_stale_before_build');
+                        return $cachedResponse;
+                    }
+                }
+
                 $fpcBuildLock = $fpcCoordinator->acquireBuildLock($this->request->getMethod() ?: 'GET');
                 if ($fpcBuildLock === null) {
                     $cachedResponse = $fpcCoordinator->waitForPublishedResponse($this->request->getMethod() ?: 'GET');
@@ -1552,6 +1564,9 @@ class Core
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
         // 编辑器预览模式不写入全页缓存
         $isEditorMode = \w_env_get('editor_mode') !== null && (\w_env_get('editor_mode') === '1' || \w_env_get('editor_mode') === 'true');
+        $skipCacheDerivedResponseWrites = isset($response)
+            && $response instanceof Response
+            && $this->shouldSkipFpcPublishForCachedControllerResponse($response);
         if (
             !$this->is_backend
             && !$isEditorMode
@@ -1560,6 +1575,7 @@ class Core
             && !empty($fpcHtml)
             && $fpcCoordinator !== null
             && $fpcBuildLock !== null
+            && !$skipCacheDerivedResponseWrites
             && $fpcCoordinator->canPublishResponse($response, $this->request->getMethod() ?: 'GET')
         ) {
             $fpcCoordinator->publishResponse(
@@ -1573,7 +1589,9 @@ class Core
         }
         // 兼容性：如果 url_cache_data 为空，也保存到旧的缓存键
         $routeProfileMark('fpc_publish');
-        if (!$this->url_cache_data) {
+        $routeCacheMethod = \strtoupper((string)($this->request->getMethod() ?: 'GET'));
+        $canWriteRouteCache = $routeCacheMethod === 'GET' || $routeCacheMethod === 'HEAD';
+        if (!$this->url_cache_data && $canWriteRouteCache && !$skipCacheDerivedResponseWrites) {
             $ruleCachePayload = [
                 self::RULE_CACHE_RULE_KEY => $this->request->getRule(),
                 self::RULE_CACHE_PARAMS_KEY => $this->routerGeneratedGetParams,
@@ -1590,6 +1608,16 @@ class Core
                 $fpcCoordinator->releaseBuildLock($fpcBuildLock);
             }
         }
+    }
+
+    private function shouldSkipFpcPublishForCachedControllerResponse(Response $response): bool
+    {
+        $fpcHit = $response->getHeader('X-Wls-Performance-Fpc-Hit');
+        if (\is_array($fpcHit)) {
+            $fpcHit = \implode(',', $fpcHit);
+        }
+
+        return \trim((string)$fpcHit) === '1';
     }
 
     private function resolveRequestScopedResponse(mixed $result, string $output): Response

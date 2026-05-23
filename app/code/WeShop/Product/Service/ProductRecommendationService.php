@@ -120,11 +120,21 @@ class ProductRecommendationService
         /** @var Product $productModel */
         $productModel = ObjectManager::getInstance(Product::class);
         $rows = $productModel->clear()
-            ->where(Product::schema_fields_sku, 'DEMO-CAT-%', 'like')
-            ->where(Product::schema_fields_status, 1)
-            ->where(Product::schema_fields_ID, $seedProductIds, 'not in')
+            ->loadLocalDescription()
+            ->fields(implode(',', [
+                'main_table.*',
+                'local.name AS local_name',
+                'local.short_description AS local_short_description',
+            ]))
+            ->where('main_table.' . Product::schema_fields_sku, 'DEMO-CAT-%', 'like')
+            ->where('main_table.' . Product::schema_fields_status, 1)
             ->select()
             ->fetchArray();
+        $seedSet = array_fill_keys($seedProductIds, true);
+        $rows = array_values(array_filter(
+            $rows,
+            static fn(array $row): bool => !isset($seedSet[(int)($row[Product::schema_fields_ID] ?? $row['product_id'] ?? 0)])
+        ));
 
         usort($rows, static function (array $a, array $b) use ($target): int {
             preg_match('/^DEMO-CAT-(\d+)$/', (string)($a[Product::schema_fields_sku] ?? ''), $ma);
@@ -287,12 +297,14 @@ class ProductRecommendationService
         $price = (float) ($product['price'] ?? $product[Product::schema_fields_price] ?? 0);
         $originalPrice = (float) ($product['original_price'] ?? $price);
         $stock = (int) ($product['stock'] ?? $product[Product::schema_fields_stock] ?? 0);
+        $name = $this->resolveLocalizedField($product, Product::schema_fields_name);
+        $shortDescription = $this->resolveLocalizedField($product, Product::schema_fields_short_description);
 
         return [
             'product_id' => (int) ($product['product_id'] ?? $product[Product::schema_fields_ID] ?? 0),
-            'name' => (string) ($product['name'] ?? $product[Product::schema_fields_name] ?? ''),
+            'name' => $name,
             'handle' => (string) ($product['handle'] ?? $product[Product::schema_fields_HANDLE] ?? ''),
-            'short_description' => (string) ($product['short_description'] ?? $product[Product::schema_fields_short_description] ?? ''),
+            'short_description' => $shortDescription,
             'price' => $price,
             'price_formatted' => $this->getPriceService()->formatPrice($price),
             'original_price' => $originalPrice,
@@ -323,5 +335,19 @@ class ProductRecommendationService
     private function getPriceService(): PriceService
     {
         return $this->priceService ?? ObjectManager::getInstance(PriceService::class);
+    }
+
+    /**
+     * @param array<string, mixed> $product
+     */
+    private function resolveLocalizedField(array $product, string $field): string
+    {
+        $localizedField = 'local_' . $field;
+        $localizedValue = trim((string)($product[$localizedField] ?? ''));
+        if ($localizedValue !== '') {
+            return $localizedValue;
+        }
+
+        return (string)($product[$field] ?? '');
     }
 }

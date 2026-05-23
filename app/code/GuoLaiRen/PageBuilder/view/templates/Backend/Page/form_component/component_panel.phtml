@@ -48,7 +48,10 @@ $componentsApiUrl = $this->getBackendUrl('pagebuilder/backend/visual/api/compone
 ]);
 
 // 获取模板CSS的基础URL（用于组件预览）
-$templateCssBaseUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css');
+$templateCssSource = 'GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css';
+$templateCssBaseUrl = $this->templateStaticExists($templateCssSource)
+    ? $this->fetchTemplateStatic($templateCssSource)
+    : '';
 ?>
 
 <style>

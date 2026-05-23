@@ -16,6 +16,26 @@ final class AiSiteBuildPlanProjectionServiceTest extends TestCase
             'page_types' => ['home_page'],
             'site_title' => 'Example Site',
             'brief_description' => 'Explain the service clearly.',
+            'default_locale' => 'en_US',
+            'execution_blueprint_draft' => [
+                'pages' => [
+                    'home_page' => [
+                        'title' => 'Home',
+                        'page_goal' => 'Explain the service clearly.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'title' => 'Explain the service clearly',
+                                'goal' => 'Show the service value with a direct CTA.',
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'A clear overview helps visitors understand the next step.'],
+                                    ['field' => 'cta', 'sample' => 'Contact us'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
         ]);
 
         $projection = (new AiSiteBuildPlanProjectionService())->build($contract);

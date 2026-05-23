@@ -86,7 +86,7 @@ class Listing extends CommandAbstract
         // 2. 获取所有 Weline Server 实例（通过 ServerInstanceManager）
         if ($typeFilter === null || $typeFilter === 'weline') {
             $manager = $this->getInstanceManager();
-            $allInfo = $manager->getAllInstanceInfo(false);
+            $allInfo = $manager->getAllPersistedInstanceInfo();
             $processInfoMap = $this->buildProcessInfoMap($allInfo);
             
             foreach ($allInfo as $name => $info) {
@@ -136,7 +136,8 @@ class Listing extends CommandAbstract
             return false;
         }
 
-        $status = (new IpcControlGateway())->getStatus($info->name, 1.5);
+        $gateway = new IpcControlGateway();
+        $status = $gateway->getStatusBrief($info->name, 0.5);
         return $status['success'] && (bool)($status['data']['running'] ?? false);
     }
 
@@ -146,11 +147,6 @@ class Listing extends CommandAbstract
             || $service->role === ControlMessage::ROLE_MEMORY_SERVER;
     }
 
-    protected function isSharedExternalService(ServiceInfo $service): bool
-    {
-        return (bool) ($service->metadata['shared_external'] ?? false);
-    }
-    
     /**
      * 格式化运行时长
      */

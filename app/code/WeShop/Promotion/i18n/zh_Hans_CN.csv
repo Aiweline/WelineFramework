@@ -21,6 +21,10 @@
 "Promotion Hub",优惠中心
 "Today Deals",今日特惠
 "Seasonal Sale",季节促销
+"Unsupported promotion provider operation: %{1}","Unsupported promotion provider operation: %{1}"
+"Promotion Query","Promotion Query"
+"Provides frontend promotion operations through the worker API.","Provides frontend promotion operations through the worker API."
+"Frontend coupon apply operation.","Frontend coupon apply operation."
 "Homepage hero banner","Homepage hero banner"
 "Inject content into the storefront homepage hero banner area.","Inject content into the storefront homepage hero banner area."
 "Homepage deals before","Homepage deals before"

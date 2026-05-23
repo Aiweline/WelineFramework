@@ -9,6 +9,12 @@
  * @hook-solo false
  */
 
+use Weline\Customer\Service\AccountSidebarContentGate;
+
+if (!AccountSidebarContentGate::accepts('returns')) {
+    return;
+}
+
 use WeShop\RMA\Service\RmaPageDataService;
 use WeShop\RMA\Service\RmaService;
 use Weline\Framework\Manager\ObjectManager;
@@ -51,28 +57,28 @@ if (!$selectedOrderEligible) {
     $selectedOrderItems = [];
     $selectedOrderItemCount = 0;
 }
-$feedbackDefault = '提交后会停留在当前个人中心，并自动刷新售后记录。';
+$feedbackDefault = (string) __('提交后会停留在当前个人中心，并自动刷新售后记录。');
 
 $statusLabels = [
-    RmaService::STATUS_PENDING => '待处理',
-    RmaService::STATUS_APPROVED => '已同意',
-    RmaService::STATUS_REJECTED => '已拒绝',
+    RmaService::STATUS_PENDING => (string) __('待处理'),
+    RmaService::STATUS_APPROVED => (string) __('已同意'),
+    RmaService::STATUS_REJECTED => (string) __('已拒绝'),
 ];
 
 $jsText = [
-    'recordTitleTemplate' => '售后单 #%{1}',
-    'orderNumberTemplate' => '订单号：%{1}',
-    'quantityTemplate' => 'x%{1}',
-    'moreItemsTemplate' => '还有 %{1} 件商品',
-    'selectedOrder' => '已选择订单',
-    'selectedReturnOrder' => '已选择售后订单',
-    'switchedToReturns' => '已切换到当前页售后区，可直接提交或查看进度。',
-    'submitting' => '正在提交售后申请...',
-    'submitted' => '售后申请已提交。',
-    'submitFailed' => '暂时无法提交售后申请。',
-    'selectOrder' => '请选择可售后订单',
-    'selectedOrderItems' => '已选订单商品',
-    'itemCountTemplate' => '共 %{1} 件',
+    'recordTitleTemplate' => (string) __('售后单 #%{1}'),
+    'orderNumberTemplate' => (string) __('订单号：%{1}'),
+    'quantityTemplate' => (string) __('x%{1}'),
+    'moreItemsTemplate' => (string) __('还有 %{1} 件商品'),
+    'selectedOrder' => (string) __('已选择订单'),
+    'selectedReturnOrder' => (string) __('已选择售后订单'),
+    'switchedToReturns' => (string) __('已切换到当前页售后区，可直接提交或查看进度。'),
+    'submitting' => (string) __('正在提交售后申请...'),
+    'submitted' => (string) __('售后申请已提交。'),
+    'submitFailed' => (string) __('暂时无法提交售后申请。'),
+    'selectOrder' => (string) __('请选择可售后订单'),
+    'selectedOrderItems' => (string) __('已选订单商品'),
+    'itemCountTemplate' => (string) __('共 %{1} 件'),
 ];
 
 $rmaReasonIcon = static function (string $reason): string {
@@ -107,14 +113,14 @@ $rmaCleanDescription = static function (string $description): string {
     <div class="weshop-account-returns" id="weshop-account-returns">
         <div class="weshop-returns-header">
             <div>
-                <h2 class="weshop-returns-title">退换货</h2>
-                <p class="weshop-returns-subtitle">提交和跟踪售后申请，不离开当前个人中心。</p>
+                <h2 class="weshop-returns-title"><?= __('退换货') ?></h2>
+                <p class="weshop-returns-subtitle"><?= __('提交和跟踪售后申请，不离开当前个人中心。') ?></p>
             </div>
             <div class="weshop-returns-selected-order" data-rma-selected-order>
                 <?php if ($order && $selectedOrderEligible && !empty($order['increment_id'])): ?>
-                    已选择订单 #<?= $escape($order['increment_id']) ?>
+                    <?= $escape(__('已选择订单')) ?> #<?= $escape($order['increment_id']) ?>
                 <?php else: ?>
-                    从订单列表选择需要售后的订单
+                    <?= __('从订单列表选择需要售后的订单') ?>
                 <?php endif; ?>
             </div>
         </div>
@@ -123,8 +129,8 @@ $rmaCleanDescription = static function (string $description): string {
             <article class="weshop-returns-card">
                 <div class="weshop-returns-card__header">
                     <div>
-                        <p class="weshop-returns-card__eyebrow">新建申请</p>
-                        <h3 class="weshop-returns-card__title">提交退货 / 换货</h3>
+                        <p class="weshop-returns-card__eyebrow"><?= __('新建申请') ?></p>
+                        <h3 class="weshop-returns-card__title"><?= __('提交退货 / 换货') ?></h3>
                     </div>
                 </div>
 
@@ -132,15 +138,15 @@ $rmaCleanDescription = static function (string $description): string {
                     <?= $this->getFormKey($this->getUrl('rma/create')) ?>
 
                     <label class="weshop-returns-form__field">
-                        <span>选择订单</span>
+                        <span><?= __('选择订单') ?></span>
                         <select data-rma-order-select required>
-                            <option value=""><?= $escape('请选择可售后订单') ?></option>
+                            <option value=""><?= $escape(__('请选择可售后订单')) ?></option>
                             <?php foreach ($orderOptions as $option): ?>
                                 <?php
                                 $optionOrderId = (int) ($option['order_id'] ?? 0);
                                 $optionIncrementId = trim((string) ($option['increment_id'] ?? ''));
                                 $optionEligible = (bool) ($option['eligible'] ?? false);
-                                $optionReason = trim((string) ($option['reason'] ?? ''));
+                                $optionReason = trim((string) __((string) ($option['reason'] ?? '')));
                                 $optionSelected = $order && $optionEligible && $optionOrderId === (int) ($order['order_id'] ?? 0);
                                 $optionLabel = '#' . ($optionIncrementId !== '' ? $optionIncrementId : (string) $optionOrderId);
                                 if (!$optionEligible && $optionReason !== '') {
@@ -160,7 +166,7 @@ $rmaCleanDescription = static function (string $description): string {
                     <input type="hidden" name="return_url" value="<?= $escape($selectedReturnUrl) ?>" data-rma-return-url-input>
 
                     <label class="weshop-returns-form__field">
-                        <span>申请类型</span>
+                        <span><?= __('申请类型') ?></span>
                         <select name="type">
                             <?php foreach ($requestTypes as $type): ?>
                                 <option value="<?= $escape($type['code'] ?? '') ?>">
@@ -171,9 +177,9 @@ $rmaCleanDescription = static function (string $description): string {
                     </label>
 
                     <label class="weshop-returns-form__field">
-                        <span>原因</span>
+                        <span><?= __('原因') ?></span>
                         <select name="reason" required>
-                            <option value="">请选择原因</option>
+                            <option value=""><?= __('请选择原因') ?></option>
                             <?php foreach ($reasonOptions as $reason): ?>
                                 <?php
                                 $reasonValue = is_array($reason) ? (string) ($reason['value'] ?? '') : (string) $reason;
@@ -187,14 +193,14 @@ $rmaCleanDescription = static function (string $description): string {
                     </label>
 
                     <label class="weshop-returns-form__field">
-                        <span>补充说明</span>
-                        <textarea name="description" rows="4" placeholder="<?= $escape('请补充问题描述、尺寸或损坏情况') ?>"></textarea>
+                        <span><?= __('补充说明') ?></span>
+                        <textarea name="description" rows="4" placeholder="<?= $escape(__('请补充问题描述、尺寸或损坏情况')) ?>"></textarea>
                     </label>
 
                     <div class="weshop-returns-order-preview<?= $selectedOrderItems === [] ? ' is-empty' : '' ?>" data-rma-order-preview>
                             <div class="weshop-returns-order-preview__header">
-                                <strong data-rma-order-preview-title>已选订单商品</strong>
-                                <span data-rma-order-preview-count><?= $escape('共 ' . $selectedOrderItemCount . ' 件') ?></span>
+                                <strong data-rma-order-preview-title><?= __('已选订单商品') ?></strong>
+                                <span data-rma-order-preview-count><?= $escape(__('共 %{1} 件', [$selectedOrderItemCount])) ?></span>
                             </div>
                             <div class="weshop-returns-order-preview__list" data-rma-order-preview-list>
                                 <?php foreach ($selectedOrderItems as $orderItem): ?>
@@ -221,7 +227,7 @@ $rmaCleanDescription = static function (string $description): string {
 
                     <div class="weshop-returns-actions">
                     <button type="button" id="account-rma-submit" class="weshop-returns-submit">
-                        提交售后申请
+                        <?= __('提交售后申请') ?>
                     </button>
                         <a
                             href="<?= $escape($this->getUrl('customer/contact')) ?>"
@@ -239,16 +245,16 @@ $rmaCleanDescription = static function (string $description): string {
             <article class="weshop-returns-card">
                 <div class="weshop-returns-card__header">
                     <div>
-                        <p class="weshop-returns-card__eyebrow">申请记录</p>
-                        <h3 class="weshop-returns-card__title">最近售后进度</h3>
+                        <p class="weshop-returns-card__eyebrow"><?= __('申请记录') ?></p>
+                        <h3 class="weshop-returns-card__title"><?= __('最近售后进度') ?></h3>
                     </div>
                 </div>
 
                 <?php if (empty($rmaList)): ?>
                     <div class="weshop-empty-returns" data-rma-empty-state>
                         <i class="ri-exchange-line weshop-empty-returns-icon" aria-hidden="true"></i>
-                        <h3>暂无退换货申请</h3>
-                        <p>直接从当前页的订单操作进入售后，提交后会在这里持续显示进度。</p>
+                        <h3><?= __('暂无退换货申请') ?></h3>
+                        <p><?= __('直接从当前页的订单操作进入售后，提交后会在这里持续显示进度。') ?></p>
                     </div>
                 <?php else: ?>
                     <div class="weshop-returns-list" data-rma-list>
@@ -271,8 +277,8 @@ $rmaCleanDescription = static function (string $description): string {
                             <article class="weshop-return-item" data-rma-record>
                                 <div class="weshop-return-item__main">
                                     <div>
-                                        <strong><?= $escape('售后单 #' . $rmaId) ?></strong>
-                                        <span><?= $escape('订单号：' . ($orderIncrementId !== '' ? $orderIncrementId : (string) $orderId)) ?></span>
+                                        <strong><?= $escape(__('售后单 #%{1}', [$rmaId])) ?></strong>
+                                        <span><?= $escape(__('订单号：%{1}', [$orderIncrementId !== '' ? $orderIncrementId : (string) $orderId])) ?></span>
                                     </div>
                                     <span class="weshop-return-status status-<?= $escape($status) ?>">
                                         <?= $escape($statusLabel) ?>
@@ -318,7 +324,7 @@ $rmaCleanDescription = static function (string $description): string {
                                             </div>
                                         <?php endforeach; ?>
                                         <?php if ($remainingRecordItems > 0): ?>
-                                            <span class="weshop-return-item__more"><?= $escape('还有 ' . $remainingRecordItems . ' 件商品') ?></span>
+                                            <span class="weshop-return-item__more"><?= $escape(__('还有 %{1} 件商品', [$remainingRecordItems])) ?></span>
                                         <?php endif; ?>
                                     </div>
                                 <?php endif; ?>
