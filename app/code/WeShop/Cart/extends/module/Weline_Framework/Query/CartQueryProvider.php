@@ -7,6 +7,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use WeShop\Cart\Controller\Frontend\Cart\Index as CartPageController;
 use WeShop\Cart\Service\CartApiPayloadService;
+use WeShop\Cart\Service\CartCountCookieService;
 use WeShop\Cart\Service\CartIdentityService;
 use WeShop\Cart\Service\CartService;
 
@@ -15,7 +16,8 @@ class CartQueryProvider implements QueryProviderInterface
     public function __construct(
         private readonly CartService $cartService,
         private readonly ?CartApiPayloadService $cartApiPayloadService = null,
-        private readonly ?CartIdentityService $cartIdentityService = null
+        private readonly ?CartIdentityService $cartIdentityService = null,
+        private readonly ?CartCountCookieService $cartCountCookieService = null
     ) {
     }
 
@@ -87,6 +89,10 @@ class CartQueryProvider implements QueryProviderInterface
         $customerId = $this->getFrontendCustomerId(false);
         $count = $customerId > 0 ? $this->cartService->getCartItemCount($customerId) : 0;
 
+        if ($customerId > 0) {
+            $this->getCartCountCookieService()->sync($count);
+        }
+
         return [
             'code' => 200,
             'msg' => (string)__('购物车数量加载成功。'),
@@ -144,6 +150,11 @@ class CartQueryProvider implements QueryProviderInterface
     private function getCartIdentityService(): CartIdentityService
     {
         return $this->cartIdentityService ?? ObjectManager::getInstance(CartIdentityService::class);
+    }
+
+    private function getCartCountCookieService(): CartCountCookieService
+    {
+        return $this->cartCountCookieService ?? ObjectManager::getInstance(CartCountCookieService::class);
     }
 
     private function getCartItems(array $params): array

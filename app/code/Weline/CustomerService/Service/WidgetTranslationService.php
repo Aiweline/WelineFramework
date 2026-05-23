@@ -82,6 +82,24 @@ class WidgetTranslationService
     }
 
     /**
+     * @param string[] $localeCodes
+     * @return array<string, array<string, string>>
+     */
+    public function getWidgetTranslationsForLocales(array $localeCodes): array
+    {
+        $translations = [];
+        foreach (array_unique($localeCodes) as $localeCode) {
+            $localeCode = (string)$localeCode;
+            if ($localeCode === '') {
+                continue;
+            }
+            $translations[$localeCode] = $this->getLocaleTranslations($localeCode);
+        }
+
+        return $translations;
+    }
+
+    /**
      * @return array<string, string>
      */
     private function getLocaleTranslations(string $localeCode): array

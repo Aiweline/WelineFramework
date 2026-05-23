@@ -13,6 +13,7 @@ final class AiSiteBuildPromptContextAssembler
      */
     public function assemble(array $contract, array $task): array
     {
+        $this->assertNoForbiddenBuildContextKeys($task['runtime_context'] ?? [], 'task.runtime_context');
         $inputScope = \is_array($task['input_scope'] ?? null) ? $task['input_scope'] : [];
         $blockId = \trim((string)($inputScope['block_id'] ?? $task['block_id'] ?? ''));
         $pageId = \trim((string)($inputScope['page_id'] ?? $task['page_id'] ?? ''));
@@ -40,11 +41,14 @@ final class AiSiteBuildPromptContextAssembler
             'page_design_plan' => \is_array($pageIdentity['page_design_plan'] ?? null) ? $pageIdentity['page_design_plan'] : [],
             'block' => $block,
             'content_items' => $this->sliceContentItems($items, $this->stringList($block['content_keys'] ?? [])),
-            'design_manifest' => \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [],
+            'site_identity_contract' => $this->resolveSiteIdentityContract($contract, $items),
+            'runtime_context' => \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
+            'output_contract' => \is_array($task['output_contract'] ?? null) ? $task['output_contract'] : [],
+            'acceptance' => \is_array($task['acceptance'] ?? null) ? $task['acceptance'] : [],
             'policy_ref' => \is_array($contract['policy_ref'] ?? null) ? $contract['policy_ref'] : [],
-            'policy_projection' => \is_array($contract['policy_projection'] ?? null) ? $contract['policy_projection'] : [],
             'policy_slices' => $this->stringList($task['policy_slices'] ?? []),
             'acceptance_rule_ids' => $this->stringList($task['acceptance_rule_ids'] ?? []),
+            'context_budget' => \is_array($task['context_budget'] ?? null) ? $task['context_budget'] : [],
         ];
         AiSiteWorkflowTrace::json('prompt_context_assembled', $assembled, [
             'contract_id' => (string)($contract['contract_meta']['id'] ?? ''),
@@ -54,6 +58,32 @@ final class AiSiteBuildPromptContextAssembler
         ]);
 
         return $assembled;
+    }
+
+    private function assertNoForbiddenBuildContextKeys(mixed $value, string $path): void
+    {
+        if (!\is_array($value)) {
+            return;
+        }
+
+        $forbidden = [
+            'scope' => true,
+            'plan_json' => true,
+            'plan_structured' => true,
+            'plan_workbench' => true,
+            'execution_blueprint' => true,
+            'execution_blueprint_draft' => true,
+            'presentation_projection' => true,
+            'ui_projection' => true,
+        ];
+        foreach ($value as $key => $item) {
+            $keyText = \trim((string)$key);
+            $nextPath = $path . '.' . $keyText;
+            if (isset($forbidden[$keyText])) {
+                throw new \RuntimeException('Forbidden broad build context key: ' . $nextPath);
+            }
+            $this->assertNoForbiddenBuildContextKeys($item, $nextPath);
+        }
     }
 
     /**
@@ -106,6 +136,29 @@ final class AiSiteBuildPromptContextAssembler
             'conversion_role' => $conversionRole,
             'page_flow_role' => $this->firstNonEmpty([$page['page_flow_role'] ?? null]),
             'page_design_plan' => $pageDesignPlan,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @param array<string, mixed> $contentItems
+     * @return array<string, mixed>
+     */
+    private function resolveSiteIdentityContract(array $contract, array $contentItems): array
+    {
+        $sourceOfTruth = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
+        $userRequirements = \is_array($sourceOfTruth['user_requirements'] ?? null) ? $sourceOfTruth['user_requirements'] : [];
+        $brandIdentity = \is_array($userRequirements['brand_identity'] ?? null) ? $userRequirements['brand_identity'] : [];
+
+        return [
+            'site_name' => $this->firstNonEmpty([
+                $contentItems['site.name'] ?? null,
+                $userRequirements['site_name'] ?? null,
+                $contract['site_brief']['site_name'] ?? null,
+            ]),
+            'allowed_brand_terms' => $this->stringList($brandIdentity['allowed_brand_terms'] ?? []),
+            'forbidden_template_brand_terms' => $this->stringList($brandIdentity['forbidden_template_brand_terms'] ?? []),
+            'template_scaffold_rule' => (string)($brandIdentity['template_scaffold_rule'] ?? ''),
         ];
     }
 

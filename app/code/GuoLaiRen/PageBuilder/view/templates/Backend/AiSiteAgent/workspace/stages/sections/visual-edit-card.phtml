@@ -1,3 +1,13 @@
+<?php
+$previewPageOptions = \is_array($previewPageOptions ?? null) ? $previewPageOptions : [];
+$pagesByType = \is_array($pagesByType ?? null) ? $pagesByType : [];
+$pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
+$embeddedVisualUrl = (string)($embeddedVisualUrl ?? '');
+$guidedUi = !empty($guidedUi);
+$state = \is_array($state ?? null) ? $state : [];
+$previewPageType = \trim((string)($previewPageType ?? ($state['preview_page_type'] ?? '')));
+$previewPageId = (int)($previewPageId ?? ($state['preview_page_id'] ?? 0));
+?>
 <div class="card border-0 shadow-sm" data-stage-panel="visual_edit">
 
     <div class="card-header bg-transparent border-0 pt-4 pb-0">

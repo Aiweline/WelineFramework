@@ -81,7 +81,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
 
         $script = $context->sslEnabled
-            ? $scriptDir . DS . 'worker_ssl.php'
+            ? $this->resolveSslWorkerScript($scriptDir, $context)
             : $scriptDir . DS . 'worker.php';
 
         $port = $this->getPort($instanceId, $context);
@@ -177,5 +177,27 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
     {
         $this->dynamicEnabled = false;
         $this->dynamicInstanceCount = 0;
+    }
+
+    private function resolveSslWorkerScript(string $scriptDir, ServiceContext $context): string
+    {
+        $engine = \strtolower(\trim((string)$context->getConfig('wls.ssl.engine', 'stream')));
+        if ($engine === '') {
+            $engine = 'stream';
+        }
+        if ($engine === 'event_buffer' && PHP_OS_FAMILY === 'Windows') {
+            throw new \InvalidArgumentException(
+                'wls.ssl.engine=event_buffer is not supported on native Windows: '
+                . 'PHP event SSL bufferevent server exits during TLS accept. Use stream or external TLS termination.'
+            );
+        }
+
+        return match ($engine) {
+            'stream' => $scriptDir . DS . 'worker_ssl.php',
+            'event_buffer' => $scriptDir . DS . 'worker_ssl_event.php',
+            default => throw new \InvalidArgumentException(
+                'Unsupported WLS SSL engine "' . $engine . '"; expected stream or event_buffer'
+            ),
+        };
     }
 }

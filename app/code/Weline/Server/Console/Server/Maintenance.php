@@ -182,7 +182,12 @@ class Maintenance extends CommandAbstract
         \stream_set_blocking($conn, false);
         
         // 发送滚动重启命令
-        $command = ControlMessage::command(ControlMessage::ACTION_ROLLING_RESTART);
+        $command = ControlMessage::command(
+            ControlMessage::ACTION_ROLLING_RESTART,
+            '',
+            [],
+            (string)($info['control_token'] ?? '')
+        );
         $written = @\fwrite($conn, $command);
         
         if ($written === false || $written === 0) {
@@ -260,7 +265,7 @@ class Maintenance extends CommandAbstract
         \stream_set_blocking($conn, false);
         
         // 发送命令
-        $command = ControlMessage::command($action);
+        $command = ControlMessage::command($action, '', [], (string)($info['control_token'] ?? ''));
         $written = @\fwrite($conn, $command);
         
         if ($written === false || $written === 0) {

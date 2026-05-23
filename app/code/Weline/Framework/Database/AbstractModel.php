@@ -171,7 +171,7 @@ abstract class AbstractModel extends DataObject
         }
         # 重置查询
         if (!isset($this->_cache)) {
-            $this->_cache = w_cache('database');
+            $this->_cache = \w_cache('database');
         }
         # dbManager
         if (empty($this->dbManager)) {

@@ -16,12 +16,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page', 'about_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page', 'about_page']), [], 'virtual_theme');
 
         $this->assertIsArray($scope['build_blueprint'] ?? null);
         $this->assertIsArray($scope['build_tasks'] ?? null);
@@ -54,6 +49,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
             'page_types' => ['home_page'],
             'site_title' => 'Example Site',
             'brief_description' => 'Explain the service clearly.',
+            'default_locale' => 'en_US',
             'execution_blueprint_draft' => [
                 'signature' => 'stage-one-signature',
                 'pages' => [
@@ -65,11 +61,19 @@ class AiSiteBuildTaskServiceTest extends TestCase
                                 'block_key' => 'hero',
                                 'title' => 'Launch reliable AI workflows',
                                 'goal' => 'Show the core value with a direct CTA.',
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'A concise proof-led section helps visitors understand the next step.'],
+                                    ['field' => 'cta', 'sample' => 'Contact us'],
+                                ],
                             ],
                             [
                                 'block_key' => 'trust',
                                 'title' => 'Proof that operations stay reliable',
                                 'goal' => 'Show concrete evidence before conversion.',
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'Reliable operations are supported by clear proof and next steps.'],
+                                    ['field' => 'cta', 'sample' => 'See proof'],
+                                ],
                             ],
                         ],
                     ],
@@ -88,12 +92,12 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame($buildPlan['contract_meta']['id'], $scope['build_blueprint']['build_plan_contract_id'] ?? null);
         $this->assertSame($buildPlan['contract_meta']['signature'], $scope['build_blueprint']['build_plan_signature'] ?? null);
         $this->assertSame(
-            ['shared:header', 'shared:footer', 'page:home_page:hero', 'page:home_page:trust'],
+            ['shared:header', 'shared:footer', 'page:home_page:content/home-page-hero', 'page:home_page:content/home-page-trust'],
             \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
         );
         $pageTaskDefinition = \array_values(\array_filter(
             $scope['build_blueprint']['tasks'] ?? [],
-            static fn(array $task): bool => ($task['task_key'] ?? '') === 'page:home_page:hero'
+            static fn(array $task): bool => ($task['task_key'] ?? '') === 'page:home_page:content/home-page-hero'
         ));
         $this->assertCount(1, $pageTaskDefinition);
         $this->assertSame('content/home-page-hero', $pageTaskDefinition[0]['section_code'] ?? null);
@@ -105,31 +109,22 @@ class AiSiteBuildTaskServiceTest extends TestCase
         );
         $this->assertSame(
             ['task_key', 'status', 'attempt_no', 'message', 'result_ref', 'updated_at', 'started_at', 'finished_at'],
-            \array_keys($scope['build_tasks']['page:home_page:hero'] ?? [])
+            \array_keys($scope['build_tasks']['page:home_page:content/home-page-hero'] ?? [])
         );
     }
 
     public function testEnsureTaskScopeUsesConfirmedBuildPlanV2BeforeLegacyTaskPlan(): void
     {
-        $buildPlanService = new AiSiteBuildPlanService();
-        $buildPlan = $buildPlanService->confirm($buildPlanService->buildFromScope([
-            'page_types' => ['home_page'],
-            'site_title' => 'Example Site',
-            'brief_description' => 'Explain the service clearly.',
-        ]));
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-            'build_plan_v2' => $buildPlan,
-            'build_plan_confirmed' => 1,
+        $scope = $service->ensureTaskScope(\array_replace($this->buildConfirmedScope(['home_page']), [
             'task_plan_confirmed' => 0,
-        ], [], 'virtual_theme');
+        ]), [], 'virtual_theme');
 
         $this->assertSame('build_plan_v2', $scope['build_blueprint']['source'] ?? null);
         $this->assertSame(1, $scope['build_plan_confirmed'] ?? 0);
         $this->assertArrayHasKey('shared:header', $scope['build_tasks']);
-        $this->assertArrayHasKey('page:home_page:hero', $scope['build_tasks']);
+        $this->assertArrayHasKey('page:home_page:content/home-page-hero', $scope['build_tasks']);
     }
 
     public function testEnsureTaskScopeIgnoresLegacyTaskPlanContractsWhenBuildPlanV2IsMissing(): void
@@ -154,8 +149,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
 
         $this->assertNotSame('stage2_confirmed_task_plan', $scope['build_blueprint']['source'] ?? '');
         $this->assertSame(0, (int)($scope['build_plan_confirmed'] ?? 0));
-        $this->assertArrayHasKey('shared:header', $scope['build_tasks']);
-        $this->assertArrayHasKey('page:home_page:content/home-page-hero', $scope['build_tasks']);
+        $this->assertSame([], $scope['build_tasks']);
         $this->assertArrayNotHasKey('shared:legacy-only', $scope['build_tasks']);
     }
 
@@ -179,11 +173,11 @@ class AiSiteBuildTaskServiceTest extends TestCase
         ]));
     }
 
-    public function testHasConfirmedBuildPlanForBuildAcceptsConfirmedExecutionBlueprint(): void
+    public function testHasConfirmedBuildPlanForBuildRejectsConfirmedExecutionBlueprintWithoutBuildPlanV2(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $this->assertTrue($service->hasConfirmedBuildPlanForBuild([
+        $this->assertFalse($service->hasConfirmedBuildPlanForBuild([
             'plan_confirmed' => 1,
             'execution_blueprint_confirmed_signature' => 'stage-one-confirmed',
             'execution_blueprint' => [
@@ -199,23 +193,15 @@ class AiSiteBuildTaskServiceTest extends TestCase
 
     public function testNormalizeConfirmedBuildPlanFlagRepairsStaleBuildPlanConfirmedFlag(): void
     {
-        $buildPlanService = new AiSiteBuildPlanService();
-        $buildPlan = $buildPlanService->confirm($buildPlanService->buildFromScope([
-            'page_types' => ['home_page'],
-            'site_title' => 'Example Site',
-            'brief_description' => 'Explain the service clearly.',
-        ]));
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-            'build_plan_v2' => $buildPlan,
+        $scope = $service->ensureTaskScope(\array_replace($this->buildConfirmedScope(['home_page']), [
             'build_plan_confirmed' => 0,
-        ], [], 'virtual_theme');
+        ]), [], 'virtual_theme');
 
         $this->assertSame(1, (int)($scope['build_plan_confirmed'] ?? 0));
         $this->assertSame('build_plan_v2', $scope['build_blueprint']['source'] ?? null);
-        $this->assertArrayHasKey('page:home_page:hero', $scope['build_tasks']);
+        $this->assertArrayHasKey('page:home_page:content/home-page-hero', $scope['build_tasks']);
     }
 
     public function testEnsureTaskScopeUsesFullBuildPlanV2PageGraph(): void
@@ -225,6 +211,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
             'page_types' => ['home_page', 'about_page', 'contact_page'],
             'site_title' => 'Example Site',
             'brief_description' => 'Explain the service clearly.',
+            'default_locale' => 'en_US',
             'execution_blueprint_draft' => [
                 'signature' => 'stage-one-signature',
                 'pages' => [
@@ -232,25 +219,25 @@ class AiSiteBuildTaskServiceTest extends TestCase
                         'title' => 'Home',
                         'page_goal' => 'Convert qualified buyers.',
                         'blocks' => [
-                            ['block_key' => 'hero'],
-                            ['block_key' => 'trust'],
-                            ['block_key' => 'cta'],
+                            ['block_key' => 'hero', 'title' => 'Clear home hero', 'goal' => 'Open with value.', 'field_plan' => [['field' => 'description', 'sample' => 'A focused opening explains the offer clearly.']]],
+                            ['block_key' => 'trust', 'title' => 'Reliable proof', 'goal' => 'Build trust.', 'field_plan' => [['field' => 'description', 'sample' => 'Proof points help visitors evaluate the offer.']]],
+                            ['block_key' => 'cta', 'title' => 'Next step', 'goal' => 'Drive action.', 'field_plan' => [['field' => 'description', 'sample' => 'A direct call to action moves qualified visitors forward.']]],
                         ],
                     ],
                     'about_page' => [
                         'title' => 'About',
                         'page_goal' => 'Explain the company story.',
                         'blocks' => [
-                            ['block_key' => 'story'],
-                            ['block_key' => 'team'],
+                            ['block_key' => 'story', 'title' => 'Company story', 'goal' => 'Explain the company.', 'field_plan' => [['field' => 'description', 'sample' => 'The story clarifies why the team can deliver.']]],
+                            ['block_key' => 'team', 'title' => 'Team proof', 'goal' => 'Show credibility.', 'field_plan' => [['field' => 'description', 'sample' => 'Team details support trust and credibility.']]],
                         ],
                     ],
                     'contact_page' => [
                         'title' => 'Contact',
                         'page_goal' => 'Make contact easy.',
                         'blocks' => [
-                            ['block_key' => 'form'],
-                            ['block_key' => 'faq'],
+                            ['block_key' => 'form', 'title' => 'Contact form', 'goal' => 'Make contact easy.', 'field_plan' => [['field' => 'description', 'sample' => 'Simple contact guidance helps visitors reach the team.']]],
+                            ['block_key' => 'faq', 'title' => 'Common questions', 'goal' => 'Reduce hesitation.', 'field_plan' => [['field' => 'description', 'sample' => 'Clear answers remove friction before contact.']]],
                         ],
                     ],
                 ],
@@ -268,13 +255,13 @@ class AiSiteBuildTaskServiceTest extends TestCase
             [
                 'shared:header',
                 'shared:footer',
-                'page:home_page:hero',
-                'page:home_page:trust',
-                'page:home_page:cta',
-                'page:about_page:story',
-                'page:about_page:team',
-                'page:contact_page:form',
-                'page:contact_page:faq',
+                'page:home_page:content/home-page-hero',
+                'page:home_page:content/home-page-trust',
+                'page:home_page:content/home-page-cta',
+                'page:about_page:content/about-page-story',
+                'page:about_page:content/about-page-team',
+                'page:contact_page:content/contact-page-form',
+                'page:contact_page:content/contact-page-faq',
             ],
             \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
         );
@@ -282,7 +269,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertCount(9, $scope['build_tasks']);
     }
 
-    public function testEnsureTaskScopeUsesStageOnePagePlansWhenExecutionPagesAreEmpty(): void
+    public function testEnsureTaskScopeRejectsStageOnePagePlansWithoutBuildPlanV2(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
@@ -308,17 +295,10 @@ class AiSiteBuildTaskServiceTest extends TestCase
             ],
         ], [], 'virtual_theme');
 
-        self::assertSame('stage1_execution_blueprint', $scope['build_blueprint']['source'] ?? null);
-        self::assertSame(
-            [
-                'shared:header',
-                'shared:footer',
-                'page:home_page:hero',
-                'page:home_page:trust',
-                'page:about_page:story',
-            ],
-            \array_column($scope['build_blueprint']['tasks'] ?? [], 'task_key')
-        );
+        self::assertSame([], $scope['build_blueprint'] ?? []);
+        self::assertSame([], $scope['build_tasks'] ?? []);
+        self::assertSame(0, (int)($scope['build_plan_confirmed'] ?? 0));
+        self::assertStringContainsString('build_plan_v2', \implode("\n", $scope['build_plan_v2_validation']['errors'] ?? []));
     }
 
     public function testFreshRepairResetsAttemptCountForQualityRetry(): void
@@ -506,7 +486,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
         );
     }
 
-    public function testEnsureTaskScopeReusesExistingConfirmedBuildPlanV2Blueprint(): void
+    public function testEnsureTaskScopeRejectsReusableBlueprintWithoutConfirmedBuildPlanV2(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
         $existingBlueprint = [
@@ -549,26 +529,18 @@ class AiSiteBuildTaskServiceTest extends TestCase
             'brief_description' => 'Example site summary',
         ], 'virtual_theme');
 
-        $this->assertTrue($service->hasConfirmedBuildPlanForBuild($scope));
-        $this->assertSame(1, (int)($scope['build_plan_confirmed'] ?? 0));
-        $this->assertSame($existingBlueprint, $scope['build_blueprint']);
-        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_RUNNING, $scope['build_tasks']['page:home_page:hero']['status'] ?? null);
-        $this->assertSame(2, $scope['build_tasks']['page:home_page:hero']['attempt_no'] ?? null);
-        $this->assertSame(['component_code' => 'hero'], $scope['build_tasks']['page:home_page:hero']['result_ref'] ?? null);
-        $this->assertArrayNotHasKey('runtime_context', $scope['build_tasks']['page:home_page:hero']);
-        $this->assertArrayNotHasKey('task_script', $scope['build_tasks']['page:home_page:hero']);
+        $this->assertFalse($service->hasConfirmedBuildPlanForBuild($scope));
+        $this->assertSame(0, (int)($scope['build_plan_confirmed'] ?? 0));
+        $this->assertSame([], $scope['build_blueprint']);
+        $this->assertSame([], $scope['build_tasks']);
+        $this->assertStringContainsString('build_plan_v2', \implode("\n", $scope['build_plan_v2_validation']['errors'] ?? []));
     }
 
     public function testSummarizeReflectsDoneAndPendingTasks(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'html_blocks');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'html_blocks');
 
         $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
         $summary = $service->summarize($scope);
@@ -585,12 +557,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page', 'about_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page', 'about_page']), [], 'virtual_theme');
 
         $initial = $service->pickConcurrentTasks($scope, 3);
         $this->assertSame(['shared:header', 'shared:footer'], \array_column($initial, 'task_key'));
@@ -612,12 +579,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page', 'about_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page', 'about_page']), [], 'virtual_theme');
 
         $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
         $scope = $service->markTaskDone($scope, 'shared:footer', ['region' => 'footer']);
@@ -634,12 +596,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page', 'about_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page', 'about_page']), [], 'virtual_theme');
         foreach ($scope['build_blueprint']['tasks'] as &$task) {
             if (($task['task_key'] ?? '') === 'page:home_page:content/home-page-hero') {
                 $task['can_parallel'] = false;
@@ -659,12 +616,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
 
         $scope = $service->markTaskRunning($scope, 'shared:header');
         $scope['build_tasks']['shared:footer']['status'] = AiSiteBuildTaskService::TASK_STATUS_CANCELLED;
@@ -680,12 +632,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
 
         $pageTaskKey = 'page:home_page:content/home-page-hero';
         $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
@@ -708,12 +655,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
 
         $pageTaskKey = 'page:home_page:content/home-page-hero';
         $scope = $service->markTaskRunning($scope, 'shared:header');
@@ -741,12 +683,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
 
         $pageTaskKey = 'page:home_page:content/home-page-hero';
         $scope['build_tasks']['shared:header']['status'] = AiSiteBuildTaskService::TASK_STATUS_PENDING;
@@ -779,12 +716,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
 
         $pageTaskKey = 'page:home_page:content/home-page-hero';
         $scope['build_tasks']['shared:header']['status'] = AiSiteBuildTaskService::TASK_STATUS_DONE;
@@ -814,12 +746,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
 
         $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
 
@@ -833,12 +760,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
 
         $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
         $scope['build_tasks']['shared:footer']['status'] = AiSiteBuildTaskService::TASK_STATUS_CANCELLED;
@@ -861,12 +783,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page', 'about_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'html_blocks');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page', 'about_page']), [], 'html_blocks');
 
         $scope = $service->markTaskRunning($scope, 'page:home_page:content/home-page-hero');
         $scope = $service->markTaskDone($scope, 'page:home_page:content/home-page-hero', ['page_type' => 'home_page']);
@@ -896,12 +813,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
 
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page', 'about_page'],
-        ], [
-            'site_title' => 'Example Site',
-            'brief_description' => 'Example site summary',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page', 'about_page']), [], 'virtual_theme');
 
         $this->assertFalse($service->arePageTasksComplete($scope, 'home_page'));
 
@@ -1178,12 +1090,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
     public function testReconcileDoesNotTreatStageOneSharedPlanAsBuiltArtifact(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
-        $scope = $service->ensureTaskScope([
-            'page_types' => ['home_page'],
-        ], [
-            'site_title' => 'Teenipiya',
-            'brief_description' => 'Gaming entertainment site',
-        ], 'virtual_theme');
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
         $scope['shared_components'] = [
             'header' => [
                 'task_key' => 'shared:header',
@@ -1233,5 +1140,52 @@ class AiSiteBuildTaskServiceTest extends TestCase
         self::assertStringContainsString('page:blog_category:article_collection', $detail);
         self::assertStringContainsString('AI HTML generation timeout', $detail);
         self::assertStringContainsString('重试失败项', $detail);
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function buildConfirmedScope(array $pageTypes = ['home_page']): array
+    {
+        $pages = [];
+        foreach ($pageTypes as $pageType) {
+            $pages[$pageType] = [
+                'title' => \ucwords(\str_replace('_', ' ', $pageType)),
+                'page_goal' => 'Explain the offer clearly and move qualified visitors to the next step.',
+                'blocks' => [
+                    [
+                        'block_key' => 'hero',
+                        'title' => 'Clear offer for qualified visitors',
+                        'goal' => 'Show the core value with a direct CTA.',
+                        'field_plan' => [
+                            ['field' => 'description', 'sample' => 'A concise proof-led section helps visitors understand the next step.'],
+                            ['field' => 'cta', 'sample' => 'Contact us'],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
+        $sourceScope = [
+            'page_types' => $pageTypes,
+            'site_title' => 'Example Site',
+            'brief_description' => 'Explain the service clearly.',
+            'default_locale' => 'en_US',
+            'execution_blueprint_draft' => [
+                'pages' => $pages,
+            ],
+        ];
+        $buildPlanService = new AiSiteBuildPlanService();
+        $buildPlan = $buildPlanService->confirm($buildPlanService->buildFromScope($sourceScope));
+
+        return [
+            'page_types' => $pageTypes,
+            'site_title' => 'Example Site',
+            'brief_description' => 'Explain the service clearly.',
+            'default_locale' => 'en_US',
+            'build_plan_v2' => $buildPlan,
+            'build_plan_confirmed' => 1,
+        ];
     }
 }

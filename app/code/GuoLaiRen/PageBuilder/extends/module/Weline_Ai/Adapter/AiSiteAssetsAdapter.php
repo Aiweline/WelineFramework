@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Ai\Adapter;
 
 use Weline\Ai\Interface\AdapterSkillBindingInterface;
+use Weline\Ai\Interface\AdapterStyleBindingInterface;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
-class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindingInterface
+class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindingInterface, AdapterStyleBindingInterface
 {
     public function getDefaultSkillCodes(): array
     {
         return ['claude-design'];
+    }
+
+    public function getDefaultStyleCodes(): array
+    {
+        return ['india-card-game-apk-dark-neon'];
     }
 
     public function getCode(): string
@@ -53,9 +59,9 @@ class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindi
             . "3. Match the target site language, market, block role, and visual direction from the prompt.\n";
 
         if ($this->requiresTransparentIdentityPng($params)) {
-            $contract .= "4. Identity logo/icon contract (HARD): output a PNG logo asset with real transparent alpha background. The canvas must be transparent; only the brand mark, symbol, or wordmark pixels may be visible.\n"
+            $contract .= "4. Identity logo/icon contract (HARD): output a transparent identity asset: transparent PNG alpha, or safe SVG with no canvas background. The canvas must be transparent; only the brand mark, symbol, or wordmark pixels may be visible.\n"
                 . "5. Identity logo/icon exclusions (HARD): no white box, solid-color tile, rounded square card, gradient backdrop, photo scene, wall mockup, app icon tile, screenshot frame, watermark, or paragraph text.\n"
-                . "6. If the selected image model cannot produce transparent PNG alpha output, the generation must fail contract validation instead of returning a JPEG/WebP or opaque background asset.\n";
+                . "6. If the selected image model cannot produce transparent identity output, the generation must fail contract validation instead of returning a JPEG/WebP or opaque background asset.\n";
         }
 
         return $contract;

@@ -46,7 +46,7 @@ $isAccountPage = $requestPath === '/customer/account'
             var lastUnpaidCount = 0;
             var seenStorageKey = 'weshop.order.unpaid.seen.<?= rawurlencode($username !== '' ? $username : 'customer') ?>';
             var summaryStorageKey = seenStorageKey + '.summary.v1';
-            var summaryCacheTtlMs = 5000;
+            var summaryCacheTtlMs = 60000;
             var unpaidLoadTimer = null;
 
             function getOrderApi() {
@@ -246,7 +246,7 @@ $isAccountPage = $requestPath === '/customer/account'
             window.addEventListener('weshop:orders-viewed', markCurrentOrdersPageSeen);
             window.setInterval(function () {
                 scheduleUnpaidOrdersCount(0);
-            }, 30000);
+            }, 120000);
         })();
     </script>
 

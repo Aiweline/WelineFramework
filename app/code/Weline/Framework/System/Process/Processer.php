@@ -1736,7 +1736,7 @@ class Processer
             return 0;
         }
         $removed = 0;
-        $stalePids = [];
+        $recordsByPid = [];
 
         // 清理陈旧的 *-pid.json 文件（进程不存活的）
         $files = \glob($dir . '*-pid.json');
@@ -1746,33 +1746,66 @@ class Processer
                 continue;
             }
             $data = \json_decode($raw, true);
+            if (!\is_array($data)) {
+                continue;
+            }
             $pid = isset($data['pid']) ? (int) $data['pid'] : 0;
             if ($pid <= 0) {
                 continue;
             }
 
-            $matchesIdentity = \is_array($data) && self::doesPidMatchRecordedIdentity($pid, $data);
-            if (!$matchesIdentity) {
-                @\unlink($path);
-                $stalePids[] = $pid;
-                $removed++;
-            }
+            $recordsByPid[$pid][] = [
+                'path' => $path,
+                'data' => $data,
+            ];
         }
         
         // 同步清理 pid_index.json 中的陈旧记录
-        if (!empty($stalePids)) {
+        if ($recordsByPid !== []) {
+            $pidInfo = self::batchGetProcessInfo(\array_map('intval', \array_keys($recordsByPid)));
             $pidIndex = self::readPidIndex();
             $pidIndexChanged = false;
-            foreach ($stalePids as $stalePid) {
-                if (isset($pidIndex[$stalePid])) {
-                    unset($pidIndex[$stalePid]);
+
+            foreach ($recordsByPid as $pid => $records) {
+                $info = \is_array($pidInfo[$pid] ?? null) ? $pidInfo[$pid] : [];
+                if ((bool)($info['exists'] ?? false)) {
+                    continue;
+                }
+
+                foreach ($records as $record) {
+                    $path = (string)($record['path'] ?? '');
+                    if ($path !== '' && \is_file($path)) {
+                        @\unlink($path);
+                        $removed++;
+                    }
+                }
+
+                if (isset($pidIndex[$pid])) {
+                    unset($pidIndex[$pid]);
                     $pidIndexChanged = true;
                 }
-                self::untrustPid($stalePid);
+                self::untrustPid((int)$pid);
             }
+
             if ($pidIndexChanged) {
                 self::writePidIndex($pidIndex);
             }
+        }
+
+        foreach ($files ?? [] as $path) {
+            if (!\is_file($path)) {
+                continue;
+            }
+
+            $raw = @\file_get_contents($path);
+            $data = \json_decode($raw === false ? '' : $raw, true);
+            $pid = \is_array($data) ? (int)($data['pid'] ?? 0) : 0;
+            if ($pid > 0) {
+                continue;
+            }
+
+            @\unlink($path);
+            $removed++;
         }
 
         $pidIndex = self::filterPidIndexExistingJsonPaths(self::readPidIndex());
@@ -4307,33 +4340,24 @@ POWERSHELL;
             return [];
         }
 
-        if (\count($pids) > 16) {
-            return null;
-        }
-
         $results = [];
+        $validPids = [];
         foreach ($pids as $pid) {
             $pid = (int) $pid;
             if ($pid <= 0) {
                 continue;
             }
-
-            $output = [];
-            $returnCode = 0;
-            self::execute("tasklist /FI \"PID eq {$pid}\" /FO CSV /NH 2>NUL", $output, $returnCode);
-
+            $validPids[$pid] = $pid;
             $results[$pid] = false;
-            foreach ($output as $line) {
-                $parts = \str_getcsv(\trim($line), ',', '"', '');
-                if (\count($parts) < 2) {
-                    continue;
-                }
+        }
 
-                if ((int) \preg_replace('/[^\d]/', '', (string) $parts[1]) === $pid) {
-                    $results[$pid] = true;
-                    break;
-                }
-            }
+        if ($validPids === []) {
+            return $results;
+        }
+
+        $processInfo = self::batchGetProcessInfo(\array_values($validPids));
+        foreach ($validPids as $pid) {
+            $results[$pid] = (bool)($processInfo[$pid]['exists'] ?? false);
         }
 
         return $results;
@@ -6212,7 +6236,21 @@ POWERSHELL;
             return 0;
         }
 
-        $result = self::batchKillProcessTrees(\array_map('intval', \array_keys($targetPids)), true);
+        $processInfo = self::batchGetProcessInfo(\array_map('intval', \array_keys($targetPids)));
+        $livePids = [];
+        foreach (\array_keys($targetPids) as $pid) {
+            $pid = (int)$pid;
+            $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
+            if ((bool)($info['exists'] ?? false) && !(bool)($info['is_zombie'] ?? false)) {
+                $livePids[] = $pid;
+            }
+        }
+
+        if ($livePids === []) {
+            return 0;
+        }
+
+        $result = self::batchKillProcessTrees($livePids, true);
         
         return (int) ($result['killed'] ?? 0);
     }

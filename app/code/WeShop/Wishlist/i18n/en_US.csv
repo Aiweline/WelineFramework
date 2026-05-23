@@ -1,14 +1,26 @@
-﻿"Wishlist Management","Wishlist Management"
-"Customer Wishlist","Customer Wishlist"
-"Wishlist item ID is required.","Wishlist item ID is required."
-"Removed from wishlist.","Removed from wishlist."
-"Failed to remove from wishlist.","Failed to remove from wishlist."
-"Please log in to continue.","Please log in to continue."
-"Product ID is required.","Product ID is required."
-"Added to wishlist.","Added to wishlist."
-"You are not allowed to remove this wishlist item.","You are not allowed to remove this wishlist item."
-Wishlist,Wishlist
-"Resume with %1 saved item(s).","Resume with %1 saved item(s)."
+﻿心愿单管理,"Wishlist Management"
+客户心愿单,"Customer Wishlist"
+"缺少心愿单条目 ID。","Wishlist item ID is required."
+已从心愿单移除。,"Removed from wishlist."
+从心愿单移除失败。,"Failed to remove from wishlist."
+请先登录。,"Please log in to continue."
+"缺少商品 ID。","Product ID is required."
+已加入心愿单。,"Added to wishlist."
+心愿单查询器不支持的操作：%{1},"Unsupported wishlist provider operation: %{1}"
+"缺少购物车条目 ID。","Cart item ID is required."
+未找到对应购物车条目。,"Cart item could not be found."
+已移至稍后购买。,"Saved for later."
+无法移除该心愿单条目。,"Wishlist item could not be removed."
+心愿单数量已加载。,"Wishlist count loaded."
+心愿单查询,"Wishlist Query"
+"通过 Worker API 提供前台心愿单操作。","Provides frontend wishlist operations through the worker API."
+前台心愿单添加操作。,前台心愿单添加操作。
+前台心愿单移除操作。,前台心愿单移除操作。
+前台稍后购买（从购物车移入）操作。,前台稍后购买（从购物车移入）操作。
+前台心愿单数量查询操作。,前台心愿单数量查询操作。
+您无权移除此心愿单条目。,"You are not allowed to remove this wishlist item."
+心愿单,Wishlist
+"继续浏览已保存的 %{1} 件商品","Resume with %{1} saved item(s)"
 "店铺 > 收藏管理","Store > Favorites Management"
 系统配置,"System Configuration"
 店铺,Store
@@ -42,22 +54,3 @@ ID,ID
 缺货,"Out of Stock"
 加入购物车,"Add to Cart"
 移除,Remove
-心愿单,Wishlist
-继续浏览已保存的 %{1} 件商品,"Resume with %{1} saved item(s)"
-请先登录。,"Please log in to continue."
-缺少商品 ID。,"Product ID is required."
-已加入心愿单。,"Added to wishlist."
-缺少心愿单条目 ID。,"Wishlist item ID is required."
-已从心愿单移除。,"Removed from wishlist."
-您无权移除此心愿单条目。,"You are not allowed to remove this wishlist item."
-心愿单查询,Wishlist Query
-通过 Worker API 提供前台心愿单操作。,"Provides frontend wishlist operations through the worker API."
-心愿单查询器不支持的操作：%{1},"Unsupported wishlist provider operation: %{1}"
-缺少购物车条目 ID。,"Cart item ID is required."
-未找到对应购物车条目。,"Cart item could not be found."
-已移至稍后购买。,"Saved for later."
-无法移除该心愿单条目。,"Wishlist item could not be removed."
-心愿单数量已加载。,"Wishlist count loaded."
-心愿单管理,"Wishlist Management"
-客户心愿单,"Customer Wishlist"
-从心愿单移除失败。,"Failed to remove from wishlist."

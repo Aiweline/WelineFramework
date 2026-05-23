@@ -23,7 +23,8 @@ final class EventLoopFactory
             ];
         }
 
-        // AUTO 模式优先稳定性：默认 select，event 仅在显式 driver=event 时启用。
+        // AUTO keeps the stable select backend; event remains opt-in until its
+        // watcher churn is removed and TLS fresh-connection latency improves.
         return [
             'loop' => new SelectEventLoop(),
             'requested' => $normalized,
@@ -41,4 +42,3 @@ final class EventLoopFactory
         };
     }
 }
-

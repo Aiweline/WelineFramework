@@ -8,7 +8,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 
 final class AiSiteStageOneContractService
 {
-    public const CONTRACT_VERSION = 'stage1_contract_v3';
+    public const CONTRACT_VERSION = 'stage1_contract_v4';
     public const FIELD_PLAN_COUNT = 3;
 
     /** @var list<string> */
@@ -42,7 +42,10 @@ final class AiSiteStageOneContractService
         'image_role',
         'image_subject',
         'placement',
+        'visual_atmosphere',
+        'image_treatment',
         'reuse_policy',
+        'css_motif',
     ];
 
     /** @var list<string> */
@@ -77,6 +80,14 @@ final class AiSiteStageOneContractService
         $pageContracts = [];
         foreach ($pageTypes as $pageType) {
             $budget = $this->resolveBlockBudget($pageType, $scope);
+            $isPolicyPage = \in_array($pageType, [
+                'privacy_policy',
+                'terms_of_service',
+                'refund_policy',
+                'shipping_policy',
+                'cookie_policy',
+            ], true);
+            $firstRequiredBlockKey = \trim((string)($budget['required'][0] ?? ''));
             $pageContracts[$pageType] = [
                 'page_type' => $pageType,
                 'min_blocks' => $budget['min'],
@@ -94,10 +105,14 @@ final class AiSiteStageOneContractService
                 'requires_execution_core_copy' => true,
                 'requires_visual_signature' => true,
                 'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
-                'visual_signature_uniqueness_scope' => 'same_page_adjacent_blocks',
-                'forbid_repeated_composition_patterns_within_page' => true,
+                'visual_signature_uniqueness_scope' => !$isPolicyPage ? 'same_page_adjacent_blocks' : 'same_page_adjacent_blocks_soft',
+                'visual_signature_duplicate_severity' => !$isPolicyPage ? 'high' : 'medium',
+                'forbid_repeated_composition_patterns_within_page' => !$isPolicyPage,
+                'composition_overuse_severity' => 'medium',
                 'requires_image_intent' => true,
                 'image_intent_keys' => self::IMAGE_INTENT_KEYS,
+                'first_block_requires_generated_image' => false,
+                'first_generated_image_block_key' => '',
                 'block_count_handoff_required' => true,
             ];
         }
@@ -189,14 +204,14 @@ final class AiSiteStageOneContractService
                 'field_key_format' => 'short_snake_case_semantic_key',
                 'forbid_empty_field_key' => true,
                 'sample_acceptance_examples' => [
-                    'headline' => 'Aster Route Contract 为每个页面预先锁定可访问地址',
-                    'supporting_copy' => '访客点击导航时只进入已规划页面，不会落到无效路径。',
-                    'context_detail' => '查看博客更新',
+                    'headline' => 'Trusted APK Download for Indian Card Players',
+                    'supporting_copy' => 'Install the app, review the game lobby, and start from a clear first step.',
+                    'context_detail' => 'Secure setup, game lobby preview, and support access',
                 ],
                 'sample_rejection_examples' => [
-                    '标题围绕核心价值展开',
-                    '说明页面亮点',
-                    '突出品牌优势',
+                    'Write a title around the main value',
+                    'Describe this block clearly',
+                    'Highlight brand advantages',
                     'Describe the main benefit',
                 ],
             ],
@@ -206,10 +221,12 @@ final class AiSiteStageOneContractService
                 'regenerate_when_contract_hash_or_block_image_intent_changes' => true,
                 'forbid_external_symbolic_urls' => true,
                 'each_block_must_declare_image_intent' => true,
+                'needs_image_must_be_json_boolean_true_or_false' => true,
                 'needs_image_true_requires_role_subject_placement' => true,
-                'needs_image_false_requires_css_motif_or_rationale' => true,
+                'needs_image_false_requires_css_motif_and_treatment' => true,
                 'opening_or_media_asset_blocks_default_to_needs_image' => true,
                 'non_policy_pages_require_at_least_one_generated_image_intent' => true,
+                'non_policy_first_block_requires_generated_image_intent' => false,
                 'planned_image_without_verified_asset_must_fail_not_placeholder' => true,
                 'placeholder_image_assets_forbidden' => true,
             ],
@@ -289,6 +306,8 @@ final class AiSiteStageOneContractService
                     'forbid_repeated_composition_patterns_within_page' => true,
                     'requires_image_intent' => true,
                     'image_intent_keys' => self::IMAGE_INTENT_KEYS,
+                    'first_block_requires_generated_image' => false,
+                    'first_generated_image_block_key' => '',
                     'block_count_handoff_required' => true,
                 ]);
             }
@@ -320,6 +339,8 @@ final class AiSiteStageOneContractService
         $normalized['navigation_address_rules']['allowed_internal_paths'] = \is_array($normalized['page_route_contract']['allowed_internal_paths'] ?? null)
             ? $normalized['page_route_contract']['allowed_internal_paths']
             : [];
+        $normalized['image_planning_rules'] = \is_array($normalized['image_planning_rules'] ?? null) ? $normalized['image_planning_rules'] : [];
+        $normalized['image_planning_rules']['non_policy_first_block_requires_generated_image_intent'] = false;
         $normalized['contract_hash'] = $this->hashStablePayload($normalized);
 
         return $normalized;
@@ -333,12 +354,32 @@ final class AiSiteStageOneContractService
     {
         $required = [];
         $optional = [];
+        $styleCode = \mb_strtolower(\trim((string)(
+            $scope['design_direction_code']
+            ?? $scope['design_direction_snapshot']['code']
+            ?? $scope['design_direction']['code']
+            ?? ''
+        )));
+        $isCardGameStyle = $styleCode === 'india-card-game-apk-dark-neon';
         if ($pageType === Page::TYPE_HOME || $pageType === 'home_page') {
             $sourceRequired = \is_array($scope['source_truth_contract']['required_home_blocks'] ?? null)
                 ? \array_values(\array_filter(\array_map('strval', $scope['source_truth_contract']['required_home_blocks'])))
                 : [];
-            $required = \array_values(\array_unique(\array_merge(['hero', 'final_cta'], $sourceRequired)));
-            $optional = ['brand_promise', 'featured_offers', 'trust_proof', 'resource_preview', 'experience_highlights'];
+            if ($isCardGameStyle) {
+                $required = \array_values(\array_unique(\array_merge([
+                    'hero',
+                    'hero_download',
+                    'game_showcase_or_features',
+                    'trust_security',
+                    'player_reviews',
+                    'faq_or_rules',
+                    'final_cta',
+                ], $sourceRequired)));
+                $optional = ['bonus_steps', 'install_steps', 'route_chips', 'benefit_cards', 'responsible_play'];
+            } else {
+                $required = \array_values(\array_unique(\array_merge(['hero', 'final_cta'], $sourceRequired)));
+                $optional = ['brand_promise', 'featured_offers', 'trust_proof', 'resource_preview', 'experience_highlights'];
+            }
         } elseif ($pageType === Page::TYPE_ABOUT) {
             $required = ['origin_story', 'mission_values', 'trust_proof', 'about_cta'];
             $optional = ['team_principles', 'quality_process', 'community_signal'];
@@ -375,9 +416,10 @@ final class AiSiteStageOneContractService
         }
 
         $isHome = $pageType === Page::TYPE_HOME || $pageType === 'home_page';
+        $isCardGameHome = $isHome && $isCardGameStyle;
         $min = \max($isHome ? 5 : 3, \count($required));
-        $max = $isHome ? \max($min, 7) : \max($min, 5);
-        $target = $isHome ? \min(\max(6, $min), $max) : \min(\max(\count($required), $min), $max);
+        $max = $isHome ? \max($min, $isCardGameHome ? 8 : 7) : \max($min, 5);
+        $target = $isHome ? \min(\max($isCardGameHome ? 7 : 6, $min), $max) : \min(\max(\count($required), $min), $max);
         $optional = \array_values(\array_filter(\array_unique(\array_map('strval', $optional)), static fn(string $value): bool => \trim($value) !== ''));
 
         return [
@@ -409,6 +451,10 @@ final class AiSiteStageOneContractService
                 'forbidden_block_keys' => self::GENERIC_BLOCK_KEYS,
                 'requires_visual_signature' => true,
                 'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
+                'visual_signature_uniqueness_scope' => 'same_page_adjacent_blocks',
+                'visual_signature_duplicate_severity' => 'high',
+                'forbid_repeated_composition_patterns_within_page' => true,
+                'composition_overuse_severity' => 'medium',
                 'requires_image_intent' => true,
                 'image_intent_keys' => self::IMAGE_INTENT_KEYS,
             ];

@@ -1,22 +1,24 @@
 ﻿订阅计划管理,"Subscription Plan Management"
 编辑订阅计划,"Edit Subscription Plan"
-新建订阅计划,"Create Subscription Plan"
+新建订阅计划,"New Subscription Plan"
 订阅计划不存在。,"Subscription plan does not exist."
 保存成功。,"Saved successfully."
 保存失败：%{error},"Save failed: %{error}"
 删除成功。,"Deleted successfully."
 删除失败：%{error},"Delete failed: %{error}"
 订阅管理,"Subscription Management"
-缺少订阅 ID。,"Subscription ID is required."
+"缺少订阅 ID。","Subscription ID is required."
 订阅详情,"Subscription Details"
 订阅已取消。,"Subscription cancelled."
 取消失败：%{error},"Cancel failed: %{error}"
 订阅已暂停。,"Subscription paused."
+暂停失败：%{error},"Pause failed: %{error}"
 订阅已恢复。,"Subscription resumed."
 恢复失败：%{error},"Resume failed: %{error}"
 请先登录。,"Please login first."
 暂时无法取消该订阅。,"Unable to cancel this subscription right now."
 我的订阅服务,"My Subscriptions"
+暂时无法暂停该订阅。,"Unable to pause this subscription right now."
 暂时无法恢复该订阅。,"Unable to resume this subscription right now."
 订阅服务详情,"Subscription Service Details"
 订阅页前置扩展内容,"Subscription page before content"
@@ -48,8 +50,6 @@
 每%{cycle},"Every %{cycle}"
 订阅不存在。,"Subscription does not exist."
 您无权查看该订阅。,"You do not have permission to view this subscription."
-暂时无法暂停该订阅。,"Unable to pause this subscription right now."
-暂停失败：%{error},"Pause failed: %{error}"
 订阅计划不存在,"Subscription plan not found"
 订阅计划已停用,"Subscription plan is disabled"
 创建订阅：%{plan},"Subscription created: %{plan}"
@@ -68,11 +68,10 @@
 订阅信息暂不可用,"Subscription info is currently unavailable"
 订阅服务暂时无法加载，请稍后重试。,"The subscription service is temporarily unavailable, please try again later."
 周期订单,"Recurring Orders"
-订阅服务,"Subscriptions"
+订阅服务,"Subscription Service"
 打开订阅中心,"Open Subscriptions"
 生效与历史计划,"Active and historical plans"
 在此集中查看计费周期，暂停或恢复计划，并管理续费。,"Review billing cycles, pause or resume plans, and manage renewals from one place."
-新建订阅计划,"New Subscription Plan"
 返回,Back
 计划名称,"Plan Name"
 关联产品,"Associated Product"
@@ -88,14 +87,12 @@
 停用,Disabled
 保存,Save
 错误,Error
-订阅计划管理,"Subscription Plan Management"
 暂无订阅计划,"No subscription plans yet"
 操作,Actions
 确认删除,"Confirm Delete"
 确认删除此订阅计划？,"Are you sure to delete this subscription plan?"
 确认,Confirm
 取消,Cancel
-订阅管理,"Subscription Management"
 总计,Total
 活跃订阅,"Active Subscriptions"
 试用订阅,"Trial Subscriptions"
@@ -109,7 +106,6 @@
 续费次数,"Renewal Count"
 创建时间,"Created At"
 查看,View
-订阅详情,"Subscription Details"
 暂停,Pause
 恢复,Resume
 支付方式,"Payment Method"
@@ -130,7 +126,6 @@
 确认暂停此订阅？,"Are you sure you want to pause this subscription?"
 确认恢复,"Confirm restore"
 确认恢复此订阅？,"Are you sure you want to restore this subscription?"
-订阅服务,"Subscription Service"
 查看会员、VIP、定期购和自动续费服务，续费周期、状态和取消操作都可以在当前页面完成。,"View membership, VIP, subscription, and auto-renewal services. Renewal cycles, status, and cancellation operations can all be completed on this page."
 全部订阅,"All Subscriptions"
 需关注,"Needs Attention"

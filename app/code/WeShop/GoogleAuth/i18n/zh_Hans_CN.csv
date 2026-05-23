@@ -38,6 +38,7 @@
 "Google auth is not configured.","Google 认证未配置。"
 "Unsupported Google auth mode: %{1}","不支持的 Google 认证模式：%{1}"
 "Sign in with Google","使用 Google 登录"
+"使用 Google 账户继续","使用 Google 账户继续"
 或,或
 "Google Sign-In","Google 登录"
 "Connected Account",已连接账户
@@ -72,4 +73,3 @@ Policy,策略
 "Verify and Sign In",验证并登录
 "Challenge expires at: %{1}",挑战过期时间：%{1}
 Unknown,未知
-"使用 Google 账户继续","使用 Google 账户继续"

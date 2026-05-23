@@ -5,8 +5,12 @@
  * @var \Weline\Framework\View\Template $this
  */
 
-$title = (string) ($this->getData('title') ?? __('热销产品'));
-$subtitle = (string) ($this->getData('subtitle') ?? __('最受欢迎的商品'));
+use Weline\Theme\Helper\WidgetI18n;
+
+$titleSource = trim((string)($this->getData('title') ?? '')) ?: '热销产品';
+$subtitleSource = trim((string)($this->getData('subtitle') ?? '')) ?: '最受欢迎的商品';
+$widgetTitle = WidgetI18n::label($titleSource, '热销产品');
+$widgetSubtitle = WidgetI18n::label($subtitleSource, '最受欢迎的商品');
 $limit = max(1, (int) ($this->getData('limit') ?? 8));
 $showSalesCount = (bool) ($this->getData('show_sales_count') ?? false);
 $columns = (string) ($this->getData('columns') ?? '4');
@@ -42,20 +46,20 @@ if (!in_array($columns, $allowedColumns, true)) {
 ?>
 
 <section class="motor-bestsellers-widget" id="<?= htmlspecialchars($widgetId, ENT_QUOTES) ?>">
-    <?php if ($title !== '' || $subtitle !== ''): ?>
+    <?php if ($titleSource !== '' || $subtitleSource !== ''): ?>
         <header class="motor-bestsellers-widget__header">
             <div class="motor-bestsellers-widget__eyebrow">
                 <span class="motor-bestsellers-widget__eyebrow-mark"></span>
                 <span><?= __('Top Picks') ?></span>
             </div>
-            <?php if ($title !== ''): ?>
+            <?php if ($titleSource !== ''): ?>
                 <h2 class="motor-bestsellers-widget__title font-heading">
-                    <?= htmlspecialchars($title, ENT_QUOTES) ?>
+                    <?= htmlspecialchars($widgetTitle, ENT_QUOTES, 'UTF-8') ?>
                 </h2>
             <?php endif; ?>
-            <?php if ($subtitle !== ''): ?>
+            <?php if ($subtitleSource !== ''): ?>
                 <p class="motor-bestsellers-widget__subtitle">
-                    <?= htmlspecialchars($subtitle, ENT_QUOTES) ?>
+                    <?= htmlspecialchars($widgetSubtitle, ENT_QUOTES, 'UTF-8') ?>
                 </p>
             <?php endif; ?>
         </header>

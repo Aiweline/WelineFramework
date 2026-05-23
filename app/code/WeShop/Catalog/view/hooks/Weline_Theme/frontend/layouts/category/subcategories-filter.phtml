@@ -141,7 +141,7 @@ if (empty($childCategories) && empty($parentCategory)) {
             <div class="category-filter-section-content">
                 <a href="<?= htmlspecialchars($parentUrl) ?>" class="category-filter-parent-link">
                     <span class="category-filter-parent-icon">←</span>
-                    <span class="category-filter-parent-name"><?= htmlspecialchars($parentCategory['name'] ?? '') ?></span>
+                    <span class="category-filter-parent-name"><?= htmlspecialchars($categoryUrlService->localizeCategoryDisplayName((string)($parentCategory['name'] ?? ''))) ?></span>
                 </a>
             </div>
         </div>
@@ -179,7 +179,7 @@ if (empty($childCategories) && empty($parentCategory)) {
                         // 构建完整的层级路径
                         $catPath = $currentPath !== '' ? $currentPath . '/' . rawurlencode($catHandle) : rawurlencode($catHandle);
                         $catUrl = $template->getUrl($categoryUrlService->buildCategoryPublicPath($cat, $currentPath));
-                        $catName = htmlspecialchars($cat['name'] ?? '');
+                        $catName = htmlspecialchars($categoryUrlService->localizeCategoryDisplayName((string)($cat['name'] ?? '')));
                         
                         // 获取分类图标（优先从已加载的数据中获取，如果没有则从 EAV 属性获取）
                         $catIcon = $cat['icon'] ?? '';

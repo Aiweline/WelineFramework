@@ -74,6 +74,7 @@ class PassthroughCore
     private const IPC_READY_HOMEPAGE_TLS_TIMEOUT_SEC = 3.0;
     private const IPC_READY_HOMEPAGE_WRITE_TIMEOUT_SEC = 2.0;
     private const IPC_READY_HOMEPAGE_READ_TIMEOUT_SEC = 30.0;
+    private const IPC_READY_HOMEPAGE_ROUTE_GATE_TARGETS = 6;
     private const HOMEPAGE_WARMUP_MAX_TARGETS = 96;
     
     /**
@@ -148,9 +149,13 @@ class PassthroughCore
     private array $homepageWarmupHosts = ['localhost'];
     /** @var string[] */
     private array $homepageWarmupPaths = ['/'];
+    /** @var string[] */
+    private array $homepageWarmupCookies = [''];
+    private int $homepageWarmupRouteGateTargets = self::IPC_READY_HOMEPAGE_ROUTE_GATE_TARGETS;
     /** @var array<int, int> port => warmup ticket */
     private array $workerHomepageWarmupTickets = [];
     private int $nextWorkerHomepageWarmupTicket = 1;
+    private ?int $activeHomepageWarmupPort = null;
 
     /**
      * HTTP 重定向端口（用于明文 HTTP 请求转发到 http_redirect_worker）
@@ -189,7 +194,7 @@ class PassthroughCore
      *
      * PHP 8.4 优化：结构化数组类型提升性能和内存布局
      *
-     * @var array<int, array{worker: resource, port: int, clientIp: string, sni: string, open_time: float}>
+     * @var array<int, array{worker: resource, port: int, clientIp: string, sni: string, open_time: float, request_sent_at: float, last_client_to_worker_at: float, last_worker_to_client_at: float, worker_responded: bool, request_line: string, response_first_line: string, response_status_line: string}>
      */
     private array $connections = [];
 
@@ -218,6 +223,19 @@ class PassthroughCore
     private int $backendPoolIdleTtl = 15;
 
     /**
+     * SSL worker cold preconnect pool size per worker.
+     *
+     * These sockets have not carried TLS bytes yet. Once a socket is bound to
+     * a client TLS stream it is never returned to the pool.
+     */
+    private int $sslBackendPreconnectPerWorker = 0;
+
+    /**
+     * Round-robin cursor for incremental SSL backend preconnect refill.
+     */
+    private int $sslBackendPreconnectCursor = 0;
+
+    /**
      * H15: 客户端写入缓冲区
      * 当客户端 TCP 发送缓冲区满时，暂存未写入的数据
      *
@@ -226,6 +244,14 @@ class PassthroughCore
      * @var array<int, string>
      */
     private array $clientWriteBuffers = [];
+
+    /**
+     * Upstream write buffer for bytes already read from the client but not yet
+     * accepted by the worker socket. Dispatcher flushes this on write readiness.
+     *
+     * @var array<int, string>
+     */
+    private array $workerWriteBuffers = [];
 
     /**
      * H15: Worker 已关闭但还有缓冲数据需要发送的连接
@@ -296,6 +322,14 @@ class PassthroughCore
     private float $firstByteTimeoutSeconds = 2.5;
 
     /**
+     * In SSL passthrough mode the dispatcher cannot see HTTP, but it can see
+     * encrypted byte direction. If client->worker traffic is not followed by
+     * worker->client traffic quickly, the worker is probably rendering or stuck
+     * in TLS/userland work and should not receive more fresh connections.
+     */
+    private float $workerBusyPenaltyAfterSeconds = 0.12;
+
+    /**
      * Health audit probes run outside the browser request path, so they can
      * tolerate a slightly wider TCP/TLS budget than request failover. The old
      * 0.8s cap was too aggressive on Windows SSL workers under load and could
@@ -303,6 +337,7 @@ class PassthroughCore
      */
     private float $workerHealthConnectTimeoutSec = 2.0;
     private float $workerHealthResponseTimeoutSec = 2.0;
+    private bool $workerHealthAuditEnabled = false;
 
     /**
      * Worker 全部不可用时的自旋等待总时长（秒）
@@ -338,7 +373,7 @@ class PassthroughCore
      * 高并发失败路径每次额外阻塞 300-500ms 会级联拖垮主循环。
      * 默认 0.1s 对 localhost TCP connect 绰绰有余；远端后端可通过 configure 覆盖。
      */
-    private float $workerConnectSelectTimeoutSec = 0.1;
+    private float $workerConnectSelectTimeoutSec = 0.02;
 
     /**
      * 上次输出「workerPorts 为空」到 stderr 的时间（节流，避免启动时刷屏）
@@ -351,6 +386,7 @@ class PassthroughCore
     /** @var array<int, string> */
     private array $lastLoggedHttpRequestLineByConn = [];
     private int $requestIngressLogMaxPerConnection = 3;
+    private bool $trafficTraceEnabled = false;
     private $spinWaitTickCallback = null;
 
     /**
@@ -424,11 +460,21 @@ class PassthroughCore
         if (isset($config['first_byte_timeout_seconds'])) {
             $this->firstByteTimeoutSeconds = \max(0.5, (float)$config['first_byte_timeout_seconds']);
         }
+        if (isset($config['worker_busy_penalty_after_ms'])) {
+            $requested = ((float)$config['worker_busy_penalty_after_ms']) / 1000.0;
+            $this->workerBusyPenaltyAfterSeconds = \max(0.0, \min($requested, 5.0));
+        } elseif (isset($config['worker_busy_penalty_after_seconds'])) {
+            $requested = (float)$config['worker_busy_penalty_after_seconds'];
+            $this->workerBusyPenaltyAfterSeconds = \max(0.0, \min($requested, 5.0));
+        }
         if (isset($config['worker_health_connect_timeout_sec'])) {
             $this->workerHealthConnectTimeoutSec = \max(0.3, \min((float)$config['worker_health_connect_timeout_sec'], 10.0));
         }
         if (isset($config['worker_health_response_timeout_sec'])) {
             $this->workerHealthResponseTimeoutSec = \max(0.5, \min((float)$config['worker_health_response_timeout_sec'], 10.0));
+        }
+        if (isset($config['worker_health_audit_enabled'])) {
+            $this->workerHealthAuditEnabled = (bool)$config['worker_health_audit_enabled'];
         }
         if (isset($config['spin_wait_max_seconds'])) {
             $requestedSpinWait = (float) $config['spin_wait_max_seconds'];
@@ -453,6 +499,9 @@ class PassthroughCore
             $requested = (float) $config['worker_connect_select_timeout_sec'];
             $this->workerConnectSelectTimeoutSec = \max(0.01, \min($requested, 2.0));
         }
+        if (isset($config['traffic_trace_enabled'])) {
+            $this->trafficTraceEnabled = (bool)$config['traffic_trace_enabled'];
+        }
         if (isset($config['homepage_warmup_enabled'])) {
             $this->homepageWarmupEnabled = (bool) $config['homepage_warmup_enabled'];
         }
@@ -468,6 +517,14 @@ class PassthroughCore
                 $this->homepageWarmupPaths = $paths;
             }
         }
+        if (isset($config['homepage_warmup_variants'])) {
+            $this->homepageWarmupCookies = $this->normalizeHomepageWarmupVariants($config['homepage_warmup_variants']);
+        } elseif (isset($config['homepage_warmup_cookies'])) {
+            $this->homepageWarmupCookies = $this->normalizeHomepageWarmupCookies($config['homepage_warmup_cookies']);
+        }
+        if (isset($config['homepage_warmup_route_gate_targets'])) {
+            $this->homepageWarmupRouteGateTargets = \max(1, \min((int)$config['homepage_warmup_route_gate_targets'], self::HOMEPAGE_WARMUP_MAX_TARGETS));
+        }
         if (isset($config['backend_pool_enabled'])) {
             $this->backendPoolEnabled = (bool)$config['backend_pool_enabled'];
         }
@@ -476,6 +533,9 @@ class PassthroughCore
         }
         if (isset($config['backend_pool_idle_ttl'])) {
             $this->backendPoolIdleTtl = \max(1, (int)$config['backend_pool_idle_ttl']);
+        }
+        if (isset($config['ssl_backend_preconnect_per_worker'])) {
+            $this->sslBackendPreconnectPerWorker = \max(0, (int)$config['ssl_backend_preconnect_per_worker']);
         }
         
         // 传递缓存配置
@@ -487,7 +547,7 @@ class PassthroughCore
         if (isset($config['http_redirect_port'])) {
             $this->httpRedirectPort = (int) $config['http_redirect_port'];
         }
-        if (!$this->backendPoolEnabled) {
+        if (!$this->backendPoolEnabled && $this->sslBackendPreconnectPerWorker <= 0) {
             $this->closeAllIdleWorkerSockets();
         }
     }
@@ -495,6 +555,26 @@ class PassthroughCore
     public function setSpinWaitTickCallback(?callable $callback): void
     {
         $this->spinWaitTickCallback = $callback;
+    }
+
+    public function tickSslBackendPreconnectPool(int $maxCreates = 1): void
+    {
+        if (!$this->workerSslEnabled || $this->sslBackendPreconnectPerWorker <= 0 || $this->workerPorts === []) {
+            return;
+        }
+
+        $maxCreates = \max(1, $maxCreates);
+        $portCount = \count($this->workerPorts);
+        $created = 0;
+        $visited = 0;
+        while ($visited < $portCount && $created < $maxCreates) {
+            $index = $this->sslBackendPreconnectCursor % $portCount;
+            $this->sslBackendPreconnectCursor++;
+            $visited++;
+
+            $port = (int)$this->workerPorts[$index];
+            $created += $this->primeSslIdleWorkerPool($port, $maxCreates - $created);
+        }
     }
 
     /**
@@ -543,6 +623,8 @@ class PassthroughCore
             'sni' => '',
             'open_time' => \microtime(true),
             'request_sent_at' => 0.0,
+            'last_client_to_worker_at' => 0.0,
+            'last_worker_to_client_at' => 0.0,
             'worker_responded' => false,
             'request_line' => '',
             'response_first_line' => '',
@@ -815,6 +897,10 @@ class PassthroughCore
             return false;
         }
 
+        if ($this->workerSslEnabled && $this->hasLessLoadedWorker($workerPort)) {
+            return false;
+        }
+
         return true;
     }
 
@@ -922,13 +1008,18 @@ class PassthroughCore
         $count = \count($this->workerPorts);
         $startIndex = $this->connectionCounter % $count;
         $this->connectionCounter++;
-        
-        for ($i = 0; $i < $count; $i++) {
-            $index = ($startIndex + $i) % $count;
-            $port = $this->workerPorts[$index];
+
+        $candidatePorts = $this->workerSslEnabled
+            ? $this->orderWorkerPortsByActiveLoad($startIndex)
+            : $this->orderWorkerPortsRoundRobin($startIndex);
+
+        foreach ($candidatePorts as $port) {
 
             // 跳过已尝试的端口
             if ($port === $excludePort) {
+                continue;
+            }
+            if ($this->shouldDeferPendingWarmupWorker((int)$port, $excludePort)) {
                 continue;
             }
 
@@ -984,6 +1075,9 @@ class PassthroughCore
             if ($excludePort !== null && $port === $excludePort) {
                 continue;
             }
+            if ($this->shouldDeferPendingWarmupWorker((int)$port, $excludePort)) {
+                continue;
+            }
             if (!$this->isWorkerSaturated((int)$port)) {
                 continue;
             }
@@ -1016,6 +1110,9 @@ class PassthroughCore
 
         foreach ($this->workerPorts as $port) {
             if ($port === $excludePort) {
+                continue;
+            }
+            if ($this->shouldDeferPendingWarmupWorker((int)$port, $excludePort)) {
                 continue;
             }
             
@@ -1107,12 +1204,29 @@ class PassthroughCore
             }
         }
 
+        if ($this->workerSslEnabled && $this->sslBackendPreconnectPerWorker > 0) {
+            $reusedSocket = $this->acquireIdleWorkerSocket($workerPort);
+            if ($reusedSocket !== false) {
+                $this->stats['backend_pool_reused']++;
+                return $reusedSocket;
+            }
+        }
+
+        return $this->openWorkerSocket($workerPort);
+    }
+
+    private function openWorkerSocket(int $workerPort, ?float $connectTimeoutOverride = null)
+    {
         $workerSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
         if ($workerSocket === false) {
             return false;
         }
         
         // 设置非阻塞
+        if (\defined('TCP_NODELAY')) {
+            @\socket_set_option($workerSocket, \SOL_TCP, (int)\TCP_NODELAY, 1);
+        }
+
         \socket_set_nonblock($workerSocket);
 
         // 尝试连接（非阻塞）
@@ -1137,7 +1251,7 @@ class PassthroughCore
         // 默认 0.1s 对 localhost Worker 绰绰有余；远端后端可通过 worker_connect_select_timeout_sec 覆盖。
         // 高并发失败路径下，单次 connect 的最差阻塞从 500ms → 100ms。
         $failoverTimeout = \max(0.01, \min(
-            $this->workerConnectSelectTimeoutSec,
+            $connectTimeoutOverride ?? $this->workerConnectSelectTimeoutSec,
             (float) $this->connectTimeout
         ));
         $seconds = (int) $failoverTimeout;
@@ -1316,6 +1430,13 @@ class PassthroughCore
      */
     public function auditWorkerApplicationHealth(): array
     {
+        if (!$this->workerHealthAuditEnabled) {
+            return [
+                'healthy' => \array_values(\array_map('intval', $this->workerPorts)),
+                'failed' => [],
+            ];
+        }
+
         $healthy = [];
         $failed = [];
         $connectTimeout = $this->workerHealthConnectTimeoutSec;
@@ -1704,10 +1825,11 @@ class PassthroughCore
         return (\microtime(true) - $startedAt) < self::IPC_READY_WARMUP_RETRY_GRACE_SEC;
     }
 
-    private function buildWorkerHomepageWarmupRequest(string $host = 'localhost', string $path = '/'): string
+    private function buildWorkerHomepageWarmupRequest(string $host = 'localhost', string $path = '/', string $cookieHeader = ''): string
     {
         $host = \str_replace(["\r", "\n"], '', \trim($host));
         $path = \str_replace(["\r", "\n"], '', \trim($path));
+        $cookieHeader = \str_replace(["\r", "\n"], '', \trim($cookieHeader));
         if ($host === '') {
             $host = 'localhost';
         }
@@ -1717,6 +1839,7 @@ class PassthroughCore
 
         return "GET {$path} HTTP/1.1\r\n"
             . "Host: {$host}\r\n"
+            . ($cookieHeader !== '' ? "Cookie: {$cookieHeader}\r\n" : '')
             . InternalRequestLabel::buildHeaderLine(InternalRequestLabel::HOMEPAGE_WARMUP)
             . "Connection: close\r\n\r\n";
     }
@@ -1754,6 +1877,68 @@ class PassthroughCore
         return \array_values(\array_unique($paths));
     }
 
+    private function normalizeHomepageWarmupCookies(mixed $value): array
+    {
+        $items = $this->normalizeWarmupList($value);
+        $cookies = [''];
+        foreach ($items as $item) {
+            $cookie = \str_replace(["\r", "\n", "\t"], '', \trim($item));
+            if ($cookie === '') {
+                continue;
+            }
+            $cookies[$cookie] = $cookie;
+        }
+
+        return \array_values($cookies);
+    }
+
+    private function normalizeHomepageWarmupVariants(mixed $value): array
+    {
+        if (\is_string($value)) {
+            $decoded = \json_decode($value, true);
+            $value = \is_array($decoded) ? $decoded : (\preg_split('/[,\s]+/', $value) ?: []);
+        }
+        if (!\is_array($value)) {
+            return [''];
+        }
+
+        $cookies = [''];
+        foreach ($value as $variant) {
+            $lang = '';
+            $currency = '';
+            if (\is_array($variant)) {
+                $lang = (string)($variant['lang'] ?? $variant['language'] ?? $variant[0] ?? '');
+                $currency = (string)($variant['currency'] ?? $variant[1] ?? '');
+            } elseif (\is_scalar($variant)) {
+                $raw = \trim((string)$variant);
+                if (\str_contains($raw, 'WELINE_USER_LANG=') || \str_contains($raw, 'WELINE_USER_CURRENCY=')) {
+                    $cookie = \str_replace(["\r", "\n", "\t"], '', $raw);
+                    if ($cookie !== '') {
+                        $cookies[$cookie] = $cookie;
+                    }
+                    continue;
+                }
+                $parts = \preg_split('/[:|\/,]/', $raw, 2) ?: [];
+                $lang = (string)($parts[0] ?? '');
+                $currency = (string)($parts[1] ?? '');
+            }
+
+            $lang = \str_replace('-', '_', \trim($lang));
+            $currency = \strtoupper(\trim($currency));
+            if ($lang === '' || !\preg_match('/^[a-z]{2}_[A-Za-z0-9_]{2,}$/', $lang)) {
+                continue;
+            }
+            if (!\preg_match('/^[A-Z]{3}$/', $currency)) {
+                continue;
+            }
+
+            $cookie = "WELINE_USER_LANG={$lang}; WELINE_USER_CURRENCY={$currency}";
+            $cookies[$cookie] = $cookie;
+        }
+
+        return \array_values($cookies);
+    }
+
     private function normalizeWarmupList(mixed $value): array
     {
         if (\is_string($value)) {
@@ -1779,18 +1964,25 @@ class PassthroughCore
     }
 
     /**
-     * @return array<int, array{host: string, path: string}>
+     * @return array<int, array{host: string, path: string, cookie: string}>
      */
     private function homepageWarmupTargets(): array
     {
         $hosts = $this->homepageWarmupHosts !== [] ? $this->homepageWarmupHosts : ['localhost'];
         $paths = $this->homepageWarmupPaths !== [] ? $this->homepageWarmupPaths : ['/'];
+        $cookies = $this->homepageWarmupCookies !== [] ? $this->homepageWarmupCookies : [''];
         $targets = [];
         foreach ($hosts as $host) {
             foreach ($paths as $path) {
-                $targets[] = ['host' => $host, 'path' => $path];
-                if (\count($targets) >= self::HOMEPAGE_WARMUP_MAX_TARGETS) {
-                    return $targets;
+                $pathContext = $this->parseWarmupPathContext($path);
+                foreach ($cookies as $cookie) {
+                    if (!$this->warmupPathAcceptsCookieContext($pathContext, $cookie)) {
+                        continue;
+                    }
+                    $targets[] = ['host' => $host, 'path' => $path, 'cookie' => $cookie];
+                    if (\count($targets) >= self::HOMEPAGE_WARMUP_MAX_TARGETS) {
+                        return $targets;
+                    }
                 }
             }
         }
@@ -1808,16 +2000,105 @@ class PassthroughCore
      *
      * @return array{success: bool, error: string}
      */
+    /**
+     * @return array{lang: string, currency: string}
+     */
+    private function parseWarmupPathContext(string $path): array
+    {
+        $path = '/' . \ltrim($path, '/');
+
+        if (\preg_match('#^/([A-Z]{3})/([A-Za-z]{2}_[A-Za-z0-9_]{2,})(?:/|$)#', $path, $matches)) {
+            return [
+                'currency' => \strtoupper((string)$matches[1]),
+                'lang' => \str_replace('-', '_', (string)$matches[2]),
+            ];
+        }
+
+        if (\preg_match('#^/([A-Za-z]{2}_[A-Za-z0-9_]{2,})(?:/|$)#', $path, $matches)) {
+            return [
+                'currency' => '',
+                'lang' => \str_replace('-', '_', (string)$matches[1]),
+            ];
+        }
+
+        if (\preg_match('#^/([A-Z]{3})(?:/|$)#', $path, $matches)) {
+            return [
+                'currency' => \strtoupper((string)$matches[1]),
+                'lang' => '',
+            ];
+        }
+
+        return ['lang' => '', 'currency' => ''];
+    }
+
+    /**
+     * @param array{lang: string, currency: string} $pathContext
+     */
+    private function warmupPathAcceptsCookieContext(array $pathContext, string $cookie): bool
+    {
+        $cookie = \trim($cookie);
+        if ($cookie === '') {
+            return true;
+        }
+
+        $cookieContext = $this->parseWarmupCookieContext($cookie);
+        if ($cookieContext['lang'] === '' && $cookieContext['currency'] === '') {
+            return true;
+        }
+
+        if ($pathContext['lang'] !== '' && $cookieContext['lang'] !== '' && $pathContext['lang'] !== $cookieContext['lang']) {
+            return false;
+        }
+
+        if ($pathContext['currency'] !== ''
+            && $cookieContext['currency'] !== ''
+            && $pathContext['currency'] !== $cookieContext['currency']
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{lang: string, currency: string}
+     */
+    private function parseWarmupCookieContext(string $cookie): array
+    {
+        $context = ['lang' => '', 'currency' => ''];
+        foreach (\explode(';', $cookie) as $part) {
+            $pair = \explode('=', \trim($part), 2);
+            if (\count($pair) !== 2) {
+                continue;
+            }
+
+            $name = \strtoupper(\trim($pair[0]));
+            $value = \trim($pair[1]);
+            if ($name === 'WELINE_USER_LANG') {
+                $context['lang'] = \str_replace('-', '_', $value);
+            } elseif ($name === 'WELINE_USER_CURRENCY') {
+                $context['currency'] = \strtoupper($value);
+            }
+        }
+
+        return $context;
+    }
+
     protected function warmupWorkerViaHomepage(
         int $port,
         int $maxRetries = 3,
         float $connectTimeoutSeconds = 5.0,
         float $tlsTimeoutSeconds = 8.0,
         float $writeTimeoutSeconds = 5.0,
-        float $readTimeoutSeconds = 60.0
+        float $readTimeoutSeconds = 60.0,
+        ?int $maxTargets = null,
+        bool $requireAllTargets = false
     ): array
     {
         $targets = $this->homepageWarmupTargets();
+        if ($maxTargets !== null && $maxTargets > 0 && \count($targets) > $maxTargets) {
+            $targets = \array_slice($targets, 0, $maxTargets);
+        }
         $successCount = 0;
         $failures = [];
         foreach ($targets as $target) {
@@ -1825,6 +2106,7 @@ class PassthroughCore
                 $port,
                 (string)$target['host'],
                 (string)$target['path'],
+                (string)($target['cookie'] ?? ''),
                 $maxRetries,
                 $connectTimeoutSeconds,
                 $tlsTimeoutSeconds,
@@ -1837,6 +2119,13 @@ class PassthroughCore
             }
 
             $successCount++;
+        }
+
+        if ($requireAllTargets && $failures !== []) {
+            return [
+                'success' => false,
+                'error' => \implode('; ', \array_slice($failures, 0, 5)) ?: 'homepage warmup incomplete',
+            ];
         }
 
         if ($successCount > 0) {
@@ -1865,6 +2154,7 @@ class PassthroughCore
         int $port,
         string $hostHeader,
         string $path,
+        string $cookieHeader = '',
         int $maxRetries = 3,
         float $connectTimeoutSeconds = 5.0,
         float $tlsTimeoutSeconds = 8.0,
@@ -1968,7 +2258,7 @@ class PassthroughCore
 
                 // 发送真实的首页请求来触发框架初始化（而不是简单的健康检查）
                 // 这样可以预热框架、数据库连接、缓存等，避免第一个用户请求过慢
-                $request = $this->buildWorkerHomepageWarmupRequest($hostHeader, $path);
+                $request = $this->buildWorkerHomepageWarmupRequest($hostHeader, $path, $cookieHeader);
                 $writeOffset = 0;
                 $writeDeadline = \microtime(true) + \max(0.2, $writeTimeoutSeconds);
                 while ($writeOffset < \strlen($request)) {
@@ -2489,6 +2779,7 @@ class PassthroughCore
                 unset($this->workerSaturation[$p]);
             }
         }
+
     }
 
     /**
@@ -2553,14 +2844,23 @@ class PassthroughCore
                 continue;
             }
 
-            $result = $this->warmupWorkerViaHomepage(
-                $port,
-                self::IPC_READY_HOMEPAGE_WARMUP_RETRIES,
-                self::IPC_READY_HOMEPAGE_CONNECT_TIMEOUT_SEC,
-                self::IPC_READY_HOMEPAGE_TLS_TIMEOUT_SEC,
-                self::IPC_READY_HOMEPAGE_WRITE_TIMEOUT_SEC,
-                self::IPC_READY_HOMEPAGE_READ_TIMEOUT_SEC
-            );
+            $this->activeHomepageWarmupPort = $port;
+            try {
+                $result = $this->warmupWorkerViaHomepage(
+                    $port,
+                    self::IPC_READY_HOMEPAGE_WARMUP_RETRIES,
+                    self::IPC_READY_HOMEPAGE_CONNECT_TIMEOUT_SEC,
+                    self::IPC_READY_HOMEPAGE_TLS_TIMEOUT_SEC,
+                    self::IPC_READY_HOMEPAGE_WRITE_TIMEOUT_SEC,
+                    self::IPC_READY_HOMEPAGE_READ_TIMEOUT_SEC,
+                    $this->homepageWarmupRouteGateTargets,
+                    false
+                );
+            } finally {
+                if ($this->activeHomepageWarmupPort === $port) {
+                    $this->activeHomepageWarmupPort = null;
+                }
+            }
             if (!($result['success'] ?? false)) {
                 $failed[$port] = (string)($result['error'] ?? 'homepage warmup failed');
                 $this->clearJoinedWorkerHomepageWarmupTicket($port);
@@ -2577,6 +2877,46 @@ class PassthroughCore
     private function clearJoinedWorkerHomepageWarmupTicket(int $port): void
     {
         unset($this->workerHomepageWarmupTickets[$port]);
+    }
+
+    private function isWorkerHomepageWarmupPending(int $port): bool
+    {
+        return isset($this->workerHomepageWarmupTickets[$port]);
+    }
+
+    private function shouldDeferPendingWarmupWorker(int $port, ?int $excludePort = null): bool
+    {
+        if (!$this->isWorkerHomepageWarmupPending($port)) {
+            return false;
+        }
+
+        if ($this->activeHomepageWarmupPort === $port) {
+            foreach ($this->workerPorts as $candidatePort) {
+                $candidatePort = (int)$candidatePort;
+                if ($candidatePort <= 0 || $candidatePort === $port || $candidatePort === $excludePort) {
+                    continue;
+                }
+                if (!$this->isWorkerBlacklisted($candidatePort)
+                    && !$this->isWorkerSaturated($candidatePort)
+                ) {
+                    return true;
+                }
+            }
+        }
+
+        foreach ($this->workerPorts as $candidatePort) {
+            $candidatePort = (int)$candidatePort;
+            if ($candidatePort <= 0 || $candidatePort === $port || $candidatePort === $excludePort) {
+                continue;
+            }
+            if (!$this->isWorkerHomepageWarmupPending($candidatePort)
+                && !$this->isWorkerBlacklisted($candidatePort)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function setWorkerPorts(array $ports, bool $preservePreviousOnTotalReject = true): array
@@ -2876,6 +3216,17 @@ class PassthroughCore
         
         $workerSocket = $this->connections[$connId]['worker'];
         $workerPort = $this->connections[$connId]['port'];
+
+        if (isset($this->workerWriteBuffers[$connId]) && $this->workerWriteBuffers[$connId] !== '') {
+            $flushed = $this->flushWorkerBuffer($clientSocket);
+            if ($flushed === -1) {
+                $this->connectionTerminalReasons[$connId] = 'forward_to_worker_flush_failed';
+                return -1;
+            }
+            if (isset($this->workerWriteBuffers[$connId]) && $this->workerWriteBuffers[$connId] !== '') {
+                return 0;
+            }
+        }
         
         // 读取客户端数据
         $data = @\socket_read($clientSocket, $this->readBufferSize);
@@ -2909,38 +3260,109 @@ class PassthroughCore
         
         // 转发到 Worker（完整写入循环，处理部分写入）
         $totalWritten = 0;
-        $maxRetries = 100;
-        $retries = 0;
+        $maxAttempts = 4;
+        $attempts = 0;
         
-        while ($totalWritten < $length && $retries < $maxRetries) {
+        while ($totalWritten < $length && $attempts < $maxAttempts) {
+            $attempts++;
             $remaining = \substr($data, $totalWritten);
             $written = @\socket_write($workerSocket, $remaining);
             
             if ($written === false) {
                 // Worker 写入失败（Worker 可能掉线），记录到健康状态
                 $errCode = \socket_last_error($workerSocket);
+                if (\in_array($errCode, self::WOULDBLOCK_ERRORS, true)) {
+                    \socket_clear_error($workerSocket);
+                    break;
+                }
                 $this->connectionTerminalReasons[$connId] = 'forward_to_worker_worker_write_error:' . (string)$errCode;
                 $this->recordWorkerFailure($workerPort);
                 return $totalWritten > 0 ? $totalWritten : -1;
             }
             
             if ($written === 0) {
-                SchedulerSystem::usleep(1000);
-                $retries++;
-                continue;
+                break;
             }
             
             $totalWritten += $written;
-            $retries = 0;
         }
 
         if ($totalWritten > 0 && isset($this->connections[$connId])) {
+            $now = \microtime(true);
+            $this->connections[$connId]['last_client_to_worker_at'] = $now;
             $requestSentAt = (float)($this->connections[$connId]['request_sent_at'] ?? 0.0);
             if ($requestSentAt <= 0.0) {
-                $this->connections[$connId]['request_sent_at'] = \microtime(true);
+                $this->connections[$connId]['request_sent_at'] = $now;
             }
         }
+
+        if ($totalWritten < $length) {
+            $remaining = \substr($data, $totalWritten);
+            $this->workerWriteBuffers[$connId] = ($this->workerWriteBuffers[$connId] ?? '') . $remaining;
+        }
         
+        return $length;
+    }
+
+    public function flushWorkerBuffer($clientSocket): int
+    {
+        $connId = \spl_object_id($clientSocket);
+
+        if (!isset($this->workerWriteBuffers[$connId]) || $this->workerWriteBuffers[$connId] === '') {
+            return 0;
+        }
+        if (!isset($this->connections[$connId])) {
+            unset($this->workerWriteBuffers[$connId]);
+            return -1;
+        }
+
+        $workerSocket = $this->connections[$connId]['worker'];
+        $workerPort = (int)$this->connections[$connId]['port'];
+        $buffer = $this->workerWriteBuffers[$connId];
+        $bufferLen = \strlen($buffer);
+        $totalWritten = 0;
+        $attempts = 0;
+        $maxAttempts = 8;
+
+        while ($totalWritten < $bufferLen && $attempts < $maxAttempts) {
+            $attempts++;
+            $remaining = \substr($buffer, $totalWritten);
+            $written = @\socket_write($workerSocket, $remaining);
+
+            if ($written === false) {
+                $errCode = \socket_last_error($workerSocket);
+                if (\in_array($errCode, self::WOULDBLOCK_ERRORS, true)) {
+                    \socket_clear_error($workerSocket);
+                    break;
+                }
+                $this->connectionTerminalReasons[$connId] = 'flush_worker_buffer_worker_write_error:' . (string)$errCode;
+                unset($this->workerWriteBuffers[$connId]);
+                $this->recordWorkerFailure($workerPort);
+                return -1;
+            }
+
+            if ($written === 0) {
+                break;
+            }
+
+            $totalWritten += $written;
+        }
+
+        if ($totalWritten > 0 && isset($this->connections[$connId])) {
+            $now = \microtime(true);
+            $this->connections[$connId]['last_client_to_worker_at'] = $now;
+            $requestSentAt = (float)($this->connections[$connId]['request_sent_at'] ?? 0.0);
+            if ($requestSentAt <= 0.0) {
+                $this->connections[$connId]['request_sent_at'] = $now;
+            }
+        }
+
+        if ($totalWritten >= $bufferLen) {
+            unset($this->workerWriteBuffers[$connId]);
+        } else {
+            $this->workerWriteBuffers[$connId] = \substr($buffer, $totalWritten);
+        }
+
         return $totalWritten;
     }
     
@@ -2981,7 +3403,7 @@ class PassthroughCore
         }
         
         $totalBytesForwarded = 0;
-        $maxReadAttempts = 100; // 增加到 100 次
+        $maxReadAttempts = 8;
         $readAttempts = 0;
         $workerEof = false;
         
@@ -3022,7 +3444,10 @@ class PassthroughCore
             }
             
             $length = \strlen($data);
-            $this->recordWorkerResponseIngress($connId, $data, $workerPort);
+            $this->connections[$connId]['last_worker_to_client_at'] = \microtime(true);
+            if (!$this->workerSslEnabled) {
+                $this->recordWorkerResponseIngress($connId, $data, $workerPort);
+            }
             $this->markWorkerResponsive($connId, $workerPort);
             $this->stats['bytes_out'] += $length;
             
@@ -3040,9 +3465,7 @@ class PassthroughCore
                     $errCode = \socket_last_error($clientSocket);
                     if (\in_array($errCode, self::WOULDBLOCK_ERRORS, true)) {
                         \socket_clear_error($clientSocket);
-                        SchedulerSystem::usleep(1000);
-                        $retries++;
-                        continue;
+                        break;
                     }
                     // 写入错误，连接断开
                     $this->connectionTerminalReasons[$connId] = 'forward_to_client_client_write_error:' . (string)$errCode;
@@ -3052,9 +3475,7 @@ class PassthroughCore
                 }
                 
                 if ($written === 0) {
-                    SchedulerSystem::usleep(1000);
-                    $retries++;
-                    continue;
+                    break;
                 }
                 
                 $totalWritten += $written;
@@ -3125,6 +3546,11 @@ class PassthroughCore
         }
 
         $this->connections[$connId]['worker_responded'] = true;
+        $this->recordWorkerSuccess($workerPort);
+        if (!$this->trafficTraceEnabled) {
+            return;
+        }
+
         $requestSentAt = (float)($this->connections[$connId]['request_sent_at'] ?? 0.0);
         $ttfbMs = $requestSentAt > 0.0 ? \round((\microtime(true) - $requestSentAt) * 1000, 1) : null;
         $clientIp = (string)($this->connections[$connId]['clientIp'] ?? '');
@@ -3133,7 +3559,6 @@ class PassthroughCore
             $message .= ", ttfb_ms={$ttfbMs}";
         }
         $this->logWarmup($message, 'INFO');
-        $this->recordWorkerSuccess($workerPort);
     }
 
     private function recordWorkerResponseIngress(int $connId, string $data, int $workerPort): void
@@ -3161,12 +3586,17 @@ class PassthroughCore
         if ($requestLine !== '') {
             $message .= ", request=\"{$requestLine}\"";
         }
-        $this->logWarmup($message, 'INFO');
+        if ($this->trafficTraceEnabled) {
+            $this->logWarmup($message, 'INFO');
+        }
     }
 
     private function logIncomingRequestIngress(int $connId, string $data): void
     {
         if (!isset($this->connections[$connId])) {
+            return;
+        }
+        if (!$this->trafficTraceEnabled) {
             return;
         }
 
@@ -3276,9 +3706,7 @@ class PassthroughCore
                 $errCode = \socket_last_error($clientSocket);
                 if (\in_array($errCode, self::WOULDBLOCK_ERRORS, true)) {
                     \socket_clear_error($clientSocket);
-                    $attempts++;
-                    SchedulerSystem::usleep(1000);
-                    continue;
+                    break;
                 }
                 // 写入错误
                 $this->connectionTerminalReasons[$connId] = 'flush_client_buffer_client_write_error:' . (string)$errCode;
@@ -3287,9 +3715,7 @@ class PassthroughCore
             }
             
             if ($written === 0) {
-                $attempts++;
-                SchedulerSystem::usleep(1000);
-                continue;
+                break;
             }
             
             $totalWritten += $written;
@@ -3298,6 +3724,7 @@ class PassthroughCore
         
         if ($totalWritten >= $bufferLen) {
             unset($this->clientWriteBuffers[$connId]);
+            unset($this->workerWriteBuffers[$connId]);
         } else {
             $this->clientWriteBuffers[$connId] = \substr($buffer, $totalWritten);
         }
@@ -3312,6 +3739,12 @@ class PassthroughCore
     {
         $connId = \spl_object_id($clientSocket);
         return isset($this->clientWriteBuffers[$connId]) && $this->clientWriteBuffers[$connId] !== '';
+    }
+
+    public function hasWorkerBufferedData($clientSocket): bool
+    {
+        $connId = \spl_object_id($clientSocket);
+        return isset($this->workerWriteBuffers[$connId]) && $this->workerWriteBuffers[$connId] !== '';
     }
     
     /**
@@ -3348,6 +3781,20 @@ class PassthroughCore
         // 也包括 Worker 已关闭的连接（即使缓冲区空，也需要关闭）
         foreach ($this->workerClosed as $connId => $closed) {
             if ($closed && !\in_array($connId, $connIds, true)) {
+                $connIds[] = $connId;
+            }
+        }
+        return $connIds;
+    }
+
+    /**
+     * @return array<int>
+     */
+    public function getPendingWorkerBufferConnIds(): array
+    {
+        $connIds = [];
+        foreach ($this->workerWriteBuffers as $connId => $buffer) {
+            if ($buffer !== '') {
                 $connIds[] = $connId;
             }
         }
@@ -3446,6 +3893,7 @@ class PassthroughCore
             && !$this->workerSslEnabled
             && !$isTlsTunnelLikely
             && empty($this->clientWriteBuffers[$connId])
+            && empty($this->workerWriteBuffers[$connId])
             && empty($this->workerClosed[$connId]);
 
         if ($reusable && $this->releaseWorkerSocketToPool($workerPort, $workerSocket)) {
@@ -3459,6 +3907,7 @@ class PassthroughCore
         
         // H15: 清理写缓冲区
         unset($this->clientWriteBuffers[$connId]);
+        unset($this->workerWriteBuffers[$connId]);
         unset($this->workerClosed[$connId]);
         unset($this->connectionTerminalReasons[$connId]);
         unset($this->clientInputClosed[$connId]);
@@ -3482,6 +3931,9 @@ class PassthroughCore
         }
         
         $this->connections = [];
+        $this->clientWriteBuffers = [];
+        $this->workerWriteBuffers = [];
+        $this->workerClosed = [];
         $this->clientInputClosed = [];
         $this->requestIngressLogCountByConn = [];
         $this->lastLoggedHttpRequestLineByConn = [];
@@ -3524,6 +3976,198 @@ class PassthroughCore
         }
 
         return false;
+    }
+
+    /**
+     * @return int[]
+     */
+    private function orderWorkerPortsRoundRobin(int $startIndex): array
+    {
+        $count = \count($this->workerPorts);
+        if ($count <= 1) {
+            return $this->workerPorts;
+        }
+
+        $ordered = [];
+        for ($i = 0; $i < $count; $i++) {
+            $ordered[] = (int)$this->workerPorts[($startIndex + $i) % $count];
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * @return int[]
+     */
+    private function orderWorkerPortsByActiveLoad(int $startIndex): array
+    {
+        $ports = $this->orderWorkerPortsRoundRobin($startIndex);
+        if (\count($ports) <= 1) {
+            return $ports;
+        }
+
+        $activeCounts = $this->getWorkerActiveConnectionCounts();
+        $pendingResponseCounts = $this->getWorkerPendingResponseCounts();
+        $ranked = [];
+        foreach ($ports as $rank => $port) {
+            $ranked[] = [
+                'port' => (int)$port,
+                'pending_response' => (int)($pendingResponseCounts[(int)$port] ?? 0),
+                'active' => (int)($activeCounts[(int)$port] ?? 0),
+                'rank' => (int)$rank,
+            ];
+        }
+
+        \usort($ranked, static function (array $left, array $right): int {
+            $pendingCompare = ((int)$left['pending_response']) <=> ((int)$right['pending_response']);
+            if ($pendingCompare !== 0) {
+                return $pendingCompare;
+            }
+
+            $activeCompare = ((int)$left['active']) <=> ((int)$right['active']);
+            if ($activeCompare !== 0) {
+                return $activeCompare;
+            }
+
+            return ((int)$left['rank']) <=> ((int)$right['rank']);
+        });
+
+        return \array_map(static fn(array $entry): int => (int)$entry['port'], $ranked);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function getWorkerActiveConnectionCounts(): array
+    {
+        $counts = [];
+        foreach ($this->workerPorts as $port) {
+            $counts[(int)$port] = 0;
+        }
+
+        foreach ($this->connections as $connection) {
+            $port = (int)($connection['port'] ?? 0);
+            if ($port > 0 && \array_key_exists($port, $counts)) {
+                $counts[$port]++;
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function getWorkerPendingResponseCounts(?float $now = null): array
+    {
+        $counts = [];
+        foreach ($this->workerPorts as $port) {
+            $counts[(int)$port] = 0;
+        }
+
+        $now ??= \microtime(true);
+        foreach ($this->connections as $connection) {
+            $port = (int)($connection['port'] ?? 0);
+            if ($port <= 0 || !\array_key_exists($port, $counts)) {
+                continue;
+            }
+            if ($this->connectionIsWaitingForWorkerBytes($connection, $now)) {
+                $counts[$port]++;
+            }
+        }
+
+        return $counts;
+    }
+
+    private function connectionIsWaitingForWorkerBytes(array $connection, float $now): bool
+    {
+        if ($this->workerBusyPenaltyAfterSeconds <= 0.0) {
+            return false;
+        }
+
+        $lastClientToWorkerAt = (float)($connection['last_client_to_worker_at'] ?? 0.0);
+        if ($lastClientToWorkerAt <= 0.0) {
+            return false;
+        }
+
+        $lastWorkerToClientAt = (float)($connection['last_worker_to_client_at'] ?? 0.0);
+        if ($lastWorkerToClientAt >= $lastClientToWorkerAt) {
+            return false;
+        }
+
+        return ($now - $lastClientToWorkerAt) >= $this->workerBusyPenaltyAfterSeconds;
+    }
+
+    private function hasLessLoadedWorker(int $workerPort): bool
+    {
+        if ($this->workerPorts === [] || !\in_array($workerPort, $this->workerPorts, true)) {
+            return false;
+        }
+
+        $activeCounts = $this->getWorkerActiveConnectionCounts();
+        $pendingResponseCounts = $this->getWorkerPendingResponseCounts();
+        $currentLoad = (int)($activeCounts[$workerPort] ?? 0);
+        $currentPending = (int)($pendingResponseCounts[$workerPort] ?? 0);
+        $currentScore = ($currentPending * 10000) + $currentLoad;
+        if ($currentScore <= 0) {
+            return false;
+        }
+
+        foreach ($this->workerPorts as $port) {
+            $port = (int)$port;
+            if ($port === $workerPort
+                || $this->isWorkerHomepageWarmupPending($port)
+                || $this->isWorkerBlacklisted($port)
+                || $this->isWorkerSaturated($port)
+            ) {
+                continue;
+            }
+            $candidatePending = (int)($pendingResponseCounts[$port] ?? 0);
+            $candidateLoad = (int)($activeCounts[$port] ?? 0);
+            $candidateScore = ($candidatePending * 10000) + $candidateLoad;
+            if ($candidateScore < $currentScore) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function primeSslIdleWorkerPool(int $workerPort, ?int $maxCreates = null): int
+    {
+        if (!$this->workerSslEnabled || $this->sslBackendPreconnectPerWorker <= 0) {
+            return 0;
+        }
+        if (!\in_array($workerPort, $this->workerPorts, true)) {
+            return 0;
+        }
+
+        $this->cleanupIdleWorkerSockets($workerPort);
+        if (!isset($this->idleWorkerPool[$workerPort])) {
+            $this->idleWorkerPool[$workerPort] = [];
+        }
+
+        $current = \count($this->idleWorkerPool[$workerPort]);
+        $ttl = \min(3, $this->backendPoolIdleTtl);
+        $created = 0;
+        while (
+            $current < $this->sslBackendPreconnectPerWorker
+            && ($maxCreates === null || $created < $maxCreates)
+        ) {
+            $socket = $this->openWorkerSocket($workerPort, 0.02);
+            if ($socket === false) {
+                break;
+            }
+
+            $this->idleWorkerPool[$workerPort][] = [
+                'socket' => $socket,
+                'expires_at' => \microtime(true) + $ttl,
+            ];
+            $current++;
+            $created++;
+        }
+
+        return $created;
     }
 
     private function releaseWorkerSocketToPool(int $workerPort, $socket): bool

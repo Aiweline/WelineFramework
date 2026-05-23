@@ -37,41 +37,70 @@ class QueryBin extends FrontendController
         ];
         $statusCode = 200;
         $startedAt = \microtime(true);
+        $phaseProfile = [];
+        $phaseLast = $startedAt;
+        $markPhase = static function (string $name, array $meta = []) use (&$phaseProfile, &$phaseLast): void {
+            $now = \microtime(true);
+            $step = [
+                'name' => $name,
+                'duration_ms' => \round(($now - $phaseLast) * 1000, 2),
+            ];
+            if ($meta !== []) {
+                $step['meta'] = $meta;
+            }
+            $phaseProfile[] = $step;
+            $phaseLast = $now;
+        };
 
         try {
             $this->assertProtocolHeaders();
+            $markPhase('assert_protocol_headers');
             $this->assertSameOrigin();
+            $markPhase('assert_same_origin');
             $this->assertContentType();
+            $markPhase('assert_content_type');
 
             $rawBody = $this->request->getParameterBag()->getRawBody();
             if ($rawBody === '') {
                 throw new FrontendQueryException('protocol_error', 'Empty binary request body.', 400);
             }
+            $markPhase('read_raw_body', ['bytes' => \strlen($rawBody)]);
 
             $payload = $this->codec->decodePacket($rawBody);
             if (!\is_array($payload)) {
                 throw new FrontendQueryException('protocol_error', 'Worker request payload must be a map.', 400);
             }
+            $markPhase('decode_packet');
             $requestSummary = $this->summarizeRequestPayload($payload);
             RequestContext::set('query_bin.summary', $requestSummary);
+            $markPhase('summarize_payload', $requestSummary);
 
             if (($payload['type'] ?? '') === 'handshake') {
                 $payload = $this->handleHandshake($payload, $requestId);
+                $markPhase('handle_handshake');
                 $statusCode = 200;
             } else {
                 $headers = $this->readSignedHeaders();
+                $markPhase('read_signed_headers');
                 $this->validateSignedRequest($headers, $rawBody);
+                $markPhase('validate_signed_request');
 
                 $result = $this->gateway->execute($payload, $headers['capability']);
+                $markPhase('gateway_execute');
                 $payload = [
                     'ok' => true,
                     'data' => $result,
                     'error' => null,
                     'request_id' => $requestId,
                 ];
+                $markPhase('build_success_payload');
                 $statusCode = 200;
             }
         } catch (FrontendQueryException $exception) {
+            $markPhase('frontend_query_exception', [
+                'code' => $exception->getErrorCode(),
+                'status' => $exception->getHttpStatus(),
+            ]);
             $payload = [
                 'ok' => false,
                 'data' => null,
@@ -83,6 +112,7 @@ class QueryBin extends FrontendController
             ];
             $statusCode = $exception->getHttpStatus();
         } catch (\InvalidArgumentException $exception) {
+            $markPhase('invalid_argument_exception');
             $payload = [
                 'ok' => false,
                 'data' => null,
@@ -94,6 +124,9 @@ class QueryBin extends FrontendController
             ];
             $statusCode = 400;
         } catch (\Throwable $throwable) {
+            $markPhase('throwable_exception', [
+                'class' => \get_class($throwable),
+            ]);
             $payload = [
                 'ok' => false,
                 'data' => null,
@@ -107,12 +140,20 @@ class QueryBin extends FrontendController
         }
 
         $this->endBinaryOutputGuard($guard);
+        $markPhase('end_output_guard');
 
         $elapsedMs = \round((\microtime(true) - $startedAt) * 1000, 2);
+        $gatewayProfile = RequestContext::get('query_bin.gateway_profile');
+        $serviceProfile = RequestContext::get('query_bin.service_profile');
+        $providerProfile = RequestContext::get('query_bin.provider_profile');
         RequestContext::set('query_bin.timing', $requestSummary + [
             'request_id' => $requestId,
             'status' => $statusCode,
             'duration_ms' => $elapsedMs,
+            'phases' => $phaseProfile,
+            'gateway_profile' => \is_array($gatewayProfile) ? $gatewayProfile : [],
+            'service_profile' => \is_array($serviceProfile) ? $serviceProfile : [],
+            'provider_profile' => \is_array($providerProfile) ? $providerProfile : [],
         ]);
         $this->logSlowQueryBin($requestId, $requestSummary, $statusCode, $elapsedMs);
 
@@ -312,8 +353,18 @@ class QueryBin extends FrontendController
      */
     private function binaryResponse(array $payload, int $statusCode, array $summary, float $elapsedMs): Response
     {
+        $encodeStart = \microtime(true);
+        $encodedPayload = $this->codec->encodePacket($payload);
+        $encodeMs = \round((\microtime(true) - $encodeStart) * 1000, 2);
+        $timing = RequestContext::get('query_bin.timing');
+        if (\is_array($timing)) {
+            $timing['response_encode_ms'] = $encodeMs;
+            $timing['response_bytes'] = \strlen($encodedPayload);
+            RequestContext::set('query_bin.timing', $timing);
+        }
+
         $response = Response::fromContent(
-            $this->codec->encodePacket($payload),
+            $encodedPayload,
             $statusCode,
             WelineBinaryCodec::CONTENT_TYPE
         );

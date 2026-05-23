@@ -29,6 +29,7 @@ use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
 use Weline\Framework\Router\Core as Router;
+use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Session\SessionFactory;
 
 class App
@@ -180,14 +181,39 @@ class App
 
     public function applyParsedUrl(array $parse): void
     {
+        $applyUrlProfile = [];
+        $applyUrlLast = \microtime(true);
+        $markApplyUrlStep = static function (string $name, array $meta = []) use (&$applyUrlProfile, &$applyUrlLast): void {
+            $now = \microtime(true);
+            $step = [
+                'name' => $name,
+                'duration_ms' => \round(($now - $applyUrlLast) * 1000, 2),
+            ];
+            if ($meta !== []) {
+                $step['meta'] = $meta;
+            }
+            $applyUrlProfile[] = $step;
+            $applyUrlLast = $now;
+        };
+        $flushApplyUrlProfile = static function () use (&$applyUrlProfile): void {
+            if ($applyUrlProfile !== []) {
+                RequestContext::set('app.apply_url.profile', $applyUrlProfile);
+            }
+        };
+
         if (!isset($parse['server']) || !\is_array($parse['server'])) {
             $parse['server'] = [];
         }
+        $markApplyUrlStep('normalize_parse_server');
 
         $server = Context::current()->server();
         if (!\is_array($server)) {
             $server = [];
         }
+        $markApplyUrlStep('load_context_server', [
+            'parse_server_keys' => \count($parse['server']),
+            'context_server_keys' => \count($server),
+        ]);
         $rawRequestUri = Url::decode_url($this->normalizeParsedUri(
             $server['WELINE_ORIGIN_REQUEST_URI'] ?? $server['REQUEST_URI'] ?? $this->getCurrentRequestUri()
         ));
@@ -197,6 +223,7 @@ class App
         if (!\str_starts_with($rawRequestUri, '/')) {
             $rawRequestUri = '/' . $rawRequestUri;
         }
+        $markApplyUrlStep('raw_request_uri');
 
         $area = (string)($parse['area'] ?? $parse['server']['WELINE_AREA'] ?? $server['WELINE_AREA'] ?? '');
         $isBackendArea = $area === 'backend' || $area === 'rest_backend';
@@ -209,6 +236,10 @@ class App
             $parse['server']['REQUEST_URI'] = $uri;
             $parse['server']['QUERY_STRING'] = Url::parse_url($uri, 'query');
         }
+        $markApplyUrlStep('normalize_request_uri', [
+            'area' => $area,
+            'is_backend_area' => $isBackendArea,
+        ]);
 
         if (!isset($parse['server']['REQUEST_URI']) || $parse['server']['REQUEST_URI'] === '') {
             $parse['server']['REQUEST_URI'] = isset($parse['uri'])
@@ -219,6 +250,9 @@ class App
         foreach ($parse['server'] as $key => $value) {
             Context::current()->set('input.server.' . $key, $value);
         }
+        $markApplyUrlStep('server_context_set', [
+            'keys' => \count($parse['server']),
+        ]);
 
         if ($area !== '') {
             WelineEnv::set('area', $area, 'App applyParsedUrl');
@@ -240,6 +274,12 @@ class App
         Context::current()->set('input.server.WELINE_IS_BACKEND', $isBackend);
         WelineEnv::set('is_backend', $isBackend, 'App applyParsedUrl');
         WelineEnv::set('url_parsed', true, 'App applyParsedUrl');
+        $markApplyUrlStep('env_route_state', [
+            'area' => $welineArea,
+            'is_backend' => $isBackend,
+            'language' => (string)($parse['language'] ?? ''),
+            'currency' => (string)($parse['currency'] ?? ''),
+        ]);
 
         // 必须用 parser 已合并进 input.server 的 REQUEST_URI，不能读旧的 request.uri（WlsRuntime 预写会残留）。
         $serverMerged = Context::current()->server();
@@ -251,6 +291,7 @@ class App
             $currentUri = '/' . $currentUri;
         }
         WelineEnv::set('request.uri', $currentUri, 'App applyParsedUrl');
+        $markApplyUrlStep('current_uri');
 
         $scheme = (string)WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http'));
         $host = (string)WelineEnv::get('server.http_host', Context::current()->get('input.host', 'localhost'));
@@ -259,19 +300,69 @@ class App
         Context::current()->set('input.server.WELINE_FULL_REQUEST_URI', $fullRequestUri);
         WelineEnv::set('origin_request_uri', $rawRequestUri, 'App applyParsedUrl');
         WelineEnv::set('full_request_uri', $fullRequestUri, 'App applyParsedUrl');
+        $markApplyUrlStep('full_request_uri', [
+            'host' => $host,
+            'scheme' => $scheme,
+        ]);
 
         $shouldDispatchUrlParsedAfter = (PROD || Runtime::isPersistent()) && !WelineEnv::get('is_backend', false);
+        $markApplyUrlStep('dispatch_guard', [
+            'should_dispatch' => $shouldDispatchUrlParsedAfter,
+        ]);
         if ($shouldDispatchUrlParsedAfter) {
-            $this->resolveEventManager()->dispatch('Weline_Framework::App::url_parsed_after');
-            if (Runtime::isPersistent() && RequestContext::get('wls.fpc.cached_response') instanceof Response) {
+            if ($this->tryPersistentFpcFastPath()) {
+                $markApplyUrlStep('fpc_fast_path', ['hit' => true]);
+                $flushApplyUrlProfile();
                 return;
             }
+            $markApplyUrlStep('fpc_fast_path', ['hit' => false]);
+            $this->resolveEventManager()->dispatch('Weline_Framework::App::url_parsed_after');
+            $markApplyUrlStep('url_parsed_after_dispatch');
+            if (Runtime::isPersistent() && RequestContext::get('wls.fpc.cached_response') instanceof Response) {
+                $markApplyUrlStep('url_parsed_after_cached_response', ['hit' => true]);
+                $flushApplyUrlProfile();
+                return;
+            }
+            $markApplyUrlStep('url_parsed_after_cached_response', ['hit' => false]);
         }
 
         $this->syncCookieRouteStateFromServer();
+        $markApplyUrlStep('sync_cookie_route_state');
         self::syncCurrentContextFromGlobals();
+        $markApplyUrlStep('sync_current_context_from_globals');
         RequestContext::syncFromContext();
+        $markApplyUrlStep('request_context_sync');
         $this->invalidateCurrentRequestUriCache();
+        $markApplyUrlStep('invalidate_uri_cache');
+        $flushApplyUrlProfile();
+    }
+
+    private function tryPersistentFpcFastPath(): bool
+    {
+        if (!Runtime::isPersistent()) {
+            return false;
+        }
+        if ((string)WelineEnv::get('request.method', 'GET') !== 'GET') {
+            return false;
+        }
+        if (!WelineEnv::get('url_parsed', false) || WelineEnv::get('is_backend', false)) {
+            return false;
+        }
+
+        try {
+            $coordinator = ObjectManager::getInstance(FullPageCacheCoordinator::class);
+            if (!$coordinator->canServeCachedResponse('GET')) {
+                return false;
+            }
+            $response = $coordinator->getCachedResponse('GET', true);
+            if (!$response instanceof Response) {
+                return false;
+            }
+            RequestContext::set('wls.fpc.cached_response', $response);
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function initializeRouter(): Router
@@ -298,7 +389,25 @@ class App
             return;
         }
 
+        if ($this->canDeferFrontendSessionStart($requestMethod)) {
+            return;
+        }
+
         SessionFactory::getInstance()->createSession()->start('');
+    }
+
+    private function canDeferFrontendSessionStart(string $requestMethod): bool
+    {
+        if (WelineEnv::get('is_backend', false)) {
+            return false;
+        }
+
+        $method = \strtoupper(\trim($requestMethod) ?: 'GET');
+        if (!\in_array($method, ['GET', 'HEAD'], true)) {
+            return false;
+        }
+
+        return true;
     }
 
     public function runRouter(?Router $router = null): mixed

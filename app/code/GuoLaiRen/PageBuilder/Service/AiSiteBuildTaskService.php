@@ -7,6 +7,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeLayout;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContractValidator;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractMetaBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractQaReportBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
@@ -174,20 +175,20 @@ class AiSiteBuildTaskService
     public function ensureTaskScope(array $scope, array $websiteProfile, string $workspaceTrack): array
     {
         $pageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : \array_keys(Page::getPageTypes());
-        $scope = $this->refreshConfirmedBuildPlanContract($scope, $websiteProfile, $workspaceTrack);
+        unset($websiteProfile);
         $scope = $this->normalizeConfirmedBuildPlanFlag($scope);
         $existingBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $existingTasks = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
-        $blueprint = $this->buildBlueprintFromBuildPlanV2($scope, $pageTypes, $workspaceTrack);
-        if (
-            $blueprint === []
-            && (int)($scope['build_plan_confirmed'] ?? 0) === 1
-            && $this->isReusableConfirmedBuildBlueprint($existingBlueprint)
-        ) {
-            $blueprint = $existingBlueprint;
+        $validation = $this->validateConfirmedBuildPlanV2ForBuild($scope);
+        if (!($validation['valid'] ?? false)) {
+            return $this->markBuildPlanExecutionBlocked($scope, $validation);
         }
+        $blueprint = $this->buildBlueprintFromBuildPlanV2($scope, $pageTypes, $workspaceTrack);
         if ($blueprint === []) {
-            $blueprint = $this->buildBlueprint($pageTypes, $scope, $websiteProfile, $workspaceTrack);
+            return $this->markBuildPlanExecutionBlocked($scope, [
+                'valid' => false,
+                'errors' => ['TASK_CONTEXT_MISSING: confirmed build_plan_v2 did not produce an executable task graph'],
+            ]);
         }
         $signature = (string)($blueprint['signature'] ?? '');
 
@@ -333,15 +334,7 @@ class AiSiteBuildTaskService
      */
     public function hasConfirmedBuildPlanForBuild(array $scope): bool
     {
-        if ($this->hasConfirmedBuildPlanV2ForBuild($scope)) {
-            return true;
-        }
-        if ($this->hasConfirmedExecutionBlueprintForBuild($scope)) {
-            return true;
-        }
-
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        return $this->isReusableConfirmedBuildBlueprint($buildBlueprint);
+        return $this->hasConfirmedBuildPlanV2ForBuild($scope);
     }
 
     /**
@@ -360,19 +353,73 @@ class AiSiteBuildTaskService
      */
     private function hasConfirmedBuildPlanV2ForBuild(array $scope): bool
     {
+        return (bool)($this->validateConfirmedBuildPlanV2ForBuild($scope)['valid'] ?? false);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{valid:bool,errors:list<string>}
+     */
+    private function validateConfirmedBuildPlanV2ForBuild(array $scope): array
+    {
         $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
         if ($contract === []) {
-            return false;
+            return [
+                'valid' => false,
+                'errors' => ['BUILD_PLAN_CONTRACT_INVALID: confirmed build_plan_v2 is required before build'],
+            ];
         }
+
         $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
         $status = \strtolower(\trim((string)($meta['status'] ?? '')));
-        return ((int)($scope['build_plan_confirmed'] ?? 0) === 1 || $status === 'confirmed')
-            && \is_array($contract['tasks'] ?? null)
-            && $contract['tasks'] !== []
-            && \is_array($contract['pages'] ?? null)
-            && $contract['pages'] !== []
-            && \is_array($contract['blocks'] ?? null)
-            && $contract['blocks'] !== [];
+        if ((int)($scope['build_plan_confirmed'] ?? 0) !== 1 && $status !== 'confirmed') {
+            return [
+                'valid' => false,
+                'errors' => ['BUILD_PLAN_CONTRACT_INVALID: build_plan_v2 must be confirmed before build'],
+            ];
+        }
+        if (\trim((string)($meta['signature'] ?? '')) === '') {
+            return [
+                'valid' => false,
+                'errors' => ['BUILD_PLAN_CONTRACT_INVALID: confirmed build_plan_v2 is missing contract_meta.signature'],
+            ];
+        }
+
+        $validation = (new BuildPlanContractValidator())->validate($contract);
+        if (!($validation['valid'] ?? false)) {
+            return [
+                'valid' => false,
+                'errors' => \array_values(\array_map(
+                    static fn(string $error): string => 'BUILD_PLAN_CONTRACT_INVALID: ' . $error,
+                    \is_array($validation['errors'] ?? null) ? $validation['errors'] : []
+                )),
+            ];
+        }
+
+        return ['valid' => true, 'errors' => []];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array{valid:bool,errors:list<string>} $validation
+     * @return array<string, mixed>
+     */
+    private function markBuildPlanExecutionBlocked(array $scope, array $validation): array
+    {
+        $scope['build_plan_v2_validation'] = $validation;
+        $scope['build_plan_confirmed'] = 0;
+        $scope['has_build_plan_v2'] = \is_array($scope['build_plan_v2'] ?? null) && $scope['build_plan_v2'] !== [] ? 1 : 0;
+        $scope['build_blueprint'] = [];
+        $scope['build_tasks'] = [];
+        $scope['build_task_summary'] = [
+            'total' => 0,
+            'pending' => 0,
+            'running' => 0,
+            'done' => 0,
+            'failed' => 0,
+        ];
+
+        return $scope;
     }
 
     /**
@@ -762,7 +809,6 @@ class AiSiteBuildTaskService
         $contentManifest = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
         $contentItems = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
         $promptContextAssembler = new AiSiteBuildPromptContextAssembler();
-        $stage2RuntimeContext = $this->resolveBuildPlanStage2RuntimeContext($scope, $contract);
         $orderedTaskIds = $this->normalizeBuildPlanStringList($contract['build_order'] ?? []);
         foreach (\array_keys($tasksById) as $taskId) {
             if (!\in_array($taskId, $orderedTaskIds, true)) {
@@ -776,6 +822,19 @@ class AiSiteBuildTaskService
             $contractTask = \is_array($tasksById[$taskId] ?? null) ? $tasksById[$taskId] : [];
             if ($contractTask === []) {
                 continue;
+            }
+            $taskRuntimeContext = \is_array($contractTask['runtime_context'] ?? null) ? $contractTask['runtime_context'] : [];
+            $taskOutputContract = \is_array($contractTask['output_contract'] ?? null) ? $contractTask['output_contract'] : [];
+            $taskAcceptance = \is_array($contractTask['acceptance'] ?? null) ? $contractTask['acceptance'] : [];
+            if ($taskRuntimeContext === [] || $taskOutputContract === [] || $taskAcceptance === []) {
+                AiSiteWorkflowTrace::log('build_plan_v2_task_context_missing', [
+                    'contract_id' => (string)($meta['id'] ?? ''),
+                    'task_id' => $taskId,
+                    'missing_runtime_context' => $taskRuntimeContext === [],
+                    'missing_output_contract' => $taskOutputContract === [],
+                    'missing_acceptance' => $taskAcceptance === [],
+                ]);
+                return [];
             }
             $inputScope = \is_array($contractTask['input_scope'] ?? null) ? $contractTask['input_scope'] : [];
             $pageId = \trim((string)($inputScope['page_id'] ?? $contractTask['page_id'] ?? ''));
@@ -818,11 +877,17 @@ class AiSiteBuildTaskService
             $visualSignature = \is_array($block['visual_signature'] ?? null)
                 ? $block['visual_signature']
                 : (\is_array($contractTask['visual_signature'] ?? null) ? $contractTask['visual_signature'] : []);
+            $imageIntent = \is_array($block['image_intent'] ?? null)
+                ? $block['image_intent']
+                : (\is_array($contractTask['image_intent'] ?? null) ? $contractTask['image_intent'] : []);
             $stylePlan = \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [];
             foreach (['design_tags', 'visual_signature', 'image_intent'] as $planKey) {
                 if (\is_array($block[$planKey] ?? null) && $block[$planKey] !== []) {
                     $stylePlan[$planKey] = $block[$planKey];
                 }
+            }
+            if ($imageIntent !== []) {
+                $stylePlan['image_intent'] = $imageIntent;
             }
             if ($pageFlowRole !== '') {
                 $stylePlan['page_flow_role'] = $pageFlowRole;
@@ -836,6 +901,9 @@ class AiSiteBuildTaskService
             }
             if ($visualSignature !== []) {
                 $planContext['block_visual_signature'] = $visualSignature;
+            }
+            if ($imageIntent !== []) {
+                $planContext['block_image_intent'] = $imageIntent;
             }
 
             $tasks[] = [
@@ -853,6 +921,7 @@ class AiSiteBuildTaskService
                 'block_type' => $blockType,
                 'page_flow_role' => $pageFlowRole,
                 'visual_signature' => $visualSignature,
+                'image_intent' => $imageIntent,
                 'label' => $label,
                 'sort_order' => 100 + ((int)$sortIndex * 10),
                 'dependencies' => $this->normalizeBuildPlanStringList($contractTask['depends_on'] ?? []),
@@ -868,26 +937,23 @@ class AiSiteBuildTaskService
                 'result_ref' => $isShared
                     ? ['region' => $region]
                     : ['page_type' => $pageType, 'section_code' => $sectionCode],
-                'runtime_context' => \array_replace($stage2RuntimeContext, [
+                'runtime_context' => \array_replace($taskRuntimeContext, [
                     'build_plan_contract_id' => (string)($meta['id'] ?? ''),
                     'content_locale' => (string)($contract['i18n']['primary_locale'] ?? $scope['default_locale'] ?? ''),
                     'context_refs' => [
-                        'global_context_ref' => 'build_plan_v2.source_of_truth',
-                        'theme_context_ref' => 'build_plan_v2.runtime_context.theme_context_snapshot',
-                        'shared_context_ref' => 'build_plan_v2.runtime_context.shared_prompt_context',
+                        'site_brief_ref' => 'build_plan_v2.site_brief',
+                        'design_manifest_ref' => 'build_plan_v2.design_manifest',
                         'page_context_ref' => $pageId !== '' ? ('build_plan_v2.pages.' . $pageId) : '',
                         'block_context_ref' => $blockId !== '' ? ('build_plan_v2.blocks.' . $blockId) : '',
-                        'asset_context_ref' => 'scope.asset_manifest',
+                        'asset_context_ref' => $blockId !== '' ? ('build_plan_v2.blocks.' . $blockId . '.image_intent') : '',
                     ],
                 ]),
                 'plan_context' => $planContext,
                 'task_script' => [
                     'component_type' => $isShared ? $region : 'section',
-                    'data_contract' => [
-                        'title' => 'string',
-                        'description' => 'string',
-                        'cta' => 'object',
-                    ],
+                    'data_contract' => \is_array($taskOutputContract['render_data'] ?? null) ? $taskOutputContract['render_data'] : [],
+                    'output_contract' => $taskOutputContract,
+                    'acceptance' => $taskAcceptance,
                     'content_keys' => $contentKeys,
                     'policy_slices' => $this->normalizeBuildPlanStringList($contractTask['policy_slices'] ?? []),
                     'acceptance_rule_ids' => $this->normalizeBuildPlanStringList($contractTask['acceptance_rule_ids'] ?? []),
@@ -899,12 +965,18 @@ class AiSiteBuildTaskService
                     'content_plan' => $this->sliceBuildPlanContentItems($contentItems, $contentKeys),
                     'style_plan' => $stylePlan,
                     'visual_signature' => $visualSignature,
+                    'image_intent' => $imageIntent,
+                    'output_contract' => $taskOutputContract,
+                    'acceptance' => $taskAcceptance,
                 ],
                 'implementation_contract' => [
                     'source' => 'build_plan_v2',
                     'contract_id' => (string)($meta['id'] ?? ''),
                     'task_id' => $taskId,
                     'block_id' => $blockId,
+                    'data_contract' => \is_array($taskOutputContract['render_data'] ?? null) ? $taskOutputContract['render_data'] : [],
+                    'output_contract' => $taskOutputContract,
+                    'acceptance' => $taskAcceptance,
                 ],
             ];
         }
@@ -3956,7 +4028,7 @@ class AiSiteBuildTaskService
 
         // Valid templates contain raw HTML tags. Only escaped tags or malformed
         // numeric tags are visitor-visible leakage and must invalidate artifacts.
-        if (\preg_match('/&lt;\s*\/?\s*[a-z0-9][^&\n]{0,160}(?:class\s*=|&gt;)/iu', $payload) === 1) {
+        if (\preg_match('/&lt;\s*\/?\s*[a-z][a-z0-9:-]*[^&\n]{0,160}(?:class\s*=|&gt;)/iu', $payload) === 1) {
             return true;
         }
         if (\preg_match('/<\s*\/?\s*[0-9][^>\n]{0,160}>/u', $payload) === 1) {

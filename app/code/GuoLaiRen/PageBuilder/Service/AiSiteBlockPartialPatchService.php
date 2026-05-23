@@ -1694,6 +1694,7 @@ class AiSiteBlockPartialPatchService
             . "- Do not output raw HTML, CSS, PHTML, Markdown fences, comments, or prose outside JSON.\n"
             . "- Do not include reason, why, or decision_reason fields; use change_summary for the visible change summary.\n"
             . "- If _pb_server_template_phtml is present, keep it renderable.\n\n"
+            . 'Example replacement JSON shape (copy structure, not content): {"block":{"block_id":"same-block-id","type":"content","config":{"content.title":"Finished localized title","cta.text":"Finished CTA"},"html":"<section class=\'pb-c-root\'><h2>Finished localized title</h2></section>","field_schema":{"preserve":"current schema unless changed"}},"change_summary":"Updated visible copy and styling for the requested block.","changed_fields":["config.content.title","html"]}' . "\n\n"
             . ($visualContract !== '' ? $visualContract . "\n" : '')
             . "Visible copy governance:\n"
             . "- Visitor-facing copy and attributes must use the target website content locale.\n"

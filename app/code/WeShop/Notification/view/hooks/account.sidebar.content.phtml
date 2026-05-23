@@ -7,6 +7,12 @@
  * @hook-solo false
  */
 
+use Weline\Customer\Service\AccountSidebarContentGate;
+
+if (!AccountSidebarContentGate::accepts('notification-preferences')) {
+    return;
+}
+
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Notification\Model\CustomerNotificationContact;
 use WeShop\Notification\Service\CustomerNotificationPreferenceService;

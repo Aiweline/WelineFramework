@@ -16,6 +16,25 @@ final class AiSiteBuildPlanTaskSchedulerTest extends TestCase
             'page_types' => ['home_page'],
             'site_title' => 'Example Site',
             'brief_description' => 'Explain the service clearly.',
+            'plan_json' => [
+                'pages' => [
+                    'home_page' => [
+                        'page_goal' => 'Explain the service clearly.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'content' => 'Explain the service clearly.',
+                                'goal' => 'Show the service value with a direct CTA.',
+                                'field_plan' => [
+                                    ['field' => 'title', 'sample' => 'Explain the service clearly'],
+                                    ['field' => 'description', 'sample' => 'A clear overview helps visitors understand the next step.'],
+                                    ['field' => 'button_text', 'sample' => 'Contact us'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
         ], [], 'virtual_theme');
 
         self::assertSame(1, $patch['build_plan_confirmed']);
@@ -167,6 +186,20 @@ final class AiSiteBuildPlanTaskSchedulerTest extends TestCase
                 ],
                 'required_home_blocks' => [],
                 'must_not_do' => [],
+            ],
+            'execution_blueprint_draft' => [
+                'pages' => [
+                    'home_page' => [
+                        'page_goal' => 'Explain the service clearly.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'title' => 'Explain the service clearly',
+                                'goal' => 'Show the service value with a direct CTA.',
+                            ],
+                        ],
+                    ],
+                ],
             ],
         ], [], 'virtual_theme');
 

@@ -267,6 +267,19 @@ class Router implements RouterInterface
                     'path'        => implode('/', $pathSegments),
                 ];
 
+                /** @var CategoryService $categoryService */
+                $categoryService = ObjectManager::getInstance(CategoryService::class);
+                if (is_array($categoriesData['current'] ?? null)) {
+                    $categoriesData['current'] = $categoryService->localizeCategoryRecordForStorefront($categoriesData['current']);
+                }
+                if (is_array($categoriesData['breadcrumbs'] ?? null)) {
+                    foreach ($categoriesData['breadcrumbs'] as $index => $breadcrumb) {
+                        if (is_array($breadcrumb)) {
+                            $categoriesData['breadcrumbs'][$index] = $categoryService->localizeCategoryRecordForStorefront($breadcrumb);
+                        }
+                    }
+                }
+
                 $request->setData('categories', $categoriesData);
             }
 
@@ -380,11 +393,21 @@ class Router implements RouterInterface
                 return;
             }
 
-            $request->setData('categories', [
+            $categoriesPayload = [
                 'current' => $currentCategory,
                 'breadcrumbs' => $breadcrumbs,
                 'path' => implode('/', $pathSegments),
-            ]);
+            ];
+            if (is_array($categoriesPayload['current'])) {
+                $categoriesPayload['current'] = $categoryService->localizeCategoryRecordForStorefront($categoriesPayload['current']);
+            }
+            foreach ($categoriesPayload['breadcrumbs'] as $index => $breadcrumb) {
+                if (is_array($breadcrumb)) {
+                    $categoriesPayload['breadcrumbs'][$index] = $categoryService->localizeCategoryRecordForStorefront($breadcrumb);
+                }
+            }
+
+            $request->setData('categories', $categoriesPayload);
         } catch (\Throwable) {
         }
     }

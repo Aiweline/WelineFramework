@@ -12,10 +12,16 @@ declare(strict_types=1);
  */
 namespace Weline\Websites\Extends\Module\Weline_Ai\Adapter;
 
+use Weline\Ai\Interface\AdapterStyleBindingInterface;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
-class WebsiteBuilderAdapter implements ScenarioAdapterInterface
+class WebsiteBuilderAdapter implements ScenarioAdapterInterface, AdapterStyleBindingInterface
 {
+    public function getDefaultStyleCodes(): array
+    {
+        return [];
+    }
+
     public function getCode(): string
     {
         return 'website_builder';
