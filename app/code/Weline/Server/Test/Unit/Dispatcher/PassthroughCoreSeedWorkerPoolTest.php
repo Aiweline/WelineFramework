@@ -65,7 +65,9 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
                 float $connectTimeoutSeconds = 5.0,
                 float $tlsTimeoutSeconds = 8.0,
                 float $writeTimeoutSeconds = 5.0,
-                float $readTimeoutSeconds = 60.0
+                float $readTimeoutSeconds = 60.0,
+                ?int $maxTargets = null,
+                bool $requireAllTargets = false
             ): array {
                 $this->homepageCalls[] = [
                     'port' => $port,
@@ -74,6 +76,8 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
                     'tls_timeout' => $tlsTimeoutSeconds,
                     'write_timeout' => $writeTimeoutSeconds,
                     'read_timeout' => $readTimeoutSeconds,
+                    'max_targets' => $maxTargets,
+                    'require_all_targets' => $requireAllTargets,
                 ];
 
                 $result = $this->homepageResults[$port] ?? true;
@@ -301,7 +305,7 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         // P0-2：worker_connect_select_timeout_sec 覆盖旧硬编码 0.3-0.5s，默认 0.1s，
         // 且受 [0.01, 2.0] 钳制避免误配置引入极端阻塞。
         $core = new PassthroughCore('127.0.0.1', 19981, 2);
-        self::assertSame(0.1, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
+        self::assertSame(0.02, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
 
         $core->configure(['worker_connect_select_timeout_sec' => 0.25]);
         self::assertSame(0.25, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));

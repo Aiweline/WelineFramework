@@ -6,7 +6,7 @@ namespace Weline\Framework\Runtime\Preload;
 
 final class WorkerPreloadContext
 {
-    public const PHASE_READY_GATE = 'ready_gate';
+    public const PHASE_BOOTSTRAP = 'bootstrap';
     public const PHASE_DEFERRED = 'deferred';
     public const PHASE_TRAFFIC_WARMUP = 'traffic_warmup';
 

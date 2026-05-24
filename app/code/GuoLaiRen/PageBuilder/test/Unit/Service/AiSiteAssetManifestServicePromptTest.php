@@ -201,6 +201,87 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertStringContainsString('India card gaming club', $brief);
     }
 
+    public function testSyncFromBuildPlanPreservesVerifiedSlotAcrossSamePlanningContext(): void
+    {
+        $service = new AiSiteAssetManifestService();
+        $slotId = 'page:home_page:hero:opening:image';
+        $finalUrl = '/pub/media/page-build/ai-generated/example.test/page-home_page-hero-opening-image.png';
+
+        $scope = [
+            'stage1_contract' => [
+                'contract_hash' => 'same-stage-contract',
+            ],
+            'website_profile' => [
+                'brief_description' => 'A premium Sichuan restaurant website.',
+            ],
+            'asset_manifest' => [
+                'slots' => [
+                    $slotId => [
+                        'slot_id' => $slotId,
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home_page',
+                        'block_key' => 'hero',
+                        'section_code' => 'content/home-page-hero',
+                        'task_key' => 'page:home_page:content/home-page-hero',
+                        'label' => 'Hero visual',
+                        'brief' => 'Verified hero visual.',
+                        'source' => 'fixture',
+                        'status' => 'generated',
+                        'final_url' => $finalUrl,
+                        'variants' => [[
+                            'url' => $finalUrl,
+                            'path' => \ltrim($finalUrl, '/'),
+                            'mime_type' => 'image/png',
+                            'mode' => 'fixture',
+                        ]],
+                        'planning_context_hash' => 'same-stage-contract',
+                    ],
+                ],
+            ],
+            'build_plan_v2' => [
+                'blocks' => [
+                    [
+                        'page_type' => 'home_page',
+                        'section_key' => 'hero',
+                        'block_id' => 'home_page.hero',
+                        'page_flow_role' => 'opening',
+                        'image_intent' => [
+                            'needs_image' => true,
+                            'image_role' => 'hero_image',
+                            'image_subject' => 'restaurant hero',
+                        ],
+                        'asset_requirements' => [
+                            [
+                                'slot_id' => $slotId,
+                                'slot_type' => 'hero_image',
+                                'brief' => 'Legacy duplicate requirement for the same slot.',
+                            ],
+                        ],
+                        'block_contract' => [
+                            'page_flow_role' => 'opening',
+                            'media_strategy' => [
+                                'needs_real_image' => true,
+                                'asset_slot_id' => $slotId,
+                                'image_subject' => 'restaurant hero',
+                                'placement' => 'background_layer',
+                            ],
+                        ],
+                    ],
+                ],
+                'content_manifest' => [
+                    'items' => [],
+                ],
+            ],
+        ];
+
+        $manifest = $service->syncFromBuildPlan($scope);
+        $slot = $manifest['slots'][$slotId] ?? [];
+
+        self::assertSame($finalUrl, (string)($slot['final_url'] ?? ''));
+        self::assertSame('fixture', (string)($slot['source'] ?? ''));
+        self::assertSame('generated', (string)($slot['status'] ?? ''));
+    }
+
     public function testRequiredIdentityLogoSlotBriefIsSubjectFirst(): void
     {
         // 锁定 buildRequiredIdentitySlots 写入 manifest 的 slot.brief 是主体优先：

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace WeShop\Cart\Service;
 
 use Weline\Cart\Api\CartTrashInterface;
+use Weline\Eav\Model\EavAttribute;
+use Weline\Eav\Model\EavAttribute\Option;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Cart\Model\Cart;
@@ -82,12 +84,14 @@ class CartService implements CartTrashInterface
         return $totals;
     }
 
-    public function addToCart(int $customerId, int $productId, int $quantity = 1, ?float $price = null): Cart
+    public function addToCart(int $customerId, int $productId, int $quantity = 1, ?float $price = null, array $options = []): Cart
     {
+        $optionSnapshot = $this->normalizeOptions($options);
         $eventData = [
             'customer_id' => $customerId,
             'product_id' => $productId,
             'quantity' => $quantity,
+            'options' => $optionSnapshot,
         ];
         $this->getEventsManager()->dispatch('WeShop_Cart::add_to_cart_before', $eventData);
 
@@ -115,6 +119,9 @@ class CartService implements CartTrashInterface
                 ->setData(Cart::schema_fields_IS_TRASHED, 0)
                 ->setData(Cart::schema_fields_TRASHED_AT, null)
                 ->setData(Cart::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+            if ($optionSnapshot !== []) {
+                $existing->setData(Cart::schema_fields_PRODUCT_OPTIONS, $this->encodeOptions($optionSnapshot));
+            }
             $this->applyProductSnapshot($existing, $productSnapshot);
             $existing->save();
             $cart = $existing;
@@ -124,6 +131,7 @@ class CartService implements CartTrashInterface
                 ->setData(Cart::schema_fields_PRODUCT_ID, $productId)
                 ->setData(Cart::schema_fields_QUANTITY, $quantity)
                 ->setData(Cart::schema_fields_PRICE, $price)
+                ->setData(Cart::schema_fields_PRODUCT_OPTIONS, $this->encodeOptions($optionSnapshot))
                 ->setData(Cart::schema_fields_IS_TRASHED, 0)
                 ->setData(Cart::schema_fields_TRASHED_AT, null)
                 ->setData(Cart::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
@@ -152,6 +160,7 @@ class CartService implements CartTrashInterface
             'customer_id' => $customerId,
             'product_id' => $productId,
             'quantity' => $quantity,
+            'options' => $optionSnapshot,
         ];
         $this->getEventsManager()->dispatch('WeShop_Cart::add_to_cart_after', $eventData);
 
@@ -320,6 +329,124 @@ class CartService implements CartTrashInterface
         return \is_array($row) ? (int) ($row[Cart::schema_fields_ID] ?? 0) : 0;
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function normalizeOptions(mixed $rawOptions): array
+    {
+        if (\is_string($rawOptions)) {
+            $rawOptions = \trim($rawOptions);
+            if ($rawOptions === '') {
+                return [];
+            }
+
+            $decoded = \json_decode($rawOptions, true);
+            if (\is_array($decoded)) {
+                return $this->normalizeOptions($decoded);
+            }
+
+            return [[
+                'label' => (string) __('规格'),
+                'value' => $rawOptions,
+            ]];
+        }
+
+        if (!\is_array($rawOptions) || $rawOptions === []) {
+            return [];
+        }
+
+        $isAssoc = \array_keys($rawOptions) !== \range(0, \count($rawOptions) - 1);
+        if ($isAssoc) {
+            $options = [];
+            foreach ($rawOptions as $label => $value) {
+                if (!\is_scalar($value)) {
+                    continue;
+                }
+
+                $value = \trim((string) $value);
+                if ($value === '') {
+                    continue;
+                }
+
+                $options[] = [
+                    'label' => \trim((string) $label) !== '' ? \trim((string) $label) : (string) __('规格'),
+                    'value' => $value,
+                ];
+            }
+
+            return $options;
+        }
+
+        $options = [];
+        foreach ($rawOptions as $option) {
+            if (!\is_array($option)) {
+                if (!\is_scalar($option)) {
+                    continue;
+                }
+
+                $value = \trim((string) $option);
+                if ($value !== '') {
+                    $options[] = [
+                        'label' => (string) __('规格'),
+                        'value' => $value,
+                    ];
+                }
+                continue;
+            }
+
+            $value = \trim((string) ($option['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized = [
+                'label' => \trim((string) ($option['label'] ?? '')) !== ''
+                    ? \trim((string) ($option['label'] ?? ''))
+                    : (string) __('规格'),
+                'value' => $value,
+            ];
+
+            foreach (['attribute_id', 'option_id'] as $idKey) {
+                $id = (int) ($option[$idKey] ?? 0);
+                if ($id > 0) {
+                    $normalized[$idKey] = $id;
+                }
+            }
+
+            $code = \trim((string) ($option['code'] ?? ''));
+            if ($code !== '') {
+                $normalized['code'] = $code;
+            }
+
+            $swatchType = \trim((string) ($option['swatch_type'] ?? ''));
+            $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
+            if ($swatchType !== '' && $swatchValue !== '') {
+                $normalized['swatch_type'] = $swatchType;
+                $normalized['swatch_value'] = $swatchValue;
+            }
+
+            $options[] = $normalized;
+        }
+
+        return $options;
+    }
+
+    public function formatOptions(mixed $rawOptions): string
+    {
+        $parts = [];
+        foreach ($this->normalizeOptions($rawOptions) as $option) {
+            $label = \trim((string) ($option['label'] ?? ''));
+            $value = \trim((string) ($option['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $parts[] = $label !== '' ? $label . ': ' . $value : $value;
+        }
+
+        return \implode(' / ', $parts);
+    }
+
     protected function getEventsManager(): EventsManager
     {
         return $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
@@ -411,7 +538,384 @@ class CartService implements CartTrashInterface
         }
         unset($item);
 
+        return $this->attachOptionsToItems($items);
+    }
+
+    /**
+     * @param array<int, mixed> $items
+     * @return array<int, mixed>
+     */
+    private function attachOptionsToItems(array $items): array
+    {
+        $productIds = [];
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+
+            $rawOptions = $item['options']
+                ?? $item['option']
+                ?? $item[Cart::schema_fields_PRODUCT_OPTIONS]
+                ?? null;
+            if ($this->normalizeOptions($rawOptions) === []) {
+                $productId = (int) ($item[Cart::schema_fields_PRODUCT_ID] ?? $item['product_id'] ?? 0);
+                if ($productId > 0) {
+                    $productIds[] = $productId;
+                }
+            }
+        }
+
+        $derivedOptions = $this->deriveOptionSnapshotsByProductIds($productIds);
+        foreach ($items as &$item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+
+            $rawOptions = $item['options']
+                ?? $item['option']
+                ?? $item[Cart::schema_fields_PRODUCT_OPTIONS]
+                ?? null;
+            $options = $this->normalizeOptions($rawOptions);
+            if ($options === []) {
+                $productId = (int) ($item[Cart::schema_fields_PRODUCT_ID] ?? $item['product_id'] ?? 0);
+                $options = $derivedOptions[$productId] ?? [];
+            }
+
+            $productId = (int) ($item[Cart::schema_fields_PRODUCT_ID] ?? $item['product_id'] ?? 0);
+            $options = $this->enrichOptionSnapshotsForProduct($productId, $options);
+            $item['options'] = $options;
+        }
+        unset($item);
+
         return $items;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $options
+     * @return array<int, array<string, mixed>>
+     */
+    private function enrichOptionSnapshotsForProduct(int $productId, array $options): array
+    {
+        if ($productId <= 0 || $options === []) {
+            return $options;
+        }
+
+        $needsSwatch = false;
+        $optionIds = [];
+        foreach ($options as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            if (\trim((string) ($option['swatch_type'] ?? '')) === '' || \trim((string) ($option['swatch_value'] ?? '')) === '') {
+                $needsSwatch = true;
+            }
+            $optionId = (int) ($option['option_id'] ?? 0);
+            if ($optionId > 0) {
+                $optionIds[] = $optionId;
+            }
+        }
+
+        if (!$needsSwatch) {
+            return $options;
+        }
+
+        $swatchByOptionId = [];
+        $swatchByCode = [];
+        foreach ($this->loadOptionValueLabels($optionIds) as $optionId => $data) {
+            $swatchType = \trim((string) ($data['swatch_type'] ?? ''));
+            $swatchValue = \trim((string) ($data['swatch_value'] ?? ''));
+            if ($swatchType === '' || $swatchValue === '') {
+                continue;
+            }
+
+            $swatch = [
+                'swatch_type' => $swatchType,
+                'swatch_value' => $swatchValue,
+            ];
+            $swatchByOptionId[(int) $optionId] = $swatch;
+
+            $code = \strtolower(\trim((string) ($data['code'] ?? '')));
+            if ($code !== '') {
+                $swatchByCode[$code] = $swatch;
+            }
+        }
+
+        $demoSwatches = $this->buildDemoOptionSwatchMap($productId);
+        $swatchByOptionId = $swatchByOptionId + $demoSwatches['by_option_id'];
+        $swatchByCode = $swatchByCode + $demoSwatches['by_code'];
+
+        foreach ($options as &$option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            if (\trim((string) ($option['swatch_type'] ?? '')) !== '' && \trim((string) ($option['swatch_value'] ?? '')) !== '') {
+                continue;
+            }
+
+            $optionId = (int) ($option['option_id'] ?? 0);
+            $code = \strtolower(\trim((string) ($option['code'] ?? '')));
+            $swatch = $optionId > 0 && isset($swatchByOptionId[$optionId])
+                ? $swatchByOptionId[$optionId]
+                : ($code !== '' && isset($swatchByCode[$code]) ? $swatchByCode[$code] : null);
+            if ($swatch === null) {
+                continue;
+            }
+
+            $option['swatch_type'] = $swatch['swatch_type'];
+            $option['swatch_value'] = $swatch['swatch_value'];
+        }
+        unset($option);
+
+        return $options;
+    }
+
+    /**
+     * @return array{by_option_id: array<int, array{swatch_type: string, swatch_value: string}>, by_code: array<string, array{swatch_type: string, swatch_value: string}>}
+     */
+    private function buildDemoOptionSwatchMap(int $productId): array
+    {
+        $empty = ['by_option_id' => [], 'by_code' => []];
+        if ($productId <= 0) {
+            return $empty;
+        }
+
+        /** @var Product $product */
+        $product = ObjectManager::getInstance(Product::class);
+        $row = $product->reset()->clearData()
+            ->where(Product::schema_fields_ID, $productId)
+            ->find()
+            ->fetch();
+        if (!$row || !$row->getId()) {
+            return $empty;
+        }
+
+        $sku = (string) $row->getData(Product::schema_fields_sku);
+        if (!\str_starts_with($sku, 'DEMO-CAT-')) {
+            return $empty;
+        }
+
+        $swatches = [
+            900101 => ['code' => 'black', 'swatch_type' => 'color', 'swatch_value' => '#111827'],
+            900102 => ['code' => 'navy', 'swatch_type' => 'color', 'swatch_value' => '#1e3a8a'],
+            900103 => ['code' => 'beige', 'swatch_type' => 'color', 'swatch_value' => '#d6b98c'],
+            900201 => ['code' => 'm', 'swatch_type' => 'text', 'swatch_value' => 'M'],
+            900202 => ['code' => 'l', 'swatch_type' => 'text', 'swatch_value' => 'L'],
+            900203 => ['code' => 'xl', 'swatch_type' => 'text', 'swatch_value' => 'XL'],
+        ];
+
+        $result = $empty;
+        foreach ($swatches as $optionId => $swatch) {
+            $snapshot = [
+                'swatch_type' => $swatch['swatch_type'],
+                'swatch_value' => $swatch['swatch_value'],
+            ];
+            $result['by_option_id'][(int) $optionId] = $snapshot;
+            $result['by_code'][(string) $swatch['code']] = $snapshot;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int, int> $productIds
+     * @return array<int, array<int, array<string, mixed>>>
+     */
+    private function deriveOptionSnapshotsByProductIds(array $productIds): array
+    {
+        $productIds = \array_values(\array_unique(\array_filter(\array_map('intval', $productIds))));
+        if ($productIds === []) {
+            return [];
+        }
+
+        /** @var ProductOptionId $optionModel */
+        $optionModel = ObjectManager::getInstance(ProductOptionId::class);
+        $rows = $optionModel->reset()->clearData()
+            ->where(ProductOptionId::schema_fields_PRODUCT_ID, $productIds, 'in')
+            ->select()
+            ->fetchArray();
+        if (!\is_array($rows) || $rows === []) {
+            return [];
+        }
+
+        $attributeIds = [];
+        $optionIds = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+
+            $attributeId = (int) ($row[ProductOptionId::schema_fields_ATTRIBUTE_ID] ?? 0);
+            $optionId = (int) ($row[ProductOptionId::schema_fields_OPTION_ID] ?? 0);
+            if ($attributeId > 0) {
+                $attributeIds[] = $attributeId;
+            }
+            if ($optionId > 0) {
+                $optionIds[] = $optionId;
+            }
+        }
+
+        $attributes = $this->loadOptionAttributeLabels($attributeIds);
+        $options = $this->loadOptionValueLabels($optionIds);
+        $snapshots = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+
+            $productId = (int) ($row[ProductOptionId::schema_fields_PRODUCT_ID] ?? 0);
+            $attributeId = (int) ($row[ProductOptionId::schema_fields_ATTRIBUTE_ID] ?? 0);
+            $optionId = (int) ($row[ProductOptionId::schema_fields_OPTION_ID] ?? 0);
+            if ($productId <= 0 || $attributeId <= 0 || $optionId <= 0) {
+                continue;
+            }
+
+            $dedupeKey = $attributeId . ':' . $optionId;
+            if (isset($seen[$productId][$dedupeKey])) {
+                continue;
+            }
+            $seen[$productId][$dedupeKey] = true;
+
+            $label = \trim((string) ($attributes[$attributeId]['label'] ?? ''));
+            $value = \trim((string) ($options[$optionId]['value'] ?? ''));
+            if ($value === '') {
+                $value = (string) $optionId;
+            }
+
+            $snapshot = [
+                'label' => $label !== '' ? $label : (string) __('规格'),
+                'value' => $value,
+                'attribute_id' => $attributeId,
+                'option_id' => $optionId,
+                'code' => (string) ($options[$optionId]['code'] ?? ''),
+            ];
+
+            $swatchType = (string) ($options[$optionId]['swatch_type'] ?? '');
+            $swatchValue = (string) ($options[$optionId]['swatch_value'] ?? '');
+            if ($swatchType !== '' && $swatchValue !== '') {
+                $snapshot['swatch_type'] = $swatchType;
+                $snapshot['swatch_value'] = $swatchValue;
+            }
+
+            $snapshots[$productId][] = $snapshot;
+        }
+
+        foreach ($snapshots as &$snapshot) {
+            \usort(
+                $snapshot,
+                static fn(array $left, array $right): int => ((int) ($left['attribute_id'] ?? 0)) <=> ((int) ($right['attribute_id'] ?? 0))
+            );
+        }
+        unset($snapshot);
+
+        return $snapshots;
+    }
+
+    /**
+     * @param array<int, int> $attributeIds
+     * @return array<int, array{label: string, code: string}>
+     */
+    private function loadOptionAttributeLabels(array $attributeIds): array
+    {
+        $attributeIds = \array_values(\array_unique(\array_filter(\array_map('intval', $attributeIds))));
+        if ($attributeIds === []) {
+            return [];
+        }
+
+        /** @var EavAttribute $attribute */
+        $attribute = ObjectManager::getInstance(EavAttribute::class);
+        $rows = $attribute->reset()->clearData()
+            ->where(EavAttribute::schema_fields_ID, $attributeIds, 'in')
+            ->select()
+            ->fetchArray();
+
+        $labels = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+
+            $attributeId = (int) ($row[EavAttribute::schema_fields_ID] ?? 0);
+            if ($attributeId <= 0) {
+                continue;
+            }
+
+            $labels[$attributeId] = [
+                'label' => (string) ($row[EavAttribute::schema_fields_name] ?? ''),
+                'code' => (string) ($row[EavAttribute::schema_fields_code] ?? ''),
+            ];
+        }
+
+        return $labels;
+    }
+
+    /**
+     * @param array<int, int> $optionIds
+     * @return array<int, array{value: string, code: string, swatch_type?: string, swatch_value?: string}>
+     */
+    private function loadOptionValueLabels(array $optionIds): array
+    {
+        $optionIds = \array_values(\array_unique(\array_filter(\array_map('intval', $optionIds))));
+        if ($optionIds === []) {
+            return [];
+        }
+
+        /** @var Option $option */
+        $option = ObjectManager::getInstance(Option::class);
+        $rows = $option->reset()->clearData()
+            ->where(Option::schema_fields_ID, $optionIds, 'in')
+            ->select()
+            ->fetchArray();
+
+        $labels = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+
+            $optionId = (int) ($row[Option::schema_fields_ID] ?? 0);
+            if ($optionId <= 0) {
+                continue;
+            }
+
+            $optionData = [
+                'value' => (string) ($row[Option::schema_fields_value] ?? ''),
+                'code' => (string) ($row[Option::schema_fields_code] ?? ''),
+            ];
+
+            $swatchImage = \trim((string) ($row[Option::schema_fields_swatch_image] ?? ''));
+            $swatchColor = \trim((string) ($row[Option::schema_fields_swatch_color] ?? ''));
+            $swatchText = \trim((string) ($row[Option::schema_fields_swatch_text] ?? ''));
+            if ($swatchImage !== '') {
+                $optionData['swatch_type'] = 'image';
+                $optionData['swatch_value'] = $swatchImage;
+            } elseif ($swatchColor !== '') {
+                $optionData['swatch_type'] = 'color';
+                $optionData['swatch_value'] = $swatchColor;
+            } elseif ($swatchText !== '') {
+                $optionData['swatch_type'] = 'text';
+                $optionData['swatch_value'] = $swatchText;
+            }
+
+            $labels[$optionId] = $optionData;
+        }
+
+        return $labels;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $options
+     */
+    private function encodeOptions(array $options): ?string
+    {
+        $options = $this->normalizeOptions($options);
+        if ($options === []) {
+            return null;
+        }
+
+        $encoded = \json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return \is_string($encoded) ? $encoded : null;
     }
 
     /**

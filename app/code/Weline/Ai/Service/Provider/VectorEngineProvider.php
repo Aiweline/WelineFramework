@@ -584,6 +584,7 @@ class VectorEngineProvider extends OpenAiProvider
      */
     private function postJson(string $url, string $apiKey, array $payload, int $timeout): array
     {
+        $this->applyPostJsonExecutionTimeLimit($timeout);
         if (function_exists('curl_init')) {
             return $this->postJsonWithCurl($url, $apiKey, $payload, $timeout);
         }
@@ -631,6 +632,15 @@ class VectorEngineProvider extends OpenAiProvider
         }
 
         return $decoded;
+    }
+
+    private function applyPostJsonExecutionTimeLimit(int $timeout): void
+    {
+        @set_time_limit(
+            $timeout > 0
+                ? $timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER
+                : 0
+        );
     }
 
     /**

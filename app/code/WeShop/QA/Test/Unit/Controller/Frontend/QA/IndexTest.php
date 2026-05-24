@@ -57,16 +57,21 @@ class IndexTest extends TestCase
         $pageDataService = $this->createMock(QAQuestionPageDataService::class);
         $pageDataService->expects($this->once())
             ->method('build')
-            ->with(88)
+            ->with(88, 2, 5, 9)
             ->willReturn([
                 'product_id' => 88,
                 'qa_list' => [['question_id' => 1]],
                 'question_count' => 1,
+                'page' => 2,
+                'page_count' => 4,
             ]);
 
         $request = $this->createMock(Request::class);
         $request->method('getParam')->willReturnMap([
             ['product_id', null, 88],
+            ['page', null, 2],
+            ['page_size', null, 5],
+            ['question_id', null, 9],
         ]);
 
         $controller = $this->getMockBuilder(Index::class)
@@ -74,7 +79,7 @@ class IndexTest extends TestCase
             ->onlyMethods(['assign', 'fetch', 'redirect'])
             ->getMock();
         $controller->expects($this->never())->method('redirect');
-        $controller->expects($this->exactly(4))->method('assign');
+        $controller->expects($this->exactly(6))->method('assign');
         $controller->expects($this->once())->method('fetch')->willReturn('page');
         $this->setProtectedProperty($controller, 'request', $request);
 

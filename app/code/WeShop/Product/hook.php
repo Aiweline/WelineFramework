@@ -54,4 +54,16 @@ return [
         'description' => __('在产品详情页标签区域渲染产品描述、规格、评价、问答等内容。支持多个标签页切换，包括商品详情、规格参数、用户评价、问答等。'),
         'doc' => 'frontend/layouts/product/tabs-content.md',
     ],
+
+    // ==================== Backend Product Edit Hooks ====================
+    'WeShop_Product::backend::product::edit::nav-after' => [
+        'name' => __('产品编辑页步骤导航后'),
+        'description' => __('在后台产品编辑页步骤导航末尾追加模块自己的管理入口。'),
+        'doc' => 'backend/product/edit/nav-after.md',
+    ],
+    'WeShop_Product::backend::product::edit::content-after' => [
+        'name' => __('产品编辑页内容后'),
+        'description' => __('在后台产品编辑页内容区域末尾追加当前产品相关的模块管理面板。'),
+        'doc' => 'backend/product/edit/content-after.md',
+    ],
 ];

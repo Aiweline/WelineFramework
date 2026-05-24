@@ -54,18 +54,18 @@
 迷你购物车已加载,"Mini Cart Loaded"
 "在迷你购物车数据加载完成后触发，用于 AJAX 请求响应。","Triggered after the mini cart data finishes loading, used for AJAX request responses."
 "Cart 查询器不支持的操作：%{1}","Operations not supported by Cart query: %{1}"
-购物车数量加载成功。,购物车数量加载成功。
+购物车数量加载成功。,"Cart count loaded successfully."
 购物车查询,"Cart query"
 提供购物车读取与总额计算能力,"Provides shopping cart reading and total calculation capabilities"
-"通过 Weline_Cart 根路由渲染前台购物车页面","通过 Weline_Cart 根路由渲染前台购物车页面"
-前台购物车加购操作,前台购物车加购操作
-前台商品规格读取操作,前台商品规格读取操作
-前台迷你购物车商品列表操作,前台迷你购物车商品列表操作
-前台购物车数量读取操作,前台购物车数量读取操作
-前台购物车更新操作,前台购物车更新操作
-前台购物车移除操作（移至回收站）,前台购物车移除操作（移至回收站）
-前台购物车回收站读取操作,前台购物车回收站读取操作
-前台购物车回收站恢复操作,前台购物车回收站恢复操作
+"通过 Weline_Cart 根路由渲染前台购物车页面","Render the frontend cart page through the Weline_Cart root route"
+前台购物车加购操作,"Frontend add-to-cart operation"
+前台商品规格读取操作,"Frontend product options read operation"
+前台迷你购物车商品列表操作,"Frontend mini cart item list operation"
+前台购物车数量读取操作,"Frontend cart count read operation"
+前台购物车更新操作,"Frontend cart update operation"
+前台购物车移除操作（移至回收站）,"Frontend cart remove operation (move to trash)"
+前台购物车回收站读取操作,"Frontend cart trash read operation"
+前台购物车回收站恢复操作,"Frontend cart trash restore operation"
 获取客户购物车商品列表,"Get customer shopping cart product list"
 计算客户购物车总额,"Calculate customer cart total"
 清空客户购物车,"Clear customer shopping cart"
@@ -191,54 +191,75 @@
 商品已恢复至购物车。,"Item restored to cart."
 购物车回收站加载成功。,"Cart trash loaded successfully."
 迷你购物车加载成功。,"Mini cart loaded successfully."
-"商品 #%{1}","商品 #%{1}"
 规格,Option
+"商品 #%{1}","Product #%{1}"
+颜色,Color
+黑色,Black
+藏青,Navy
+米色,Beige
+尺码,Size
 商品不存在或不可用。,"Product does not exist or is unavailable."
-购物车项目已在垃圾箱中,购物车项目已在垃圾箱中
-购物车项目不存在,购物车项目不存在
-无权%{1}此购物车项目,无权%{1}此购物车项目
-购物车,"Shopping Cart"
+购物车项目已在垃圾箱中,"Cart item is already in the trash"
+购物车项目不存在,"Cart item does not exist"
+无权%{1}此购物车项目,"No permission to %{1} this cart item"
 打开购物车,"Open cart"
+购物车,"Shopping Cart"
 加入购物车,"Add to Cart"
 缺货,"Out of Stock"
 选择规格,"Select Specification"
 关闭,Close
 数量,Quantity
+获取产品信息失败,"Failed to load product information"
 暂无可选规格,"No selectable specifications"
 库存:,Inventory:
 已加入购物车,"Added to cart"
 添加购物车失败,"Failed to add to cart"
 已添加,Added
-"WeShop 购物车","WeShop 购物车"
+请输入优惠码,"Please enter a promo code"
+暂无图片,"No image"
+"前端 API 尚未加载，请刷新后重试","Frontend API is not loaded yet. Please refresh and try again."
+"前端 API 加载超时，请刷新后重试","Frontend API loading timed out. Please refresh and try again."
+"前端 API 模块加载失败，请刷新后重试","Frontend API module failed to load. Please refresh and try again."
+"前端 API 模块加载超时，请刷新后重试","Frontend API module loading timed out. Please refresh and try again."
+更新购物车超时，请稍后重试,"Cart update timed out. Please try again later."
+更新购物车失败,"Failed to update cart"
+移除商品超时，请稍后重试,"Removing item timed out. Please try again later."
+移除商品失败,"Failed to remove item"
+恢复商品超时，请稍后重试,"Restoring item timed out. Please try again later."
+恢复商品失败,"Failed to restore item"
+加入稍后再买超时，请稍后重试,"Save for later timed out. Please try again later."
+暂时无法加入稍后再买,"Unable to save for later right now"
+应用优惠码超时，请稍后重试,"Applying promo code timed out. Please try again later."
+优惠码不可用,"Promo code is not available"
+"WeShop 购物车","WeShop Cart"
 "共 %{1} 件商品，确认后即可进入结账。","%{1} items in your cart. Review them before checkout."
-购物车还是空的，先去挑选商品。,购物车还是空的，先去挑选商品。
-购物车垃圾箱,购物车垃圾箱
-最近移除,最近移除
-可快速恢复到购物车,可快速恢复到购物车
-垃圾箱暂无商品。移除购物车商品后会出现在这里。,垃圾箱暂无商品。移除购物车商品后会出现在这里。
-暂无图片,暂无图片
-"数量 %{1}","数量 %{1}"
-恢复,恢复
+购物车还是空的，先去挑选商品。,"Your cart is empty. Browse products to get started."
+购物车垃圾箱,"Cart trash"
+最近移除,"Recently removed"
+可快速恢复到购物车,"Quickly restore items to your cart"
+垃圾箱暂无商品。移除购物车商品后会出现在这里。,"No items in trash yet. Removed cart items will appear here."
+"数量 %{1}","Qty %{1}"
+恢复,Restore
 继续购物,"Continue Shopping"
-购物车为空,购物车为空
-把喜欢的商品加入购物车后，可以在这里统一结账。,把喜欢的商品加入购物车后，可以在这里统一结账。
-去逛逛,去逛逛
+购物车为空,"Your cart is empty"
+把喜欢的商品加入购物车后，可以在这里统一结账。,"Add items you like to your cart and checkout here."
+去逛逛,"Start shopping"
 有货,"In Stock"
-库存不足,库存不足
-商品已失效,商品已失效
-支持配送,支持配送
-调整数量,调整数量
-商品数量,商品数量
+库存不足,"Low stock"
+商品已失效,"Product unavailable"
+支持配送,"Eligible for delivery"
+调整数量,"Adjust quantity"
+商品数量,"Item quantity"
 移除,Remove
-稍后再买,稍后再买
-单价,单价
+稍后再买,"Save for later"
+单价,"Unit price"
 订单摘要,"Order Summary"
-"%{1} 件","%{1} 件"
-商品小计,商品小计
-配送费,配送费
-优惠,优惠
-预估税费,预估税费
-应付合计,应付合计
+"%{1} 件","%{1} items"
+商品小计,Subtotal
+配送费,Shipping
+优惠,Discount
+预估税费,"Estimated tax"
+应付合计,"Total due"
 优惠码,"Promo code"
 输入优惠码,"Enter code"
 应用,Apply
@@ -264,5 +285,8 @@
 您的购物车是空的,"Your cart is empty"
 您还没有向购物车添加任何商品。,"Looks like you haven't added anything to your cart yet."
 查看购物车,"View cart"
-关闭购物车,关闭购物车
 运费和税费将在结算时计算,"Shipping and taxes are calculated at checkout"
+关闭购物车,"Close cart"
+正在加载购物车...,"Loading cart..."
+购物车内容加载失败，请重试。,"Cart content failed to load. Please try again."
+重试,Retry

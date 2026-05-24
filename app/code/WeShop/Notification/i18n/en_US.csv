@@ -4,22 +4,22 @@
 "Notification could not be marked as read.","Notification could not be marked as read."
 "Notification Detail","Notification Detail"
 "Please log in to continue.","Please log in to continue."
-请先登录后再配置通知渠道。,请先登录后再配置通知渠道。
-通知渠道配置已保存。,通知渠道配置已保存。
+请先登录后再配置通知渠道。,"Please sign in before configuring notification channels."
+通知渠道配置已保存。,"Notification channel settings saved."
 "Unsupported notification provider operation: %{1}","Unsupported notification provider operation: %{1}"
 "Notification Query","Notification Query"
 "Provides frontend notification operations through the worker API.","Provides frontend notification operations through the worker API."
 "Mark a notification owned by the current customer as read.","Mark a notification owned by the current customer as read."
-"订单 {1} 已提交","订单 {1} 已提交"
-订单已提交,订单已提交
-我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。,我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。
+"订单 {1} 已提交","Order {1} submitted"
+订单已提交,"Order submitted"
+我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。,"We have received your order. Payment, shipping, and after-sales status will be synced through your selected notification channels."
 站内通知,"On-site Notifications"
 通知渠道和联系方式不能为空。,"Notification channel and contact method cannot be empty."
 该通知渠道暂不支持客户配置。,"This notification channel does not currently support customer configuration."
 请输入有效的通知邮箱。,"Enter a valid notification email."
-邮箱,邮箱
-订单通知,订单通知
-您的订单已提交，我们会继续同步后续状态。,您的订单已提交，我们会继续同步后续状态。
+邮箱,Email
+订单通知,"Order notifications"
+您的订单已提交，我们会继续同步后续状态。,"Your order has been submitted. We will continue syncing future status updates."
 Unread,Unread
 Read,Read
 "Notification not found.","Notification not found."
@@ -29,6 +29,7 @@ Order,Order
 Payment,Payment
 Membership,Membership
 Promotion,Promotion
+商品问答提及,"Product Q&A Mention"
 "Manage customer notifications, read status, and delivery visibility for support teams.","Manage customer notifications, read status, and delivery visibility for support teams."
 "Total Notifications","Total Notifications"
 "Unread Notifications","Unread Notifications"
@@ -54,6 +55,8 @@ View,View
 "Back to Notifications","Back to Notifications"
 "Review notification metadata and content before support follow-up.","Review notification metadata and content before support follow-up."
 "Basic Information","Basic Information"
+目标链接,"Target Link"
+打开,Open
 Content,Content
 "Already marked as read.","Already marked as read."
 消息通知,Notifications
@@ -61,6 +64,7 @@ Content,Content
 全部消息,"All Messages"
 未读,Unread
 标记已读,"Mark as Read"
+查看,View
 当前还没有消息。后续订单、支付、配送和售后事件产生后，会自动出现在这里。,"There are no messages yet. Future order, payment, delivery, and after-sales events will appear here automatically."
 通知渠道设置,"Notification Channel Settings"
 配置订单、支付、配送和售后通知的接收方式，结账页会优先使用这里保存的偏好。,"Configure how you receive order, payment, delivery, and after-sales notifications. Checkout will use the preferences saved here first."
@@ -83,6 +87,13 @@ Content,Content
 已保存联系人,"Saved Contacts"
 通知设置,"Notification Settings"
 管理订单、支付与售后消息提醒,"Manage order, payment, and after-sales notifications"
+订单通知渠道,"Order notification channels"
+已选通知渠道,"Selected notification channels"
+未选择,"Not selected"
+可用于本次订单通知。,"Available for this order notification."
+请先在个人中心配置该渠道。,"Configure this channel in your account center first."
+去个人中心管理通知渠道,"Manage notification channels in account center"
+访客结账仅使用邮箱接收本次订单通知，登录后可以保存更多通知渠道。,"Guest checkout uses email for this order notification only. Sign in to save more notification channels."
 "Stay Updated","Stay Updated"
 "Notification Center","Notification Center"
 "Open Center","Open Center"

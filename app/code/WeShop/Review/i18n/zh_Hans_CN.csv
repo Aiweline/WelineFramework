@@ -3,18 +3,33 @@
 "Review rejected successfully",评论已拒绝
 "Review not found",评论不存在
 "Review deleted successfully",评论已删除
+评价项配置,评价项配置
+请求方式错误,请求方式错误
+评价项配置已保存,评价项配置已保存
+评价项配置保存失败：%{1},评价项配置保存失败：%{1}
 "Review Management",评论管理
 "Review Detail",评论详情
-"Please log in to write a review.","Please log in to write a review."
-"Product and content are required.",商品和评论内容不能为空。
-"Unable to submit your review right now.",暂时无法提交您的评价。
-"Thank you for submitting your review.",感谢您提交评论。
+请登录后再评价。,请登录后再评价。
+商品和评价内容不能为空。,商品和评价内容不能为空。
+只有购买过该商品的客户才能评价。,只有购买过该商品的客户才能评价。
+暂时无法提交评价。,暂时无法提交评价。
+评价已提交，审核通过后会公开展示。,评价已提交，审核通过后会公开展示。
 "Product ID cannot be empty.",产品ID不能为空。
 "Product Reviews",商品评论
 "Unsupported review provider operation: %{1}","Unsupported review provider operation: %{1}"
+"Please sign in before replying.","Please sign in before replying."
+"Review and reply content are required.","Review and reply content are required."
+"Unable to submit reply right now.","Unable to submit reply right now."
+"Reply submitted.","Reply submitted."
+商品不能为空。,商品不能为空。
+已选择匿名评论。,已选择匿名评论。
+已选择下单后评论。,已选择下单后评论。
+未查询到该商品订单，已选择匿名评论。,未查询到该商品订单，已选择匿名评论。
 "Review Query","Review Query"
 "Provides frontend review operations through the worker API.","Provides frontend review operations through the worker API."
-"Submit a frontend product review.","Submit a frontend product review."
+点击写评论时自动判断本次评价方式；未登录前端直接选择匿名，已登录才查询是否购买过该商品。,点击写评论时自动判断本次评价方式；未登录前端直接选择匿名，已登录才查询是否购买过该商品。
+"Reply to a product review. Mentions such as @customer:123 notify the mentioned customer.","Reply to a product review. Mentions such as @customer:123 notify the mentioned customer."
+提交商品评价，匿名模式允许游客提交，下单后评论模式要求登录并购买过该商品。,提交商品评价，匿名模式允许游客提交，下单后评论模式要求登录并购买过该商品。
 "Product review tab content",商品评论标签内容
 "Render the customer review block inside product detail tabs.",在商品详情标签中渲染客户评论模块。
 "Review Page Hooks",评论页面扩展位
@@ -30,55 +45,108 @@ Rejected,已拒绝
 "3 Stars",三星
 "4 Stars",四星
 "5 Stars",五星
+下单后评论,下单后评论
+匿名评论,匿名评论
 Anonymous,匿名用户
+评价项名称不能为空,评价项名称不能为空
+新增评价项需要同时填写编码和名称,新增评价项需要同时填写编码和名称
+评价项编码已存在,评价项编码已存在
+"Review, customer and reply content are required.","Review, customer and reply content are required."
+"Review does not exist or is not visible.","Review does not exist or is not visible."
+"Reply target does not exist.","Reply target does not exist."
+"Customer #%{1}","Customer #%{1}"
+"Your review has a new reply","Your review has a new reply"
+"Customer %{1} replied in a product review.","Customer %{1} replied in a product review."
+Customer,Customer
+匿名用户,匿名用户
+加载当前产品评价失败：%{1},加载当前产品评价失败：%{1}
+"Approve Review","Approve Review"
+"Are you sure you want to approve this review?",确定要通过这条评论吗？
+Approve,通过
+"Failed to approve review",审核评论失败
+"Reject Review","Reject Review"
+"Are you sure you want to reject this review?",确定要拒绝这条评论吗？
+Reject,拒绝
+"Failed to reject review",拒绝评论失败
+"Delete Review","Delete Review"
+"Are you sure you want to delete this review? This action cannot be undone.",确定要删除这条评论吗？此操作无法撤销。
+Delete,删除
+"Failed to delete review",删除评论失败
+"Request failed",请求失败
+当前产品评价,当前产品评价
+在产品编辑时查看并处理当前产品的买家评价。,在产品编辑时查看并处理当前产品的买家评价。
+查看全部评价,查看全部评价
+评价设置,评价设置
+保存产品后即可管理评价。,保存产品后即可管理评价。
+"Total Reviews",评论总数
+Pending,待审核
+当前产品暂无评价。,当前产品暂无评价。
+"Review ID",评论ID
+Rating,评分
+细分评分,细分评分
+媒体,媒体
+Content,内容
+Status,状态
+"Created At",创建时间
+Actions,操作
+视频,视频
+View,查看
+评价,评价
+当前产品,当前产品
 "Customer Voices",买家声音
 "Latest Reviews",最新评论
 "View All Reviews",查看全部评论
-Rating,评分
 "No product reviews yet. Be the first to share your experience.",暂无商品评论，欢迎成为第一个分享体验的用户。
+评论管理,评论管理
+已配置评价项,已配置评价项
+返回评论列表,返回评论列表
+暂无评价项，请运行安装升级或新增自定义评价项。,暂无评价项，请运行安装升级或新增自定义评价项。
+启用,启用
+编码,编码
+名称,名称
+排序,排序
+类型,类型
+系统项,系统项
+自定义,自定义
+评价模式,评价模式
+游客可直接提交评价，后台审核通过后才会公开展示；提交后仅当前浏览器会立即看到待审核评价。,游客可直接提交评价，后台审核通过后才会公开展示；提交后仅当前浏览器会立即看到待审核评价。
+客户需要登录，并且购买过当前商品后才能提交评价。,客户需要登录，并且购买过当前商品后才能提交评价。
+新增自定义评价项,新增自定义评价项
+仅支持小写字母、数字和下划线，保存时会自动规范化。,仅支持小写字母、数字和下划线，保存时会自动规范化。
+包装体验,包装体验
+保存后立即启用,保存后立即启用
+启用的评价项会展示在前台评价表单中，买家提交后会随评价一起保存并展示在后台详情和产品评价区。,启用的评价项会展示在前台评价表单中，买家提交后会随评价一起保存并展示在后台详情和产品评价区。
+取消,取消
+保存配置,保存配置
 WeShop,WeShop
 Review,Review
 "Review List",评论列表
-"Total Reviews",评论总数
-Pending,待审核
 "Filter Reviews",筛选评论
 "Product ID",产品ID
 "Enter product ID",输入产品ID
 "Customer ID",客户ID
 "Enter customer ID",输入客户ID
-Status,状态
 "All Statuses",全部状态
 "All Ratings",全部评分
 Star(s),星
 "Apply Filters",应用筛选
 Reset,重置
-Export,导出
 "No reviews found",未找到评论
-"Review ID",评论ID
 Title,标题
-Content,内容
-"Created At",创建时间
-Actions,操作
-View,查看
-Approve,通过
-Reject,拒绝
-Delete,删除
+图片,图片
 Previous,上一页
 Next,下一页
 "Page %{1} of %{2}",第%{1}页，共%{2}页
-"Approve Review","Approve Review"
-"Are you sure you want to approve this review?",确定要通过这条评论吗？
-"Failed to approve review",审核评论失败
-"Request failed",请求失败
-"Reject Review","Reject Review"
-"Are you sure you want to reject this review?",确定要拒绝这条评论吗？
-"Failed to reject review",拒绝评论失败
-"Delete Review","Delete Review"
-"Are you sure you want to delete this review? This action cannot be undone.",确定要删除这条评论吗？此操作无法撤销。
-"Failed to delete review",删除评论失败
 Detail,Detail
 "Back to List",返回列表
 "Review Content",评论内容
+这条评价没有提交细分评分。,这条评价没有提交细分评分。
+图文视频,图文视频
+这条评价没有提交图片或视频。,这条评价没有提交图片或视频。
+"Review Replies","Review Replies"
+"Reply to","Reply to"
+"Mentioned customers","Mentioned customers"
+"No replies yet.","No replies yet."
 "Review History",审核历史
 "Review Submitted",评论提交
 "Last Updated",最后更新
@@ -88,3 +156,4 @@ Detail,Detail
 "Customer Name",客户姓名
 Email,邮箱
 Metadata,元数据
+评论视频,评论视频

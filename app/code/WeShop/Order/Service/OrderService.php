@@ -73,6 +73,7 @@ class OrderService
             ->setData(Order::schema_fields_shipping_method, (string) ($orderData['shipping_method'] ?? ''))
             ->setData(Order::schema_fields_payment_method, (string) ($orderData['payment_method'] ?? ''))
             ->setData(Order::schema_fields_shipping_address, $this->encodeAddress($orderData['shipping_address'] ?? []))
+            ->setData(Order::schema_fields_billing_address, $this->encodeAddress($orderData['billing_address'] ?? $orderData['shipping_address'] ?? []))
             ->setData(Order::schema_fields_created_at, date('Y-m-d H:i:s'))
             ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
@@ -112,6 +113,8 @@ class OrderService
             $productName = trim((string)($item['product_name'] ?? $item['name'] ?? ''));
             $productSku = (string)($item['product_sku'] ?? $item['sku'] ?? '');
             $productImage = trim((string)($item['product_image'] ?? $item['image'] ?? ''));
+            $productOptions = $this->normalizeOptions($item['options'] ?? $item['product_options'] ?? null);
+            $productOptionsJson = $this->encodeOptions($productOptions);
 
             $orderItem = $this->newOrderItemModel();
             $orderItem->clearData()
@@ -120,6 +123,7 @@ class OrderService
                 ->setData(OrderItem::schema_fields_PRODUCT_NAME, $productName)
                 ->setData(OrderItem::schema_fields_PRODUCT_SKU, $productSku)
                 ->setData(OrderItem::schema_fields_PRODUCT_IMAGE, $productImage)
+                ->setData(OrderItem::schema_fields_PRODUCT_OPTIONS, $productOptionsJson)
                 ->setData(OrderItem::schema_fields_QUANTITY, $quantity)
                 ->setData(OrderItem::schema_fields_PRICE, $price)
                 ->setData(OrderItem::schema_fields_TOTAL, $total)
@@ -134,6 +138,8 @@ class OrderService
                     'product_name' => $productName,
                     'product_sku' => $productSku,
                     'product_image' => $productImage,
+                    'product_options' => $productOptionsJson,
+                    'options' => $productOptions,
                     'quantity' => $quantity,
                     'price' => $price,
                     'total' => $total,
@@ -182,12 +188,21 @@ class OrderService
             $item['price'] = (float)($productSnapshot['price'] ?? $item['price'] ?? 0);
         }
 
+        $productOptions = $this->normalizeOptions(
+            $item['options']
+            ?? $item['product_options']
+            ?? $item[OrderItem::schema_fields_PRODUCT_OPTIONS]
+            ?? null
+        );
+
         $item['product_name'] = $productName;
         $item['name'] = $productName;
         $item['product_sku'] = $productSku;
         $item['sku'] = $productSku;
         $item['product_image'] = $productImage;
         $item['image'] = $productImage;
+        $item['options'] = $productOptions;
+        $item['product_options'] = $this->encodeOptions($productOptions);
 
         return $item;
     }
@@ -751,6 +766,105 @@ class OrderService
         };
     }
 
+    /**
+     * @return array<int, array<string, string>>
+     */
+    protected function normalizeOptions(mixed $rawOptions): array
+    {
+        if (\is_string($rawOptions)) {
+            $rawOptions = \trim($rawOptions);
+            if ($rawOptions === '') {
+                return [];
+            }
+
+            $decoded = \json_decode($rawOptions, true);
+            if (\is_array($decoded)) {
+                return $this->normalizeOptions($decoded);
+            }
+
+            return [[
+                'label' => (string) __('规格'),
+                'value' => $rawOptions,
+            ]];
+        }
+
+        if (!\is_array($rawOptions) || $rawOptions === []) {
+            return [];
+        }
+
+        $isAssoc = \array_keys($rawOptions) !== \range(0, \count($rawOptions) - 1);
+        if ($isAssoc) {
+            $options = [];
+            foreach ($rawOptions as $label => $value) {
+                if (\is_scalar($value) && \trim((string) $value) !== '') {
+                    $options[] = [
+                        'label' => \trim((string) $label) !== '' ? \trim((string) $label) : (string) __('规格'),
+                        'value' => \trim((string) $value),
+                    ];
+                }
+            }
+
+            return $options;
+        }
+
+        $options = [];
+        foreach ($rawOptions as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+
+            $value = \trim((string) ($option['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized = [
+                'label' => \trim((string) ($option['label'] ?? '')) !== ''
+                    ? \trim((string) ($option['label'] ?? ''))
+                    : (string) __('规格'),
+                'value' => $value,
+            ];
+
+            foreach (['attribute_id', 'option_id'] as $idKey) {
+                $id = (int) ($option[$idKey] ?? 0);
+                if ($id > 0) {
+                    $normalized[$idKey] = $id;
+                }
+            }
+
+            $code = \trim((string) ($option['code'] ?? ''));
+            if ($code !== '') {
+                $normalized['code'] = $code;
+            }
+
+            $swatchType = \trim((string) ($option['swatch_type'] ?? ''));
+            $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
+            if ($swatchType !== '' && $swatchValue !== '') {
+                $normalized['swatch_type'] = $swatchType;
+                $normalized['swatch_value'] = $swatchValue;
+            }
+
+            $options[] = $normalized;
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param array<int, array<string, string>> $options
+     */
+    protected function encodeOptions(array $options): string
+    {
+        $options = $this->normalizeOptions($options);
+        if ($options === []) {
+            return '';
+        }
+
+        $encoded = \json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return \is_string($encoded) ? $encoded : '';
+    }
+
     protected function encodeAddress(mixed $address): string
     {
         if (!is_array($address) || $address === []) {
@@ -818,6 +932,7 @@ class OrderService
                 'row_total' => $rowTotal,
                 'product_name' => (string) ($item['product_name'] ?? ''),
                 'product_sku' => (string) ($item['product_sku'] ?? ''),
+                'options' => $this->normalizeOptions($item['options'] ?? $item['product_options'] ?? null),
             ];
         }
 
@@ -843,6 +958,7 @@ class OrderService
         $hydrated[OrderItem::schema_fields_QUANTITY] = $quantity;
         $hydrated[OrderItem::schema_fields_PRICE] = $price;
         $hydrated[OrderItem::schema_fields_TOTAL] = $total;
+        $hydrated[OrderItem::schema_fields_PRODUCT_OPTIONS] = (string) ($hydrated['product_options'] ?? '');
         $hydrated['quantity'] = $quantity;
         $hydrated['price'] = $price;
         $hydrated['total'] = $total;

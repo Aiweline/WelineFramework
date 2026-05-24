@@ -14,7 +14,9 @@ use WeShop\Product\Model\Product\OptionId as ProductOptionId;
 use WeShop\Review\Model\Review;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
+use Weline\Eav\Model\EavAttribute\LocalDescription as AttributeLocalDescription;
 use Weline\Eav\Model\EavAttribute\Option;
+use Weline\Eav\Model\EavAttribute\Option\LocalDescription as OptionLocalDescription;
 use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavEntity;
@@ -43,6 +45,8 @@ class ProductProvider implements FakeDataProviderInterface
         private readonly ?Type $attributeType = null,
         private readonly ?Review $review = null,
         private readonly ?Customer $customer = null,
+        private readonly ?AttributeLocalDescription $attributeLocalDescription = null,
+        private readonly ?OptionLocalDescription $optionLocalDescription = null,
     ) {
     }
 
@@ -147,6 +151,7 @@ class ProductProvider implements FakeDataProviderInterface
         $this->repairStaleDemoFoodHandleCollisions();
         $this->repairDuplicateSkus();
         $this->cleanupInvalidManagedAttributeOptions();
+        $this->syncManagedAttributeLocalDescriptions();
         $result->merge($this->seedProductReviews($context));
 
         return $result;
@@ -341,8 +346,114 @@ class ProductProvider implements FakeDataProviderInterface
      */
     private function getProducts(): array
     {
-        $products = $this->getBaseProducts();
-        return array_merge($products, $this->getCategoryCoverageProducts($products));
+        $products = array_map([$this, 'withProductLocalDescriptions'], $this->getBaseProducts());
+        $coverageProducts = array_map(
+            [$this, 'withProductLocalDescriptions'],
+            $this->getCategoryCoverageProducts($products)
+        );
+
+        return array_merge($products, $coverageProducts);
+    }
+
+    /**
+     * @param array<string, mixed> $productData
+     * @return array<string, mixed>
+     */
+    private function withProductLocalDescriptions(array $productData): array
+    {
+        $productData['attributes'] = $this->resolveAttributePayload($productData);
+        $existingLocalDescriptions = $productData['local_descriptions'] ?? [];
+        $sku = (string)($productData['sku'] ?? '');
+        $overrides = $this->getProductLocalDescriptionOverrides()[$sku] ?? [];
+
+        $productData['local_descriptions'] = array_replace_recursive(
+            $this->buildFallbackProductLocalDescriptions($productData),
+            is_array($existingLocalDescriptions) ? $existingLocalDescriptions : [],
+            $overrides
+        );
+
+        $variants = $productData['variants'] ?? [];
+        if (is_array($variants) && $variants !== []) {
+            $parentData = $productData;
+            unset($parentData['variants'], $parentData['local_descriptions'], $parentData['attributes']);
+            $productData['variants'] = array_map(function (array $variant) use ($parentData): array {
+                return $this->withProductLocalDescriptions(array_replace($parentData, $variant));
+            }, $variants);
+        }
+
+        return $productData;
+    }
+
+    /**
+     * @param array<string, mixed> $productData
+     * @return array<string, array<string, string>>
+     */
+    private function buildFallbackProductLocalDescriptions(array $productData): array
+    {
+        $fields = [
+            'name' => (string)($productData['name'] ?? ''),
+            'short_description' => (string)($productData['short_description'] ?? ''),
+            'description' => (string)($productData['description'] ?? ''),
+            'meta_name' => (string)($productData['name'] ?? ''),
+            'meta_description' => (string)($productData['short_description'] ?? ''),
+            'meta_keywords' => (string)($productData['meta_keywords'] ?? ''),
+        ];
+
+        return [
+            'zh_Hans_CN' => $fields,
+            'en_US' => $fields,
+        ];
+    }
+
+    /**
+     * @return array<string, array<string, array<string, string>>>
+     */
+    private function getProductLocalDescriptionOverrides(): array
+    {
+        return [
+            'FAKE-HANFU-RUAO-001' => [
+                'en_US' => [
+                    'name' => 'Qingyu Cross-Collar Ru\'ao',
+                    'short_description' => 'Song-inspired cross-collar hanfu top with a light drape for everyday styling.',
+                    'description' => 'A seeded hanfu top inspired by Song-style cross-collar tailoring, relaxed sleeves, tie details, and subtle patterned fabric for pairing with mamian skirts or shawls.',
+                    'meta_name' => 'Qingyu Cross-Collar Ru\'ao',
+                    'meta_description' => 'Song-inspired cross-collar hanfu top with a light drape for everyday styling.',
+                    'meta_keywords' => 'hanfu,ruao,cross-collar top,traditional chinese clothing',
+                ],
+            ],
+            'FAKE-HANFU-MAMIANQUN-001' => [
+                'en_US' => [
+                    'name' => 'Gold-Woven Mamian Skirt',
+                    'short_description' => 'Ming-inspired mamian skirt with a structured hem for pairing with hanfu tops and shawls.',
+                    'description' => 'A seeded mamian skirt demo product inspired by traditional gold-woven motifs, designed for category filters, specification display, and hanfu outfit showcases.',
+                    'meta_name' => 'Gold-Woven Mamian Skirt',
+                    'meta_description' => 'Ming-inspired mamian skirt with a structured hem for pairing with hanfu tops and shawls.',
+                    'meta_keywords' => 'hanfu,mamian skirt,traditional chinese skirt',
+                ],
+            ],
+            'FAKE-HANFU-BUXIE-001' => [
+                'en_US' => [
+                    'name' => 'Cloud-Pattern Embroidered Cloth Shoes',
+                    'short_description' => 'Traditional embroidered cloth shoes for lightweight hanfu styling.',
+                    'description' => 'Seeded hanfu cloth shoes inspired by traditional cloud embroidery and soft soles, used for shoe specifications, color filters, and outfit pairing demos.',
+                    'meta_name' => 'Cloud-Pattern Embroidered Cloth Shoes',
+                    'meta_description' => 'Traditional embroidered cloth shoes for lightweight hanfu styling.',
+                    'meta_keywords' => 'hanfu,embroidered cloth shoes,traditional footwear',
+                ],
+            ],
+            'FAKE-HANFU-RUAO-GRN-M' => ['en_US' => ['name' => 'Qingyu Cross-Collar Ru\'ao Pine Green M']],
+            'FAKE-HANFU-RUAO-WHT-L' => ['en_US' => ['name' => 'Qingyu Cross-Collar Ru\'ao Moon White L']],
+            'FAKE-HANFU-RUAO-RED-M' => ['en_US' => ['name' => 'Qingyu Cross-Collar Ru\'ao Crimson M']],
+            'FAKE-HANFU-RUAO-BEI-XL' => ['en_US' => ['name' => 'Qingyu Cross-Collar Ru\'ao Beige XL']],
+            'FAKE-HANFU-MAMIANQUN-RED-M' => ['en_US' => ['name' => 'Gold-Woven Mamian Skirt Crimson M']],
+            'FAKE-HANFU-MAMIANQUN-NAVY-L' => ['en_US' => ['name' => 'Gold-Woven Mamian Skirt Dark Cyan L']],
+            'FAKE-HANFU-MAMIANQUN-GRN-S' => ['en_US' => ['name' => 'Gold-Woven Mamian Skirt Bamboo Green S']],
+            'FAKE-HANFU-MAMIANQUN-BEI-XL' => ['en_US' => ['name' => 'Gold-Woven Mamian Skirt Beige XL']],
+            'FAKE-HANFU-BUXIE-RED-40' => ['en_US' => ['name' => 'Cloud-Pattern Embroidered Cloth Shoes Vermilion 40']],
+            'FAKE-HANFU-BUXIE-BEI-41' => ['en_US' => ['name' => 'Cloud-Pattern Embroidered Cloth Shoes Beige 41']],
+            'FAKE-HANFU-BUXIE-WHT-42' => ['en_US' => ['name' => 'Cloud-Pattern Embroidered Cloth Shoes Moon White 42']],
+            'FAKE-HANFU-BUXIE-GRN-43' => ['en_US' => ['name' => 'Cloud-Pattern Embroidered Cloth Shoes Bamboo Green 43']],
+        ];
     }
 
     /**
@@ -1837,7 +1948,7 @@ class ProductProvider implements FakeDataProviderInterface
             }
         }
 
-        foreach (['color', 'size', 'material', 'brand', 'delivery_type', 'download_format', 'license_term'] as $attributeCode) {
+        foreach (array_keys($this->getAttributeDefinitions()) as $attributeCode) {
             $value = trim((string)($productData[$attributeCode] ?? ''));
             if ($value !== '') {
                 $payload[$attributeCode] = $value;
@@ -1971,8 +2082,428 @@ class ProductProvider implements FakeDataProviderInterface
 
         $weight = (float)($productData['weight'] ?? 0);
         $payload['delivery_type'] = $weight <= 0 ? 'download' : 'physical';
+        $payload['brand'] ??= 'weshop_demo';
+        $payload['material'] ??= $this->resolveDefaultMaterial($needle);
+        $payload['color'] = $this->resolveDefaultColor($needle);
+        $payload['size'] = $this->resolveDefaultSize($needle);
+        $payload['style'] = $this->resolveDefaultStyle($needle);
+        $payload['usage_scene'] = $this->resolveDefaultUsageScene($needle);
+        $payload['package_type'] = $this->resolveDefaultPackageType($productData, $needle);
+        $payload['warranty'] = $this->resolveDefaultWarranty($payload['delivery_type'], $needle);
+        $payload['specification'] = $this->resolveDefaultSpecification($needle);
+        $payload['form_factor'] = $this->resolveDefaultFormFactor($needle);
+        $payload['feature_set'] = $this->resolveDefaultFeatureSet($needle);
+        $payload['compatibility'] = $this->resolveDefaultCompatibility($needle);
+        $payload['care_instruction'] = $this->resolveDefaultCareInstruction($payload['delivery_type'], $needle);
+        $payload['season'] = $this->resolveDefaultSeason($needle);
 
         return $payload;
+    }
+
+    private function resolveDefaultMaterial(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, 'sofa') => 'linen',
+            str_contains($needle, 'table'),
+            str_contains($needle, 'oak') => 'oak',
+            str_contains($needle, 'lamp') => 'metal',
+            str_contains($needle, 'bag'),
+            str_contains($needle, 'router') => 'nylon',
+            str_contains($needle, 'book'),
+            str_contains($needle, 'ebook') => 'paper',
+            str_contains($needle, 'camera'),
+            str_contains($needle, 'monitor') => 'aluminum',
+            str_contains($needle, 'digital'),
+            str_contains($needle, 'download'),
+            str_contains($needle, 'preset'),
+            str_contains($needle, 'watchface') => 'digital_file',
+            default => 'mixed_material',
+        };
+    }
+
+    private function resolveDefaultColor(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, 'pink'),
+            str_contains($needle, 'rose') => 'pink',
+            str_contains($needle, 'purple'),
+            str_contains($needle, 'violet') => 'purple',
+            str_contains($needle, 'gold') => 'gold',
+            str_contains($needle, 'brown') => 'brown',
+            str_contains($needle, '-wht-'),
+            str_contains($needle, ' white '),
+            str_contains($needle, 'moon white') => 'white',
+            str_contains($needle, '-gray-'),
+            str_contains($needle, ' gray '),
+            str_contains($needle, 'grey') => 'gray',
+            str_contains($needle, 'silver') => 'silver',
+            str_contains($needle, 'titanium') => 'silver',
+            str_contains($needle, '-red-'),
+            str_contains($needle, ' red '),
+            str_contains($needle, 'crimson'),
+            str_contains($needle, 'vermilion') => 'red',
+            str_contains($needle, '-green-'),
+            str_contains($needle, '-grn-'),
+            str_contains($needle, ' green '),
+            str_contains($needle, 'bamboo green') => 'green',
+            str_contains($needle, '-navy-'),
+            str_contains($needle, ' navy '),
+            str_contains($needle, 'dark cyan') => 'navy',
+            str_contains($needle, '-blue-'),
+            str_contains($needle, ' blue ') => 'blue',
+            str_contains($needle, '-bei-'),
+            str_contains($needle, ' beige '),
+            str_contains($needle, 'linen'),
+            str_contains($needle, 'sofa') => 'beige',
+            str_contains($needle, 'oak'),
+            str_contains($needle, 'table'),
+            str_contains($needle, 'natural') => 'natural',
+            str_contains($needle, 'digital'),
+            str_contains($needle, 'download'),
+            str_contains($needle, 'watchface'),
+            str_contains($needle, 'preset') => 'blue',
+            str_contains($needle, 'lamp') => 'white',
+            str_contains($needle, '-blk-'),
+            str_contains($needle, ' black ') => 'black',
+            default => 'black',
+        };
+    }
+
+    private function resolveDefaultSize(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, '64gb') => '64gb',
+            str_contains($needle, '32gb') => '32gb',
+            str_contains($needle, '512') => '512gb',
+            str_contains($needle, '256') => '256gb',
+            str_contains($needle, '128') => '128gb',
+            str_contains($needle, '1tb') => '1tb',
+            str_contains($needle, 'usb-c'),
+            str_contains($needle, 'usbc') => 'usb-c',
+            str_contains($needle, 'magsafe') => 'magsafe',
+            str_contains($needle, '15-inch'),
+            str_contains($needle, '15 inch') => '15-inch',
+            str_contains($needle, '13-inch'),
+            str_contains($needle, '13 inch') => '13-inch',
+            str_contains($needle, '27-inch'),
+            str_contains($needle, '27 inch'),
+            str_contains($needle, 'monitor') => '27-inch',
+            str_contains($needle, '20000mah'),
+            str_contains($needle, '20k') => '20000mah',
+            str_contains($needle, '2-pack'),
+            str_contains($needle, '2pk') => '2-pack',
+            str_contains($needle, '84-key') => '84-key',
+            str_contains($needle, '7-inch') => '7-inch',
+            str_contains($needle, 'queen'),
+            str_contains($needle, '160x200') => 'queen',
+            str_contains($needle, '500g') => '500g',
+            str_contains($needle, '50-pack') => '50-pack',
+            str_contains($needle, 'three-seat'),
+            str_contains($needle, 'sofa') => 'three-seat',
+            str_contains($needle, 'download'),
+            str_contains($needle, 'watchface'),
+            str_contains($needle, 'preset'),
+            str_contains($needle, 'digital') => 'digital-bundle',
+            str_contains($needle, 'shoe'),
+            str_contains($needle, 'buxie') => '42',
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'ruao'),
+            str_contains($needle, 'mamian') => 'm',
+            str_contains($needle, 'lamp'),
+            str_contains($needle, 'speaker'),
+            str_contains($needle, 'mouse'),
+            str_contains($needle, 'camera'),
+            str_contains($needle, 'hub'),
+            str_contains($needle, 'dock'),
+            str_contains($needle, 'reader'),
+            str_contains($needle, 'table') => 'compact',
+            default => 'regular',
+        };
+    }
+
+    private function resolveDefaultStyle(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'ruao'),
+            str_contains($needle, 'mamian'),
+            str_contains($needle, 'buxie') => 'traditional',
+            str_contains($needle, 'gaming') => 'gaming',
+            str_contains($needle, 'office'),
+            str_contains($needle, 'desk'),
+            str_contains($needle, 'work') => 'professional',
+            str_contains($needle, 'sport'),
+            str_contains($needle, 'fitness') => 'sporty',
+            str_contains($needle, 'home'),
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'table'),
+            str_contains($needle, 'lamp') => 'minimalist',
+            default => 'modern',
+        };
+    }
+
+    private function resolveDefaultUsageScene(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'ruao'),
+            str_contains($needle, 'mamian'),
+            str_contains($needle, 'buxie') => 'traditional_outfit',
+            str_contains($needle, 'travel'),
+            str_contains($needle, 'power bank'),
+            str_contains($needle, 'earbuds'),
+            str_contains($needle, 'headphone') => 'travel',
+            str_contains($needle, 'office'),
+            str_contains($needle, 'desk'),
+            str_contains($needle, 'mouse'),
+            str_contains($needle, 'keyboard'),
+            str_contains($needle, 'monitor'),
+            str_contains($needle, 'laptop'),
+            str_contains($needle, 'dock') => 'office',
+            str_contains($needle, 'camera'),
+            str_contains($needle, 'creator'),
+            str_contains($needle, 'vlog'),
+            str_contains($needle, 'preset') => 'creator',
+            str_contains($needle, 'gaming') => 'gaming',
+            str_contains($needle, 'smart home'),
+            str_contains($needle, 'smarthome'),
+            str_contains($needle, 'hub') => 'smart_home',
+            str_contains($needle, 'home'),
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'table'),
+            str_contains($needle, 'lamp') => 'home_living',
+            str_contains($needle, 'download'),
+            str_contains($needle, 'digital'),
+            str_contains($needle, 'watchface') => 'digital',
+            default => 'daily_use',
+        };
+    }
+
+    private function resolveDefaultPackageType(array $productData, string $needle): string
+    {
+        if (is_array($productData['variants'] ?? null) && $productData['variants'] !== []) {
+            return 'configurable_parent';
+        }
+
+        return match (true) {
+            str_contains($needle, 'download'),
+            str_contains($needle, 'digital'),
+            str_contains($needle, 'watchface'),
+            str_contains($needle, 'preset') => 'digital_pack',
+            str_contains($needle, 'kit'),
+            str_contains($needle, 'bundle'),
+            str_contains($needle, '2-pack') => 'bundle',
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'table'),
+            str_contains($needle, 'lamp') => 'furniture_piece',
+            default => 'single_item',
+        };
+    }
+
+    private function resolveDefaultWarranty(string $deliveryType, string $needle): string
+    {
+        if ($deliveryType === 'download') {
+            return str_contains($needle, 'lifetime') || str_contains($needle, 'watchface')
+                ? 'lifetime_access'
+                : 'commercial_license';
+        }
+
+        return match (true) {
+            str_contains($needle, 'phone'),
+            str_contains($needle, 'iphone'),
+            str_contains($needle, 'galaxy'),
+            str_contains($needle, 'macbook'),
+            str_contains($needle, 'ipad'),
+            str_contains($needle, 'camera'),
+            str_contains($needle, 'monitor'),
+            str_contains($needle, 'router'),
+            str_contains($needle, 'hub') => 'two_year',
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'buxie'),
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'table'),
+            str_contains($needle, 'lamp') => 'thirty_day',
+            default => 'one_year',
+        };
+    }
+
+    private function resolveDefaultSpecification(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, 'ultra') => 'ultra',
+            str_contains($needle, 'pro') => 'pro',
+            str_contains($needle, 'air') => 'lightweight',
+            str_contains($needle, 'bundle'),
+            str_contains($needle, 'kit'),
+            str_contains($needle, '2-pack'),
+            str_contains($needle, 'pack') => 'bundle',
+            str_contains($needle, 'digital'),
+            str_contains($needle, 'download'),
+            str_contains($needle, 'preset'),
+            str_contains($needle, 'watchface') => 'digital',
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'ruao'),
+            str_contains($needle, 'mamian'),
+            str_contains($needle, 'buxie') => 'heritage',
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'table'),
+            str_contains($needle, 'lamp') => 'home_standard',
+            str_contains($needle, 'mouse'),
+            str_contains($needle, 'keyboard'),
+            str_contains($needle, 'monitor'),
+            str_contains($needle, 'dock') => 'workspace',
+            default => 'standard',
+        };
+    }
+
+    private function resolveDefaultFormFactor(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, 'phone'),
+            str_contains($needle, 'iphone'),
+            str_contains($needle, 'galaxy'),
+            str_contains($needle, 'handheld'),
+            str_contains($needle, 'power bank'),
+            str_contains($needle, 'reader') => 'handheld',
+            str_contains($needle, 'watch'),
+            str_contains($needle, 'band') => 'wearable',
+            str_contains($needle, 'headphone'),
+            str_contains($needle, 'earbuds'),
+            str_contains($needle, 'speaker') => 'audio_device',
+            str_contains($needle, 'macbook'),
+            str_contains($needle, 'ipad'),
+            str_contains($needle, 'monitor'),
+            str_contains($needle, 'keyboard'),
+            str_contains($needle, 'mouse'),
+            str_contains($needle, 'dock') => 'desktop_device',
+            str_contains($needle, 'ruao') => 'apparel_top',
+            str_contains($needle, 'mamian') => 'apparel_bottom',
+            str_contains($needle, 'buxie'),
+            str_contains($needle, 'shoe') => 'footwear',
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'table') => 'furniture',
+            str_contains($needle, 'lamp') => 'home_decor',
+            str_contains($needle, 'digital'),
+            str_contains($needle, 'download'),
+            str_contains($needle, 'preset'),
+            str_contains($needle, 'watchface') => 'digital_asset',
+            default => 'accessory',
+        };
+    }
+
+    private function resolveDefaultFeatureSet(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, 'noise'),
+            str_contains($needle, 'anc'),
+            str_contains($needle, 'headphone'),
+            str_contains($needle, 'earbuds') => 'noise_cancelling',
+            str_contains($needle, 'power bank'),
+            str_contains($needle, 'charging'),
+            str_contains($needle, 'usb-c'),
+            str_contains($needle, 'dock') => 'fast_charging',
+            str_contains($needle, 'wireless'),
+            str_contains($needle, 'bluetooth'),
+            str_contains($needle, 'speaker'),
+            str_contains($needle, 'mouse'),
+            str_contains($needle, 'keyboard') => 'wireless',
+            str_contains($needle, 'camera'),
+            str_contains($needle, 'creator'),
+            str_contains($needle, 'vlog') => 'creator_ready',
+            str_contains($needle, 'gaming') => 'performance',
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'ruao'),
+            str_contains($needle, 'mamian'),
+            str_contains($needle, 'buxie') => 'handcrafted',
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'chair'),
+            str_contains($needle, 'mouse') => 'ergonomic',
+            str_contains($needle, 'smart home'),
+            str_contains($needle, 'smarthome'),
+            str_contains($needle, 'hub'),
+            str_contains($needle, 'router') => 'smart_connected',
+            str_contains($needle, 'digital'),
+            str_contains($needle, 'download'),
+            str_contains($needle, 'preset'),
+            str_contains($needle, 'watchface') => 'instant_access',
+            default => 'daily_essential',
+        };
+    }
+
+    private function resolveDefaultCompatibility(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, 'iphone'),
+            str_contains($needle, 'ipad'),
+            str_contains($needle, 'macbook'),
+            str_contains($needle, 'airpods'),
+            str_contains($needle, 'watchface') => 'apple_ecosystem',
+            str_contains($needle, 'galaxy'),
+            str_contains($needle, 'android') => 'android',
+            str_contains($needle, 'usb-c'),
+            str_contains($needle, 'dock'),
+            str_contains($needle, 'power bank') => 'usb_c',
+            str_contains($needle, 'bluetooth'),
+            str_contains($needle, 'speaker'),
+            str_contains($needle, 'headphone'),
+            str_contains($needle, 'earbuds'),
+            str_contains($needle, 'mouse'),
+            str_contains($needle, 'keyboard') => 'bluetooth',
+            str_contains($needle, 'smart home'),
+            str_contains($needle, 'smarthome'),
+            str_contains($needle, 'hub') => 'smart_home',
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'ruao'),
+            str_contains($needle, 'mamian'),
+            str_contains($needle, 'buxie') => 'hanfu_outfit',
+            str_contains($needle, 'digital'),
+            str_contains($needle, 'download'),
+            str_contains($needle, 'preset') => 'digital_download',
+            str_contains($needle, 'sofa'),
+            str_contains($needle, 'table'),
+            str_contains($needle, 'lamp') => 'home_living',
+            default => 'universal',
+        };
+    }
+
+    private function resolveDefaultCareInstruction(string $deliveryType, string $needle): string
+    {
+        if ($deliveryType === 'download') {
+            return 'digital_backup';
+        }
+
+        return match (true) {
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'ruao'),
+            str_contains($needle, 'mamian') => 'dry_clean',
+            str_contains($needle, 'buxie'),
+            str_contains($needle, 'shoe'),
+            str_contains($needle, 'sofa') => 'spot_clean',
+            str_contains($needle, 'cotton'),
+            str_contains($needle, 'tee'),
+            str_contains($needle, 'shirt') => 'machine_wash',
+            str_contains($needle, 'phone'),
+            str_contains($needle, 'macbook'),
+            str_contains($needle, 'ipad'),
+            str_contains($needle, 'camera'),
+            str_contains($needle, 'monitor') => 'keep_dry',
+            default => 'wipe_clean',
+        };
+    }
+
+    private function resolveDefaultSeason(string $needle): string
+    {
+        return match (true) {
+            str_contains($needle, 'linen'),
+            str_contains($needle, 'summer') => 'summer',
+            str_contains($needle, 'hoodie'),
+            str_contains($needle, 'coat'),
+            str_contains($needle, 'winter') => 'winter',
+            str_contains($needle, 'hanfu'),
+            str_contains($needle, 'ruao'),
+            str_contains($needle, 'mamian') => 'spring_autumn',
+            default => 'all_season',
+        };
     }
 
     /**
@@ -2158,6 +2689,353 @@ class ProductProvider implements FakeDataProviderInterface
         return (int)($statement->fetch(\PDO::FETCH_ASSOC)['option_id'] ?? 0);
     }
 
+    private function syncManagedAttributeLocalDescriptions(): void
+    {
+        $attributeIdsByCode = $this->getManagedAttributeIdsByCode();
+        if ($attributeIdsByCode === []) {
+            return;
+        }
+
+        $this->syncAttributeLocalDescriptionRows($attributeIdsByCode);
+        $this->syncOptionLocalDescriptionRows($attributeIdsByCode);
+    }
+
+    /**
+     * @param array<string, int> $attributeIdsByCode
+     */
+    private function syncAttributeLocalDescriptionRows(array $attributeIdsByCode): void
+    {
+        $records = [];
+        $localDefinitions = $this->getAttributeLocalDefinitions();
+        foreach ($attributeIdsByCode as $attributeCode => $attributeId) {
+            $attributeId = (int)$attributeId;
+            if ($attributeId <= 0 || !isset($localDefinitions[$attributeCode])) {
+                continue;
+            }
+
+            foreach ($localDefinitions[$attributeCode] as $localeCode => $name) {
+                $records[] = [
+                    AttributeLocalDescription::fields_ID => $attributeId,
+                    AttributeLocalDescription::schema_fields_local_code => $localeCode,
+                    AttributeLocalDescription::schema_fields_name => $name,
+                ];
+            }
+        }
+
+        if ($records === []) {
+            return;
+        }
+
+        $model = $this->getAttributeLocalDescriptionModel();
+        $model->clear()
+            ->getQuery()
+            ->where(AttributeLocalDescription::fields_ID, array_values($attributeIdsByCode), 'in')
+            ->where(AttributeLocalDescription::schema_fields_local_code, ['zh_Hans_CN', 'en_US'], 'in')
+            ->delete()
+            ->fetch();
+        $model->reset()->insert($records)->fetch();
+    }
+
+    /**
+     * @param array<string, int> $attributeIdsByCode
+     */
+    private function syncOptionLocalDescriptionRows(array $attributeIdsByCode): void
+    {
+        $optionRecords = [];
+        $optionIds = [];
+        $attributeCodeById = array_flip($attributeIdsByCode);
+        $localDefinitions = $this->getOptionLocalDefinitions();
+        $optionRows = ($this->eavAttributeOption ?? ObjectManager::getInstance(Option::class))->reset()
+            ->fields(Option::schema_fields_ID . ',' . Option::schema_fields_attribute_id . ',' . Option::schema_fields_code)
+            ->where(Option::schema_fields_attribute_id, array_values($attributeIdsByCode), 'in')
+            ->select()
+            ->fetchArray();
+
+        foreach ($optionRows as $optionRow) {
+            $attributeId = (int)($optionRow[Option::schema_fields_attribute_id] ?? 0);
+            $attributeCode = (string)($attributeCodeById[$attributeId] ?? '');
+            $optionId = (int)($optionRow[Option::schema_fields_ID] ?? 0);
+            $optionCode = (string)($optionRow[Option::schema_fields_code] ?? '');
+            $translations = $localDefinitions[$attributeCode][$optionCode] ?? null;
+            if ($attributeCode === '' || $optionId <= 0 || !is_array($translations)) {
+                continue;
+            }
+
+            $optionIds[] = $optionId;
+            foreach ($translations as $localeCode => $value) {
+                $optionRecords[] = [
+                    OptionLocalDescription::fields_ID => $optionId,
+                    OptionLocalDescription::schema_fields_local_code => $localeCode,
+                    Option::schema_fields_value => $value,
+                ];
+            }
+        }
+
+        if ($optionRecords === [] || $optionIds === []) {
+            return;
+        }
+
+        $model = $this->getOptionLocalDescriptionModel();
+        $model->clear()
+            ->getQuery()
+            ->where(OptionLocalDescription::fields_ID, array_values(array_unique($optionIds)), 'in')
+            ->where(OptionLocalDescription::schema_fields_local_code, ['zh_Hans_CN', 'en_US'], 'in')
+            ->delete()
+            ->fetch();
+        $model->reset()->insert($optionRecords)->fetch();
+    }
+
+    private function getAttributeLocalDescriptionModel(): AttributeLocalDescription
+    {
+        return $this->attributeLocalDescription ?? ObjectManager::getInstance(AttributeLocalDescription::class);
+    }
+
+    private function getOptionLocalDescriptionModel(): OptionLocalDescription
+    {
+        return $this->optionLocalDescription ?? ObjectManager::getInstance(OptionLocalDescription::class);
+    }
+
+    /**
+     * @return array<string, array<string, string>>
+     */
+    private function getAttributeLocalDefinitions(): array
+    {
+        return [
+            'color' => ['zh_Hans_CN' => '颜色', 'en_US' => 'Color'],
+            'size' => ['zh_Hans_CN' => '尺寸', 'en_US' => 'Size'],
+            'material' => ['zh_Hans_CN' => '材质', 'en_US' => 'Material'],
+            'brand' => ['zh_Hans_CN' => '品牌', 'en_US' => 'Brand'],
+            'style' => ['zh_Hans_CN' => '风格', 'en_US' => 'Style'],
+            'usage_scene' => ['zh_Hans_CN' => '使用场景', 'en_US' => 'Usage Scene'],
+            'package_type' => ['zh_Hans_CN' => '包装类型', 'en_US' => 'Package Type'],
+            'warranty' => ['zh_Hans_CN' => '售后保障', 'en_US' => 'Warranty'],
+            'specification' => ['zh_Hans_CN' => '规格档位', 'en_US' => 'Specification'],
+            'form_factor' => ['zh_Hans_CN' => '商品形态', 'en_US' => 'Form Factor'],
+            'feature_set' => ['zh_Hans_CN' => '核心卖点', 'en_US' => 'Feature Set'],
+            'compatibility' => ['zh_Hans_CN' => '兼容性', 'en_US' => 'Compatibility'],
+            'care_instruction' => ['zh_Hans_CN' => '保养方式', 'en_US' => 'Care Instruction'],
+            'season' => ['zh_Hans_CN' => '适用季节', 'en_US' => 'Season'],
+            'delivery_type' => ['zh_Hans_CN' => '配送类型', 'en_US' => 'Delivery Type'],
+            'download_format' => ['zh_Hans_CN' => '下载格式', 'en_US' => 'Download Format'],
+            'license_term' => ['zh_Hans_CN' => '授权期限', 'en_US' => 'License Term'],
+        ];
+    }
+
+    /**
+     * @return array<string, array<string, array<string, string>>>
+     */
+    private function getOptionLocalDefinitions(): array
+    {
+        return [
+            'color' => [
+                'black' => ['zh_Hans_CN' => '黑色', 'en_US' => 'Black'],
+                'white' => ['zh_Hans_CN' => '白色', 'en_US' => 'White'],
+                'gray' => ['zh_Hans_CN' => '灰色', 'en_US' => 'Gray'],
+                'silver' => ['zh_Hans_CN' => '银色', 'en_US' => 'Silver'],
+                'blue' => ['zh_Hans_CN' => '蓝色', 'en_US' => 'Blue'],
+                'green' => ['zh_Hans_CN' => '绿色', 'en_US' => 'Green'],
+                'red' => ['zh_Hans_CN' => '红色', 'en_US' => 'Red'],
+                'navy' => ['zh_Hans_CN' => '黛青', 'en_US' => 'Navy'],
+                'beige' => ['zh_Hans_CN' => '米杏', 'en_US' => 'Beige'],
+                'natural' => ['zh_Hans_CN' => '原木色', 'en_US' => 'Natural'],
+                'pink' => ['zh_Hans_CN' => '粉色', 'en_US' => 'Pink'],
+                'purple' => ['zh_Hans_CN' => '紫色', 'en_US' => 'Purple'],
+                'gold' => ['zh_Hans_CN' => '金色', 'en_US' => 'Gold'],
+                'brown' => ['zh_Hans_CN' => '棕色', 'en_US' => 'Brown'],
+            ],
+            'size' => [
+                'xs' => ['zh_Hans_CN' => 'XS', 'en_US' => 'XS'],
+                's' => ['zh_Hans_CN' => 'S', 'en_US' => 'S'],
+                'm' => ['zh_Hans_CN' => 'M', 'en_US' => 'M'],
+                'l' => ['zh_Hans_CN' => 'L', 'en_US' => 'L'],
+                'xl' => ['zh_Hans_CN' => 'XL', 'en_US' => 'XL'],
+                'xxl' => ['zh_Hans_CN' => 'XXL', 'en_US' => 'XXL'],
+                '32gb' => ['zh_Hans_CN' => '32GB', 'en_US' => '32GB'],
+                '64gb' => ['zh_Hans_CN' => '64GB', 'en_US' => '64GB'],
+                '256gb' => ['zh_Hans_CN' => '256GB', 'en_US' => '256GB'],
+                '512gb' => ['zh_Hans_CN' => '512GB', 'en_US' => '512GB'],
+                '128gb' => ['zh_Hans_CN' => '128GB', 'en_US' => '128GB'],
+                '1tb' => ['zh_Hans_CN' => '1TB', 'en_US' => '1TB'],
+                'usb-c' => ['zh_Hans_CN' => 'USB-C', 'en_US' => 'USB-C'],
+                'magsafe' => ['zh_Hans_CN' => 'MagSafe', 'en_US' => 'MagSafe'],
+                '13-inch' => ['zh_Hans_CN' => '13 英寸', 'en_US' => '13-inch'],
+                '15-inch' => ['zh_Hans_CN' => '15 英寸', 'en_US' => '15-inch'],
+                '27-inch' => ['zh_Hans_CN' => '27 英寸', 'en_US' => '27-inch'],
+                '7-inch' => ['zh_Hans_CN' => '7 英寸', 'en_US' => '7-inch'],
+                '20000mah' => ['zh_Hans_CN' => '20000mAh', 'en_US' => '20000mAh'],
+                '2-pack' => ['zh_Hans_CN' => '2 件装', 'en_US' => '2-Pack'],
+                '84-key' => ['zh_Hans_CN' => '84 键', 'en_US' => '84-Key'],
+                'compact' => ['zh_Hans_CN' => '紧凑款', 'en_US' => 'Compact'],
+                'regular' => ['zh_Hans_CN' => '标准款', 'en_US' => 'Regular'],
+                'large' => ['zh_Hans_CN' => '大号', 'en_US' => 'Large'],
+                'one-size' => ['zh_Hans_CN' => '均码', 'en_US' => 'One Size'],
+                'three-seat' => ['zh_Hans_CN' => '三人位', 'en_US' => 'Three-Seat'],
+                'digital-bundle' => ['zh_Hans_CN' => '数字套装', 'en_US' => 'Digital Bundle'],
+                'queen' => ['zh_Hans_CN' => 'Queen 尺寸', 'en_US' => 'Queen'],
+                '500g' => ['zh_Hans_CN' => '500g', 'en_US' => '500g'],
+                '50-pack' => ['zh_Hans_CN' => '50 件装', 'en_US' => '50-Pack'],
+                '40' => ['zh_Hans_CN' => '欧码 40', 'en_US' => 'EU 40'],
+                '41' => ['zh_Hans_CN' => '欧码 41', 'en_US' => 'EU 41'],
+                '42' => ['zh_Hans_CN' => '欧码 42', 'en_US' => 'EU 42'],
+                '43' => ['zh_Hans_CN' => '欧码 43', 'en_US' => 'EU 43'],
+            ],
+            'material' => [
+                'titanium' => ['zh_Hans_CN' => '钛金属', 'en_US' => 'Titanium'],
+                'aluminum' => ['zh_Hans_CN' => '铝合金', 'en_US' => 'Aluminum'],
+                'plastic' => ['zh_Hans_CN' => '塑料', 'en_US' => 'Plastic'],
+                'cotton' => ['zh_Hans_CN' => '棉', 'en_US' => 'Cotton'],
+                'cotton_blend' => ['zh_Hans_CN' => '棉混纺', 'en_US' => 'Cotton Blend'],
+                'silk' => ['zh_Hans_CN' => '丝绸', 'en_US' => 'Silk'],
+                'linen' => ['zh_Hans_CN' => '亚麻', 'en_US' => 'Linen'],
+                'oak' => ['zh_Hans_CN' => '橡木', 'en_US' => 'Oak'],
+                'metal' => ['zh_Hans_CN' => '金属', 'en_US' => 'Metal'],
+                'nylon' => ['zh_Hans_CN' => '尼龙', 'en_US' => 'Nylon'],
+                'knit' => ['zh_Hans_CN' => '针织', 'en_US' => 'Knit'],
+                'paper' => ['zh_Hans_CN' => '纸质', 'en_US' => 'Paper'],
+                'digital_file' => ['zh_Hans_CN' => '数字文件', 'en_US' => 'Digital File'],
+                'mixed_material' => ['zh_Hans_CN' => '混合材质', 'en_US' => 'Mixed Material'],
+            ],
+            'brand' => [
+                'weshop_demo' => ['zh_Hans_CN' => 'WeShop 演示', 'en_US' => 'WeShop Demo'],
+                'apple' => ['zh_Hans_CN' => 'Apple', 'en_US' => 'Apple'],
+                'samsung' => ['zh_Hans_CN' => 'Samsung', 'en_US' => 'Samsung'],
+                'sony' => ['zh_Hans_CN' => 'Sony', 'en_US' => 'Sony'],
+                'bose' => ['zh_Hans_CN' => 'Bose', 'en_US' => 'Bose'],
+                'logitech' => ['zh_Hans_CN' => 'Logitech', 'en_US' => 'Logitech'],
+                'canon' => ['zh_Hans_CN' => 'Canon', 'en_US' => 'Canon'],
+                'hua_chao' => ['zh_Hans_CN' => '华朝汉服', 'en_US' => 'Huachao Hanfu'],
+                'yun_jin_studio' => ['zh_Hans_CN' => '云锦工坊', 'en_US' => 'Yunjin Studio'],
+                'jin_xiu_ge' => ['zh_Hans_CN' => '锦绣阁', 'en_US' => 'Jinxiu Pavilion'],
+                'nike' => ['zh_Hans_CN' => 'Nike', 'en_US' => 'Nike'],
+                'adidas' => ['zh_Hans_CN' => 'Adidas', 'en_US' => 'Adidas'],
+                'levis' => ['zh_Hans_CN' => 'Levi\'s', 'en_US' => 'Levi\'s'],
+                'uniqlo' => ['zh_Hans_CN' => 'Uniqlo', 'en_US' => 'Uniqlo'],
+                'ikea' => ['zh_Hans_CN' => 'IKEA', 'en_US' => 'IKEA'],
+                'muji' => ['zh_Hans_CN' => 'MUJI', 'en_US' => 'MUJI'],
+                'dyson' => ['zh_Hans_CN' => 'Dyson', 'en_US' => 'Dyson'],
+                'nespresso' => ['zh_Hans_CN' => 'Nespresso', 'en_US' => 'Nespresso'],
+                'osprey' => ['zh_Hans_CN' => 'Osprey', 'en_US' => 'Osprey'],
+                'herman_miller' => ['zh_Hans_CN' => 'Herman Miller', 'en_US' => 'Herman Miller'],
+                'lindt' => ['zh_Hans_CN' => 'Lindt', 'en_US' => 'Lindt'],
+                'lego' => ['zh_Hans_CN' => 'LEGO', 'en_US' => 'LEGO'],
+                'tesla' => ['zh_Hans_CN' => 'Tesla', 'en_US' => 'Tesla'],
+            ],
+            'style' => [
+                'modern' => ['zh_Hans_CN' => '现代', 'en_US' => 'Modern'],
+                'minimalist' => ['zh_Hans_CN' => '简约', 'en_US' => 'Minimalist'],
+                'traditional' => ['zh_Hans_CN' => '传统', 'en_US' => 'Traditional'],
+                'professional' => ['zh_Hans_CN' => '专业', 'en_US' => 'Professional'],
+                'sporty' => ['zh_Hans_CN' => '运动', 'en_US' => 'Sporty'],
+                'gaming' => ['zh_Hans_CN' => '游戏', 'en_US' => 'Gaming'],
+            ],
+            'usage_scene' => [
+                'daily_use' => ['zh_Hans_CN' => '日常使用', 'en_US' => 'Daily Use'],
+                'traditional_outfit' => ['zh_Hans_CN' => '国风穿搭', 'en_US' => 'Traditional Outfit'],
+                'travel' => ['zh_Hans_CN' => '旅行通勤', 'en_US' => 'Travel'],
+                'office' => ['zh_Hans_CN' => '办公', 'en_US' => 'Office'],
+                'creator' => ['zh_Hans_CN' => '创作工作', 'en_US' => 'Creator Work'],
+                'gaming' => ['zh_Hans_CN' => '游戏娱乐', 'en_US' => 'Gaming'],
+                'smart_home' => ['zh_Hans_CN' => '智能家居', 'en_US' => 'Smart Home'],
+                'home_living' => ['zh_Hans_CN' => '居家生活', 'en_US' => 'Home Living'],
+                'digital' => ['zh_Hans_CN' => '数字使用', 'en_US' => 'Digital Use'],
+            ],
+            'package_type' => [
+                'single_item' => ['zh_Hans_CN' => '单品', 'en_US' => 'Single Item'],
+                'configurable_parent' => ['zh_Hans_CN' => '可配置主商品', 'en_US' => 'Configurable Parent'],
+                'bundle' => ['zh_Hans_CN' => '套装', 'en_US' => 'Bundle'],
+                'digital_pack' => ['zh_Hans_CN' => '数字资源包', 'en_US' => 'Digital Pack'],
+                'furniture_piece' => ['zh_Hans_CN' => '家具体件', 'en_US' => 'Furniture Piece'],
+            ],
+            'warranty' => [
+                'thirty_day' => ['zh_Hans_CN' => '30 天支持', 'en_US' => '30-Day Support'],
+                'one_year' => ['zh_Hans_CN' => '一年质保', 'en_US' => '1-Year Warranty'],
+                'two_year' => ['zh_Hans_CN' => '两年质保', 'en_US' => '2-Year Warranty'],
+                'lifetime_access' => ['zh_Hans_CN' => '终身访问', 'en_US' => 'Lifetime Access'],
+                'commercial_license' => ['zh_Hans_CN' => '商用授权', 'en_US' => 'Commercial License'],
+            ],
+            'specification' => [
+                'standard' => ['zh_Hans_CN' => '标准款', 'en_US' => 'Standard'],
+                'pro' => ['zh_Hans_CN' => 'Pro 款', 'en_US' => 'Pro'],
+                'ultra' => ['zh_Hans_CN' => 'Ultra 款', 'en_US' => 'Ultra'],
+                'lightweight' => ['zh_Hans_CN' => '轻量款', 'en_US' => 'Lightweight'],
+                'bundle' => ['zh_Hans_CN' => '套装规格', 'en_US' => 'Bundle'],
+                'digital' => ['zh_Hans_CN' => '数字规格', 'en_US' => 'Digital'],
+                'heritage' => ['zh_Hans_CN' => '传统规格', 'en_US' => 'Heritage'],
+                'home_standard' => ['zh_Hans_CN' => '家居标准款', 'en_US' => 'Home Standard'],
+                'workspace' => ['zh_Hans_CN' => '工作台规格', 'en_US' => 'Workspace'],
+            ],
+            'form_factor' => [
+                'handheld' => ['zh_Hans_CN' => '手持设备', 'en_US' => 'Handheld'],
+                'wearable' => ['zh_Hans_CN' => '可穿戴', 'en_US' => 'Wearable'],
+                'audio_device' => ['zh_Hans_CN' => '音频设备', 'en_US' => 'Audio Device'],
+                'desktop_device' => ['zh_Hans_CN' => '桌面设备', 'en_US' => 'Desktop Device'],
+                'apparel_top' => ['zh_Hans_CN' => '上装', 'en_US' => 'Apparel Top'],
+                'apparel_bottom' => ['zh_Hans_CN' => '下装', 'en_US' => 'Apparel Bottom'],
+                'footwear' => ['zh_Hans_CN' => '鞋履', 'en_US' => 'Footwear'],
+                'furniture' => ['zh_Hans_CN' => '家具', 'en_US' => 'Furniture'],
+                'home_decor' => ['zh_Hans_CN' => '家居装饰', 'en_US' => 'Home Decor'],
+                'digital_asset' => ['zh_Hans_CN' => '数字资产', 'en_US' => 'Digital Asset'],
+                'accessory' => ['zh_Hans_CN' => '配件', 'en_US' => 'Accessory'],
+            ],
+            'feature_set' => [
+                'daily_essential' => ['zh_Hans_CN' => '日常基础', 'en_US' => 'Daily Essential'],
+                'noise_cancelling' => ['zh_Hans_CN' => '主动降噪', 'en_US' => 'Noise Cancelling'],
+                'fast_charging' => ['zh_Hans_CN' => '快速充电', 'en_US' => 'Fast Charging'],
+                'wireless' => ['zh_Hans_CN' => '无线连接', 'en_US' => 'Wireless'],
+                'creator_ready' => ['zh_Hans_CN' => '创作者适配', 'en_US' => 'Creator Ready'],
+                'performance' => ['zh_Hans_CN' => '性能增强', 'en_US' => 'Performance'],
+                'handcrafted' => ['zh_Hans_CN' => '手工工艺', 'en_US' => 'Handcrafted'],
+                'ergonomic' => ['zh_Hans_CN' => '人体工学', 'en_US' => 'Ergonomic'],
+                'smart_connected' => ['zh_Hans_CN' => '智能互联', 'en_US' => 'Smart Connected'],
+                'instant_access' => ['zh_Hans_CN' => '即时访问', 'en_US' => 'Instant Access'],
+            ],
+            'compatibility' => [
+                'universal' => ['zh_Hans_CN' => '通用', 'en_US' => 'Universal'],
+                'apple_ecosystem' => ['zh_Hans_CN' => 'Apple 生态', 'en_US' => 'Apple Ecosystem'],
+                'android' => ['zh_Hans_CN' => 'Android', 'en_US' => 'Android'],
+                'usb_c' => ['zh_Hans_CN' => 'USB-C', 'en_US' => 'USB-C'],
+                'bluetooth' => ['zh_Hans_CN' => '蓝牙', 'en_US' => 'Bluetooth'],
+                'smart_home' => ['zh_Hans_CN' => '智能家居', 'en_US' => 'Smart Home'],
+                'hanfu_outfit' => ['zh_Hans_CN' => '汉服穿搭', 'en_US' => 'Hanfu Outfit'],
+                'home_living' => ['zh_Hans_CN' => '家居空间', 'en_US' => 'Home Living'],
+                'digital_download' => ['zh_Hans_CN' => '数字下载', 'en_US' => 'Digital Download'],
+            ],
+            'care_instruction' => [
+                'wipe_clean' => ['zh_Hans_CN' => '擦拭清洁', 'en_US' => 'Wipe Clean'],
+                'hand_wash' => ['zh_Hans_CN' => '手洗', 'en_US' => 'Hand Wash'],
+                'dry_clean' => ['zh_Hans_CN' => '干洗', 'en_US' => 'Dry Clean'],
+                'machine_wash' => ['zh_Hans_CN' => '机洗', 'en_US' => 'Machine Wash'],
+                'keep_dry' => ['zh_Hans_CN' => '保持干燥', 'en_US' => 'Keep Dry'],
+                'digital_backup' => ['zh_Hans_CN' => '备份文件', 'en_US' => 'Digital Backup'],
+                'spot_clean' => ['zh_Hans_CN' => '局部清洁', 'en_US' => 'Spot Clean'],
+            ],
+            'season' => [
+                'all_season' => ['zh_Hans_CN' => '四季', 'en_US' => 'All Season'],
+                'spring_autumn' => ['zh_Hans_CN' => '春秋', 'en_US' => 'Spring/Autumn'],
+                'summer' => ['zh_Hans_CN' => '夏季', 'en_US' => 'Summer'],
+                'winter' => ['zh_Hans_CN' => '冬季', 'en_US' => 'Winter'],
+            ],
+            'delivery_type' => [
+                'physical' => ['zh_Hans_CN' => '实物配送', 'en_US' => 'Physical Shipment'],
+                'download' => ['zh_Hans_CN' => '数字下载', 'en_US' => 'Download'],
+                'virtual' => ['zh_Hans_CN' => '虚拟访问', 'en_US' => 'Virtual Access'],
+            ],
+            'download_format' => [
+                'zip' => ['zh_Hans_CN' => 'ZIP', 'en_US' => 'ZIP'],
+                'pdf' => ['zh_Hans_CN' => 'PDF', 'en_US' => 'PDF'],
+                'mp3' => ['zh_Hans_CN' => 'MP3', 'en_US' => 'MP3'],
+                'wav' => ['zh_Hans_CN' => 'WAV', 'en_US' => 'WAV'],
+                'license_key' => ['zh_Hans_CN' => '授权密钥', 'en_US' => 'License Key'],
+            ],
+            'license_term' => [
+                'lifetime' => ['zh_Hans_CN' => '终身', 'en_US' => 'Lifetime'],
+                'commercial' => ['zh_Hans_CN' => '商用', 'en_US' => 'Commercial Use'],
+                'personal' => ['zh_Hans_CN' => '个人使用', 'en_US' => 'Personal Use'],
+                'subscription' => ['zh_Hans_CN' => '订阅', 'en_US' => 'Subscription'],
+            ],
+        ];
+    }
+
     private function saveAttributeValue(int $attributeId, int $productId, int $optionId): void
     {
         $pdo = $this->product->getConnection()->getConnector()->getLink();
@@ -2309,16 +3187,20 @@ class ProductProvider implements FakeDataProviderInterface
     {
         return [
             'color' => ['name' => 'Color', 'options' => [
-                'black' => ['value' => 'Black', 'swatch_color' => '#111111'],
-                'white' => ['value' => 'White', 'swatch_color' => '#f5f5f5'],
-                'gray' => ['value' => 'Gray', 'swatch_color' => '#7c7c7c'],
-                'silver' => ['value' => 'Silver', 'swatch_color' => '#c0c0c0'],
-                'blue' => ['value' => 'Blue', 'swatch_color' => '#2563eb'],
-                'green' => ['value' => 'Green', 'swatch_color' => '#16a34a'],
-                'red' => ['value' => 'Red', 'swatch_color' => '#dc2626'],
-                'navy' => ['value' => 'Navy', 'swatch_color' => '#1e3a8a'],
-                'beige' => ['value' => 'Beige', 'swatch_color' => '#d6c6a8'],
-                'natural' => ['value' => 'Natural', 'swatch_color' => '#b08d57'],
+                'black' => ['value' => 'Black', 'swatch_color' => '#111111', 'swatch_image' => 'https://images.unsplash.com/photo-1616348436168-de43ad0db179?auto=format&fit=crop&w=240&q=70'],
+                'white' => ['value' => 'White', 'swatch_color' => '#f5f5f5', 'swatch_image' => 'https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?auto=format&fit=crop&w=240&q=70'],
+                'gray' => ['value' => 'Gray', 'swatch_color' => '#7c7c7c', 'swatch_image' => 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=240&q=70'],
+                'silver' => ['value' => 'Silver', 'swatch_color' => '#c0c0c0', 'swatch_image' => 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=240&q=70'],
+                'blue' => ['value' => 'Blue', 'swatch_color' => '#2563eb', 'swatch_image' => 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=240&q=70'],
+                'green' => ['value' => 'Green', 'swatch_color' => '#16a34a', 'swatch_image' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=240'],
+                'red' => ['value' => 'Red', 'swatch_color' => '#dc2626', 'swatch_image' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=240'],
+                'navy' => ['value' => 'Navy', 'swatch_color' => '#1e3a8a', 'swatch_image' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=240'],
+                'beige' => ['value' => 'Beige', 'swatch_color' => '#d6c6a8', 'swatch_image' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=240'],
+                'natural' => ['value' => 'Natural', 'swatch_color' => '#b08d57', 'swatch_image' => 'https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=240&q=70'],
+                'pink' => ['value' => 'Pink', 'swatch_color' => '#ec4899', 'swatch_image' => 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=240&q=70'],
+                'purple' => ['value' => 'Purple', 'swatch_color' => '#7c3aed', 'swatch_image' => 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=240&q=70'],
+                'gold' => ['value' => 'Gold', 'swatch_color' => '#d4af37', 'swatch_image' => 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&w=240&q=70'],
+                'brown' => ['value' => 'Brown', 'swatch_color' => '#8b5a2b', 'swatch_image' => 'https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=240&q=70'],
             ]],
             'size' => ['name' => 'Size', 'options' => [
                 'xs' => ['value' => 'XS'],
@@ -2327,6 +3209,8 @@ class ProductProvider implements FakeDataProviderInterface
                 'l' => ['value' => 'L'],
                 'xl' => ['value' => 'XL'],
                 'xxl' => ['value' => 'XXL'],
+                '32gb' => ['value' => '32GB'],
+                '64gb' => ['value' => '64GB'],
                 '256gb' => ['value' => '256GB'],
                 '512gb' => ['value' => '512GB'],
                 '128gb' => ['value' => '128GB'],
@@ -2336,8 +3220,19 @@ class ProductProvider implements FakeDataProviderInterface
                 '13-inch' => ['value' => '13-inch'],
                 '15-inch' => ['value' => '15-inch'],
                 '27-inch' => ['value' => '27-inch'],
+                '7-inch' => ['value' => '7-inch'],
                 '20000mah' => ['value' => '20000mAh'],
                 '2-pack' => ['value' => '2-Pack'],
+                '84-key' => ['value' => '84-Key'],
+                'compact' => ['value' => 'Compact'],
+                'regular' => ['value' => 'Regular'],
+                'large' => ['value' => 'Large'],
+                'one-size' => ['value' => 'One Size'],
+                'three-seat' => ['value' => 'Three-Seat'],
+                'digital-bundle' => ['value' => 'Digital Bundle'],
+                'queen' => ['value' => 'Queen'],
+                '500g' => ['value' => '500g'],
+                '50-pack' => ['value' => '50-Pack'],
                 '40' => ['value' => 'EU 40'],
                 '41' => ['value' => 'EU 41'],
                 '42' => ['value' => 'EU 42'],
@@ -2355,8 +3250,12 @@ class ProductProvider implements FakeDataProviderInterface
                 'metal' => ['value' => 'Metal'],
                 'nylon' => ['value' => 'Nylon'],
                 'knit' => ['value' => 'Knit'],
+                'paper' => ['value' => 'Paper'],
+                'digital_file' => ['value' => 'Digital File'],
+                'mixed_material' => ['value' => 'Mixed Material'],
             ]],
             'brand' => ['name' => 'Brand', 'options' => [
+                'weshop_demo' => ['value' => 'WeShop Demo'],
                 'apple' => ['value' => 'Apple'],
                 'samsung' => ['value' => 'Samsung'],
                 'sony' => ['value' => 'Sony'],
@@ -2379,6 +3278,101 @@ class ProductProvider implements FakeDataProviderInterface
                 'lindt' => ['value' => 'Lindt'],
                 'lego' => ['value' => 'LEGO'],
                 'tesla' => ['value' => 'Tesla'],
+            ]],
+            'style' => ['name' => 'Style', 'options' => [
+                'modern' => ['value' => 'Modern'],
+                'minimalist' => ['value' => 'Minimalist'],
+                'traditional' => ['value' => 'Traditional'],
+                'professional' => ['value' => 'Professional'],
+                'sporty' => ['value' => 'Sporty'],
+                'gaming' => ['value' => 'Gaming'],
+            ]],
+            'usage_scene' => ['name' => 'Usage Scene', 'options' => [
+                'daily_use' => ['value' => 'Daily Use'],
+                'traditional_outfit' => ['value' => 'Traditional Outfit'],
+                'travel' => ['value' => 'Travel'],
+                'office' => ['value' => 'Office'],
+                'creator' => ['value' => 'Creator Work'],
+                'gaming' => ['value' => 'Gaming'],
+                'smart_home' => ['value' => 'Smart Home'],
+                'home_living' => ['value' => 'Home Living'],
+                'digital' => ['value' => 'Digital Use'],
+            ]],
+            'package_type' => ['name' => 'Package Type', 'options' => [
+                'single_item' => ['value' => 'Single Item'],
+                'configurable_parent' => ['value' => 'Configurable Parent'],
+                'bundle' => ['value' => 'Bundle'],
+                'digital_pack' => ['value' => 'Digital Pack'],
+                'furniture_piece' => ['value' => 'Furniture Piece'],
+            ]],
+            'warranty' => ['name' => 'Warranty', 'options' => [
+                'thirty_day' => ['value' => '30-Day Support'],
+                'one_year' => ['value' => '1-Year Warranty'],
+                'two_year' => ['value' => '2-Year Warranty'],
+                'lifetime_access' => ['value' => 'Lifetime Access'],
+                'commercial_license' => ['value' => 'Commercial License'],
+            ]],
+            'specification' => ['name' => 'Specification', 'options' => [
+                'standard' => ['value' => 'Standard'],
+                'pro' => ['value' => 'Pro'],
+                'ultra' => ['value' => 'Ultra'],
+                'lightweight' => ['value' => 'Lightweight'],
+                'bundle' => ['value' => 'Bundle'],
+                'digital' => ['value' => 'Digital'],
+                'heritage' => ['value' => 'Heritage'],
+                'home_standard' => ['value' => 'Home Standard'],
+                'workspace' => ['value' => 'Workspace'],
+            ]],
+            'form_factor' => ['name' => 'Form Factor', 'options' => [
+                'handheld' => ['value' => 'Handheld'],
+                'wearable' => ['value' => 'Wearable'],
+                'audio_device' => ['value' => 'Audio Device'],
+                'desktop_device' => ['value' => 'Desktop Device'],
+                'apparel_top' => ['value' => 'Apparel Top'],
+                'apparel_bottom' => ['value' => 'Apparel Bottom'],
+                'footwear' => ['value' => 'Footwear'],
+                'furniture' => ['value' => 'Furniture'],
+                'home_decor' => ['value' => 'Home Decor'],
+                'digital_asset' => ['value' => 'Digital Asset'],
+                'accessory' => ['value' => 'Accessory'],
+            ]],
+            'feature_set' => ['name' => 'Feature Set', 'options' => [
+                'daily_essential' => ['value' => 'Daily Essential'],
+                'noise_cancelling' => ['value' => 'Noise Cancelling'],
+                'fast_charging' => ['value' => 'Fast Charging'],
+                'wireless' => ['value' => 'Wireless'],
+                'creator_ready' => ['value' => 'Creator Ready'],
+                'performance' => ['value' => 'Performance'],
+                'handcrafted' => ['value' => 'Handcrafted'],
+                'ergonomic' => ['value' => 'Ergonomic'],
+                'smart_connected' => ['value' => 'Smart Connected'],
+                'instant_access' => ['value' => 'Instant Access'],
+            ]],
+            'compatibility' => ['name' => 'Compatibility', 'options' => [
+                'universal' => ['value' => 'Universal'],
+                'apple_ecosystem' => ['value' => 'Apple Ecosystem'],
+                'android' => ['value' => 'Android'],
+                'usb_c' => ['value' => 'USB-C'],
+                'bluetooth' => ['value' => 'Bluetooth'],
+                'smart_home' => ['value' => 'Smart Home'],
+                'hanfu_outfit' => ['value' => 'Hanfu Outfit'],
+                'home_living' => ['value' => 'Home Living'],
+                'digital_download' => ['value' => 'Digital Download'],
+            ]],
+            'care_instruction' => ['name' => 'Care Instruction', 'options' => [
+                'wipe_clean' => ['value' => 'Wipe Clean'],
+                'hand_wash' => ['value' => 'Hand Wash'],
+                'dry_clean' => ['value' => 'Dry Clean'],
+                'machine_wash' => ['value' => 'Machine Wash'],
+                'keep_dry' => ['value' => 'Keep Dry'],
+                'digital_backup' => ['value' => 'Digital Backup'],
+                'spot_clean' => ['value' => 'Spot Clean'],
+            ]],
+            'season' => ['name' => 'Season', 'options' => [
+                'all_season' => ['value' => 'All Season'],
+                'spring_autumn' => ['value' => 'Spring/Autumn'],
+                'summer' => ['value' => 'Summer'],
+                'winter' => ['value' => 'Winter'],
             ]],
             'delivery_type' => ['name' => 'Delivery Type', 'options' => [
                 'physical' => ['value' => 'Physical Shipment'],

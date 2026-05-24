@@ -33,6 +33,7 @@ $renderIcon = static function (string $name): string {
     </div>
 <?php else: ?>
     <?php foreach ($items as $item): ?>
+        <?php $itemOptionItems = is_array($item['option_items'] ?? null) ? $item['option_items'] : []; ?>
         <div class="mini-cart-item" 
              data-item-id="<?= htmlspecialchars((string)($item['cart_id'] ?? '')) ?>" 
              data-product-id="<?= htmlspecialchars((string)($item['product_id'] ?? '')) ?>">
@@ -56,9 +57,13 @@ $renderIcon = static function (string $name): string {
                     <?= htmlspecialchars($item['name'] ?? '') ?>
                 </a>
                 
-                <?php if (!empty($item['options'])): ?>
+                <?php if ($itemOptionItems !== []): ?>
                     <div class="mini-cart-item__options">
-                        <?= htmlspecialchars($item['options']) ?>
+                        <?= \WeShop\Product\Helper\ProductOptionRenderer::renderItems($itemOptionItems, true) ?>
+                    </div>
+                <?php elseif (!empty($item['options'])): ?>
+                    <div class="mini-cart-item__options">
+                        <?= htmlspecialchars((string) $item['options']) ?>
                     </div>
                 <?php endif; ?>
                 

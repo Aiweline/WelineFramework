@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Shipping\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Service\ShippingServiceManager as FrameworkShippingServiceManager;
 use WeShop\Shipping\Interface\ShippingProviderInterface;
@@ -13,9 +14,13 @@ use WeShop\Shipping\Provider\FedEx;
 
 class ShippingService
 {
+    private ?ShippingMethodLocalDescriptionService $localDescriptionService = null;
+
     public function __construct(
-        private readonly ?FrameworkShippingServiceManager $frameworkShippingManager = null
+        private readonly ?FrameworkShippingServiceManager $frameworkShippingManager = null,
+        ?ShippingMethodLocalDescriptionService $localDescriptionService = null
     ) {
+        $this->localDescriptionService = $localDescriptionService;
     }
 
     public function calculateShipping(array $shippingData, string $shippingMethod): float
@@ -44,7 +49,7 @@ class ShippingService
     {
         $frameworkMethods = $this->getFrameworkCheckoutShippingMethods($context);
         if ($frameworkMethods !== []) {
-            return $frameworkMethods;
+            return $this->localizeMethods($frameworkMethods, (string) ($context['locale'] ?? ''));
         }
 
         $methods = [];
@@ -78,7 +83,7 @@ class ShippingService
             }
         }
 
-        return $methods;
+        return $this->localizeMethods($methods, (string) ($context['locale'] ?? ''));
     }
 
     /**
@@ -109,7 +114,9 @@ class ShippingService
             return null;
         }
 
-        return $this->applyRuntimeOverrides($this->normalizeMethod($registry[$code]));
+        return $this->localizeMethod(
+            $this->applyRuntimeOverrides($this->normalizeMethod($registry[$code]))
+        );
     }
 
     protected function calculateByProvider(string $shippingMethod, array $shippingData): float
@@ -229,6 +236,7 @@ class ShippingService
             'areas' => array_values(array_map(static fn(mixed $value): string => strtolower((string) $value), (array) ($method['areas'] ?? []))),
             'currencies' => array_values(array_map(static fn(mixed $value): string => strtoupper((string) $value), (array) ($method['currencies'] ?? []))),
             'countries' => array_values(array_map(static fn(mixed $value): string => strtoupper((string) $value), (array) ($method['countries'] ?? []))),
+            'local_descriptions' => \is_array($method['local_descriptions'] ?? null) ? $method['local_descriptions'] : [],
         ];
     }
 
@@ -253,6 +261,12 @@ class ShippingService
                 $method[$key] = (string) $override[$key];
             }
         }
+        if (\is_array($override['local_descriptions'] ?? null)) {
+            $method['local_descriptions'] = $override['local_descriptions'];
+        }
+        if (\is_array($override['local_description'] ?? null)) {
+            $method['local_descriptions'] = $override['local_description'];
+        }
         foreach (['enabled', 'is_default'] as $key) {
             if (array_key_exists($key, $override)) {
                 $method[$key] = (bool) $override[$key];
@@ -275,6 +289,39 @@ class ShippingService
         }
 
         return $method;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $methods
+     * @return array<int, array<string, mixed>>
+     */
+    private function localizeMethods(array $methods, string $locale = ''): array
+    {
+        foreach ($methods as $index => $method) {
+            $methods[$index] = $this->localizeMethod($method, $locale);
+        }
+
+        return $methods;
+    }
+
+    /**
+     * @param array<string, mixed> $method
+     * @return array<string, mixed>
+     */
+    private function localizeMethod(array $method, string $locale = ''): array
+    {
+        $locale = trim($locale) !== '' ? $locale : State::getLangLocal();
+
+        return $this->getLocalDescriptionService()->localize($method, $locale);
+    }
+
+    private function getLocalDescriptionService(): ShippingMethodLocalDescriptionService
+    {
+        if ($this->localDescriptionService === null) {
+            $this->localDescriptionService = new ShippingMethodLocalDescriptionService();
+        }
+
+        return $this->localDescriptionService;
     }
 
     /**

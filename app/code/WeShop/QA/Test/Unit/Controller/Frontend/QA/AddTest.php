@@ -9,31 +9,38 @@ use WeShop\QA\Controller\Frontend\QA\Add;
 use WeShop\QA\Service\QAService;
 use WeShop\Customer\Api\CustomerContextInterface;
 use Weline\Framework\Http\Request;
-use Weline\Framework\Http\Url;
 
 class AddTest extends TestCase
 {
-    public function testIndexReturnsLoginRedirectPayloadWhenGuest(): void
+    public function testIndexAllowsGuestAnonymousQuestion(): void
     {
         $customerContext = $this->createMock(CustomerContextInterface::class);
         $customerContext->expects($this->once())->method('getUserId')->willReturn(null);
 
         $qaService = $this->createMock(QAService::class);
-        $qaService->expects($this->never())->method('createQuestion');
+        $qaService->expects($this->once())
+            ->method('createQuestion')
+            ->with($this->callback(static fn(array $payload): bool => $payload['customer_id'] === 0));
 
-        $url = $this->createMock(Url::class);
-        $url->expects($this->once())->method('getUrl')->with('customer/account/login')->willReturn('https://example/login');
+        $request = $this->createMock(Request::class);
+        $request->method('body')->willReturnMap([
+            ['product_id', null, 501],
+            ['question', null, 'Guest question?'],
+            ['mentioned_customer_ids', null, null],
+            ['display_name', null, null],
+        ]);
+        $request->method('getPost')->willReturn(null);
 
         $controller = $this->getMockBuilder(Add::class)
-            ->setConstructorArgs([$customerContext, $qaService, $url])
+            ->setConstructorArgs([$customerContext, $qaService])
             ->onlyMethods(['fetchJson'])
             ->getMock();
         $controller->expects($this->once())
             ->method('fetchJson')
-            ->with($this->callback(static fn(array $payload): bool => ($payload['success'] ?? true) === false))
+            ->with($this->callback(static fn(array $payload): bool => (bool) ($payload['success'] ?? false)))
             ->willReturn('json');
 
-        $this->setProtectedProperty($controller, 'request', $this->createMock(Request::class));
+        $this->setProtectedProperty($controller, 'request', $request);
 
         $this->assertSame('json', $controller->index());
     }
@@ -48,14 +55,17 @@ class AddTest extends TestCase
             ->method('createQuestion')
             ->with($this->callback(static fn(array $payload): bool => $payload['customer_id'] === 42));
 
-        $url = $this->createMock(Url::class);
-
         $request = $this->createMock(Request::class);
-        $request->method('body')->willReturnMap([['product_id', null, 501], ['question', null, 'Test?']]);
-        $request->method('getPost')->willReturn([]);
+        $request->method('body')->willReturnMap([
+            ['product_id', null, 501],
+            ['question', null, 'Test?'],
+            ['mentioned_customer_ids', null, [7]],
+            ['display_name', null, 'Ada'],
+        ]);
+        $request->method('getPost')->willReturn(null);
 
         $controller = $this->getMockBuilder(Add::class)
-            ->setConstructorArgs([$customerContext, $qaService, $url])
+            ->setConstructorArgs([$customerContext, $qaService])
             ->onlyMethods(['fetchJson'])
             ->getMock();
         $controller->expects($this->once())

@@ -41,8 +41,10 @@ class PlaceOrder extends FrontendController
                 'guest_email' => $guestEmail,
                 'order_id' => (int) (($this->readRequestValue('order_id') ?? $this->readRequestValue('retry_order_id')) ?? 0),
                 'shipping_address_id' => $isGuestCheckout ? 0 : (int) ($this->readRequestValue('shipping_address_id') ?? 0),
-                'billing_address_id' => (int) ($this->readRequestValue('billing_address_id') ?? 0),
+                'billing_address_id' => $isGuestCheckout ? 0 : (int) ($this->readRequestValue('billing_address_id') ?? 0),
+                'billing_same_as_shipping' => $this->readBillingSameAsShipping(),
                 'shipping_address' => $this->readShippingAddress(),
+                'billing_address' => $this->readBillingAddress(),
                 'shipping_method' => (string) ($this->readRequestValue('shipping_method') ?? ''),
                 'payment_method' => (string) ($this->readRequestValue('payment_method') ?? ''),
                 'notification_channels' => $this->readNotificationChannels(),
@@ -61,6 +63,8 @@ class PlaceOrder extends FrontendController
                 'is_guest_checkout' => $isGuestCheckout,
                 'guest_email' => $guestEmail,
                 'shipping_address' => $checkoutData['shipping_address'],
+                'billing_address' => $checkoutData['billing_address'],
+                'billing_same_as_shipping' => $checkoutData['billing_same_as_shipping'],
                 'shipping_method' => $checkoutData['shipping_method'],
                 'payment_method' => \is_array($result['payment_method'] ?? null) ? $result['payment_method'] : [],
                 'notification_channels' => $checkoutData['notification_channels'],
@@ -118,6 +122,39 @@ class PlaceOrder extends FrontendController
         }
 
         return $shippingAddress;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function readBillingAddress(): array
+    {
+        $billingAddress = $this->readRequestValue('billing_address');
+        if (!\is_array($billingAddress) || $billingAddress === []) {
+            $billingAddress = $this->readRequestValue('billing');
+        }
+
+        $billingAddress = \is_array($billingAddress) ? $billingAddress : [];
+        $guestEmail = $this->readGuestEmail();
+        if ($guestEmail !== '' && empty($billingAddress['email'])) {
+            $billingAddress['email'] = $guestEmail;
+        }
+
+        return $billingAddress;
+    }
+
+    protected function readBillingSameAsShipping(): bool
+    {
+        $value = $this->readRequestValue('billing_same_as_shipping');
+        if ($value === null) {
+            return true;
+        }
+
+        if (\is_bool($value)) {
+            return $value;
+        }
+
+        return !\in_array(strtolower(trim((string) $value)), ['0', 'false', 'off', 'no'], true);
     }
 
     protected function readGuestEmail(): string

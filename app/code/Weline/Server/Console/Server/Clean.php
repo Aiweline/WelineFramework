@@ -23,6 +23,21 @@ class Clean extends CommandAbstract
     public function execute(array $args = [], array $data = []): void
     {
         $this->printer->setup(__('清理未运行的 WLS 实例记录'));
+        $force = isset($args['f']) || isset($args['force']);
+        $candidates = $this->findSafeCleanupCandidates();
+
+        if (!$force) {
+            if ($candidates === []) {
+                $this->printer->info(__('未发现可安全清理的未运行实例记录。'));
+                $this->printer->note(__('默认 dry-run 未修改任何文件。'));
+                return;
+            }
+
+            $this->printer->warning(__('默认 dry-run：发现 %{1} 个可清理实例，但未删除。', [\count($candidates)]));
+            $this->printer->note(__('可清理实例：%{1}', [\implode(', ', $candidates)]));
+            $this->printer->note(__('确认清理请执行：php bin/w server:clean --force'));
+            return;
+        }
 
         $cleanedNames = $this->instanceManager->cleanupInactiveInstances();
         $cleaned = \count($cleanedNames);
@@ -51,13 +66,37 @@ class Clean extends CommandAbstract
             'server:clean',
             __('清理那些已经没有运行但仍占着实例文件的 WLS 实例记录'),
             [
+                '-f, --force' => __('执行清理；默认仅 dry-run 检查'),
                 '--help' => __('显示帮助信息'),
             ],
             [],
             [
-                __('清理未运行实例记录') => 'php bin/w server:clean',
+                __('预览未运行实例记录') => 'php bin/w server:clean',
+                __('确认清理未运行实例记录') => 'php bin/w server:clean --force',
                 __('清理后查看实例状态') => 'php bin/w server:status --all',
             ]
         );
+    }
+
+    /**
+     * @return string[]
+     */
+    private function findSafeCleanupCandidates(): array
+    {
+        $candidates = [];
+        foreach ($this->instanceManager->getAllPersistedInstanceInfo() as $name => $info) {
+            $stats = $this->instanceManager->probeRuntimeStatsForInstance($info, 0.5);
+            if (!empty($stats['instance_running']) || !empty($stats['ipc_success'])) {
+                continue;
+            }
+
+            $raw = $this->instanceManager->getRawInstanceData((string)$name) ?? [];
+            $state = (string)($raw['lifecycle_state'] ?? $raw['startup_phase'] ?? '');
+            if ($state === '' || \in_array($state, ['stopped', 'stale_cleanup', 'master_exited'], true)) {
+                $candidates[] = (string)$name;
+            }
+        }
+
+        return $candidates;
     }
 }

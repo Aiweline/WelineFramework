@@ -20,6 +20,13 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class ResourceTreeService implements ResourceTreeServiceInterface
 {
+    private const BACKEND_MENU_TREE_CACHE_TTL = 120.0;
+
+    /**
+     * @var array<string, array{expires: float, data: array}>
+     */
+    private static array $backendMenuTreeCache = [];
+
     protected function newAclModel(): Acl
     {
         return ObjectManager::getInstance(Acl::class, [], false);
@@ -38,6 +45,17 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      */
     public function getBackendMenuTree(Role $role): array
     {
+        $roleId = (int)$role->getId();
+        if ($roleId <= 0) {
+            return [];
+        }
+
+        $cacheKey = 'role:' . $roleId;
+        $now = microtime(true);
+        if (isset(self::$backendMenuTreeCache[$cacheKey]) && self::$backendMenuTreeCache[$cacheKey]['expires'] >= $now) {
+            return self::$backendMenuTreeCache[$cacheKey]['data'];
+        }
+
         $aclModel = $this->newAclModel();
         
         // 获取所有启用的菜单类型资源
@@ -49,15 +67,17 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             ->fetchArray();
         
         if (empty($menuSources)) {
+            self::$backendMenuTreeCache[$cacheKey] = ['expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL, 'data' => []];
             return [];
         }
         
         $menuSourceIds = array_column($menuSources, Acl::schema_fields_SOURCE_ID);
         
         // 非超管需要检查权限
-        if ($role->getId() !== 1) {
+        if ($roleId !== 1) {
             $allowedSources = $this->getAllowedMenuSources($role, $menuSourceIds);
             if (empty($allowedSources)) {
+                self::$backendMenuTreeCache[$cacheKey] = ['expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL, 'data' => []];
                 return [];
             }
             // 展开祖先以确保树结构完整
@@ -67,7 +87,9 @@ class ResourceTreeService implements ResourceTreeServiceInterface
         }
         
         // 构建树
-        return $this->buildTree($menuSources, $allowedSources, '', true);
+        $tree = $this->buildTree($menuSources, $allowedSources, '', true);
+        self::$backendMenuTreeCache[$cacheKey] = ['expires' => $now + self::BACKEND_MENU_TREE_CACHE_TTL, 'data' => $tree];
+        return $tree;
     }
     
     /**
@@ -168,12 +190,19 @@ class ResourceTreeService implements ResourceTreeServiceInterface
      * @param bool $filterMenuType 是否过滤只保留菜单类型
      * @return array
      */
-    private function buildTree(array $allSources, array $allowedSources, string $parentSource, bool $filterMenuType): array
+    private function buildTree(array $allSources, array $allowedSources, string $parentSource, bool $filterMenuType, ?array $sourcesByParent = null, ?array $allowedSet = null): array
     {
+        if ($sourcesByParent === null) {
+            $sourcesByParent = [];
+            foreach ($allSources as $source) {
+                $parent = (string)($source[Acl::schema_fields_PARENT_SOURCE] ?? '');
+                $sourcesByParent[$parent][] = $source;
+            }
+        }
         $nodes = [];
-        $allowedSet = array_flip($allowedSources);
+        $allowedSet ??= array_flip($allowedSources);
         
-        foreach ($allSources as $source) {
+        foreach ($sourcesByParent[$parentSource] ?? [] as $source) {
             $sid = $source[Acl::schema_fields_SOURCE_ID] ?? '';
             $parent = $source[Acl::schema_fields_PARENT_SOURCE] ?? '';
             $type = $source[Acl::schema_fields_TYPE] ?? '';
@@ -206,7 +235,7 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             ];
             
             // 递归构建子节点
-            $children = $this->buildTree($allSources, $allowedSources, $sid, $filterMenuType);
+            $children = $this->buildTree($allSources, $allowedSources, $sid, $filterMenuType, $sourcesByParent, $allowedSet);
             if (!empty($children)) {
                 $node['nodes'] = $children;
             }

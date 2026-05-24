@@ -68,6 +68,67 @@ final class AiSiteBuildPlanServiceTest extends TestCase
         self::assertArrayHasKey('runtime_context', $contract['tasks'][2]);
         self::assertArrayHasKey('output_contract', $contract['tasks'][2]);
         self::assertArrayHasKey('acceptance', $contract['tasks'][2]);
+        self::assertSame('en_US', $contract['tasks'][2]['runtime_context']['content_locale'] ?? null);
+        self::assertSame('en_US', $contract['tasks'][2]['runtime_context']['language_contract']['source_of_truth_locale'] ?? null);
+    }
+
+    public function testBuildPlanUsesContentLocaleInsteadOfPlanLocaleForEveryTask(): void
+    {
+        $service = new AiSiteBuildPlanService();
+
+        $contract = $service->buildFromScope([
+            'page_types' => ['home_page'],
+            'site_title' => 'Example Site',
+            'brief_description' => 'Convert qualified buyers with clear trust proof.',
+            'content_locale' => 'ar_SA',
+            'default_locale' => 'ar_SA',
+            'plan_locale' => 'en_US',
+            'execution_blueprint_draft' => [
+                'signature' => 'stage1-signature',
+                'pages' => [
+                    'home_page' => [
+                        'title' => 'Home',
+                        'page_goal' => 'Show the product value and lead visitors to contact sales.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'page_flow_role' => 'opening',
+                                'title' => 'Launch reliable AI workflows',
+                                'goal' => 'Show the core value with a direct CTA.',
+                                'visual_signature' => [
+                                    'composition_pattern' => 'split hero',
+                                    'spatial_rhythm' => 'copy left, media right',
+                                    'media_strategy' => 'Generated hero image in the media panel',
+                                    'surface_treatment' => 'deep blue surface',
+                                    'interaction_pattern' => 'CTA hover lift',
+                                ],
+                                'image_intent' => [
+                                    'needs_image' => true,
+                                    'image_role' => 'hero_image',
+                                    'image_subject' => 'dashboard interface on a laptop',
+                                    'placement' => 'media_panel',
+                                    'visual_atmosphere' => 'calm enterprise workspace',
+                                    'image_treatment' => 'rounded editorial crop',
+                                    'reuse_policy' => 'reuse_when_intent_matches',
+                                    'css_motif' => '',
+                                ],
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'Operational tooling for teams that need dependable automation.'],
+                                    ['field' => 'cta', 'sample' => 'Book a workflow audit'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertSame('ar_SA', $contract['i18n']['primary_locale'] ?? null);
+        self::assertSame('ar_SA', $contract['content_manifest']['primary_locale'] ?? null);
+        foreach ($contract['tasks'] as $task) {
+            self::assertSame('ar_SA', $task['runtime_context']['content_locale'] ?? null);
+            self::assertSame('ar_SA', $task['runtime_context']['language_contract']['source_of_truth_locale'] ?? null);
+        }
     }
 
     public function testConfirmMarksContractConfirmedAndProjectionIsReadOnly(): void

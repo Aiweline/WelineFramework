@@ -35,6 +35,9 @@ class Parser
     protected static array $workerMaterializedWordsCache = [];
     protected static ?string $currentRequestWordsId = null;
     protected static ?string $currentRequestWordsKey = null;
+    protected static ?string $currentRequestLayeredWordsId = null;
+    protected static ?string $currentRequestLayeredWordsKey = null;
+    protected static array $currentRequestTranslatedWords = [];
     
     /**
      * 请求生命周期内使用的翻译词（用于按需加载）
@@ -71,6 +74,9 @@ class Parser
             self::$isLoadingWords = false;
             self::$currentRequestWordsId = null;
             self::$currentRequestWordsKey = null;
+            self::$currentRequestLayeredWordsId = null;
+            self::$currentRequestLayeredWordsKey = null;
+            self::$currentRequestTranslatedWords = [];
         });
     }
 
@@ -142,7 +148,12 @@ class Parser
         if (Runtime::isPersistent()) {
             self::ensureStateRegistered();
             self::$usedWords[$words] = $words;
-            return self::translateWordFromLayers($words, self::getCurrentLayeredWords());
+            $layers = self::getCurrentLayeredWords();
+            $translationCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $words;
+            if (isset(self::$currentRequestTranslatedWords[$translationCacheKey])) {
+                return self::$currentRequestTranslatedWords[$translationCacheKey];
+            }
+            return self::$currentRequestTranslatedWords[$translationCacheKey] = self::translateWordFromLayers($words, $layers);
         }
 
         self::getWords();
@@ -342,6 +353,9 @@ class Parser
         self::$workerMaterializedWordsCache = [];
         self::$currentRequestWordsId = null;
         self::$currentRequestWordsKey = null;
+        self::$currentRequestLayeredWordsId = null;
+        self::$currentRequestLayeredWordsKey = null;
+        self::$currentRequestTranslatedWords = [];
         self::$loaded = false;
         self::$loadedLang = null;
         self::$isLoadingWords = false;
@@ -360,21 +374,22 @@ class Parser
     private static function getCurrentLayeredWords(): array
     {
         $requestId = Runtime::isPersistent() ? RequestContext::getId() : null;
+        if (
+            $requestId !== null
+            && self::$currentRequestLayeredWordsId === $requestId
+            && self::$currentRequestLayeredWordsKey !== null
+            && isset(self::$workerLayeredWordsCache[self::$currentRequestLayeredWordsKey])
+        ) {
+            return self::$workerLayeredWordsCache[self::$currentRequestLayeredWordsKey];
+        }
+
         $lang = State::getLangLocal();
         $modules = self::resolveRequestModules();
         $layeredCacheKey = self::buildLayeredWordsCacheKey($lang, $modules);
 
-        if ($requestId !== null
-            && self::$currentRequestWordsId === $requestId
-            && self::$currentRequestWordsKey === $layeredCacheKey
-            && isset(self::$workerLayeredWordsCache[$layeredCacheKey])
-        ) {
-            return self::$workerLayeredWordsCache[$layeredCacheKey];
-        }
-
         $layers = self::getLayeredWords($lang, $modules);
-        self::$currentRequestWordsId = $requestId;
-        self::$currentRequestWordsKey = $layeredCacheKey;
+        self::$currentRequestLayeredWordsId = $requestId;
+        self::$currentRequestLayeredWordsKey = $layeredCacheKey;
 
         return $layers;
     }

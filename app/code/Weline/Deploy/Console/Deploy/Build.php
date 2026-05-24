@@ -13,10 +13,12 @@ declare(strict_types=1);
 
 namespace Weline\Deploy\Console\Deploy;
 
+use Weline\Deploy\Service\DeployConfigService;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\Console\Server\TablePrinter;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 
 class Build extends CommandAbstract
@@ -179,6 +181,14 @@ class Build extends CommandAbstract
 
                 $config[$key] = $value;
             }
+        }
+
+        try {
+            /** @var DeployConfigService $deployConfigService */
+            $deployConfigService = ObjectManager::getInstance(DeployConfigService::class);
+            $config = array_merge($config, $deployConfigService->getProjectDeployConfig());
+        } catch (\Throwable) {
+            // 后台配置不可用时继续使用 .env，保证部署入口可恢复。
         }
 
         return $config;

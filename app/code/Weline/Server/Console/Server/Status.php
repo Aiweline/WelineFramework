@@ -37,6 +37,18 @@ class Status extends CommandAbstract
         $instanceName = $this->parseInstanceName($args);
         $showAll = isset($args['all']) || isset($args['a']) || $instanceName === '';
         $watchMode = isset($args['w']) || isset($args['watch']);
+        $doctorMode = isset($args['doctor']);
+        $jsonMode = isset($args['json']);
+
+        if ($doctorMode) {
+            $diagnostics = (new Doctor())->buildDiagnostics($instanceName);
+            if ($jsonMode) {
+                echo \json_encode($diagnostics, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+                return;
+            }
+            (new Doctor())->execute(['server:doctor', $instanceName], []);
+            return;
+        }
 
         if ($watchMode) {
             $this->runWatchMode($instanceName, $showAll);
@@ -527,6 +539,8 @@ class Status extends CommandAbstract
                 '[name]' => __('实例名称（默认显示所有实例）'),
                 '-a, --all' => __('显示所有实例'),
                 '-w, --watch' => __('Watch 模式：每 3 秒自动刷新，Ctrl+C 退出'),
+                '--doctor' => __('显示 WLS 运行时策略、降级原因和优化建议'),
+                '--json' => __('与 --doctor 同用时输出 JSON'),
                 '--help' => __('显示帮助信息'),
             ],
             [],
@@ -534,6 +548,7 @@ class Status extends CommandAbstract
                 __('查看所有实例') => 'php bin/w server:status',
                 __('查看指定实例') => 'php bin/w server:status api-server',
                 __('实时监控（watch 模式）') => 'php bin/w server:status -w',
+                __('运行时诊断') => 'php bin/w server:status --doctor --json',
                 __('清理未运行实例记录') => 'php bin/w server:clean',
             ]
         );

@@ -46,7 +46,7 @@ final class FullPageCacheCoordinator
     private const DEFAULT_LANG = 'zh_Hans_CN';
     private const DEFAULT_CURRENCY = 'CNY';
     private const VARIANT_PAYLOAD_KEY = 'fpc_variant';
-    private const FPC_CACHE_SCHEMA_VERSION = '20260522-dev-cache-file-body-img180-profile1';
+    private const FPC_CACHE_SCHEMA_VERSION = '20260524-mini-cart-state';
 
     /**
      * @var array<string, bool>
@@ -389,6 +389,10 @@ final class FullPageCacheCoordinator
 
     public function canServeCachedResponse(string $method = 'GET'): bool
     {
+        if ($this->shouldBypassForDynamicFirstRender()) {
+            return false;
+        }
+
         if (!$this->isFrontendResponseCacheAllowed($method)) {
             return false;
         }
@@ -398,6 +402,10 @@ final class FullPageCacheCoordinator
 
     public function canBuildCachedResponse(string $method = 'GET'): bool
     {
+        if ($this->shouldBypassForDynamicFirstRender()) {
+            return false;
+        }
+
         return $this->normalizeHttpMethod($method) === 'GET'
             && $this->isFrontendResponseCacheAllowed($method)
             && (!$this->hasLoggedInFrontendSession() || $this->canUsePrivateSessionFpc());
@@ -419,6 +427,24 @@ final class FullPageCacheCoordinator
     public function canUsePrivateSessionCachedResponse(): bool
     {
         return $this->canUsePrivateSessionFpc();
+    }
+
+    public function shouldBypassForDynamicFirstRender(): bool
+    {
+        foreach ([
+            $_SERVER['WLS_FPC_BYPASS'] ?? null,
+            $_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? null,
+            $_SERVER['HTTP_X_WLS_FPC_BYPASS'] ?? null,
+            $_SERVER['HTTP_X_WLS_DYNAMIC_WARMUP'] ?? null,
+            $_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? null,
+        ] as $flag) {
+            if (\is_scalar($flag)
+                && \in_array(\strtolower(\trim((string)$flag)), ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function hasLoggedInFrontendSessionForCache(): bool

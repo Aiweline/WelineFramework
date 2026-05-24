@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
+use Weline\Framework\App\Env;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Service\Query\FrameworkQueryService;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Model\AiSiteBuilderSession as WebsitesAiSiteBuilderSession;
 use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService as WebsitesDomainPurchaseWorkbenchService;
 use Weline\Websites\Service\AiWorkbench\SessionService as WebsitesSessionService;
 
 final class AiSiteAgentWorkspaceBridgeService
 {
+    private const LOCAL_REGISTRAR_ACCOUNT_ID = 900001;
+
     public function __construct(
         private readonly AiSiteAgentSessionService $sessionService,
         private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService,
@@ -29,7 +33,7 @@ final class AiSiteAgentWorkspaceBridgeService
     public function buildRegistrarAccountOptions(): array
     {
         $rows = $this->frameworkQueryService->execute('websites', 'getRegistrarAccounts', ['status' => 'active']);
-        return $this->buildRegistrarAccountOptionsFromRows(\is_array($rows) ? $rows : [], \defined('DEV') && DEV);
+        return $this->buildRegistrarAccountOptionsFromRows(\is_array($rows) ? $rows : [], $this->isLocalDomainEnvironment());
     }
 
     /**
@@ -69,13 +73,13 @@ final class AiSiteAgentWorkspaceBridgeService
         }
 
         foreach ($options as $option) {
-            if ((int)($option['account_id'] ?? 0) === 900001 || (string)($option['registrar_code'] ?? '') === 'local_demo') {
+            if ((int)($option['account_id'] ?? 0) === self::LOCAL_REGISTRAR_ACCOUNT_ID || (string)($option['registrar_code'] ?? '') === 'local_demo') {
                 return $options;
             }
         }
 
         \array_unshift($options, [
-            'account_id' => 900001,
+            'account_id' => self::LOCAL_REGISTRAR_ACCOUNT_ID,
             'label' => (string)__('本地供应商 - 本地默认账号'),
             'registrar_name' => (string)__('本地供应商'),
             'registrar_code' => 'local_demo',
@@ -83,6 +87,56 @@ final class AiSiteAgentWorkspaceBridgeService
         ]);
 
         return $options;
+    }
+
+    /**
+     * @return array{mode:string,is_local:bool,configured_host:string,local_registrar_account_id:int,local_root_domains:list<string>}
+     */
+    public function buildDomainChoiceEnvironment(): array
+    {
+        $isLocal = $this->isLocalDomainEnvironment();
+
+        return [
+            'mode' => $isLocal ? 'local' : 'online',
+            'is_local' => $isLocal,
+            'configured_host' => $this->resolveConfiguredWlsHost(),
+            'local_registrar_account_id' => self::LOCAL_REGISTRAR_ACCOUNT_ID,
+            'local_root_domains' => [
+                LocalDomainPolicy::TEST_ROOT_DOMAIN,
+                LocalDomainPolicy::LEGACY_LOCAL_TEST_ROOT_DOMAIN,
+                LocalDomainPolicy::LOOPBACK_ROOT_DOMAIN,
+            ],
+        ];
+    }
+
+    public function resolveConfiguredWlsHost(): string
+    {
+        $hosts = $this->collectConfiguredWlsHosts();
+        foreach ($hosts as $host) {
+            if (!$this->isListenOnlyHost($host)) {
+                return $host;
+            }
+        }
+
+        return $hosts[0] ?? '';
+    }
+
+    public function isLocalDomainEnvironment(?string $configuredHost = null): bool
+    {
+        $hosts = $configuredHost !== null ? [$configuredHost] : $this->collectConfiguredWlsHosts();
+        if ($hosts === []) {
+            return true;
+        }
+
+        foreach ($hosts as $host) {
+            if ($this->isLocalConfiguredHost($host)) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -99,7 +153,7 @@ final class AiSiteAgentWorkspaceBridgeService
         array $linkedScope,
         array $viewScope,
         array $registrarAccounts,
-        bool $isDevMode
+        bool $isLocalDomainEnvironment
     ): array {
         $recommendedDomainList = $this->normalizeStringList($linkedScope['recommended_domain_list'] ?? []);
         if ($recommendedDomainList === []) {
@@ -109,14 +163,17 @@ final class AiSiteAgentWorkspaceBridgeService
         $recommendedRegistrarLabel = \trim((string)($linkedScope['recommended_registrar_label'] ?? $viewScope['recommended_registrar_label'] ?? ''));
         $preferredRegistrarAccountId = (int)($linkedScope['preferred_registrar_account_id'] ?? $linkedScope['registrar_account_id'] ?? $viewScope['preferred_registrar_account_id'] ?? $viewScope['registrar_account_id'] ?? 0);
 
-        if ($isDevMode) {
+        if ($isLocalDomainEnvironment) {
             foreach ($registrarAccounts as $account) {
-                if ((int)($account['account_id'] ?? 0) !== 900001) {
+                if ((int)($account['account_id'] ?? 0) !== self::LOCAL_REGISTRAR_ACCOUNT_ID) {
                     continue;
                 }
-                $preferredRegistrarAccountId = 900001;
+                $preferredRegistrarAccountId = self::LOCAL_REGISTRAR_ACCOUNT_ID;
                 break;
             }
+        } elseif ($this->isLocalRegistrarAccountId($preferredRegistrarAccountId)) {
+            $preferredRegistrarAccountId = 0;
+            $recommendedRegistrarLabel = '';
         } elseif ($preferredRegistrarAccountId <= 0) {
             $preferredRegistrarAccountId = 0;
         }
@@ -136,6 +193,94 @@ final class AiSiteAgentWorkspaceBridgeService
             'recommended_registrar_label' => $recommendedRegistrarLabel,
             'preferred_registrar_account_id' => $preferredRegistrarAccountId,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectConfiguredWlsHosts(): array
+    {
+        $hosts = [];
+        foreach (['wls.host', 'server.host'] as $path) {
+            $host = $this->normalizeConfiguredHost(Env::get($path, ''));
+            if ($host !== '') {
+                $hosts[] = $host;
+            }
+        }
+
+        $servers = Env::get('wls.servers', []);
+        if (\is_array($servers)) {
+            foreach ($servers as $server) {
+                if (!\is_array($server)) {
+                    continue;
+                }
+                $host = $this->normalizeConfiguredHost($server['host'] ?? '');
+                if ($host !== '') {
+                    $hosts[] = $host;
+                }
+            }
+        }
+
+        return \array_values(\array_unique($hosts));
+    }
+
+    private function normalizeConfiguredHost(mixed $value): string
+    {
+        $host = \strtolower(\trim((string)$value));
+        if ($host === '') {
+            return '';
+        }
+
+        if (\str_contains($host, '://')) {
+            $parsedHost = \parse_url($host, \PHP_URL_HOST);
+            $host = \is_string($parsedHost) ? $parsedHost : $host;
+        }
+
+        $host = \trim($host, " \t\n\r\0\x0B[]");
+        if (\substr_count($host, ':') === 1) {
+            [$host] = \explode(':', $host, 2);
+        }
+
+        return \trim($host);
+    }
+
+    private function isLocalConfiguredHost(string $host): bool
+    {
+        $host = $this->normalizeConfiguredHost($host);
+        if ($host === '' || $this->isListenOnlyHost($host)) {
+            return true;
+        }
+
+        if (LocalDomainPolicy::isManagedLocalDomain($host)) {
+            return true;
+        }
+
+        $validatedIp = \filter_var($host, \FILTER_VALIDATE_IP);
+        if ($validatedIp === false) {
+            return false;
+        }
+
+        return \filter_var(
+            $host,
+            \FILTER_VALIDATE_IP,
+            \FILTER_FLAG_NO_PRIV_RANGE | \FILTER_FLAG_NO_RES_RANGE
+        ) === false;
+    }
+
+    private function isListenOnlyHost(string $host): bool
+    {
+        $host = $this->normalizeConfiguredHost($host);
+        if ($host === '') {
+            return true;
+        }
+
+        return \in_array($host, ['0.0.0.0', '::', '::1', '127.0.0.1', 'localhost'], true)
+            || \str_starts_with($host, '127.');
+    }
+
+    private function isLocalRegistrarAccountId(int $accountId): bool
+    {
+        return $accountId === self::LOCAL_REGISTRAR_ACCOUNT_ID;
     }
 
     /**

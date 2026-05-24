@@ -22,6 +22,81 @@ use Weline\Ai\Service\AiService;
 
 final class AiSiteExecutionBlueprintServiceTest extends TestCase
 {
+    public function testStageOneContentLocalePrefersWebsiteLocaleOverPlanLocale(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'resolveStageOneContentLocale');
+        $method->setAccessible(true);
+
+        self::assertSame(
+            'pt_BR',
+            (string)$method->invoke($service, [
+                'plan_locale' => 'zh_Hans_CN',
+                'default_locale' => 'pt_BR',
+                'website_profile' => [
+                    'default_locale' => 'pt_BR',
+                    'content_locale' => '',
+                ],
+            ], 'zh_Hans_CN')
+        );
+
+        self::assertSame(
+            'en_US',
+            (string)$method->invoke($service, [
+                'content_locale' => 'en_US',
+                'default_locale' => 'pt_BR',
+                'website_profile' => [
+                    'default_locale' => 'pt_BR',
+                ],
+            ], 'zh_Hans_CN')
+        );
+    }
+
+    public function testStageOneBlockRepairNormalizesExecutionScriptTypo(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'repairAiStageOneBlocksBeforeValidation');
+        $method->setAccessible(true);
+
+        $blocks = $method->invoke($service, [[
+            'block_key' => 'hero',
+            'content' => 'Baixe o APK da Teenipiya com segurança.',
+            'field_plan' => [],
+            'execution_script' => [],
+            'ution_script' => [
+                'core_copy' => 'Baixe o APK e entre em mesas confiáveis de Teen Patti.',
+                'feature_points' => ['Download rápido'],
+            ],
+        ]], Page::TYPE_HOME, 'pt_BR', [], []);
+
+        self::assertIsArray($blocks);
+        self::assertSame(
+            'Baixe o APK e entre em mesas confiáveis de Teen Patti.',
+            (string)($blocks[0]['execution_script']['core_copy'] ?? '')
+        );
+        self::assertArrayNotHasKey('ution_script', $blocks[0]);
+    }
+
+    public function testStageOneRecoveryRulesHandleIconOnlyImageSubject(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'buildStageOneIssueSpecificRecoveryRules');
+        $method->setAccessible(true);
+
+        $rules = $method->invoke($service, [[
+            'reason_code' => 'icon_only_image_subject',
+            'page_type' => 'about_page',
+            'block_key' => 'origin_story',
+            'field_path' => 'blocks.0.image_intent.image_subject',
+        ]]);
+
+        self::assertIsArray($rules);
+        $text = \implode("\n", \array_map('strval', $rules));
+        self::assertStringContainsString('icon_only_image_subject', $text);
+        self::assertStringContainsString('real scene, product interface, editorial environment, or human-in-context visual', $text);
+        self::assertStringContainsString('about_page/origin_story', $text);
+    }
+
     public function testBuildPlanArtifactsProducesMarkdownAndBlueprint(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());

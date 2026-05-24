@@ -84,6 +84,7 @@ Do not promote:
 
 - Treat the current session as more than the chat transcript. The effective input includes the user request, injected `AGENTS.md` instructions, automation metadata, and loaded memory for the same automation.
 - If the strongest correction comes from session-provided repo rules rather than back-and-forth chat, it still counts as explicit correction evidence.
+- If the current automation or user request itself tightens what must be remembered, treat that request text as a valid correction source and update the owning self-learning skill immediately.
 - If the user explicitly says a complaint, correction, or repeated mistake should be remembered, update the owning skill and automation memory even when no repository-wide rule changes.
 - If the user explicitly asks to extract "what the user clearly mentioned" together with "what the handling process first got wrong and later corrected," record both streams and normalize them into one reusable rule set rather than keeping only user quotations.
 - Do not record the complaint wording itself as policy; record the corrected execution standard that would have prevented the complaint.
@@ -130,6 +131,7 @@ Use one of these shapes when rewriting lessons:
 ## Complaint-driven self-learning ownership
 
 - When the user explicitly says complaints, corrections, or wrong-first-then-fixed behavior must be remembered, treat that instruction as a standing requirement of the self-learning workflow rather than a one-off reminder.
+- When the complaint or correction is about the handling workflow itself, promote the reusable process rule exactly the same way as a framework-code correction; do not limit learning extraction to product-code mistakes.
 - For these runs, the owning skill must preserve three things together: the initial mistake, the correction trigger, and the future default action that avoids repeating the mistake.
 - If the only new lesson in the session is "remember user corrections and complaints systematically," update the session-review skill and automation memory instead of manufacturing unrelated framework rules.
 

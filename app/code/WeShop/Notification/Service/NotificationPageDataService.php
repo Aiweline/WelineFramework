@@ -42,6 +42,7 @@ class NotificationPageDataService
                 'type' => (string) ($item['type'] ?? 'info'),
                 'title' => (string) ($item['title'] ?? ''),
                 'content' => (string) ($item['content'] ?? ''),
+                'target_url' => (string) ($item['target_url'] ?? ''),
                 'is_read' => (int) ($item['is_read'] ?? 0),
                 'created_at' => (string) ($item['created_at'] ?? ''),
             ];

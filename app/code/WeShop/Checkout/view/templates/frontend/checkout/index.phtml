@@ -6,6 +6,8 @@ $discountLabel = $couponCode !== '' ? (string) __('优惠券 %{1}', [$couponCode
 $customer = $this->getData('customer') ?? null;
 $savedAddresses = $this->getData('saved_addresses') ?? [];
 $selectedShippingAddressId = (int) ($this->getData('selected_shipping_address_id') ?? 0);
+$selectedBillingAddressId = (int) ($this->getData('selected_billing_address_id') ?? 0);
+$billingSameAsShipping = (bool) ($this->getData('billing_same_as_shipping') ?? true);
 $countries = $this->getData('countries') ?? [];
 $isRetryPayment = (bool) ($this->getData('is_retry_payment') ?? false);
 $checkoutIdentity = is_array($this->getData('checkout_identity') ?? null) ? $this->getData('checkout_identity') : [];
@@ -13,6 +15,44 @@ $checkoutMode = (string) ($this->getData('checkout_mode') ?? $checkoutIdentity['
 $isGuestCheckout = $checkoutMode === 'guest' || (bool) ($this->getData('is_guest_checkout') ?? !$customer);
 $customerCheckoutAllowed = (bool) ($this->getData('customer_checkout_allowed') ?? $checkoutIdentity['customer_allowed'] ?? (bool) $customer);
 $guestCheckoutAllowed = (bool) ($this->getData('guest_checkout_allowed') ?? $checkoutIdentity['guest_allowed'] ?? true);
+$selectedSavedAddressId = 0;
+if (!$isGuestCheckout && $savedAddresses) {
+    foreach ($savedAddresses as $index => $address) {
+        $addressId = (int) ($address['address_id'] ?? 0);
+        if ($addressId <= 0) {
+            continue;
+        }
+
+        if ($selectedShippingAddressId > 0 && $addressId === $selectedShippingAddressId) {
+            $selectedSavedAddressId = $addressId;
+            break;
+        }
+
+        if ($index === 0) {
+            $selectedSavedAddressId = $addressId;
+        }
+    }
+}
+$showNewAddressFields = $isGuestCheckout || $selectedSavedAddressId <= 0;
+$selectedBillingSavedAddressId = 0;
+if (!$billingSameAsShipping && !$isGuestCheckout && $savedAddresses) {
+    foreach ($savedAddresses as $index => $address) {
+        $addressId = (int) ($address['address_id'] ?? 0);
+        if ($addressId <= 0) {
+            continue;
+        }
+
+        if ($selectedBillingAddressId > 0 && $addressId === $selectedBillingAddressId) {
+            $selectedBillingSavedAddressId = $addressId;
+            break;
+        }
+
+        if ($index === 0) {
+            $selectedBillingSavedAddressId = $addressId;
+        }
+    }
+}
+$showBillingAddressFields = !$billingSameAsShipping && ($isGuestCheckout || $selectedBillingSavedAddressId <= 0);
 $retryOrderId = (int) ($this->getData('retry_order_id') ?? 0);
 $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ?? '');
 $checkoutCurrency = strtoupper(trim((string) (
@@ -512,6 +552,58 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
         font-size: 0.84rem;
     }
 
+    .weshop-checkout-summary-options {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.5rem;
+        margin-top: 0.25rem;
+        color: var(--color-text-secondary, #6b7280);
+        font-size: 0.78rem;
+        line-height: 1.35;
+    }
+
+    .weshop-checkout-summary-options .weshop-product-option {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        min-width: 0;
+    }
+
+    .weshop-checkout-summary-options .weshop-product-option__label {
+        font-weight: 700;
+        color: var(--color-text-primary, #111827);
+    }
+
+    .weshop-checkout-summary-options .weshop-product-option__separator {
+        color: var(--color-text-tertiary, #9ca3af);
+    }
+
+    .weshop-checkout-summary-options .weshop-product-option__swatch {
+        width: 0.95rem;
+        height: 0.95rem;
+        flex: 0 0 0.95rem;
+        border: 1px solid rgba(17, 24, 39, 0.18);
+        background: #fff;
+    }
+
+    .weshop-checkout-summary-options .weshop-product-option__swatch--color {
+        border-radius: 999px;
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.62);
+    }
+
+    .weshop-checkout-summary-options .weshop-product-option__swatch--image {
+        border-radius: 0.25rem;
+        overflow: hidden;
+    }
+
+    .weshop-checkout-summary-options .weshop-product-option__swatch img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+    }
+
     .weshop-checkout-summary-price {
         color: var(--color-text-primary, #111827);
         font-weight: 700;
@@ -720,7 +812,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                         <?php foreach ($savedAddresses as $index => $address): ?>
                             <?php
                             $addressId = (int) ($address['address_id'] ?? 0);
-                            $checked = $selectedShippingAddressId > 0 ? $addressId === $selectedShippingAddressId : $index === 0;
+                            $checked = !$isGuestCheckout && $addressId > 0 && $addressId === $selectedSavedAddressId;
                             ?>
                             <label class="weshop-checkout-choice">
                                 <input type="radio" name="shipping_address_id" value="<?= $addressId ?>" <?= $checked ? 'checked' : '' ?>>
@@ -734,7 +826,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                             </label>
                         <?php endforeach; ?>
                         <label class="weshop-checkout-choice">
-                            <input type="radio" name="shipping_address_id" value="0" <?= $selectedShippingAddressId <= 0 ? 'checked' : '' ?>>
+                            <input type="radio" name="shipping_address_id" value="0" <?= $showNewAddressFields ? 'checked' : '' ?>>
                             <span>
                                 <span class="weshop-checkout-choice-title"><?= __('使用新地址') ?></span>
                                 <span class="weshop-checkout-choice-meta"><?= __('在下方填写新的收货地址。') ?></span>
@@ -751,7 +843,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                     <?php endif; ?>
                 </div>
 
-                <div class="weshop-checkout-fields" id="weshop-new-address-grid" data-weshop-new-address-grid>
+                <div class="weshop-checkout-fields" id="weshop-new-address-grid" data-weshop-new-address-grid<?= $showNewAddressFields ? '' : ' hidden' ?>>
                     <div class="weshop-checkout-field">
                         <label for="shipping-firstname"><?= __('名') ?></label>
                         <input id="shipping-firstname" name="shipping_address[firstname]" type="text" autocomplete="given-name" data-new-address-field data-guest-address-required>
@@ -789,6 +881,101 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                                 <option value="<?= $escape($countryCode) ?>"><?= $escape($country['name'] ?? $countryCode) ?></option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                </div>
+            </section>
+
+            <section class="weshop-checkout-card" data-weshop-billing-section>
+                <div class="weshop-checkout-section-title">
+                    <h2><?= __('账单地址') ?></h2>
+                    <span><?= __('账单地址') ?></span>
+                </div>
+
+                <input type="hidden" name="billing_same_as_shipping" value="<?= $billingSameAsShipping ? '1' : '0' ?>" data-weshop-billing-same-input>
+                <label class="weshop-checkout-choice">
+                    <input type="checkbox" data-weshop-billing-same-toggle <?= $billingSameAsShipping ? 'checked' : '' ?>>
+                    <span>
+                        <span class="weshop-checkout-choice-title"><?= __('账单地址与收货地址相同') ?></span>
+                        <span class="weshop-checkout-choice-meta"><?= __('使用收货地址作为账单地址。') ?></span>
+                    </span>
+                </label>
+
+                <div data-weshop-billing-address-panel<?= $billingSameAsShipping ? ' hidden' : '' ?>>
+                    <div class="weshop-checkout-choice-list weshop-checkout-address-list" data-weshop-billing-address-list>
+                        <?php if ($savedAddresses): ?>
+                            <?php foreach ($savedAddresses as $index => $address): ?>
+                                <?php
+                                $addressId = (int) ($address['address_id'] ?? 0);
+                                $checked = !$isGuestCheckout && !$billingSameAsShipping && $addressId > 0 && $addressId === $selectedBillingSavedAddressId;
+                                ?>
+                                <label class="weshop-checkout-choice">
+                                    <input type="radio" name="billing_address_id" value="<?= $addressId ?>" <?= $checked ? 'checked' : '' ?>>
+                                    <span>
+                                        <span class="weshop-checkout-choice-title"><?= $escape($address['name'] ?? '') ?></span>
+                                        <span class="weshop-checkout-choice-meta">
+                                            <?= $escape($address['street'] ?? '') ?><br>
+                                            <?= $escape($address['city'] ?? '') ?>, <?= $escape($address['state'] ?? '') ?> <?= $escape($address['postcode'] ?? '') ?>
+                                        </span>
+                                    </span>
+                                </label>
+                            <?php endforeach; ?>
+                            <label class="weshop-checkout-choice">
+                                <input type="radio" name="billing_address_id" value="0" <?= $showBillingAddressFields ? 'checked' : '' ?>>
+                                <span>
+                                    <span class="weshop-checkout-choice-title"><?= __('使用新账单地址') ?></span>
+                                    <span class="weshop-checkout-choice-meta"><?= __('在下方填写新的账单地址。') ?></span>
+                                </span>
+                            </label>
+                        <?php else: ?>
+                            <label class="weshop-checkout-choice weshop-checkout-address-empty">
+                                <input type="radio" name="billing_address_id" value="0" checked>
+                                <span>
+                                    <span class="weshop-checkout-choice-title"><?= __('添加新的账单地址') ?></span>
+                                    <span class="weshop-checkout-choice-meta"><?= __('当前账户还没有保存账单地址，填写下方地址即可完成本次结账。') ?></span>
+                                </span>
+                            </label>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="weshop-checkout-fields" data-weshop-billing-new-address-grid<?= $showBillingAddressFields ? '' : ' hidden' ?>>
+                        <div class="weshop-checkout-field">
+                            <label for="billing-firstname"><?= __('名') ?></label>
+                            <input id="billing-firstname" name="billing_address[firstname]" type="text" autocomplete="billing given-name" data-billing-address-field data-billing-address-required>
+                        </div>
+                        <div class="weshop-checkout-field">
+                            <label for="billing-lastname"><?= __('姓') ?></label>
+                            <input id="billing-lastname" name="billing_address[lastname]" type="text" autocomplete="billing family-name" data-billing-address-field data-billing-address-required>
+                        </div>
+                        <div class="weshop-checkout-field full">
+                            <label for="billing-street"><?= __('详细地址') ?></label>
+                            <input id="billing-street" name="billing_address[street]" type="text" autocomplete="billing street-address" data-billing-address-field data-billing-address-required>
+                        </div>
+                        <div class="weshop-checkout-field">
+                            <label for="billing-city"><?= __('城市') ?></label>
+                            <input id="billing-city" name="billing_address[city]" type="text" autocomplete="billing address-level2" data-billing-address-field data-billing-address-required>
+                        </div>
+                        <div class="weshop-checkout-field">
+                            <label for="billing-region"><?= __('州/省') ?></label>
+                            <input id="billing-region" name="billing_address[region]" type="text" autocomplete="billing address-level1" data-billing-address-field>
+                        </div>
+                        <div class="weshop-checkout-field">
+                            <label for="billing-postcode"><?= __('邮编') ?></label>
+                            <input id="billing-postcode" name="billing_address[postcode]" type="text" autocomplete="billing postal-code" data-billing-address-field data-billing-address-required>
+                        </div>
+                        <div class="weshop-checkout-field">
+                            <label for="billing-telephone"><?= __('电话') ?></label>
+                            <input id="billing-telephone" name="billing_address[telephone]" type="tel" autocomplete="billing tel" data-billing-address-field>
+                        </div>
+                        <div class="weshop-checkout-field full">
+                            <label for="billing-country"><?= __('国家/地区') ?></label>
+                            <select id="billing-country" name="billing_address[country_id]" autocomplete="billing country" data-billing-address-field data-billing-address-required>
+                                <option value=""><?= __('请选择国家/地区') ?></option>
+                                <?php foreach ($countries as $country): ?>
+                                    <?php $countryCode = (string) ($country['code'] ?? ''); ?>
+                                    <option value="<?= $escape($countryCode) ?>"><?= $escape($country['name'] ?? $countryCode) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -851,6 +1038,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             <h2><?= __('订单摘要') ?></h2>
             <div class="weshop-checkout-summary-list">
                 <?php foreach ($cartItems as $item): ?>
+                    <?php $itemOptions = is_array($item['options'] ?? null) ? $item['options'] : []; ?>
                     <div class="weshop-checkout-summary-item">
                         <div class="weshop-checkout-summary-thumb">
                             <img src="<?= $escape($item['image'] ?? '') ?>" alt="<?= $escape($item['name'] ?? '') ?>">
@@ -858,6 +1046,11 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                         </div>
                         <div>
                             <div class="weshop-checkout-summary-item-name"><?= $escape($item['name'] ?? '') ?></div>
+                            <?php if ($itemOptions !== []): ?>
+                                <div class="weshop-checkout-summary-options">
+                                    <?= \WeShop\Product\Helper\ProductOptionRenderer::renderItems($itemOptions, true) ?>
+                                </div>
+                            <?php endif; ?>
                             <div class="weshop-checkout-summary-item-meta"><?= __('数量：%{1}', (int) ($item['qty'] ?? 0)) ?></div>
                         </div>
                         <div class="weshop-checkout-summary-price"><?= $formatCheckoutPrice((float) ($item['row_total'] ?? 0)) ?></div>
@@ -969,6 +1162,13 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
         var newAddressGrid = document.querySelector('[data-weshop-new-address-grid]');
         var addressFields = Array.prototype.slice.call(form.querySelectorAll('[data-new-address-field]'));
         var requiredAddressFields = Array.prototype.slice.call(form.querySelectorAll('[data-guest-address-required]'));
+        var billingSameInput = form.querySelector('[data-weshop-billing-same-input]');
+        var billingSameToggle = form.querySelector('[data-weshop-billing-same-toggle]');
+        var billingAddressPanel = document.querySelector('[data-weshop-billing-address-panel]');
+        var billingAddressList = document.querySelector('[data-weshop-billing-address-list]');
+        var billingNewAddressGrid = document.querySelector('[data-weshop-billing-new-address-grid]');
+        var billingAddressFields = Array.prototype.slice.call(form.querySelectorAll('[data-billing-address-field]'));
+        var requiredBillingAddressFields = Array.prototype.slice.call(form.querySelectorAll('[data-billing-address-required]'));
         var guestEmailInput = form.querySelector('input[name="guest_email"]');
         var authModal = document.querySelector('[data-weshop-auth-modal]');
         var authForm = authModal ? authModal.querySelector('[data-weshop-auth-form]') : null;
@@ -1088,6 +1288,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             }
 
             syncAddressRequiredState();
+            syncBillingAddressRequiredState();
             if (shouldRefresh !== false) {
                 scheduleCheckoutMethodRefresh();
             }
@@ -1126,6 +1327,54 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             }
             requiredAddressFields.forEach(function (field) {
                 if (useSavedAddress) {
+                    field.removeAttribute('required');
+                } else {
+                    field.setAttribute('required', 'required');
+                }
+            });
+        }
+
+        function isBillingSameAsShipping() {
+            return billingSameInput ? billingSameInput.value !== '0' : true;
+        }
+
+        function selectedBillingAddressId() {
+            if (isBillingSameAsShipping() || isGuestCheckoutMode()) {
+                return 0;
+            }
+
+            var checked = form.querySelector('input[name="billing_address_id"]:checked');
+            if (checked) {
+                return parseInt(checked.value || '0', 10) || 0;
+            }
+            return 0;
+        }
+
+        function syncBillingAddressRequiredState() {
+            var sameAsShipping = billingSameToggle ? Boolean(billingSameToggle.checked) : isBillingSameAsShipping();
+            if (billingSameInput) {
+                billingSameInput.value = sameAsShipping ? '1' : '0';
+            }
+            if (billingAddressPanel) {
+                billingAddressPanel.hidden = sameAsShipping;
+            }
+            if (billingAddressList) {
+                billingAddressList.hidden = sameAsShipping || isGuestCheckoutMode();
+            }
+
+            if (!sameAsShipping && isGuestCheckoutMode()) {
+                var newBillingOption = form.querySelector('input[name="billing_address_id"][value="0"]');
+                if (newBillingOption) {
+                    newBillingOption.checked = true;
+                }
+            }
+
+            var useSavedBillingAddress = !sameAsShipping && selectedBillingAddressId() > 0;
+            if (billingNewAddressGrid) {
+                billingNewAddressGrid.hidden = sameAsShipping || (useSavedBillingAddress && !isGuestCheckoutMode());
+            }
+            requiredBillingAddressFields.forEach(function (field) {
+                if (sameAsShipping || useSavedBillingAddress) {
                     field.removeAttribute('required');
                 } else {
                     field.setAttribute('required', 'required');
@@ -1235,13 +1484,26 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             var html = '';
 
             if (items.length > 0) {
+                var defaultAddressId = 0;
+                var selectedAddressExists = false;
+                items.forEach(function (address) {
+                    var addressId = parseInt((address && (address.address_id || address.delivery_address_id)) || '0', 10) || 0;
+                    if (defaultAddressId <= 0 && addressId > 0) {
+                        defaultAddressId = addressId;
+                    }
+                    if (selectedAddressId > 0 && addressId === selectedAddressId) {
+                        selectedAddressExists = true;
+                    }
+                });
+                var effectiveSelectedAddressId = selectedAddressExists ? selectedAddressId : defaultAddressId;
+
                 items.forEach(function (address, index) {
                     if (!address) {
                         return;
                     }
 
                     var addressId = parseInt(address.address_id || address.delivery_address_id || '0', 10) || 0;
-                    var isChecked = selectedAddressId > 0 ? addressId === selectedAddressId : index === 0;
+                    var isChecked = effectiveSelectedAddressId > 0 ? addressId === effectiveSelectedAddressId : index === 0;
                     var name = address.name || [address.firstname || '', address.lastname || ''].join(' ').trim();
                     var region = address.state || address.region || '';
 
@@ -1258,7 +1520,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                 });
 
                 html += '<label class="weshop-checkout-choice">'
-                    + '<input type="radio" name="shipping_address_id" value="0"' + (selectedAddressId <= 0 ? ' checked' : '') + '>'
+                    + '<input type="radio" name="shipping_address_id" value="0"' + (effectiveSelectedAddressId <= 0 ? ' checked' : '') + '>'
                     + '<span>'
                     + '<span class="weshop-checkout-choice-title"><?= $escape((string) __('使用新地址')) ?></span>'
                     + '<span class="weshop-checkout-choice-meta"><?= $escape((string) __('在下方填写新的收货地址。')) ?></span>'
@@ -1277,6 +1539,70 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             savedAddressList.innerHTML = html;
         }
 
+        function renderBillingAddressList(addresses, selectedAddressId) {
+            if (!billingAddressList) {
+                return;
+            }
+
+            var items = Array.isArray(addresses) ? addresses : [];
+            var html = '';
+
+            if (items.length > 0) {
+                var defaultAddressId = 0;
+                var selectedAddressExists = false;
+                items.forEach(function (address) {
+                    var addressId = parseInt((address && (address.address_id || address.delivery_address_id)) || '0', 10) || 0;
+                    if (defaultAddressId <= 0 && addressId > 0) {
+                        defaultAddressId = addressId;
+                    }
+                    if (selectedAddressId > 0 && addressId === selectedAddressId) {
+                        selectedAddressExists = true;
+                    }
+                });
+                var effectiveSelectedAddressId = selectedAddressExists ? selectedAddressId : defaultAddressId;
+
+                items.forEach(function (address, index) {
+                    if (!address) {
+                        return;
+                    }
+
+                    var addressId = parseInt(address.address_id || address.delivery_address_id || '0', 10) || 0;
+                    var isChecked = effectiveSelectedAddressId > 0 ? addressId === effectiveSelectedAddressId : index === 0;
+                    var name = address.name || [address.firstname || '', address.lastname || ''].join(' ').trim();
+                    var region = address.state || address.region || '';
+
+                    html += '<label class="weshop-checkout-choice">'
+                        + '<input type="radio" name="billing_address_id" value="' + escapeHtml(String(addressId)) + '"' + (isChecked ? ' checked' : '') + '>'
+                        + '<span>'
+                        + '<span class="weshop-checkout-choice-title">' + escapeHtml(name) + '</span>'
+                        + '<span class="weshop-checkout-choice-meta">'
+                        + escapeHtml(address.street || '') + '<br>'
+                        + escapeHtml(address.city || '') + ', ' + escapeHtml(region) + ' ' + escapeHtml(address.postcode || '')
+                        + '</span>'
+                        + '</span>'
+                        + '</label>';
+                });
+
+                html += '<label class="weshop-checkout-choice">'
+                    + '<input type="radio" name="billing_address_id" value="0"' + (effectiveSelectedAddressId <= 0 ? ' checked' : '') + '>'
+                    + '<span>'
+                    + '<span class="weshop-checkout-choice-title"><?= $escape((string) __('使用新账单地址')) ?></span>'
+                    + '<span class="weshop-checkout-choice-meta"><?= $escape((string) __('在下方填写新的账单地址。')) ?></span>'
+                    + '</span>'
+                    + '</label>';
+            } else {
+                html = '<label class="weshop-checkout-choice weshop-checkout-address-empty">'
+                    + '<input type="radio" name="billing_address_id" value="0" checked>'
+                    + '<span>'
+                    + '<span class="weshop-checkout-choice-title"><?= $escape((string) __('添加新的账单地址')) ?></span>'
+                    + '<span class="weshop-checkout-choice-meta"><?= $escape((string) __('当前账户还没有保存账单地址，填写下方地址即可完成本次结账。')) ?></span>'
+                    + '</span>'
+                    + '</label>';
+            }
+
+            billingAddressList.innerHTML = html;
+        }
+
         function fillShippingAddressFields(address) {
             if (!address || typeof address !== 'object') {
                 return;
@@ -1284,6 +1610,29 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
 
             ['firstname', 'lastname', 'street', 'city', 'region', 'postcode', 'telephone', 'country_id'].forEach(function (key) {
                 var field = form.querySelector('[name="shipping_address[' + key + ']"]');
+                if (!field) {
+                    return;
+                }
+
+                var value = address[key];
+                if ((key === 'region') && (value == null || value === '')) {
+                    value = address.state || '';
+                }
+                if (value == null || value === '') {
+                    return;
+                }
+
+                field.value = String(value);
+            });
+        }
+
+        function fillBillingAddressFields(address) {
+            if (!address || typeof address !== 'object') {
+                return;
+            }
+
+            ['firstname', 'lastname', 'street', 'city', 'region', 'postcode', 'telephone', 'country_id'].forEach(function (key) {
+                var field = form.querySelector('[name="billing_address[' + key + ']"]');
                 if (!field) {
                     return;
                 }
@@ -1317,12 +1666,17 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             }
 
             renderSavedAddressList(data.saved_addresses || [], parseInt(data.selected_shipping_address_id || '0', 10) || 0);
+            renderBillingAddressList(data.billing_addresses || data.saved_addresses || [], parseInt(data.selected_billing_address_id || '0', 10) || 0);
+            if (billingSameToggle && typeof data.billing_same_as_shipping !== 'undefined') {
+                billingSameToggle.checked = Boolean(data.billing_same_as_shipping);
+            }
             renderMethodList(shippingMethodHost, data.shipping_methods || [], 'shipping_method', '<?= $escape((string) __('当前收货地址没有可用配送方式。')) ?>');
             renderMethodList(paymentMethodHost, data.payment_methods || [], 'payment_method', '<?= $escape((string) __('当前没有可用的支付方式。')) ?>');
             renderCartSummary(data.cart_summary || {});
 
             if (Array.isArray(data.saved_addresses) && data.saved_addresses.length > 0) {
                 fillShippingAddressFields(data.saved_addresses[0]);
+                fillBillingAddressFields((data.billing_addresses || data.saved_addresses)[0]);
             }
 
             ensureCustomerModeChecked();
@@ -1474,6 +1828,22 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                 }
                 syncAddressRequiredState();
                 scheduleCheckoutMethodRefresh();
+                return;
+            }
+
+            if (target.hasAttribute('data-weshop-billing-same-toggle')) {
+                syncBillingAddressRequiredState();
+                return;
+            }
+
+            if (target.name === 'billing_address_id') {
+                if (isGuestCheckoutMode()) {
+                    var newBillingOption = form.querySelector('input[name="billing_address_id"][value="0"]');
+                    if (newBillingOption) {
+                        newBillingOption.checked = true;
+                    }
+                }
+                syncBillingAddressRequiredState();
                 return;
             }
 

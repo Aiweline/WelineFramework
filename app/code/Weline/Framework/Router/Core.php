@@ -413,10 +413,11 @@ class Core
         }
         $hasPreviewTheme = \w_env_get('preview_theme') !== null && (int)\w_env_get('preview_theme') > 0;
         $isFrontendRootRequest = $this->isFrontendRootRequest();
+        $canUseRouteCache = !$this->is_backend && !$hasPreviewTheme && !$isFrontendRootRequest;
         
         
         // 性能优化：复用已读取的统一缓存数据
-        if ($this->unifiedCacheData === null && !$isFrontendRootRequest) {
+        if ($this->unifiedCacheData === null && $canUseRouteCache) {
             $cached = $this->cache->get($this->unified_cache_key);
             // 将 false 转换为 null，保持类型一致性
             $this->unifiedCacheData = ($cached === false) ? null : $cached;
@@ -424,9 +425,7 @@ class Core
         
         // 优先从统一缓存中读取 router
         if (
-            !$this->is_backend
-            && !$hasPreviewTheme
-            && !$isFrontendRootRequest
+            $canUseRouteCache
             && is_array($this->unifiedCacheData)
             && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])
             && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])
@@ -441,7 +440,7 @@ class Core
         }
         
         // 回退到旧的缓存方式（兼容性）
-        $router = ($this->is_backend || $hasPreviewTheme || $isFrontendRootRequest) ? null : $this->cache->get($this->_router_cache_key);
+        $router = $canUseRouteCache ? $this->cache->get($this->_router_cache_key) : null;
         if ($router) {
             if (self::isStaleEmptyRootRouterCache($this->request_area, $url, $this->request->getRule(), $router)) {
                 $this->clearCurrentRequestRouteCaches();
@@ -955,6 +954,10 @@ class Core
 
     private static function shouldUseGeneratedRouterSnapshotFallback(): bool
     {
+        if (Runtime::isPersistent()) {
+            return true;
+        }
+
         $processDir = BP . 'var' . DS . 'process' . DS;
 
         return is_file($processDir . 'setup_upgrade.lock')
@@ -1591,7 +1594,7 @@ class Core
         $routeProfileMark('fpc_publish');
         $routeCacheMethod = \strtoupper((string)($this->request->getMethod() ?: 'GET'));
         $canWriteRouteCache = $routeCacheMethod === 'GET' || $routeCacheMethod === 'HEAD';
-        if (!$this->url_cache_data && $canWriteRouteCache && !$skipCacheDerivedResponseWrites) {
+        if (!$this->is_backend && !$this->url_cache_data && $canWriteRouteCache && !$skipCacheDerivedResponseWrites) {
             $ruleCachePayload = [
                 self::RULE_CACHE_RULE_KEY => $this->request->getRule(),
                 self::RULE_CACHE_PARAMS_KEY => $this->routerGeneratedGetParams,

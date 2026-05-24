@@ -8,10 +8,6 @@
  * @param autoOpen {default=true,name="Auto open after add"}
  */
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\SessionFactory;
-use WeShop\Cart\Service\CartService;
-
 $renderIcon = static function (string $name): string {
     return match ($name) {
         'close' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.4 6.4a1 1 0 0 1 1.4 0L12 10.6l4.2-4.2a1 1 0 1 1 1.4 1.4L13.4 12l4.2 4.2a1 1 0 0 1-1.4 1.4L12 13.4l-4.2 4.2a1 1 0 0 1-1.4-1.4l4.2-4.2-4.2-4.2a1 1 0 0 1 0-1.4Z" fill="currentColor"/></svg>',
@@ -31,26 +27,6 @@ $autoOpen = $this->getData('autoOpen') ?? true;
 
 $cartCount = 0;
 $cartTotal = 0.0;
-$cartItems = [];
-
-try {
-    $session = SessionFactory::getInstance()->createFrontendSession();
-    $customer = $session->getCustomer();
-    if ($customer && (int)$customer->getId() > 0) {
-        /** @var CartService $cartService */
-        $cartService = ObjectManager::getInstance(CartService::class);
-        $cartItems = $cartService->getCartItems((int)$customer->getId());
-        $totals = $cartService->calculateTotals((int)$customer->getId());
-        foreach ($cartItems as $item) {
-            $cartCount += max(1, (int)($item['quantity'] ?? $item['qty'] ?? 1));
-        }
-        $cartTotal = (float)($totals['subtotal'] ?? 0);
-    }
-} catch (\Throwable) {
-    $cartItems = [];
-    $cartCount = 0;
-    $cartTotal = 0.0;
-}
 ?>
 
 <div class="mini-cart-overlay"
@@ -88,46 +64,14 @@ try {
             <w:hook>WeShop_Cart::frontend::partials::mini-cart::shipping-progress</w:hook>
         </div>
 
-        <div id="mini-cart-items" class="mini-cart-drawer__items" data-wslot="mini-cart-items" data-wslot-name="mini-cart-items" data-loading="false">
-            <?php if ($cartCount > 0): ?>
-                <?php foreach ($cartItems as $item): ?>
-                    <?php
-                    $itemId = (int)($item['cart_id'] ?? $item['id'] ?? 0);
-                    $productId = (int)($item['product_id'] ?? 0);
-                    $product = is_array($item['product'] ?? null) ? $item['product'] : [];
-                    $productName = (string)($product['name'] ?? __('商品') . ' #' . $productId);
-                    $productImage = (string)($product['image'] ?? '');
-                    $price = (float)($item['price'] ?? 0);
-                    $quantity = max(1, (int)($item['quantity'] ?? $item['qty'] ?? 1));
-                    ?>
-                    <div class="mini-cart-item" data-item-id="<?= $itemId ?>" data-product-id="<?= $productId ?>">
-                        <div class="mini-cart-item__image">
-                            <?php if ($productImage !== ''): ?>
-                                <img src="<?= htmlspecialchars($productImage) ?>" alt="<?= htmlspecialchars($productName) ?>" loading="lazy"/>
-                            <?php else: ?>
-                                <div class="mini-cart-item__placeholder"><span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('image') ?></span></div>
-                            <?php endif; ?>
-                        </div>
-                        <div class="mini-cart-item__details">
-                            <a href="#" class="mini-cart-item__name"><?= htmlspecialchars($productName) ?></a>
-                            <div class="mini-cart-item__price"><?= $this->formatPrice($price) ?></div>
-                            <div class="mini-cart-item__qty">
-                                <button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="<?= $itemId ?>" aria-label="<?= __('减少数量') ?>">
-                                    <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('minus') ?></span>
-                                </button>
-                                <span class="mini-cart-item__qty-value"><?= $quantity ?></span>
-                                <button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="<?= $itemId ?>" aria-label="<?= __('增加数量') ?>">
-                                    <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('plus') ?></span>
-                                </button>
-                            </div>
-                        </div>
-                        <button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="<?= $itemId ?>" aria-label="<?= __('删除商品') ?>">
-                            <span class="mini-cart-icon" aria-hidden="true"><?= $renderIcon('trash') ?></span>
-                        </button>
-                    </div>
-                <?php endforeach; ?>
-            <?php elseif ($showEmptyState): ?>
-                <div class="mini-cart-items__empty" id="mini-cart-empty">
+        <div id="mini-cart-items"
+             class="mini-cart-drawer__items"
+             data-wslot="mini-cart-items"
+             data-wslot-name="mini-cart-items"
+             data-loading="false"
+             data-needs-refresh="true">
+            <?php if ($showEmptyState): ?>
+                <div class="mini-cart-items__empty" id="mini-cart-empty" style="display:none;">
                     <w:hook>WeShop_Cart::frontend::partials::mini-cart::empty</w:hook>
                     <div class="mini-cart-empty">
                         <span class="mini-cart-empty__icon mini-cart-icon" aria-hidden="true"><?= $renderIcon('cart') ?></span>
@@ -138,6 +82,7 @@ try {
             <?php endif; ?>
             <div class="mini-cart-drawer__loading" id="mini-cart-loading" style="display:none;">
                 <div class="mini-cart-drawer__spinner"></div>
+                <p class="mini-cart-drawer__loading-text"><?= __('正在加载购物车...') ?></p>
             </div>
         </div>
         <w:hook>WeShop_Cart::frontend::partials::mini-cart::items-after</w:hook>
@@ -178,6 +123,23 @@ window.__WelineMiniCartConfig = <?= json_encode([
         'subtotal' => $cartTotal,
         'subtotal_formatted' => $this->formatPrice($cartTotal),
     ],
+    'labels' => [
+        'decreaseQty' => (string)__('减少数量'),
+        'increaseQty' => (string)__('增加数量'),
+        'removeItem' => (string)__('删除商品'),
+        'loading' => (string)__('正在加载购物车...'),
+        'emptyCart' => (string)__('购物车是空的'),
+        'startShopping' => (string)__('开始购物'),
+        'loadFailed' => (string)__('购物车内容加载失败，请重试。'),
+        'retry' => (string)__('重试'),
+    ],
+    'icons' => [
+        'cart' => $renderIcon('cart'),
+        'image' => $renderIcon('image'),
+        'minus' => $renderIcon('minus'),
+        'plus' => $renderIcon('plus'),
+        'trash' => $renderIcon('trash'),
+    ],
 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 </script>
 
@@ -209,6 +171,22 @@ body:has(#mini-cart-drawer.is-open) #customer-service-widget { opacity: 0 !impor
 .mini-cart-item__placeholder .mini-cart-icon { font-size: 26px; }
 .mini-cart-item__details { min-width: 0; flex: 1; padding-right: 28px; }
 .mini-cart-item__name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--color-text-dark, #111827); font-weight: 600; line-height: 1.4; text-decoration: none; }
+.mini-cart-item__options { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; color: var(--color-text-secondary, #6b7280); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.mini-cart-item__option { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.mini-cart-item__option-label { font-weight: 500; color: var(--color-text-secondary, #6b7280); }
+.mini-cart-item__option-value { min-width: 0; }
+.mini-cart-item__option-separator { color: var(--color-text-tertiary, #9ca3af); }
+.mini-cart-item__option-swatch { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: 0 0 16px; overflow: hidden; border: 1px solid rgba(17, 24, 39, .18); background: var(--color-bg-secondary, #f3f4f6); }
+.mini-cart-item__option-swatch--color { border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .55); }
+.mini-cart-item__option-swatch--image { border-radius: 4px; }
+.mini-cart-item__option-swatch img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.mini-cart-item__options .weshop-product-option { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.mini-cart-item__options .weshop-product-option__label { font-weight: 500; color: var(--color-text-secondary, #6b7280); }
+.mini-cart-item__options .weshop-product-option__separator { color: var(--color-text-tertiary, #9ca3af); }
+.mini-cart-item__options .weshop-product-option__swatch { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: 0 0 16px; overflow: hidden; border: 1px solid rgba(17, 24, 39, .18); background: var(--color-bg-secondary, #f3f4f6); }
+.mini-cart-item__options .weshop-product-option__swatch--color { border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .55); }
+.mini-cart-item__options .weshop-product-option__swatch--image { border-radius: 4px; }
+.mini-cart-item__options .weshop-product-option__swatch img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .mini-cart-item__price { margin-top: 6px; color: var(--color-text-dark, #111827); font-weight: 700; }
 .mini-cart-item__qty { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--color-text-dark, #111827); }
 .mini-cart-item__qty-btn { width: 28px; height: 28px; border-radius: 8px; background: var(--color-bg-secondary, #f3f4f6); color: var(--color-text-secondary, #4b5563); }
@@ -220,6 +198,13 @@ body:has(#mini-cart-drawer.is-open) #customer-service-widget { opacity: 0 !impor
 .mini-cart-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--color-text-secondary, #6b7280); }
 .mini-cart-empty__icon { font-size: 54px; }
 .mini-cart-empty__link { color: var(--color-accent, #2563eb); font-weight: 700; text-decoration: none; }
+.mini-cart-drawer__loading { min-height: 220px; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: var(--color-text-secondary, #6b7280); }
+.mini-cart-drawer__spinner { width: 32px; height: 32px; border: 3px solid var(--color-border-light, #e5e7eb); border-top-color: var(--color-accent, #2563eb); border-radius: 999px; animation: mini-cart-spin .75s linear infinite; }
+.mini-cart-drawer__loading-text { margin: 0; font-size: 14px; font-weight: 600; color: var(--color-text-secondary, #6b7280); }
+.mini-cart-error { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 32px 22px; text-align: center; color: var(--color-text-secondary, #6b7280); }
+.mini-cart-error__message { margin: 0; max-width: 260px; font-size: 14px; line-height: 1.5; }
+.mini-cart-error__retry { min-height: 38px; padding: 0 18px; border: 1px solid var(--color-border-default, #d1d5db); border-radius: 10px; background: var(--color-bg-primary, #fff); color: var(--color-text-dark, #111827); font-weight: 800; cursor: pointer; }
+@keyframes mini-cart-spin { to { transform: rotate(360deg); } }
 .mini-cart-drawer__summary-row { display: flex; justify-content: space-between; gap: 16px; font-weight: 700; }
 .mini-cart-drawer__summary-note { margin: 8px 0 16px; color: var(--color-text-secondary, #6b7280); font-size: 13px; }
 .mini-cart-drawer__actions { display: grid; gap: 10px; }

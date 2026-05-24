@@ -13,6 +13,12 @@ use Weline\Widget\Service\WidgetData;
 
 final class WorkerResponseMemoryGuardCompactionTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        WorkerResponseMemoryGuard::consumeDrainAfterResponseReason();
+        parent::tearDown();
+    }
+
     public function testCompactRuntimeCachesClearsRebuildableProcessCaches(): void
     {
         $this->writeStaticProperty(TemplateCacheManager::class, 'memoryCache', [
@@ -52,6 +58,14 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
         self::assertSame([], $this->readStaticProperty(MemoryCacheService::class, 'tagIndex'));
         self::assertSame([], $this->readStaticProperty(MemoryCacheService::class, 'hostIndex'));
         self::assertGreaterThanOrEqual(5, $result['cleared_process_caches']);
+    }
+
+    public function testDrainAfterResponseReasonIsOneShot(): void
+    {
+        WorkerResponseMemoryGuard::requestDrainAfterResponse('fiber_output_buffer_overflow');
+
+        self::assertSame('fiber_output_buffer_overflow', WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
+        self::assertNull(WorkerResponseMemoryGuard::consumeDrainAfterResponseReason());
     }
 
     private function readStaticProperty(string $class, string $property): mixed

@@ -7,6 +7,7 @@ namespace WeShop\Product\Console\Product\Import;
 use WeShop\Catalog\Model\Category;
 use WeShop\Customer\Model\Customer;
 use WeShop\Product\Model\Product;
+use WeShop\Product\Model\Product\LocalDescription as ProductLocalDescription;
 use WeShop\Product\Model\ProductCategory;
 use WeShop\Review\Model\Review;
 use Weline\Eav\Model\EavAttribute;
@@ -37,6 +38,67 @@ class ImportDefault extends CommandAbstract
     {
         $this->product = $product;
         $this->attributeSet = $attributeSet;
+    }
+
+    /**
+     * @param array<string, mixed> $productData
+     */
+    private function syncLocalDescriptions(int $productId, array $productData): void
+    {
+        $localDescriptions = $productData['local_descriptions'] ?? [];
+        if ($productId <= 0 || !is_array($localDescriptions) || $localDescriptions === []) {
+            return;
+        }
+
+        $records = [];
+        foreach ($localDescriptions as $localeCode => $fields) {
+            if (!is_array($fields)) {
+                continue;
+            }
+            $localeCode = trim((string)$localeCode);
+            $name = trim((string)($fields['name'] ?? ''));
+            $shortDescription = trim((string)($fields['short_description'] ?? ''));
+            $description = trim((string)($fields['description'] ?? ''));
+            if ($localeCode === '' || ($name === '' && $shortDescription === '' && $description === '')) {
+                continue;
+            }
+
+            $records[] = [
+                ProductLocalDescription::schema_fields_ID => $productId,
+                ProductLocalDescription::schema_fields_local_code => $localeCode,
+                ProductLocalDescription::schema_fields_NAME => $name !== '' ? $name : (string)($productData['name'] ?? ''),
+                ProductLocalDescription::schema_fields_SHORT_DESCRIPTION => $shortDescription !== '' ? $shortDescription : (string)($productData['short_description'] ?? ''),
+                ProductLocalDescription::schema_fields_DESCRIPTION => $description !== '' ? $description : (string)($productData['description'] ?? ''),
+                ProductLocalDescription::schema_fields_META_NAME => trim((string)($fields['meta_name'] ?? '')) !== '' ? (string)$fields['meta_name'] : ($name !== '' ? $name : (string)($productData['name'] ?? '')),
+                ProductLocalDescription::schema_fields_META_DESCRIPTION => trim((string)($fields['meta_description'] ?? '')) !== '' ? (string)$fields['meta_description'] : ($shortDescription !== '' ? $shortDescription : (string)($productData['short_description'] ?? '')),
+                ProductLocalDescription::schema_fields_META_KEYWORDS => trim((string)($fields['meta_keywords'] ?? '')) !== '' ? (string)$fields['meta_keywords'] : (string)($productData['meta_keywords'] ?? ''),
+            ];
+        }
+
+        if ($records === []) {
+            return;
+        }
+
+        /** @var ProductLocalDescription $localDescription */
+        $localDescription = ObjectManager::getInstance(ProductLocalDescription::class);
+        $link = $localDescription->getQuery()->getLink();
+        $table = $localDescription->getTable();
+        $delete = $link->prepare("DELETE FROM {$table} WHERE product_id = ?");
+        $delete->execute([$productId]);
+
+        $columns = array_keys($records[0]);
+        $columnSql = implode(', ', array_map(
+            static fn(string $column): string => '"' . str_replace('"', '""', $column) . '"',
+            $columns
+        ));
+        $placeholderSql = implode(', ', array_fill(0, count($columns), '?'));
+        $insert = $link->prepare("INSERT INTO {$table} ({$columnSql}) VALUES ({$placeholderSql})");
+        foreach ($records as $record) {
+            $insert->execute(array_map(
+                static fn(string $column): mixed => $record[$column] ?? null,
+                $columns
+            ));
+        }
     }
 
     /**
@@ -113,6 +175,7 @@ class ImportDefault extends CommandAbstract
                 $this->printer->success("✓ 创建产品: {$productData['name']} (SKU: {$productData['sku']}, ID: {$productId})");
                 $importedCount++;
                 $importedProductIds[] = $productId;
+                $this->syncLocalDescriptions((int)$productId, $productData);
                 
                 // 保存EAV属性值（颜色、尺寸、材质、品牌）
                 $this->saveProductAttributes($product, $productData);
@@ -156,6 +219,11 @@ class ImportDefault extends CommandAbstract
                         if ($variantId) {
                             // 保存变体的EAV属性值
                             $this->saveProductAttributes($variantProduct, $variant);
+                            $this->syncLocalDescriptions((int)$variantId, $variant + [
+                                'description' => $productData['description'],
+                                'short_description' => $productData['short_description'],
+                                'meta_keywords' => $productData['meta_keywords'] ?? '',
+                            ]);
                             $this->printer->note("  └─ 创建变体: {$variant['name']} (SKU: {$variant['sku']})");
                         }
                     }
@@ -419,6 +487,9 @@ class ImportDefault extends CommandAbstract
             /** @var ProductCategory $productCategory */
             $productCategory = ObjectManager::getInstance(ProductCategory::class);
             $productCategoryTable = $productCategory->getTable();
+            /** @var ProductLocalDescription $localDescription */
+            $localDescription = ObjectManager::getInstance(ProductLocalDescription::class);
+            $localDescriptionTable = $localDescription->getTable();
             
             // 收集所有要删除的产品ID
             $productIds = [];
@@ -440,6 +511,9 @@ class ImportDefault extends CommandAbstract
             
             // 1. 删除产品分类关联
             $sql = "DELETE FROM {$productCategoryTable} WHERE product_id IN ({$productIdList})";
+            $link->exec($sql);
+
+            $sql = "DELETE FROM {$localDescriptionTable} WHERE product_id IN ({$productIdList})";
             $link->exec($sql);
             
             // 2. 删除子产品/变体（parent_id 在列表中的产品）
@@ -1503,6 +1577,24 @@ class ImportDefault extends CommandAbstract
                 'brand' => 'muji',
                 'color' => 'white',
                 'material' => 'plastic',
+                'local_descriptions' => [
+                    'zh_Hans_CN' => [
+                        'name' => 'MUJI 无印良品 香薰机',
+                        'short_description' => 'MUJI 无印良品超声波香薰机，配备 LED 夜灯和定时功能',
+                        'description' => 'MUJI 超声波香薰机可搭配精油使用，内置 LED 夜灯并支持定时功能，适合卧室、书房和客厅营造舒适氛围。',
+                        'meta_name' => 'MUJI 无印良品 香薰机',
+                        'meta_description' => 'MUJI 无印良品超声波香薰机，配备 LED 夜灯和定时功能',
+                        'meta_keywords' => 'MUJI,无印良品,香薰机,加湿器',
+                    ],
+                    'en_US' => [
+                        'name' => 'MUJI Aromatherapy Diffuser',
+                        'short_description' => 'MUJI ultrasonic aromatherapy diffuser with LED night light and timer.',
+                        'description' => 'A MUJI ultrasonic aromatherapy diffuser for essential oils, featuring a soft LED night light and timer modes for bedrooms, studies, and living spaces.',
+                        'meta_name' => 'MUJI Aromatherapy Diffuser',
+                        'meta_description' => 'MUJI ultrasonic aromatherapy diffuser with LED night light and timer.',
+                        'meta_keywords' => 'MUJI,aromatherapy diffuser,ultrasonic diffuser,humidifier',
+                    ],
+                ],
             ],
             // 家居用品 - 厨房小家电
             [

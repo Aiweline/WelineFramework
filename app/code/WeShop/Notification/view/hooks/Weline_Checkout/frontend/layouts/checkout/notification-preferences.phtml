@@ -34,14 +34,14 @@ foreach ($channels as $code => $channel) {
 ?>
 <details class="weshop-checkout-notification-preferences">
     <summary class="weshop-checkout-notification-summary">
-        <span class="weshop-checkout-notification-title">&#35746;&#21333;&#36890;&#30693;&#28192;&#36947;</span>
-        <span class="weshop-checkout-notification-tags" aria-label="&#24050;&#36873;&#36890;&#30693;&#28192;&#36947;">
+        <span class="weshop-checkout-notification-title"><?= htmlspecialchars((string) __('订单通知渠道'), ENT_QUOTES, 'UTF-8') ?></span>
+        <span class="weshop-checkout-notification-tags" aria-label="<?= htmlspecialchars((string) __('已选通知渠道'), ENT_QUOTES, 'UTF-8') ?>">
             <?php if ($selectedLabels): ?>
                 <?php foreach ($selectedLabels as $label): ?>
                     <span class="weshop-checkout-notification-tag"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></span>
                 <?php endforeach; ?>
             <?php else: ?>
-                <span class="weshop-checkout-notification-tag weshop-checkout-notification-tag-empty">&#26410;&#36873;&#25321;</span>
+                <span class="weshop-checkout-notification-tag weshop-checkout-notification-tag-empty"><?= htmlspecialchars((string) __('未选择'), ENT_QUOTES, 'UTF-8') ?></span>
             <?php endif; ?>
         </span>
     </summary>
@@ -60,7 +60,7 @@ foreach ($channels as $code => $channel) {
                     <span>
                         <span class="weshop-checkout-choice-title"><?= htmlspecialchars((string) ($channel['name'] ?? $code), ENT_QUOTES, 'UTF-8') ?></span>
                         <span class="weshop-checkout-choice-meta">
-                            <?= $configured ? '&#21487;&#29992;&#20110;&#26412;&#27425;&#35746;&#21333;&#36890;&#30693;&#12290;' : '&#35831;&#20808;&#22312;&#20010;&#20154;&#20013;&#24515;&#37197;&#32622;&#35813;&#28192;&#36947;&#12290;' ?>
+                            <?= htmlspecialchars((string) ($configured ? __('可用于本次订单通知。') : __('请先在个人中心配置该渠道。')), ENT_QUOTES, 'UTF-8') ?>
                         </span>
                     </span>
                 </label>
@@ -68,11 +68,11 @@ foreach ($channels as $code => $channel) {
         </div>
         <?php if ($customerId > 0): ?>
             <p class="weshop-checkout-notification-help">
-                <a href="<?= htmlspecialchars($manageUrl, ENT_QUOTES, 'UTF-8') ?>" class="font-semibold text-primary hover:underline">&#21435;&#20010;&#20154;&#20013;&#24515;&#31649;&#29702;&#36890;&#30693;&#28192;&#36947;</a>
+                <a href="<?= htmlspecialchars($manageUrl, ENT_QUOTES, 'UTF-8') ?>" class="font-semibold text-primary hover:underline"><?= htmlspecialchars((string) __('去个人中心管理通知渠道'), ENT_QUOTES, 'UTF-8') ?></a>
             </p>
         <?php else: ?>
             <p class="weshop-checkout-notification-help">
-                &#35775;&#23458;&#32467;&#36134;&#20165;&#20351;&#29992;&#37038;&#31665;&#25509;&#25910;&#26412;&#27425;&#35746;&#21333;&#36890;&#30693;&#65292;&#30331;&#24405;&#21518;&#21487;&#20197;&#20445;&#23384;&#26356;&#22810;&#36890;&#30693;&#28192;&#36947;&#12290;
+                <?= htmlspecialchars((string) __('访客结账仅使用邮箱接收本次订单通知，登录后可以保存更多通知渠道。'), ENT_QUOTES, 'UTF-8') ?>
             </p>
         <?php endif; ?>
     </div>

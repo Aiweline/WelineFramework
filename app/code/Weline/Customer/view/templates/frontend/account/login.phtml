@@ -716,8 +716,20 @@ html.dark .auth-form__input:-webkit-autofill:active {
             );
         }
 
+        function setLoginLoading(loading) {
+            loginBtn.disabled = loading;
+            loginBtn.classList.toggle('auth-form__submit--busy', loading);
+            loginBtn.setAttribute('aria-busy', loading ? 'true' : 'false');
+            if (loginBusyLabel) {
+                loginBusyLabel.setAttribute('aria-hidden', loading ? 'false' : 'true');
+            }
+        }
+
         form.addEventListener('submit', function(e) {
             if (!canUseAccountApi()) {
+                if ((username.value || '').trim() && password.value) {
+                    setLoginLoading(true);
+                }
                 return;
             }
 
@@ -749,9 +761,7 @@ html.dark .auth-form__input:-webkit-autofill:active {
                 return;
             }
 
-            loginBtn.disabled = true;
-            loginBtn.classList.add('auth-form__submit--busy');
-            loginBtn.setAttribute('aria-busy', 'true');
+            setLoginLoading(true);
 
             var body = formDataToObject(new FormData(form));
 
@@ -765,6 +775,7 @@ html.dark .auth-form__input:-webkit-autofill:active {
                 if (response.ok && isLoginSuccessPayload(resp)) {
                     loginBtn.classList.remove('auth-form__submit--busy');
                     loginBtn.classList.add('auth-form__submit--success');
+                    loginBtn.disabled = true;
                     loginBtn.setAttribute('aria-busy', 'false');
                     if (loginBusyLabel) {
                         loginBusyLabel.setAttribute('aria-hidden', 'true');
@@ -806,14 +817,10 @@ html.dark .auth-form__input:-webkit-autofill:active {
             var scrollTop = window.scrollY + rect.top - 100;
             window.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
 
-            loginBtn.disabled = false;
-            loginBtn.classList.remove('auth-form__submit--busy', 'auth-form__submit--success');
-            loginBtn.setAttribute('aria-busy', 'false');
+            setLoginLoading(false);
+            loginBtn.classList.remove('auth-form__submit--success');
             loginBtn.style.transform = '';
             loginBtn.style.transition = '';
-            if (loginBusyLabel) {
-                loginBusyLabel.setAttribute('aria-hidden', 'true');
-            }
             if (loginIdleLabel) {
                 loginIdleLabel.innerHTML = '<lang>登录</lang>';
             }

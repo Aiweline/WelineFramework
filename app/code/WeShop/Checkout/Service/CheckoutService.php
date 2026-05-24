@@ -42,6 +42,8 @@ class CheckoutService
             throw new \Exception((string) __('购物车为空，无法结账。'));
         }
 
+        $shippingAddress = $this->normalizeShippingAddress($checkoutData);
+        $billingAddress = $this->normalizeBillingAddress($checkoutData, $shippingAddress);
         $summary = $this->buildCheckoutSummary($cartItems, $totals, $checkoutData);
 
         $orderSummary = $this->query('order', 'createOrder', [
@@ -55,7 +57,8 @@ class CheckoutService
                 'total' => $summary['grand_total'],
                 'shipping_method' => (string) ($checkoutData['shipping_method'] ?? ''),
                 'payment_method' => (string) ($checkoutData['payment_method'] ?? ''),
-                'shipping_address' => $this->normalizeShippingAddress($checkoutData),
+                'shipping_address' => $shippingAddress,
+                'billing_address' => $billingAddress,
             ],
         ]);
         if (!\is_array($orderSummary) || (int) ($orderSummary['order_id'] ?? 0) <= 0) {
@@ -72,11 +75,14 @@ class CheckoutService
             $product = \is_array($cartItem['product'] ?? null) ? $cartItem['product'] : [];
             $quantity = (int) ($cartItem['quantity'] ?? $cartItem['qty'] ?? 1);
             $price = (float) ($cartItem['price'] ?? 0);
+            $options = $this->normalizeOptions($cartItem['options'] ?? $cartItem['product_options'] ?? null);
             $orderItems[] = [
                 'product_id' => (int) ($cartItem['product_id'] ?? 0),
                 'product_name' => (string) ($product['name'] ?? $cartItem['product_name'] ?? ''),
                 'product_sku' => (string) ($product['sku'] ?? $cartItem['product_sku'] ?? ''),
                 'product_image' => (string) ($product['image'] ?? $cartItem['product_image'] ?? $cartItem['image'] ?? ''),
+                'product_options' => $this->encodeOptions($options),
+                'options' => $options,
                 'quantity' => $quantity,
                 'price' => $price,
                 'total' => $price * $quantity,
@@ -236,6 +242,11 @@ class CheckoutService
             throw new \InvalidArgumentException((string) __('请填写收货地址信息。'));
         }
 
+        $billingAddress = $this->normalizeBillingAddress($checkoutData, $shippingAddress);
+        if ($billingAddress === []) {
+            throw new \InvalidArgumentException((string) __('请填写账单地址信息。'));
+        }
+
         if (empty($checkoutData['shipping_method'])) {
             throw new \InvalidArgumentException((string) __('请选择配送方式。'));
         }
@@ -289,6 +300,13 @@ class CheckoutService
         }
 
         $checkoutData['shipping_address'] = $shippingAddress;
+        $billingAddress = $checkoutData['billing_address'] ?? $checkoutData['billing'] ?? [];
+        if (!\is_array($billingAddress)) {
+            $billingAddress = [];
+        }
+        $checkoutData['billing_address'] = $billingAddress;
+        $checkoutData['billing_address_id'] = max(0, (int) ($checkoutData['billing_address_id'] ?? 0));
+        $checkoutData['billing_same_as_shipping'] = $this->normalizeBoolean($checkoutData['billing_same_as_shipping'] ?? true);
         $checkoutData['shipping_method'] = (string) ($checkoutData['shipping_method'] ?? '');
         $checkoutData['payment_method'] = (string) ($checkoutData['payment_method'] ?? '');
         $checkoutData['order_id'] = (int) ($checkoutData['order_id'] ?? $checkoutData['retry_order_id'] ?? 0);
@@ -461,6 +479,58 @@ class CheckoutService
     }
 
     /**
+     * @param array<string, mixed> $checkoutData
+     * @param array<string, mixed> $shippingAddress
+     * @return array<string, mixed>
+     */
+    protected function normalizeBillingAddress(array $checkoutData, array $shippingAddress = []): array
+    {
+        if ($this->normalizeBoolean($checkoutData['billing_same_as_shipping'] ?? true)) {
+            return $shippingAddress !== [] ? $shippingAddress : $this->normalizeShippingAddress($checkoutData);
+        }
+
+        $address = is_array($checkoutData['billing_address'] ?? null) ? $checkoutData['billing_address'] : [];
+        $guestEmail = trim((string) ($checkoutData['guest_email'] ?? $checkoutData['email'] ?? ''));
+        if ($guestEmail !== '' && empty($address['email'])) {
+            $address['email'] = $guestEmail;
+        }
+
+        $addressId = (int) ($checkoutData['billing_address_id'] ?? 0);
+        if ($addressId <= 0 || !empty($checkoutData['is_guest_checkout'])) {
+            return $address;
+        }
+
+        $addressCustomerId = (int) ($checkoutData['authenticated_customer_id'] ?? $checkoutData['customer_id'] ?? 0);
+        $resolved = $this->resolveSavedBillingAddress($addressId, $addressCustomerId);
+        if ($resolved === []) {
+            return $address;
+        }
+
+        if ($address === []) {
+            return $resolved;
+        }
+
+        return array_merge($resolved, array_filter(
+            $address,
+            static fn (mixed $value): bool => $value !== null && $value !== '' && $value !== []
+        ));
+    }
+
+    protected function normalizeBoolean(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+
+        $value = strtolower(trim((string) $value));
+        if ($value === '') {
+            return false;
+        }
+
+        return !\in_array($value, ['0', 'false', 'off', 'no'], true);
+    }
+
+    /**
      * @param array<int, mixed> $cartItems
      * @return array<int, array<string, mixed>>
      */
@@ -479,10 +549,110 @@ class CheckoutService
                 'weight' => (float) ($item['weight'] ?? $product['weight'] ?? 0),
                 'sku' => (string) ($product['sku'] ?? $item['product_sku'] ?? ''),
                 'name' => (string) ($product['name'] ?? $item['product_name'] ?? ''),
+                'options' => $this->normalizeOptions($item['options'] ?? $item['product_options'] ?? null),
             ];
         }
 
         return $result;
+    }
+
+    /**
+     * @return array<int, array<string, string>>
+     */
+    protected function normalizeOptions(mixed $rawOptions): array
+    {
+        if (\is_string($rawOptions)) {
+            $rawOptions = \trim($rawOptions);
+            if ($rawOptions === '') {
+                return [];
+            }
+
+            $decoded = \json_decode($rawOptions, true);
+            if (\is_array($decoded)) {
+                return $this->normalizeOptions($decoded);
+            }
+
+            return [[
+                'label' => (string) __('规格'),
+                'value' => $rawOptions,
+            ]];
+        }
+
+        if (!\is_array($rawOptions) || $rawOptions === []) {
+            return [];
+        }
+
+        $isAssoc = \array_keys($rawOptions) !== \range(0, \count($rawOptions) - 1);
+        if ($isAssoc) {
+            $options = [];
+            foreach ($rawOptions as $label => $value) {
+                if (\is_scalar($value) && \trim((string) $value) !== '') {
+                    $options[] = [
+                        'label' => \trim((string) $label) !== '' ? \trim((string) $label) : (string) __('规格'),
+                        'value' => \trim((string) $value),
+                    ];
+                }
+            }
+
+            return $options;
+        }
+
+        $options = [];
+        foreach ($rawOptions as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+
+            $value = \trim((string) ($option['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized = [
+                'label' => \trim((string) ($option['label'] ?? '')) !== ''
+                    ? \trim((string) ($option['label'] ?? ''))
+                    : (string) __('规格'),
+                'value' => $value,
+            ];
+
+            foreach (['attribute_id', 'option_id'] as $idKey) {
+                $id = (int) ($option[$idKey] ?? 0);
+                if ($id > 0) {
+                    $normalized[$idKey] = $id;
+                }
+            }
+
+            $code = \trim((string) ($option['code'] ?? ''));
+            if ($code !== '') {
+                $normalized['code'] = $code;
+            }
+
+            $swatchType = \trim((string) ($option['swatch_type'] ?? ''));
+            $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
+            if ($swatchType !== '' && $swatchValue !== '') {
+                $normalized['swatch_type'] = $swatchType;
+                $normalized['swatch_value'] = $swatchValue;
+            }
+
+            $options[] = $normalized;
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param array<int, array<string, string>> $options
+     */
+    protected function encodeOptions(array $options): string
+    {
+        $options = $this->normalizeOptions($options);
+        if ($options === []) {
+            return '';
+        }
+
+        $encoded = \json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return \is_string($encoded) ? $encoded : '';
     }
 
     /**
@@ -556,6 +726,11 @@ class CheckoutService
         $address = $this->addressService->getAddress($addressId, $customerId > 0 ? $customerId : null);
 
         return is_array($address) ? $address : [];
+    }
+
+    protected function resolveSavedBillingAddress(int $addressId, int $customerId): array
+    {
+        return $this->resolveSavedShippingAddress($addressId, $customerId);
     }
 
     protected function reuseRetryPaymentOrder(int $customerId, int $orderId): Order

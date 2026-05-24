@@ -34,6 +34,8 @@ use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Service\Query\QueryProviderRegistry;
 use Weline\I18n\Parser as I18nParser;
 use Weline\Server\Log\LogConfig;
+use Weline\Server\Service\DynamicWarmup\HotPathDiscoveryService;
+use Weline\Server\Service\MemoryStateFacade;
 /**
  * WLS 运行时
  * 
@@ -45,10 +47,15 @@ use Weline\Server\Log\LogConfig;
  */
 class WlsRuntime implements RuntimeInterface
 {
+    private const DYNAMIC_WARMUP_COORDINATOR_NS = 'wls_dynamic_warmup';
+
     /**
      * 是否已初始化
      */
     private bool $bootstrapped = false;
+
+    private static ?MemoryStateFacade $dynamicWarmupCoordinator = null;
+    private static bool $dynamicWarmupCoordinatorResolved = false;
     
     /**
      * 事件管理器（进程级缓存）
@@ -63,7 +70,13 @@ class WlsRuntime implements RuntimeInterface
     private ?WorkerPreloadManager $preloadManager = null;
 
     private array $preloadPhasesCompleted = [];
-    
+
+    private bool $readyGateWorkerBootstrapWarmupCompleted = false;
+
+    private bool $readyGateWorkerRegistryWarmupCompleted = false;
+
+    private bool $readyGateDynamicFirstRenderWarmupCompleted = false;
+
     /**
      * 请求计数
      */
@@ -151,41 +164,12 @@ class WlsRuntime implements RuntimeInterface
         FiberOutputBuffer::install();
         SchedulerSystem::yield();
 
-        if ($this->shouldRunReadyGateCorePreload()) {
-            $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
-            $this->runWorkerPreloadPhase(WorkerPreloadContext::PHASE_READY_GATE);
-            SchedulerSystem::yield();
-        }
-        
         // 预加载常用对象（进程级缓存）
-        if ($this->shouldRunSynchronousWorkerBootstrapRegistryWarmup()) {
-            $this->eventManager = ObjectManager::getInstance(EventsManager::class);
-            $this->router = ObjectManager::getInstance(Router::class);
-            $this->preloadWorkerRegistries();
-            if ($this->shouldRunSynchronousWorkerBootstrapObserverWarmup()) {
-                $this->dispatchWorkerBootstrapWarmup();
-            }
-            SchedulerSystem::yield();
-        }
-        
         // Router 在 WLS 模式下是进程级单例。
         // 请求级状态由 Router::__init() 在每个请求开始时重置，
         // 无需在此注册额外回调（__init 通过 RequestContext ID 检测新请求）。
         
         $this->bootstrapped = true;
-    }
-
-    private function shouldRunReadyGateCorePreload(): bool
-    {
-        $rawFlag = \getenv('WLS_WORKER_READY_GATE_CORE_PRELOAD');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker_ready_gate_core_preload', null);
-        }
-        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            return true;
-        }
-
-        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'], true);
     }
 
     private function getWorkerPreloadManager(): WorkerPreloadManager
@@ -210,29 +194,6 @@ class WlsRuntime implements RuntimeInterface
         $this->preloadPhasesCompleted[$phase] = true;
     }
 
-    private function shouldRunSynchronousWorkerBootstrapRegistryWarmup(): bool
-    {
-        $rawFlag = \getenv('WLS_WORKER_BOOTSTRAP_SYNC_WARMUP');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker_bootstrap_sync_warmup', null);
-        }
-
-        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            $legacyFlag = \getenv('WLS_WORKER_BOOTSTRAP_WARMUP');
-            if ($legacyFlag === false || \trim((string)$legacyFlag) === '') {
-                $legacyFlag = Env::get('wls.worker_bootstrap_warmup', null);
-            }
-            if ($legacyFlag === null || \trim((string)$legacyFlag) === '') {
-                return false;
-            }
-
-            return \strtolower(\trim((string)$legacyFlag)) === 'sync';
-        }
-
-        $flag = \strtolower(\trim((string)$rawFlag));
-        return \in_array($flag, ['1', 'true', 'yes', 'on', 'sync'], true);
-    }
-
     private function shouldRunWorkerBootstrapWarmup(): bool
     {
         $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
@@ -253,46 +214,163 @@ class WlsRuntime implements RuntimeInterface
         return \in_array($flag, ['1', 'true', 'yes', 'on', 'sync', 'async', 'deferred'], true);
     }
 
-    private function shouldRunSynchronousWorkerBootstrapObserverWarmup(): bool
+    public function runReadyGateWorkerBootstrapWarmup(): void
     {
-        $rawFlag = \getenv('WLS_WORKER_BOOTSTRAP_OBSERVER_WARMUP');
+        if ($this->readyGateWorkerBootstrapWarmupCompleted) {
+            return;
+        }
+
+        $startedAt = \microtime(true);
+        $backendResult = $this->newBackendFirstRenderWarmupResult();
+        $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
+
+        $this->logReadyGateWarmupStep('route_assert_begin', $workerId, $startedAt);
+        $this->assertGeneratedRouteFilesReady();
+        $this->logReadyGateWarmupStep('route_assert_done', $workerId, $startedAt);
+        if ($this->shouldRunReadyGateWorkerRegistryWarmup()) {
+            $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
+            $this->router ??= ObjectManager::getInstance(Router::class);
+            $this->logReadyGateWarmupStep('registry_begin', $workerId, $startedAt);
+            $this->preloadWorkerRegistries(true);
+            $this->readyGateWorkerRegistryWarmupCompleted = true;
+            $this->logReadyGateWarmupStep('registry_done', $workerId, $startedAt);
+            SchedulerSystem::yield();
+        } else {
+            $this->logReadyGateWarmupStep('registry_skipped', $workerId, $startedAt);
+        }
+
+        if ($this->shouldRunReadyGateWorkerBootstrapObserverWarmup()) {
+            $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
+            $this->router ??= ObjectManager::getInstance(Router::class);
+            $this->logReadyGateWarmupStep('observer_begin', $workerId, $startedAt);
+            $this->dispatchWorkerBootstrapWarmup();
+            $this->logReadyGateWarmupStep('observer_done', $workerId, $startedAt);
+            SchedulerSystem::yield();
+        } else {
+            $this->logReadyGateWarmupStep('observer_skipped', $workerId, $startedAt);
+        }
+
+        $this->logReadyGateWarmupStep('backend_begin', $workerId, $startedAt);
+        $backendResult = $this->runReadyGateBackendFirstRenderWarmup();
+        $this->logReadyGateWarmupStep(
+            'backend_done warmed=' . (int)($backendResult['warmed'] ?? 0)
+            . ' failed=' . (int)($backendResult['failed'] ?? 0)
+            . ' elapsed_ms=' . (float)($backendResult['elapsed_ms'] ?? 0.0),
+            $workerId,
+            $startedAt
+        );
+        if ((int)($backendResult['failed'] ?? 0) > 0) {
+            $message = 'READY gate backend first-render warmup failed worker=' . $workerId
+                . ' failed=' . (int)($backendResult['failed'] ?? 0)
+                . ' errors=' . \json_encode(
+                    \array_slice(\is_array($backendResult['errors'] ?? null) ? $backendResult['errors'] : [], 0, 6),
+                    \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE
+                );
+            if (!$this->shouldFailOpenReadyGateBackendWarmup()) {
+                throw new \RuntimeException($message);
+            }
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[WlsRuntime] ' . $message);
+            }
+        }
+
+        $dynamicResult = $this->newDynamicFirstRenderWarmupResult();
+        $this->logReadyGateWarmupStep('dynamic_begin', $workerId, $startedAt);
+        if ($this->shouldRunReadyGateDynamicFirstRenderWarmup()) {
+            $dynamicResult = $this->runReadyGateDynamicFirstRenderWarmup();
+            $this->readyGateDynamicFirstRenderWarmupCompleted = true;
+            $this->logReadyGateWarmupStep(
+                'dynamic_done warmed=' . (int)($dynamicResult['warmed'] ?? 0)
+                . ' failed=' . (int)($dynamicResult['failed'] ?? 0)
+                . ' elapsed_ms=' . (float)($dynamicResult['elapsed_ms'] ?? 0.0),
+                $workerId,
+                $startedAt
+            );
+            if ((int)($dynamicResult['failed'] ?? 0) > 0) {
+                $message = 'READY gate dynamic first-render warmup failed worker=' . $workerId
+                    . ' failed=' . (int)($dynamicResult['failed'] ?? 0)
+                    . ' errors=' . \json_encode(
+                        \array_slice(\is_array($dynamicResult['errors'] ?? null) ? $dynamicResult['errors'] : [], 0, 8),
+                        \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE
+                    );
+                if (!$this->shouldFailOpenReadyGateDynamicWarmup()) {
+                    throw new \RuntimeException($message);
+                }
+                if (\function_exists('w_log_warning')) {
+                    \w_log_warning('[WlsRuntime] ' . $message);
+                }
+            }
+        } else {
+            $this->logReadyGateWarmupStep('dynamic_skipped', $workerId, $startedAt);
+        }
+
+        $this->readyGateWorkerBootstrapWarmupCompleted = true;
+        if (\function_exists('w_log_info')) {
+            \w_log_info('[WlsRuntime] ready-gate bootstrap warmup done worker=' . $workerId
+                . ' backend_warmed=' . (int)($backendResult['warmed'] ?? 0)
+                . ' backend_failed=' . (int)($backendResult['failed'] ?? 0)
+                . ' dynamic_warmed=' . (int)($dynamicResult['warmed'] ?? 0)
+                . ' dynamic_failed=' . (int)($dynamicResult['failed'] ?? 0)
+                . ' hosts=' . \json_encode($backendResult['hosts'] ?? [], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE)
+                . ' paths=' . \json_encode($backendResult['paths'] ?? [], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE)
+                . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
+        }
+    }
+
+    private function shouldRunReadyGateWorkerBootstrapObserverWarmup(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_READY_GATE_OBSERVER_WARMUP');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker_bootstrap_observer_warmup', null);
+            $rawFlag = Env::get('wls.worker.ready_gate_observer_warmup', '0');
         }
 
-        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            $legacyFlag = \getenv('WLS_WORKER_BOOTSTRAP_WARMUP');
-            if ($legacyFlag === false || \trim((string)$legacyFlag) === '') {
-                $legacyFlag = Env::get('wls.worker_bootstrap_warmup', null);
-            }
-            if ($legacyFlag === null || \trim((string)$legacyFlag) === '') {
-                return false;
-            }
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync'], true);
+    }
 
-            return \strtolower(\trim((string)$legacyFlag)) === 'sync';
+    private function shouldRunReadyGateWorkerRegistryWarmup(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_READY_GATE_REGISTRY_WARMUP');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.ready_gate_registry_warmup', '0');
         }
 
-        $flag = \strtolower(\trim((string)$rawFlag));
-        return \in_array($flag, ['1', 'true', 'yes', 'on', 'sync'], true);
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync'], true);
+    }
+
+    private function logReadyGateWarmupStep(string $step, int $workerId, float $startedAt): void
+    {
+        if (!\function_exists('w_log_info')) {
+            return;
+        }
+
+        \w_log_info('[WlsRuntime] ready-gate ' . $step
+            . ' worker=' . $workerId
+            . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
     }
 
     public function runDeferredWorkerBootstrapWarmup(): void
     {
         $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
-        if (!$this->roleCanRunDeferredWorkerBootstrap($role)) {
-            return;
-        }
+        $roleCanRunGeneralDeferred = $this->roleCanRunDeferredWorkerBootstrap($role);
 
-        $runRegistryWarmup = $this->shouldRunWorkerBootstrapWarmup();
-        $runObserverWarmup = $this->shouldRunDeferredWorkerBootstrapObserverWarmup();
-        $runUrlMetadataWarmup = $this->shouldRunDeferredWorkerBootstrapUrlMetadataWarmup();
-        $runFpcBuildAheadWarmup = $this->shouldRunDeferredFpcBuildAheadWarmup();
-        $runFpcProcessPullWarmup = $this->shouldRunDeferredFpcProcessPullWarmup();
+        $runRegistryWarmup = $roleCanRunGeneralDeferred && $this->shouldRunWorkerBootstrapWarmup();
+        $runObserverWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredWorkerBootstrapObserverWarmup();
+        $runUrlMetadataWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredWorkerBootstrapUrlMetadataWarmup();
+        $runBackendFirstRenderWarmup = $this->shouldRunDeferredBackendFirstRenderWarmup();
+        $runFpcBuildAheadWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredFpcBuildAheadWarmup();
+        $runFpcProcessPullWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredFpcProcessPullWarmup();
+        $runDynamicFirstRenderWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredDynamicFirstRenderWarmup();
+        if ($this->readyGateWorkerRegistryWarmupCompleted) {
+            $runRegistryWarmup = false;
+            $runUrlMetadataWarmup = false;
+        }
         if (!$runRegistryWarmup
             && !$runObserverWarmup
             && !$runUrlMetadataWarmup
+            && !$runBackendFirstRenderWarmup
             && !$runFpcBuildAheadWarmup
             && !$runFpcProcessPullWarmup
+            && !$runDynamicFirstRenderWarmup
         ) {
             return;
         }
@@ -310,96 +388,1208 @@ class WlsRuntime implements RuntimeInterface
                 Url::preloadWorkerRoutingMetadata();
             }, 'url metadata');
         }
+        if ($runBackendFirstRenderWarmup) {
+            $this->runDeferredBackendFirstRenderWarmup();
+        }
         if ($runFpcBuildAheadWarmup) {
             $this->runDeferredFpcBuildAheadWarmup();
         }
         if ($runFpcProcessPullWarmup) {
             $this->runDeferredFpcProcessPullWarmup($runFpcBuildAheadWarmup);
         }
+        if ($runDynamicFirstRenderWarmup) {
+            $this->runDeferredDynamicFirstRenderWarmup();
+        }
     }
 
-    public function runReadyGateFpcBuildAheadWarmup(): void
+    /**
+     * @return array{enabled: bool, warmed: int, failed: int, paths: list<string>, hosts: list<string>, errors: list<string>, samples: list<array<string, mixed>>, elapsed_ms: float}
+     */
+    private function newDynamicFirstRenderWarmupResult(): array
     {
-        if (!$this->shouldRunReadyGateFpcBuildAheadWarmup()) {
-            return;
+        return [
+            'enabled' => false,
+            'warmed' => 0,
+            'failed' => 0,
+            'paths' => [],
+            'hosts' => [],
+            'errors' => [],
+            'samples' => [],
+            'elapsed_ms' => 0.0,
+        ];
+    }
+
+    /**
+     * @return array{enabled: bool, warmed: int, failed: int, paths: list<string>, hosts: list<string>, errors: list<string>, samples: list<array<string, mixed>>, elapsed_ms: float}
+     */
+    private function runReadyGateDynamicFirstRenderWarmup(): array
+    {
+        if (!$this->shouldRunReadyGateDynamicFirstRenderWarmup()) {
+            return $this->newDynamicFirstRenderWarmupResult();
         }
 
-        $paths = $this->resolveReadyGateFpcBuildAheadPaths();
-        $hosts = $this->resolveReadyGateFpcBuildAheadHosts();
-        if ($paths === [] || $hosts === []) {
-            return;
+        return $this->runDynamicFirstRenderWarmupInternal(
+            $this->readyGateDynamicWarmupMaxPaths(),
+            $this->newDynamicFirstRenderWarmupResult(),
+            $this->resolveReadyGateDynamicWarmupPaths()
+        );
+    }
+
+    private function shouldRunReadyGateDynamicFirstRenderWarmup(): bool
+    {
+        if (!$this->canRunDynamicFirstRenderWarmupForCurrentRole()) {
+            return false;
         }
 
-        $built = 0;
-        $failed = 0;
-        $startedAt = \microtime(true);
-        foreach ($hosts as $host) {
-            foreach ($paths as $path) {
-                $published = false;
-                $lastError = '';
-                $attempts = (int)(Env::get('wls.worker.fpc_ready_gate_attempts', 2) ?: 2);
-                $attempts = \max(1, \min($attempts, 4));
-                for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-                    try {
-                        $this->runInternalWarmupRequest($host, $path, $built + $failed + 1, 'fpc-ready-gate');
-                        $published = $this->hasSharedFpcWarmupPayload($host, $path);
-                        if ($published) {
-                            break;
-                        }
-                        $lastError = 'shared FPC payload not readable after build';
-                    } catch (\Throwable $e) {
-                        $lastError = $e->getMessage();
-                    }
+        $rawFlag = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_ENABLED');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_enabled', '1');
+        }
 
-                    if ($attempt < $attempts) {
-                        SchedulerSystem::yieldDelay(50);
-                    }
-                }
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'], true);
+    }
 
-                if ($published) {
-                    $built++;
-                    continue;
-                }
+    private function shouldFailOpenReadyGateDynamicWarmup(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_FAIL_OPEN');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_fail_open', '1');
+        }
 
-                $failed++;
-                $message = '[WlsRuntime] FPC ready-gate failed ' . $host . $path
-                    . ($lastError !== '' ? ': ' . $lastError : '');
-                if (\function_exists('w_log_warning')) {
-                    \w_log_warning($message);
-                } else {
-                    \error_log($message);
-                }
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'fail_open'], true);
+    }
+
+    private function readyGateDynamicWarmupMaxPaths(): int
+    {
+        $raw = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_MAX_PATHS');
+        if ($raw === false || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.dynamic_ready_gate_max_paths', null);
+        }
+        if ($raw === null || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.dynamic_ready_gate_max', 32);
+        }
+
+        return \max(1, \min(128, (int)$raw));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveReadyGateDynamicWarmupPaths(): array
+    {
+        $maxPaths = $this->readyGateDynamicWarmupMaxPaths();
+        $configured = Env::get('wls.worker.dynamic_ready_gate_paths', null);
+        if ($configured !== null && (!\is_string($configured) || \trim($configured) !== '')) {
+            return \array_slice($this->normalizeDynamicWarmupPathList($configured), 0, $maxPaths);
+        }
+
+        if (!$this->shouldUseReadyGateDynamicDiscovery()) {
+            return \array_slice($this->readyGateDynamicCriticalWarmupPaths(), 0, $maxPaths);
+        }
+
+        try {
+            $discovery = ObjectManager::getInstance(HotPathDiscoveryService::class);
+            $paths = $discovery instanceof HotPathDiscoveryService
+                ? $discovery->discover(\max($maxPaths * 4, 16))
+                : [];
+        } catch (\Throwable) {
+            $paths = [];
+        }
+
+        $readyGatePaths = [];
+        foreach ($paths as $path) {
+            if (!$this->isReadyGateDynamicControllerCachePath($path)) {
+                continue;
+            }
+            $readyGatePaths[$path] = $path;
+            if (\count($readyGatePaths) >= $maxPaths) {
+                break;
             }
         }
 
-        if (\function_exists('w_log_info')) {
-            \w_log_info('[WlsRuntime] FPC ready-gate warmed=' . $built
-                . ' failed=' . $failed
-                . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
+        if ($readyGatePaths === []) {
+            $readyGatePaths = \array_combine(
+                $this->readyGateDynamicCriticalWarmupPaths(),
+                $this->readyGateDynamicCriticalWarmupPaths()
+            ) ?: [];
+        }
+
+        return \array_slice(\array_values($readyGatePaths), 0, $maxPaths);
+    }
+
+    private function shouldUseReadyGateDynamicDiscovery(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_DISCOVERY');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_discovery', 'critical');
+        }
+
+        return \in_array(
+            \strtolower(\trim((string)$rawFlag)),
+            ['1', 'true', 'yes', 'on', 'auto', 'discovery'],
+            true
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function readyGateDynamicCriticalWarmupPaths(): array
+    {
+        return [
+            '/',
+            '/catalog/category/clothing',
+            '/en_US/catalog/category/clothing',
+            '/USD/en_US/catalog/category/clothing',
+            '/zh_Hans_CN/catalog/category/clothing',
+            '/CNY/zh_Hans_CN/catalog/category/clothing',
+            '/product/demo-category-81-sports',
+            '/en_US/product/demo-category-81-sports',
+            '/product/demo-category-45-clothing',
+            '/en_US/product/demo-category-45-clothing',
+            '/catalog/category/clothing/sports',
+            '/en_US/catalog/category/clothing/sports',
+            '/USD/en_US/catalog/category/clothing/sports',
+            '/zh_Hans_CN/catalog/category/clothing/sports',
+            '/CNY/zh_Hans_CN/catalog/category/clothing/sports',
+            '/catalog/category/clothing/women',
+            '/en_US/catalog/category/clothing/women',
+            '/USD/en_US/catalog/category/clothing/women',
+            '/zh_Hans_CN/catalog/category/clothing/women',
+            '/CNY/zh_Hans_CN/catalog/category/clothing/women',
+            '/catalog/category/clothing/men',
+            '/en_US/catalog/category/clothing/men',
+            '/USD/en_US/catalog/category/clothing/men',
+            '/zh_Hans_CN/catalog/category/clothing/men',
+            '/CNY/zh_Hans_CN/catalog/category/clothing/men',
+            '/USD/en_US/product/demo-category-81-sports',
+            '/zh_Hans_CN/product/demo-category-81-sports',
+            '/CNY/zh_Hans_CN/product/demo-category-81-sports',
+            '/USD/en_US/product/demo-category-45-clothing',
+            '/zh_Hans_CN/product/demo-category-45-clothing',
+            '/CNY/zh_Hans_CN/product/demo-category-45-clothing',
+            '/product/demo-category-126-food',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeDynamicWarmupPathList(mixed $configured): array
+    {
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (!\is_array($configured)) {
+            return [];
+        }
+
+        $paths = [];
+        try {
+            $discovery = ObjectManager::getInstance(HotPathDiscoveryService::class);
+        } catch (\Throwable) {
+            $discovery = null;
+        }
+
+        foreach ($configured as $path) {
+            if (!\is_scalar($path)) {
+                continue;
+            }
+            $normalized = $discovery instanceof HotPathDiscoveryService
+                ? $discovery->normalizeFrontendPagePath($path)
+                : $this->normalizeInternalWarmupPath((string)$path);
+            if ($normalized !== null && $normalized !== '') {
+                $paths[$normalized] = $normalized;
+            }
+        }
+
+        return \array_values($paths);
+    }
+
+    private function isReadyGateDynamicControllerCachePath(string $path): bool
+    {
+        $lower = \strtolower($path);
+        return $lower === '/'
+            || \preg_match('#^/[a-z]{2}_[a-z0-9_]+/?$#i', $lower) === 1
+            || \str_contains($lower, '/catalog/category/')
+            || \str_contains($lower, '/product/')
+            || \str_contains($lower, '/product/view')
+            || \str_contains($lower, '/pagebuilder/');
+    }
+
+    private function assertGeneratedRouteFilesReady(): void
+    {
+        $routeTables = [];
+        $missing = [];
+        $invalid = [];
+
+        foreach (Env::router_files_PATH as $routerFile) {
+            if (!\is_file($routerFile)) {
+                $missing[] = $this->formatGeneratedRoutePath($routerFile);
+                continue;
+            }
+
+            try {
+                $routes = include $routerFile;
+            } catch (\Throwable $e) {
+                throw new \RuntimeException(
+                    'Generated router file is not readable: '
+                    . $this->formatGeneratedRoutePath($routerFile)
+                    . ' (' . $e->getMessage() . ')',
+                    0,
+                    $e
+                );
+            }
+
+            if (!\is_array($routes)) {
+                $invalid[] = $this->formatGeneratedRoutePath($routerFile) . ' did not return an array';
+                continue;
+            }
+
+            $routeTables[$routerFile] = $routes;
+        }
+
+        if ($missing !== []) {
+            throw new \RuntimeException(
+                'Generated router files are missing before worker READY: '
+                . \implode(', ', $missing)
+                . '. Run php bin/w setup:upgrade --route before starting WLS.'
+            );
+        }
+
+        $backendRoutes = $routeTables[Env::path_BACKEND_PC_ROUTER_FILE] ?? [];
+        if (!$this->routeTableHasAnyKey($backendRoutes, ['admin', 'admin::GET'])) {
+            $invalid[] = $this->formatGeneratedRoutePath(Env::path_BACKEND_PC_ROUTER_FILE)
+                . ' is missing admin route';
+        }
+        if (!$this->routeTableHasAnyKey($backendRoutes, ['admin/login', 'admin/login::GET'])) {
+            $invalid[] = $this->formatGeneratedRoutePath(Env::path_BACKEND_PC_ROUTER_FILE)
+                . ' is missing admin/login route';
+        }
+
+        $frontendRoutes = $routeTables[Env::path_FRONTEND_PC_ROUTER_FILE] ?? [];
+        if ($frontendRoutes === []) {
+            $invalid[] = $this->formatGeneratedRoutePath(Env::path_FRONTEND_PC_ROUTER_FILE) . ' is empty';
+        }
+
+        if ($invalid !== []) {
+            throw new \RuntimeException(
+                'Generated router files are not ready before worker READY: '
+                . \implode('; ', $invalid)
+                . '. Run php bin/w setup:upgrade --route before starting WLS.'
+            );
         }
     }
 
-    private function shouldRunReadyGateFpcBuildAheadWarmup(): bool
+    /**
+     * @param array<string, mixed> $routes
+     * @param list<string> $keys
+     */
+    private function routeTableHasAnyKey(array $routes, array $keys): bool
+    {
+        foreach ($keys as $key) {
+            if (\array_key_exists($key, $routes)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function formatGeneratedRoutePath(string $path): string
+    {
+        $normalizedBase = \rtrim(\str_replace(['/', '\\'], DIRECTORY_SEPARATOR, BP), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $normalizedPath = \str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+        if (\str_starts_with($normalizedPath, $normalizedBase)) {
+            return \str_replace(DIRECTORY_SEPARATOR, '/', \substr($normalizedPath, \strlen($normalizedBase)));
+        }
+
+        return $path;
+    }
+
+    /**
+     * @return array{enabled: bool, warmed: int, failed: int, hosts: list<string>, paths: list<string>, errors: list<string>, elapsed_ms: float}
+     */
+    private function runReadyGateBackendFirstRenderWarmup(): array
+    {
+        if (!$this->shouldRunReadyGateBackendFirstRenderWarmup()) {
+            return $this->newBackendFirstRenderWarmupResult();
+        }
+
+        return $this->runBackendFirstRenderWarmupRequests('ready-gate');
+    }
+
+    /**
+     * @return array{enabled: bool, warmed: int, failed: int, hosts: list<string>, paths: list<string>, errors: list<string>, elapsed_ms: float}
+     */
+    private function newBackendFirstRenderWarmupResult(): array
+    {
+        return [
+            'enabled' => false,
+            'warmed' => 0,
+            'failed' => 0,
+            'hosts' => [],
+            'paths' => [],
+            'errors' => [],
+            'elapsed_ms' => 0.0,
+        ];
+    }
+
+    /**
+     * @return array{enabled: bool, warmed: int, failed: int, hosts: list<string>, paths: list<string>, errors: list<string>, elapsed_ms: float}
+     */
+    private function runBackendFirstRenderWarmupRequests(string $scope): array
+    {
+        $result = $this->newBackendFirstRenderWarmupResult();
+        $startedAt = \microtime(true);
+        $result['enabled'] = true;
+        $userId = $this->resolveReadyGateBackendWarmupUserId();
+        if ($userId <= 0) {
+            $result['errors'][] = 'backend warmup user disabled';
+            $result['elapsed_ms'] = \round((\microtime(true) - $startedAt) * 1000, 2);
+            return $result;
+        }
+
+        $hosts = $this->resolveBackendWarmupHosts($scope);
+        $paths = $this->resolveBackendWarmupPaths($scope);
+        $result['hosts'] = $hosts;
+        $result['paths'] = $paths;
+        if ($hosts === [] || $paths === []) {
+            $result['elapsed_ms'] = \round((\microtime(true) - $startedAt) * 1000, 2);
+            return $result;
+        }
+
+        $sequence = 0;
+        foreach ($hosts as $host) {
+            foreach ($paths as $path) {
+                $sequence++;
+                try {
+                    $meta = $this->runBackendFirstRenderWarmupAttempt($host, $path, $sequence, $userId);
+                    $statusCode = (int)($meta['status_code'] ?? 0);
+                    $location = $this->warmupHeaderValue((array)($meta['headers'] ?? []), 'Location');
+                    $bodyLength = (int)($meta['body_length'] ?? 0);
+                    $cache = $this->backendWarmupControllerCacheSource((array)($meta['headers'] ?? []));
+                    $store = $this->backendWarmupStoreStatus((array)($meta['headers'] ?? []), $cache);
+                    if ($statusCode >= 200
+                        && $statusCode < 300
+                        && $location === ''
+                        && $bodyLength > 0
+                        && !$this->backendWarmupCacheIsReady($cache)
+                        && $this->backendWarmupStoreIndicatesPopulate($store, $cache)
+                    ) {
+                        $sequence++;
+                        SchedulerSystem::yield();
+                        $meta = $this->runBackendFirstRenderWarmupAttempt($host, $path, $sequence, $userId);
+                        $statusCode = (int)($meta['status_code'] ?? 0);
+                        $location = $this->warmupHeaderValue((array)($meta['headers'] ?? []), 'Location');
+                        $bodyLength = (int)($meta['body_length'] ?? 0);
+                        $cache = $this->backendWarmupControllerCacheSource((array)($meta['headers'] ?? []));
+                        $store = $this->backendWarmupStoreStatus((array)($meta['headers'] ?? []), $cache);
+                    }
+                    $cacheObserved = $cache !== '' || $store !== '';
+                    if ($statusCode >= 200
+                        && $statusCode < 300
+                        && $location === ''
+                        && $bodyLength > 0
+                        && (!$cacheObserved || $this->backendWarmupCacheIsReady($cache))
+                    ) {
+                        $result['warmed']++;
+                    } else {
+                        $result['failed']++;
+                        $error = $host . $path . ': status=' . $statusCode . ' body_length=' . $bodyLength;
+                        if ($location !== '') {
+                            $error .= ' location=' . $location;
+                        }
+                        if ($cacheObserved) {
+                            $error .= ' cache=' . ($cache !== '' ? $cache : 'missing');
+                            if ($store !== '') {
+                                $error .= ' store=' . $store;
+                            }
+                        }
+                        $result['errors'][] = $error;
+                    }
+                } catch (\Throwable $e) {
+                    $result['failed']++;
+                    $result['errors'][] = $host . $path . ': ' . $e->getMessage();
+                }
+                SchedulerSystem::yield();
+            }
+        }
+
+        $result['elapsed_ms'] = \round((\microtime(true) - $startedAt) * 1000, 2);
+        if ((int)$result['failed'] > 0 && \function_exists('w_log_warning')) {
+            \w_log_warning('[WlsRuntime] ' . $scope . ' backend warmup incomplete: '
+                . \json_encode($result, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $headers
+     */
+    private function backendWarmupControllerCacheSource(array $headers): string
+    {
+        foreach (['X-WLS-Controller-Cache', 'X-WLS-Admin-View-Cache'] as $headerName) {
+            $value = $this->warmupHeaderValue($headers, $headerName);
+            if ($value !== '') {
+                return \strtolower($value);
+            }
+        }
+
+        return '';
+    }
+
+    private function backendWarmupCacheIsReady(string $cache): bool
+    {
+        $cache = \strtolower(\trim($cache));
+        return $cache === 'local'
+            || $cache === 'shared'
+            || \str_starts_with($cache, 'local:')
+            || \str_starts_with($cache, 'shared:');
+    }
+
+    /**
+     * @param array<string, mixed> $headers
+     */
+    private function backendWarmupStoreStatus(array $headers, string $cache = ''): string
+    {
+        foreach (['X-WLS-Admin-View-Cache-Full-Html', 'X-WLS-Admin-View-Cache-Store'] as $headerName) {
+            $value = $this->warmupHeaderValue($headers, $headerName);
+            if ($value !== '') {
+                return \strtolower($value);
+            }
+        }
+
+        return \strtolower(\trim($cache)) === 'stored' ? 'stored' : '';
+    }
+
+    private function backendWarmupStoreIndicatesPopulate(string $store, string $cache): bool
+    {
+        $store = \strtolower(\trim($store));
+        $cache = \strtolower(\trim($cache));
+        return $cache === 'stored'
+            || $store === 'stored'
+            || $store === 'ok';
+    }
+
+    private function shouldRunReadyGateBackendFirstRenderWarmup(): bool
     {
         $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
         if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
             return false;
         }
 
-        $rawFlag = \getenv('WLS_WORKER_FPC_READY_GATE_ENABLED');
+        $rawFlag = \getenv('WLS_WORKER_BACKEND_READY_GATE_WARMUP');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.fpc_ready_gate_enabled', null);
+            $rawFlag = Env::get('wls.worker.backend_ready_gate_warmup', '1');
         }
-        if ($rawFlag === null || \trim((string)$rawFlag) === '') {
-            $rawFlag = '1';
+
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync'], true);
+    }
+
+    private function shouldFailOpenReadyGateBackendWarmup(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_BACKEND_READY_GATE_FAIL_OPEN');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.backend_ready_gate_fail_open', '0');
         }
-        if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on'], true)) {
+
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'fail_open'], true);
+    }
+
+    private function shouldRunDeferredBackendFirstRenderWarmup(): bool
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
             return false;
         }
 
-        $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
-        $ownerWorkerId = (int)(Env::get('wls.worker.fpc_ready_gate_owner_worker_id', 1) ?: 1);
-        return $workerId <= 0 || $ownerWorkerId <= 0 || $workerId === $ownerWorkerId;
+        $rawFlag = \getenv('WLS_WORKER_BACKEND_DEFERRED_WARMUP');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.backend_deferred_warmup', '1');
+        }
+
+        if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
+            return false;
+        }
+
+        return $this->isDynamicFirstRenderWarmupOwnerWorker(
+            'WLS_WORKER_BACKEND_DEFERRED_WARMUP_OWNER_WORKER_ID',
+            'wls.worker.backend_deferred_warmup_owner_worker_id',
+            1
+        );
+    }
+
+    private function runDeferredBackendFirstRenderWarmup(): void
+    {
+        $delayMs = (int)(Env::get('wls.worker.backend_deferred_warmup_delay_ms', 1500) ?: 0);
+        $delayMs = \max(0, \min($delayMs, 30000));
+        if ($delayMs > 0) {
+            SchedulerSystem::yieldDelay($delayMs);
+        }
+
+        $result = $this->runBackendFirstRenderWarmupRequests('deferred');
+        if ((int)($result['failed'] ?? 0) > 0) {
+            return;
+        }
+
+        if (\function_exists('w_log_info')) {
+            \w_log_info('[WlsRuntime] deferred backend first-render warmup done warmed='
+                . (int)($result['warmed'] ?? 0)
+                . ' elapsed_ms=' . (float)($result['elapsed_ms'] ?? 0.0));
+        }
+    }
+
+    private function resolveReadyGateBackendWarmupUserId(): int
+    {
+        if (\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)) {
+            return \Weline\Backend\Service\BackendWarmupContext::resolveWarmupUserId();
+        }
+
+        $raw = \getenv('WLS_WORKER_BACKEND_WARMUP_USER_ID');
+        if ($raw === false || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.backend_warmup_user_id', 1);
+        }
+
+        return \max(0, (int)$raw);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveReadyGateBackendWarmupHosts(): array
+    {
+        return $this->resolveBackendWarmupHosts('ready-gate');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveBackendWarmupHosts(string $scope): array
+    {
+        $hosts = [];
+        $configured = $scope === 'ready-gate'
+            ? Env::get('wls.worker.backend_ready_gate_warmup_hosts', null)
+            : Env::get('wls.worker.backend_warmup_hosts', null);
+        if ($configured !== null && $configured !== '') {
+            if (\is_string($configured)) {
+                $decoded = \json_decode($configured, true);
+                $configured = \is_array($decoded)
+                    ? $decoded
+                    : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+            }
+            if (\is_array($configured)) {
+                foreach ($configured as $host) {
+                    if (\is_scalar($host)) {
+                        $hosts[] = (string)$host;
+                    }
+                }
+            }
+        }
+
+        if ($hosts === [] && $scope === 'ready-gate') {
+            foreach ($this->resolveCurrentInstanceWarmupHosts() as $host) {
+                $normalizedHost = $this->normalizeInternalWarmupHost($host);
+                if ($normalizedHost !== null && \str_starts_with($normalizedHost, '127.0.0.1:')) {
+                    $hosts[] = $normalizedHost;
+                    break;
+                }
+            }
+        }
+
+        if ($hosts === [] && $scope !== 'ready-gate') {
+            foreach ($this->resolveCurrentInstanceWarmupHosts() as $host) {
+                $hosts[] = $host;
+            }
+
+            foreach ($this->resolveDynamicFirstRenderWarmupHosts() as $host) {
+                $hosts[] = $host;
+            }
+        }
+
+        $normalized = [];
+        foreach ($hosts === [] ? ['127.0.0.1'] : $hosts as $host) {
+            $host = $this->normalizeInternalWarmupHost($host);
+            if ($host === null) {
+                continue;
+            }
+            $normalized[$host] = $host;
+            if (\count($normalized) >= ($scope === 'ready-gate' ? 1 : 4)) {
+                break;
+            }
+        }
+
+        return \array_values($normalized) ?: ['127.0.0.1'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveCurrentInstanceWarmupHosts(): array
+    {
+        $instance = (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE_NAME'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: '');
+        if ($instance === '') {
+            return [];
+        }
+
+        $file = \defined('BP')
+            ? BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instance . '.json'
+            : '';
+        if ($file === '' || !\is_file($file)) {
+            return [];
+        }
+
+        $data = \json_decode((string)@\file_get_contents($file), true);
+        if (!\is_array($data)) {
+            return [];
+        }
+
+        $port = (int)($data['main_port'] ?? $data['port'] ?? 0);
+        $hosts = [];
+        foreach ([$data['host'] ?? null, $data['public_host'] ?? null] as $host) {
+            if (!\is_scalar($host)) {
+                continue;
+            }
+            $host = \trim((string)$host);
+            if ($host === '') {
+                continue;
+            }
+            $hosts[] = $port > 0 && !\str_contains($host, ':') ? $host . ':' . $port : $host;
+        }
+
+        if ($port > 0) {
+            $hosts[] = '127.0.0.1:' . $port;
+        }
+
+        return $hosts;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveReadyGateBackendWarmupPaths(): array
+    {
+        return $this->resolveBackendWarmupPaths('ready-gate');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveBackendWarmupPaths(string $scope): array
+    {
+        $configured = $scope === 'ready-gate'
+            ? Env::get('wls.worker.backend_ready_gate_warmup_paths', null)
+            : Env::get('wls.worker.backend_warmup_paths', null);
+        if ($configured === null || $configured === '') {
+            $configured = $scope === 'ready-gate'
+                ? ['admin/login', 'admin']
+                : ['admin'];
+        }
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+
+        $backendPrefix = \trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        $plainBase = '/' . \trim($backendPrefix, '/');
+        $baseCandidates = [$plainBase];
+        foreach ($this->resolveBackendWarmupLocalePairs() as [$currency, $locale]) {
+            $localizedBase = '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '')
+                . ($currency !== '' ? $currency . '/' : '')
+                . ($locale !== '' ? $locale . '/' : '');
+            $localizedBase = '/' . \trim($localizedBase, '/');
+            $baseCandidates[$localizedBase] = $localizedBase;
+        }
+        $baseCandidates = \array_values($baseCandidates);
+
+        $paths = [];
+        foreach (\is_array($configured) ? $configured : [] as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $path = \str_replace(["\r", "\n", "\t"], '', \trim((string)$item));
+            if ($path === '') {
+                continue;
+            }
+            if (\str_contains($path, '://')) {
+                $path = $this->normalizeInternalWarmupPath($path);
+                if (\strlen($path) <= 2048) {
+                    $paths[$path] = $path;
+                }
+                continue;
+            }
+            if ($path[0] === '/') {
+                if (\strlen($path) <= 2048) {
+                    $paths[$path] = $path;
+                }
+                continue;
+            }
+
+            foreach ($baseCandidates as $base) {
+                $candidate = \rtrim($base, '/') . '/' . \ltrim($path, '/');
+                if (\strlen($candidate) > 2048) {
+                    continue;
+                }
+                $paths[$candidate] = $candidate;
+                if (\count($paths) >= 8) {
+                    break 2;
+                }
+            }
+            if (\count($paths) >= 8) {
+                break;
+            }
+        }
+
+        return \array_values($paths);
+    }
+
+    /**
+     * @return list<array{0: string, 1: string}>
+     */
+    private function resolveBackendWarmupLocalePairs(): array
+    {
+        $pairs = [];
+        $addPair = static function (mixed $currency, mixed $locale) use (&$pairs): void {
+            if (!\is_scalar($currency) || !\is_scalar($locale)) {
+                return;
+            }
+            $currency = \strtoupper(\trim((string)$currency, " /\t\r\n"));
+            $locale = \trim((string)$locale, " /\t\r\n");
+            if ($currency === '' || $locale === '') {
+                return;
+            }
+            $key = $currency . '/' . $locale;
+            $pairs[$key] = [$currency, $locale];
+        };
+
+        $addPair(
+            Env::get('wls.worker.backend_warmup_currency', 'CNY') ?: 'CNY',
+            Env::get('wls.worker.backend_warmup_locale', 'zh_Hans_CN') ?: 'zh_Hans_CN'
+        );
+
+        try {
+            $addPair(State::getCurrency(), State::getLang());
+        } catch (\Throwable) {
+        }
+
+        $extraPairs = Env::get('wls.worker.backend_warmup_locale_pairs', null);
+        if (\is_string($extraPairs)) {
+            $decoded = \json_decode($extraPairs, true);
+            $extraPairs = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $extraPairs, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (\is_array($extraPairs)) {
+            foreach ($extraPairs as $pair) {
+                if (\is_string($pair) && \str_contains($pair, '/')) {
+                    [$currency, $locale] = \explode('/', $pair, 2);
+                    $addPair($currency, $locale);
+                    continue;
+                }
+                if (\is_array($pair)) {
+                    $addPair($pair['currency'] ?? $pair[0] ?? '', $pair['locale'] ?? $pair['language'] ?? $pair[1] ?? '');
+                }
+            }
+        }
+
+        $addPair('USD', 'en_US');
+        $addPair('CNY', 'zh_Hans_CN');
+
+        return \array_slice(\array_values($pairs), 0, 4);
+    }
+
+    private function runBackendFirstRenderWarmupAttempt(string $host, string $path, int $sequence, int $userId): array
+    {
+        return $this->runInternalWarmupRequest(
+            $host,
+            $path,
+            $sequence,
+            'backend-first-render',
+            [
+                'WLS_INTERNAL_BACKEND_WARMUP' => '1',
+                'WLS_INTERNAL_BACKEND_WARMUP_USER_ID' => (string)$userId,
+                'WLS_FPC_BYPASS' => '1',
+                'HTTP_X_WLS_FPC_BYPASS' => '1',
+            ],
+            [
+                'User-Agent' => 'WLS-Backend-FirstRender-Warmup/1.0',
+                'Accept-Encoding' => 'identity',
+                'X-WLS-FPC-Bypass' => '1',
+            ]
+        );
+    }
+
+    /**
+     * @param array{enabled: bool, warmed: int, failed: int, paths: list<string>, hosts: list<string>, errors: list<string>, samples: list<array<string, mixed>>, elapsed_ms: float} $result
+     * @return array{enabled: bool, warmed: int, failed: int, paths: list<string>, hosts: list<string>, errors: list<string>, samples: list<array<string, mixed>>, elapsed_ms: float}
+     */
+    private function runDynamicFirstRenderWarmupInternal(int $effectiveMaxPaths, array $result, ?array $pathsOverride = null): array
+    {
+        $result['enabled'] = true;
+        $startedAt = \microtime(true);
+        if ($pathsOverride !== null) {
+            $paths = \array_slice(\array_values($pathsOverride), 0, $effectiveMaxPaths);
+        } else {
+            try {
+                $discovery = ObjectManager::getInstance(HotPathDiscoveryService::class);
+                $paths = $discovery instanceof HotPathDiscoveryService
+                    ? $discovery->discover($effectiveMaxPaths)
+                    : ['/'];
+            } catch (\Throwable $e) {
+                $paths = ['/'];
+                $result['errors'][] = 'path discovery failed: ' . $e->getMessage();
+                if (\function_exists('w_log_warning')) {
+                    \w_log_warning('[WlsRuntime] dynamic first-render path discovery failed: ' . $e->getMessage());
+                }
+            }
+        }
+
+        $hosts = $this->resolveDynamicFirstRenderWarmupHosts();
+        $result['paths'] = $paths;
+        $result['hosts'] = $hosts;
+        if ($paths === [] || $hosts === []) {
+            $result['elapsed_ms'] = \round((\microtime(true) - $startedAt) * 1000, 2);
+            return $result;
+        }
+
+        $sequence = 0;
+        $targetMs = $this->dynamicFirstRenderTargetMs();
+        $maxAttempts = $this->dynamicWarmupValidationAttempts();
+        foreach ($hosts as $host) {
+            foreach ($paths as $path) {
+                $sequence++;
+                $pathKey = $this->dynamicWarmupPathKey($host, $path);
+                $ownsPathLock = false;
+                try {
+                    $ownsPathLock = $this->acquireDynamicWarmupPathLock($pathKey);
+                    if (!$ownsPathLock) {
+                        $this->waitForDynamicWarmupPathReady($pathKey);
+                    }
+
+                    $attempts = 0;
+                    do {
+                        $attempts++;
+                        $warmupMeta = $this->runDynamicFirstRenderWarmupAttempt($host, $path, $sequence);
+                        $validation = $this->validateDynamicFirstRenderWarmup($warmupMeta, $targetMs);
+                        if ($validation['ok'] || $attempts >= $maxAttempts) {
+                            break;
+                        }
+                        $sequence++;
+                        SchedulerSystem::yield();
+                    } while (true);
+                    if (\count($result['samples']) < 8 || $path === '/') {
+                        $result['samples'][] = [
+                            'host' => $host,
+                            'path' => $path,
+                            'status' => (int)($warmupMeta['status_code'] ?? 0),
+                            'cache' => $validation['cache'],
+                            'store' => $this->dynamicWarmupStoreStatus($warmupMeta['headers'] ?? []),
+                            'body_length' => (int)($warmupMeta['body_length'] ?? 0),
+                            'formatted_http' => (bool)($warmupMeta['formatted_http'] ?? false),
+                            'elapsed_ms' => (float)($warmupMeta['elapsed_ms'] ?? 0.0),
+                            'target_ms' => $targetMs,
+                            'attempts' => $attempts,
+                            'ready' => (bool)$validation['ok'],
+                            'reason' => $validation['reason'],
+                        ];
+                    }
+                    if (!$validation['ok']) {
+                        $result['failed']++;
+                        $message = $host . $path . ': ' . $validation['reason'];
+                        $result['errors'][] = $message;
+                        $this->markDynamicWarmupPathReady($pathKey, false, $validation['reason']);
+                        if (\function_exists('w_log_warning')) {
+                            \w_log_warning('[WlsRuntime] dynamic first-render warmup not ready ' . $message);
+                        }
+                        continue;
+                    }
+
+                    $this->markDynamicWarmupPathReady($pathKey, true, $validation['reason']);
+                    $result['warmed']++;
+                } catch (\Throwable $e) {
+                    $result['failed']++;
+                    $message = $host . $path . ': ' . $e->getMessage();
+                    $result['errors'][] = $message;
+                    $this->markDynamicWarmupPathReady($pathKey, false, $e->getMessage());
+                    if (\function_exists('w_log_warning')) {
+                        \w_log_warning('[WlsRuntime] dynamic first-render warmup failed ' . $message);
+                    }
+                } finally {
+                    if ($ownsPathLock) {
+                        $this->releaseDynamicWarmupPathLock($pathKey);
+                    }
+                }
+
+                SchedulerSystem::yield();
+            }
+        }
+
+        $result['elapsed_ms'] = \round((\microtime(true) - $startedAt) * 1000, 2);
+        if (\function_exists('w_log_info')) {
+            \w_log_info('[WlsRuntime] dynamic first-render warmed=' . $result['warmed']
+                . ' failed=' . $result['failed']
+                . ' paths=' . \count($paths)
+                . ' samples=' . \json_encode($result['samples'], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE)
+                . ' elapsed_ms=' . $result['elapsed_ms']);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array{headers: array<string, mixed>, status_code: int, body_length: int, elapsed_ms: float}
+     */
+    private function runDynamicFirstRenderWarmupAttempt(string $host, string $path, int $sequence): array
+    {
+        return $this->runInternalWarmupRequest(
+            $host,
+            $path,
+            $sequence,
+            'dynamic-first-render',
+            [
+                'WLS_INTERNAL_DYNAMIC_WARMUP' => '1',
+                'WLS_FPC_BYPASS' => '1',
+                'HTTP_X_WLS_DYNAMIC_WARMUP' => '1',
+                'HTTP_X_WLS_FPC_BYPASS' => '1',
+            ],
+            [
+                'User-Agent' => 'WLS-Dynamic-FirstRender-Warmup/1.0',
+                'Accept-Encoding' => 'identity',
+                'X-WLS-Dynamic-Warmup' => '1',
+                'X-WLS-FPC-Bypass' => '1',
+            ]
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $warmupMeta
+     * @return array{ok: bool, reason: string, cache: string}
+     */
+    private function validateDynamicFirstRenderWarmup(array $warmupMeta, float $targetMs): array
+    {
+        $headers = \is_array($warmupMeta['headers'] ?? null) ? $warmupMeta['headers'] : [];
+        $statusCode = (int)($warmupMeta['status_code'] ?? 0);
+        $elapsedMs = (float)($warmupMeta['elapsed_ms'] ?? 0.0);
+        $cache = $this->dynamicWarmupControllerCacheSource($headers);
+
+        if ($statusCode < 200 || $statusCode >= 400) {
+            return ['ok' => false, 'reason' => 'status=' . $statusCode, 'cache' => $cache];
+        }
+
+        $fpcStatus = \strtoupper($this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
+            ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC'));
+        if ($fpcStatus === 'HIT') {
+            return ['ok' => false, 'reason' => 'fpc=HIT', 'cache' => $cache];
+        }
+
+        if (!$this->dynamicWarmupCacheIsReady($cache)) {
+            return ['ok' => false, 'reason' => 'cache=' . ($cache !== '' ? $cache : 'missing'), 'cache' => $cache];
+        }
+
+        if ($targetMs > 0.0 && $elapsedMs > $targetMs) {
+            $reason = 'elapsed_ms=' . \round($elapsedMs, 2) . ' target_ms=' . \round($targetMs, 2);
+            if (!$this->shouldBlockDynamicWarmupOnTargetMs()) {
+                return [
+                    'ok' => true,
+                    'reason' => 'ready:slow ' . $reason,
+                    'cache' => $cache,
+                ];
+            }
+
+            return [
+                'ok' => false,
+                'reason' => $reason,
+                'cache' => $cache,
+            ];
+        }
+
+        return ['ok' => true, 'reason' => 'ready', 'cache' => $cache];
+    }
+
+    private function shouldBlockDynamicWarmupOnTargetMs(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_DYNAMIC_WARMUP_BLOCK_ON_TARGET_MS');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.dynamic_warmup_block_on_target_ms', '0');
+        }
+
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'strict', 'block'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $headers
+     */
+    private function dynamicWarmupControllerCacheSource(array $headers): string
+    {
+        foreach (['X-WLS-Controller-Cache', 'X-WLS-PageBuilder-View-Cache', 'X-WLS-Category-View-Cache', 'X-WLS-Product-View-Cache'] as $headerName) {
+            $value = $this->warmupHeaderValue($headers, $headerName);
+            if ($value !== '') {
+                return \strtolower($value);
+            }
+        }
+
+        return '';
+    }
+
+    private function dynamicWarmupCacheIsReady(string $cache): bool
+    {
+        $cache = \strtolower(\trim($cache));
+        return $cache === 'local'
+            || $cache === 'shared'
+            || \str_starts_with($cache, 'local:')
+            || \str_starts_with($cache, 'shared:');
+    }
+
+    /**
+     * @param array<string, mixed> $headers
+     */
+    private function dynamicWarmupStoreStatus(array $headers): string
+    {
+        foreach (['X-WLS-PageBuilder-View-Cache-Store', 'X-WLS-Category-View-Cache-Store', 'X-WLS-Product-View-Cache-Store'] as $headerName) {
+            $value = $this->warmupHeaderValue($headers, $headerName);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private function dynamicFirstRenderTargetMs(): float
+    {
+        $raw = \getenv('WLS_WORKER_DYNAMIC_TARGET_MS');
+        if ($raw === false || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.dynamic_target_ms', 70);
+        }
+
+        return \max(0.0, (float)$raw);
+    }
+
+    private function dynamicWarmupValidationAttempts(): int
+    {
+        $raw = \getenv('WLS_WORKER_DYNAMIC_WARMUP_ATTEMPTS');
+        if ($raw === false || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.dynamic_warmup_attempts', 3);
+        }
+
+        return \max(1, \min(5, (int)$raw));
+    }
+
+    private function dynamicWarmupPathKey(string $host, string $path): string
+    {
+        return \sha1(\strtolower(\trim($host)) . '|' . $this->normalizeInternalWarmupPath($path));
+    }
+
+    private function acquireDynamicWarmupPathLock(string $pathKey): bool
+    {
+        $coordinator = $this->dynamicWarmupCoordinator();
+        if ($coordinator === null) {
+            return true;
+        }
+
+        try {
+            $ready = $coordinator->get(self::DYNAMIC_WARMUP_COORDINATOR_NS, 'ready.' . $pathKey);
+            if (\is_array($ready) && !empty($ready['ok'])) {
+                return false;
+            }
+
+            $owner = (string)\getmypid() . ':' . (string)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: '0');
+            return $coordinator->cas(self::DYNAMIC_WARMUP_COORDINATOR_NS, 'lock.' . $pathKey, null, $owner, 30);
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
+    private function waitForDynamicWarmupPathReady(string $pathKey): void
+    {
+        $coordinator = $this->dynamicWarmupCoordinator();
+        if ($coordinator === null) {
+            return;
+        }
+
+        $deadline = \microtime(true) + ($this->dynamicWarmupPathWaitMs() / 1000);
+        do {
+            try {
+                $ready = $coordinator->get(self::DYNAMIC_WARMUP_COORDINATOR_NS, 'ready.' . $pathKey);
+                if (\is_array($ready)) {
+                    return;
+                }
+            } catch (\Throwable) {
+                return;
+            }
+
+            SchedulerSystem::yield();
+            \usleep(50_000);
+        } while (\microtime(true) < $deadline);
+    }
+
+    private function markDynamicWarmupPathReady(string $pathKey, bool $ok, string $reason): void
+    {
+        $coordinator = $this->dynamicWarmupCoordinator();
+        if ($coordinator === null) {
+            return;
+        }
+
+        try {
+            $coordinator->set(self::DYNAMIC_WARMUP_COORDINATOR_NS, 'ready.' . $pathKey, [
+                'ok' => $ok,
+                'reason' => $reason,
+                'pid' => \getmypid(),
+                'worker_id' => (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0),
+                'ts' => \microtime(true),
+            ], 120);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function releaseDynamicWarmupPathLock(string $pathKey): void
+    {
+        $coordinator = $this->dynamicWarmupCoordinator();
+        if ($coordinator === null) {
+            return;
+        }
+
+        try {
+            $coordinator->delete(self::DYNAMIC_WARMUP_COORDINATOR_NS, 'lock.' . $pathKey);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function dynamicWarmupPathWaitMs(): int
+    {
+        $raw = \getenv('WLS_WORKER_DYNAMIC_WARMUP_PATH_WAIT_MS');
+        if ($raw === false || \trim((string)$raw) === '') {
+            $raw = Env::get('wls.worker.dynamic_warmup_path_wait_ms', 1000);
+        }
+
+        return \max(100, \min(30000, (int)$raw));
+    }
+
+    private function dynamicWarmupCoordinator(): ?MemoryStateFacade
+    {
+        if (self::$dynamicWarmupCoordinatorResolved) {
+            return self::$dynamicWarmupCoordinator;
+        }
+        self::$dynamicWarmupCoordinatorResolved = true;
+
+        try {
+            self::$dynamicWarmupCoordinator = new MemoryStateFacade([
+                'consumer_code' => self::DYNAMIC_WARMUP_COORDINATOR_NS,
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]);
+        } catch (\Throwable) {
+            self::$dynamicWarmupCoordinator = null;
+        }
+
+        return self::$dynamicWarmupCoordinator;
     }
 
     private function shouldRunDeferredWorkerBootstrapObserverWarmup(): bool
@@ -438,6 +1628,69 @@ class WlsRuntime implements RuntimeInterface
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true);
+    }
+
+    private function shouldRunDeferredDynamicFirstRenderWarmup(): bool
+    {
+        if (!$this->canRunDynamicFirstRenderWarmupForCurrentRole()) {
+            return false;
+        }
+
+        $rawFlag = \getenv('WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_ENABLED');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.dynamic_deferred_warmup_enabled', '1');
+        }
+
+        if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
+            return false;
+        }
+
+        return $this->isDynamicFirstRenderWarmupOwnerWorker(
+            'WLS_WORKER_DYNAMIC_DEFERRED_WARMUP_OWNER_WORKER_ID',
+            'wls.worker.dynamic_deferred_warmup_owner_worker_id',
+            1
+        );
+    }
+
+    private function runDeferredDynamicFirstRenderWarmup(): void
+    {
+        $maxPaths = (int)(Env::get('wls.worker.dynamic_hot_path_max', 32) ?: 32);
+        $maxPaths = \max(1, \min(128, $maxPaths));
+        $result = $this->runDynamicFirstRenderWarmupInternal($maxPaths, $this->newDynamicFirstRenderWarmupResult());
+        if ((int)($result['failed'] ?? 0) > 0) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[WlsRuntime] deferred dynamic first-render warmup incomplete: ' . \json_encode([
+                    'warmed' => (int)($result['warmed'] ?? 0),
+                    'failed' => (int)($result['failed'] ?? 0),
+                    'errors' => \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 8),
+                ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+            }
+            return;
+        }
+
+        if (\function_exists('w_log_info')) {
+            \w_log_info('[WlsRuntime] deferred dynamic first-render warmup done warmed=' . (int)($result['warmed'] ?? 0)
+                . ' elapsed_ms=' . (float)($result['elapsed_ms'] ?? 0.0));
+        }
+    }
+
+    private function canRunDynamicFirstRenderWarmupForCurrentRole(): bool
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+
+        return !\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true);
+    }
+
+    private function isDynamicFirstRenderWarmupOwnerWorker(string $envName, string $configPath, int $defaultOwnerWorkerId): bool
+    {
+        $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
+        $rawOwner = \getenv($envName);
+        if ($rawOwner === false || \trim((string)$rawOwner) === '') {
+            $rawOwner = Env::get($configPath, $defaultOwnerWorkerId);
+        }
+
+        $ownerWorkerId = (int)$rawOwner;
+        return $workerId <= 0 || $ownerWorkerId <= 0 || $workerId === $ownerWorkerId;
     }
 
     private function shouldRunDeferredFpcBuildAheadWarmup(): bool
@@ -634,12 +1887,162 @@ class WlsRuntime implements RuntimeInterface
         }
     }
 
+    private function normalizeInternalWarmupHost(mixed $host): ?string
+    {
+        if (!\is_scalar($host)) {
+            return null;
+        }
+
+        $host = \trim((string)$host);
+        if ($host === '') {
+            return null;
+        }
+
+        if (\str_contains($host, '://')) {
+            $parts = $this->parseWarmupUrl($host);
+            if ($parts === null || !\is_string($parts['host'] ?? null) || $parts['host'] === '') {
+                return null;
+            }
+
+            $authority = (string)$parts['host'];
+            if (\filter_var($authority, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+                $authority = '[' . $authority . ']';
+            }
+            if (isset($parts['port'])) {
+                $authority .= ':' . (int)$parts['port'];
+            }
+
+            return $this->normalizeInternalWarmupAuthority($authority);
+        }
+
+        return $this->normalizeInternalWarmupAuthority($host);
+    }
+
+    private function normalizeInternalWarmupAuthority(string $authority): ?string
+    {
+        $authority = \trim($authority, " \t\n\r\0\x0B/");
+        if ($authority === ''
+            || $authority === '0.0.0.0'
+            || $authority === '[::]'
+            || \str_contains($authority, '/')
+            || \str_contains($authority, '\\')
+            || \preg_match('/[\r\n]/', $authority)
+        ) {
+            return null;
+        }
+
+        if ($authority[0] === '[') {
+            if (!\preg_match('/^\[([0-9A-Fa-f:.]+)\](?::([0-9]{1,5}))?$/', $authority, $matches)) {
+                return null;
+            }
+            if (!\filter_var($matches[1], \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+                return null;
+            }
+            if (isset($matches[2]) && !$this->isValidTcpPort($matches[2])) {
+                return null;
+            }
+
+            return '[' . $matches[1] . ']' . (isset($matches[2]) ? ':' . (int)$matches[2] : '');
+        }
+
+        if (\str_contains($authority, '[') || \str_contains($authority, ']')) {
+            return null;
+        }
+
+        if (\filter_var($authority, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+            return '[' . $authority . ']';
+        }
+
+        $host = $authority;
+        $port = null;
+        if (\substr_count($authority, ':') === 1) {
+            [$host, $port] = \explode(':', $authority, 2);
+        } elseif (\str_contains($authority, ':')) {
+            return null;
+        }
+
+        $host = \trim($host);
+        if ($host === ''
+            || $host === '0.0.0.0'
+            || !\preg_match('/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/', $host)
+        ) {
+            return null;
+        }
+        if ($port !== null && !$this->isValidTcpPort($port)) {
+            return null;
+        }
+
+        return $host . ($port !== null ? ':' . (int)$port : '');
+    }
+
+    private function normalizeInternalWarmupPath(string $path): string
+    {
+        $path = \str_replace(["\r", "\n", "\t"], '', \trim($path));
+        if ($path === '') {
+            return '/';
+        }
+
+        if (\str_contains($path, '://')) {
+            $parts = $this->parseWarmupUrl($path);
+            if ($parts === null) {
+                throw new \InvalidArgumentException('Invalid internal warmup URL path.');
+            }
+            $query = \is_string($parts['query'] ?? null) && $parts['query'] !== ''
+                ? '?' . $parts['query']
+                : '';
+            $path = (\is_string($parts['path'] ?? null) && $parts['path'] !== '' ? $parts['path'] : '/') . $query;
+        }
+
+        if ($path[0] !== '/') {
+            $path = '/' . $path;
+        }
+        if (\strlen($path) > 2048 || \preg_match('/\s/', $path)) {
+            throw new \InvalidArgumentException('Invalid internal warmup path.');
+        }
+
+        return $path;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function parseWarmupUrl(string $url): ?array
+    {
+        try {
+            $parts = \parse_url($url);
+        } catch (\ValueError) {
+            return null;
+        }
+
+        return \is_array($parts) ? $parts : null;
+    }
+
+    private function isValidTcpPort(mixed $port): bool
+    {
+        if (!\is_scalar($port) || !\ctype_digit((string)$port)) {
+            return false;
+        }
+
+        $port = (int)$port;
+        return $port > 0 && $port <= 65535;
+    }
+
     /**
      * @return list<string>
      */
-    private function resolveReadyGateFpcBuildAheadHosts(): array
+    private function resolveDynamicFirstRenderWarmupHosts(): array
     {
-        $configured = Env::get('wls.worker.fpc_ready_gate_hosts', ['127.0.0.1']);
+        $configured = Env::get('wls.worker.dynamic_hot_path_hosts', null);
+        if ($configured === null || $configured === '') {
+            $hosts = [];
+            foreach ($this->resolveCurrentInstanceWarmupHosts() as $host) {
+                $normalizedHost = $this->normalizeInternalWarmupHost($host);
+                if ($normalizedHost !== null) {
+                    $hosts[] = $normalizedHost;
+                }
+            }
+            $configured = $hosts !== [] ? $hosts : ['127.0.0.1'];
+        }
         if (\is_string($configured)) {
             $decoded = \json_decode($configured, true);
             $configured = \is_array($decoded)
@@ -650,76 +2053,17 @@ class WlsRuntime implements RuntimeInterface
         $hosts = \is_array($configured) ? $configured : ['127.0.0.1'];
         $normalized = [];
         foreach ($hosts as $host) {
-            if (!\is_scalar($host)) {
-                continue;
-            }
-            $host = \trim((string)$host);
-            if (\str_contains($host, '://')) {
-                $parsedHost = \parse_url($host, \PHP_URL_HOST);
-                $host = \is_string($parsedHost) ? $parsedHost : '';
-            }
-            $host = \trim($host, " \t\n\r\0\x0B[]/");
-            if ($host === '' || $host === '0.0.0.0' || $host === '::' || \str_contains($host, '/')) {
+            $host = $this->normalizeInternalWarmupHost($host);
+            if ($host === null) {
                 continue;
             }
             $normalized[$host] = $host;
-            if (\count($normalized) >= 2) {
+            if (\count($normalized) >= 3) {
                 break;
             }
         }
 
-        return \array_values($normalized);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function resolveReadyGateFpcBuildAheadPaths(): array
-    {
-        $paths = [
-            '/',
-            '/en_US/catalog/category/sports',
-            '/USD/en_US/catalog/category/women',
-            '/en_US/catalog/category/men/shirts',
-            '/en_US/catalog/category/running-gear',
-            '/en_US/product/demo-category-81-sports',
-            '/en_US/product/demo-category-45-clothing',
-        ];
-
-        $configured = Env::get('wls.worker.fpc_ready_gate_paths', []);
-        if (\is_string($configured)) {
-            $decoded = \json_decode($configured, true);
-            $configured = \is_array($decoded)
-                ? $decoded
-                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
-        }
-        if (\is_array($configured) && $configured !== []) {
-            $paths = [];
-            foreach ($configured as $path) {
-                if (\is_scalar($path)) {
-                    $paths[] = (string)$path;
-                }
-            }
-        }
-
-        $normalized = [];
-        foreach ($paths as $path) {
-            $path = \str_replace(["\r", "\n", "\t"], '', \trim((string)$path));
-            if ($path === '') {
-                continue;
-            }
-            if ($path[0] !== '/') {
-                $path = '/' . $path;
-            }
-            if (\strlen($path) > 2048) {
-                continue;
-            }
-            $normalized[$path] = $path;
-        }
-
-        $maxPaths = (int)(Env::get('wls.worker.fpc_ready_gate_max_paths', 8) ?: 8);
-        $maxPaths = \max(1, \min($maxPaths, 32));
-        return \array_slice(\array_values($normalized), 0, $maxPaths);
+        return \array_values($normalized) ?: ['127.0.0.1'];
     }
 
     /**
@@ -748,13 +2092,8 @@ class WlsRuntime implements RuntimeInterface
 
         $normalized = [];
         foreach ($hosts as $host) {
-            $host = \trim((string)$host);
-            if (\str_contains($host, '://')) {
-                $parsedHost = \parse_url($host, \PHP_URL_HOST);
-                $host = \is_string($parsedHost) ? $parsedHost : '';
-            }
-            $host = \trim($host, " \t\n\r\0\x0B[]/");
-            if ($host === '' || $host === '0.0.0.0' || $host === '::' || \str_contains($host, '/')) {
+            $host = $this->normalizeInternalWarmupHost($host);
+            if ($host === null) {
                 continue;
             }
             $normalized[$host] = $host;
@@ -844,19 +2183,46 @@ class WlsRuntime implements RuntimeInterface
         return \array_slice(\array_values($normalized), 0, $maxPaths);
     }
 
-    private function runInternalWarmupRequest(string $host, string $path, int $sequence, string $label = 'fpc-build-ahead'): void
+    /**
+     * @param array<string, string> $serverOverrides
+     * @param array<string, string> $requestHeaders
+     * @return array{headers: array<string, mixed>, status_code: int, body_length: int, elapsed_ms: float}
+     */
+    private function runInternalWarmupRequest(
+        string $host,
+        string $path,
+        int $sequence,
+        string $label = 'fpc-build-ahead',
+        array $serverOverrides = [],
+        array $requestHeaders = []
+    ): array
     {
-        $rawRequest = "GET {$path} HTTP/1.1\r\n"
-            . "Host: {$host}\r\n"
-            . "User-Agent: WLS-FPC-BuildAhead/1.0\r\n"
-            . "Accept: text/html,application/xhtml+xml\r\n"
-            . "Accept-Encoding: gzip\r\n"
-            . "Connection: close\r\n"
-            . "X-WLS-Internal-Request: {$label}\r\n"
-            . "Weline-Internal-Warmup: 1\r\n"
-            . "\r\n";
+        $startedAt = \microtime(true);
+        $host = $this->normalizeInternalWarmupHost($host)
+            ?? throw new \InvalidArgumentException('Invalid internal warmup host.');
+        $path = $this->normalizeInternalWarmupPath($path);
+        $headers = \array_merge([
+            'Host' => $host,
+            'User-Agent' => 'WLS-FPC-BuildAhead/1.0',
+            'Accept' => 'text/html,application/xhtml+xml',
+            'Accept-Encoding' => 'gzip',
+            'Connection' => 'close',
+            'X-WLS-Internal-Request' => $label,
+            'Weline-Internal-Warmup' => '1',
+        ], $requestHeaders);
 
-        $request = WlsRequest::fromRaw($rawRequest, [
+        $rawRequest = "GET {$path} HTTP/1.1\r\n";
+        foreach ($headers as $name => $value) {
+            $name = \preg_replace('/[^A-Za-z0-9-]/', '', (string)$name) ?? '';
+            $value = \str_replace(["\r", "\n"], '', (string)$value);
+            if ($name === '') {
+                continue;
+            }
+            $rawRequest .= $name . ': ' . $value . "\r\n";
+        }
+        $rawRequest .= "\r\n";
+
+        $server = \array_merge([
             'WLS_INSTANCE' => (string)($_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: ''),
             'WLS_WORKER_ID' => (string)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: ''),
             'WLS_PORT' => (string)($_SERVER['WLS_PORT'] ?? $_ENV['WLS_PORT'] ?? \getenv('WLS_PORT') ?: ''),
@@ -864,45 +2230,125 @@ class WlsRuntime implements RuntimeInterface
             'WLS_INTERNAL_WARMUP' => '1',
             'HTTPS' => 'on',
             'REQUEST_SCHEME' => 'https',
-        ]);
+        ], $serverOverrides);
+
+        $request = WlsRequest::fromRaw($rawRequest, $server);
 
         $result = $this->handle($request);
-        unset($result, $request);
+        $response = $request->getResponse();
+        $responseHeaders = \method_exists($response, 'getHeaders') ? (array)$response->getHeaders() : [];
+        $formattedResult = $this->parseFormattedWarmupResult((string)$result);
+        foreach ($formattedResult['headers'] as $name => $value) {
+            $responseHeaders[(string)$name] = $value;
+        }
+        $pendingStatus = $this->consumePendingResponseStatus();
+        $pendingHeaders = $this->consumePendingHeaders();
+        $this->consumePendingCookies();
+        foreach ($pendingHeaders as $name => $value) {
+            if ($value === '' || $value === null) {
+                continue;
+            }
+            $responseHeaders[(string)$name] = $value;
+        }
+        $statusCode = (int)($pendingStatus['status_code'] ?? 0);
+        if ($statusCode <= 0 && \method_exists($response, 'getStatusCode')) {
+            $statusCode = (int)$response->getStatusCode();
+        }
+        if ($statusCode <= 0 && $formattedResult['status_code'] > 0) {
+            $statusCode = $formattedResult['status_code'];
+        }
+        $meta = [
+            'headers' => $responseHeaders,
+            'status_code' => $statusCode,
+            'body_length' => $formattedResult['body_length'] >= 0
+                ? $formattedResult['body_length']
+                : \strlen((string)$result),
+            'formatted_http' => $formattedResult['status_code'] > 0,
+            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+        ];
+        unset($result, $request, $response);
+
+        return $meta;
     }
 
-    private function hasSharedFpcWarmupPayload(string $host, string $path): bool
+    /**
+     * @return array{headers: array<string, string>, status_code: int, body_length: int}
+     */
+    private function parseFormattedWarmupResult(string $result): array
     {
-        try {
-            $coordinator = ObjectManager::getInstance(\Weline\Framework\Router\FullPageCacheCoordinator::class);
-            if (!$coordinator instanceof \Weline\Framework\Router\FullPageCacheCoordinator
-                || !\method_exists($coordinator, 'hasSharedCachedResponseForFullUri')) {
-                return false;
+        if (!\str_starts_with($result, 'HTTP/')) {
+            return ['headers' => [], 'status_code' => 0, 'body_length' => -1];
+        }
+
+        $headerEnd = \strpos($result, "\r\n\r\n");
+        if ($headerEnd === false) {
+            return ['headers' => [], 'status_code' => 0, 'body_length' => \strlen($result)];
+        }
+
+        $headerPart = \substr($result, 0, $headerEnd);
+        $body = \substr($result, $headerEnd + 4);
+        $lines = \preg_split('/\r\n/', $headerPart) ?: [];
+        $statusCode = 0;
+        $headers = [];
+        foreach ($lines as $index => $line) {
+            if ($index === 0) {
+                if (\preg_match('/^HTTP\/\S+\s+(\d{3})\b/', $line, $matches)) {
+                    $statusCode = (int)$matches[1];
+                }
+                continue;
             }
 
-            return $coordinator->hasSharedCachedResponseForFullUri(
-                'https://' . $host . $path,
-                'GET',
-                ''
-            );
-        } catch (\Throwable) {
-            return false;
+            $colon = \strpos($line, ':');
+            if ($colon === false) {
+                continue;
+            }
+
+            $name = \trim(\substr($line, 0, $colon));
+            if ($name === '') {
+                continue;
+            }
+            $headers[$name] = \trim(\substr($line, $colon + 1));
         }
+
+        return [
+            'headers' => $headers,
+            'status_code' => $statusCode,
+            'body_length' => \strlen($body),
+        ];
     }
 
-    private function preloadWorkerRegistries(): void
+    /**
+     * @param array<string, mixed> $headers
+     */
+    private function warmupHeaderValue(array $headers, string $name): string
+    {
+        foreach ($headers as $headerName => $value) {
+            if (!\is_scalar($headerName) || \strcasecmp((string)$headerName, $name) !== 0) {
+                continue;
+            }
+            if (\is_array($value)) {
+                $value = \reset($value);
+            }
+            return \is_scalar($value) ? \trim((string)$value) : '';
+        }
+
+        return '';
+    }
+
+    private function preloadWorkerRegistries(bool $bootstrapDefaults = false): void
     {
         $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
-        $this->runWorkerPreloadPhase(WorkerPreloadContext::PHASE_READY_GATE);
+        $this->runWorkerPreloadPhase(WorkerPreloadContext::PHASE_BOOTSTRAP);
         SchedulerSystem::yield();
 
-        if ($this->isWorkerWarmupStepEnabled('query_provider', false)) {
+        if ($this->isWorkerWarmupStepEnabled('query_provider', $bootstrapDefaults)) {
             $this->warmupStep(static function (): void {
                 ObjectManager::getInstance(QueryProviderRegistry::class)->getAllDescriptors();
             }, 'query provider registry');
             SchedulerSystem::yield();
         }
 
-        if ($this->isWorkerWarmupStepEnabled('i18n', false)) {
+        if ($this->isWorkerWarmupStepEnabled('i18n', $bootstrapDefaults)) {
             $this->warmupStep(static function (): void {
                 PhraseParser::preloadWorkerDictionaries();
                 I18nParser::preloadWorkerDictionaries();
@@ -910,7 +2356,7 @@ class WlsRuntime implements RuntimeInterface
             SchedulerSystem::yield();
         }
 
-        if ($this->isWorkerWarmupStepEnabled('url_metadata', false)) {
+        if ($this->isWorkerWarmupStepEnabled('url_metadata', $bootstrapDefaults)) {
             $this->warmupStep(static function (): void {
                 Url::preloadWorkerRoutingMetadata();
             }, 'url metadata');
@@ -986,6 +2432,26 @@ class WlsRuntime implements RuntimeInterface
                 \w_log_warning('[WlsRuntime] worker bootstrap warmup failed: ' . $e->getMessage());
             }
         }
+    }
+
+    private function installBackendWarmupContext(Request $request): void
+    {
+        if (!\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)) {
+            return;
+        }
+
+        if (!\Weline\Backend\Service\BackendWarmupContext::isInternalWarmupRequest($request)) {
+            \Weline\Backend\Service\BackendWarmupContext::clear();
+            return;
+        }
+
+        $warmupUser = \Weline\Backend\Service\BackendWarmupContext::resolveWarmupUser($request);
+        if ($warmupUser === null) {
+            \Weline\Backend\Service\BackendWarmupContext::clear();
+            return;
+        }
+
+        \Weline\Backend\Service\BackendWarmupContext::installForUser($warmupUser);
     }
     
     /**
@@ -1117,6 +2583,9 @@ class WlsRuntime implements RuntimeInterface
             $_SERVER['WLS_REQUEST_COUNT'] = $this->requestCount;
             Context::current()->set('runtime.request_count', $this->requestCount);
             $app->bootstrapRequestCycle();
+            if ($request !== null) {
+                $this->installBackendWarmupContext($request);
+            }
             $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
             WelineEnv::set('request.uri', $timing['uri'], 'WlsRuntime handle');
             WelineEnv::set('request.method', $_SERVER['REQUEST_METHOD'] ?? 'GET', 'WlsRuntime handle');
@@ -1200,6 +2669,7 @@ class WlsRuntime implements RuntimeInterface
                 if (!empty($this->getPerformanceConfig()['response_headers_enabled'])) {
                     $this->applyPerformanceHeaders($timing, $request);
                 }
+                $this->applyDynamicFirstRenderHeaders($timing, $request, true);
 
                 return $cachedFpcResponse->toHttpString();
             }
@@ -1335,6 +2805,7 @@ class WlsRuntime implements RuntimeInterface
             // 关键：必须使用“请求级”标记，不能只看 SseContext 全局静态状态。
             // WLS 多 Fiber 并发下，全局静态标记可能被其它 Fiber 的 SSE 请求短暂置为 true，
             // 若据此短路，普通 HTTP 请求会被误判为 SSE 并返回空响应。
+            $this->applyDynamicFirstRenderHeaders($timing, $request, false);
             if ($this->isSseStreamHandledInCurrentRequest($request)) {
                 $this->logResponseDiagnostic('sse_stream_short_circuit', $request, $timing, [
                     'result_type' => \get_debug_type($result),
@@ -1397,6 +2868,7 @@ class WlsRuntime implements RuntimeInterface
                 $request->getResponse()->setHeader('X-Weline-Request-Id', RequestLifecycleTrace::ensureRequestId());
             } catch (\Throwable) {
             }
+            $this->applyDynamicFirstRenderHeaders($timing, $request, false);
 
             return $resultStr;
             
@@ -1505,6 +2977,25 @@ class WlsRuntime implements RuntimeInterface
             }
 
             // 记录错误日志（DEV 环境）
+            if ($e instanceof \OverflowException && \str_contains($e->getMessage(), 'WLS output capture exceeded')) {
+                $compaction = [];
+                if (\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class, false)) {
+                    try {
+                        $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+                        \Weline\Server\Service\WorkerResponseMemoryGuard::requestDrainAfterResponse('fiber_output_buffer_overflow');
+                    } catch (\Throwable) {
+                        $compaction = [];
+                    }
+                }
+                w_log_warning(
+                    '[WlsRuntime] Fiber output capture overflow; worker will drain after response. '
+                    . 'memory_usage=' . \memory_get_usage(true)
+                    . ' memory_peak=' . \memory_get_peak_usage(true)
+                    . ' compaction=' . (\json_encode($compaction, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}')
+                    . ' message=' . $e->getMessage()
+                );
+            }
+
             $isDev = \defined('DEV') && DEV;
             if ($isDev) {
                 $this->logWlsError($e);
@@ -2004,6 +3495,114 @@ class WlsRuntime implements RuntimeInterface
         } catch (\Throwable) {
             // 蹇界暐鍝嶅簲澶村啓鍏ラ敊璇紝涓嶅奖鍝嶄富娴佺▼銆?
         }
+    }
+
+    private function applyDynamicFirstRenderHeaders(array $timing, ?Request $request, bool $fpcHit): void
+    {
+        try {
+            $request ??= ObjectManager::getInstance(Request::class);
+            if (!$request || !method_exists($request, 'getResponse')) {
+                return;
+            }
+
+            $response = $request->getResponse();
+            if (!$response || !method_exists($response, 'setHeader')) {
+                return;
+            }
+
+            $response->setHeader('X-WLS-First-Render-Total-Ms', (string)($timing['total_ms'] ?? 0));
+            $response->setHeader('X-WLS-Warmup-Status', $this->currentWarmupStatus());
+            $response->setHeader('X-WLS-FPC-Status', $this->currentFpcStatus($response, $fpcHit));
+            $controllerCache = $this->resolveControllerCacheSource($timing, $response);
+            if ($controllerCache !== '') {
+                $response->setHeader('X-WLS-Controller-Cache', $controllerCache);
+            }
+        } catch (\Throwable) {
+        }
+    }
+
+    private function shouldEmitDynamicFirstRenderHeaders(?Request $request = null): bool
+    {
+        if ((string)($_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? '') === '1'
+            || (string)($_SERVER['HTTP_X_WLS_DYNAMIC_WARMUP'] ?? '') === '1'
+            || (string)($_SERVER['HTTP_X_WLS_FPC_BYPASS'] ?? '') === '1'
+            || (string)($_SERVER['WLS_FPC_BYPASS'] ?? '') === '1'
+            || (string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1') {
+            return true;
+        }
+        if ($request !== null) {
+            foreach (['X-WLS-Dynamic-Benchmark', 'X-WLS-Dynamic-Warmup', 'X-WLS-FPC-Bypass'] as $headerName) {
+                if ((string)($request->getHeader($headerName) ?? '') === '1') {
+                    return true;
+                }
+            }
+        }
+
+        $rawFlag = Env::get('wls.worker.dynamic_observability_headers_enabled', '1');
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function currentWarmupStatus(): string
+    {
+        if ((string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1') {
+            return 'dynamic-warmup';
+        }
+        if ((string)($_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? '') === '1') {
+            return 'dynamic-benchmark';
+        }
+        if ((string)($_SERVER['WLS_INTERNAL_WARMUP'] ?? '') === '1') {
+            return 'internal-warmup';
+        }
+
+        return 'ready';
+    }
+
+    private function currentFpcStatus(Response $response, bool $fpcHit): string
+    {
+        if ($fpcHit) {
+            return 'HIT';
+        }
+        if ((string)($_SERVER['WLS_FPC_BYPASS'] ?? '') === '1'
+            || (string)($_SERVER['HTTP_X_WLS_FPC_BYPASS'] ?? '') === '1'
+            || (string)($_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? '') === '1') {
+            return 'BYPASS';
+        }
+
+        $header = $response->getHeader('X-Weline-FPC');
+        if (\is_scalar($header) && \trim((string)$header) !== '') {
+            return \strtoupper(\trim((string)$header));
+        }
+
+        return 'MISS';
+    }
+
+    private function resolveControllerCacheSource(array $timing, Response $response): string
+    {
+        foreach (['X-WLS-Category-View-Cache', 'X-WLS-Product-View-Cache', 'X-WLS-PageBuilder-View-Cache'] as $headerName) {
+            $value = $response->getHeader($headerName);
+            if (\is_scalar($value) && \trim((string)$value) !== '') {
+                return \strtolower(\trim((string)$value));
+            }
+        }
+
+        foreach (['category_view', 'product_view'] as $profileKey) {
+            $profile = $timing[$profileKey] ?? null;
+            if (!\is_array($profile)) {
+                continue;
+            }
+            foreach (\array_reverse($profile) as $step) {
+                if (!\is_array($step) || ($step['name'] ?? '') !== ($profileKey === 'category_view' ? 'category::runtime_cache_get' : 'product::runtime_cache_get')) {
+                    continue;
+                }
+                $meta = \is_array($step['meta'] ?? null) ? $step['meta'] : [];
+                $status = $meta['status'] ?? '';
+                if (\is_scalar($status) && \trim((string)$status) !== '') {
+                    return \strtolower(\trim((string)$status));
+                }
+            }
+        }
+
+        return '';
     }
 
     private function recordPerformanceTiming(array $timing, bool $isDev): void

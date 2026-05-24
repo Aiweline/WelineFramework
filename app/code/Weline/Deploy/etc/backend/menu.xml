@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Deploy::deploy_config"
+          name="deploy_config"
+          title="部署配置"
+          action="deploy/backend/config"
+          parent="Weline_Backend::system_maintenance"
+          icon="mdi mdi-source-branch"
+          order="70"/>
+</menus>

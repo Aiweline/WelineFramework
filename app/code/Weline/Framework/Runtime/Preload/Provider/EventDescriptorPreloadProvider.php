@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime\Preload\Provider;
 
+use Weline\Framework\Event\EventRegistryInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Preload\WorkerPreloadContext;
@@ -19,7 +20,7 @@ final class EventDescriptorPreloadProvider implements WorkerPreloadProviderInter
 
     public function phase(): string
     {
-        return WorkerPreloadContext::PHASE_READY_GATE;
+        return WorkerPreloadContext::PHASE_BOOTSTRAP;
     }
 
     public function priority(): int
@@ -36,9 +37,14 @@ final class EventDescriptorPreloadProvider implements WorkerPreloadProviderInter
     {
         $start = \microtime(true);
         $memoryStart = \memory_get_usage(true);
+        /** @var EventRegistryInterface $eventRegistry */
+        $eventRegistry = ObjectManager::getInstance(EventRegistryInterface::class);
+        $registry = $eventRegistry->getRegistry(false);
+        $events = \is_array($registry['events'] ?? null) ? $registry['events'] : [];
+        $dynamicPatterns = \is_array($registry['dynamic_patterns'] ?? null) ? $registry['dynamic_patterns'] : [];
+
         /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $events = $eventsManager->scanEvents();
         $observerCount = 0;
         foreach ($this->hotEvents() as $eventName) {
             $observerCount += \count($eventsManager->getEventObservers($eventName));
@@ -52,6 +58,7 @@ final class EventDescriptorPreloadProvider implements WorkerPreloadProviderInter
             \memory_get_usage(true) - $memoryStart,
             [
                 'events' => \count($events),
+                'dynamic_patterns' => \count($dynamicPatterns),
                 'hot_observers' => $observerCount,
             ]
         );

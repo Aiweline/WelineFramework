@@ -319,23 +319,51 @@ class AiSiteAgentSessionService
     /**
      * @return array<string, mixed>
      */
-    public function loadScopeForStage(AiSiteAgentSession $session, string $stageCode): array
+    public function loadScopeForStage(AiSiteAgentSession $session, string $stageCode, ?array $artifactKeys = null): array
     {
         $scope = $this->loadScopeFragmentFromPgsql($session, $stageCode);
         if ($scope !== null) {
             $scope = $this->hydrateLegacyArtifactsForStage($session, $scope, $stageCode);
-            return $this->artifactStorage()->hydrateScopeForStage(
+            return $artifactKeys === null
+                ? $this->artifactStorage()->hydrateScopeForStage(
+                    (int)$session->getId(),
+                    $scope,
+                    $stageCode
+                )
+                : $this->hydrateScopeWithExplicitArtifacts((int)$session->getId(), $scope, $artifactKeys);
+        }
+
+        $scope = $this->decodeSessionScopeData($session);
+        return $artifactKeys === null
+            ? $this->artifactStorage()->hydrateScopeForStage(
                 (int)$session->getId(),
                 $scope,
                 $stageCode
-            );
+            )
+            : $this->hydrateScopeWithExplicitArtifacts((int)$session->getId(), $scope, $artifactKeys);
+    }
+
+    /**
+     * Load only the requested top-level scope keys. This is used by WLS hot paths
+     * that must not hydrate full stage artifacts before first paint.
+     *
+     * @param list<string> $scopeKeys
+     * @param list<string> $artifactKeys
+     * @return array<string, mixed>
+     */
+    public function loadScopeFragment(AiSiteAgentSession $session, array $scopeKeys, array $artifactKeys = []): array
+    {
+        $scopeKeys = $this->normalizeScopeKeyList($scopeKeys);
+        if ($scopeKeys === []) {
+            return [];
         }
 
-        return $this->artifactStorage()->hydrateScopeForStage(
-            (int)$session->getId(),
-            $this->decodeSessionScopeData($session),
-            $stageCode
-        );
+        $scope = $this->loadScopeFragmentByKeysFromPgsql($session, $scopeKeys);
+        if ($scope === null) {
+            $scope = \array_intersect_key($this->decodeSessionScopeData($session), \array_flip($scopeKeys));
+        }
+
+        return $this->hydrateScopeWithExplicitArtifacts((int)$session->getId(), $scope, $artifactKeys);
     }
 
     /**
@@ -688,9 +716,51 @@ SQL;
     }
 
     /**
+     * @param list<string> $keys
+     * @return list<string>
+     */
+    private function normalizeScopeKeyList(array $keys): array
+    {
+        $normalized = [];
+        foreach ($keys as $key) {
+            $key = \trim((string)$key);
+            if ($key === '' || \in_array($key, $normalized, true)) {
+                continue;
+            }
+            $normalized[] = $key;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param list<string> $artifactKeys
+     * @return array<string, mixed>
+     */
+    private function hydrateScopeWithExplicitArtifacts(int $sessionId, array $scope, array $artifactKeys): array
+    {
+        $artifactKeys = $this->normalizeScopeKeyList($artifactKeys);
+        if ($artifactKeys === []) {
+            return $scope;
+        }
+
+        return $this->artifactStorage()->hydrateScope($sessionId, $scope, $artifactKeys);
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     private function loadScopeFragmentFromPgsql(AiSiteAgentSession $session, string $stageCode): ?array
+    {
+        return $this->loadScopeFragmentByKeysFromPgsql($session, $this->resolveStageScopeKeys($stageCode));
+    }
+
+    /**
+     * @param list<string> $keys
+     * @return array<string, mixed>|null
+     */
+    private function loadScopeFragmentByKeysFromPgsql(AiSiteAgentSession $session, array $keys): ?array
     {
         $sessionId = (int)$session->getId();
         $adminId = (int)$session->getAdminUserId();
@@ -702,7 +772,10 @@ SQL;
             return null;
         }
 
-        $keys = $this->resolveStageScopeKeys($stageCode);
+        $keys = $this->normalizeScopeKeyList($keys);
+        if ($keys === []) {
+            return [];
+        }
         $jsonBuild = $this->buildStageScopeJsonbExpression($keys);
         $table = $this->sessionModel->getTable();
         $pk = AiSiteAgentSession::schema_fields_ID;

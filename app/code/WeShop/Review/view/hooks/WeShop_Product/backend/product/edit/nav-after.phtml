@@ -1,0 +1,36 @@
+<?php
+/**
+ * Product edit review tab navigation.
+ *
+ * @hook-priority 220
+ * @hook-sort-order 20
+ * @hook-solo false
+ */
+$this->request->addModule('WeShop_Review');
+\Weline\Framework\Phrase\Parser::$loaded = false;
+
+$product = $this->getData('product');
+$type = (string) ($this->getData('type') ?? 'simple');
+$stepNumber = $type === 'configurable' ? 5 : 4;
+$progress = '';
+if (is_object($product) && method_exists($product, 'getData')) {
+    $progress = (string) ($product->getData('progress') ?? '');
+} elseif (is_array($product)) {
+    $progress = (string) ($product['progress'] ?? '');
+}
+?>
+<li class='nav-item'>
+    <a href='#product_reviews'
+       class='nav-link <?= $progress === 'product_reviews' ? 'active' : '' ?>'
+       scope="edit_product"
+       name="progress"
+       value="product_reviews"
+       data-index="4"
+       data-toggle='tab'>
+        <span class='step-number'><?= $stepNumber ?></span>
+        <span class='step-title'><lang>评价</lang></span>
+        <span class='help-block'>
+            <span class='text-primary'><lang>当前产品</lang></span>
+        </span>
+    </a>
+</li>

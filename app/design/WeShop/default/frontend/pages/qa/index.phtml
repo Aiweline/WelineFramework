@@ -8,6 +8,12 @@ $removeAction = (string) ($this->getData('remove_action') ?? $this->getUrl('qa/r
 $loginUrl = (string) ($this->getData('login_url') ?? $this->getUrl('customer/account/login'));
 $productId = (int) ($this->getData('product_id') ?? $product['product_id'] ?? 0);
 $productName = (string) ($product['name'] ?? __('Product Q&A'));
+$page = max(1, (int) ($this->getData('page') ?? 1));
+$pageCount = max(1, (int) ($this->getData('page_count') ?? 1));
+$hasPrevious = (bool) ($this->getData('has_previous') ?? false);
+$hasNext = (bool) ($this->getData('has_next') ?? false);
+$previousPageUrl = (string) ($this->getData('previous_page_url') ?? '');
+$nextPageUrl = (string) ($this->getData('next_page_url') ?? '');
 ?>
 <main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
     <section class="rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
@@ -30,6 +36,9 @@ $productName = (string) ($product['name'] ?? __('Product Q&A'));
                 <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Total Questions') ?></p>
                 <p class="mt-2 text-4xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $questionCount ?></p>
                 <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Visible and approved Q&A entries for this product.') ?></p>
+                <?php if ($pageCount > 1): ?>
+                    <p class="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-primary"><?= __('第 %{1} / %{2} 页', [$page, $pageCount]) ?></p>
+                <?php endif; ?>
             </div>
         </div>
     </section>
@@ -47,7 +56,18 @@ $productName = (string) ($product['name'] ?? __('Product Q&A'));
             <?php if ($qaList): ?>
                 <div class="mt-6 space-y-4">
                     <?php foreach ($qaList as $qaItem): ?>
-                        <article class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark" data-question-card="<?= (int) ($qaItem['question_id'] ?? 0) ?>">
+                        <?php
+                        $qaId = (int) ($qaItem['question_id'] ?? 0);
+                        $isTarget = !empty($qaItem['is_target']);
+                        ?>
+                        <article id="qa-question-<?= $qaId ?>" class="rounded-2xl border <?= $isTarget ? 'border-primary ring-2 ring-primary/20' : 'border-border-light dark:border-border-dark' ?> bg-background-light p-4 dark:bg-background-dark" data-question-card="<?= $qaId ?>">
+                            <div class="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                                <span class="rounded-full bg-primary/10 px-3 py-1 text-primary"><?= htmlspecialchars((string) ($qaItem['source_label'] ?? __('客户问答')), ENT_QUOTES) ?></span>
+                                <?php if (!empty($qaItem['is_recommended'])): ?>
+                                    <span class="rounded-full bg-amber-100 px-3 py-1 text-amber-700"><?= __('推荐') ?></span>
+                                <?php endif; ?>
+                                <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($qaItem['display_name'] ?? ''), ENT_QUOTES) ?></span>
+                            </div>
                             <p class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($qaItem['question'] ?? ''), ENT_QUOTES) ?></p>
                             <?php if (!empty($qaItem['answer'])): ?>
                                 <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($qaItem['answer'] ?? ''), ENT_QUOTES) ?></p>
@@ -58,7 +78,7 @@ $productName = (string) ($product['name'] ?? __('Product Q&A'));
                             <div class="mt-3 flex items-center justify-between gap-3">
                                 <p class="text-xs text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($qaItem['created_at'] ?? ''), ENT_QUOTES) ?></p>
                                 <?php if (!empty($qaItem['is_owner'])): ?>
-                                    <button type="button" data-remove-question="<?= (int) ($qaItem['question_id'] ?? 0) ?>" class="rounded-full border border-border-light px-3 py-1 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                                    <button type="button" data-remove-question="<?= $qaId ?>" class="rounded-full border border-border-light px-3 py-1 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
                                         <?= __('Remove') ?>
                                     </button>
                                 <?php endif; ?>
@@ -67,6 +87,21 @@ $productName = (string) ($product['name'] ?? __('Product Q&A'));
                         </article>
                     <?php endforeach; ?>
                 </div>
+                <?php if ($pageCount > 1): ?>
+                    <nav class="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold">
+                        <?php if ($hasPrevious && $previousPageUrl !== ''): ?>
+                            <a href="<?= htmlspecialchars($previousPageUrl, ENT_QUOTES) ?>" class="rounded-full border border-border-light px-4 py-2 text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark"><?= __('上一页') ?></a>
+                        <?php else: ?>
+                            <span class="rounded-full border border-border-light px-4 py-2 text-text-secondary-light opacity-50 dark:border-border-dark dark:text-text-secondary-dark"><?= __('上一页') ?></span>
+                        <?php endif; ?>
+                        <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('第 %{1} / %{2} 页', [$page, $pageCount]) ?></span>
+                        <?php if ($hasNext && $nextPageUrl !== ''): ?>
+                            <a href="<?= htmlspecialchars($nextPageUrl, ENT_QUOTES) ?>" class="rounded-full border border-border-light px-4 py-2 text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark"><?= __('下一页') ?></a>
+                        <?php else: ?>
+                            <span class="rounded-full border border-border-light px-4 py-2 text-text-secondary-light opacity-50 dark:border-border-dark dark:text-text-secondary-dark"><?= __('下一页') ?></span>
+                        <?php endif; ?>
+                    </nav>
+                <?php endif; ?>
             <?php else: ?>
                 <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark">
                     <span class="material-symbols-outlined text-5xl text-primary">forum</span>
@@ -80,7 +115,7 @@ $productName = (string) ($product['name'] ?? __('Product Q&A'));
 
         <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
             <h2 class="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Ask a question') ?></h2>
-            <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Questions are reviewed before public display to keep product discussions clear and accurate.') ?></p>
+            <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('直接提交商品问题。已登录客户购买过该商品时会自动标记为已下单用户。') ?></p>
             <form id="qa-form" class="mt-4 space-y-4" method="post" action="<?= htmlspecialchars($askAction, ENT_QUOTES) ?>">
                 <?= $this->getFormKey($askAction) ?>
                 <input type="hidden" name="product_id" value="<?= $productId ?>">
@@ -134,7 +169,7 @@ $productName = (string) ($product['name'] ?? __('Product Q&A'));
                     return QaApi.add(payload, {silent: true});
                 }).then(function (result) {
                     if (result && result.success) {
-                        setFeedback(result.message || '<?= __('Your question has been submitted and is pending review.') ?>', true);
+                        setFeedback(result.message || '<?= __('您的问题已发布。') ?>', true);
                         form.reset();
                         return;
                     }

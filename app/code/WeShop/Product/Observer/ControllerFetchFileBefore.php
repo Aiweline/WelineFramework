@@ -16,6 +16,7 @@ namespace WeShop\Product\Observer;
 
 use WeShop\Product\Model\Product;
 use WeShop\Product\Service\ProductLayoutService;
+use WeShop\Product\Service\ProductService;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -63,9 +64,14 @@ class ControllerFetchFileBefore implements ObserverInterface
         // 如果有productId，加载产品数据并应用布局
         if ($productId) {
             // 加载产品数据
-            /** @var Product $product */
-            $product = ObjectManager::getInstance(Product::class);
-            $product->load($productId);
+            /** @var ProductService $productService */
+            $productService = ObjectManager::getInstance(ProductService::class);
+            $product = $productService->getProduct($productId);
+            if (!$product || !$product->getId()) {
+                /** @var Product $product */
+                $product = ObjectManager::getInstance(Product::class);
+                $product->load($productId);
+            }
 
             if ($product->getId()) {
                 // 将产品数据设置到模板中

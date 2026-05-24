@@ -76,11 +76,27 @@ class BackendController extends PcController
 
         $this->request->setServer('WELINE_AREA', 'backend');
         $this->request->setServer('WELINE_IS_BACKEND', '1');
+
+        if (\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)
+            && \Weline\Backend\Service\BackendWarmupContext::isInternalWarmupRequest($this->request)
+        ) {
+            $warmupUser = \Weline\Backend\Service\BackendWarmupContext::resolveWarmupUser($this->request);
+            if ($warmupUser !== null) {
+                \Weline\Backend\Service\BackendWarmupContext::installForUser($warmupUser);
+            }
+        }
     }
 
     protected function loginCheck(): void
     {
         if ((\defined('ENV_TEST') && ENV_TEST === true) || \defined('PHPUNIT_COMPOSER_INSTALL') || \defined('__PHPUNIT_PHAR__')) {
+            return;
+        }
+
+        if (\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)
+            && \Weline\Backend\Service\BackendWarmupContext::isInternalWarmupRequest($this->request)
+            && \Weline\Backend\Service\BackendWarmupContext::isActive()
+        ) {
             return;
         }
 
@@ -113,17 +129,13 @@ class BackendController extends PcController
                     );
                 }
 
-                $no_login_url_cache_key = 'no_login_redirect_url';
-                $no_login_redirect_url = $this->cache->get($no_login_url_cache_key);
-                
-                if (!$no_login_redirect_url) {
-                    /** @var EventsManager $evenManager */
-                    $evenManager = ObjectManager::getInstance(EventsManager::class);
-                    $noLoginRedirectUrl = new DataObject(['no_login_redirect_url' => []]);
-                    $evenManager->dispatch('Weline_Framework_Router::backend_no_login_redirect_url', $noLoginRedirectUrl);
-                    $no_login_redirect_url = $noLoginRedirectUrl->getData('no_login_redirect_url');
-                    $this->cache->set($no_login_url_cache_key, $this->_url->getUri($no_login_redirect_url));
-                }
+                /** @var EventsManager $evenManager */
+                $evenManager = ObjectManager::getInstance(EventsManager::class);
+                $noLoginRedirectUrl = new DataObject(['no_login_redirect_url' => '']);
+                $evenManager->dispatch('Weline_Framework_Router::backend_no_login_redirect_url', $noLoginRedirectUrl);
+                $no_login_redirect_url = $this->normalizeBackendLoginUrlSameOrigin(
+                    (string)$noLoginRedirectUrl->getData('no_login_redirect_url')
+                );
                 
                 if ($no_login_redirect_url) {
                     $this->redirect($this->withBackendLoginReturnUrl((string)$no_login_redirect_url, $routeUrlPath));
@@ -177,6 +189,42 @@ class BackendController extends PcController
         ];
 
         return $loginUrl . (\str_contains($loginUrl, '?') ? '&' : '?') . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private function normalizeBackendLoginUrlSameOrigin(string $loginUrl): string
+    {
+        $parsed = \parse_url($loginUrl);
+        $path = \is_array($parsed) ? (string)($parsed['path'] ?? '') : '';
+        if ($path === '') {
+            $path = $this->getBackendPathWithPrefix('admin/login');
+        }
+
+        $query = \is_array($parsed) && isset($parsed['query']) && $parsed['query'] !== ''
+            ? '?' . $parsed['query']
+            : '';
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost');
+
+        return $scheme . '://' . $host . (\str_starts_with($path, '/') ? $path : '/' . $path) . $query;
+    }
+
+    private function getBackendPathWithPrefix(string $path): string
+    {
+        $backendPrefix = \Weline\Framework\App\Env::getAreaRoutePrefix('backend');
+        $areaRoute = (string)($this->request->getServer('WELINE_AREA_ROUTE') ?? '');
+        if ($areaRoute !== '' && $backendPrefix !== null && $backendPrefix !== ''
+            && (\str_starts_with($areaRoute, $backendPrefix . '/') || $areaRoute === $backendPrefix)
+        ) {
+            return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
+        }
+
+        if ($backendPrefix !== null && $backendPrefix !== '') {
+            $currency = (string)(\w_env('user.currency', 'CNY') ?? 'CNY');
+            $language = (string)(\w_env('user.lang', 'zh_Hans_CN') ?? 'zh_Hans_CN');
+            return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
+        }
+
+        return '/' . \ltrim($path, '/');
     }
 
     private function getCurrentRequestUrl(): string

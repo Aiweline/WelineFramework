@@ -70,6 +70,19 @@ final class StyleService
         return $this->repository()->modelToArray($style);
     }
 
+    public function deleteCustom(string $code, int $adminId): bool
+    {
+        if ($this->registry()->isReservedCode($code, $adminId)) {
+            throw new \InvalidArgumentException('Builtin/module styles are read-only and cannot be deleted.');
+        }
+
+        if (!$this->repository()->delete($code, $adminId)) {
+            throw new \InvalidArgumentException('Style not found.');
+        }
+
+        return true;
+    }
+
     /**
      * @return array<string, mixed>
      */

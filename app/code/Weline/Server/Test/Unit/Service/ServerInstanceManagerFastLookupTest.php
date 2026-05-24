@@ -8,6 +8,60 @@ use Weline\Server\Service\ServerInstanceManager;
 
 final class ServerInstanceManagerFastLookupTest extends TestCase
 {
+    public function testSaveInstancePreservesMasterOnlyStartupRuntimeConfig(): void
+    {
+        $manager = new ServerInstanceManager();
+        $instanceName = 'endpoint-runtime-' . \str_replace('.', '', \uniqid('', true));
+        $file = $manager->getInstanceFile($instanceName);
+
+        try {
+            $manager->saveInstance($instanceName, [
+                'host' => '127.0.0.1',
+                'port' => 9502,
+                'count' => 8,
+                'daemon' => true,
+                'dispatcher_enabled' => true,
+                'worker_port' => 25954,
+                'worker_base_port' => 16452,
+                'session_server_port' => 26422,
+                'session_server_token_file_name' => 'session_server.token',
+                'memory_server_port' => 26423,
+                'memory_server_token_file_name' => 'memory_server.token',
+                'worker_memory_limit' => '256M',
+                'dispatcher_memory_limit' => '256M',
+                'orchestrator_runtime_options' => ['background_ready_wait_sec' => 60],
+                'shared_state' => [
+                    'session' => [
+                        'host' => '127.0.0.1',
+                        'port' => 26422,
+                        'token_file_name' => 'session_server.token',
+                        'shared_service' => true,
+                        'reuse_existing' => true,
+                    ],
+                    'memory' => [
+                        'host' => '127.0.0.1',
+                        'port' => 26423,
+                        'token_file_name' => 'memory_server.token',
+                        'shared_service' => true,
+                        'created_now' => true,
+                    ],
+                ],
+            ]);
+
+            $raw = $manager->getRawInstanceData($instanceName);
+
+            self::assertIsArray($raw);
+            self::assertSame(26422, (int)($raw['session_server_port'] ?? 0));
+            self::assertSame(26423, (int)($raw['memory_server_port'] ?? 0));
+            self::assertTrue((bool)($raw['shared_state']['session']['shared_service'] ?? false));
+            self::assertTrue((bool)($raw['shared_state']['memory']['created_now'] ?? false));
+            self::assertSame(60, (int)($raw['orchestrator_runtime_options']['background_ready_wait_sec'] ?? 0));
+        } finally {
+            @\unlink($file);
+            @\unlink($file . '.lock');
+        }
+    }
+
     public function testHasInstanceUsesEndpointRecordFastPath(): void
     {
         $manager = $this->createManager([

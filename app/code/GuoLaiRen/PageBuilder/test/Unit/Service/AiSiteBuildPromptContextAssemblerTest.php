@@ -49,6 +49,8 @@ final class AiSiteBuildPromptContextAssemblerTest extends TestCase
         self::assertArrayHasKey('runtime_context', $context);
         self::assertArrayHasKey('output_contract', $context);
         self::assertArrayHasKey('acceptance', $context);
+        self::assertSame('en_US', $context['content_locale']);
+        self::assertSame('en_US', $context['language_contract']['source_of_truth_locale'] ?? null);
         self::assertArrayNotHasKey('policy_projection', $context);
         self::assertArrayNotHasKey('design_manifest', $context);
     }

@@ -52,7 +52,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'cart_customer_id' => $cartCustomerId,
             'authenticated_customer_id' => $authenticatedCustomerId,
             'shipping_address_id' => $isGuestCheckout ? 0 : (int) ($form['shipping_address_id'] ?? 0),
+            'billing_address_id' => $isGuestCheckout ? 0 : (int) ($form['billing_address_id'] ?? 0),
+            'billing_same_as_shipping' => $this->readBillingSameAsShipping($form),
             'shipping_address' => $this->readShippingAddress($form),
+            'billing_address' => $this->readBillingAddress($form),
             'shipping_method' => (string) ($form['shipping_method'] ?? ''),
             'payment_method' => (string) ($form['payment_method'] ?? ''),
         ]);
@@ -69,7 +72,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ] : null,
             'guest_email' => (string) ($checkoutIdentity['guest_email'] ?? ''),
             'saved_addresses' => $pageData['saved_addresses'] ?? [],
+            'billing_addresses' => $pageData['billing_addresses'] ?? $pageData['saved_addresses'] ?? [],
             'selected_shipping_address_id' => (int) ($pageData['selected_shipping_address_id'] ?? 0),
+            'selected_billing_address_id' => (int) ($pageData['selected_billing_address_id'] ?? 0),
+            'billing_same_as_shipping' => (bool) ($pageData['billing_same_as_shipping'] ?? true),
             'shipping_methods' => $pageData['shipping_methods'] ?? [],
             'payment_methods' => $pageData['payment_methods'] ?? [],
             'cart_summary' => $pageData['cart_summary'] ?? [],
@@ -85,7 +91,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
 
         $data = $this->checkoutPageDataService->buildDynamicMethodData($cartCustomerId, [
             'shipping_address_id' => $isGuestCheckout ? 0 : (int)($form['shipping_address_id'] ?? 0),
+            'billing_address_id' => $isGuestCheckout ? 0 : (int)($form['billing_address_id'] ?? 0),
+            'billing_same_as_shipping' => $this->readBillingSameAsShipping($form),
             'shipping_address' => $this->readShippingAddress($form),
+            'billing_address' => $this->readBillingAddress($form),
             'shipping_method' => (string)($form['shipping_method'] ?? ''),
             'payment_method' => (string)($form['payment_method'] ?? ''),
             'order_id' => (int)(($form['order_id'] ?? $form['retry_order_id'] ?? 0)),
@@ -96,7 +105,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'authenticated_customer_id' => $authenticatedCustomerId,
         ]);
 
-        return $this->success('Checkout methods refreshed.', $data);
+        return $this->success((string) __('结账方式刷新成功。'), $data);
     }
 
     private function placeOrder(array $form): array
@@ -117,8 +126,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'guest_email' => $guestEmail,
             'order_id' => (int)(($form['order_id'] ?? $form['retry_order_id'] ?? 0)),
             'shipping_address_id' => $isGuestCheckout ? 0 : (int)($form['shipping_address_id'] ?? 0),
-            'billing_address_id' => (int)($form['billing_address_id'] ?? 0),
+            'billing_address_id' => $isGuestCheckout ? 0 : (int)($form['billing_address_id'] ?? 0),
+            'billing_same_as_shipping' => $this->readBillingSameAsShipping($form),
             'shipping_address' => $this->readShippingAddress($form),
+            'billing_address' => $this->readBillingAddress($form),
             'shipping_method' => (string)($form['shipping_method'] ?? ''),
             'payment_method' => (string)($form['payment_method'] ?? ''),
             'notification_channels' => $this->readNotificationChannels($form),
@@ -137,6 +148,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'is_guest_checkout' => $isGuestCheckout,
             'guest_email' => $guestEmail,
             'shipping_address' => $checkoutData['shipping_address'],
+            'billing_address' => $checkoutData['billing_address'],
+            'billing_same_as_shipping' => $checkoutData['billing_same_as_shipping'],
             'shipping_method' => $checkoutData['shipping_method'],
             'payment_method' => is_array($result['payment_method'] ?? null) ? $result['payment_method'] : [],
             'notification_channels' => $checkoutData['notification_channels'],
@@ -171,6 +184,32 @@ class CheckoutQueryProvider implements QueryProviderInterface
         }
 
         return $shippingAddress;
+    }
+
+    private function readBillingAddress(array $form): array
+    {
+        $billingAddress = $form['billing_address'] ?? $form['billing'] ?? [];
+        $billingAddress = is_array($billingAddress) ? $billingAddress : [];
+        $guestEmail = $this->readGuestEmail($form);
+        if ($guestEmail !== '' && empty($billingAddress['email'])) {
+            $billingAddress['email'] = $guestEmail;
+        }
+
+        return $billingAddress;
+    }
+
+    private function readBillingSameAsShipping(array $form): bool
+    {
+        if (!array_key_exists('billing_same_as_shipping', $form)) {
+            return true;
+        }
+
+        $value = $form['billing_same_as_shipping'];
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        return !in_array(strtolower(trim((string)$value)), ['0', 'false', 'off', 'no'], true);
     }
 
     private function readGuestEmail(array $form): string

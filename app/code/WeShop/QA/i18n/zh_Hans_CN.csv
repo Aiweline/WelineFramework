@@ -9,9 +9,11 @@
 "Question rejected successfully.","Question rejected successfully."
 "Failed to reject question.","Failed to reject question."
 "Reject failed: %{1}","Reject failed: %{1}"
-"Please log in to ask a question.","Please log in to ask a question."
+问答元数据已保存。,问答元数据已保存。
+问答元数据保存失败。,问答元数据保存失败。
+保存元数据失败：%{1},保存元数据失败：%{1}
 "Product ID and question text are required.",商品ID和问题内容不能为空。
-"Your question has been submitted and is pending review.",您的问题已提交，等待审核后展示。
+您的问题已发布。,您的问题已发布。
 "Product ID cannot be empty.",商品ID不能为空。
 "Product Q&A",商品问答
 "Please log in to manage your questions.",请先登录后再管理您的问题。
@@ -29,7 +31,14 @@
 "Inject widgets before the storefront Q&A listing.",在前台问答列表前注入扩展内容。
 "QA Question Item Hooks",问答条目扩展位
 "Add badges or metadata around each storefront question card.",在前台问题卡片周围注入徽标或附加信息。
+匿名用户,匿名用户
+"客户 #%{1}","客户 #%{1}"
+客户问答,客户问答
 "Store team",店铺团队
+系统推荐,系统推荐
+已下单用户,已下单用户
+您在商品问答中被提及,您在商品问答中被提及
+"客户 %{1} 在商品问答中提到了您。","客户 %{1} 在商品问答中提到了您。"
 "Questions & Answers",问答
 "Community Q&A",社区问答
 "Open Full Q&A",查看完整问答
@@ -43,11 +52,13 @@ List,List
 ID,ID
 "Product ID","Product ID"
 "Customer ID","Customer ID"
+来源,来源
 Question,Question
 Answer,Answer
 Status,Status
 Created,Created
 Actions,Actions
+推荐,推荐
 "Not answered yet","Not answered yet"
 Pending,Pending
 Approved,Approved
@@ -71,8 +82,14 @@ Detail,Detail
 "Approve & Reply","Approve & Reply"
 "Question Info","Question Info"
 "Question ID","Question ID"
+展示名称,展示名称
+是,是
+否,否
 "Created At","Created At"
 "Updated At","Updated At"
+来源设置,来源设置
+推荐/热门,推荐/热门
+保存来源设置,保存来源设置
 "Quick Actions","Quick Actions"
 "Approve Without Answer","Approve Without Answer"
 "Reject Question","Reject Question"

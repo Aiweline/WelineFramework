@@ -35,8 +35,8 @@
 "Inject content before the promotion product grid on storefront promotion pages.","Inject content before the promotion product grid on storefront promotion pages."
 "Promotion page after content","Promotion page after content"
 "Inject content after the promotion product grid on storefront promotion pages.","Inject content after the promotion product grid on storefront promotion pages."
-购物车优惠券,购物车优惠券
-在购物车订单摘要优惠券区域渲染促销模块的优惠券入口。,在购物车订单摘要优惠券区域渲染促销模块的优惠券入口。
+购物车优惠券,"Cart coupon"
+在购物车订单摘要优惠券区域渲染促销模块的优惠券入口。,"Render the promotion module coupon entry in the cart order summary coupon area."
 已结束,Ended
 未开始,"Not started"
 进行中,"In Progress"

@@ -9,9 +9,11 @@
 "Question rejected successfully.","Question rejected successfully."
 "Failed to reject question.","Failed to reject question."
 "Reject failed: %{1}","Reject failed: %{1}"
-"Please log in to ask a question.","Please log in to ask a question."
+问答元数据已保存。,"Question metadata saved successfully."
+问答元数据保存失败。,"Failed to save question metadata."
+保存元数据失败：%{1},"Save metadata failed: %{1}"
 "Product ID and question text are required.","Product ID and question text are required."
-"Your question has been submitted and is pending review.","Your question has been submitted and is pending review."
+您的问题已发布。,"Your question has been published."
 "Product ID cannot be empty.","Product ID cannot be empty."
 "Product Q&A","Product Q&A"
 "Please log in to manage your questions.","Please log in to manage your questions."
@@ -29,7 +31,14 @@
 "Inject widgets before the storefront Q&A listing.","Inject widgets before the storefront Q&A listing."
 "QA Question Item Hooks","QA Question Item Hooks"
 "Add badges or metadata around each storefront question card.","Add badges or metadata around each storefront question card."
+匿名用户,Anonymous
+"客户 #%{1}","Customer #%{1}"
+客户问答,"Customer Q&A"
 "Store team","Store team"
+系统推荐,"System Recommended"
+已下单用户,"Verified Buyer"
+您在商品问答中被提及,"You were mentioned in product Q&A"
+"客户 %{1} 在商品问答中提到了您。","Customer %{1} mentioned you in product Q&A."
 "Questions & Answers","Questions & Answers"
 "Community Q&A","Community Q&A"
 "Open Full Q&A","Open Full Q&A"
@@ -43,11 +52,13 @@ List,List
 ID,ID
 "Product ID","Product ID"
 "Customer ID","Customer ID"
+来源,Source
 Question,Question
 Answer,Answer
 Status,Status
 Created,Created
 Actions,Actions
+推荐,Recommended
 "Not answered yet","Not answered yet"
 Pending,Pending
 Approved,Approved
@@ -71,8 +82,14 @@ Detail,Detail
 "Approve & Reply","Approve & Reply"
 "Question Info","Question Info"
 "Question ID","Question ID"
+展示名称,"Display Name"
+是,Yes
+否,No
 "Created At","Created At"
 "Updated At","Updated At"
+来源设置,"Source Settings"
+推荐/热门,"Recommended / Hot"
+保存来源设置,"Save Source Settings"
 "Quick Actions","Quick Actions"
 "Approve Without Answer","Approve Without Answer"
 "Reject Question","Reject Question"

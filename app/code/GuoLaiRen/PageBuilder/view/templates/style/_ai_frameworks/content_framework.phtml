@@ -117,6 +117,18 @@ try {
     overflow: hidden;
 }
 
+#<?= $componentId ?>,
+#<?= $componentId ?> * {
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+#<?= $componentId ?> [data-pb-ai-action],
+#<?= $componentId ?> a[class*="-cta"],
+#<?= $componentId ?> button[class*="-cta"] {
+    max-width: 100%;
+}
+
 /* ===== 背景质感：纯色底时添加微噪点纹理 + 装饰光晕 ===== */
 #<?= $componentId ?>::before {
     content: '';
@@ -452,8 +464,6 @@ try {
         padding: 16px;
     }
 
-    {{CSS_RESPONSIVE}}
-
     <?php if ({{CONTENT_OWNS_AI_SHELL}}): ?>
     #<?= $componentId ?> {
         padding: 0;
@@ -465,6 +475,8 @@ try {
     }
     <?php endif; ?>
 }
+
+{{CSS_RESPONSIVE}}
 </style>
 
 <section id="<?= $componentId ?>">
@@ -497,12 +509,36 @@ $_jsPlaceholder = <<<'JSEOF'
 JSEOF;
 $jsContent = trim($_jsPlaceholder);
 $_hasValidJs = !empty($jsContent) && strpos($jsContent, '{{') !== 0 && strlen($jsContent) > 5;
-if ($_hasValidJs): 
+$_installActionBridge = strpos($jsContent, 'pb:cta') === false;
+if ($_hasValidJs || $_installActionBridge):
 ?>
 <script>
 (function() {
     const component = document.getElementById('<?= $componentId ?>');
+    if (!component) {
+        return;
+    }
+    <?php if ($_installActionBridge): ?>
+    const actionControls = component.querySelectorAll('[data-pb-ai-action]');
+    actionControls.forEach((control) => {
+        if (control.getAttribute('data-pb-ai-bound') === '1') {
+            return;
+        }
+        control.setAttribute('data-pb-ai-bound', '1');
+        control.addEventListener('click', (event) => {
+            const action = control.getAttribute('data-pb-ai-action') || '';
+            const target = control.getAttribute('data-pb-ai-target') || control.getAttribute('href') || '';
+            const label = (control.textContent || '').trim();
+            component.dispatchEvent(new CustomEvent('pb:cta', {
+                bubbles: true,
+                detail: { action, target, label, source: control, originalEvent: event }
+            }));
+        });
+    });
+    <?php endif; ?>
+    <?php if ($_hasValidJs): ?>
     <?= $jsContent ?>
+    <?php endif; ?>
 })();
 </script>
 <?php endif; ?>

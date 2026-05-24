@@ -41,7 +41,7 @@ $cartCount = $cartCountCookie->read() ?? 0;
           <?= $cartCount === 0 ? 'style="display:none;"' : '' ?>>
         <?= $cartCount > 99 ? '99+' : $cartCount ?>
     </span>
-    <span class="action-line-2"><lang>购物车</lang></span>
+    <span class="action-line-2"><?= __('购物车') ?></span>
 </button>
 </div>
 
@@ -51,8 +51,8 @@ $cartCount = $cartCountCookie->read() ?? 0;
     'autoOpen' => true,
 ]) ?>
 
-<script src="@static(WeShop_Cart::js/mini-cart.js)?v=20260522-mini-cart-hydrate"></script>
-<script src="@static(WeShop_Cart::js/cart-hydrate.js)?v=20260522-mini-cart-hydrate"></script>
+<script src="@static(WeShop_Cart::js/mini-cart.js)?v=20260524-mini-cart-swatches"></script>
+<script src="@static(WeShop_Cart::js/cart-hydrate.js)?v=20260524-mini-cart-state"></script>
 
 <script>
 (function () {

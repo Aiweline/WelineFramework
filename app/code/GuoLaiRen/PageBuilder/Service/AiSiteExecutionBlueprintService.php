@@ -46,6 +46,8 @@ final class AiSiteExecutionBlueprintService
     private ?AiSiteStageOnePromptContractRenderer $stageOnePromptContractRenderer = null;
     private ?AiSiteStageOneContractValidator $stageOneContractValidator = null;
     private ?AiSitePageRouteContractService $pageRouteContractService = null;
+    private ?AiSiteDesignDirectorService $siteDesignDirectorService = null;
+    private ?AiSiteBlockContractAssemblerService $blockContractAssemblerService = null;
 
     public function __construct(
         private readonly AiSitePageBlueprintService $pageBlueprintService,
@@ -125,6 +127,60 @@ final class AiSiteExecutionBlueprintService
         return $this->pageRouteContractService;
     }
 
+    private function getSiteDesignDirectorService(): AiSiteDesignDirectorService
+    {
+        if ($this->siteDesignDirectorService === null) {
+            $this->siteDesignDirectorService = ObjectManager::getInstance(AiSiteDesignDirectorService::class);
+        }
+
+        return $this->siteDesignDirectorService;
+    }
+
+    private function getBlockContractAssemblerService(): AiSiteBlockContractAssemblerService
+    {
+        if ($this->blockContractAssemblerService === null) {
+            $this->blockContractAssemblerService = ObjectManager::getInstance(AiSiteBlockContractAssemblerService::class);
+        }
+
+        return $this->blockContractAssemblerService;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $themeContextSnapshot
+     * @param array<string, mixed> $pagePlans
+     * @return array<string, mixed>
+     */
+    private function buildStageOneDesignContractArtifacts(
+        array $scope,
+        array $websiteProfile,
+        array $themeContextSnapshot,
+        array $pagePlans
+    ): array {
+        $siteDesignSystem = $this->getSiteDesignDirectorService()->materialize(
+            $scope,
+            $websiteProfile,
+            $themeContextSnapshot,
+            $pagePlans,
+            \is_array($scope['reference_image_insights'] ?? null) ? $scope['reference_image_insights'] : []
+        );
+        $assembled = $this->getBlockContractAssemblerService()->assemble(
+            $scope,
+            $websiteProfile,
+            ['theme_design' => $themeContextSnapshot],
+            $pagePlans,
+            $siteDesignSystem
+        );
+
+        return [
+            'site_design_system' => $siteDesignSystem,
+            'page_plans' => \is_array($assembled['page_plans'] ?? null) ? $assembled['page_plans'] : $pagePlans,
+            'asset_distribution_policy' => \is_array($assembled['asset_distribution_policy'] ?? null) ? $assembled['asset_distribution_policy'] : [],
+            'contract_summary' => \is_array($assembled['contract_summary'] ?? null) ? $assembled['contract_summary'] : [],
+        ];
+    }
+
     /**
      * @param array<string, mixed> $scope
      * @param list<array<string, mixed>> $conversation
@@ -159,6 +215,7 @@ final class AiSiteExecutionBlueprintService
     {
         foreach ([
             $scope['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['website_profile']['default_locale'] ?? null,
             $scope['default_language'] ?? null,
@@ -305,6 +362,18 @@ final class AiSiteExecutionBlueprintService
             $planLocale
         );
         $pagePlans = $this->buildStageOnePagePlansConcurrently($pages, $sharedPromptContext);
+        $designContractArtifacts = $this->buildStageOneDesignContractArtifacts(
+            $planningScope,
+            $websiteProfile,
+            $themeContextSnapshot,
+            $pagePlans
+        );
+        $siteDesignSystem = \is_array($designContractArtifacts['site_design_system'] ?? null) ? $designContractArtifacts['site_design_system'] : [];
+        $assetDistributionPolicy = \is_array($designContractArtifacts['asset_distribution_policy'] ?? null) ? $designContractArtifacts['asset_distribution_policy'] : [];
+        $pagePlans = \is_array($designContractArtifacts['page_plans'] ?? null) ? $designContractArtifacts['page_plans'] : $pagePlans;
+        $themeContextSnapshot['site_design_system'] = $siteDesignSystem;
+        $sharedPromptContext['site_design_system'] = $siteDesignSystem;
+        $sharedPromptContext['asset_distribution_policy'] = $assetDistributionPolicy;
         $stageOneQueue = $this->buildStageOnePageFanoutQueueEnvelope($stageOneQueue, $pagePlans, $sharedPromptContext, $planLocale);
         $blockIndex = $this->buildStageOneBlockIndex($sharedComponents, $pagePlans);
         foreach ($pagePlans as $pageType => $pagePlan) {
@@ -328,6 +397,8 @@ final class AiSiteExecutionBlueprintService
             'page_blueprints' => $pageBlueprints,
             'theme_context_snapshot' => $themeContextSnapshot,
             'shared_prompt_context' => $sharedPromptContext,
+            'site_design_system' => $siteDesignSystem,
+            'asset_distribution_policy' => $assetDistributionPolicy,
             'stage1_queue' => $stageOneQueue,
             'shared_components' => $sharedComponents,
             'pages' => $pages,
@@ -359,9 +430,13 @@ final class AiSiteExecutionBlueprintService
             'navigation_plan' => $navigationPlan,
             'footer_plan' => $footerPlan,
             'theme_context_snapshot' => $themeContextSnapshot,
+            'site_design_system' => $siteDesignSystem,
+            'asset_distribution_policy' => $assetDistributionPolicy,
             'shared_components' => $sharedComponents,
             'shared_plan' => [
                 'theme_design' => $themeContextSnapshot,
+                'site_design_system' => $siteDesignSystem,
+                'asset_distribution_policy' => $assetDistributionPolicy,
                 'theme_design_job' => $themeDesignQueueJob,
                 'header_block' => $sharedComponents['header'],
                 'footer_block' => $sharedComponents['footer'],
@@ -3821,6 +3896,7 @@ final class AiSiteExecutionBlueprintService
             'CSS-only media assets rule: when image_intent.needs_image=false, execution_script.media_assets MUST be an empty array []. Do not write avatar, photo, image, screenshot, mockup, scene, or generated asset names for CSS-only review/proof/FAQ/CTA blocks.',
             'Media path BAD examples: BAD {"image_intent":{"needs_image":false},"visual_signature":{"media_strategy":"CSS-only/no generated image; review cards"},"execution_script":{"media_assets":["review avatar photo"]}}; BAD {"image_intent":{"needs_image":true},"visual_signature":{"media_strategy":"CSS-only/no generated image; badge cards"}}.',
             'Block object hard gate: every block must include page_flow_role, design_tags with all required keys, visual_signature with all five keys, image_intent with all eight keys, exactly three field_plan rows, and execution_script.core_copy. Do not omit these objects for review, FAQ, policy, blog, list, or CTA blocks.',
+            'Schema spelling gate: the key must be exactly "execution_script". Never output "ution_script", "exec_script", "executionScript", or any shortened/misspelled variant.',
             'Visual signature completeness rule: visual_signature.composition_pattern, spatial_rhythm, media_strategy, surface_treatment, and interaction_pattern must all be non-empty concrete text. Never use empty string, "none", "same as above", or a schema placeholder for any visual_signature field. If the block is static, still describe the static layout, scan rhythm, CSS media strategy, surface, and focus/hover behavior.',
             'Visual signature examples (copy the shape, not the content; adapt to this exact block): ' . $visualSignatureExamplesJson,
             'CTA field rule: if page_flow_role=cta, row 2 field must be exactly cta_label, action_label, or button_text with a visitor-facing action label. Do not force article/category/contact support blocks into CTA shape unless their page_flow_role is cta.',
@@ -4825,6 +4901,7 @@ final class AiSiteExecutionBlueprintService
             '- design_tags must contain all required keys inside the design_tags object: visual, motion, interaction, texture, responsive, color_layering, implementation_note. Never place color_layering or implementation_note only at block root.',
             '- design_tags.responsive MUST describe desktop, tablet, and phone behavior. If the block uses image + form/card/CTA panels, explicitly state panel order, stack breakpoint, min-width:0 / max-width:100% containment, and that decorative layers cannot cover content.',
             '- Block object hard gate: every block must include page_flow_role, design_tags with all required keys, visual_signature with all five keys, image_intent with all eight keys, exactly three field_plan rows, and execution_script.core_copy. Do not omit these objects for review, FAQ, policy, blog, list, or CTA blocks.',
+            '- Schema spelling gate: every block must use the exact key execution_script. Do not output ution_script, exec_script, executionScript, or any shortened/misspelled variant.',
             '- Visual signature completeness rule: visual_signature.composition_pattern, spatial_rhythm, media_strategy, surface_treatment, and interaction_pattern must all be non-empty concrete text. Never use empty string, "none", "same as above", or a schema placeholder for any visual_signature field. If the block is static, still describe the static layout, scan rhythm, CSS media strategy, surface, and focus/hover behavior.',
             '- Visual signature examples (copy the shape, not the content; adapt to this exact page/block): ' . $visualSignatureExamplesJson,
             '- Every field_plan row MUST include field, sample, and a concrete implementation_note explaining where/how that exact sample is rendered on the page.',
@@ -4957,6 +5034,7 @@ final class AiSiteExecutionBlueprintService
         $visualTargets = [];
         $cssOnlyTargets = [];
         $missingIntentTargets = [];
+        $iconOnlyImageTargets = [];
         foreach ($issues as $issue) {
             if (!\is_array($issue)) {
                 continue;
@@ -4984,6 +5062,9 @@ final class AiSiteExecutionBlueprintService
             }
             if ($code === 'missing_image_intent' && $targetLabel !== '') {
                 $missingIntentTargets[] = $targetLabel;
+            }
+            if ($code === 'icon_only_image_subject' && $targetLabel !== '') {
+                $iconOnlyImageTargets[] = $targetLabel;
             }
         }
 
@@ -5033,6 +5114,13 @@ final class AiSiteExecutionBlueprintService
                 : '';
             $rules[] = 'Issue-specific rule for page_missing_generated_image_intent:' . $targetText
                 . ' the returned page must contain at least one block with image_intent.needs_image=true. Prefer the named block when it is a natural media target, otherwise place the generated-image slot on the block that best fits the page narrative. Use image_role hero_image or section_image, placement background_layer/media_panel/inline_visual, reuse_policy reuse_when_intent_matches, and a concrete image_subject tied to that block. Do not force block index 0 to be the generated-image block solely to satisfy this issue.';
+        }
+        if (isset($codes['icon_only_image_subject'])) {
+            $targetText = $iconOnlyImageTargets !== []
+                ? (' Exact image_subject target(s): ' . \implode(', ', \array_values(\array_unique($iconOnlyImageTargets))) . '.')
+                : '';
+            $rules[] = 'Issue-specific rule for icon_only_image_subject:' . $targetText
+                . ' replace the generated image subject with a real scene, product interface, editorial environment, or human-in-context visual tied to the block. Do not use an isolated badge, logo, icon, glyph, shield, coin mark, sparkle, arrow, or decorative symbol as the image_subject. For Teenipiya-style pages, prefer a phone APK lobby screen, Indian card table, support dashboard, safety verification scene, or player community scene when it matches the block.';
         }
         if (isset($codes['invalid_image_intent_needs_image'])) {
             $rules[] = 'Issue-specific rule for invalid_image_intent_needs_image: rewrite image_intent.needs_image as the JSON boolean true or false only. Never use "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text. Put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment and keep the rest of the block creative and page-specific.';
@@ -6745,6 +6833,29 @@ final class AiSiteExecutionBlueprintService
             \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [],
             $sharedPromptContext
         );
+        $designContractArtifacts = $this->buildStageOneDesignContractArtifacts(
+            $scope,
+            $websiteProfile,
+            $themeContextSnapshot,
+            $pagePlans
+        );
+        $siteDesignSystem = \is_array($designContractArtifacts['site_design_system'] ?? null) ? $designContractArtifacts['site_design_system'] : [];
+        $assetDistributionPolicy = \is_array($designContractArtifacts['asset_distribution_policy'] ?? null) ? $designContractArtifacts['asset_distribution_policy'] : [];
+        $pagePlans = \is_array($designContractArtifacts['page_plans'] ?? null) ? $designContractArtifacts['page_plans'] : $pagePlans;
+        $themeContextSnapshot['site_design_system'] = $siteDesignSystem;
+        $sharedPromptContext['site_design_system'] = $siteDesignSystem;
+        $sharedPromptContext['asset_distribution_policy'] = $assetDistributionPolicy;
+        $structured['theme_context_snapshot'] = $themeContextSnapshot;
+        $structured['site_design_system'] = $siteDesignSystem;
+        $structured['asset_distribution_policy'] = $assetDistributionPolicy;
+        $structured['shared_plan']['site_design_system'] = $siteDesignSystem;
+        $structured['shared_plan']['asset_distribution_policy'] = $assetDistributionPolicy;
+        $executionBlueprint['theme_context_snapshot'] = $themeContextSnapshot;
+        $executionBlueprint['shared_prompt_context'] = $sharedPromptContext;
+        $executionBlueprint['site_design_system'] = $siteDesignSystem;
+        $executionBlueprint['asset_distribution_policy'] = $assetDistributionPolicy;
+        $planJson['site_design_system'] = $siteDesignSystem;
+        $planJson['asset_distribution_policy'] = $assetDistributionPolicy;
         $stageOneQueue = $this->buildStageOnePageFanoutQueueEnvelope($stageOneQueue, $pagePlans, $sharedPromptContext, $planLocale);
         $structured['stage1_queue'] = $stageOneQueue;
         $executionBlueprint['stage1_queue'] = $stageOneQueue;
@@ -7767,7 +7878,7 @@ final class AiSiteExecutionBlueprintService
             $page['blocks'] = $this->repairAiStageOneBlocksBeforeValidation(
                 \is_array($page['blocks'] ?? null) ? $page['blocks'] : [],
                 (string)$pageType,
-                $planLocale,
+                $contentLocale !== '' ? $contentLocale : $planLocale,
                 [
                     'theme_design' => \is_array($normalized['theme_design'] ?? null)
                         ? $normalized['theme_design']
@@ -7779,7 +7890,7 @@ final class AiSiteExecutionBlueprintService
                 $page = $this->repairStageOneHomeHeroBriefSignals(
                     $page,
                     $this->extractStageOneBriefSignalTokens($briefDescription),
-                    $planLocale
+                    $contentLocale !== '' ? $contentLocale : $planLocale
                 );
             }
 
@@ -7976,6 +8087,11 @@ final class AiSiteExecutionBlueprintService
             if (!\is_array($block)) {
                 continue;
             }
+            $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+            if ($executionScript === [] && \is_array($block['ution_script'] ?? null)) {
+                $executionScript = $block['ution_script'];
+                unset($block['ution_script']);
+            }
             $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? ''));
             $template = \trim((string)($block['component_kind'] ?? $block['template'] ?? ''));
             $sectionName = \trim((string)($block['section_code'] ?? $blockKey));
@@ -8007,7 +8123,7 @@ final class AiSiteExecutionBlueprintService
             }
             $block['field_plan'] = $fieldPlan;
             $block['execution_script'] = $this->repairAiStageOneExecutionScriptBeforeValidation(
-                \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [],
+                $executionScript,
                 $blockKey,
                 $template,
                 $sectionName,
@@ -14032,14 +14148,28 @@ final class AiSiteExecutionBlueprintService
                 continue;
             }
             $stageOnePagePlan = \is_array($stageOnePagePlans[$pageType] ?? null) ? $stageOnePagePlans[$pageType] : [];
+            $stageOneBlocksByKey = [];
+            foreach (\is_array($stageOnePagePlan['blocks'] ?? null) ? $stageOnePagePlan['blocks'] : [] as $stageOneBlock) {
+                if (!\is_array($stageOneBlock)) {
+                    continue;
+                }
+                $stageOneBlockKey = (string)($stageOneBlock['block_key'] ?? $stageOneBlock['section_code'] ?? '');
+                if ($stageOneBlockKey !== '') {
+                    $stageOneBlocksByKey[$stageOneBlockKey] = $stageOneBlock;
+                }
+            }
             $blockRows = [];
             foreach ($this->sortStageOneBlocksForPlanBookMarkdown(\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []) as $offset => $block) {
                 if (!\is_array($block)) {
                     continue;
                 }
+                $blockKey = (string)($block['block_key'] ?? $block['section_code'] ?? 'block');
+                $stageOneBlock = \is_array($stageOneBlocksByKey[$blockKey] ?? null) ? $stageOneBlocksByKey[$blockKey] : [];
                 $blockRows[] = [
-                    'block_key' => (string)($block['block_key'] ?? $block['section_code'] ?? 'block'),
+                    'block_key' => $blockKey,
                     'sort_order' => $this->resolveStageOnePlanBookBlockSortOrder($block, (int)$offset),
+                    'page_flow_role' => (string)($stageOneBlock['page_flow_role'] ?? $block['page_flow_role'] ?? ''),
+                    'morphology_id' => (string)($stageOneBlock['morphology_id'] ?? $block['morphology_id'] ?? ''),
                     'content' => $this->buildBlockContentSummary($block),
                     'implementation_note' => $this->buildBlockImplementationFocus($block, (string)($structured['i18n']['locale'] ?? '')),
                     'keywords' => \array_values(\array_filter(\array_map(
@@ -14050,6 +14180,10 @@ final class AiSiteExecutionBlueprintService
                     ), static fn(string $value): bool => $value !== '')),
                     'field_plan' => $this->normalizeStageOneFieldPlanForCustomerView(\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : []),
                     'execution_script' => \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [],
+                    'visual_signature' => \is_array($stageOneBlock['visual_signature'] ?? null) ? $stageOneBlock['visual_signature'] : [],
+                    'image_intent' => \is_array($stageOneBlock['image_intent'] ?? null) ? $stageOneBlock['image_intent'] : [],
+                    'asset_requirements' => \is_array($stageOneBlock['asset_requirements'] ?? null) ? $stageOneBlock['asset_requirements'] : [],
+                    'block_contract' => \is_array($stageOneBlock['block_contract'] ?? null) ? $stageOneBlock['block_contract'] : [],
                 ];
             }
             $pageBlocks[(string)$pageType] = [
@@ -14068,6 +14202,7 @@ final class AiSiteExecutionBlueprintService
                     \is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : []
                 ), static fn(string $value): bool => $value !== '')),
                 'blocks' => $blockRows,
+                'asset_distribution_policy' => \is_array($stageOnePagePlan['asset_distribution_policy'] ?? null) ? $stageOnePagePlan['asset_distribution_policy'] : [],
                 'display_blocks' => $this->buildStageOnePageDisplayBlocks($sharedBlocks, $blockRows),
             ];
         }
@@ -14087,6 +14222,8 @@ final class AiSiteExecutionBlueprintService
             'navigation_plan' => \is_array($structured['navigation_plan'] ?? null) ? $structured['navigation_plan'] : [],
             'footer_plan' => \is_array($structured['footer_plan'] ?? null) ? $structured['footer_plan'] : [],
             'theme_context_snapshot' => \is_array($structured['theme_context_snapshot'] ?? null) ? $structured['theme_context_snapshot'] : [],
+            'site_design_system' => \is_array($structured['site_design_system'] ?? null) ? $structured['site_design_system'] : [],
+            'asset_distribution_policy' => \is_array($structured['asset_distribution_policy'] ?? null) ? $structured['asset_distribution_policy'] : [],
             'shared_components' => $sharedComponents,
             'shared_prompt_context' => \is_array($structured['shared_plan']['shared_prompt_context'] ?? null) ? $structured['shared_plan']['shared_prompt_context'] : [],
             'stage1_contract' => \is_array($structured['stage1_contract'] ?? null) ? $structured['stage1_contract'] : [],

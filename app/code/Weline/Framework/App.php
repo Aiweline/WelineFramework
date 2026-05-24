@@ -119,6 +119,10 @@ class App
 
     private function shouldDispatchRunBefore(): bool
     {
+        if ((string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1') {
+            return false;
+        }
+
         if (PROD) {
             return true;
         }
@@ -945,6 +949,10 @@ class App
     private function invalidateCurrentRequestUriCache(): void
     {
         $request = $this->resolveRequest();
+        if ($request !== null) {
+            $request->getServerBag()->initFromGlobals(true);
+            Request::clearStaticUrlPathCache();
+        }
         if ($request !== null && \method_exists($request, 'invalidateUriCache')) {
             $request->invalidateUriCache();
         }

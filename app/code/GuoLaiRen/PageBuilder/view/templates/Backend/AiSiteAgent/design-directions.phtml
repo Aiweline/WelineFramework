@@ -8,36 +8,76 @@ $items = \is_array($items) ? $items : [];
 $listUrl = (string)($this->getData('design_direction_list_url') ?? '');
 $saveUrl = (string)($this->getData('design_direction_save_url') ?? '');
 $disableUrl = (string)($this->getData('design_direction_disable_url') ?? '');
+$deleteUrl = (string)($this->getData('design_direction_delete_url') ?? '');
 $cloneBuiltinUrl = (string)($this->getData('design_direction_clone_builtin_url') ?? '');
 $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('*/backend/ai-site-agent/index'));
+$arrayFields = [
+    'industry_tags' => __('行业标签'),
+    'match_keywords' => __('关键词匹配规则'),
+    'visual_keywords' => __('视觉关键词'),
+    'layout_patterns' => __('布局模式'),
+    'image_strategy' => __('图片策略'),
+    'forbidden_patterns' => __('禁止模式'),
+    'qa_rules' => __('QA 规则'),
+    'example_refs' => __('参考样例'),
+];
 ?>
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0"><i class="mdi mdi-compass-outline me-1"></i><?= htmlspecialchars((string)($this->getData('title') ?? __('AI 设计方向模板')), ENT_QUOTES, 'UTF-8') ?></h4>
-            <a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8') ?>">
-                <i class="mdi mdi-arrow-left me-1"></i><?= htmlspecialchars((string)__('返回工作台'), ENT_QUOTES, 'UTF-8') ?>
-            </a>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-primary btn-sm" id="pb-dd-new">
+                    <i class="mdi mdi-plus me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('新建设计方向'), ENT_QUOTES, 'UTF-8') ?>
+                </button>
+                <a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="mdi mdi-arrow-left me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('返回工作台'), ENT_QUOTES, 'UTF-8') ?>
+                </a>
+            </div>
         </div>
     </div>
 </div>
 
 <div class="row g-3">
-    <div class="col-lg-7">
+    <div class="col-xl-6">
         <div class="card">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <h5 class="card-title mb-0"><?= htmlspecialchars((string)__('方向列表'), ENT_QUOTES, 'UTF-8') ?></h5>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="pb-dd-refresh"><?= htmlspecialchars((string)__('刷新'), ENT_QUOTES, 'UTF-8') ?></button>
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <h5 class="card-title mb-0"><?= htmlspecialchars((string)__('方向列表'), ENT_QUOTES, 'UTF-8') ?></h5>
+                    <div class="small text-muted" id="pb-dd-list-count"></div>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="pb-dd-refresh" title="<?= htmlspecialchars((string)__('刷新列表'), ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="mdi mdi-refresh me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('刷新'), ENT_QUOTES, 'UTF-8') ?>
+                </button>
             </div>
             <div class="card-body">
-                <div class="list-group" id="pb-dd-list"></div>
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-7">
+                        <input class="form-control form-control-sm" id="pb-dd-search" type="search" placeholder="<?= htmlspecialchars((string)__('搜索编码、名称、说明'), ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                    <div class="col-sm-5">
+                        <select class="form-select form-select-sm" id="pb-dd-filter">
+                            <option value="all"><?= htmlspecialchars((string)__('全部方向'), ENT_QUOTES, 'UTF-8') ?></option>
+                            <option value="active"><?= htmlspecialchars((string)__('仅启用'), ENT_QUOTES, 'UTF-8') ?></option>
+                            <option value="disabled"><?= htmlspecialchars((string)__('仅停用'), ENT_QUOTES, 'UTF-8') ?></option>
+                            <option value="custom"><?= htmlspecialchars((string)__('仅自定义'), ENT_QUOTES, 'UTF-8') ?></option>
+                            <option value="builtin"><?= htmlspecialchars((string)__('仅内置'), ENT_QUOTES, 'UTF-8') ?></option>
+                        </select>
+                    </div>
+                </div>
+                <div class="list-group pb-dd-list" id="pb-dd-list"></div>
+                <div class="alert alert-light border d-none mb-0" id="pb-dd-empty"><?= htmlspecialchars((string)__('没有匹配的设计方向。'), ENT_QUOTES, 'UTF-8') ?></div>
             </div>
         </div>
     </div>
-    <div class="col-lg-5">
+    <div class="col-xl-6">
         <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0"><?= htmlspecialchars((string)__('自定义方向'), ENT_QUOTES, 'UTF-8') ?></h5>
+            <div class="card-header d-flex align-items-center justify-content-between gap-2">
+                <div>
+                    <h5 class="card-title mb-0" id="pb-dd-editor-title"><?= htmlspecialchars((string)__('新建设计方向'), ENT_QUOTES, 'UTF-8') ?></h5>
+                    <div class="small text-muted" id="pb-dd-editor-mode"><?= htmlspecialchars((string)__('保存后会进入当前管理员的自定义设计方向库。'), ENT_QUOTES, 'UTF-8') ?></div>
+                </div>
+                <span class="badge bg-soft-info text-info" id="pb-dd-editor-badge"><?= htmlspecialchars((string)__('新建'), ENT_QUOTES, 'UTF-8') ?></span>
             </div>
             <div class="card-body">
                 <div class="row g-2">
@@ -45,34 +85,32 @@ $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('*/backen
                         <label class="form-label" for="pb-dd-code"><?= htmlspecialchars((string)__('编码'), ENT_QUOTES, 'UTF-8') ?></label>
                         <input class="form-control" id="pb-dd-code" placeholder="premium-law-firm">
                     </div>
-                    <div class="col-md-7">
+                    <div class="col-md-5">
                         <label class="form-label" for="pb-dd-name"><?= htmlspecialchars((string)__('名称'), ENT_QUOTES, 'UTF-8') ?></label>
                         <input class="form-control" id="pb-dd-name" placeholder="<?= htmlspecialchars((string)__('高端律师事务所'), ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" for="pb-dd-status-select"><?= htmlspecialchars((string)__('状态'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <select class="form-select" id="pb-dd-status-select">
+                            <option value="active"><?= htmlspecialchars((string)__('启用'), ENT_QUOTES, 'UTF-8') ?></option>
+                            <option value="disabled"><?= htmlspecialchars((string)__('停用'), ENT_QUOTES, 'UTF-8') ?></option>
+                        </select>
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="pb-dd-description"><?= htmlspecialchars((string)__('说明'), ENT_QUOTES, 'UTF-8') ?></label>
                         <textarea class="form-control" id="pb-dd-description" rows="2"></textarea>
                     </div>
-                    <?php
-                    $textareaFields = [
-                        'match_keywords' => __('关键词匹配规则'),
-                        'visual_keywords' => __('视觉关键词'),
-                        'layout_patterns' => __('布局模式'),
-                        'image_strategy' => __('图片策略'),
-                        'forbidden_patterns' => __('禁止模式'),
-                        'qa_rules' => __('QA 规则'),
-                    ];
-                    foreach ($textareaFields as $field => $label): ?>
-                        <div class="col-12">
+                    <?php foreach ($arrayFields as $field => $label): ?>
+                        <div class="col-md-6">
                             <label class="form-label" for="pb-dd-<?= htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></label>
                             <textarea class="form-control pb-dd-array" id="pb-dd-<?= htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" data-field="<?= htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" rows="3" placeholder="<?= htmlspecialchars((string)__('一行一条，也支持 JSON 数组'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
                         </div>
                     <?php endforeach; ?>
-                    <div class="col-12">
+                    <div class="col-md-6">
                         <label class="form-label" for="pb-dd-color-system"><?= htmlspecialchars((string)__('色彩倾向 JSON'), ENT_QUOTES, 'UTF-8') ?></label>
-                        <textarea class="form-control" id="pb-dd-color-system" rows="3" placeholder='{"base":"#111","accent":"#f6a500"}'></textarea>
+                        <textarea class="form-control" id="pb-dd-color-system" rows="4" placeholder='{"base":"#111","accent":"#f6a500"}'></textarea>
                     </div>
-                    <div class="col-12">
+                    <div class="col-md-6">
                         <label class="form-label" for="pb-dd-block-rules"><?= htmlspecialchars((string)__('Block 设计规则 JSON'), ENT_QUOTES, 'UTF-8') ?></label>
                         <textarea class="form-control" id="pb-dd-block-rules" rows="4" placeholder='{"hero":"...","faq":"..."}'></textarea>
                     </div>
@@ -83,11 +121,18 @@ $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('*/backen
                     <div class="col-12">
                         <label class="form-label" for="pb-dd-supplemental"><?= htmlspecialchars((string)__('补充说明'), ENT_QUOTES, 'UTF-8') ?></label>
                         <textarea class="form-control" id="pb-dd-supplemental" rows="2"></textarea>
-                        <div class="form-text"><?= htmlspecialchars((string)__('补充说明只是辅助，保存时必须有结构化字段。'), ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="form-text"><?= htmlspecialchars((string)__('保存时至少需要两个结构化字段，不能只填写补充说明。'), ENT_QUOTES, 'UTF-8') ?></div>
                     </div>
-                    <div class="col-12 d-flex gap-2 align-items-center">
-                        <button type="button" class="btn btn-primary" id="pb-dd-save"><?= htmlspecialchars((string)__('保存方向'), ENT_QUOTES, 'UTF-8') ?></button>
-                        <button type="button" class="btn btn-outline-secondary" id="pb-dd-clear"><?= htmlspecialchars((string)__('清空'), ENT_QUOTES, 'UTF-8') ?></button>
+                    <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-primary" id="pb-dd-save">
+                            <i class="mdi mdi-content-save me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('保存'), ENT_QUOTES, 'UTF-8') ?>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="pb-dd-clear">
+                            <i class="mdi mdi-eraser me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('重置'), ENT_QUOTES, 'UTF-8') ?>
+                        </button>
+                        <button type="button" class="btn btn-outline-danger d-none" id="pb-dd-delete-current">
+                            <i class="mdi mdi-delete-outline me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('删除'), ENT_QUOTES, 'UTF-8') ?>
+                        </button>
                         <span class="small text-muted" id="pb-dd-status"></span>
                     </div>
                 </div>
@@ -101,15 +146,46 @@ $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('*/backen
     var listUrl = <?= json_encode($listUrl, JSON_THROW_ON_ERROR) ?>;
     var saveUrl = <?= json_encode($saveUrl, JSON_THROW_ON_ERROR) ?>;
     var disableUrl = <?= json_encode($disableUrl, JSON_THROW_ON_ERROR) ?>;
+    var deleteUrl = <?= json_encode($deleteUrl, JSON_THROW_ON_ERROR) ?>;
     var cloneBuiltinUrl = <?= json_encode($cloneBuiltinUrl, JSON_THROW_ON_ERROR) ?>;
-    var initialItems = <?= json_encode($items, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR) ?>;
+    var currentItems = <?= json_encode($items, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR) ?>;
+    var editingCode = '';
     var listEl = document.getElementById('pb-dd-list');
+    var emptyEl = document.getElementById('pb-dd-empty');
     var statusEl = document.getElementById('pb-dd-status');
+    var countEl = document.getElementById('pb-dd-list-count');
+    var codeEl = document.getElementById('pb-dd-code');
+    var deleteCurrentBtn = document.getElementById('pb-dd-delete-current');
+    var labels = {
+        newTitle: <?= json_encode((string)__('新建设计方向'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        editTitle: <?= json_encode((string)__('编辑设计方向'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        newBadge: <?= json_encode((string)__('新建'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        editBadge: <?= json_encode((string)__('编辑'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        readonly: <?= json_encode((string)__('内置'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        custom: <?= json_encode((string)__('自定义'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        active: <?= json_encode((string)__('启用'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        disabled: <?= json_encode((string)__('停用'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        edit: <?= json_encode((string)__('编辑'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        clone: <?= json_encode((string)__('复制'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        disable: <?= json_encode((string)__('停用'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        enable: <?= json_encode((string)__('启用'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        delete: <?= json_encode((string)__('删除'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        confirmDelete: <?= json_encode((string)__('确定删除这个自定义设计方向？删除后不可恢复。'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        refreshed: <?= json_encode((string)__('已刷新'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        saved: <?= json_encode((string)__('已保存'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        deleted: <?= json_encode((string)__('已删除'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        cloned: <?= json_encode((string)__('已复制为自定义方向'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        disabledDone: <?= json_encode((string)__('已停用'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>,
+        enabledDone: <?= json_encode((string)__('已启用'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>
+    };
 
     function post(url, payload) {
+        if (!url) {
+            return Promise.reject(new Error('API url is empty.'));
+        }
         var body = Object.keys(payload || {}).map(function (key) {
             var value = payload[key];
-            if (typeof value === 'object') {
+            if (typeof value === 'object' && value !== null) {
                 value = JSON.stringify(value);
             }
             return encodeURIComponent(key) + '=' + encodeURIComponent(String(value == null ? '' : value));
@@ -119,7 +195,11 @@ $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('*/backen
             headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest'},
             credentials: 'same-origin',
             body: body
-        }).then(function (r) { return r.json(); });
+        }).then(function (response) {
+            return response.json().catch(function () {
+                throw new Error('Invalid JSON response.');
+            });
+        });
     }
 
     function parseLines(value) {
@@ -149,80 +229,206 @@ $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('*/backen
         }
     }
 
+    function formatStructured(value) {
+        if (value == null || value === '') {
+            return '';
+        }
+        if (Array.isArray(value)) {
+            return value.every(function (item) { return typeof item !== 'object'; }) ? value.join("\n") : JSON.stringify(value, null, 2);
+        }
+        if (typeof value === 'object') {
+            return JSON.stringify(value, null, 2);
+        }
+        return String(value);
+    }
+
     function setStatus(text) {
         if (statusEl) {
             statusEl.textContent = String(text || '');
         }
     }
 
-    function render(items) {
+    function isCustom(item) {
+        return String(item && (item.source_type || item.source) || '') === 'custom' && !item.readonly;
+    }
+
+    function clonePayload(item, status) {
+        var payload = Object.assign({}, item || {});
+        payload.status = status || payload.status || 'active';
+        payload.source_type = 'custom';
+        delete payload.readonly;
+        delete payload.selectable;
+        delete payload.exists;
+        return payload;
+    }
+
+    function visibleItems() {
+        var filter = document.getElementById('pb-dd-filter').value;
+        var keyword = String(document.getElementById('pb-dd-search').value || '').toLowerCase().trim();
+        return (Array.isArray(currentItems) ? currentItems : []).filter(function (item) {
+            var source = String(item.source_type || item.source || '');
+            var status = String(item.status || 'active');
+            if (filter === 'active' && status !== 'active') return false;
+            if (filter === 'disabled' && status !== 'disabled') return false;
+            if (filter === 'custom' && source !== 'custom') return false;
+            if (filter === 'builtin' && source === 'custom') return false;
+            if (!keyword) return true;
+            return [
+                item.code,
+                item.name,
+                item.description,
+                (Array.isArray(item.match_keywords) ? item.match_keywords.join(' ') : ''),
+                (Array.isArray(item.visual_keywords) ? item.visual_keywords.join(' ') : '')
+            ].join(' ').toLowerCase().indexOf(keyword) !== -1;
+        });
+    }
+
+    function render() {
         if (!listEl) {
             return;
         }
+        var items = visibleItems();
         listEl.innerHTML = '';
-        (Array.isArray(items) ? items : []).forEach(function (item) {
+        if (countEl) {
+            countEl.textContent = String(items.length) + ' / ' + String((currentItems || []).length);
+        }
+        if (emptyEl) {
+            emptyEl.classList.toggle('d-none', items.length > 0);
+        }
+        items.forEach(function (item) {
             var row = document.createElement('div');
             row.className = 'list-group-item';
-            row.innerHTML = '<div class="d-flex justify-content-between gap-2">'
-                + '<div><div class="fw-semibold"></div><div class="small text-muted"></div><div class="small mt-1"></div></div>'
-                + '<div class="d-flex flex-column gap-1"></div></div>';
-            row.querySelector('.fw-semibold').textContent = String(item.name || item.code || '');
-            row.querySelector('.text-muted').textContent = String(item.code || '') + ' · ' + String(item.source_type || '') + ' · v' + String(item.version || 1);
-            row.querySelector('.small.mt-1').textContent = String(item.description || '').slice(0, 180);
-            var actions = row.querySelector('.d-flex.flex-column');
-            if (item.source_type === 'builtin') {
-                var cloneBtn = document.createElement('button');
-                cloneBtn.type = 'button';
-                cloneBtn.className = 'btn btn-outline-primary btn-sm';
-                cloneBtn.textContent = <?= json_encode(__('复制内置'), JSON_THROW_ON_ERROR) ?>;
-                cloneBtn.addEventListener('click', function () {
-                    post(cloneBuiltinUrl, {code: item.code}).then(refresh);
-                });
-                actions.appendChild(cloneBtn);
-            } else {
-                var editBtn = document.createElement('button');
-                editBtn.type = 'button';
-                editBtn.className = 'btn btn-outline-secondary btn-sm';
-                editBtn.textContent = <?= json_encode(__('编辑'), JSON_THROW_ON_ERROR) ?>;
-                editBtn.addEventListener('click', function () { fillEditor(item); });
-                actions.appendChild(editBtn);
-                var disableBtn = document.createElement('button');
-                disableBtn.type = 'button';
-                disableBtn.className = 'btn btn-outline-danger btn-sm';
-                disableBtn.textContent = <?= json_encode(__('停用'), JSON_THROW_ON_ERROR) ?>;
-                disableBtn.addEventListener('click', function () {
-                    post(disableUrl, {code: item.code}).then(refresh);
-                });
-                actions.appendChild(disableBtn);
+            if (String(item.status || 'active') === 'disabled') {
+                row.classList.add('text-muted');
             }
+            row.innerHTML =
+                '<div class="d-flex justify-content-between gap-3">' +
+                    '<div class="min-w-0 flex-grow-1">' +
+                        '<div class="d-flex flex-wrap align-items-center gap-2 mb-1">' +
+                            '<button type="button" class="btn btn-link p-0 fw-semibold text-start dd-name"></button>' +
+                            '<span class="badge dd-status"></span>' +
+                            '<span class="badge dd-source"></span>' +
+                        '</div>' +
+                        '<div class="small text-muted dd-meta"></div>' +
+                        '<div class="small mt-1 dd-desc"></div>' +
+                    '</div>' +
+                    '<div class="d-flex flex-column gap-1 dd-actions"></div>' +
+                '</div>';
+            var nameBtn = row.querySelector('.dd-name');
+            nameBtn.textContent = String(item.name || item.code || '');
+            nameBtn.addEventListener('click', function () {
+                if (isCustom(item)) {
+                    fillEditor(item);
+                }
+            });
+            var statusBadge = row.querySelector('.dd-status');
+            var status = String(item.status || 'active');
+            statusBadge.textContent = status === 'disabled' ? labels.disabled : labels.active;
+            statusBadge.className = 'badge dd-status ' + (status === 'disabled' ? 'bg-soft-secondary text-secondary' : 'bg-soft-success text-success');
+            var source = String(item.source_type || item.source || '');
+            var sourceBadge = row.querySelector('.dd-source');
+            sourceBadge.textContent = source === 'custom' ? labels.custom : labels.readonly;
+            sourceBadge.className = 'badge dd-source ' + (source === 'custom' ? 'bg-soft-primary text-primary' : 'bg-soft-info text-info');
+            row.querySelector('.dd-meta').textContent = String(item.code || '') + ' · v' + String(item.version || 1) + (item.updated_at ? ' · ' + String(item.updated_at) : '');
+            row.querySelector('.dd-desc').textContent = String(item.description || '').slice(0, 180);
+            renderActions(row.querySelector('.dd-actions'), item);
             listEl.appendChild(row);
         });
     }
 
+    function actionButton(icon, text, className, title) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = className || 'btn btn-outline-secondary btn-sm';
+        button.title = title || text;
+        button.innerHTML = '<i class="mdi ' + icon + ' me-1" aria-hidden="true"></i>' + text;
+        return button;
+    }
+
+    function renderActions(actions, item) {
+        if (!actions) {
+            return;
+        }
+        if (isCustom(item)) {
+            var editBtn = actionButton('mdi-pencil-outline', labels.edit, 'btn btn-outline-secondary btn-sm');
+            editBtn.addEventListener('click', function () { fillEditor(item); });
+            actions.appendChild(editBtn);
+
+            if (String(item.status || 'active') === 'disabled') {
+                var enableBtn = actionButton('mdi-check-circle-outline', labels.enable, 'btn btn-outline-success btn-sm');
+                enableBtn.addEventListener('click', function () {
+                    post(saveUrl, clonePayload(item, 'active')).then(function (data) {
+                        if (!data || !data.success) throw new Error((data && data.message) || 'enable failed');
+                        setStatus(labels.enabledDone);
+                        return refresh(false);
+                    }).catch(showError);
+                });
+                actions.appendChild(enableBtn);
+            } else {
+                var disableBtn = actionButton('mdi-close-circle-outline', labels.disable, 'btn btn-outline-warning btn-sm');
+                disableBtn.addEventListener('click', function () {
+                    post(disableUrl, {code: item.code}).then(function (data) {
+                        if (!data || !data.success) throw new Error((data && data.message) || 'disable failed');
+                        setStatus(labels.disabledDone);
+                        return refresh(false);
+                    }).catch(showError);
+                });
+                actions.appendChild(disableBtn);
+            }
+
+            var deleteBtn = actionButton('mdi-delete-outline', labels.delete, 'btn btn-outline-danger btn-sm');
+            deleteBtn.addEventListener('click', function () { deleteItem(item); });
+            actions.appendChild(deleteBtn);
+            return;
+        }
+
+        var cloneBtn = actionButton('mdi-content-copy', labels.clone, 'btn btn-outline-primary btn-sm');
+        cloneBtn.addEventListener('click', function () {
+            post(cloneBuiltinUrl, {code: item.code}).then(function (data) {
+                if (!data || !data.success) throw new Error((data && data.message) || 'clone failed');
+                setStatus(labels.cloned);
+                return refresh(false).then(function () {
+                    if (data.item) fillEditor(data.item);
+                });
+            }).catch(showError);
+        });
+        actions.appendChild(cloneBtn);
+    }
+
     function fillEditor(item) {
-        document.getElementById('pb-dd-code').value = String(item.code || '');
+        item = item || {};
+        editingCode = String(item.code || '');
+        document.getElementById('pb-dd-editor-title').textContent = editingCode ? labels.editTitle : labels.newTitle;
+        document.getElementById('pb-dd-editor-mode').textContent = editingCode ? String(item.code || '') : <?= json_encode((string)__('保存后会进入当前管理员的自定义设计方向库。'), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>;
+        var badge = document.getElementById('pb-dd-editor-badge');
+        badge.textContent = editingCode ? labels.editBadge : labels.newBadge;
+        badge.className = 'badge ' + (editingCode ? 'bg-soft-primary text-primary' : 'bg-soft-info text-info');
+        codeEl.value = String(item.code || '');
+        codeEl.readOnly = editingCode !== '';
         document.getElementById('pb-dd-name').value = String(item.name || '');
+        document.getElementById('pb-dd-status-select').value = String(item.status || 'active') === 'disabled' ? 'disabled' : 'active';
         document.getElementById('pb-dd-description').value = String(item.description || '');
         document.querySelectorAll('.pb-dd-array').forEach(function (el) {
-            var field = el.getAttribute('data-field') || '';
-            el.value = Array.isArray(item[field]) ? item[field].join("\n") : JSON.stringify(item[field] || [], null, 2);
+            el.value = formatStructured(item[el.getAttribute('data-field') || '']);
         });
-        document.getElementById('pb-dd-color-system').value = JSON.stringify(item.color_system || {}, null, 2);
-        document.getElementById('pb-dd-block-rules').value = JSON.stringify(item.block_rules || {}, null, 2);
+        document.getElementById('pb-dd-color-system').value = formatStructured(item.color_system || {});
+        document.getElementById('pb-dd-block-rules').value = formatStructured(item.block_rules || {});
         document.getElementById('pb-dd-cta-style').value = String(item.cta_style || '');
         document.getElementById('pb-dd-supplemental').value = String(item.supplemental_prompt || '');
+        deleteCurrentBtn.classList.toggle('d-none', !editingCode);
+        setStatus('');
     }
 
     function collect() {
         var payload = {
-            code: document.getElementById('pb-dd-code').value,
+            code: codeEl.value,
             name: document.getElementById('pb-dd-name').value,
             description: document.getElementById('pb-dd-description').value,
             color_system: parseObject(document.getElementById('pb-dd-color-system').value),
             block_rules: parseObject(document.getElementById('pb-dd-block-rules').value),
             cta_style: document.getElementById('pb-dd-cta-style').value,
             supplemental_prompt: document.getElementById('pb-dd-supplemental').value,
-            status: 'active'
+            status: document.getElementById('pb-dd-status-select').value === 'disabled' ? 'disabled' : 'active'
         };
         document.querySelectorAll('.pb-dd-array').forEach(function (el) {
             payload[el.getAttribute('data-field') || ''] = parseLines(el.value);
@@ -230,16 +436,40 @@ $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('*/backen
         return payload;
     }
 
-    function refresh() {
+    function refresh(updateStatus) {
         return post(listUrl, {include_disabled: 1}).then(function (data) {
             if (!data || !data.success) {
                 throw new Error((data && data.message) || 'load failed');
             }
-            render(data.items || []);
-            setStatus(<?= json_encode(__('已刷新'), JSON_THROW_ON_ERROR) ?>);
-        }).catch(function (err) {
-            setStatus(err && err.message ? err.message : 'error');
-        });
+            currentItems = data.items || [];
+            render();
+            if (updateStatus !== false) {
+                setStatus(labels.refreshed);
+            }
+        }).catch(showError);
+    }
+
+    function deleteItem(item) {
+        if (!isCustom(item)) {
+            return;
+        }
+        if (!window.confirm(labels.confirmDelete)) {
+            return;
+        }
+        post(deleteUrl, {code: item.code}).then(function (data) {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) || 'delete failed');
+            }
+            if (editingCode === String(item.code || '')) {
+                fillEditor({});
+            }
+            setStatus(labels.deleted);
+            return refresh(false);
+        }).catch(showError);
+    }
+
+    function showError(err) {
+        setStatus(err && err.message ? err.message : 'error');
     }
 
     document.getElementById('pb-dd-save').addEventListener('click', function () {
@@ -247,17 +477,25 @@ $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('*/backen
             if (!data || !data.success) {
                 throw new Error((data && data.message) || 'save failed');
             }
-            setStatus(<?= json_encode(__('已保存'), JSON_THROW_ON_ERROR) ?>);
-            refresh();
-        }).catch(function (err) {
-            setStatus(err && err.message ? err.message : 'error');
-        });
+            setStatus(labels.saved);
+            return refresh(false).then(function () {
+                if (data.item) {
+                    fillEditor(data.item);
+                }
+            });
+        }).catch(showError);
     });
-    document.getElementById('pb-dd-clear').addEventListener('click', function () {
-        fillEditor({});
-        setStatus('');
+    document.getElementById('pb-dd-clear').addEventListener('click', function () { fillEditor({}); });
+    deleteCurrentBtn.addEventListener('click', function () {
+        var item = currentItems.find(function (candidate) { return String(candidate.code || '') === editingCode; });
+        if (item) {
+            deleteItem(item);
+        }
     });
-    document.getElementById('pb-dd-refresh').addEventListener('click', refresh);
-    render(initialItems);
+    document.getElementById('pb-dd-new').addEventListener('click', function () { fillEditor({}); });
+    document.getElementById('pb-dd-refresh').addEventListener('click', function () { refresh(true); });
+    document.getElementById('pb-dd-filter').addEventListener('change', render);
+    document.getElementById('pb-dd-search').addEventListener('input', render);
+    render();
 }());
 </script>

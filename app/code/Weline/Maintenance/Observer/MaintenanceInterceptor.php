@@ -80,6 +80,13 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
      */
     public function execute(Event &$event): void
     {
+        if ((string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1'
+            || (string)($_SERVER['WLS_INTERNAL_BACKEND_WARMUP'] ?? '') === '1'
+            || (string)($_SERVER['WLS_INTERNAL_WARMUP'] ?? '') === '1'
+        ) {
+            return;
+        }
+
         // CLI 模式不检查维护模式
         if (Runtime::isCli() && !(\defined('WLS_MODE') && WLS_MODE)) {
             return;

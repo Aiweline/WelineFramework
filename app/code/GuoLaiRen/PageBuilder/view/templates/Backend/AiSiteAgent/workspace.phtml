@@ -61,6 +61,8 @@ $recommendedRegistrarLabel = (string)($this->getData('recommended_registrar_labe
 $preferredRegistrarAccountId = (int)($this->getData('preferred_registrar_account_id') ?? 0);
 $registrarAccounts = $this->getData('registrar_accounts');
 $registrarAccounts = \is_array($registrarAccounts) ? $registrarAccounts : [];
+$domainChoiceEnvironment = $this->getData('domain_choice_environment');
+$domainChoiceEnvironment = \is_array($domainChoiceEnvironment) ? $domainChoiceEnvironment : [];
 $registrarSelectOptions = [];
 foreach ($registrarAccounts as $account) {
     if (!\is_array($account)) {
@@ -138,6 +140,83 @@ if ($sessionResolvedTargetDomain === '' && \is_array($scope['recommended_domain_
             break;
         }
     }
+}
+
+/** 域名供应商和域名选择联动状态。 */
+$domainChoiceEnvIsLocal = !empty($domainChoiceEnvironment['is_local']);
+$domainChoiceLocalAccountId = (int)($domainChoiceEnvironment['local_registrar_account_id'] ?? 900001);
+$domainChoiceLocalAccountId = $domainChoiceLocalAccountId > 0 ? $domainChoiceLocalAccountId : 900001;
+$domainChoiceRegistrarLabels = [];
+foreach ($registrarAccounts as $account) {
+    if (!\is_array($account)) {
+        continue;
+    }
+    $accountId = (int)($account['account_id'] ?? 0);
+    if ($accountId <= 0) {
+        continue;
+    }
+    $accountLabel = \trim((string)($account['label'] ?? ''));
+    if ($accountLabel === '') {
+        $accountLabel = \trim((string)($account['registrar_name'] ?? $account['account_name'] ?? $account['registrar_code'] ?? ''));
+    }
+    $domainChoiceRegistrarLabels[$accountId] = $accountLabel !== '' ? $accountLabel : (string)$accountId;
+}
+$domainChoiceSelectedRegistrarLabel = $recommendedRegistrarLabel;
+if ($domainChoiceSelectedRegistrarLabel === '' && $preferredRegistrarAccountId > 0) {
+    $domainChoiceSelectedRegistrarLabel = (string)($domainChoiceRegistrarLabels[$preferredRegistrarAccountId] ?? '');
+}
+$domainChoiceDefaultAccountId = $preferredRegistrarAccountId > 0
+    ? $preferredRegistrarAccountId
+    : ($domainChoiceEnvIsLocal ? $domainChoiceLocalAccountId : 0);
+$domainChoiceTags = [];
+$domainChoiceSeen = [];
+$addDomainChoice = static function (string $domain, int $accountId, string $source, string $sourceLabel) use (
+    &$domainChoiceTags,
+    &$domainChoiceSeen,
+    $domainChoiceRegistrarLabels,
+    $domainChoiceSelectedRegistrarLabel
+): void {
+    $domain = \strtolower(\trim($domain));
+    if ($domain === '') {
+        return;
+    }
+    $accountId = $accountId > 0 ? $accountId : 0;
+    $key = $accountId . '|' . $domain;
+    if (isset($domainChoiceSeen[$key])) {
+        return;
+    }
+    $domainChoiceSeen[$key] = true;
+    $registrarLabel = $accountId > 0
+        ? (string)($domainChoiceRegistrarLabels[$accountId] ?? $domainChoiceSelectedRegistrarLabel)
+        : '';
+    $domainChoiceTags[] = [
+        'domain' => $domain,
+        'account_id' => $accountId,
+        'registrar_label' => $registrarLabel,
+        'source' => $source,
+        'source_label' => $sourceLabel,
+    ];
+};
+$addDomainChoice($sessionResolvedTargetDomain, $domainChoiceDefaultAccountId, 'current', (string)__('当前域名'));
+foreach ($recommendedDomainList as $recommendedDomain) {
+    $addDomainChoice((string)$recommendedDomain, $domainChoiceDefaultAccountId, 'recommended', (string)__('AI 推荐'));
+}
+$purchaseStateDomain = \trim((string)($domainPurchaseState['domain'] ?? ''));
+if ($purchaseStateDomain !== '') {
+    $purchaseStateAccountId = (int)($domainPurchaseState['registrar_account_id'] ?? $domainChoiceDefaultAccountId);
+    $addDomainChoice($purchaseStateDomain, $purchaseStateAccountId, 'purchase', (string)__('购买记录'));
+}
+$domainChoiceState = [
+    'environment' => $domainChoiceEnvironment,
+    'providers' => $registrarSelectOptions,
+    'selected_provider_id' => $preferredRegistrarAccountId,
+    'selected_provider_label' => $domainChoiceSelectedRegistrarLabel,
+    'domains' => $domainChoiceTags,
+];
+try {
+    $domainChoiceStateJson = \json_encode($domainChoiceState, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+} catch (\JsonException) {
+    $domainChoiceStateJson = '{}';
 }
 
 /** 建站方案是否已在会话中存在（用于方案确认后直接进入构建的门闩） */
@@ -402,6 +481,11 @@ $workspaceTplData = [
     'domainStatusBadgeClass' => $domainStatusBadgeClass,
     'recommendedDomainList' => $recommendedDomainList,
     'recommendedRegistrarLabel' => $recommendedRegistrarLabel,
+    'preferredRegistrarAccountId' => $preferredRegistrarAccountId,
+    'domainChoiceSelectedRegistrarLabel' => $domainChoiceSelectedRegistrarLabel,
+    'domainChoiceEnvironment' => $domainChoiceEnvironment,
+    'domainChoiceState' => $domainChoiceState,
+    'domainChoiceStateJson' => $domainChoiceStateJson,
     'registrarSelectOptionsJson' => $registrarSelectOptionsJson,
     'purchaseDialogJsUrl' => $purchaseDialogJsUrl,
     'activeOperation' => $activeOperation ?? [],

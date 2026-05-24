@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace WeShop\Review\Controller\Frontend\Review;
 
 use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Review\Service\ReviewConfigService;
+use WeShop\Review\Service\ReviewPurchaseEligibilityService;
 use WeShop\Review\Service\ReviewService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\Url;
@@ -16,45 +18,61 @@ class Create extends FrontendController
     public function __construct(
         private readonly CustomerContextInterface $customerContext,
         private readonly ReviewService $reviewService,
-        private readonly Url $url
+        private readonly Url $url,
+        private readonly ?ReviewConfigService $reviewConfigService = null,
+        private readonly ?ReviewPurchaseEligibilityService $purchaseEligibilityService = null
     ) {
     }
 
     public function index(): string
     {
+        $reviewMode = $this->resolveReviewMode($this->readString('review_mode'));
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
-        if ($customerId <= 0) {
+        if ($reviewMode === ReviewConfigService::MODE_ORDER && $customerId <= 0) {
             if ($this->shouldReturnJson()) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('Please log in to write a review.'),
+                    'message' => __('请登录后再评价。'),
                     'data' => ['redirect_url' => $this->url->getUrl(self::LOGIN_ROUTE)],
                 ]);
             }
 
-            $this->getMessageManager()->addError(__('Please log in to write a review.'));
+            $this->getMessageManager()->addError(__('请登录后再评价。'));
             $this->redirect(self::LOGIN_ROUTE);
             return '';
         }
 
         $productId = $this->readProductId();
         $rating = $this->readRating();
-        $title = $this->readString('title');
-        $content = $this->readString('content');
+        $title = trim($this->readString('title'));
+        $content = trim($this->readString('content'));
+        $ratingScores = $this->readArray('rating_scores');
+        $mediaItems = $this->readArray('media_items');
 
         if ($productId <= 0 || !$content) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Product and content are required.'),
+                'message' => __('商品和评价内容不能为空。'),
+            ]);
+        }
+
+        if ($reviewMode === ReviewConfigService::MODE_ORDER
+            && !$this->getPurchaseEligibilityService()->customerCanReviewProduct($customerId, $productId)
+        ) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('只有购买过该商品的客户才能评价。'),
             ]);
         }
 
         $reviewData = [
             'product_id' => $productId,
-            'customer_id' => $customerId,
+            'customer_id' => $reviewMode === ReviewConfigService::MODE_ORDER ? $customerId : 0,
             'rating' => $rating,
             'title' => $title,
             'content' => $content,
+            'rating_scores' => $ratingScores,
+            'media_items' => $mediaItems,
         ];
 
         try {
@@ -62,14 +80,18 @@ class Create extends FrontendController
         } catch (\Throwable $exception) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Unable to submit your review right now.'),
+                'message' => __('暂时无法提交评价。'),
             ]);
         }
 
         return $this->fetchJson([
             'success' => true,
-            'message' => __('Thank you for submitting your review.'),
-            'data' => ['review_id' => (int) ($review->getId() ?? 0)],
+            'message' => __('评价已提交，审核通过后会公开展示。'),
+            'data' => [
+                'review_id' => (int) ($review->getId() ?? 0),
+                'review_mode' => $reviewMode,
+                'review' => $this->reviewService->buildClientReviewPayload($review),
+            ],
         ]);
     }
 
@@ -106,11 +128,56 @@ class Create extends FrontendController
 
     protected function readString(string $field): string
     {
-        return (string) (
-            $this->request->body($field)
+        $value = $this->request->body($field);
+        if ($value === null) {
+            $value = $this->request->getPost($field);
+        }
+        if ($value === null) {
+            $value = $this->request->getParam($field);
+        }
+
+        return is_scalar($value) ? (string) $value : '';
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    protected function readArray(string $field): array
+    {
+        $value = $this->request->body($field)
             ?? $this->request->getPost($field)
             ?? $this->request->getParam($field)
-            ?? ''
+            ?? [];
+
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && trim($value) !== '') {
+            $decoded = json_decode($value, true);
+            return json_last_error() === JSON_ERROR_NONE && is_array($decoded) ? $decoded : [$value];
+        }
+
+        return [];
+    }
+
+    private function getReviewConfigService(): ReviewConfigService
+    {
+        return $this->reviewConfigService ?? new ReviewConfigService();
+    }
+
+    private function resolveReviewMode(string $requestedMode): string
+    {
+        $configService = $this->getReviewConfigService();
+        $requestedMode = trim($requestedMode);
+
+        return $configService->normalizeReviewMode(
+            $requestedMode !== '' ? $requestedMode : $configService->getReviewMode()
         );
+    }
+
+    private function getPurchaseEligibilityService(): ReviewPurchaseEligibilityService
+    {
+        return $this->purchaseEligibilityService ?? new ReviewPurchaseEligibilityService();
     }
 }

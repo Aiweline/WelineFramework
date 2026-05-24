@@ -32,10 +32,10 @@
 "Inject storefront content above the default-theme search results page.","Inject storefront content above the default-theme search results page."
 "Search results after content","Search results after content"
 "Inject storefront content after the default-theme search result grid and empty state.","Inject storefront content after the default-theme search result grid and empty state."
-搜索商品、品牌或分类。,搜索商品、品牌或分类。
-暂未找到匹配结果。,暂未找到匹配结果。
-"显示第 %{1}-%{2} 个，共 %{3} 个结果","显示第 %{1}-%{2} 个，共 %{3} 个结果"
-排序,排序
+搜索商品、品牌或分类。,"Search for products, brands, or categories."
+暂未找到匹配结果。,"No matching results found."
+"显示第 %{1}-%{2} 个，共 %{3} 个结果","Showing %{1}-%{2} of %{3} results"
+排序,Sort
 基础信息,"Basic Info"
 搜索引擎类型,"Search Engine Type"
 请选择,"Please select"
@@ -108,20 +108,20 @@
 删除失败：,"Deletion failed:"
 删除请求失败,"Delete request failed"
 删除请求失败：,"Delete request failed:"
-商品搜索,商品搜索
-“%{1}”的搜索结果,“%{1}”的搜索结果
-搜索商品目录,搜索商品目录
-搜索关键词,搜索关键词
-搜索商品、品牌、分类...,搜索商品、品牌、分类...
-搜索,搜索
-热门搜索,热门搜索
-清除全部,清除全部
-筛选,筛选
-查看详情,查看详情
-上一页,上一页
-"第 %{1} / %{2} 页","第 %{1} / %{2} 页"
-下一页,下一页
-暂未找到匹配商品,暂未找到匹配商品
-换一个关键词、点击热门搜索，或移除筛选条件后再试。,换一个关键词、点击热门搜索，或移除筛选条件后再试。
-输入商品、品牌或分类开始搜索,输入商品、品牌或分类开始搜索
-使用上方搜索框浏览商品目录，也可以直接点击热门搜索词。,使用上方搜索框浏览商品目录，也可以直接点击热门搜索词。
+商品搜索,"Product search"
+“%{1}”的搜索结果,"Search results for %{1}"
+搜索商品目录,"Search product catalog"
+搜索关键词,"Search keywords"
+搜索商品、品牌、分类...,"Search products, brands, categories..."
+搜索,Search
+热门搜索,"Popular searches"
+清除全部,"Clear all"
+筛选,Filter
+查看详情,"View details"
+上一页,"Previous page"
+"第 %{1} / %{2} 页","Page %{1} / %{2}"
+下一页,"Next page"
+暂未找到匹配商品,"No matching products found"
+换一个关键词、点击热门搜索，或移除筛选条件后再试。,"Try another keyword, click a popular search, or remove filters and try again."
+输入商品、品牌或分类开始搜索,"Enter a product, brand, or category to start searching"
+使用上方搜索框浏览商品目录，也可以直接点击热门搜索词。,"Use the search box above to browse the product catalog, or click a popular search term."
