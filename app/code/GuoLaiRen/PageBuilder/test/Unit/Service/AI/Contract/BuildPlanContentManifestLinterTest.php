@@ -51,6 +51,55 @@ final class BuildPlanContentManifestLinterTest extends TestCase
         self::assertTrue($this->hasErrorContaining($result['errors'], 'CTA copy'));
     }
 
+    public function testPolicyMetadataBrandTermsDoNotCountAsLocaleLeak(): void
+    {
+        $contract = $this->contract([
+            'home.title' => '成都餐馆官网',
+            'home.desc' => '展示招牌菜、预约入口和门店信息。',
+            'home.hero.title' => '老成都川菜馆',
+            'home.hero.cta' => '预订座位',
+            'site.allowed_brand_terms' => 'Contract QA Restaurant',
+            'site.forbidden_template_brand_terms' => 'Aster and Rye, Northstar Clinics',
+        ]);
+        $contract['i18n']['primary_locale'] = 'zh_Hans_CN';
+        $contract['content_manifest']['primary_locale'] = 'zh_Hans_CN';
+
+        $result = (new BuildPlanContentManifestLinter())->validate($contract);
+
+        self::assertTrue($result['valid'], \implode("\n", $result['errors']));
+    }
+
+    public function testPortugueseTodosDoesNotCountAsTodoPlaceholder(): void
+    {
+        $contract = $this->contract([
+            'home.title' => 'Teenipiya',
+            'home.desc' => 'Um site para jogadores de Teen Patti no Brasil.',
+            'home.hero.title' => 'Jogo justo para todos',
+            'home.hero.copy' => 'Nossa missão é oferecer jogo justo, transparência e diversão para todos.',
+            'home.hero.cta' => 'Baixar APK seguro',
+        ]);
+        $contract['i18n']['primary_locale'] = 'pt_BR';
+        $contract['content_manifest']['primary_locale'] = 'pt_BR';
+        $contract['blocks'][0]['content_keys'][] = 'home.hero.copy';
+
+        $result = (new BuildPlanContentManifestLinter())->validate($contract);
+
+        self::assertTrue($result['valid'], \implode("\n", $result['errors']));
+    }
+
+    public function testTodoMarkerStillCountsAsPlaceholder(): void
+    {
+        $result = (new BuildPlanContentManifestLinter())->validate($this->contract([
+            'home.title' => 'Teenipiya',
+            'home.desc' => 'Um site para jogadores de Teen Patti no Brasil.',
+            'home.hero.title' => 'TODO: replace this headline',
+            'home.hero.cta' => 'Baixar APK seguro',
+        ]));
+
+        self::assertFalse($result['valid']);
+        self::assertTrue($this->hasErrorContaining($result['errors'], 'placeholder copy'));
+    }
+
     /**
      * @param array<string, string> $items
      * @return array<string, mixed>

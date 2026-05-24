@@ -60,6 +60,7 @@ class CartQueryProvider implements QueryProviderInterface
             'product_id' => (int)($params['product_id'] ?? 0),
             'qty' => (int)($params['qty'] ?? 1),
             'selected_options' => $params['selected_options'] ?? [],
+            'selected_option_labels' => $params['selected_option_labels'] ?? [],
         ]);
     }
 
@@ -80,7 +81,6 @@ class CartQueryProvider implements QueryProviderInterface
             $payload['data']['items'] = \array_slice($payload['data']['items'], 0, $limit);
         }
 
-        $payload['data']['html'] = $this->renderMiniItemsHtml($payload['data']);
         return $payload;
     }
 
@@ -223,6 +223,7 @@ class CartQueryProvider implements QueryProviderInterface
                         'product_id' => ['type' => 'int', 'required' => true, 'min' => 1],
                         'qty' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 999],
                         'selected_options' => ['type' => 'list', 'required' => false, 'max_items' => 20],
+                        'selected_option_labels' => ['type' => 'list', 'required' => false, 'max_items' => 20],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Add product to cart',
@@ -248,7 +249,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'cache_ttl' => 5,
+                    'cache_ttl' => 0,
                     'params' => [
                         'limit' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 20],
                     ],
@@ -262,7 +263,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'cache_ttl' => 5,
+                    'cache_ttl' => 0,
                     'params' => [],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Cart item count',

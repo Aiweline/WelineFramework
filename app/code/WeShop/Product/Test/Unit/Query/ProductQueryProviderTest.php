@@ -16,6 +16,45 @@ use WeShop\Product\Model\ProductCategory;
 
 class ProductQueryProviderTest extends TestCase
 {
+    public function testGetProductByIdsUsesLocalizedProductText(): void
+    {
+        $calls = new ArrayObject();
+        $product = $this->createFakeProduct($calls, [
+            [
+                Product::schema_fields_ID => 5,
+                Product::schema_fields_name => '中文商品名',
+                Product::schema_fields_short_description => '中文短描述',
+                Product::schema_fields_description => '中文描述',
+                Product::schema_fields_sku => 'SKU-5',
+                Product::schema_fields_spu => 'SPU-5',
+                Product::schema_fields_price => 120,
+                Product::schema_fields_cost => 50,
+                Product::schema_fields_stock => 8,
+                Product::schema_fields_image => '/image.jpg',
+                Product::schema_fields_images => '[]',
+                Product::schema_fields_status => 1,
+                Product::schema_fields_HANDLE => 'english-product',
+                Product::schema_fields_parent_id => 0,
+                'local_name' => 'English Product Name',
+                'local_short_description' => 'English short description',
+                'local_description' => 'English description',
+            ],
+        ]);
+        $priceService = $this->createResolvingPriceService([]);
+
+        $provider = new ProductQueryProvider($product, $priceService, $this->createFakeProductCategory());
+        $result = $provider->execute('getProductByIds', ['product_ids' => [5]]);
+
+        $this->assertSame('English Product Name', $result[0]['name'] ?? null);
+        $this->assertSame('English short description', $result[0]['short_description'] ?? null);
+        $this->assertSame('English description', $result[0]['description'] ?? null);
+        $this->assertContains(['loadLocalDescription'], iterator_to_array($calls));
+        $this->assertContains(
+            ['where', 'main_table.' . Product::schema_fields_ID, [5], 'in', 'AND', 'AND'],
+            iterator_to_array($calls)
+        );
+    }
+
     public function testSearchProductsFiltersAndSortsByEffectivePrice(): void
     {
         $calls = new ArrayObject();
@@ -46,16 +85,12 @@ class ProductQueryProviderTest extends TestCase
 
         $recordedCalls = iterator_to_array($calls);
         $this->assertSame(
-            ['where', "(name LIKE '%bag%' OR sku LIKE '%bag%' OR short_description LIKE '%bag%' OR description LIKE '%bag%')", null, '=', 'AND', 'AND'],
-            $recordedCalls[1]
-        );
-        $this->assertSame(
             ['where', Product::schema_fields_status, 1, '=', 'AND', 'AND'],
-            $recordedCalls[2]
+            $recordedCalls[1]
         );
         $this->assertNotContains(['where', Product::schema_fields_price, 10.0, '>=', 'AND', 'AND'], $recordedCalls);
         $this->assertNotContains(['where', Product::schema_fields_price, 99.0, '<=', 'AND', 'AND'], $recordedCalls);
-        $this->assertSame(['pagination', 1, 12, 2], $recordedCalls[5]);
+        $this->assertSame(['pagination', 1, 12, 2], $recordedCalls[4]);
         $this->assertSame(2, $result['total']);
         $this->assertSame('Travel Bag', $result['items'][0]['name']);
         $this->assertSame(20.0, $result['items'][0]['price']);
@@ -298,6 +333,20 @@ class ProductQueryProviderTest extends TestCase
             public function limit(int $size, int $offset = 0): static
             {
                 $this->calls[] = ['limit', $size, $offset];
+
+                return $this;
+            }
+
+            public function loadLocalDescription(string $local_code = '', string|\Weline\I18n\LocalModel $model = ''): static
+            {
+                $this->calls[] = ['loadLocalDescription'];
+
+                return $this;
+            }
+
+            public function fields(string|array $fields): static
+            {
+                $this->calls[] = ['fields', $fields];
 
                 return $this;
             }

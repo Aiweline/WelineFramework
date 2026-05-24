@@ -115,6 +115,9 @@ final class QATest extends TestCase
             ->method('getQuestion')
             ->with(5)
             ->willReturn($question);
+        $this->qaService->expects($this->once())
+            ->method('getSourceTypeOptions')
+            ->willReturn(['customer' => '客户问答', 'system' => '系统推荐']);
 
         $controller = $this->getMockBuilder(QA::class)
             ->setConstructorArgs([$this->qaService])
@@ -122,7 +125,7 @@ final class QATest extends TestCase
             ->getMock();
 
         $assignments = [];
-        $controller->expects($this->exactly(6))
+        $controller->expects($this->exactly(8))
             ->method('assign')
             ->willReturnCallback(static function (string $key, mixed $value) use (&$assignments, $controller) {
                 $assignments[$key] = $value;
@@ -144,6 +147,8 @@ final class QATest extends TestCase
         self::assertSame('/backend/backend/qa/approve', $assignments['approve_url'] ?? null);
         self::assertSame('/backend/backend/qa/reject', $assignments['reject_url'] ?? null);
         self::assertSame('/backend/backend/qa', $assignments['back_url'] ?? null);
+        self::assertSame('/backend/backend/qa/metadata', $assignments['metadata_url'] ?? null);
+        self::assertSame(['customer' => '客户问答', 'system' => '系统推荐'], $assignments['source_type_options'] ?? null);
     }
 
     public function testApproveWithInvalidRequestMethodAddsError(): void
@@ -313,6 +318,41 @@ final class QATest extends TestCase
         $this->setControllerRequest($controller, $this->createRequestMock(['id' => 5], true));
 
         self::assertSame('', $controller->reject());
+    }
+
+    public function testMetadataSuccessfullyUpdatesQuestionSettings(): void
+    {
+        $this->qaService->expects($this->once())
+            ->method('updateQuestionMetadata')
+            ->with(5, [
+                'source_type' => 'system',
+                'is_recommended' => '1',
+                'display_name' => '系统推荐',
+            ])
+            ->willReturn(true);
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())
+            ->method('addSuccess')
+            ->with('问答元数据已保存。');
+
+        $controller = $this->getMockBuilder(QA::class)
+            ->setConstructorArgs([$this->qaService])
+            ->onlyMethods(['getMessageManager', 'redirect'])
+            ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('*/backend/qa/view', ['id' => 5]);
+
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'id' => 5,
+            'source_type' => 'system',
+            'is_recommended' => '1',
+            'display_name' => '系统推荐',
+        ], true));
+
+        self::assertSame('', $controller->metadata());
     }
 
     private function createRequestMock(array $params = [], bool $isPost = true): Request

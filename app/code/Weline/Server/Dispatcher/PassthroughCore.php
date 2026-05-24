@@ -1248,7 +1248,7 @@ class PassthroughCore
         }
 
         // P0-2：用可配置的 workerConnectSelectTimeoutSec 替代旧 0.3-0.5s 硬上限。
-        // 默认 0.1s 对 localhost Worker 绰绰有余；远端后端可通过 worker_connect_select_timeout_sec 覆盖。
+        // 默认 0.02s 对 localhost Worker 绰绰有余；远端后端可通过 worker_connect_select_timeout_sec 覆盖。
         // 高并发失败路径下，单次 connect 的最差阻塞从 500ms → 100ms。
         $failoverTimeout = \max(0.01, \min(
             $connectTimeoutOverride ?? $this->workerConnectSelectTimeoutSec,

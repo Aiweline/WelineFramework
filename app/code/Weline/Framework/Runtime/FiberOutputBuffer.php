@@ -308,10 +308,12 @@ final class FiberOutputBuffer
         }
 
         $chunkBytes = \strlen($chunk);
-        if (!self::canAppend($frame->bytes, $chunkBytes)) {
+        $overflowContext = self::buildAppendOverflowContext($frame->bytes, $chunkBytes);
+        if ($overflowContext !== null) {
             $frame->buffer = '';
             $frame->bytes = 0;
             $frame->overflowed = true;
+            $frame->overflowContext = $overflowContext;
             return;
         }
 
@@ -322,32 +324,137 @@ final class FiberOutputBuffer
     private static function finishFrame(FiberOutputCaptureFrame $frame): string
     {
         if ($frame->overflowed) {
+            self::logOverflow($frame->overflowContext);
             throw new \OverflowException(
                 'WLS output capture exceeded safe memory limits; request output was discarded before it could crash the worker.'
+                . self::formatOverflowContext($frame->overflowContext)
             );
         }
 
         return $frame->buffer;
     }
 
-    private static function canAppend(int $currentBytes, int $chunkBytes): bool
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function buildAppendOverflowContext(int $currentBytes, int $chunkBytes): ?array
     {
         if ($chunkBytes <= 0) {
-            return true;
+            return null;
         }
 
         if ($currentBytes > self::MAX_CAPTURE_BYTES - $chunkBytes) {
-            return false;
+            return self::buildOverflowContext(
+                'capture_limit',
+                $currentBytes,
+                $chunkBytes,
+                0,
+                0,
+                0
+            );
         }
 
         $memoryLimit = self::getMemoryLimitBytes();
         if ($memoryLimit <= 0) {
-            return true;
+            return null;
         }
 
         $projectedAppendBytes = $currentBytes + $chunkBytes + self::MIN_MEMORY_HEADROOM_BYTES;
+        $memoryUsage = \memory_get_usage(true);
 
-        return \memory_get_usage(true) + $projectedAppendBytes < $memoryLimit;
+        if ($memoryUsage + $projectedAppendBytes >= $memoryLimit) {
+            return self::buildOverflowContext(
+                'memory_headroom',
+                $currentBytes,
+                $chunkBytes,
+                $memoryUsage,
+                $memoryLimit,
+                $projectedAppendBytes
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function buildOverflowContext(
+        string $reason,
+        int $currentBytes,
+        int $chunkBytes,
+        int $memoryUsage,
+        int $memoryLimit,
+        int $projectedAppendBytes
+    ): array {
+        $fiber = \Fiber::getCurrent();
+
+        return [
+            'reason' => $reason,
+            'request_id' => (string)(RequestContext::getId() ?? ''),
+            'uri' => (string)($_SERVER['REQUEST_URI'] ?? '(none)'),
+            'fiber_id' => $fiber instanceof \Fiber ? \spl_object_id($fiber) : null,
+            'current_bytes' => $currentBytes,
+            'chunk_bytes' => $chunkBytes,
+            'max_capture_bytes' => self::MAX_CAPTURE_BYTES,
+            'memory_usage' => $memoryUsage > 0 ? $memoryUsage : \memory_get_usage(true),
+            'memory_limit' => $memoryLimit,
+            'min_memory_headroom' => self::MIN_MEMORY_HEADROOM_BYTES,
+            'projected_append_bytes' => $projectedAppendBytes,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private static function formatOverflowContext(array $context): string
+    {
+        if ($context === []) {
+            return '';
+        }
+
+        $fields = [];
+        foreach ([
+            'reason',
+            'current_bytes',
+            'chunk_bytes',
+            'max_capture_bytes',
+            'memory_usage',
+            'memory_limit',
+            'min_memory_headroom',
+            'projected_append_bytes',
+            'request_id',
+            'uri',
+        ] as $key) {
+            if (!\array_key_exists($key, $context)) {
+                continue;
+            }
+            $value = $context[$key];
+            if (\is_scalar($value) || $value === null) {
+                $fields[] = $key . '=' . (string)$value;
+            }
+        }
+
+        return $fields === [] ? '' : ' (' . \implode(', ', $fields) . ')';
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private static function logOverflow(array $context): void
+    {
+        $message = '[FiberOutputBufferOverflow] '
+            . (\json_encode($context, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}');
+
+        if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
+            try {
+                \Weline\Server\Log\WlsLogger::warning_($message);
+                return;
+            } catch (\Throwable) {
+            }
+        }
+
+        \error_log($message);
     }
 
     private static function isInstalledBufferActive(): bool
@@ -457,4 +564,7 @@ final class FiberOutputCaptureFrame
     public int $bytes = 0;
 
     public bool $overflowed = false;
+
+    /** @var array<string, mixed> */
+    public array $overflowContext = [];
 }

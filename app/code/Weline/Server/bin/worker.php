@@ -819,6 +819,7 @@ if ($isMaintenanceWorker) {
 if ($controlPort <= 0 && !$supervisorEnabled) {
     $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 }
+
 $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
 $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
 $supervisorEnabled = $supervisorEnabledRaw !== false
@@ -836,6 +837,27 @@ $ipcDraining = $ipcDraining ?? false;
 $ipcReceivedShutdown = $ipcReceivedShutdown ?? false;
 $drainStartTime = $drainStartTime ?? 0;
 $shouldExit = $shouldExit ?? false;
+$readyGateWorkerBootstrapWarmupCompleted = false;
+$runReadyGateWorkerBootstrapWarmup = static function () use (
+    &$readyGateWorkerBootstrapWarmupCompleted,
+    &$runtime,
+    &$runtimeError,
+    $isMaintenanceWorker,
+    $workerId
+): void {
+    if ($readyGateWorkerBootstrapWarmupCompleted
+        || $isMaintenanceWorker
+        || $runtimeError !== null
+        || !$runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+    ) {
+        return;
+    }
+
+    WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup start worker={$workerId}");
+    $runtime->runReadyGateWorkerBootstrapWarmup();
+    $readyGateWorkerBootstrapWarmupCompleted = true;
+    WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup done worker={$workerId}");
+};
 
 if ($controlPort > 0 || $supervisorEnabled) {
     $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
@@ -1077,6 +1099,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         );
     }
     $ipcClient = $kernel->getClient();
+    $runReadyGateWorkerBootstrapWarmup();
     $readyReported = $kernel->isConnected()
         ? $kernel->sendReady()
         : $kernel->connectAndRegister($controlPort);
@@ -1347,9 +1370,9 @@ $maxConsecutiveErrors = 100; // 连续 100 次错误才考虑重启（给予足�
 // 进入事件循环后向 Master 上报一次（IPC 重连后会再次上报）
 $workerLoopStartedSent = false;
 $sharedRuntimeConnectionWarmupStarted = false;
-$sharedRuntimeConnectionWarmupNotBefore = \microtime(true) + \max(0.05, \min(1.0, $workerId * 0.05));
+$sharedRuntimeConnectionWarmupNotBefore = \microtime(true);
 $deferredWorkerBootstrapWarmupStarted = false;
-$deferredWorkerBootstrapWarmupNotBefore = \microtime(true) + \max(0.25, \min(4.0, $workerId * 0.25));
+$deferredWorkerBootstrapWarmupNotBefore = \microtime(true);
 
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
@@ -1416,6 +1439,7 @@ while (true) {
         $ipcReconnectAttempts++;
         
         WlsLogger::warning_("[IPC] 第 {$ipcReconnectAttempts}/{$ipcReconnectMaxAttempts} 次尝试与 Master 重新连接 (端口: {$controlPort})");
+        $runReadyGateWorkerBootstrapWarmup();
         if ($kernel->connectAndRegister($controlPort)) {
             $ipcClient = $kernel->getClient();
             unset($ipcReconnectDueTime, $ipcReconnectAttempts, $ipcReconnectMaxAttempts);
@@ -1446,7 +1470,7 @@ while (true) {
     if (!$sharedRuntimeConnectionWarmupStarted
         && !$isMaintenanceWorker
         && isset($sessionHost, $sessionPort, $memoryHost, $memoryPort)
-        && ($workerLoopStartedSent || $workerLoopCount > 1)
+        && $workerLoopStartedSent
         && !$ipcReceivedShutdown
         && \microtime(true) >= $sharedRuntimeConnectionWarmupNotBefore
     ) {
@@ -1495,20 +1519,28 @@ while (true) {
     // ========== Deferred worker bootstrap warmup ==========
     if (!$deferredWorkerBootstrapWarmupStarted
         && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
-        && ($workerLoopStartedSent || $workerLoopCount > 3)
+        && $workerLoopStartedSent
         && !$ipcReceivedShutdown
         && \microtime(true) >= $deferredWorkerBootstrapWarmupNotBefore
     ) {
         $deferredWorkerBootstrapWarmupStarted = true;
+        $warmupIpcClient = $ipcClient;
         $fiberScheduler->registerFiber();
-        $deferredWarmupFiber = new \Fiber(static function () use ($runtime, $workerId, $fiberScheduler): void {
+        $deferredWarmupFiber = new \Fiber(static function () use ($runtime, $workerId, $fiberScheduler, $warmupIpcClient): void {
+            $warmupLog = static function (string $message, string $level = 'INFO') use ($workerId, $warmupIpcClient): void {
+                if ($warmupIpcClient !== null && $warmupIpcClient->isConnected()) {
+                    $warmupIpcClient->sendLogLine("[WorkerWarmup] Worker{$workerId} {$message}" . PHP_EOL, $level, "Worker#{$workerId}");
+                }
+            };
             try {
-                \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(\min(4000, \max(50, $workerId * 250)));
+                $warmupLog('warmup_started');
                 WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup start worker={$workerId}");
                 $runtime->runDeferredWorkerBootstrapWarmup();
                 WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup done worker={$workerId}");
+                $warmupLog('warmup_success');
             } catch (\Throwable $e) {
                 WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup failed worker={$workerId}: " . $e->getMessage());
+                $warmupLog('warmup_failed', 'WARNING');
             } finally {
                 $fiberScheduler->unregisterFiber();
             }
@@ -3289,6 +3321,7 @@ function sendResponseAndCleanup(
         $response = \Weline\Server\Service\WorkerResponseMemoryGuard::forceConnectionCloseHeader($response);
     }
 
+    $responseFullyWritten = false;
     if (!$isSseMode) {
         $responseLen = \strlen($response);
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
@@ -3340,6 +3373,7 @@ function sendResponseAndCleanup(
         if ($totalWritten >= $responseLen) {
             WlsLogger::debug_("Worker 已写完响应 connId={$connId} written={$totalWritten}");
             $responseBytes = $totalWritten;
+            $responseFullyWritten = true;
             goto http_finalize_skip_write;
         }
 

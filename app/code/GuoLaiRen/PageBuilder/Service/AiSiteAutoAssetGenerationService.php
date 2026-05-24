@@ -10,6 +10,8 @@ use Weline\Framework\Manager\ObjectManager;
 class AiSiteAutoAssetGenerationService
 {
     private const DEFAULT_LIMIT = 4;
+    private const FAILURE_TRAIL_MAX_ITEMS = 80;
+    private const FAILURE_TRAIL_MESSAGE_MAX_LEN = 800;
 
     public function __construct(
         private readonly AiSiteAssetManifestService $manifestService,
@@ -209,6 +211,12 @@ class AiSiteAutoAssetGenerationService
             $slot = $this->manifestService->getSlot($manifest, $slotId);
         }
 
+        $preverifiedSlot = $this->resolvePreverifiedSlot($scope, $manifest, $slot, $slotId, $session);
+        if ($preverifiedSlot !== []) {
+            $manifest = $this->manifestService->upsert($manifest, $preverifiedSlot);
+            $slot = $this->manifestService->getSlot($manifest, $slotId);
+        }
+
         $finalUrl = \trim((string)($slot['final_url'] ?? ''));
         if (
             $finalUrl !== ''
@@ -380,6 +388,150 @@ class AiSiteAutoAssetGenerationService
                 ],
             ];
         }
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $manifest
+     * @param array<string,mixed> $slot
+     * @return array<string,mixed>
+     */
+    private function resolvePreverifiedSlot(
+        array $scope,
+        array $manifest,
+        array $slot,
+        string $slotId,
+        AiSiteAgentSession $session
+    ): array {
+        $slotId = \trim($slotId);
+        if ($slotId === '') {
+            return [];
+        }
+
+        $candidates = [];
+        $scopeManifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        $scopeVerifiedAssets = $scopeManifest !== [] ? $this->manifestService->extractVerifiedAssets($scopeManifest) : [];
+        $scopeSlots = \is_array($scope['asset_manifest']['slots'] ?? null) ? $scope['asset_manifest']['slots'] : [];
+        if (\is_array($scopeSlots[$slotId] ?? null) && \array_key_exists($slotId, $scopeVerifiedAssets)) {
+            $candidates[] = $scopeSlots[$slotId];
+        }
+        $manifestSlots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
+        if (\is_array($manifestSlots[$slotId] ?? null)) {
+            $candidates[] = $manifestSlots[$slotId];
+        }
+        $verifiedAssets = \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [];
+        if (\array_key_exists($slotId, $verifiedAssets)) {
+            $candidates[] = [
+                'slot_id' => $slotId,
+                'final_url' => $verifiedAssets[$slotId],
+                'source' => 'verified_asset',
+                'status' => 'done',
+            ];
+        }
+
+        foreach ($candidates as $candidate) {
+            if (!\is_array($candidate)) {
+                continue;
+            }
+            $finalUrl = $this->firstNonEmptyString([
+                $candidate['final_url'] ?? null,
+                $candidate['url'] ?? null,
+            ]);
+            if ($finalUrl === '') {
+                continue;
+            }
+            $candidateSlot = \array_replace($slot, $candidate, [
+                'slot_id' => $slotId,
+                'final_url' => $finalUrl,
+                'url' => $finalUrl,
+                'status' => \trim((string)($candidate['status'] ?? '')) ?: 'done',
+                'source' => \trim((string)($candidate['source'] ?? '')) ?: 'verified_asset',
+                'error_message' => '',
+                'execution_token' => '',
+            ]);
+            if (!$this->preverifiedSlotUrlIsAllowed($candidateSlot, $finalUrl, $scope, $session)) {
+                continue;
+            }
+            if ($this->identityAssetFinalUrlNeedsRegeneration($slotId, $candidateSlot, $finalUrl)) {
+                continue;
+            }
+
+            return $candidateSlot;
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     * @param array<string,mixed> $scope
+     */
+    private function preverifiedSlotUrlIsAllowed(
+        array $slot,
+        string $finalUrl,
+        array $scope,
+        AiSiteAgentSession $session
+    ): bool {
+        $finalUrl = \trim($finalUrl);
+        if ($finalUrl === '') {
+            return false;
+        }
+        if ($this->preverifiedSlotLooksLikePlaceholder($slot, $finalUrl)) {
+            return false;
+        }
+
+        return $this->isFinalUrlUnderCurrentDomainAssetPath($finalUrl, $scope, $session)
+            || $this->manifestService->isReusableSessionBlockAsset($scope, $slot, $finalUrl);
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function preverifiedSlotLooksLikePlaceholder(array $slot, string $finalUrl): bool
+    {
+        foreach (\is_array($slot['variants'] ?? null) ? $slot['variants'] : [] as $variant) {
+            if (!\is_array($variant)) {
+                continue;
+            }
+            if ((int)($variant['placeholder'] ?? 0) === 1) {
+                return true;
+            }
+            foreach (['mode', 'model', 'source'] as $key) {
+                $value = \strtolower(\trim((string)($variant[$key] ?? '')));
+                if ($value === 'placeholder' || $value === 'local_composed' || \str_contains($value, 'local_composition')) {
+                    return true;
+                }
+            }
+            if (\trim((string)($variant['generation_fallback_reason'] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        $path = \parse_url($finalUrl, \PHP_URL_PATH);
+        $path = \strtolower(\is_string($path) && $path !== '' ? $path : $finalUrl);
+        $source = \strtolower(\trim((string)($slot['source'] ?? '')));
+
+        return $source === 'generated'
+            && \str_contains($path, '/pub/media/page-build/ai-generated/')
+            && \str_ends_with($path, '.svg');
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function firstNonEmptyString(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $value = \trim((string)$value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -640,6 +792,7 @@ class AiSiteAutoAssetGenerationService
         $trail = \is_array($scope['asset_image_generation_failures'] ?? null)
             ? $scope['asset_image_generation_failures']
             : [];
+        $trail = $this->compactAssetImageGenerationFailureTrail($trail);
         $stamp = \date('Y-m-d H:i:s');
         foreach ($failedSlots as $failure) {
             $slotId = \trim((string)($failure['slot_id'] ?? ''));
@@ -653,7 +806,7 @@ class AiSiteAutoAssetGenerationService
                 'updated_at' => $stamp,
             ];
         }
-        $scope['asset_image_generation_failures'] = \array_values($trail);
+        $scope['asset_image_generation_failures'] = $this->compactAssetImageGenerationFailureTrail($trail);
 
         return $scope;
     }
@@ -671,7 +824,9 @@ class AiSiteAutoAssetGenerationService
         $trail = \is_array($scope['asset_image_generation_failures'] ?? null)
             ? $scope['asset_image_generation_failures']
             : [];
-        $scope['asset_image_generation_failures'] = $this->filterAssetImageGenerationFailures($trail, $slotId);
+        $scope['asset_image_generation_failures'] = $this->compactAssetImageGenerationFailureTrail(
+            $this->filterAssetImageGenerationFailures($trail, $slotId)
+        );
 
         return $scope;
     }
@@ -693,6 +848,38 @@ class AiSiteAutoAssetGenerationService
             }
             return \trim((string)($row['slot_id'] ?? $row['slotId'] ?? '')) !== $slotId;
         }));
+    }
+
+    /**
+     * @param list<mixed> $trail
+     * @return list<array<string,mixed>>
+     */
+    private function compactAssetImageGenerationFailureTrail(array $trail): array
+    {
+        if ($trail === []) {
+            return [];
+        }
+
+        $trail = \array_values(\array_filter($trail, static fn(mixed $row): bool => \is_array($row)));
+        if (\count($trail) > self::FAILURE_TRAIL_MAX_ITEMS) {
+            $trail = \array_slice($trail, -self::FAILURE_TRAIL_MAX_ITEMS);
+        }
+
+        foreach ($trail as &$row) {
+            $slotId = \trim((string)($row['slot_id'] ?? $row['slotId'] ?? ''));
+            if ($slotId !== '') {
+                $row['slot_id'] = $slotId;
+            }
+            unset($row['slotId']);
+
+            $message = \trim((string)($row['message'] ?? ''));
+            if ($message !== '' && \mb_strlen($message) > self::FAILURE_TRAIL_MESSAGE_MAX_LEN) {
+                $row['message'] = \mb_substr($message, 0, self::FAILURE_TRAIL_MESSAGE_MAX_LEN) . '...';
+            }
+        }
+        unset($row);
+
+        return $trail;
     }
 
     /**

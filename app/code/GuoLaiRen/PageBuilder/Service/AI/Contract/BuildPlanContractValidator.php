@@ -246,6 +246,15 @@ final class BuildPlanContractValidator
             if ($runtimeContext === []) {
                 $errors[] = 'Task ' . $taskId . ' runtime_context must not be empty';
             }
+            if (\trim((string)($runtimeContext['content_locale'] ?? '')) === '') {
+                $errors[] = 'Task ' . $taskId . ' runtime_context.content_locale is required';
+            }
+            $languageContract = \is_array($runtimeContext['language_contract'] ?? null) ? $runtimeContext['language_contract'] : [];
+            if ($languageContract === []) {
+                $errors[] = 'Task ' . $taskId . ' runtime_context.language_contract is required';
+            } elseif (\trim((string)($languageContract['source_of_truth_locale'] ?? '')) === '') {
+                $errors[] = 'Task ' . $taskId . ' runtime_context.language_contract.source_of_truth_locale is required';
+            }
             foreach ($this->findForbiddenRuntimeContextKeys($runtimeContext) as $path) {
                 $errors[] = 'Task ' . $taskId . ' runtime_context contains forbidden broad context: ' . $path;
             }

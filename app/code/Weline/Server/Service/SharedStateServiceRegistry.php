@@ -9,59 +9,6 @@ use Weline\Framework\App\Env;
 class SharedStateServiceRegistry
 {
     private const REGISTRY_FILE = 'server' . DIRECTORY_SEPARATOR . 'shared-services' . DIRECTORY_SEPARATOR . 'registry.json';
-    private const LOCK_DIR = 'server' . DIRECTORY_SEPARATOR . 'shared-services' . DIRECTORY_SEPARATOR . 'locks' . DIRECTORY_SEPARATOR;
-
-    public function withRoleLock(string $role, callable $callback): mixed
-    {
-        $role = $this->normalizeRole($role);
-        $lockFile = $this->getRoleLockFile($role);
-        $dir = \dirname($lockFile);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-
-        $fp = @\fopen($lockFile, 'c');
-        if ($fp === false) {
-            throw new \RuntimeException("Unable to open shared-service lock file: {$lockFile}");
-        }
-
-        try {
-            if (!\flock($fp, LOCK_EX)) {
-                throw new \RuntimeException("Unable to acquire shared-service lock for role {$role}");
-            }
-
-            return $callback();
-        } finally {
-            @\flock($fp, LOCK_UN);
-            @\fclose($fp);
-        }
-    }
-
-    public function tryWithRoleLock(string $role, callable $callback, mixed $fallback = null): mixed
-    {
-        $role = $this->normalizeRole($role);
-        $lockFile = $this->getRoleLockFile($role);
-        $dir = \dirname($lockFile);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-
-        $fp = @\fopen($lockFile, 'c');
-        if ($fp === false) {
-            return $fallback;
-        }
-
-        try {
-            if (!\flock($fp, LOCK_EX | LOCK_NB)) {
-                return $fallback;
-            }
-
-            return $callback();
-        } finally {
-            @\flock($fp, LOCK_UN);
-            @\fclose($fp);
-        }
-    }
 
     /**
      * @return array<string, mixed>
@@ -273,11 +220,6 @@ class SharedStateServiceRegistry
         $services = \is_array($data['services'] ?? null) ? $data['services'] : [];
 
         return ['services' => $services];
-    }
-
-    private function getRoleLockFile(string $role): string
-    {
-        return Env::VAR_DIR . self::LOCK_DIR . $role . '.lock';
     }
 
     private function normalizeRole(string $role): string

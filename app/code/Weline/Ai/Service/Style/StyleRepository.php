@@ -159,6 +159,23 @@ final class StyleRepository
         return $style;
     }
 
+    public function delete(string $code, int $adminId): bool
+    {
+        $style = $this->findByCode($code, $adminId);
+        if (!$style) {
+            return false;
+        }
+
+        $sourceType = (string)$style->getData(AiStyle::schema_fields_SOURCE_TYPE);
+        if ($sourceType !== AiStyle::SOURCE_CUSTOM) {
+            throw new \InvalidArgumentException('Only custom styles can be deleted from the database.');
+        }
+
+        $style->delete()->fetch();
+
+        return true;
+    }
+
     /**
      * @param array<string, mixed> $row
      * @return array<string, mixed>

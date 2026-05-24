@@ -44,10 +44,10 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 "Product ID is required.","Product ID is required."
 "Product is unavailable.","Product is unavailable."
 产品布局定时切换任务,"Product Layout Scheduled Switch Task"
-"产品 #%1 的布局计划 #%2 已激活，布局 '%3' 应用到 %4","产品 #%1 的布局计划 #%2 已激活，布局 '%3' 应用到 %4"
+"产品 #%1 的布局计划 #%2 已激活，布局 '%3' 应用到 %4","Layout schedule #%2 for product #%1 has been activated; layout '%3' applied to %4"
 重置为待执行,"Reset to Pending"
 标记为已完成,"Mark as Completed"
-"产品 #%1 的布局计划 #%2 已%3","产品 #%1 的布局计划 #%2 已%3"
+"产品 #%1 的布局计划 #%2 已%3","Product #%1 layout schedule #%2 has been %3"
 没有需要处理的产品布局计划,"No product layout schedules to process"
 每分钟检查并执行产品布局定时切换任务,"Check and execute product layout scheduled switch task every minute"
 产品保存前,"Before Product Save"
@@ -102,23 +102,50 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 在产品详情页主内容区域渲染产品图片、信息、购买选项等。包括产品图片画廊、基本信息、价格、库存状态、购买按钮等核心内容。,"Render product images, information, purchase options, etc., in the main content area of the product detail page. Includes core content such as product image gallery, basic information, price, stock status, and purchase button."
 产品详情标签内容,"Product Details Tab Content"
 在产品详情页标签区域渲染产品描述、规格、评价、问答等内容。支持多个标签页切换，包括商品详情、规格参数、用户评价、问答等。,"Render product description, specifications, reviews, Q&A, etc., in the tab area of the product detail page. Supports multiple tab switching, including product details, specifications, user reviews, Q&A, etc."
+产品编辑页步骤导航后,"After product edit step navigation"
+在后台产品编辑页步骤导航末尾追加模块自己的管理入口。,"Add module management entries after the backend product edit step navigation."
+产品编辑页内容后,"After product edit content"
+在后台产品编辑页内容区域末尾追加当前产品相关的模块管理面板。,"Add module management panels for the current product after the backend product edit content."
 "Product Description","Product Description"
-颜色,颜色
-黑色,黑色
-藏青,藏青
-米色,米色
-尺码,尺码
+颜色,Color
+黑色,Black
+藏青,Navy
+米色,Beige
+尺码,Size
+评分,Rating
+放大查看,"Zoom image"
 暂无图片,"No images"
+"基于 %{1} 条评价","Based on %{1} reviews"
 SKU,SKU
 库存状态,"Inventory Status"
 有货,"In stock"
 缺货,"Out of Stock"
 件,items
+产品规格,"Product Specifications"
 优惠,Discount
 数量,Quantity
 加入购物车,"Add to Cart"
 立即购买,"Buy Now"
-产品规格,"Product Specifications"
+商品详情,"Product Details"
+暂无商品详情,"No product details yet"
+顾客评价,"Customer Reviews"
+星,star
+匿名用户,"Anonymous customer"
+暂无评价,"No reviews yet"
+商品问答,"Product Q&A"
+问,Q
+答,A
+暂无问答,"No questions yet"
+结算页地址未配置,"Checkout page URL is not configured"
+"购物车 API 不支持 add 操作","Cart API does not support the add operation"
+"购物车 API 未初始化","Cart API is not initialized"
+加入购物车失败,"Failed to add to cart"
+已加入购物车,"Added to cart"
+已成功加入购物车。,"Added to cart successfully."
+请选择,"Please choose"
+、,","
+已选,Selected
+添加购物车失败,"Failed to add to cart"
 添加中,Adding
 已添加,Added
 跳转结算中,"Redirecting to checkout"
@@ -129,7 +156,7 @@ Reviews,Reviews
 收藏,Favorite
 对比,Compare
 产品列表分页,"Product List Pagination"
-"显示 %d-%d，共 %d 件","显示 %d-%d，共 %d 件"
+"显示 %d-%d，共 %d 件","Showing %d-%d of %d items"
 首页,Homepage
 上一页,"Previous page"
 下一页,"Next page"
@@ -144,7 +171,7 @@ Reviews,Reviews
 "名称 Z-A","Name Z-A"
 最新上架,"Newly Listed"
 销量最高,"Best Selling"
-"共 %d 件商品","共 %d 件商品"
+"共 %d 件商品","%d products"
 排序,Sort
 每页,"Per page"
 网格视图,"Grid View"
@@ -294,7 +321,3 @@ ID,ID
 原价：,"Original Price:"
 现价：,"Current Price:"
 活动倒计时：,Countdown:
-相关产品,"Related products"
-热销产品,"Hot Selling Products"
-最近浏览,"Recently viewed"
-最受欢迎的商品,"Most popular products"

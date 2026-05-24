@@ -36,6 +36,10 @@ class SessionServerProvider extends AbstractServiceProvider
      */
     public function isEnabled(ServiceContext $context): bool
     {
+        if ($this->isSharedStateRuntimeManaged($context, 'session')) {
+            return false;
+        }
+
         $ss = ($context->envConfig['wls'] ?? [])['session_server'] ?? [];
         $force = $ss['enabled'] ?? null;
         if ($force !== null) {

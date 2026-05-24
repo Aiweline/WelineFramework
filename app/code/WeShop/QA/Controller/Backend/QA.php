@@ -54,6 +54,8 @@ class QA extends BaseController
         $this->assign('approve_url', $this->_url->getBackendUrl('*/backend/qa/approve'));
         $this->assign('reject_url', $this->_url->getBackendUrl('*/backend/qa/reject'));
         $this->assign('back_url', $this->_url->getBackendUrl('*/backend/qa'));
+        $this->assign('metadata_url', $this->_url->getBackendUrl('*/backend/qa/metadata'));
+        $this->assign('source_type_options', $this->qaService->getSourceTypeOptions());
 
         return $this->fetch('WeShop_QA::templates/Backend/QA/View/index.phtml');
     }
@@ -120,6 +122,45 @@ class QA extends BaseController
         }
 
         $this->redirect('*/backend/qa');
+        return '';
+    }
+
+    public function metadata(): string
+    {
+        if (!$this->request->isPost()) {
+            $this->getMessageManager()->addError(__('Invalid request method.'));
+            $this->redirect('*/backend/qa');
+            return '';
+        }
+
+        $questionId = (int) $this->request->getParam('id', 0);
+        try {
+            if ($questionId <= 0) {
+                throw new \InvalidArgumentException((string) __('Invalid question ID.'));
+            }
+
+            $result = $this->qaService->updateQuestionMetadata($questionId, [
+                'source_type' => $this->request->getParam('source_type', ''),
+                'is_recommended' => $this->request->getParam('is_recommended', 0),
+                'display_name' => $this->request->getParam('display_name', ''),
+            ]);
+
+            if ($result) {
+                $this->getMessageManager()->addSuccess(__('问答元数据已保存。'));
+            } else {
+                $this->getMessageManager()->addError(__('问答元数据保存失败。'));
+            }
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError(
+                __('保存元数据失败：%{1}', [$throwable->getMessage()])
+            );
+        }
+
+        if ($questionId > 0) {
+            $this->redirect('*/backend/qa/view', ['id' => $questionId]);
+        } else {
+            $this->redirect('*/backend/qa');
+        }
         return '';
     }
 }

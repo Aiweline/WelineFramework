@@ -702,6 +702,7 @@ class AiSitePageComponentGenerationService
             }
         }
 
+        $contentLocale = $this->resolveScopePrimaryLocale($scope);
         foreach ($tasks as $task) {
             if (!\is_array($task) || \trim((string)($task['page_type'] ?? '')) !== $pageType) {
                 continue;
@@ -733,8 +734,11 @@ class AiSitePageComponentGenerationService
                 $blockTask['task_goal'] ?? null,
                 $sectionKey
             );
-            $description = $this->resolveVisibleBuildTaskSummary($taskScript, $blockTask, $planContext);
+            $description = $this->resolveVisibleBuildTaskSummary($taskScript, $blockTask, $planContext, $contentLocale);
             $visibleSectionTitle = $this->sanitizeVisibleCopy($label);
+            if ($contentLocale !== '') {
+                $visibleSectionTitle = $this->filterVisibleCopyForLocale($visibleSectionTitle, $contentLocale);
+            }
             if ($visibleSectionTitle === '') {
                 $visibleSectionTitle = $this->humanizeIdentifier($sectionKey !== '' ? $sectionKey : $sectionCode);
             }
@@ -790,8 +794,8 @@ class AiSitePageComponentGenerationService
                 \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
                 $locale
             );
-            $label = $this->pickExecutionBlueprintBlockLabel($block, $fieldPlan, $blockKey);
-            $description = $this->pickExecutionBlueprintBlockDescription($block, $fieldPlan);
+            $label = $this->pickExecutionBlueprintBlockLabel($block, $fieldPlan, $blockKey, $locale);
+            $description = $this->pickExecutionBlueprintBlockDescription($block, $fieldPlan, $locale);
             $sectionCode = 'content/' . $this->slugForGeneratedSectionCode($pageType) . '-' . $this->slugForGeneratedSectionCode($blockKey);
             $contentRows = $this->buildExecutionBlueprintContentCopyRows($label, $description, $fieldPlan);
             $realtimeContent = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
@@ -857,6 +861,7 @@ class AiSitePageComponentGenerationService
                     'theme_context_snapshot' => $themeContext,
                     'shared_prompt_context' => $sharedPromptContext,
                     'content_locale' => $contentLocale,
+                    'language_contract' => $this->buildStage3TaskLanguageContract($contentLocale),
                 ],
             ];
         }
@@ -925,7 +930,7 @@ class AiSitePageComponentGenerationService
     /**
      * @param list<array<string,mixed>> $fieldPlan
      */
-    private function pickExecutionBlueprintBlockLabel(array $block, array $fieldPlan, string $fallback): string
+    private function pickExecutionBlueprintBlockLabel(array $block, array $fieldPlan, string $fallback, string $locale = ''): string
     {
         foreach ($fieldPlan as $field) {
             if (!\is_array($field)) {
@@ -936,22 +941,33 @@ class AiSitePageComponentGenerationService
                 continue;
             }
             $sample = $this->sanitizeVisibleCopy((string)($field['sample'] ?? $field['copy'] ?? ''));
+            if ($locale !== '') {
+                $sample = $this->filterVisibleCopyForLocale($sample, $locale);
+            }
             if ($sample !== '') {
                 return $this->clipText($sample, 72);
             }
         }
 
-        return $this->clipText($this->sanitizeVisibleCopy($this->pickString(
+        $label = $this->sanitizeVisibleCopy($this->pickString(
             $block['goal'] ?? null,
             $block['content'] ?? null,
             $fallback
-        )), 72);
+        ));
+        if ($locale !== '') {
+            $label = $this->filterVisibleCopyForLocale($label, $locale);
+        }
+        if ($label === '') {
+            $label = $fallback;
+        }
+
+        return $this->clipText($label, 72);
     }
 
     /**
      * @param list<array<string,mixed>> $fieldPlan
      */
-    private function pickExecutionBlueprintBlockDescription(array $block, array $fieldPlan): string
+    private function pickExecutionBlueprintBlockDescription(array $block, array $fieldPlan, string $locale = ''): string
     {
         foreach ($fieldPlan as $field) {
             if (!\is_array($field)) {
@@ -962,12 +978,20 @@ class AiSitePageComponentGenerationService
                 continue;
             }
             $sample = $this->sanitizeVisibleCopy((string)($field['sample'] ?? $field['copy'] ?? ''));
+            if ($locale !== '') {
+                $sample = $this->filterVisibleCopyForLocale($sample, $locale);
+            }
             if ($sample !== '') {
                 return $this->clipText($sample, 180);
             }
         }
 
-        return $this->clipText($this->sanitizeVisibleCopy((string)($block['content'] ?? $block['goal'] ?? '')), 180);
+        $fallback = $this->sanitizeVisibleCopy((string)($block['content'] ?? $block['goal'] ?? ''));
+        if ($locale !== '') {
+            $fallback = $this->filterVisibleCopyForLocale($fallback, $locale);
+        }
+
+        return $this->clipText($fallback, 180);
     }
 
     /**
@@ -1185,7 +1209,7 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $blockTask
      * @param array<string,mixed> $planContext
      */
-    private function resolveVisibleBuildTaskSummary(array $taskScript, array $blockTask, array $planContext): string
+    private function resolveVisibleBuildTaskSummary(array $taskScript, array $blockTask, array $planContext, string $locale = ''): string
     {
         $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
         $sources = [
@@ -1201,6 +1225,9 @@ class AiSitePageComponentGenerationService
                     continue;
                 }
                 $candidate = $this->sanitizeVisibleCopy((string)($row['copy'] ?? $row['sample'] ?? $row['default'] ?? ''));
+                if ($locale !== '') {
+                    $candidate = $this->filterVisibleCopyForLocale($candidate, $locale);
+                }
                 if ($candidate === '' || \in_array($candidate, $samples, true)) {
                     continue;
                 }
@@ -1471,11 +1498,11 @@ class AiSitePageComponentGenerationService
 
         $generator = $renderContext['_inline_image_asset_generator'] ?? null;
         if (!\is_callable($generator)) {
-            $defaultConfig['runtime.section_image_required'] = '0';
-            $renderContext['_visual_contract'] = \array_replace($visualContract, ['required' => 0]);
-            $spec['defaultConfig'] = $defaultConfig;
-            $spec['renderContext'] = $renderContext;
-            return $spec;
+            AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
+                'reason' => 'generator_missing',
+                'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
+            ]);
+            throw new \RuntimeException('REQUIRED_IMAGE_ASSET_UNRESOLVED: required image generator is missing for content block.');
         }
 
         $slotId = $this->firstConfigString($defaultConfig, ['runtime.section_image_slot_id']);
@@ -1490,38 +1517,42 @@ class AiSitePageComponentGenerationService
             }
         }
         if ($slotId === '') {
-            $defaultConfig['runtime.section_image_required'] = '0';
-            $renderContext['_visual_contract'] = \array_replace($visualContract, ['required' => 0]);
-            $spec['defaultConfig'] = $defaultConfig;
-            $spec['renderContext'] = $renderContext;
-            return $spec;
+            AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
+                'reason' => 'slot_id_missing',
+                'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
+            ]);
+            throw new \RuntimeException('REQUIRED_IMAGE_ASSET_UNRESOLVED: required image slot id is missing for content block.');
         }
 
         try {
             $result = $this->generateInlineImageAssetWithRetries($generator, $slotId, $defaultConfig, $renderContext);
         } catch (\Throwable $throwable) {
-            \w_log_warning('[AI Site Inline Image] non-blocking image generation failure for ' . $slotId . ': ' . $this->summarizeThrowable($throwable));
-            $defaultConfig['runtime.section_image_required'] = '0';
-            $renderContext['_visual_contract'] = \array_replace($visualContract, ['required' => 0]);
-            $spec['defaultConfig'] = $defaultConfig;
-            $spec['renderContext'] = $renderContext;
-            return $spec;
+            AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
+                'reason' => 'generation_failed',
+                'slot_id' => $slotId,
+                'error' => $this->summarizeThrowable($throwable),
+            ]);
+            throw new \RuntimeException(
+                'REQUIRED_IMAGE_ASSET_UNRESOLVED: required image generation failed for slot ' . $slotId . ': ' . $this->summarizeThrowable($throwable),
+                0,
+                $throwable
+            );
         }
         if (!\is_array($result)) {
-            $defaultConfig['runtime.section_image_required'] = '0';
-            $renderContext['_visual_contract'] = \array_replace($visualContract, ['required' => 0]);
-            $spec['defaultConfig'] = $defaultConfig;
-            $spec['renderContext'] = $renderContext;
-            return $spec;
+            AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
+                'reason' => 'invalid_generator_payload',
+                'slot_id' => $slotId,
+            ]);
+            throw new \RuntimeException('REQUIRED_IMAGE_ASSET_UNRESOLVED: required image generator returned an invalid payload for slot ' . $slotId . '.');
         }
 
         $url = \trim((string)($result['final_url'] ?? $result['url'] ?? ''));
         if ($url === '') {
-            $defaultConfig['runtime.section_image_required'] = '0';
-            $renderContext['_visual_contract'] = \array_replace($visualContract, ['required' => 0]);
-            $spec['defaultConfig'] = $defaultConfig;
-            $spec['renderContext'] = $renderContext;
-            return $spec;
+            AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
+                'reason' => 'empty_final_url',
+                'slot_id' => $slotId,
+            ]);
+            throw new \RuntimeException('REQUIRED_IMAGE_ASSET_UNRESOLVED: required image generator returned an empty final_url for slot ' . $slotId . '.');
         }
 
         $alt = $this->firstConfigString($defaultConfig, ['visual.image_alt', 'content.heading', 'title', 'runtime.section_name']);
@@ -1647,6 +1678,7 @@ class AiSitePageComponentGenerationService
 
         foreach ([
             'http: 0',
+            'http: 429',
             'http 0',
             'http 429',
             'http 500',
@@ -1663,6 +1695,8 @@ class AiSitePageComponentGenerationService
             'temporarily unavailable',
             'network',
             'curl',
+            '上游负载已饱和',
+            '请稍后再试',
         ] as $marker) {
             if (\str_contains($message, $marker)) {
                 return true;
@@ -2875,9 +2909,19 @@ PROMPT
 
         if ($region === 'content') {
             $this->assertVirtualThemeEditableFieldContract($aiData, $componentCode, $defaultConfig, $renderContext);
-            $hardPolicyReason = $this->detectHardGeneratedSectionHtmlPolicyViolation((string)($aiData['html_content'] ?? ''));
+            $hardPolicyReason = $this->detectHardGeneratedSectionHtmlPolicyViolation(
+                (string)($aiData['html_content'] ?? ''),
+                $this->resolveGeneratedContentLocaleForPolicy($renderContext, $defaultConfig)
+            );
             if ($hardPolicyReason !== null) {
                 throw new \RuntimeException('AI component content hard policy failed: ' . $hardPolicyReason);
+            }
+            $actionContractReason = $this->detectCtaActionContractViolation(
+                (string)($aiData['html_content'] ?? ''),
+                $this->mergeSemanticComponentCode($componentCode, $semanticComponentCode)
+            );
+            if ($actionContractReason !== null) {
+                throw new \RuntimeException('AI component CTA/action contract failed: ' . $actionContractReason);
             }
             // Policy-page CTA choices are content strategy, not a hard completion gate.
         }
@@ -5560,7 +5604,7 @@ PROMPT;
         return $this->detectLowQualityGeneratedSectionHtmlReason($html) !== null;
     }
 
-    private function detectHardGeneratedSectionHtmlPolicyViolation(string $html): ?string
+    private function detectHardGeneratedSectionHtmlPolicyViolation(string $html, string $locale = ''): ?string
     {
         $trimmed = \trim($html);
         if ($trimmed === '') {
@@ -5573,6 +5617,13 @@ PROMPT;
 
         // Inspect only visitor-visible text so valid URL and slot attributes do not false-positive.
         $visibleText = $this->extractVisibleHtmlText($trimmed);
+        $locale = \trim($locale);
+        if ($locale !== '' && $this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($visibleText)) {
+            return 'non-target CJK copy leaked into visitor content for locale '
+                . $locale
+                . ': '
+                . $this->clipText($visibleText, 180);
+        }
         if ($this->containsVisibleRawHtmlFragment($visibleText)) {
             return 'raw HTML fragment leaked into visitor content';
         }
@@ -5703,6 +5754,113 @@ PROMPT;
         return null;
     }
 
+    private function detectCtaActionContractViolation(string $html, string $componentCode = ''): ?string
+    {
+        $html = \trim($html);
+        if ($html === '') {
+            return null;
+        }
+
+        if (\preg_match('/<(?!a\b|button\b)([a-z][a-z0-9:-]*)\b[^>]*\bclass\s*=\s*(["\'])(?=[^"\']*\bpb-c(?:-[a-z0-9]+)*-cta\b)[^"\']*\2/iu', $html) === 1) {
+            return 'primary CTA class must be on an actionable <a> or <button>, not a static element';
+        }
+
+        if (\preg_match_all('/<button\b([^>]*)>(.*?)<\/button>/isu', $html, $buttonMatches, \PREG_SET_ORDER) > 0) {
+            foreach ($buttonMatches as $buttonMatch) {
+                $attrs = (string)($buttonMatch[1] ?? '');
+                $buttonText = $this->sanitizeVisibleCopy(\strip_tags((string)($buttonMatch[2] ?? '')));
+                $isCtaButton = \preg_match('/\bclass\s*=\s*(["\'])(?=[^"\']*\bpb-c(?:-[a-z0-9]+)*-cta\b)[^"\']*\1/iu', $attrs) === 1
+                    || \preg_match('/\bdata-pb-ai-action\s*=/iu', $attrs) === 1;
+                $isActionLookingButton = $this->isActionLookingCtaLabel($buttonText);
+                if (!$isCtaButton) {
+                    if ($isActionLookingButton && \preg_match('/<form\b[\s\S]*' . \preg_quote($buttonMatch[0], '/') . '/iu', $html) !== 1) {
+                        return 'action-looking CTA button must declare data-pb-ai-action or be a submit button inside a form';
+                    }
+                    continue;
+                }
+                if (\preg_match('/\btype\s*=\s*(["\'])(button|submit)\1/iu', $attrs, $typeMatch) !== 1) {
+                    return 'CTA button must declare type=\'button\' or type=\'submit\'';
+                }
+                $buttonType = \mb_strtolower((string)($typeMatch[2] ?? ''));
+                if ($buttonType === 'submit' && \preg_match('/<form\b/iu', $html) === 1) {
+                    continue;
+                }
+                if ($buttonType !== 'button') {
+                    return 'event CTA button must use type=\'button\' outside forms';
+                }
+                if (\preg_match('/\bdata-pb-ai-action\s*=\s*(["\'])[^"\']+\1/iu', $attrs) !== 1) {
+                    return 'event CTA button must declare data-pb-ai-action';
+                }
+            }
+        }
+
+        if (\preg_match_all('/<a\b([^>]*)>/iu', $html, $anchorMatches, \PREG_SET_ORDER) > 0) {
+            foreach ($anchorMatches as $anchorMatch) {
+                $attrs = (string)($anchorMatch[1] ?? '');
+                if (\preg_match('/\bclass\s*=\s*(["\'])(?=[^"\']*\bpb-c(?:-[a-z0-9]+)*-cta\b)[^"\']*\1/iu', $attrs) !== 1) {
+                    continue;
+                }
+                if (\preg_match('/\bhref\s*=\s*(["\'])(.*?)\1/isu', $attrs, $hrefMatch) !== 1) {
+                    return 'anchor CTA must include a real href';
+                }
+                $href = \trim((string)($hrefMatch[2] ?? ''));
+                if ($href === '' || $href === '#' || \str_starts_with(\mb_strtolower($href), 'javascript:')) {
+                    return 'anchor CTA must not use an inert href';
+                }
+            }
+        }
+
+        $componentIdentity = \mb_strtolower($componentCode);
+        $isCtaBlock = (\str_contains($componentIdentity, 'cta') || \preg_match('/(?:final[-_\/ ]*action|next[-_\/ ]*step)/u', $componentIdentity) === 1)
+            && !\str_contains($componentIdentity, 'form')
+            && !\str_contains($componentIdentity, 'faq')
+            && !\str_contains($componentIdentity, 'method');
+        $hasCtaClass = \preg_match('/\bpb-c(?:-[a-z0-9]+)*-cta\b/iu', $html) === 1;
+        if (($isCtaBlock || $hasCtaClass) && !$this->hasActionableCtaControl($html)) {
+            return 'CTA must be a real anchor with href or button with data-pb-ai-action';
+        }
+
+        return null;
+    }
+
+    private function isActionLookingCtaLabel(string $label): bool
+    {
+        $label = \trim((string)\preg_replace('/\s+/u', ' ', $label));
+        if ($label === '') {
+            return false;
+        }
+
+        return \preg_match(
+            '/\b(?:download|apk|app|install|play|start|begin|open|join|claim|submit|send|contact|baixar|instalar|jogar|come(?:c|ç)ar|iniciar|enviar|contatar)\b|下载|安装|开始|立即|聯絡|联系/iu',
+            $label
+        ) === 1;
+    }
+
+    private function hasActionableCtaControl(string $html): bool
+    {
+        if (\preg_match_all('/<a\b([^>]*)>/iu', $html, $anchorMatches, \PREG_SET_ORDER) > 0) {
+            foreach ($anchorMatches as $anchorMatch) {
+                $attrs = (string)($anchorMatch[1] ?? '');
+                if (\preg_match('/\bclass\s*=\s*(["\'])(?=[^"\']*\bpb-c(?:-[a-z0-9]+)*-cta\b)[^"\']*\1/iu', $attrs) !== 1) {
+                    continue;
+                }
+                if (\preg_match('/\bhref\s*=\s*(["\'])(.*?)\1/isu', $attrs, $hrefMatch) !== 1) {
+                    continue;
+                }
+                $href = \trim((string)($hrefMatch[2] ?? ''));
+                if ($href !== '' && !\str_starts_with($href, '#') && !\str_starts_with(\mb_strtolower($href), 'javascript:')) {
+                    return true;
+                }
+            }
+        }
+
+        if (\preg_match('/<button\b(?=[^>]*\btype\s*=\s*(["\'])button\1)(?=[^>]*\bdata-pb-ai-action\s*=\s*(["\'])[^"\']+\2)(?=[^>]*\bclass\s*=\s*(["\'])(?=[^"\']*\bpb-c(?:-[a-z0-9]+)*-cta\b)[^"\']*\3)[^>]*>/isu', $html) === 1) {
+            return true;
+        }
+
+        return \preg_match('/<form\b.*?<button\b(?=[^>]*\btype\s*=\s*(["\'])submit\1)(?=[^>]*\bclass\s*=\s*(["\'])(?=[^"\']*\bpb-c(?:-[a-z0-9]+)*-cta\b)[^"\']*\2)[^>]*>/isu', $html) === 1;
+    }
+
     private function detectBlockRoleFidelityViolation(string $componentCode, string $html, string $visibleText, string $styleCss = ''): ?string
     {
         $identity = \mb_strtolower($componentCode . ' ' . $html);
@@ -5751,8 +5909,8 @@ PROMPT;
             if ($contactLabelCount >= 2 || $cardCount >= 3) {
                 return 'CTA block role fidelity failed: CTA must be a focused next-step band, not repeated contact-method cards';
             }
-            if (\preg_match('/<(?:a|button)\b|class=(["\'])[^"\']*\b(?:pb-c(?:-[a-z0-9]+)*-cta|pb-c(?:-[a-z0-9]+)*-action)\b/iu', $html) !== 1) {
-                return 'CTA block role fidelity failed: expected one visible primary action';
+            if (!$this->hasActionableCtaControl($html)) {
+                return 'CTA block role fidelity failed: expected one visible primary action control';
             }
         }
         if (!\str_contains($componentIdentity, 'faq')) {
@@ -5838,17 +5996,8 @@ PROMPT;
         if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
             return 'internal task identifiers leaked';
         }
-        return null;
 
         $componentCode = $this->normalizeOptionalComponentCode($componentCode);
-        $trimmed = \trim($html);
-        if ($trimmed === '') {
-            return 'empty html';
-        }
-        if (\preg_match('/\bai-site-fallback\b|<svg\s+viewBox=["\']0 0 520 360["\']/iu', $trimmed) === 1) {
-            return 'plan-derived fallback visual leaked into generated content';
-        }
-        $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
         $isNavigationComponent = \preg_match('/(?:nav|menu|tabs?|filter|selector|series)/i', $componentCode . ' ' . $trimmed) === 1
             || \preg_match('/<(?:nav|a|button)\b/iu', $trimmed) === 1;
         $minimumVisibleTextLength = $isNavigationComponent ? 0 : 18;
@@ -5866,6 +6015,10 @@ PROMPT;
         $roleFidelityReason = $this->detectBlockRoleFidelityViolation($componentCode, $trimmed, $visibleText, $styleCss);
         if ($roleFidelityReason !== null) {
             return $roleFidelityReason;
+        }
+        $ctaActionReason = $this->detectCtaActionContractViolation($trimmed, $componentCode);
+        if ($ctaActionReason !== null) {
+            return $ctaActionReason;
         }
         $readabilityReason = $this->detectLabelValueReadabilityViolation($trimmed, $visibleText, $componentCode);
         if ($readabilityReason !== null) {
@@ -7860,6 +8013,17 @@ PROMPT;
     {
         $blogContext = $this->buildBlogRenderContext($scope, $pageType);
         $styleSettings = [];
+        $contentLocale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        if ($contentLocale === '') {
+            $contentLocale = \trim((string)($defaultConfig['runtime.content_locale'] ?? ''));
+        }
+        $buildPlanTask = $this->decodeRuntimeBuildPlanTask($defaultConfig);
+        $blockContractRaw = $defaultConfig['runtime.block_contract_json'] ?? null;
+        $blockContract = [];
+        if (\is_string($blockContractRaw) && \trim($blockContractRaw) !== '') {
+            $decodedBlockContract = \json_decode($blockContractRaw, true);
+            $blockContract = \is_array($decodedBlockContract) ? $decodedBlockContract : [];
+        }
 
         $context = \array_merge([
             'page' => $this->buildPreviewPageStub($pageType, $websiteProfile, $scope, $blogContext),
@@ -7867,7 +8031,10 @@ PROMPT;
             'style' => $styleSettings,
             'component_config' => $defaultConfig,
             'is_preview' => true,
-            '_content_locale' => $this->resolvePrimaryLocale($websiteProfile, $scope),
+            'content_locale' => $contentLocale,
+            'locale' => $contentLocale,
+            'website_locale' => $contentLocale,
+            '_content_locale' => $contentLocale,
             '_content_locale_explicit' => $this->hasResolvedContentLocale($websiteProfile, $scope),
             '_website_profile' => $websiteProfile,
             '_scope_identity' => [
@@ -7882,7 +8049,9 @@ PROMPT;
             '_visual_contract' => $this->decodeRuntimeVisualContract($defaultConfig),
             '_required_editable_fields' => (string)($defaultConfig['runtime.required_editable_fields'] ?? ''),
             '_scope' => $scope,
-            '_build_plan_task' => $this->decodeRuntimeBuildPlanTask($defaultConfig),
+            'build_plan_task' => $buildPlanTask,
+            'block_contract' => $blockContract,
+            '_build_plan_task' => $buildPlanTask,
             'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => $this->extractVerifiedAssetsForRenderContext($scope, $pageType, $defaultConfig),
         ], $blogContext);
@@ -7939,6 +8108,68 @@ PROMPT;
         }
 
         return [];
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @return array<string,mixed>
+     */
+    private function buildRuntimeBuildPlanTaskSnapshot(array $buildPlanTask): array
+    {
+        $snapshot = [];
+        foreach ([
+            'task_key',
+            'task_type',
+            'page_type',
+            'region',
+            'section_code',
+            'section_key',
+            'block_key',
+            'block_type',
+            'page_flow_role',
+            'visual_signature',
+            'image_intent',
+            'runtime_context',
+            'plan_context',
+            'task_script',
+            'block_task',
+            'implementation_contract',
+        ] as $key) {
+            if (\array_key_exists($key, $buildPlanTask)) {
+                $snapshot[$key] = $buildPlanTask[$key];
+            }
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function attachRuntimeTaskContextDefaults(array &$defaultConfig, array $buildPlanTask, string $locale): void
+    {
+        $runtimeContext = \is_array($buildPlanTask['runtime_context'] ?? null) ? $buildPlanTask['runtime_context'] : [];
+        $languageContract = \is_array($runtimeContext['language_contract'] ?? null)
+            ? $runtimeContext['language_contract']
+            : $this->buildStage3TaskLanguageContract($locale);
+        $defaultConfig['runtime.language_contract_json'] = (string)\json_encode(
+            $languageContract,
+            \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        $blockContract = $this->resolveBlockContract($buildPlanTask);
+        if ($blockContract !== []) {
+            $defaultConfig['runtime.block_contract_json'] = (string)\json_encode(
+                $blockContract,
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE
+            );
+        }
+        if ($buildPlanTask !== []) {
+            $defaultConfig['runtime.build_plan_task_json'] = (string)\json_encode(
+                $this->buildRuntimeBuildPlanTaskSnapshot($buildPlanTask),
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE
+            );
+        }
     }
 
     /**
@@ -9126,6 +9357,7 @@ PROMPT;
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
         $stage3LocaleContract = $this->buildStage3LocaleExecutionPromptAddon($websiteProfile, $scope);
+        $blockLanguageContract = $this->buildCurrentBlockLanguageContractPromptAddon($locale, $buildPlanTask);
         $buildPlanPromptAddon = $this->buildBuildPlanTaskPromptAddon($buildPlanTask, 'section', $scope);
         $themeContract = $this->buildThemeContractPromptAddon($scope);
         $designDirectionPrompt = $this->getDesignDirectionService()->buildStageThreePromptAddon($scope);
@@ -9148,10 +9380,11 @@ PROMPT;
         $sectionVisualContractPrompt = $this->buildSectionVisualContractPromptAddon($sectionVisualContract, $sectionThemePalette);
         $blockVisualSignaturePrompt = $this->buildBlockVisualSignaturePromptAddon($buildPlanTask, $section);
         $siblingDiversityPrompt = $this->buildSiblingBlockDiversityPromptAddon($pageType, $buildPlanTask, $scope);
+        $componentPrefix = $this->normalizeComponentCssPrefix((string)($section['code'] ?? ''));
         $currentBlockRoleContract = $this->buildRoleSpecificRecoveryContractFromExplicitPlan(
             $buildPlanTask,
             $section,
-            $this->normalizeComponentCssPrefix((string)($section['code'] ?? '')),
+            $componentPrefix,
             $strictHeroCover
         );
         $skillContract = $this->buildWelineSkillContractPromptAddon();
@@ -9174,11 +9407,17 @@ PROMPT;
         $defaultConfigForPrompt = $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
         $ctaActionContract = $this->buildCtaActionPromptAddon($defaultConfigForPrompt, $scope, $locale);
         $editableFieldContract = $this->buildVirtualThemeEditableFieldPromptContract($defaultConfigForPrompt, $buildPlanTask);
+        $virtualThemeFrameworkContract = $this->buildVirtualThemeAdaptationFrameworkPromptAddon(
+            $componentPrefix,
+            $sectionTemplate,
+            $strictHeroCover
+        );
 
         $sectionPrompt = $this->buildPromptRolePriorityContract()
             . "【系统提示词】\n"
             . $langRule
             . $this->clipText($stage3LocaleContract, 520) . "\n"
+            . $blockLanguageContract
             . "【通用提示词】\n"
             . "Stage-3 execution order: user prompt intent and latest explicit refinement are primary for content/design decisions; frozen_task_context + confirmed_theme are the concrete confirmed plan slice for this block; copy_policy is the visible-output contract against invalid structure, prompt placeholders, and internal metadata leakage; current_asset_context, quality_gate_contract, skill_guidance, and design_quality are guidance unless they protect that structure contract.\n"
             . "You are generating exactly one PageBuilder content component for the current task.\n"
@@ -9196,6 +9435,7 @@ PROMPT;
             . $templateScaffoldGuard
             . $editableFieldContract
             . ($ctaActionContract !== '' ? $ctaActionContract : '')
+            . $virtualThemeFrameworkContract
             . "Style reference: {$styleCode} ({$styleDirection})\n"
             . "【系统提示词】CTX_CURRENT_ASSET (highest priority for image URL and slot binding; paste exact strings, never reconstruct paths):\n" . $sectionVisualContractPrompt
             . "【系统提示词】CTX_BASE_OUTPUT_CONTRACT:\n" . $this->buildSectionOutputRulesPromptAddon()
@@ -9232,7 +9472,13 @@ PROMPT;
      */
     private function buildCtaActionPromptAddon(array $defaultConfig, array $scope, string $locale): string
     {
-        $label = $this->firstConfigString($defaultConfig, ['cta.text', 'content.cta_text', 'button_text', 'button.label']);
+        $label = $this->filterVisibleCopyForLocale(
+            $this->firstConfigString($defaultConfig, ['cta.text', 'content.cta_text', 'button_text', 'button.label']),
+            $locale
+        );
+        if ($label === '') {
+            $label = $this->resolvePrimaryCtaText($scope, $locale);
+        }
         $url = $this->firstConfigString($defaultConfig, ['cta.url', 'content.cta_url', 'button_url', 'button.href']);
         $normalizedUrl = $url !== '' ? $this->normalizeHrefAgainstRouteContract($url, $scope, $locale) : '';
         if ($normalizedUrl === '' && $url !== '' && !$this->shouldValidateGeneratedHrefAgainstRouteContract($url)) {
@@ -9247,6 +9493,27 @@ PROMPT;
             . "- If this block renders a primary CTA, it must be an actionable control, not an inert decorative div. When primary_cta_target is a real route/URL, declare `cta.text` and `cta.url`, bind them with `\$ctaText = \$getConfig('cta.text', '<primary_cta_label>');` and `\$ctaUrl = \$getConfig('cta.url', '<primary_cta_target>');`, then render an `<a class='pb-c-cta'>` whose href safely echoes `\$ctaUrl` and whose label safely echoes `\$ctaText`.\n"
             . "- If no real route/URL is available but the block identity still requires an action, declare only `cta.text`, bind it with `\$ctaText = \$getConfig('cta.text', '<primary_cta_label>');`, render a `<button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'>` whose label safely echoes `\$ctaText`, and provide scoped js_content that binds click on `.pb-c-cta[data-pb-ai-action]`, toggles a local active class, and dispatches a bubbled `CustomEvent('pb:cta', {detail:{action,target,label}})` from component. Do not add cta.url for button-only actions. Do not use window, document, fetch, inline onclick, or global selectors.\n"
             . "- Never output `href='#'`, hash-only anchors, `/download`, `#download`, `/faq`, `/games`, query strings, or external domains. Use only primary_cta_target or a button event with data-pb-ai-action.\n";
+    }
+
+    private function buildVirtualThemeAdaptationFrameworkPromptAddon(
+        string $componentPrefix,
+        string $sectionTemplate = '',
+        bool $strictHeroCover = false
+    ): string {
+        $prefix = $componentPrefix !== '' ? $componentPrefix : 'pb-c';
+        $heroRule = $strictHeroCover || $sectionTemplate === 'hero'
+            ? "- Hero/banner variant: the framework still owns viewport safety; use the real media role as an editable <img> cover layer inside {$prefix}-media, keep overlay/scrim below copy, and never position text outside the root.\n"
+            : "- Non-hero variant: keep the section dense and editorial; do not create oversized full-viewport hero slabs or detached centered CTA islands.\n";
+
+        return "CTX_VIRTUAL_THEME_ADAPTATION_FRAMEWORK (framework scaffold; planning context, never visitor copy):\n"
+            . "- PageBuilder owns the outer virtual-theme wrapper and responsive containment. The AI owns only the information architecture inside that wrapper: copy, media, proof devices, forms, FAQ rows, and actions for this block.\n"
+            . "- Required stable shell roles: `<section class='{$prefix}-root'>`, one `<div class='{$prefix}-inner'>`, a copy/text role (`{$prefix}-copy` or {$prefix}-text-panel), title (`{$prefix}-title`), body (`{$prefix}-text`), optional media/support roles, and an action wrapper (`{$prefix}-action`) when a CTA exists. These role names are implementation scaffolding, not visible text.\n"
+            . "- Base CSS framework: {$prefix}-root uses position:relative; overflow:hidden; box-sizing:border-box; min-width:0. {$prefix}-inner uses width:100%; max-width around 1180px; margin:0 auto; display:grid/flex; gap; min-width:0. All media/cards/forms/text columns use min-width:0; max-width:100%; box-sizing:border-box.\n"
+            . "- Responsive framework: css_extra defines desktop/base selectors only; css_responsive contains complete `@media (max-width: 768px)` and `@media (max-width: 420px)` blocks. At <=768px, split layouts stack or simplify without horizontal overflow. At <=420px, use one readable column, reduce padding, and keep every text/media/form/card within max-width:100%.\n"
+            . "- CTA framework: the actual CTA must remain a compact recognizable `<a class='{$prefix}-cta'>` with a real href or `<button type='button' class='{$prefix}-cta' data-pb-ai-action='primary_cta'>`. Full-width behavior belongs on wrappers/forms/mobile containers first; never make the desktop/default CTA a stretched page-width bar or an inert div/span.\n"
+            . "- Event framework: for event-driven CTA buttons, include data-pb-ai-action and component-scoped js_content from CTX_CTA_ACTION_CONTRACT when custom interaction is needed; the click event name is `pb:cta`. The virtual-theme framework also scopes action events to this component, so do not use inline onclick, window/document selectors, fetch, global state, or invented routes.\n"
+            . "- Layout safety bans: no fixed pixel columns that cannot shrink, no negative horizontal offsets, no translateX side panels, no absolutely positioned content outside {$prefix}-root, no `100vw` inner content inside normal sections, and no cards/sections nested inside links/buttons.\n"
+            . $heroRule;
     }
 
     /**
@@ -9410,6 +9677,123 @@ PROMPT;
         $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
 
         return $this->resolvePlannedImageIntent($buildPlanTask, $blockTask, $stylePlan, $planContext, $section);
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @return array<string,mixed>
+     */
+    private function resolveBlockContract(array $buildPlanTask): array
+    {
+        $runtimeContext = \is_array($buildPlanTask['runtime_context'] ?? null) ? $buildPlanTask['runtime_context'] : [];
+        $runtimeBlockContract = \is_array($runtimeContext['block_contract'] ?? null) ? $runtimeContext['block_contract'] : [];
+        foreach ([
+            $runtimeBlockContract['contract_v2'] ?? null,
+            $buildPlanTask['block_contract'] ?? null,
+            $buildPlanTask['output_contract']['block_contract'] ?? null,
+            $runtimeBlockContract,
+        ] as $candidate) {
+            if (!\is_array($candidate) || $candidate === []) {
+                continue;
+            }
+            $compact = [];
+            foreach ([
+                'version',
+                'page_flow_role',
+                'block_goal',
+                'morphology_id',
+            ] as $key) {
+                $text = \trim((string)($candidate[$key] ?? ''));
+                if ($text !== '') {
+                    $compact[$key] = $text;
+                }
+            }
+            foreach ([
+                'composition_pattern',
+                'content_hierarchy',
+                'media_strategy',
+                'responsive_contract',
+                'diversity_constraints',
+                'acceptance_checks',
+            ] as $key) {
+                if (\is_array($candidate[$key] ?? null) && $candidate[$key] !== []) {
+                    $compact[$key] = $candidate[$key];
+                }
+            }
+            if ($compact !== []) {
+                return $compact;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function buildBlockContractPrompt(array $defaultConfig, array $renderContext, array $buildPlanTask): string
+    {
+        $contract = $this->resolveBlockContract($buildPlanTask);
+        $runtimeContext = \is_array($buildPlanTask['runtime_context'] ?? null) ? $buildPlanTask['runtime_context'] : [];
+        $contentLocale = \trim((string)(
+            $runtimeContext['content_locale']
+            ?? $renderContext['content_locale']
+            ?? $renderContext['_content_locale']
+            ?? $defaultConfig['runtime.content_locale']
+            ?? ''
+        ));
+        $languageContract = $this->resolveStage3TaskLanguageContract($runtimeContext, $contentLocale);
+        $media = \is_array($contract['media_strategy'] ?? null) ? $contract['media_strategy'] : [];
+        $slotId = \trim((string)($media['asset_slot_id'] ?? ''));
+        if ($slotId === '') {
+            $slotId = $this->firstConfigString($defaultConfig, ['runtime.section_image_slot_id', 'visual.image_slot_id']);
+        }
+        if ($slotId === '' && \is_array($renderContext['_visual_contract'] ?? null)) {
+            $slotId = \trim((string)($renderContext['_visual_contract']['slot_id'] ?? ''));
+        }
+        if ($slotId !== '') {
+            $contract['required_image_slot_id'] = $slotId;
+        }
+        $diversity = \is_array($contract['diversity_constraints'] ?? null) ? $contract['diversity_constraints'] : [];
+        if (!\is_array($diversity['forbidden_repetition'] ?? null) || $diversity['forbidden_repetition'] === []) {
+            $diversity['forbidden_repetition'] = [
+                'same title+paragraph+button skeleton',
+                'same media placement and background layer as adjacent block',
+            ];
+        }
+        if (!\is_array($diversity['must_differ_from_previous_block'] ?? null) || $diversity['must_differ_from_previous_block'] === []) {
+            $diversity['must_differ_from_previous_block'] = ['morphology_id', 'media_placement', 'background_layer', 'support_device'];
+        }
+        $diversity['must_not_repeat_adjacent_morphology'] = true;
+        $contract['diversity_constraints'] = $diversity;
+        if ($contentLocale !== '') {
+            $contract['content_locale'] = $contentLocale;
+            $contract['language_contract'] = $languageContract;
+        }
+        $componentPrefix = $this->normalizeComponentCssPrefix((string)(
+            $buildPlanTask['section_code']
+            ?? $buildPlanTask['component_code']
+            ?? $buildPlanTask['task_key']
+            ?? ''
+        ));
+        $template = \trim((string)($contract['section_template'] ?? $buildPlanTask['section_template'] ?? ''));
+        $mediaUsage = \trim((string)($contract['media_strategy']['usage'] ?? ''));
+
+        return "5d CTX_CURRENT_BLOCK_CONTRACT (compact morphology contract; binding for layout/content/media): "
+            . $this->jsonEncodeForPrompt($contract, 1800) . "\n"
+            . "- block_contract execution rule: implement morphology_id, composition_pattern, content_hierarchy, media_strategy, responsive_contract, diversity_constraints, and acceptance_checks before generic skeletons. Do not rewrite the plan goal or replace a required real image with CSS-only output.\n"
+            . "- morphology_id is binding: the HTML structure and CSS rhythm must visibly express this morphology. A different morphology_id must produce a different composition, not the same title/paragraph/card/CTA shell with new colors.\n"
+            . "- required_image_slot_id/media.asset_slot_id rule: if present, the generated editable <img> must bind that exact slot. Do not invent URLs or move the required image into CSS.\n"
+            . "- adjacent block guard: previous_morphology_id and must_differ_from_previous_block are hard constraints. Change media placement, support/proof device, background layer, spatial rhythm, and card density from adjacent blocks unless the current contract explicitly says otherwise.\n"
+            . "- forbidden repetition rule: avoid the forbidden_repetition patterns in diversity_constraints and never render a generic title+paragraph+CTA-only block.\n"
+            . ($contentLocale !== '' ? "- block language rule: all visible text derived from this block contract must be rewritten into source_of_truth_locale={$contentLocale}; do not paste plan text in another language.\n" : '')
+            . "5e " . $this->buildVirtualThemeAdaptationFrameworkPromptAddon(
+                $componentPrefix,
+                $template,
+                \str_contains($mediaUsage, 'cover')
+            );
     }
 
     /**
@@ -9593,7 +9977,7 @@ JSON;
             . "13. Hero/media readability rule: if text sits over media, the html_content skeleton must include a scrim/overlay div and a text-panel div using the exact component prefix provided below. css_extra must include a matching scoped scrim/overlay selector with position:absolute, inset:0, background from the confirmed palette, and either opacity:.35-.58 or a rgba/transparent gradient; the text panel must have its own readable background, padding, border-radius, and z-index above media. If you cannot include those classes correctly, do not place text over media; use a normal side-by-side layout instead.\n"
             . "13a. Framework wrapper rhythm rule: content html_content owns a complete `.pb-c-root` shell. css_extra should include `#componentId{padding:0;}` so the framework mount section does not add a second vertical rhythm; the `.pb-c-root` selector owns the block background and compact spacing. Non-hero root vertical padding should normally stay in the 44-64px range unless there is a large verified media layer.\n"
             . "13b. Strict hero full-bleed rule: only when CTX_CURRENT_ASSET.strict_hero_cover=1, css_extra must include `#componentId{padding:0;}` and the root selector must use width:100vw or min-width:100vw plus margin:0 calc(50% - 50vw); do not set a pixel max-width on the root. Constrain only the inner/text panel. A centered 1200px banner or any top/bottom theme-color gutter around the image is invalid for strict_hero_cover=1 unless the latest customer request explicitly limits banner width. Page-opening/banner blocks with strict_hero_cover=0 must use page-specific composition instead of inheriting this full-bleed formula.\n"
-            . "14. Content rule: visible copy must be target-locale visitor copy derived from this block's page_goal/block_goal/content_plan and CTX_BLOCK_QA_CONTRACT.must_include_facts. Do not render why_this_block, page_goal, block_goal, data_contract, visual_contract, runtime_context, selected_skill_codes, template fragments, raw HTML tag source, or CSS source. Visible copy must not contain double quote characters because they often break JSON strings. Treat the frozen plan as intent: rewrite it into natural website copy, never paste the blueprint sentence itself. Any visible copy/image/CTA that appears in html_content must have a matching extra_fields line and must be rendered from the corresponding php_variables `\$getConfig(...)` value, not as hardcoded text. Self-check html_content by deleting every PHP echo fragment and stripping HTML tags; if visible words or numbers remain, move them into editable fields before returning.\n"
+            . "14. Content rule: visible copy must be target-locale visitor copy derived from this block's page_goal/block_goal/content_plan and CTX_BLOCK_QA_CONTRACT.must_include_facts. Do not render why_this_block, page_goal, block_goal, data_contract, visual_contract, runtime_context, selected_skill_codes, template fragments, raw HTML tag source, or CSS source. Visible copy must not contain double quote characters because they often break JSON strings. Treat the frozen plan as intent: rewrite it into natural website copy, never paste the blueprint sentence itself. BAD: using a CTX_BLOCK_GOAL sentence as the content.description default. GOOD: synthesize a concise content_locale sentence from that goal and put the rewritten sentence in extra_fields/php_variables. Any visible copy/image/CTA that appears in html_content must have a matching extra_fields line and must be rendered from the corresponding php_variables `\$getConfig(...)` value, not as hardcoded text. Self-check html_content by deleting every PHP echo fragment and stripping HTML tags; if visible words or numbers remain, move them into editable fields before returning.\n"
             . "14-content-contract. Do not self-censor normal marketing/support/reward wording solely because it is not an exact source fact. Blocking validation is limited to required JSON/HTML structure plus prompt/blueprint placeholder or visible internal metadata leakage.\n"
             . "14-policy. Policy/compliance page action rule: privacy, terms, refund, shipping, and cookie policy blocks must not inherit the site's primary download/install CTA unless the current block explicitly says it is a conversion CTA. Use policy-info, review, rights, safety, or support-oriented action copy instead.\n"
             . "14a. CSS brace rule: css_extra must be well-formed scoped selector blocks like `#componentId .pb-c-name{property:value;}` plus optional component-named `@keyframes pb-c-name{...}` blocks for motion. @media blocks belong in css_responsive ONLY and must be one complete `@media (...) { selector{...} }` body each. No raw declarations outside selector/keyframes blocks, no `}}` glued without a `{` between, no comma selectors that span unrelated regions. Count opening and closing braces before returning; counts must match exactly.\n"
@@ -9676,12 +10060,15 @@ JSON;
         $siteContext = \is_array($runtimeContext['site_context'] ?? null) ? $runtimeContext['site_context'] : [];
         $assetContext = \is_array($runtimeContext['asset_context'] ?? null) ? $runtimeContext['asset_context'] : [];
         $contentLocale = \trim((string)($runtimeContext['content_locale'] ?? $this->resolveScopePrimaryLocale($scope)));
+        $languageContract = $this->resolveStage3TaskLanguageContract($runtimeContext, $contentLocale);
 
         return "Shared build-plan task context for {$contextLabel}:\n"
             . "- task_key: " . (string)($buildPlanTask['task_key'] ?? '') . "\n"
             . "- block_goal: " . (string)($planContext['block_goal'] ?? $blockTask['task_goal'] ?? '') . "\n"
             . "- story_goal: " . (string)($taskScript['story_goal'] ?? '') . "\n"
             . "- content_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . "\n"
+            . "- language_contract: " . $this->jsonEncodeForPrompt($languageContract, 700) . "\n"
+            . "- shared language rule: every visitor-facing shared header/footer label, CTA, logo alt/title/aria text, footer helper sentence, and link label must be rewritten into content_locale before output. Short CTA labels are not exempt; `下载Teenipiya APK` is invalid for pt_BR and must become `Baixar APK` or another natural Portuguese label.\n"
             . "- site_context: " . $this->jsonEncodeForPrompt($siteContext, 1200) . "\n"
             . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 1200) . "\n"
             . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 1000) . "\n"
@@ -9713,7 +10100,7 @@ JSON;
             . "- HTML fragment discipline: every `<` in html_content must begin a valid tag name or be escaped as text, all attribute quotes must close, and all non-void tags must be balanced before returning JSON.\n"
             . "- HTML scope discipline: html_content is already nested inside the framework root. Never output `id='componentId'`, `id=\"componentId\"`, or any inner wrapper id that pretends to be the framework root. Use class-only wrappers with the component prefix.\n"
             . "- HTML attribute discipline: never output malformed attributes such as `<span='...'>`, `<div='...'>`, `<a ... class='x'href='...'>`, or `<span='class-name'>`. Every attribute needs a name, equals sign, quoted value, and whitespace before the next attribute.\n"
-            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. These fields own the component's visual quality and responsive behavior; the renderer will not inject compatibility CSS/JS or beautify weak output after generation.\n"
+            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. These fields own the component's visual quality and responsive behavior inside the virtual-theme scaffold; the renderer only provides containment and the scoped action-event bridge, not block-specific beautification.\n"
             . "- Responsive layout: ship a real responsive solution. Base css_extra defines desktop, tablet (<=900px) may simplify split layouts but must keep proof/support groups visually dense, mobile (<=420px) is single column. css_responsive MUST contain at least one `@media (max-width: 768px)` and one `@media (max-width: 420px)` block. Inside each, set children to width:100%; max-width:100%; min-width:0; box-sizing:border-box where needed and rebalance typography/spacing. SAFE_TEXT_ROLE_OUTLINE responsive behavior must follow the selected visual_signature rhythm instead of applying the same three-proof-card transition to every block.\n"
             . "- Visual depth: scoped CSS should use confirmed theme palette tokens with layered backgrounds (linear-gradient/radial-gradient permitted), pseudo-elements for ornament, hover/focus states, box-shadow elevation, border-radius, padding/gap rhythm, type scale, transition, and safe CSS motion when the selected style direction calls for it. For game/APK launch styles, use CSS-only CTA shine/pulse/halo, hover lift, active press, slow review rail movement, or card/chip drift where it fits the block. Every selector, @keyframes, and @media block must have balanced { } braces.\n"
             . "- Image-text pairing: when the style direction asks for a game/APK visual atmosphere, avoid text-only body sections. Pair copy with a verified image, CSS phone/app frame, card table, chip stack, jackpot meter, avatar/review rail, rulebook surface, or support-message visual unless the block is dense legal text.\n"
@@ -9837,12 +10224,14 @@ JSON;
         $contentLocale = $this->resolvePrimaryLocale($websiteProfile, $scope);
         $defaultLocale = \trim((string)($scope['default_locale'] ?? $websiteProfile['default_locale'] ?? ''));
         $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['planning_locale'] ?? $websiteProfile['plan_locale'] ?? ''));
+        $metadataLeakExample = "- Metadata rewrite example (content_locale=pt_BR): BAD visible body `Teenipiya \u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}\u{3001}\u{4FE1}\u{4EFB}\u{4FE1}\u{606F}\u{548C}\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}`. GOOD editable default `Descubra o Teenipiya com regras claras, acesso seguro ao APK e uma entrada rapida para jogar.` The BAD text may appear in CTX_BLOCK_GOAL, block_goal, story_goal, or plan_context; use it only as intent, never as website copy.\n";
 
         return "Visible copy governance:\n"
             . "- content_locale/default_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . ($defaultLocale !== '' && $defaultLocale !== $contentLocale ? " (default_locale {$defaultLocale})" : '') . "\n"
             . "- plan_locale: " . ($planLocale !== '' ? $planLocale : 'not provided') . " is only an internal planning language hint, never a visitor-facing language source.\n"
             . "- Visitor-visible copy must use content_locale/default_locale. Do not use plan_locale unless it is the same locale.\n"
             . "- Visitor-facing attributes are copy too: alt, title, aria-label, placeholder, value, button labels, nav labels, footer labels, and form labels must be rewritten into content_locale/default_locale before output.\n"
+            . "- Short labels are still language leaks: for a non-CJK content_locale, do not output even 1-2 Chinese/Japanese/Korean characters in CTA text, nav text, badges, button labels, logo alt/title, or form labels.\n"
             . "- Planned content is not exempt: if task_script, block_task.content_plan, field samples, nav labels, CTA labels, SEO snippets, or stage-1 plan text use another language, translate/rewrite them into content_locale/default_locale before rendering html_content/footer/header text.\n"
             . "- Brand/profile normalization: never output schema/object names such as websiteProfile, Website Profile, site profile, profile, or raw target_domain as a brand/site title. If the stored site_title/SEO/logo text is in another language than content_locale/default_locale, rewrite it into a concise visitor-facing brand label in the target locale using the business category and market from the brief.\n"
             . "- For non-CJK content locales, Chinese/Japanese/Korean brand names, meta snippets, logo text, badges, and alt text are internal source material only unless the user explicitly requested that script as visible copy. Rewrite them into the target locale before output.\n"
@@ -9851,6 +10240,7 @@ JSON;
             . "- Rewrite planning/observation sentences into direct marketing copy before rendering. Do not visibly output phrases like \"Visitors see...\", \"Visitors can review...\", \"访客看到...\", or \"访客可以...\".\n"
             . "- Never output blueprint meta-copy: page/current-section highlight headings, planning observations, design instructions, task scripts, or sentences that tell the AI to display hierarchy, trust proof, primary actions, flow, risks, or content grouping. Those are instructions, not website copy.\n"
             . "- Contract-field leak ban: never render content_contract, design_contract, implementation_contract, data_contract, visual_contract, page_goal, block_goal, why_this_block, planning_reason, selected_skill_codes, skill_snapshots, build_blueprint, build_tasks, or qa_report_contract as visible copy. These are build-time context only.\n"
+            . $metadataLeakExample
             . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
             . "- Industry relevance rule: do not reuse app-download, game, casino, reward, APK, install, or generic support-site copy unless the approved brief explicitly asks for that industry. Keep vertical language tied to the confirmed brief instead of cross-contaminating other site types.\n"
             . "- Renderer will not repair visitor copy after generation; the JSON you return must already contain final customer-specific visible copy.\n"
@@ -9951,6 +10341,56 @@ JSON;
             . "- Proofread the final visible copy in source_of_truth_locale before returning: fix misspelled words, broken word fragments, and missing spaces between sentence text and CTA/link labels. Do not concatenate two labels or a paragraph plus CTA without whitespace or punctuation.\n"
             . "- Numeric label spacing: write metric labels with a visible space or line break between numbers and words, e.g. `4.8 звезды`, never `4.8ЗВЕЗДЫ`.\n"
             . "- Final self-check before returning JSON: if any visitor-visible sentence is not in source_of_truth_locale, rewrite it now and then return.\n";
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function buildStage3TaskLanguageContract(string $contentLocale): array
+    {
+        return [
+            'source_of_truth_locale' => $contentLocale,
+            'visible_copy_rule' => 'All visitor-visible headings, body copy, CTA labels, nav/footer text, form labels, alt/title/aria/placeholder text must be written in source_of_truth_locale.',
+            'plan_text_rule' => 'The confirmed plan and task samples are intent only; rewrite or translate them before visible output.',
+            'proper_noun_rule' => 'Brand names, domain names, product names, URLs, acronyms, model names, and user-provided proper nouns may keep original spelling when natural.',
+            'self_check' => 'Before returning JSON, scan every visible string and rewrite any sentence that is not in source_of_truth_locale.',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $runtimeContext
+     * @return array<string,mixed>
+     */
+    private function resolveStage3TaskLanguageContract(array $runtimeContext, string $contentLocale): array
+    {
+        $contract = \is_array($runtimeContext['language_contract'] ?? null)
+            ? $runtimeContext['language_contract']
+            : [];
+        if ($contract === []) {
+            return $this->buildStage3TaskLanguageContract($contentLocale);
+        }
+        if (\trim((string)($contract['source_of_truth_locale'] ?? '')) === '' && $contentLocale !== '') {
+            $contract['source_of_truth_locale'] = $contentLocale;
+        }
+
+        return $contract;
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function buildCurrentBlockLanguageContractPromptAddon(string $contentLocale, array $buildPlanTask): string
+    {
+        if ($contentLocale === '') {
+            return '';
+        }
+        $runtimeContext = \is_array($buildPlanTask['runtime_context'] ?? null) ? $buildPlanTask['runtime_context'] : [];
+        $contract = $this->resolveStage3TaskLanguageContract($runtimeContext, $contentLocale);
+
+        return "CTX_WEBSITE_LANGUAGE (hard block-local language contract): "
+            . $this->jsonEncodeForPrompt($contract, 700) . "\n"
+            . "- HARD LANGUAGE CONTRACT: every visitor-visible string generated for this block must be in source_of_truth_locale={$contentLocale}; translate/rewrite any plan text, field sample, CTA label, alt text, placeholder, aria-label, nav/footer label, or form label before it becomes output.\n"
+            . "- Proper nouns may keep original spelling only when they are the confirmed brand/product/domain/URL/acronym; the surrounding sentence must still be in source_of_truth_locale.\n";
     }
 
     /**
@@ -10784,7 +11224,8 @@ JSON;
         ];
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'header'));
 
-        $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $this->resolveSharedBuildPlanTask($scope, 'header'), $locale, $scope);
+        $sharedBuildPlanTask = $this->resolveSharedBuildPlanTask($scope, 'header');
+        $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $sharedBuildPlanTask, $locale, $scope);
         $defaultConfig = $this->pinCustomerSiteTitleOnSharedDefaultConfig($defaultConfig, $websiteProfile, $scope, $locale);
         $defaultConfig = $this->normalizeSharedDefaultConfigLinksAgainstRouteContract($defaultConfig, $scope, $locale);
         $defaultConfig['logo.image'] = $effectiveLogo;
@@ -10792,6 +11233,7 @@ JSON;
         $defaultConfig['identity.shared_logo_asset'] = $effectiveLogo;
         $defaultConfig['runtime.shared_region'] = 'header';
         $defaultConfig['runtime.content_locale'] = $locale;
+        $this->attachRuntimeTaskContextDefaults($defaultConfig, $sharedBuildPlanTask, $locale);
 
         return $defaultConfig;
     }
@@ -10904,13 +11346,15 @@ JSON;
         ];
         $defaultConfig = \array_replace($defaultConfig, $this->resolveThemeStyleDefaults($scope, 'footer'));
 
-        $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $this->resolveSharedBuildPlanTask($scope, 'footer'), $locale, $scope);
+        $sharedBuildPlanTask = $this->resolveSharedBuildPlanTask($scope, 'footer');
+        $defaultConfig = $this->applyBuildPlanDefaults($defaultConfig, $sharedBuildPlanTask, $locale, $scope);
         $defaultConfig = $this->pinCustomerSiteTitleOnSharedDefaultConfig($defaultConfig, $websiteProfile, $scope, $locale);
         $defaultConfig = $this->normalizeSharedDefaultConfigLinksAgainstRouteContract($defaultConfig, $scope, $locale);
         $defaultConfig['brand.logo'] = $effectiveLogo;
         $defaultConfig['identity.shared_logo_asset'] = $effectiveLogo;
         $defaultConfig['runtime.shared_region'] = 'footer';
         $defaultConfig['runtime.content_locale'] = $locale;
+        $this->attachRuntimeTaskContextDefaults($defaultConfig, $sharedBuildPlanTask, $locale);
 
         return $defaultConfig;
     }
@@ -11073,6 +11517,27 @@ JSON;
         $defaultConfig['runtime.section_key'] = (string)($section['key'] ?? '');
         $defaultConfig['runtime.task_key'] = (string)($buildPlanTask['task_key'] ?? '');
         $defaultConfig['runtime.content_locale'] = $locale;
+        $runtimeContext = \is_array($buildPlanTask['runtime_context'] ?? null) ? $buildPlanTask['runtime_context'] : [];
+        $languageContract = \is_array($runtimeContext['language_contract'] ?? null)
+            ? $runtimeContext['language_contract']
+            : $this->buildStage3TaskLanguageContract($locale);
+        $defaultConfig['runtime.language_contract_json'] = (string)\json_encode(
+            $languageContract,
+            \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        $blockContract = $this->resolveBlockContract($buildPlanTask);
+        if ($blockContract !== []) {
+            $defaultConfig['runtime.block_contract_json'] = (string)\json_encode(
+                $blockContract,
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE
+            );
+        }
+        if ($buildPlanTask !== []) {
+            $defaultConfig['runtime.build_plan_task_json'] = (string)\json_encode(
+                $this->buildRuntimeBuildPlanTaskSnapshot($buildPlanTask),
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE
+            );
+        }
         if (\trim((string)($defaultConfig['runtime.content_copy_rows'] ?? '')) === '') {
             $sectionRows = $this->resolveExecutionBlueprintSectionRows($scope, $pageType, $section);
             if ($sectionRows !== []) {
@@ -11109,6 +11574,7 @@ JSON;
     {
         $code = \strtolower(\str_replace(['/', '_'], '-', \trim((string)($section['code'] ?? ''))));
         $key = \strtolower(\str_replace('_', '-', \trim((string)($section['key'] ?? ''))));
+        $locale = $this->resolveScopePrimaryLocale($scope);
         $blocks = $this->resolveExecutionBlueprintBlocksForPage($scope, $pageType);
         foreach ($blocks as $block) {
             if (!\is_array($block)) {
@@ -11121,10 +11587,17 @@ JSON;
             if ($key !== '' && $key !== $blockKey && !\str_contains($code, $blockKey)) {
                 continue;
             }
-            $description = $this->clipText($this->sanitizeVisibleCopy((string)($block['content'] ?? $block['goal'] ?? '')), 180);
-            $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
+            $description = $this->sanitizeVisibleCopy((string)($block['content'] ?? $block['goal'] ?? ''));
+            if ($locale !== '') {
+                $description = $this->filterVisibleCopyForLocale($description, $locale);
+            }
+            $description = $this->clipText($description, 180);
+            $fieldPlan = $this->sanitizeExecutionBlueprintFieldPlanForGeneration(
+                \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
+                $locale
+            );
             return $this->buildExecutionBlueprintContentCopyRows(
-                $this->pickExecutionBlueprintBlockLabel($block, $fieldPlan, $blockKey),
+                $this->pickExecutionBlueprintBlockLabel($block, $fieldPlan, $blockKey, $locale),
                 $description,
                 $fieldPlan
             );
@@ -11375,6 +11848,7 @@ JSON;
                     'theme_context_snapshot' => $themeContext,
                     'shared_prompt_context' => $sharedPromptContext,
                     'content_locale' => $contentLocale,
+                    'language_contract' => $this->buildStage3TaskLanguageContract($contentLocale),
                 ],
             ];
         }
@@ -11510,7 +11984,9 @@ JSON;
             : (\is_array($stylePlan['page_design_plan'] ?? null) ? $stylePlan['page_design_plan'] : []);
         $currentBlockVisualSignature = $this->resolveBlockVisualSignature($buildPlanTask);
         $currentBlockImageIntent = $this->resolveBlockImageIntent($buildPlanTask);
+        $currentBlockContract = $this->resolveBlockContract($buildPlanTask);
         $contentLocale = \trim((string)($runtimeContext['content_locale'] ?? $this->resolveScopePrimaryLocale($scope)));
+        $languageContract = $this->resolveStage3TaskLanguageContract($runtimeContext, $contentLocale);
         $policySlicesPrompt = $this->buildTaskPolicySlicesPromptAddon($buildPlanTask, $contextLabel, $scope);
         $contextScale = $this->resolveBuildPlanTaskContextScale($buildPlanTask);
         $includeExtendedContext = $contextScale >= 0.8;
@@ -11539,6 +12015,10 @@ JSON;
         $localeHint = $contentLocale !== '' ? $this->describeLocaleForAiPrompt($contentLocale) : '';
         $stage3LocaleRule = $contentLocale !== ''
             ? "- stage3 locale execution rule: source_of_truth_locale={$contentLocale} ({$localeHint}). build-plan text is intent only; rewrite any non-{$contentLocale} planned sentence before it becomes visible copy.\n"
+            : '';
+        $languageContractPrompt = $contentLocale !== ''
+            ? "1b CTX_WEBSITE_LANGUAGE: " . $this->jsonEncodeForPrompt($languageContract, 900) . "\n"
+                . "- HARD LANGUAGE CONTRACT: source_of_truth_locale={$contentLocale} ({$localeHint}). Every visible heading, paragraph, CTA label, card text, form label/placeholder, alt/title/aria text, nav/footer label, and editable-field default generated for this block must be in this locale. Translate/rewrite the plan text first; do not paste plan_locale or English/Chinese planning text when it differs.\n"
             : '';
         $verifiedAssets = $this->extractVerifiedAssetsForBuildPlanTask($scope, $buildPlanTask);
         if ($verifiedAssets === [] && \is_array($runtimeContext['asset_manifest'] ?? null)) {
@@ -11595,8 +12075,10 @@ JSON;
                 'page_type' => (string)($buildPlanTask['page_type'] ?? $planContext['page_type'] ?? ''),
                 'block_key' => (string)($buildPlanTask['block_key'] ?? $planContext['block_key'] ?? ''),
                 'section_code' => (string)($buildPlanTask['section_code'] ?? $planContext['section_code'] ?? ''),
+                'content_locale' => $contentLocale,
                 'context_refs' => $contextRefs,
             ], 900) . "\n"
+            . $languageContractPrompt
             . "2 site_context: " . $this->jsonEncodeForPrompt([
                 'site' => $siteContext,
                 'policy_context' => $policyContext,
@@ -11614,12 +12096,16 @@ JSON;
                 'page_design_plan' => $pageDesignPlan,
             ], $pageDesignPlanLimit) . "\n"
             . "5 current_block_context: " . $this->jsonEncodeForPrompt([
+                'content_locale' => $contentLocale,
+                'language_contract' => $languageContract,
+                'block_context_source' => 'build_plan_v2.task.runtime_context + build_plan_v2.block + block_contract',
                 'block_goal' => (string)($planContext['block_goal'] ?? ''),
                 'stage1_block_content' => (string)($planContext['stage1_block_content'] ?? ''),
                 'story_goal' => (string)($taskScript['story_goal'] ?? ''),
                 'stage3_directive' => (string)($taskScript['stage3_directive'] ?? ''),
                 'content_plan' => $contentPlan,
                 'style_plan' => $stylePlan,
+                'block_contract' => $currentBlockContract,
                 'visual_signature' => $currentBlockVisualSignature,
                 'image_intent' => $currentBlockImageIntent,
                 'implementation_detail' => (string)($blockTask['implementation_detail'] ?? ''),
@@ -11631,6 +12117,7 @@ JSON;
             . "- visual_signature execution rule: composition_pattern / spatial_rhythm / media_strategy / surface_treatment are binding layout choices. Implement them before any generic split-panel or three-card template.\n"
             . "5c block_image_intent_hard_contract: " . $this->jsonEncodeForPrompt($currentBlockImageIntent, 800) . "\n"
             . "- image_intent execution rule: this is the frozen Stage-1 media plan. If needs_image=true, use the required/verified image contract or generated slot for this exact block and placement. If needs_image=false, build the planned css_motif/visual_atmosphere/image_treatment as CSS-only visual support. Do not invent new image needs, ignore planned media, or reuse another block's image shell.\n"
+            . $this->buildBlockContractPrompt([], [], $buildPlanTask)
             . "6 skill_and_reference_context: " . $this->jsonEncodeForPrompt([
                 'skill_context' => $skillContext,
                 'reference_context' => $referenceContext,
@@ -11647,7 +12134,9 @@ JSON;
             . ($includeExtendedContext ? "8 policy_context: " . $this->jsonEncodeForPrompt($policyContext, $this->buildTaskContextLimit($buildPlanTask, 800, $contextScale)) . "\n" : '')
             . ($includeExtendedContext ? "9 skill_context: " . $this->jsonEncodeForPrompt($skillContext, $this->buildTaskContextLimit($buildPlanTask, 900, $contextScale)) . "\n" : '')
             . "- priority rule: user prompt intent is primary for content/design decisions; this frozen context is the confirmed block-level execution form of that intent. If site_context contains a clearer explicit user instruction, honor it while keeping schema, locale, asset, and safety contracts valid.\n"
+            . "- block-context execution rule: generate only current_block_context for task_identity.task_key. Do not borrow content, layout, CTA labels, image slots, or acceptance rules from sibling blocks, old blueprints, full scope, UI projection, or memory.\n"
             . "- design execution rule: apply confirmed page_design_plan and theme_context first, then current_block_context. Generate only this task's block for its page_type and block_key; you may design freely inside that contract, not why the block exists.\n"
+            . "- content execution rule: every heading, body line, list/card item, CTA, form label, placeholder, alt text, and editable default must be derived from current_block_context.content_plan, field_content_requirements, data_contract, block_goal, and acceptance. If plan samples are not visitor-ready, rewrite them into finished {$contentLocale} copy; do not replace them with generic marketing filler.\n"
             . "- CSS execution rule: write fewer complete selectors instead of many fragile selectors. If a decoration is hard to express safely, omit the decoration and keep the layout valid.\n"
             . "- responsive execution rule: normal grid/flex flow only; stack at <=900px and use one column at <=420px with min-width:0 and max-width:100% for layout containers, media, cards, forms, and inputs only. Apply the compact CTA override only to the actual clickable CTA button/anchor element; full-width bands, layout containers, and form wrappers may remain responsive. Prefer action/actions for wrappers so wrapper CSS is not mistaken for button CSS.\n"
             . $ctaResponsiveOverride
@@ -11854,7 +12343,7 @@ JSON;
 
         $defaultConfig = $this->applyBuildPlanContentPlanDefaults($defaultConfig, $blockTask, $locale);
 
-        $visibleSummary = $this->resolveVisibleBuildTaskSummary($taskScript, $blockTask, $planContext);
+        $visibleSummary = $this->resolveVisibleBuildTaskSummary($taskScript, $blockTask, $planContext, $locale);
         if ($locale !== '') {
             $visibleSummary = $this->filterVisibleCopyForLocale($visibleSummary, $locale);
         }
@@ -11964,7 +12453,7 @@ JSON;
                     continue;
                 }
                 $current = \trim((string)$defaultConfig[$candidateKey]);
-                if ($current === '') {
+                if ($current === '' || ($locale !== '' && $this->filterVisibleCopyForLocale($current, $locale) === '')) {
                     $defaultConfig[$candidateKey] = $copy;
                 }
             }
@@ -13332,6 +13821,10 @@ JSON;
             $scope['execution_blueprint']['content_locale'] ?? null,
             $scope['plan_json']['content_locale'] ?? null,
             $scope['plan_json']['i18n']['content_locale'] ?? null,
+            $scope['locale'] ?? null,
+            $websiteProfile['locale'] ?? null,
+            $scope['website_profile']['locale'] ?? null,
+            $scope['website_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['default_language'] ?? null,
             $websiteProfile['default_locale'] ?? null,
@@ -13742,6 +14235,12 @@ JSON;
         if ($this->containsPlanningObservationCopy($value)) {
             return '';
         }
+        if ($locale !== '' && $this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($value)) {
+            return '';
+        }
+        if ($locale !== '' && !$this->isEnglishLocale($locale) && $this->containsEnglishBoilerplateVisibleCopy($value)) {
+            return '';
+        }
 
         return $this->sanitizeVisibleCopy($value);
     }
@@ -13917,6 +14416,18 @@ JSON;
                 Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
                 Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
+            'pt' => [
+                Page::TYPE_HOME => 'Início',
+                Page::TYPE_ABOUT => 'Sobre',
+                Page::TYPE_CONTACT => 'Contato',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Política de Privacidade',
+                Page::TYPE_TERMS_OF_SERVICE => 'Termos de Serviço',
+                Page::TYPE_REFUND_POLICY => 'Política de Reembolso',
+                Page::TYPE_SHIPPING_POLICY => 'Política de Envio',
+                Page::TYPE_COOKIE_POLICY => 'Política de Cookies',
+            ],
             'th' => [
                 Page::TYPE_HOME => 'หน้าแรก',
                 Page::TYPE_ABOUT => 'เกี่ยวกับเรา',
@@ -14005,6 +14516,20 @@ JSON;
                 'start_playing' => 'Start Playing',
                 'site_name_fallback' => 'Website',
             ],
+            'pt' => [
+                'policy_info' => 'Informações legais',
+                'featured_pages' => 'Páginas principais',
+                'all_pages' => 'Todas as páginas',
+                'all_rights_reserved' => 'Todos os direitos reservados.',
+                'brand_summary' => 'Destino confiável para baixar APK de jogos de cartas, consultar regras e obter suporte.',
+                'contact_us' => 'Fale Conosco',
+                'explore_more' => 'Ver Mais',
+                'get_started' => 'Começar Agora',
+                'download_now' => 'Baixar Agora',
+                'claim_bonus' => 'Resgatar Bônus',
+                'start_playing' => 'Começar a Jogar',
+                'site_name_fallback' => 'Site',
+            ],
             'th' => [
                 'policy_info' => 'ข้อมูลนโยบาย',
                 'featured_pages' => 'หน้าสำคัญ',
@@ -14070,6 +14595,9 @@ JSON;
     private function promptLocaleFamily(string $locale): string
     {
         $locale = \trim($locale);
+        if ($this->isPortugueseLocale($locale)) {
+            return 'pt';
+        }
         if ($this->isThaiLocale($locale)) {
             return 'th';
         }
@@ -14083,6 +14611,11 @@ JSON;
             return 'ru';
         }
         return 'en';
+    }
+
+    private function isPortugueseLocale(string $locale): bool
+    {
+        return \preg_match('/^pt(?:[_-]|$)/i', \trim($locale)) === 1;
     }
 
     private function isThaiLocale(string $locale): bool
@@ -14540,6 +15073,12 @@ JSON;
             'Policy Info',
             'All Pages',
             'All rights reserved.',
+            'Contact Us',
+            'Download Now',
+            'Explore More',
+            'Get Started',
+            'Claim Bonus',
+            'Start Playing',
         ] as $phrase) {
             if (\mb_stripos($normalized, $phrase) !== false) {
                 return true;
@@ -14822,11 +15361,22 @@ JSON;
      */
     private function assertRenderedHtmlMatchesLocale(string $html, array $renderContext): void
     {
-        unset($html, $renderContext);
-        // Locale consistency is prompt guidance and browser QA, not a completion
-        // gate. The hard gate only rejects leaked prompts, placeholders, internal
-        // metadata, malformed contact fragments, and invalid HTML.
-        return;
+        $locale = $this->resolveGeneratedContentLocaleForPolicy($renderContext);
+        if ($locale === '' || !$this->isNonCjkLocale($locale)) {
+            return;
+        }
+
+        $visibleText = $this->extractVisibleHtmlText($html);
+        if (!$this->hasAnyCjkContent($visibleText)) {
+            return;
+        }
+
+        throw new \RuntimeException(
+            'Generated component locale gate failed: non-CJK locale '
+            . $locale
+            . ' rendered CJK planning/block-goal text: '
+            . $this->clipText($visibleText, 220)
+        );
     }
 
     /**
@@ -15202,7 +15752,10 @@ JSON;
             return;
         }
         // 鏍囩闂悎鏍￠獙锛氭娴嬮潪鑷棴鍚堟爣绛炬槸鍚︾己灏戦棴鏍囩
-        $hardPolicyReason = $this->detectHardGeneratedSectionHtmlPolicyViolation($html);
+        $hardPolicyReason = $this->detectHardGeneratedSectionHtmlPolicyViolation(
+            $html,
+            $this->resolveGeneratedContentLocaleForPolicy($renderContext)
+        );
         if ($hardPolicyReason !== null) {
             throw new \RuntimeException('Generated component content hard policy failed: ' . $hardPolicyReason);
         }
@@ -15288,6 +15841,28 @@ JSON;
         }
 
         return $this->resolveScopePrimaryLocale($scope);
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     */
+    private function resolveGeneratedContentLocaleForPolicy(array $renderContext, array $defaultConfig = []): string
+    {
+        $scope = $this->resolveRouteContractScopeFromRenderContext($renderContext);
+        $locale = $this->resolveRouteContractLocaleFromRenderContext($renderContext, $scope);
+        if ($locale !== '') {
+            return $locale;
+        }
+
+        foreach (['content_locale', 'locale', 'website_locale', 'default_locale', 'default_language'] as $key) {
+            $locale = \trim((string)($defaultConfig[$key] ?? ''));
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
     }
 
     private function shouldValidateGeneratedHrefAgainstRouteContract(string $href): bool

@@ -44,21 +44,30 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     protected BackendUser $adminUser;
     private Data $helper;
     private MessageManager $messageManager;
-    private MenuServiceInterface $menuService;
+    private ?MenuServiceInterface $menuService = null;
     private BackendVerificationCodeGate $backendVerificationCodeGate;
 
     public function __construct(
         BackendUser           $adminUser,
         MessageManager        $messageManager,
         Data                  $helper,
-        MenuService           $menuService,
-        BackendVerificationCodeGate $backendVerificationCodeGate
+        mixed                 $backendVerificationCodeGateOrMenuService = null,
+        ?BackendVerificationCodeGate $legacyBackendVerificationCodeGate = null
     ) {
         $this->adminUser = $adminUser;
         $this->helper = $helper;
         $this->messageManager = $messageManager;
-        $this->menuService = $menuService;
-        $this->backendVerificationCodeGate = $backendVerificationCodeGate;
+        if ($backendVerificationCodeGateOrMenuService instanceof MenuServiceInterface) {
+            // 兼容旧 compiled_factories.php：旧工厂第 4 个参数仍会传 MenuService。
+            $this->menuService = $backendVerificationCodeGateOrMenuService;
+        }
+        if ($backendVerificationCodeGateOrMenuService instanceof BackendVerificationCodeGate) {
+            $this->backendVerificationCodeGate = $backendVerificationCodeGateOrMenuService;
+        } elseif ($legacyBackendVerificationCodeGate instanceof BackendVerificationCodeGate) {
+            $this->backendVerificationCodeGate = $legacyBackendVerificationCodeGate;
+        } else {
+            $this->backendVerificationCodeGate = ObjectManager::getInstance(BackendVerificationCodeGate::class);
+        }
     }
 
     public function index()
@@ -151,7 +160,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         // 登录页本身就是一个独立完整模板，不依赖通用布局包装。
         // 在 WLS 下直接返回 detached HTML Response，避免控制器 fetch 事件链
         // 或后续结果归一化把登录页 body 吞成空响应。
-        return Response::html($this->template('Weline_Admin::templates/Login/index.phtml'));
+        return Response::html($this->template('Weline_Admin::templates/Login/fast.phtml'));
     }
 
     /**
@@ -430,7 +439,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         if (!$role || !$role->getId()) {
             return (int)$user->getId() === 1; // 超管无角色也放行
         }
-        return $this->menuService->findMenuNodeByRoute((int)$role->getId(), $routePath) !== null;
+        return $this->getMenuService()->findMenuNodeByRoute((int)$role->getId(), $routePath) !== null;
     }
 
     /**
@@ -442,13 +451,22 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         if ($user) {
             $role = $user->getRoleModel();
             if ($role && $role->getId()) {
-                $defaultRoute = $this->menuService->getDefaultEntryRoute((int)$role->getId());
+                $defaultRoute = $this->getMenuService()->getDefaultEntryRoute((int)$role->getId());
                 if ($defaultRoute !== null && $defaultRoute !== '') {
                     return $defaultRoute;
                 }
             }
         }
         return 'admin';
+    }
+
+    private function getMenuService(): MenuServiceInterface
+    {
+        if ($this->menuService === null) {
+            $this->menuService = ObjectManager::getInstance(MenuService::class);
+        }
+
+        return $this->menuService;
     }
 
     /**

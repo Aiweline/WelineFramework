@@ -8,7 +8,12 @@ use PHPUnit\Framework\TestCase;
 use WeShop\Review\Controller\Backend\Review\Index;
 use WeShop\Review\Controller\Backend\Review\View;
 use WeShop\Review\Controller\Backend\Review\Actions;
+use WeShop\Review\Controller\Backend\Review\Config;
+use WeShop\Review\Model\ReviewRatingOption;
 use WeShop\Review\Service\ReviewAdminPageDataService;
+use WeShop\Review\Service\ReviewConfigService;
+use WeShop\Review\Service\ReviewPurchaseEligibilityService;
+use WeShop\Review\Service\ReviewRatingOptionService;
 use WeShop\Review\Service\ReviewService;
 
 /**
@@ -131,6 +136,45 @@ class IndexTest extends TestCase
         $reflection = new \ReflectionMethod(Actions::class, 'delete');
         $returnType = $reflection->getReturnType();
         $this->assertEquals('Weline\Framework\Http\Response', $returnType->getName());
+    }
+
+    public function testConfigControllerClassExists(): void
+    {
+        $this->assertTrue(class_exists(Config::class));
+    }
+
+    public function testConfigControllerHasIndexAndSaveMethods(): void
+    {
+        $this->assertTrue(method_exists(Config::class, 'index'));
+        $this->assertTrue(method_exists(Config::class, 'save'));
+    }
+
+    public function testReviewRatingOptionModelClassExists(): void
+    {
+        $this->assertTrue(class_exists(ReviewRatingOption::class));
+        $this->assertSame('weshop_review_rating_option', ReviewRatingOption::schema_table);
+        $this->assertSame('option_id', ReviewRatingOption::schema_primary_key);
+    }
+
+    public function testReviewRatingOptionServiceMethodsExist(): void
+    {
+        $this->assertTrue(class_exists(ReviewRatingOptionService::class));
+        $this->assertTrue(method_exists(ReviewRatingOptionService::class, 'getDefaultOptions'));
+        $this->assertTrue(method_exists(ReviewRatingOptionService::class, 'seedDefaultOptions'));
+        $this->assertTrue(method_exists(ReviewRatingOptionService::class, 'getAllOptions'));
+        $this->assertTrue(method_exists(ReviewRatingOptionService::class, 'getEnabledOptions'));
+        $this->assertTrue(method_exists(ReviewRatingOptionService::class, 'getEnabledOptionMap'));
+        $this->assertTrue(method_exists(ReviewRatingOptionService::class, 'saveOptions'));
+    }
+
+    public function testReviewModeServicesExist(): void
+    {
+        $this->assertTrue(class_exists(ReviewConfigService::class));
+        $this->assertTrue(method_exists(ReviewConfigService::class, 'getReviewMode'));
+        $this->assertTrue(method_exists(ReviewConfigService::class, 'saveReviewMode'));
+        $this->assertTrue(method_exists(ReviewConfigService::class, 'getReviewModeOptions'));
+        $this->assertTrue(class_exists(ReviewPurchaseEligibilityService::class));
+        $this->assertTrue(method_exists(ReviewPurchaseEligibilityService::class, 'customerCanReviewProduct'));
     }
 
     /**

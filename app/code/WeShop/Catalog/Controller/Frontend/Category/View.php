@@ -11,6 +11,7 @@ use WeShop\Filters\Service\FilterUrlService;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
+use WeShop\Product\Service\ProductService;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\MessageManager;
@@ -24,11 +25,11 @@ use Weline\Server\Service\MemoryStateFacade;
 class View extends BaseController
 {
     protected ?string $layoutType = 'category';
-    private const VIEW_PAYLOAD_CACHE_TTL = 300;
+    private const VIEW_PAYLOAD_CACHE_TTL = 600;
     private const VIEW_PAYLOAD_CACHE_MAX_ITEMS = 96;
     private const VIEW_PAYLOAD_CACHE_RETAIN_ITEMS = 48;
-    private const VIEW_PAYLOAD_FULL_HTML_MAX_ITEMS = 24;
-    private const VIEW_PAYLOAD_FULL_HTML_RETAIN_ITEMS = 12;
+    private const VIEW_PAYLOAD_FULL_HTML_MAX_ITEMS = 96;
+    private const VIEW_PAYLOAD_FULL_HTML_RETAIN_ITEMS = 64;
     private const CONTENT_TEMPLATE = 'WeShop_Catalog::templates/Frontend/Category/content.phtml';
     private const CONTENT_HTML_OVERRIDE_KEY = 'weshop_category_content_html_override';
 
@@ -121,6 +122,12 @@ class View extends BaseController
             ['category_id' => (int) $category->getId()]
         );
         $categoryData = $categoryService->localizeCategoryRecordForStorefront($categoryData);
+        $categoryData['path'] = $this->buildCategoryHandlePath($categoryData);
+        $categoryData['canonical_path'] = $this->buildPublicCategoryPath($categoryData);
+        $categoryData['url'] = $this->getUrl((string)$categoryData['canonical_path']);
+        $categoryData['canonical'] = $categoryData['url'];
+        $categoryData['seo_breadcrumbs'] = $this->buildCategorySeoBreadcrumbs($categoryData);
+        $categoryData['seo_directory'] = $this->buildCategorySeoDirectory($categoryService, $categoryData);
 
         if (!is_array($categoriesCtx) || empty($categoriesCtx['current']['category_id'])) {
             $this->traceControllerStep(
@@ -183,6 +190,13 @@ class View extends BaseController
                 ]
             );
         }
+        if ($products !== []) {
+            $products = $this->traceControllerStep(
+                'category::localize_product_items',
+                fn () => $this->localizeProductItems($products),
+                ['product_count' => count($products)]
+            );
+        }
         $appliedFilters = is_array($browse['applied_filters'] ?? null) ? $browse['applied_filters'] : [];
         $facetFilters = is_array($browse['facets'] ?? null) ? $browse['facets'] : [];
         if ($facetFilters === [] && $products !== []) {
@@ -216,6 +230,8 @@ class View extends BaseController
         $this->assign('filtered_product_ids', $filteredProductIds);
         $this->assign('pagination', (string) ($browse['pagination_html'] ?? ''));
         $this->assign('pagination_data', $paginationData);
+        $this->assign('canonical_url', (string)($categoryData['canonical'] ?? ''));
+        $this->assign('breadcrumbs', (array)($categoryData['seo_breadcrumbs'] ?? []));
 
         $this->request->setData('category', $categoryData);
         $this->request->setData('products', $products);
@@ -226,6 +242,8 @@ class View extends BaseController
         $this->request->setData('filtered_product_ids', $filteredProductIds);
         $this->request->setData('pagination', (string) ($browse['pagination_html'] ?? ''));
         $this->request->setData('pagination_data', $paginationData);
+        $this->request->setData('canonical_url', (string)($categoryData['canonical'] ?? ''));
+        $this->request->setData('breadcrumbs', (array)($categoryData['seo_breadcrumbs'] ?? []));
         $this->setPerfHeader('X-WLS-Category-Debug-Request', 'children=' . count($categoryData['children']) . ';products=' . count($products) . ';ids=' . count($categoryIds));
 
         if ($facetFilters === []) {
@@ -269,6 +287,8 @@ class View extends BaseController
                 'meta_title' => $category->getData('meta_title') ?? $categoryData['name'],
                 'meta_description' => $category->getData('meta_description') ?? $categoryData['description'],
                 'meta_keywords' => $category->getData('meta_keywords') ?? '',
+                'canonical_url' => (string)($categoryData['canonical'] ?? ''),
+                'breadcrumbs' => (array)($categoryData['seo_breadcrumbs'] ?? []),
             ],
             'request' => [
                 'category' => $categoryData,
@@ -281,6 +301,8 @@ class View extends BaseController
                 'filtered_product_ids' => $filteredProductIds,
                 'pagination' => (string) ($browse['pagination_html'] ?? ''),
                 'pagination_data' => $paginationData,
+                'canonical_url' => (string)($categoryData['canonical'] ?? ''),
+                'breadcrumbs' => (array)($categoryData['seo_breadcrumbs'] ?? []),
             ],
         ];
 
@@ -470,10 +492,10 @@ class View extends BaseController
         $query = $this->getSemanticCategoryQuery();
         ksort($query);
         $uri = $this->getSemanticCategoryRequestUri($query);
-        $host = function_exists('w_env_http_host') ? (string)w_env_http_host() : '';
+        $host = $this->normalizeViewPayloadCacheHost(function_exists('w_env_http_host') ? (string)w_env_http_host() : '');
 
         return sha1((string)json_encode([
-            'v' => 18,
+            'v' => 21,
             'handle' => (string)($handle ?? ''),
             'category_id' => $categoryId,
             'query' => $query,
@@ -484,6 +506,55 @@ class View extends BaseController
             'uri' => $uri,
             'html_scope' => $this->fullHtmlViewCacheScope(),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function normalizeViewPayloadCacheHost(string $host): string
+    {
+        $host = strtolower(trim($host));
+        if ($host === '') {
+            return '';
+        }
+
+        if (str_contains($host, '://')) {
+            try {
+                $parsedHost = parse_url($host, PHP_URL_HOST);
+                $host = is_string($parsedHost) ? strtolower(trim($parsedHost)) : $host;
+            } catch (\Throwable) {
+                return '';
+            }
+        }
+
+        $host = trim($host, " \t\n\r\0\x0B/");
+        if ($host === '') {
+            return '';
+        }
+
+        if ($host[0] === '[') {
+            $end = strpos($host, ']');
+            if ($end === false) {
+                return '';
+            }
+            $ip = substr($host, 1, $end - 1);
+            return filter_var($ip, FILTER_VALIDATE_IP) ? '' : $host;
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return '';
+        }
+
+        $colonCount = substr_count($host, ':');
+        if ($colonCount === 1) {
+            $host = preg_replace('/:\d+$/', '', $host) ?? $host;
+        } elseif ($colonCount > 1) {
+            return '';
+        }
+
+        $host = trim($host, " \t\n\r\0\x0B[]/");
+        if ($host === '' || $host === 'localhost' || filter_var($host, FILTER_VALIDATE_IP)) {
+            return '';
+        }
+
+        return $host;
     }
 
     private function runtimeCacheGet(string $key): mixed
@@ -713,25 +784,17 @@ class View extends BaseController
 
     private function hydrateCategoryContext(array $categoryData): void
     {
-        $pathSegments = [];
-        foreach (($categoryData['breadcrumbs'] ?? []) as $breadcrumb) {
-            $handle = trim((string) ($breadcrumb['handle'] ?? ''), '/');
-            if ($handle !== '') {
-                $pathSegments[] = $handle;
-            }
-        }
-
         $currentHandle = trim((string) ($categoryData['handle'] ?? ''), '/');
-        if ($currentHandle !== '') {
-            $pathSegments[] = $currentHandle;
-        }
+        $path = (string)($categoryData['path'] ?? $this->buildCategoryHandlePath($categoryData));
 
         $this->request->setData('categories', [
             'current' => [
                 'category_id' => $categoryData['category_id'],
                 'name' => $categoryData['name'],
                 'handle' => $currentHandle,
-                'path' => implode('/', $pathSegments),
+                'path' => $path,
+                'url' => $categoryData['url'] ?? '',
+                'canonical' => $categoryData['canonical'] ?? '',
                 'description' => $categoryData['description'],
                 'image' => $categoryData['image'],
                 'parent_id' => $categoryData['parent_id'],
@@ -739,7 +802,7 @@ class View extends BaseController
                 'breadcrumbs' => $categoryData['breadcrumbs'],
             ],
             'breadcrumbs' => $categoryData['breadcrumbs'],
-            'path' => implode('/', $pathSegments),
+            'path' => $path,
         ]);
     }
 
@@ -781,22 +844,197 @@ class View extends BaseController
      */
     private function buildPublicCategoryPath(array $categoryData): string
     {
+        $segments = $this->buildCategoryHandleSegments($categoryData);
+
+        return $this->buildPublicCategoryPathFromSegments($segments);
+    }
+
+    /**
+     * @param array<string, mixed> $categoryData
+     */
+    private function buildCategoryHandlePath(array $categoryData): string
+    {
+        return implode('/', $this->buildCategoryHandleSegments($categoryData));
+    }
+
+    /**
+     * @param array<string, mixed> $categoryData
+     * @return list<string>
+     */
+    private function buildCategoryHandleSegments(array $categoryData): array
+    {
         $segments = [];
         foreach (($categoryData['breadcrumbs'] ?? []) as $breadcrumb) {
-            $handle = trim((string)($breadcrumb['handle'] ?? ''), '/');
-            if ($handle !== '') {
-                $segments[] = $handle;
+            if (!is_array($breadcrumb)) {
+                continue;
+            }
+            $this->appendCategoryHandleSegments($segments, (string)($breadcrumb['handle'] ?? ''));
+        }
+
+        $this->appendCategoryHandleSegments($segments, (string)($categoryData['handle'] ?? ''));
+
+        return $segments;
+    }
+
+    /**
+     * @param array<string, mixed> $categoryData
+     * @return list<string>
+     */
+    private function buildCategoryBreadcrumbHandleSegments(array $categoryData): array
+    {
+        $segments = [];
+        foreach (($categoryData['breadcrumbs'] ?? []) as $breadcrumb) {
+            if (!is_array($breadcrumb)) {
+                continue;
+            }
+            $this->appendCategoryHandleSegments($segments, (string)($breadcrumb['handle'] ?? ''));
+        }
+
+        return $segments;
+    }
+
+    /**
+     * @param list<string> $segments
+     */
+    private function buildPublicCategoryPathFromSegments(array $segments): string
+    {
+        $segments = array_values(array_filter($segments, static fn (string $segment): bool => trim($segment) !== ''));
+        if ($segments === []) {
+            return 'catalog/category/view';
+        }
+
+        return 'catalog/category/' . implode('/', array_map('rawurlencode', $segments));
+    }
+
+    /**
+     * @param list<string> $segments
+     */
+    private function appendCategoryHandleSegments(array &$segments, string $handle): void
+    {
+        $handleSegments = array_values(array_filter(
+            explode('/', trim($handle, '/')),
+            static fn (string $segment): bool => trim($segment) !== ''
+        ));
+        if ($handleSegments === []) {
+            return;
+        }
+
+        $maxOverlap = min(count($segments), count($handleSegments));
+        for ($length = $maxOverlap; $length > 0; $length--) {
+            if (array_slice($segments, -$length) === array_slice($handleSegments, 0, $length)) {
+                $segments = array_merge($segments, array_slice($handleSegments, $length));
+                return;
             }
         }
 
-        $handle = trim((string)($categoryData['handle'] ?? ''), '/');
-        if ($handle !== '') {
-            $segments[] = $handle;
+        $segments = array_merge($segments, $handleSegments);
+    }
+
+    /**
+     * @param array<string, mixed> $categoryData
+     * @return list<array{name:string,url:string}>
+     */
+    private function buildCategorySeoBreadcrumbs(array $categoryData): array
+    {
+        $items = [
+            [
+                'name' => (string)__('首页'),
+                'url' => $this->getUrl(''),
+            ],
+        ];
+        $segments = [];
+
+        foreach (($categoryData['breadcrumbs'] ?? []) as $breadcrumb) {
+            if (!is_array($breadcrumb)) {
+                continue;
+            }
+            $name = trim((string)($breadcrumb['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $this->appendCategoryHandleSegments($segments, (string)($breadcrumb['handle'] ?? ''));
+            $items[] = [
+                'name' => $name,
+                'url' => $this->getUrl($this->buildPublicCategoryPathFromSegments($segments)),
+            ];
         }
 
-        return $segments !== []
-            ? 'catalog/category/' . implode('/', $segments)
-            : 'catalog/category/view';
+        $currentName = trim((string)($categoryData['name'] ?? ''));
+        if ($currentName !== '') {
+            $this->appendCategoryHandleSegments($segments, (string)($categoryData['handle'] ?? ''));
+            $items[] = [
+                'name' => $currentName,
+                'url' => $this->getUrl($this->buildPublicCategoryPathFromSegments($segments)),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string, mixed> $categoryData
+     * @return list<array<string, mixed>>
+     */
+    private function buildCategorySeoDirectory(CategoryService $categoryService, array $categoryData): array
+    {
+        $children = $categoryData['children_tree'] ?? $categoryData['children'] ?? [];
+        $parentSegments = $this->buildCategoryHandleSegments($categoryData);
+        if ((!is_array($children) || $children === []) && (int)($categoryData['parent_id'] ?? 0) > 0) {
+            $children = $categoryService->getCategoryTree((int)$categoryData['parent_id']);
+            $parentSegments = $this->buildCategoryBreadcrumbHandleSegments($categoryData);
+        }
+        if (!is_array($children) || $children === []) {
+            return [];
+        }
+
+        return $this->buildCategorySeoDirectoryItems(
+            $children,
+            $parentSegments,
+            1,
+            (int)($categoryData['category_id'] ?? 0)
+        );
+    }
+
+    /**
+     * @param array<int, mixed> $categories
+     * @param list<string> $parentSegments
+     * @return list<array<string, mixed>>
+     */
+    private function buildCategorySeoDirectoryItems(array $categories, array $parentSegments, int $level, int $currentCategoryId): array
+    {
+        $items = [];
+        $position = 1;
+        foreach ($categories as $category) {
+            if (!is_array($category)) {
+                continue;
+            }
+            $name = trim((string)($category['name'] ?? ''));
+            $handle = trim((string)($category['handle'] ?? ''), '/');
+            if ($name === '' || $handle === '') {
+                continue;
+            }
+
+            $segments = $parentSegments;
+            $this->appendCategoryHandleSegments($segments, $handle);
+            $children = is_array($category['children'] ?? null) ? (array)$category['children'] : [];
+            $item = [
+                'category_id' => (int)($category['category_id'] ?? $category['id'] ?? 0),
+                'name' => $name,
+                'description' => (string)($category['description'] ?? ''),
+                'handle' => $handle,
+                'path' => implode('/', $segments),
+                'url' => $this->getUrl($this->buildPublicCategoryPathFromSegments($segments)),
+                'level' => $level,
+                'position' => $position,
+                'is_current' => (int)($category['category_id'] ?? $category['id'] ?? 0) === $currentCategoryId,
+                'children' => $children === [] ? [] : $this->buildCategorySeoDirectoryItems($children, $segments, $level + 1, $currentCategoryId),
+            ];
+
+            $items[] = $item;
+            $position++;
+        }
+
+        return $items;
     }
 
     /**
@@ -1078,5 +1316,72 @@ class View extends BaseController
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * @param array<int, mixed> $products
+     * @return array<int, mixed>
+     */
+    private function localizeProductItems(array $products): array
+    {
+        $productIds = [];
+        foreach ($products as $product) {
+            if (!is_array($product)) {
+                continue;
+            }
+            $productId = (int)($product['product_id'] ?? $product['entity_id'] ?? 0);
+            if ($productId > 0) {
+                $productIds[] = $productId;
+            }
+        }
+        $productIds = array_values(array_unique($productIds));
+        if ($productIds === []) {
+            return $products;
+        }
+
+        try {
+            /** @var ProductService $productService */
+            $productService = ObjectManager::getInstance(ProductService::class);
+            $localizedResult = $productService->getProducts(
+                ['product_ids' => $productIds, 'status' => 1],
+                1,
+                max(1, count($productIds))
+            );
+            $localizedById = [];
+            foreach ((array)($localizedResult['items'] ?? []) as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $productId = (int)($item['product_id'] ?? $item['entity_id'] ?? $item[Product::schema_fields_ID] ?? 0);
+                if ($productId > 0) {
+                    $localizedById[$productId] = $item;
+                }
+            }
+
+            foreach ($products as &$product) {
+                if (!is_array($product)) {
+                    continue;
+                }
+                $productId = (int)($product['product_id'] ?? $product['entity_id'] ?? 0);
+                $localized = $localizedById[$productId] ?? null;
+                if (!is_array($localized)) {
+                    continue;
+                }
+
+                foreach ([Product::schema_fields_name, Product::schema_fields_short_description, Product::schema_fields_description] as $field) {
+                    $value = trim((string)($localized[$field] ?? ''));
+                    if ($value !== '') {
+                        $product[$field] = $value;
+                    }
+                }
+                $product['product_id'] = $productId;
+                $product['entity_id'] = $productId;
+            }
+            unset($product);
+        } catch (\Throwable) {
+            return $products;
+        }
+
+        return $products;
     }
 }
