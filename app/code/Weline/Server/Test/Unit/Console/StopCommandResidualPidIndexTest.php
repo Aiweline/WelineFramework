@@ -16,10 +16,6 @@ final class StopCommandResidualPidIndexTest extends TestCase
     public function testCollectIndexedResidualPidsFromPidIndexMatchesScopedProcessNamesOnly(): void
     {
         $stop = new class extends Stop {
-            protected function isResidualIndexedPidStillRunning(int $pid, string $pname, string $taskName): bool
-            {
-                return true;
-            }
         };
 
         $pids = $this->invokeProtected(

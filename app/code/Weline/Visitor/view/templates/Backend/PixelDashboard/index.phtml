@@ -1,393 +1,551 @@
 <?php
 /**
- * 像素统计面板 - 内容模板
+ * 多站点像素事件监听看板
  *
  * @var \Weline\Framework\View\Template $this
- * @var array $stats
- * @var array $website_stats
- * @var array $website_ids
- * @var array $trends
+ * @var array $filters
+ * @var array $website_options
+ * @var array $event_options
+ * @var array $summary
+ * @var array $trend
+ * @var array $event_rows
+ * @var array $site_rows
+ * @var array $source_rows
+ * @var array $realtime_rows
+ * @var array $recent_events
  */
 
-$stats = $stats ?? [];
-$websiteStats = $website_stats ?? [];
-$websiteIds = $website_ids ?? [];
-$trends = $trends ?? [];
+$filters = $filters ?? [];
+$websiteOptions = $website_options ?? [];
+$eventOptions = $event_options ?? [];
+$summary = $summary ?? [];
+$trend = $trend ?? [];
+$eventRows = $event_rows ?? [];
+$siteRows = $site_rows ?? [];
+$sourceRows = $source_rows ?? [];
+$realtimeRows = $realtime_rows ?? [];
+$recentEvents = $recent_events ?? [];
+
+$h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$num = static fn($value, int $decimals = 0): string => number_format((float)$value, $decimals);
+$selectedWebsite = (string)($filters['website_id_raw'] ?? '');
+$selectedEvent = (string)($filters['event'] ?? '');
+$selectedRange = (string)($filters['range'] ?? '30d');
+$rangeLabels = [
+    'today' => __('今日'),
+    'yesterday' => __('昨日'),
+    '7d' => __('近 7 天'),
+    '30d' => __('近 30 天'),
+    '90d' => __('近 90 天'),
+    'custom' => __('自定义'),
+];
+$startInput = $selectedRange === 'custom' ? (string)($filters['start_day'] ?? '') : '';
+$endInput = $selectedRange === 'custom' ? (string)($filters['end_day'] ?? '') : '';
+$currentQuery = [
+    'websiteId' => $selectedWebsite,
+    'event' => $selectedEvent,
+    'range' => $selectedRange,
+    'startDate' => (string)($filters['start_day'] ?? ''),
+    'endDate' => (string)($filters['end_day'] ?? ''),
+];
+$currentQuery = array_filter($currentQuery, static fn($value): bool => $value !== null && $value !== '');
+$exportQuery = $currentQuery;
+$exportQuery['format'] = 'csv';
+$exportUrl = $this->getUrl('*/pixel_dashboard/export') . '?' . http_build_query($exportQuery);
+$refreshUrl = $this->getUrl('*/pixel_dashboard/index') . (!empty($currentQuery) ? '?' . http_build_query($currentQuery) : '');
+$trendMax = max(1, ...array_map(static fn($row): int => (int)($row['count'] ?? 0), $trend ?: [['count' => 0]]));
+$eventMax = max(1, ...array_map(static fn($row): int => (int)($row['count'] ?? 0), $eventRows ?: [['count' => 0]]));
+$realtimeMax = max(1, ...array_map(static fn($row): int => (int)($row['count'] ?? 0), $realtimeRows ?: [['count' => 0]]));
+$eventChange = (float)($summary['event_change'] ?? 0);
+$eventChangeClass = $eventChange >= 0 ? 'text-success' : 'text-danger';
 ?>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
 <style>
-/* ============================================
-   组件：Pixel Dashboard
-   模块：Weline_Visitor
-   前缀：weline-pixel-
-   ============================================ */
-.weline-pixel-dashboard-card {
-    border-radius: var(--backend-border-radius-lg, 12px);
-    box-shadow: var(--backend-card-shadow, 0 2px 12px rgba(0,0,0,0.08));
-    transition: all 0.3s ease;
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    background: var(--backend-color-card-bg, #fff);
-}
-
-.weline-pixel-dashboard-card:hover {
-    box-shadow: 0 4px 20px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.15);
-    transform: translateY(-2px);
-    border-color: var(--backend-color-primary, #556ee6);
-}
-
-.weline-pixel-dashboard-card .card-body {
-    background: var(--backend-color-card-bg, #fff);
-}
-
-.weline-pixel-dashboard-card .card-title {
+.weline-pixel-dashboard {
     color: var(--backend-color-text-primary, #212529);
 }
 
-.weline-pixel-stat-card {
-    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6) 0%, var(--backend-color-primary-dark, #4757d4) 100%);
-    color: var(--backend-color-text-inverse, #fff);
-    padding: 24px;
-    border-radius: var(--backend-border-radius-lg, 12px);
-    position: relative;
+.weline-pixel-dashboard .card {
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: 8px;
+    box-shadow: 0 1px 8px rgba(15, 23, 42, 0.05);
+}
+
+.weline-pixel-toolbar {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(160px, 0.8fr) minmax(160px, 0.8fr) minmax(140px, 0.7fr) minmax(140px, 0.7fr) auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.weline-pixel-metric {
+    min-height: 136px;
+}
+
+.weline-pixel-metric-label {
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 12px;
+    letter-spacing: 0;
+}
+
+.weline-pixel-metric-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.weline-pixel-metric-sub {
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 12px;
+}
+
+.weline-pixel-trend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    gap: 8px;
+    min-height: 220px;
+    align-items: end;
+}
+
+.weline-pixel-trend-item {
+    min-width: 44px;
+}
+
+.weline-pixel-trend-bar {
+    display: flex;
+    align-items: end;
+    justify-content: center;
+    height: 160px;
+    border-radius: 6px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
     overflow: hidden;
 }
 
-.weline-pixel-stat-card.primary {
-    background: linear-gradient(135deg, var(--backend-color-primary, #556ee6) 0%, var(--backend-color-primary-dark, #4757d4) 100%);
+.weline-pixel-trend-bar span {
+    display: block;
+    width: 100%;
+    min-height: 2px;
+    height: var(--bar-height);
+    background: linear-gradient(180deg, #2f7dd1 0%, #2da56f 100%);
 }
 
-.weline-pixel-stat-card.success {
-    background: linear-gradient(135deg, var(--backend-color-success, #34c38f) 0%, var(--backend-color-success-light, #56d0a5) 100%);
+.weline-pixel-progress {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    overflow: hidden;
 }
 
-.weline-pixel-stat-card.warning {
-    background: linear-gradient(135deg, var(--backend-color-danger, #f46a6a) 0%, var(--backend-color-danger-light, #f68a8a) 100%);
+.weline-pixel-progress span {
+    display: block;
+    height: 100%;
+    width: var(--bar-width);
+    background: #2f7dd1;
 }
 
-.weline-pixel-stat-card.info {
-    background: linear-gradient(135deg, var(--backend-color-info, #50a5f1) 0%, var(--backend-color-info-light, #6fb5f3) 100%);
+.weline-pixel-realtime {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+    gap: 8px;
 }
 
-.weline-pixel-stat-number {
-    font-size: 2.5rem;
-    font-weight: 700;
+.weline-pixel-realtime-item {
+    min-height: 92px;
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: 8px;
+    padding: 10px;
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.weline-pixel-realtime-bar {
+    height: 36px;
+    display: flex;
+    align-items: end;
     margin: 8px 0;
-    color: var(--backend-color-text-inverse, #fff);
 }
 
-.weline-pixel-stat-label {
-    font-size: 0.9rem;
-    opacity: 0.9;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--backend-color-text-inverse, #fff);
+.weline-pixel-realtime-bar span {
+    display: block;
+    width: 100%;
+    min-height: 2px;
+    height: var(--bar-height);
+    border-radius: 4px;
+    background: #d99a2b;
 }
 
-/* 表格样式适配主题 */
-.weline-pixel-dashboard-card .table {
-    color: var(--backend-color-text-primary, #212529);
+.weline-pixel-table-fixed {
+    table-layout: fixed;
 }
 
-.weline-pixel-dashboard-card .table-light {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
+.weline-pixel-url {
+    max-width: 360px;
 }
 
-.weline-pixel-dashboard-card .table-light th {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-    color: var(--backend-color-text-primary, #212529);
-    border-color: var(--backend-color-border-light, #e9ecef);
+@media (max-width: 1199px) {
+    .weline-pixel-toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
-.weline-pixel-dashboard-card .table tbody td {
-    border-color: var(--backend-color-border-light, #e9ecef);
-    color: var(--backend-color-text-primary, #212529);
-}
+@media (max-width: 575px) {
+    .weline-pixel-toolbar {
+        grid-template-columns: 1fr;
+    }
 
-.weline-pixel-dashboard-card .table-striped > tbody > tr:nth-of-type(odd) > * {
-    background: var(--backend-color-bg-secondary, #f8f9fa);
-}
-
-.weline-pixel-dashboard-card .table-hover > tbody > tr:hover > * {
-    background: var(--backend-color-table-bg-hover, #e9ecef);
-}
-
-/* 页面标题适配 */
-.page-title-box h4 {
-    color: var(--backend-color-text-primary, #212529);
-}
-
-/* 文字颜色适配 */
-.weline-pixel-dashboard-card .text-muted {
-    color: var(--backend-color-text-secondary, #6c757d) !important;
+    .weline-pixel-metric-value {
+        font-size: 24px;
+    }
 }
 </style>
 
-<!-- 页面标题 -->
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0 font-size-18"><lang>像素统计面板</lang></h4>
-            <div>
-                <button type="button" class="btn btn-primary btn-sm" id="refreshPixelData">
-                    <i class="mdi mdi-refresh"></i> <lang>刷新</lang>
-                </button>
-                <button type="button" class="btn btn-success btn-sm" id="exportPixelData">
-                    <i class="mdi mdi-download"></i> <lang>导出</lang>
-                </button>
-                <label class="ms-2">
-                    <input type="checkbox" id="autoRefresh">
-                    <lang>自动刷新</lang>
-                </label>
+<div class="weline-pixel-dashboard container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+        <div>
+            <h1 class="h3 mb-1"><lang>多站点事件监听看板</lang></h1>
+            <div class="text-muted">
+                <lang>按站点、事件和时间范围查看像素事件、实时趋势、来源与最近触发记录。</lang>
             </div>
         </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="<?= $h($refreshUrl) ?>" class="btn btn-outline-secondary btn-sm">
+                <i class="mdi mdi-refresh"></i> <lang>刷新</lang>
+            </a>
+            <a href="<?= $h($exportUrl) ?>" class="btn btn-primary btn-sm">
+                <i class="mdi mdi-download"></i> <lang>导出 CSV</lang>
+            </a>
+        </div>
     </div>
-</div>
 
-<!-- 消息提示区域 -->
-<div class='row'>
-    <div class="col-12">
-        <template>Weline_Component::message.phtml</template>
+    <div class="row">
+        <div class="col-12">
+            <template>Weline_Component::message.phtml</template>
+        </div>
     </div>
-</div>
 
-<!-- 统计卡片 -->
-<div class="row">
-    <div class="col-xl-3 col-md-6">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body weline-pixel-stat-card primary">
-                <div class="weline-pixel-stat-label"><lang>总记录数</lang></div>
-                <div class="weline-pixel-stat-number"><?= number_format($stats['total_count'] ?? 0) ?></div>
-            </div>
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" action="<?= $h($this->getUrl('*/pixel_dashboard/index')) ?>" class="weline-pixel-toolbar">
+                <div>
+                    <label class="form-label"><lang>站点</lang></label>
+                    <select name="websiteId" class="form-select">
+                        <option value="" <?= $selectedWebsite === '' ? 'selected' : '' ?>><lang>全部站点</lang></option>
+                        <?php foreach ($websiteOptions as $option): ?>
+                            <?php $siteId = (string)($option['id'] ?? ''); ?>
+                            <option value="<?= $h($siteId) ?>" <?= $selectedWebsite === $siteId ? 'selected' : '' ?>>
+                                <?= $h($option['label'] ?? __('站点 %{1}', [$siteId])) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label"><lang>事件</lang></label>
+                    <select name="event" class="form-select">
+                        <option value="" <?= $selectedEvent === '' ? 'selected' : '' ?>><lang>全部事件</lang></option>
+                        <?php foreach ($eventOptions as $eventOption): ?>
+                            <option value="<?= $h($eventOption) ?>" <?= $selectedEvent === (string)$eventOption ? 'selected' : '' ?>>
+                                <?= $h($eventOption) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label"><lang>时间范围</lang></label>
+                    <select name="range" class="form-select">
+                        <?php foreach ($rangeLabels as $rangeValue => $rangeLabel): ?>
+                            <option value="<?= $h($rangeValue) ?>" <?= $selectedRange === $rangeValue ? 'selected' : '' ?>>
+                                <?= $h($rangeLabel) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label"><lang>开始日期</lang></label>
+                    <input type="date" name="startDate" class="form-control" value="<?= $h($startInput) ?>">
+                </div>
+                <div>
+                    <label class="form-label"><lang>结束日期</lang></label>
+                    <input type="date" name="endDate" class="form-control" value="<?= $h($endInput) ?>">
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="mdi mdi-filter-outline"></i> <lang>应用筛选</lang>
+                    </button>
+                    <a href="<?= $h($this->getUrl('*/pixel_dashboard/index')) ?>" class="btn btn-outline-secondary">
+                        <lang>重置</lang>
+                    </a>
+                </div>
+            </form>
         </div>
     </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body weline-pixel-stat-card success">
-                <div class="weline-pixel-stat-label"><lang>已处理</lang></div>
-                <div class="weline-pixel-stat-number"><?= number_format($stats['dealed_count'] ?? 0) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body weline-pixel-stat-card warning">
-                <div class="weline-pixel-stat-label"><lang>未处理</lang></div>
-                <div class="weline-pixel-stat-number"><?= number_format($stats['un_deal_count'] ?? 0) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body weline-pixel-stat-card info">
-                <div class="weline-pixel-stat-label"><lang>站点数量</lang></div>
-                <div class="weline-pixel-stat-number"><?= count($websiteIds) ?></div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- 趋势图表和事件分布 -->
-<div class="row">
-    <div class="col-xl-8">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body">
-                <h4 class="card-title mb-4">
-                    <lang>最近7天趋势</lang>
-                    <small class="text-muted ms-2">
-                        <lang>总价值：</lang><span id="totalValue"><?= number_format($stats['total_value'] ?? 0) ?></span>
-                    </small>
-                </h4>
-                <canvas id="trendChart" height="80"></canvas>
+    <div class="row g-3 mb-3">
+        <div class="col-xl-3 col-md-6">
+            <div class="card h-100 weline-pixel-metric">
+                <div class="card-body">
+                    <div class="weline-pixel-metric-label"><lang>事件总数</lang></div>
+                    <div class="weline-pixel-metric-value"><?= $num($summary['total_events'] ?? 0) ?></div>
+                    <div class="weline-pixel-metric-sub">
+                        <span class="<?= $h($eventChangeClass) ?>"><?= $eventChange >= 0 ? '+' : '' ?><?= $num($eventChange, 2) ?>%</span>
+                        <lang>较上一周期</lang>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card h-100 weline-pixel-metric">
+                <div class="card-body">
+                    <div class="weline-pixel-metric-label"><lang>活跃用户</lang></div>
+                    <div class="weline-pixel-metric-value"><?= $num($summary['active_users'] ?? 0) ?></div>
+                    <div class="weline-pixel-metric-sub">
+                        <lang>人均事件</lang> <?= $num($summary['events_per_user'] ?? 0, 2) ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card h-100 weline-pixel-metric">
+                <div class="card-body">
+                    <div class="weline-pixel-metric-label"><lang>事件类型</lang></div>
+                    <div class="weline-pixel-metric-value"><?= $num($summary['event_types'] ?? 0) ?></div>
+                    <div class="weline-pixel-metric-sub">
+                        <lang>活跃站点</lang> <?= $num($summary['active_sites'] ?? 0) ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card h-100 weline-pixel-metric">
+                <div class="card-body">
+                    <div class="weline-pixel-metric-label"><lang>累计价值</lang></div>
+                    <div class="weline-pixel-metric-value"><?= $num($summary['total_value'] ?? 0, 2) ?></div>
+                    <div class="weline-pixel-metric-sub">
+                        <lang>价值事件占比</lang> <?= $num($summary['value_event_rate'] ?? 0, 2) ?>%
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-xl-4">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>事件分布</lang></h4>
-                <canvas id="eventDistributionChart" height="200"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- 站点统计 -->
-<?php if (!empty($websiteStats)): ?>
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card weline-pixel-dashboard-card">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><lang>站点统计</lang></h4>
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle table-nowrap mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th><lang>站点ID</lang></th>
-                                <th><lang>总记录数</lang></th>
-                                <th><lang>已处理</lang></th>
-                                <th><lang>未处理</lang></th>
-                                <th><lang>事件类型数</lang></th>
-                                <th><lang>操作</lang></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($websiteStats as $websiteId => $summary): ?>
-                            <tr>
-                                <td><?= $websiteId ?></td>
-                                <td><?= number_format($summary['total_count'] ?? 0) ?></td>
-                                <td><?= number_format($summary['dealed_count'] ?? 0) ?></td>
-                                <td><?= number_format($summary['un_deal_count'] ?? 0) ?></td>
-                                <td><?= $summary['event_count'] ?? 0 ?></td>
-                                <td>
-                                    <a href="<?= $this->getUrl('*/pixel_dashboard/detail') ?>?websiteId=<?= $websiteId ?>" class="btn btn-sm btn-primary">
-                                        <lang>查看详情</lang>
-                                    </a>
-                                </td>
-                            </tr>
+    <div class="row g-3 mb-3">
+        <div class="col-xl-8">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+                        <div>
+                            <h2 class="h5 mb-1"><lang>事件趋势</lang></h2>
+                            <div class="text-muted small">
+                                <?= $h($filters['start_day'] ?? '') ?> - <?= $h($filters['end_day'] ?? '') ?>
+                            </div>
+                        </div>
+                        <span class="badge bg-light text-dark border">
+                            <lang>服务端统计</lang>
+                        </span>
+                    </div>
+                    <?php if (!empty($trend)): ?>
+                        <div class="weline-pixel-trend">
+                            <?php foreach ($trend as $row): ?>
+                                <?php $height = max(2, round(((int)($row['count'] ?? 0) / $trendMax) * 100)); ?>
+                                <div class="weline-pixel-trend-item text-center">
+                                    <div class="weline-pixel-trend-bar" title="<?= $h(($row['date'] ?? '') . ' / ' . ($row['count'] ?? 0)) ?>">
+                                        <span style="--bar-height: <?= (int)$height ?>%;"></span>
+                                    </div>
+                                    <div class="small mt-2"><?= $h(substr((string)($row['date'] ?? ''), 5)) ?></div>
+                                    <div class="small fw-semibold"><?= $num($row['count'] ?? 0) ?></div>
+                                </div>
                             <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-muted"><lang>暂无趋势数据。</lang></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><lang>最近 60 分钟</lang></h2>
+                    <?php if (!empty($realtimeRows)): ?>
+                        <div class="weline-pixel-realtime">
+                            <?php foreach ($realtimeRows as $row): ?>
+                                <?php $height = max(2, round(((int)($row['count'] ?? 0) / $realtimeMax) * 100)); ?>
+                                <div class="weline-pixel-realtime-item">
+                                    <div class="small text-muted"><?= $h(substr((string)($row['timestamp'] ?? ''), 11, 5)) ?></div>
+                                    <div class="weline-pixel-realtime-bar">
+                                        <span style="--bar-height: <?= (int)$height ?>%;"></span>
+                                    </div>
+                                    <div class="fw-semibold"><?= $num($row['count'] ?? 0) ?></div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-muted"><lang>最近 60 分钟暂无事件。</lang></div>
+                    <?php endif; ?>
+                    <div class="small text-muted mt-3">
+                        <lang>处理完成率</lang> <?= $num($summary['processed_rate'] ?? 0, 2) ?>%
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-xl-7">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><lang>事件排行</lang></h2>
+                    <?php if (!empty($eventRows)): ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                <tr>
+                                    <th><lang>事件名称</lang></th>
+                                    <th class="text-end"><lang>次数</lang></th>
+                                    <th><lang>占比</lang></th>
+                                    <th class="text-end"><lang>用户</lang></th>
+                                    <th class="text-end"><lang>价值</lang></th>
+                                    <th><lang>最近触发</lang></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($eventRows as $row): ?>
+                                    <?php $barWidth = max(2, round(((int)($row['count'] ?? 0) / $eventMax) * 100)); ?>
+                                    <tr>
+                                        <td class="fw-semibold"><?= $h($row['event'] ?? '') ?></td>
+                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td>
+                                            <div class="weline-pixel-progress" title="<?= $num($row['share'] ?? 0, 2) ?>%">
+                                                <span style="--bar-width: <?= (int)$barWidth ?>%;"></span>
+                                            </div>
+                                            <div class="small text-muted mt-1"><?= $num($row['share'] ?? 0, 2) ?>%</div>
+                                        </td>
+                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['total_value'] ?? 0, 2) ?></td>
+                                        <td class="small text-muted"><?= $h($row['last_seen'] ?? '') ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-muted"><lang>暂无事件排行数据。</lang></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-5">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><lang>站点对比</lang></h2>
+                    <?php if (!empty($siteRows)): ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                <tr>
+                                    <th><lang>站点</lang></th>
+                                    <th class="text-end"><lang>事件</lang></th>
+                                    <th class="text-end"><lang>用户</lang></th>
+                                    <th class="text-end"><lang>类型</lang></th>
+                                    <th></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($siteRows as $row): ?>
+                                    <?php
+                                    $siteQuery = $currentQuery;
+                                    $siteQuery['websiteId'] = (string)($row['website_id'] ?? 0);
+                                    $siteUrl = $this->getUrl('*/pixel_dashboard/index') . '?' . http_build_query($siteQuery);
+                                    ?>
+                                    <tr>
+                                        <td class="fw-semibold"><?= __('站点 %{1}', [(int)($row['website_id'] ?? 0)]) ?></td>
+                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['event_types'] ?? 0) ?></td>
+                                        <td class="text-end">
+                                            <a href="<?= $h($siteUrl) ?>" class="btn btn-sm btn-outline-primary">
+                                                <i class="mdi mdi-chart-line"></i> <lang>查看</lang>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-muted"><lang>暂无站点对比数据。</lang></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><lang>来源</lang></h2>
+                    <?php if (!empty($sourceRows)): ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                <tr>
+                                    <th><lang>来源</lang></th>
+                                    <th class="text-end"><lang>事件</lang></th>
+                                    <th class="text-end"><lang>用户</lang></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($sourceRows as $row): ?>
+                                    <tr>
+                                        <td><?= ($row['source'] ?? '') === 'direct' ? __('直接访问') : $h($row['source'] ?? '') ?></td>
+                                        <td class="text-end"><?= $num($row['count'] ?? 0) ?></td>
+                                        <td class="text-end"><?= $num($row['active_users'] ?? 0) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-muted"><lang>暂无来源数据。</lang></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-8">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><lang>最近事件</lang></h2>
+                    <?php if (!empty($recentEvents)): ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 weline-pixel-table-fixed">
+                                <thead>
+                                <tr>
+                                    <th style="width: 150px;"><lang>时间</lang></th>
+                                    <th style="width: 92px;"><lang>站点</lang></th>
+                                    <th style="width: 160px;"><lang>事件</lang></th>
+                                    <th><lang>URL</lang></th>
+                                    <th style="width: 128px;"><lang>IP</lang></th>
+                                    <th style="width: 92px;" class="text-end"><lang>价值</lang></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($recentEvents as $row): ?>
+                                    <tr>
+                                        <td class="small text-muted"><?= $h($row['created_at'] ?? '') ?></td>
+                                        <td><?= $num($row['website_id'] ?? 0) ?></td>
+                                        <td class="fw-semibold text-truncate" title="<?= $h($row['event'] ?? '') ?>"><?= $h($row['event'] ?? '') ?></td>
+                                        <td class="weline-pixel-url text-truncate" title="<?= $h($row['url'] ?? '') ?>"><?= $h($row['url'] ?? '') ?></td>
+                                        <td class="small"><?= $h($row['ip'] ?? '') ?></td>
+                                        <td class="text-end"><?= $num($row['value'] ?? 0, 2) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-muted"><lang>暂无最近事件。</lang></div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
 </div>
-<?php endif; ?>
-
-<script>
-(function() {
-    'use strict';
-    
-    var trends = <?= json_encode($trends) ?>;
-    var topEvents = <?= json_encode($top_events ?? []) ?>;
-    var websiteIds = <?= json_encode($websiteIds ?? []) ?>;
-    var autoRefreshInterval = null;
-    
-    // 趋势图表
-    var trendCtx = document.getElementById('trendChart');
-    if (trendCtx) {
-        new Chart(trendCtx, {
-            type: 'line',
-            data: {
-                labels: trends.map(function(item) { return item.date; }),
-                datasets: [{
-                    label: '<?= __('记录数') ?>',
-                    data: trends.map(function(item) { return item.count || 0; }),
-                    borderColor: 'rgb(102, 126, 234)',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y'
-                }, {
-                    label: '<?= __('价值') ?>',
-                    data: trends.map(function(item) { return item.value || 0; }),
-                    borderColor: 'rgb(17, 153, 142)',
-                    backgroundColor: 'rgba(17, 153, 142, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y1'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: { display: true }
-                },
-                scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        beginAtZero: true,
-                        title: { display: true, text: '<?= __('记录数') ?>' }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        beginAtZero: true,
-                        grid: { drawOnChartArea: false },
-                        title: { display: true, text: '<?= __('价值') ?>' }
-                    }
-                }
-            }
-        });
-    }
-
-    // 事件分布饼图
-    var eventDistributionCtx = document.getElementById('eventDistributionChart');
-    if (eventDistributionCtx) {
-        var eventLabels = Object.keys(topEvents);
-        var eventData = Object.values(topEvents);
-        
-        new Chart(eventDistributionCtx, {
-            type: 'pie',
-            data: {
-                labels: eventLabels,
-                datasets: [{
-                    data: eventData,
-                    backgroundColor: [
-                        'rgba(102, 126, 234, 0.8)',
-                        'rgba(17, 153, 142, 0.8)',
-                        'rgba(240, 147, 251, 0.8)',
-                        'rgba(79, 172, 254, 0.8)',
-                        'rgba(255, 99, 132, 0.8)',
-                        'rgba(54, 162, 235, 0.8)',
-                        'rgba(255, 206, 86, 0.8)',
-                        'rgba(75, 192, 192, 0.8)',
-                        'rgba(153, 102, 255, 0.8)',
-                        'rgba(255, 159, 64, 0.8)'
-                    ]
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: { display: true, position: 'bottom' }
-                }
-            }
-        });
-    }
-
-    function refreshData() {
-        if (websiteIds.length > 0) {
-            var firstWebsiteId = websiteIds[0];
-            fetch('<?= $this->getUrl("*/pixel_dashboard/getRealtimeData") ?>?websiteId=' + firstWebsiteId + '&interval=10&hours=24')
-                .then(function(response) { return response.json(); })
-                .then(function(data) {
-                    if (data.code === 200 && data.data) {
-                        console.log('实时数据已更新', data.data);
-                    }
-                })
-                .catch(function(error) {
-                    console.error('刷新数据失败:', error);
-                });
-        }
-    }
-
-    function toggleAutoRefresh() {
-        var checkbox = document.getElementById('autoRefresh');
-        if (checkbox.checked) {
-            autoRefreshInterval = setInterval(refreshData, 30000);
-        } else {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
-            }
-        }
-    }
-
-    function exportData() {
-        var websiteId = websiteIds.length > 0 ? websiteIds[0] : 0;
-        var url = '<?= $this->getUrl("*/pixel_dashboard/export") ?>?websiteId=' + websiteId + '&format=csv';
-        window.open(url, '_blank');
-    }
-
-    // 绑定事件
-    document.getElementById('refreshPixelData').addEventListener('click', refreshData);
-    document.getElementById('exportPixelData').addEventListener('click', exportData);
-    document.getElementById('autoRefresh').addEventListener('change', toggleAutoRefresh);
-})();
-</script>

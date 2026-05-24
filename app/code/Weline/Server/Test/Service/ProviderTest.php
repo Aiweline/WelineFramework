@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Provider\DispatcherProvider;
 use Weline\Server\Service\Provider\HttpRedirectProvider;
+use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\Provider\WorkerProvider;
 
@@ -100,7 +101,7 @@ class ProviderTest extends TestCase
         $command = $provider->buildCommand(0, $this->context);
 
         $this->assertStringContainsString('dispatcher.php', $command->script);
-        $this->assertContains('127.0.0.1', $command->arguments);
+        $this->assertContains('0.0.0.0', $command->arguments);
         $this->assertContains('443', $command->arguments);
         $this->assertContains('10443', $command->arguments);
         $this->assertContains('4', $command->arguments);
@@ -222,6 +223,51 @@ class ProviderTest extends TestCase
         );
 
         $this->assertFalse($provider->isEnabled($context));
+    }
+
+    public function testSharedRuntimeDisablesLocalSessionAndMemoryProviders(): void
+    {
+        $context = new ServiceContext(
+            instanceName: 'shared-consumer',
+            epoch: 1,
+            controlPort: 19000,
+            masterPid: 12345,
+            host: '127.0.0.1',
+            mainPort: 9981,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'multi',
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'worker_count' => 2,
+                    'shared_state' => [
+                        'runtime' => [
+                            'session' => [
+                                'host' => '127.0.0.1',
+                                'port' => 26422,
+                                'token_file_name' => 'session_server.token',
+                                'shared_service' => true,
+                                'reuse_existing' => true,
+                            ],
+                            'memory' => [
+                                'host' => '127.0.0.1',
+                                'port' => 26423,
+                                'token_file_name' => 'memory_server.token',
+                                'shared_service' => true,
+                                'created_now' => true,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        );
+
+        $this->assertFalse((new SessionServerProvider())->isEnabled($context));
+        $this->assertFalse((new MemoryServerProvider())->isEnabled($context));
     }
 
     public function testHttpRedirectProviderBasic(): void

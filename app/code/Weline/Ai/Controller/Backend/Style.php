@@ -113,6 +113,30 @@ class Style extends BackendController
         }
     }
 
+    #[Acl('Weline_Ai::ai_style_delete', 'Delete AI style', 'mdi-delete-outline', 'Delete AI custom style')]
+    public function postDelete(): string
+    {
+        $adminId = $this->adminId();
+        if ($adminId <= 0) {
+            return $this->jsonResponse(['success' => false, 'message' => 'Admin user is required.'], 401);
+        }
+
+        $code = \trim((string)$this->bodyValue('code', $this->request->getParam('code', '')));
+        if ($code === '') {
+            return $this->jsonResponse(['success' => false, 'code' => 'INVALID_STYLE_CODE', 'message' => 'Style code is required.'], 400);
+        }
+
+        try {
+            return $this->jsonResponse([
+                'success' => true,
+                'deleted' => $this->styleService()->deleteCustom($code, $adminId),
+                'code' => $code,
+            ]);
+        } catch (\Throwable $throwable) {
+            return $this->jsonResponse(['success' => false, 'code' => 'STYLE_DELETE_FAILED', 'message' => $throwable->getMessage()], 400);
+        }
+    }
+
     #[Acl('Weline_Ai::ai_style_clone', 'Clone AI style', 'mdi-content-copy', 'Clone builtin/module style')]
     public function postCloneBuiltin(): string
     {

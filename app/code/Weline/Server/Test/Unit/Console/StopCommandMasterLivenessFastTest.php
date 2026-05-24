@@ -12,23 +12,9 @@ use Weline\Server\Service\Contract\ServerInstanceInfo;
 
 final class StopCommandMasterLivenessFastTest extends TestCase
 {
-    public function testMasterAvailabilityFastPathReturnsTrueWhenProcessExistsAndNotExited(): void
+    public function testMasterAvailabilityUsesEndpointMetadataWithoutPidProbe(): void
     {
         $stop = new class extends Stop {
-            public bool $hasExitedFast = false;
-            public bool $processExists = true;
-
-            protected function hasMasterExitedFast(int $masterPid): bool
-            {
-                unset($masterPid);
-                return $this->hasExitedFast;
-            }
-
-            protected function masterProcessExists(int $masterPid): bool
-            {
-                unset($masterPid);
-                return $this->processExists;
-            }
         };
 
         self::assertTrue($this->invokeProtected(
@@ -38,38 +24,29 @@ final class StopCommandMasterLivenessFastTest extends TestCase
         ));
     }
 
-    public function testMasterAvailabilityFastPathReturnsFalseWhenPidAlreadyExited(): void
+    public function testMasterAvailabilityReturnsFalseWhenEndpointCannotUseIpc(): void
     {
         $stop = new class extends Stop {
-            public bool $hasExitedFast = true;
-            public bool $processExists = false;
-
-            protected function hasMasterExitedFast(int $masterPid): bool
-            {
-                unset($masterPid);
-                return $this->hasExitedFast;
-            }
-
-            protected function masterProcessExists(int $masterPid): bool
-            {
-                unset($masterPid);
-                return $this->processExists;
-            }
         };
 
         self::assertFalse($this->invokeProtected(
             $stop,
             'isMasterProcessAvailableForStop',
-            $this->createInstanceInfo(12345)
+            $this->createInstanceInfo(0)
+        ));
+        self::assertFalse($this->invokeProtected(
+            $stop,
+            'isMasterProcessAvailableForStop',
+            $this->createInstanceInfo(12345, 0)
         ));
     }
 
-    private function createInstanceInfo(int $masterPid): ServerInstanceInfo
+    private function createInstanceInfo(int $masterPid, int $controlPort = 19982): ServerInstanceInfo
     {
         return new ServerInstanceInfo(
             'default',
             $masterPid,
-            19982,
+            $controlPort,
             '127.0.0.1',
             9982,
             false,

@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Reuse the canonical Weline I18n header language switcher in WeShop storefront header slots.
+ *
+ * @hook WeShop_Frontend::frontend::partials::header::language-switcher
+ * @hook-priority 100
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+include __DIR__ . '/../../../../header-language-switcher.phtml';

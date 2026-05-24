@@ -129,6 +129,46 @@ $safeBackUrl = htmlspecialchars((string) ($_SERVER['REQUEST_URI'] ?? ''));
         font-size: 0.8rem;
         color: var(--backend-color-text-secondary);
     }
+    .order-item-options {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.5rem;
+        margin-top: 0.25rem;
+        color: var(--backend-color-text-secondary);
+        font-size: 0.78rem;
+    }
+    .order-item-options .weshop-product-option {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        min-width: 0;
+    }
+    .order-item-options .weshop-product-option__label {
+        font-weight: 600;
+        color: var(--backend-color-text-primary);
+    }
+    .order-item-options .weshop-product-option__swatch {
+        width: 0.95rem;
+        height: 0.95rem;
+        flex: 0 0 0.95rem;
+        border: 1px solid rgba(17, 24, 39, 0.18);
+        background: #fff;
+    }
+    .order-item-options .weshop-product-option__swatch--color {
+        border-radius: 999px;
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.62);
+    }
+    .order-item-options .weshop-product-option__swatch--image {
+        border-radius: 0.25rem;
+        overflow: hidden;
+    }
+    .order-item-options .weshop-product-option__swatch img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+    }
     .order-item-price, .order-item-qty, .order-item-total {
         text-align: right;
         font-weight: 600;
@@ -312,6 +352,7 @@ $safeBackUrl = htmlspecialchars((string) ($_SERVER['REQUEST_URI'] ?? ''));
                                     <?php
                                     $itemName = htmlspecialchars((string) ($item['product_name'] ?? ''));
                                     $itemSku = htmlspecialchars((string) ($item['product_sku'] ?? ''));
+                                    $itemOptions = is_array($item['options'] ?? null) ? $item['options'] : [];
                                     $itemPrice = (float) ($item['price'] ?? 0);
                                     $itemQty = (int) ($item['quantity'] ?? 0);
                                     $itemTotal = (float) ($item['total'] ?? 0);
@@ -327,6 +368,11 @@ $safeBackUrl = htmlspecialchars((string) ($_SERVER['REQUEST_URI'] ?? ''));
                                             <div class='order-item-sku'>
                                                 <lang>SKU</lang>: <?= $itemSku ?: '-' ?>
                                             </div>
+                                            <?php if ($itemOptions !== []): ?>
+                                                <div class='order-item-options'>
+                                                    <?= \WeShop\Product\Helper\ProductOptionRenderer::renderItems($itemOptions) ?>
+                                                </div>
+                                            <?php endif; ?>
                                         </td>
                                         <td class='text-end order-item-price'>
                                             <?= $this->formatPrice($itemPrice) ?>

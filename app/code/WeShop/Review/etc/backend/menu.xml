@@ -4,9 +4,14 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
 
     <!-- 评论管理 - 归入 WeShop 内容管理 -->
-    <menu source="WeShop_Review::review_management" name="weshop_review_management" title="Review Management"
+    <menu source="WeShop_Review::review_management" name="weshop_review_management" title="评论管理"
           action="*/backend/review"
           parent="WeShop_Shop::main"
           icon="mdi mdi-star-outline"
           order="40"/>
+    <menu source="WeShop_Review::review_rating_options" name="weshop_review_rating_options" title="评价项配置"
+          action="*/backend/review/config"
+          parent="WeShop_Shop::main"
+          icon="mdi mdi-tune-variant"
+          order="41"/>
 </menus>

@@ -1074,7 +1074,14 @@ class Url implements UrlInterface
             }
             return self::$parserUrlCache[$url];
         }
-        $parsed = parse_url($url);
+        try {
+            $parsed = parse_url($url);
+        } catch (\ValueError $e) {
+            $parsed = [];
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[Url] parse_url failed for malformed URL: ' . $e->getMessage());
+            }
+        }
         self::$parserUrlCache[$url] = is_array($parsed) ? $parsed : [];
         if ($key) {
             return self::$parserUrlCache[$url][$key] ?? $default;

@@ -24,17 +24,25 @@ class QAQuestionPageDataServiceTest extends TestCase
         $customerContext->expects($this->once())->method('getUserId')->willReturn(12);
 
         $qaService->expects($this->once())
-            ->method('getProductQuestions')
-            ->with(99)
+            ->method('getProductQuestionsPage')
+            ->with(99, 1, 10, 0)
             ->willReturn([
-                [
-                    'question_id' => 1,
-                    'customer_id' => 12,
-                    'question' => 'Is this waterproof?',
-                    'answer' => 'Yes, IPX4 rated.',
-                    'created_at' => '2026-03-24 10:00:00',
+                'items' => [
+                    [
+                        'question_id' => 1,
+                        'customer_id' => 12,
+                        'source_type' => QAService::SOURCE_CUSTOMER,
+                        'question' => 'Is this waterproof?',
+                        'answer' => 'Yes, IPX4 rated.',
+                        'created_at' => '2026-03-24 10:00:00',
+                    ],
                 ],
+                'total' => 1,
+                'page' => 1,
+                'page_size' => 10,
+                'page_count' => 1,
             ]);
+        $qaService->method('getSourceTypeLabel')->willReturn('客户问答');
 
         $product = $this->createMock(Product::class);
         $product->method('getData')->willReturn(['product_id' => 99, 'name' => 'Sample Product']);
@@ -56,5 +64,6 @@ class QAQuestionPageDataServiceTest extends TestCase
         $this->assertSame('/customer/account/login', $result['login_url']);
         $this->assertSame('Sample Product', $result['product']['name']);
         $this->assertTrue($result['qa_list'][0]['is_owner']);
+        $this->assertSame('客户问答', $result['qa_list'][0]['source_label']);
     }
 }

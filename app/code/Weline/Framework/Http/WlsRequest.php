@@ -78,6 +78,75 @@ class WlsRequest extends Request
 
         return \implode('-', \array_map(static fn(string $part): string => \ucfirst($part), \explode('-', $name)));
     }
+
+    /**
+     * @return array{host: string, server_name: string, port: int|null}|null
+     */
+    private static function parseHostAuthority(string $host): ?array
+    {
+        $host = \trim($host);
+        if ($host === ''
+            || \str_contains($host, '/')
+            || \str_contains($host, '\\')
+            || \preg_match('/[\r\n]/', $host)
+        ) {
+            return null;
+        }
+
+        if ($host[0] === '[') {
+            if (!\preg_match('/^\[([0-9A-Fa-f:.]+)\](?::([0-9]{1,5}))?$/', $host, $matches)) {
+                return null;
+            }
+            if (!\filter_var($matches[1], \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+                return null;
+            }
+            $port = isset($matches[2]) ? (int)$matches[2] : null;
+            if ($port !== null && !self::isValidTcpPort($port)) {
+                return null;
+            }
+
+            return [
+                'host' => '[' . $matches[1] . ']',
+                'server_name' => $matches[1],
+                'port' => $port,
+            ];
+        }
+
+        if (\str_contains($host, '[') || \str_contains($host, ']') || \substr_count($host, ':') > 1) {
+            return null;
+        }
+
+        $hostName = $host;
+        $port = null;
+        if (\str_contains($host, ':')) {
+            [$hostName, $portPart] = \explode(':', $host, 2);
+            if (!\ctype_digit($portPart)) {
+                return null;
+            }
+            $port = (int)$portPart;
+            if (!self::isValidTcpPort($port)) {
+                return null;
+            }
+        }
+
+        $hostName = \trim($hostName);
+        if ($hostName === ''
+            || !\preg_match('/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/', $hostName)
+        ) {
+            return null;
+        }
+
+        return [
+            'host' => $hostName,
+            'server_name' => $hostName,
+            'port' => $port,
+        ];
+    }
+
+    private static function isValidTcpPort(int $port): bool
+    {
+        return $port > 0 && $port <= 65535;
+    }
     
     /**
      * 解析原始 HTTP 数据
@@ -124,7 +193,15 @@ class WlsRequest extends Request
         // parsedHttps 将在后面根据实际检测结果设置
         
         // 解析 URI
-        $uriParts = \parse_url($uri);
+        try {
+            $uriParts = \parse_url($uri);
+            $uriParts = \is_array($uriParts) ? $uriParts : [];
+        } catch (\ValueError $e) {
+            $uriParts = [];
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[WlsRequest] parse_url failed for malformed request URI: ' . $e->getMessage());
+            }
+        }
         $path = $uriParts['path'] ?? '/';
         $queryString = $uriParts['query'] ?? '';
         $this->parsedQueryString = $queryString;
@@ -220,7 +297,8 @@ class WlsRequest extends Request
         if ($originalHost === '') {
             throw new \InvalidArgumentException('Missing Host header in request.');
         }
-        if (\str_contains($originalHost, '/')) {
+        $hostAuthority = self::parseHostAuthority($originalHost);
+        if ($hostAuthority === null) {
             throw new \InvalidArgumentException('Invalid Host header value.');
         }
 
@@ -305,15 +383,18 @@ class WlsRequest extends Request
         }
         
         // 解析端口（优先使用 Weline-Original-Port）
-        $hostParts = \explode(':', $originalHost);
-        $hostName = $hostParts[0];
-        $hostPort = $hostParts[1] ?? null;
+        $hostName = $hostAuthority['host'];
+        $serverName = $hostAuthority['server_name'];
+        $hostPort = $hostAuthority['port'];
         
         // 端口优先级：Weline-Original-Port > Host 头中的端口 > 协议默认端口
-        if (!empty($originalPort)) {
+        if ($originalPort !== '') {
+            if (!\ctype_digit((string)$originalPort) || !self::isValidTcpPort((int)$originalPort)) {
+                throw new \InvalidArgumentException('Invalid forwarded port value.');
+            }
             $serverPort = (int)$originalPort;
         } elseif ($hostPort !== null) {
-            $serverPort = (int)$hostPort;
+            $serverPort = $hostPort;
         } else {
             $serverPort = $isHttps ? 443 : 80;
         }
@@ -333,7 +414,7 @@ class WlsRequest extends Request
         $server['HTTP_HOST'] = $normalizedHost;
         $this->parsedHost = $normalizedHost;
 
-        $server['SERVER_NAME'] = $hostName;
+        $server['SERVER_NAME'] = $serverName;
         $server['SERVER_PORT'] = (string)$serverPort;
         
         // 构建完整请求 URI（默认端口 80/443 不在 URL 中显示）

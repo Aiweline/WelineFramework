@@ -137,3 +137,42 @@
 "✓ 共恢复 %{1} 个路径","✓ 共恢复 %{1} 个路径"
 "清理: %{1}","清理: %{1}"
 "✓ 缓存清理完成","✓ 缓存清理完成"
+请求方式错误,请求方式错误
+部署配置已保存,部署配置已保存
+部署配置保存失败：%{1},部署配置保存失败：%{1}
+已配置，留空表示不修改,已配置，留空表示不修改
+未配置,未配置
+部署配置,部署配置
+"后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。","后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。"
+项目仓库,项目仓库
+项目仓库地址,项目仓库地址
+项目分支,项目分支
+"Git Remote 名称","Git Remote 名称"
+项目仓库用户名,项目仓库用户名
+"项目仓库 Token","项目仓库 Token"
+部署行为,部署行为
+部署根目录,部署根目录
+"Git 更新模式","Git 更新模式"
+"Composer 命令","Composer 命令"
+部署后命令,部署后命令
+允许覆盖本地改动,允许覆盖本地改动
+允许切换分支,允许切换分支
+"更新 Submodule","更新 Submodule"
+"运行 Composer","运行 Composer"
+核心仓库,核心仓库
+核心仓库地址,核心仓库地址
+核心默认分支,核心默认分支
+核心仓库用户名,核心仓库用户名
+"核心仓库 Token","核心仓库 Token"
+Webhook,Webhook
+监听地址,监听地址
+监听端口,监听端口
+请求路径,请求路径
+"Webhook 分支","Webhook 分支"
+"Webhook 密钥","Webhook 密钥"
+"Bash 命令","Bash 命令"
+Cloudflare,Cloudflare
+启用缓存清理,启用缓存清理
+"Cloudflare Zone ID","Cloudflare Zone ID"
+"Cloudflare API Token","Cloudflare API Token"
+保存配置,保存配置

@@ -103,6 +103,7 @@ final class RenderDataQualityLinter
     private function lintCopy(array $payload): array
     {
         $findings = [];
+        $expectedLocale = $this->resolveExpectedLocale($payload);
         foreach ($this->iterBlocks($payload) as $entry) {
             $text = $this->extractVisibleText($entry['block']);
             if ($text === '') {
@@ -121,6 +122,15 @@ final class RenderDataQualityLinter
                     'copy',
                     'copy.generic_or_placeholder',
                     'Section copy looks generic, placeholder-like, or internal-instruction-like.',
+                    $entry['path']
+                );
+            }
+            if ($this->hasLocaleMismatch($text, $expectedLocale)) {
+                $findings[] = $this->finding(
+                    'error',
+                    'copy',
+                    'copy.locale_mismatch',
+                    'Section copy contains non-target-language planning or block-goal text.',
                     $entry['path']
                 );
             }
@@ -365,9 +375,9 @@ final class RenderDataQualityLinter
                 }
             }
         }
-        foreach (['fields', 'content', 'realtime_content'] as $key) {
+        foreach (['fields', 'content', 'config', 'default_config', 'realtime_content'] as $key) {
             if (\is_array($block[$key] ?? null)) {
-                $this->collectTextLeaves($block[$key], $parts, 6);
+                $this->collectTextLeaves($block[$key], $parts, 6, \in_array($key, ['config', 'default_config'], true));
             }
         }
 
@@ -378,13 +388,21 @@ final class RenderDataQualityLinter
      * @param array<int|string, mixed> $source
      * @param list<string> $parts
      */
-    private function collectTextLeaves(array $source, array &$parts, int $depth): void
+    private function collectTextLeaves(array $source, array &$parts, int $depth, bool $visibleConfigOnly = false, string $path = ''): void
     {
         if ($depth <= 0) {
             return;
         }
-        foreach ($source as $value) {
+        foreach ($source as $key => $value) {
+            $key = \is_int($key) ? (string)$key : \trim((string)$key);
+            $nextPath = $path === '' ? $key : $path . '.' . $key;
+            if ($visibleConfigOnly && $this->isInternalConfigPath($nextPath)) {
+                continue;
+            }
             if (\is_scalar($value)) {
+                if ($visibleConfigOnly && !$this->isVisibleConfigTextPath($nextPath)) {
+                    continue;
+                }
                 $text = \trim(\strip_tags((string)$value));
                 if ($text !== '') {
                     $parts[] = $text;
@@ -392,9 +410,26 @@ final class RenderDataQualityLinter
                 continue;
             }
             if (\is_array($value)) {
-                $this->collectTextLeaves($value, $parts, $depth - 1);
+                $this->collectTextLeaves($value, $parts, $depth - 1, $visibleConfigOnly, $nextPath);
             }
         }
+    }
+
+    private function isInternalConfigPath(string $path): bool
+    {
+        $path = \strtolower($path);
+
+        return \preg_match('/(?:^|\.)(runtime|contract|style|layout|design_tokens|design_tags|visual_signature|image_intent|css_extra|css_responsive|js_content)(?:\.|$)/', $path) === 1;
+    }
+
+    private function isVisibleConfigTextPath(string $path): bool
+    {
+        $path = \strtolower($path);
+        if (\preg_match('/(?:^|\.)(url|href|src|image_url|logo|color|font|shadow|padding|margin|width|height)(?:\.|$)/', $path) === 1) {
+            return false;
+        }
+
+        return \preg_match('/(?:^|\.)(title|heading|headline|subtitle|description|summary|body|copy|text|section_intro|button_text|cta_text|label|alt|aria-label|aria_label|placeholder|html|html_content|html_extra|html_extra_column)$/', $path) === 1;
     }
 
     private function isGenericCopy(string $text): bool
@@ -425,6 +460,49 @@ final class RenderDataQualityLinter
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function resolveExpectedLocale(array $payload): string
+    {
+        foreach ([
+            $payload['content_locale'] ?? null,
+            $payload['default_locale'] ?? null,
+            $payload['locale'] ?? null,
+            $payload['i18n']['primary_locale'] ?? null,
+            $payload['website_profile']['content_locale'] ?? null,
+            $payload['website_profile']['default_locale'] ?? null,
+            $payload['website_profile']['locale'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return \strtolower(\str_replace('_', '-', $locale));
+            }
+        }
+
+        return '';
+    }
+
+    private function hasLocaleMismatch(string $text, string $expectedLocale): bool
+    {
+        if ($expectedLocale === '') {
+            return false;
+        }
+        if ($this->isCjkLocale($expectedLocale)) {
+            return false;
+        }
+
+        return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $text) === 1;
+    }
+
+    private function isCjkLocale(string $locale): bool
+    {
+        return \preg_match('/^(zh|ja|ko)(?:-|$)/i', $locale) === 1;
     }
 
     /**

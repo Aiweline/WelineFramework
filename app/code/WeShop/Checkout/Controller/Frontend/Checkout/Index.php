@@ -53,7 +53,7 @@ class Index extends BaseController
             'cart_customer_id' => $cartCustomerId,
             'authenticated_customer_id' => $authenticatedCustomerId,
         ]);
-        foreach (['selected_shipping_address_id', 'shipping_methods', 'payment_methods', 'cart_summary'] as $methodDataKey) {
+        foreach (['selected_shipping_address_id', 'selected_billing_address_id', 'billing_same_as_shipping', 'shipping_methods', 'payment_methods', 'cart_summary'] as $methodDataKey) {
             if (array_key_exists($methodDataKey, $methodData)) {
                 $pageData[$methodDataKey] = $methodData[$methodDataKey];
             }

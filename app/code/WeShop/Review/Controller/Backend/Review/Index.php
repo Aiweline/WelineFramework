@@ -28,6 +28,7 @@ class Index extends BaseController
                 'reviewApproveUrl' => $this->_url->getBackendUrl('*/backend/review/approve'),
                 'reviewRejectUrl' => $this->_url->getBackendUrl('*/backend/review/reject'),
                 'reviewDeleteUrl' => $this->_url->getBackendUrl('*/backend/review/delete'),
+                'reviewConfigUrl' => $this->_url->getBackendUrl('*/backend/review/config'),
             ],
             $this->reviewAdminPageDataService->getListData($page, $pageSize, [
                 'product_id' => $this->request->getParam('product_id', ''),

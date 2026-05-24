@@ -755,6 +755,10 @@ class MasterControlServer implements ControlPlaneServerInterface
                 WlsLogger::getInstance()->appendLineForMaster($line);
             }
 
+            if ($this->messageHandler) {
+                ($this->messageHandler)($msg, $clientId, $this);
+            }
+
             return;
         }
 

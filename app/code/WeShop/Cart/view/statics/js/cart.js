@@ -220,7 +220,7 @@
             const response = await fetchProductOptions(productId);
             
             if (!response.success) {
-                throw new Error(response.message || '获取产品信息失败');
+                throw new Error(response.message || __('获取产品信息失败'));
             }
 
             if (!response.is_configurable) {
@@ -246,7 +246,7 @@
 
         } catch (error) {
             console.error('[WeShop Cart] Failed to get product options:', error);
-            showToast(error.message || '获取产品信息失败', 'error');
+            showToast(error.message || __('获取产品信息失败'), 'error');
         } finally {
             if (triggerBtn) {
                 setButtonLoading(triggerBtn, false);
@@ -435,16 +435,7 @@
     function updateSelectedDisplay() {
         if (!state.optionsData?.attributes) return;
 
-        const selectedTexts = [];
-        state.optionsData.attributes.forEach(attr => {
-            const selectedOptionId = state.selectedOptions[attr.attribute_id];
-            if (selectedOptionId) {
-                const option = attr.options.find(o => o.option_id === selectedOptionId);
-                if (option) {
-                    selectedTexts.push(`${attr.name}: ${option.value}`);
-                }
-            }
-        });
+        const selectedTexts = getSelectedOptionLabels();
 
         if (elements.selectedOptionsText) {
             elements.selectedOptionsText.textContent = selectedTexts.join(' | ');
@@ -458,7 +449,7 @@
             }
             if (elements.productStock) {
                 if (selectedVariant.stock > 0) {
-                    elements.productStock.textContent = __('库存: ') + selectedVariant.stock;
+                    elements.productStock.textContent = __('库存:') + ' ' + selectedVariant.stock;
                     elements.productStock.className = 'product-stock in-stock';
                 } else {
                     elements.productStock.textContent = __('缺货');
@@ -469,6 +460,23 @@
                 elements.productImage.src = selectedVariant.image;
             }
         }
+    }
+
+    function getSelectedOptionLabels() {
+        if (!state.optionsData?.attributes) return [];
+
+        const selectedTexts = [];
+        state.optionsData.attributes.forEach(attr => {
+            const selectedOptionId = state.selectedOptions[attr.attribute_id];
+            if (selectedOptionId) {
+                const option = attr.options.find(o => o.option_id === selectedOptionId);
+                if (option) {
+                    selectedTexts.push(`${attr.name}: ${option.value}`);
+                }
+            }
+        });
+
+        return selectedTexts;
     }
 
     /**
@@ -511,7 +519,7 @@
         if (!state.currentProductId || !state.optionsData) return;
 
         const selectedOptionIds = Object.values(state.selectedOptions);
-        await addToCart(state.currentProductId, state.qty, selectedOptionIds, elements.addToCartBtn);
+        await addToCart(state.currentProductId, state.qty, selectedOptionIds, elements.addToCartBtn, getSelectedOptionLabels());
         
         // 成功后关闭弹窗
         hideOptionsPopup();
@@ -520,7 +528,7 @@
     /**
      * 添加到购物车
      */
-    async function addToCart(productId, qty = 1, selectedOptions = [], triggerBtn = null) {
+    async function addToCart(productId, qty = 1, selectedOptions = [], triggerBtn = null, selectedOptionLabels = []) {
         if (state.isLoading) return;
         
         state.isLoading = true;
@@ -538,6 +546,7 @@
                 product_id: productId,
                 qty: qty,
                 selected_options: selectedOptions,
+                selected_option_labels: selectedOptionLabels,
             }));
 
             if (result.success) {
@@ -549,6 +558,7 @@
                     quantity: qty,
                     selected_options: selectedOptions,
                     selectedOptions: selectedOptions, // 兼容旧版
+                    selected_option_labels: selectedOptionLabels,
                     cart_item_id: result.cart_item_id,
                     cartItemId: result.cart_item_id, // 兼容旧版
                     cart_count: result.cart_count,
@@ -585,7 +595,7 @@
             } else if (result.requires_login && result.redirect_url) {
                 window.location.href = result.redirect_url;
             } else {
-                throw new Error(result.message || '添加购物车失败');
+                throw new Error(result.message || __('添加购物车失败'));
             }
 
         } catch (error) {
@@ -709,6 +719,12 @@
         if (window.Weline?.i18n?.translate) {
             return window.Weline.i18n.translate(text);
         }
+        if (window.WelineI18n?.translate) {
+            return window.WelineI18n.translate(text);
+        }
+        if (typeof window.__ === 'function') {
+            return window.__(text);
+        }
         return text;
     }
 
@@ -821,7 +837,7 @@
                 if (code !== '') {
                     applyPromoCode(code);
                 } else {
-                    showCartPageMessage('请输入优惠码', 'warning');
+                    showCartPageMessage(__('请输入优惠码'), 'warning');
                 }
             }
         });
@@ -856,7 +872,7 @@
             img.addEventListener('error', function () {
                 const holder = document.createElement('div');
                 holder.className = 'cart-product-placeholder';
-                holder.textContent = '暂无图片';
+                holder.textContent = __('暂无图片');
                 this.replaceWith(holder);
             }, { once: true });
         });
@@ -923,7 +939,7 @@
                 }
 
                 if (Date.now() - startedAt >= API_READY_TIMEOUT_MS) {
-                    reject(new Error('前端 API 尚未加载，请刷新后重试'));
+                    reject(new Error(__('前端 API 尚未加载，请刷新后重试')));
                     return;
                 }
 
@@ -948,7 +964,7 @@
             return await withTimeout(
                 window.Weline.Api.resource(provider),
                 API_READY_TIMEOUT_MS,
-                '前端 API 加载超时，请刷新后重试'
+                __('前端 API 加载超时，请刷新后重试')
             );
         }
 
@@ -966,12 +982,12 @@
                 script.src = '/Weline/Frontend/view/statics/js/weline-api.js?v=20260517-cart-page';
                 script.async = true;
                 script.onload = () => window.setTimeout(resolve, 30);
-                script.onerror = () => reject(new Error('前端 API 模块加载失败，请刷新后重试'));
+                script.onerror = () => reject(new Error(__('前端 API 模块加载失败，请刷新后重试')));
                 document.head.appendChild(script);
             });
         }
 
-        return withTimeout(apiModuleScriptPromise, API_READY_TIMEOUT_MS, '前端 API 模块加载超时，请刷新后重试');
+        return withTimeout(apiModuleScriptPromise, API_READY_TIMEOUT_MS, __('前端 API 模块加载超时，请刷新后重试'));
     }
 
     async function updateCartItem(itemId, qty) {
@@ -984,16 +1000,16 @@
                     quantity: qty,
                 }),
                 API_CALL_TIMEOUT_MS,
-                '更新购物车超时，请稍后重试'
+                __('更新购物车超时，请稍后重试')
             ));
 
             if (data.success !== false) {
                 window.location.reload();
             } else {
-                showCartPageMessage(data.message || '更新购物车失败', 'error');
+                showCartPageMessage(data.message || __('更新购物车失败'), 'error');
             }
         } catch (error) {
-            showCartPageMessage(error.message || '更新购物车失败', 'error');
+            showCartPageMessage(error.message || __('更新购物车失败'), 'error');
         } finally {
             setCartItemBusy(itemId, false);
         }
@@ -1006,16 +1022,16 @@
             const data = normalizeCartApiPayload(await withTimeout(
                 CartApi.remove({ item_id: parseInt(itemId, 10) }),
                 API_CALL_TIMEOUT_MS,
-                '移除商品超时，请稍后重试'
+                __('移除商品超时，请稍后重试')
             ));
 
             if (data.success !== false) {
                 window.location.reload();
             } else {
-                showCartPageMessage(data.message || '移除商品失败', 'error');
+                showCartPageMessage(data.message || __('移除商品失败'), 'error');
             }
         } catch (error) {
-            showCartPageMessage(error.message || '移除商品失败', 'error');
+            showCartPageMessage(error.message || __('移除商品失败'), 'error');
         } finally {
             setCartItemBusy(itemId, false);
         }
@@ -1031,16 +1047,16 @@
             const data = normalizeCartApiPayload(await withTimeout(
                 CartApi.restore({ item_id: parseInt(itemId, 10) }),
                 API_CALL_TIMEOUT_MS,
-                '恢复商品超时，请稍后重试'
+                __('恢复商品超时，请稍后重试')
             ));
 
             if (data.success !== false) {
                 window.location.reload();
             } else {
-                showCartPageMessage(data.message || '恢复商品失败', 'error');
+                showCartPageMessage(data.message || __('恢复商品失败'), 'error');
             }
         } catch (error) {
-            showCartPageMessage(error.message || '恢复商品失败', 'error');
+            showCartPageMessage(error.message || __('恢复商品失败'), 'error');
         } finally {
             if (triggerBtn) {
                 triggerBtn.disabled = false;
@@ -1055,7 +1071,7 @@
             const data = normalizeCartApiPayload(await withTimeout(
                 WishlistApi.addFromCart({ item_id: parseInt(itemId, 10) }),
                 API_CALL_TIMEOUT_MS,
-                '加入稍后再买超时，请稍后重试'
+                __('加入稍后再买超时，请稍后重试')
             ));
 
             if (data.success) {
@@ -1068,9 +1084,9 @@
                 return;
             }
 
-            showCartPageMessage(data.message || '暂时无法加入稍后再买', 'error');
+            showCartPageMessage(data.message || __('暂时无法加入稍后再买'), 'error');
         } catch (error) {
-            showCartPageMessage(error.message || '暂时无法加入稍后再买', 'error');
+            showCartPageMessage(error.message || __('暂时无法加入稍后再买'), 'error');
         } finally {
             setCartItemBusy(itemId, false);
         }
@@ -1084,16 +1100,16 @@
             const data = normalizeCartApiPayload(await withTimeout(
                 PromotionApi.applyCoupon({ code, order_total: orderTotal }),
                 API_CALL_TIMEOUT_MS,
-                '应用优惠码超时，请稍后重试'
+                __('应用优惠码超时，请稍后重试')
             ));
 
             if (data.success) {
                 window.location.reload();
             } else {
-                showCartPageMessage(data.message || '优惠码不可用', 'warning');
+                showCartPageMessage(data.message || __('优惠码不可用'), 'warning');
             }
         } catch (error) {
-            showCartPageMessage(error.message || '优惠码不可用', 'warning');
+            showCartPageMessage(error.message || __('优惠码不可用'), 'warning');
         }
     }
 

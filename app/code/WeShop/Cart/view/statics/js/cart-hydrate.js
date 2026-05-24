@@ -1,11 +1,9 @@
 /**
  * WeShop 购物车按需 hydration
  *
- * 仅在以下情况请求 cart.count API：
- * 1. 用户已登录
- * 2. 访客存在 weline_cart_item_count Cookie 且数量 > 0
- *
- * 首次进站、无购物车 Cookie 的陌生人不会发起任何 cart API 请求。
+ * 不在页面加载阶段自动请求 cart.count。
+ * 迷你购物车打开时由 mini-cart.js 通过 cart.miniItems 拉取完整状态，
+ * 这里仅保留给其它脚本显式调用的数量同步能力。
  */
 (function (window, document) {
     'use strict';
@@ -85,7 +83,8 @@
         const normalized = Math.max(0, parseInt(String(count || 0), 10) || 0);
         document.querySelectorAll('[data-cart-count]').forEach(function (el) {
             el.textContent = normalized > 99 ? '99+' : String(normalized);
-            el.style.display = normalized > 0 ? '' : 'none';
+            const isHeaderBadge = el.classList.contains('cart-count') || !!el.closest('.header-cart-trigger');
+            el.style.display = isHeaderBadge && normalized === 0 ? 'none' : '';
             el.classList.toggle('has-items', normalized > 0);
         });
 
@@ -177,17 +176,12 @@
         window.setTimeout(run, 300);
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', scheduleHydrate);
-    } else {
-        scheduleHydrate();
-    }
-
     window.WeShopCartHydrate = {
         shouldHydrateCart: shouldHydrateCart,
         hydrateCartFromApi: hydrateCartFromApi,
         parseCartCookie: parseCartCookie,
         updateCartCountUi: updateCartCountUi,
         writeCartCookie: writeCartCookie,
+        scheduleHydrate: scheduleHydrate,
     };
 })(window, document);

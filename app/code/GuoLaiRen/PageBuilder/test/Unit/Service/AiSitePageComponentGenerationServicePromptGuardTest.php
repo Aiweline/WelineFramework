@@ -24,6 +24,9 @@ final class AiSitePageComponentGenerationServicePromptGuardTest extends TestCase
         })->call($service);
 
         self::assertStringContainsString('Visitor-visible copy must use content_locale/default_locale', $prompt);
+        self::assertStringContainsString('Metadata rewrite example', $prompt);
+        self::assertStringContainsString('CTX_BLOCK_GOAL', $prompt);
+        self::assertStringContainsString('GOOD editable default', $prompt);
         self::assertStringContainsString('home_page, about_page, contact_page', $prompt);
         self::assertStringContainsString('treat it as leaked metadata and rewrite it', $prompt);
         self::assertStringContainsString('Number-label spacing audit', $prompt);

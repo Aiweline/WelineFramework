@@ -7,7 +7,10 @@ namespace WeShop\Review\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Service\ProductService;
+use WeShop\Review\Service\ReviewConfigService;
 use WeShop\Review\Service\ReviewPageDataService;
+use WeShop\Review\Service\ReviewRatingOptionService;
+use WeShop\Review\Service\ReviewReplyService;
 use WeShop\Review\Service\ReviewService;
 
 class ReviewPageDataServiceTest extends TestCase
@@ -16,6 +19,9 @@ class ReviewPageDataServiceTest extends TestCase
     {
         $reviewService = $this->createMock(ReviewService::class);
         $productService = $this->createMock(ProductService::class);
+        $ratingOptionService = $this->createMock(ReviewRatingOptionService::class);
+        $reviewConfigService = $this->createMock(ReviewConfigService::class);
+        $reviewReplyService = $this->createMock(ReviewReplyService::class);
 
         $reviewService->expects($this->once())
             ->method('getProductReviews')
@@ -40,6 +46,27 @@ class ReviewPageDataServiceTest extends TestCase
             ->method('getAverageRating')
             ->with(123)
             ->willReturn(4.5);
+        $reviewService->expects($this->once())
+            ->method('decodeMediaItems')
+            ->with('')
+            ->willReturn([]);
+        $reviewService->expects($this->once())
+            ->method('decodeRatingScores')
+            ->with('')
+            ->willReturn([]);
+        $reviewReplyService->expects($this->once())
+            ->method('getRepliesForReviews')
+            ->with([101])
+            ->willReturn([
+                101 => [
+                    [
+                        'reply_id' => 301,
+                        'review_id' => 101,
+                        'customer_name' => 'Ada',
+                        'content' => 'Thanks for the detail.',
+                    ],
+                ],
+            ]);
 
         $product = $this->createMock(Product::class);
         $product->method('getData')->willReturn(['product_id' => 123, 'name' => 'Sample Product']);
@@ -49,7 +76,27 @@ class ReviewPageDataServiceTest extends TestCase
             ->with(123)
             ->willReturn($product);
 
-        $service = new ReviewPageDataService($reviewService, $productService);
+        $ratingOptionService->expects($this->once())
+            ->method('getEnabledOptions')
+            ->willReturn([
+                ['code' => 'quality', 'label' => '商品质量'],
+            ]);
+
+        $reviewConfigService->expects($this->once())
+            ->method('getReviewMode')
+            ->willReturn(ReviewConfigService::MODE_ORDER);
+        $reviewConfigService->expects($this->once())
+            ->method('getReviewModeLabel')
+            ->with(ReviewConfigService::MODE_ORDER)
+            ->willReturn('下单后评论');
+        $reviewConfigService->expects($this->once())
+            ->method('getReviewModeOptions')
+            ->willReturn([
+                ReviewConfigService::MODE_ORDER => '下单后评论',
+                ReviewConfigService::MODE_ANONYMOUS => '匿名评论',
+            ]);
+
+        $service = new ReviewPageDataService($reviewService, $productService, $ratingOptionService, $reviewConfigService, $reviewReplyService);
         $result = $service->build(123, 2, 10);
 
         $this->assertSame(3, $result['page_count']);
@@ -63,12 +110,19 @@ class ReviewPageDataServiceTest extends TestCase
         $this->assertSame('Jane Doe', $result['reviews'][0]['customer_name']);
         $this->assertSame('2026-03-24 00:00:00', $result['reviews'][0]['created_at']);
         $this->assertTrue($result['reviews'][0]['verified_purchase']);
+        $this->assertSame('Thanks for the detail.', $result['reviews'][0]['replies'][0]['content']);
+        $this->assertSame([['code' => 'quality', 'label' => '商品质量']], $result['rating_options']);
+        $this->assertSame(ReviewConfigService::MODE_ORDER, $result['review_mode']);
+        $this->assertSame('下单后评论', $result['review_mode_label']);
     }
 
     public function testBuildHandlesMissingProductAndEmptyReviews(): void
     {
         $reviewService = $this->createMock(ReviewService::class);
         $productService = $this->createMock(ProductService::class);
+        $ratingOptionService = $this->createMock(ReviewRatingOptionService::class);
+        $reviewConfigService = $this->createMock(ReviewConfigService::class);
+        $reviewReplyService = $this->createMock(ReviewReplyService::class);
 
         $reviewService->expects($this->once())
             ->method('getProductReviews')
@@ -81,12 +135,32 @@ class ReviewPageDataServiceTest extends TestCase
         $reviewService->expects($this->once())
             ->method('getAverageRating')
             ->willReturn(0.0);
+        $reviewReplyService->expects($this->never())
+            ->method('getRepliesForReviews');
 
         $productService->expects($this->once())
             ->method('getProduct')
             ->willReturn(null);
 
-        $service = new ReviewPageDataService($reviewService, $productService);
+        $ratingOptionService->expects($this->once())
+            ->method('getEnabledOptions')
+            ->willReturn([]);
+
+        $reviewConfigService->expects($this->once())
+            ->method('getReviewMode')
+            ->willReturn(ReviewConfigService::MODE_ANONYMOUS);
+        $reviewConfigService->expects($this->once())
+            ->method('getReviewModeLabel')
+            ->with(ReviewConfigService::MODE_ANONYMOUS)
+            ->willReturn('匿名评论');
+        $reviewConfigService->expects($this->once())
+            ->method('getReviewModeOptions')
+            ->willReturn([
+                ReviewConfigService::MODE_ORDER => '下单后评论',
+                ReviewConfigService::MODE_ANONYMOUS => '匿名评论',
+            ]);
+
+        $service = new ReviewPageDataService($reviewService, $productService, $ratingOptionService, $reviewConfigService, $reviewReplyService);
         $result = $service->build(999, 1, 20);
 
         $this->assertSame(1, $result['page_count']);
@@ -95,6 +169,8 @@ class ReviewPageDataServiceTest extends TestCase
         $this->assertSame(['product_id' => 999], $result['product']);
         $this->assertSame(0, $result['total']);
         $this->assertSame([], $result['reviews']);
+        $this->assertSame([], $result['rating_options']);
         $this->assertSame(0.0, $result['average_rating']);
+        $this->assertSame(ReviewConfigService::MODE_ANONYMOUS, $result['review_mode']);
     }
 }

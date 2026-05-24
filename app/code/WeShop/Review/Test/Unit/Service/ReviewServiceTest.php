@@ -136,6 +136,8 @@ class ReviewServiceTest extends TestCase
         $this->assertEquals('rating', Review::schema_fields_RATING);
         $this->assertEquals('title', Review::schema_fields_TITLE);
         $this->assertEquals('content', Review::schema_fields_CONTENT);
+        $this->assertEquals('media_items', Review::schema_fields_MEDIA_ITEMS);
+        $this->assertEquals('rating_scores', Review::schema_fields_RATING_SCORES);
         $this->assertEquals('status', Review::schema_fields_STATUS);
         $this->assertEquals('created_at', Review::schema_fields_CREATED_AT);
         $this->assertEquals('updated_at', Review::schema_fields_UPDATED_AT);
@@ -159,5 +161,77 @@ class ReviewServiceTest extends TestCase
         $this->assertEquals('review_id', Review::schema_fields_ID);
         // schema_primary_key 应该等于 'review_id'
         $this->assertEquals('review_id', Review::schema_primary_key);
+    }
+
+    public function testMediaAndRatingHelperMethodsExist(): void
+    {
+        $this->assertTrue(method_exists(ReviewService::class, 'normalizeMediaItems'));
+        $this->assertTrue(method_exists(ReviewService::class, 'normalizeRatingScores'));
+        $this->assertTrue(method_exists(ReviewService::class, 'decodeMediaItems'));
+        $this->assertTrue(method_exists(ReviewService::class, 'decodeRatingScores'));
+        $this->assertTrue(method_exists(ReviewService::class, 'buildClientReviewPayload'));
+    }
+
+    public function testNormalizeMediaItemsKeepsOnlySafeImagesAndVideos(): void
+    {
+        $service = new ReviewService();
+
+        $result = $service->normalizeMediaItems([
+            ['type' => 'image', 'url' => 'https://example.test/review/front.jpg', 'label' => 'Front'],
+            ['type' => 'video', 'url' => '/media/review/demo.mp4'],
+            'javascript:alert(1)',
+            'ftp://example.test/review/file.jpg',
+            '/media/review/file.txt',
+        ]);
+
+        $this->assertCount(2, $result);
+        $this->assertSame('image', $result[0]['type']);
+        $this->assertSame('https://example.test/review/front.jpg', $result[0]['url']);
+        $this->assertSame('Front', $result[0]['label']);
+        $this->assertSame('video', $result[1]['type']);
+        $this->assertSame('/media/review/demo.mp4', $result[1]['url']);
+    }
+
+    public function testDecodeRatingScoresClampsValuesAndDropsEmptyScores(): void
+    {
+        $service = new ReviewService();
+
+        $result = $service->decodeRatingScores('{"quality":6,"logistics":0,"service":"3"}');
+
+        $this->assertSame([
+            'quality' => 5,
+            'service' => 3,
+        ], $result);
+    }
+
+    public function testBuildClientReviewPayloadMarksPendingAnonymousReview(): void
+    {
+        $review = $this->createMock(Review::class);
+        $review->method('getId')->willReturn(91);
+        $review->method('getData')->willReturnCallback(static function (string $field) {
+            return [
+                Review::schema_fields_ID => 91,
+                Review::schema_fields_PRODUCT_ID => 7001,
+                Review::schema_fields_CUSTOMER_ID => 0,
+                Review::schema_fields_RATING => 4,
+                Review::schema_fields_TITLE => 'Guest review',
+                Review::schema_fields_CONTENT => 'Works well.',
+                Review::schema_fields_MEDIA_ITEMS => '[{"type":"image","url":"/media/review/a.jpg","label":"A"}]',
+                Review::schema_fields_RATING_SCORES => '{"quality":4}',
+                Review::schema_fields_STATUS => Review::STATUS_PENDING,
+                Review::schema_fields_CREATED_AT => '2026-05-24 10:00:00',
+            ][$field] ?? null;
+        });
+
+        $service = new ReviewService();
+        $payload = $service->buildClientReviewPayload($review);
+
+        $this->assertSame(91, $payload['review_id']);
+        $this->assertSame(7001, $payload['product_id']);
+        $this->assertSame(0, $payload['customer_id']);
+        $this->assertTrue($payload['pending']);
+        $this->assertFalse($payload['verified_purchase']);
+        $this->assertSame('Guest review', $payload['title']);
+        $this->assertSame([['type' => 'image', 'url' => '/media/review/a.jpg', 'label' => 'A']], $payload['media_items']);
     }
 }

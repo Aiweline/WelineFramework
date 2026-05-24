@@ -3,18 +3,33 @@
 "Review rejected successfully","Review rejected successfully"
 "Review not found","Review not found"
 "Review deleted successfully","Review deleted successfully"
+评价项配置,"Rating option settings"
+请求方式错误,"Invalid request method"
+评价项配置已保存,"Rating option settings saved"
+评价项配置保存失败：%{1},"Failed to save rating option settings: %{1}"
 "Review Management","Review Management"
 "Review Detail","Review Detail"
-"Please log in to write a review.","Please log in to write a review."
-"Product and content are required.","Product and content are required."
-"Unable to submit your review right now.","Unable to submit your review right now."
-"Thank you for submitting your review.","Thank you for submitting your review."
+请登录后再评价。,"Please log in to write a review."
+商品和评价内容不能为空。,"Product and review content are required."
+只有购买过该商品的客户才能评价。,"Only customers who purchased this product can write a review."
+暂时无法提交评价。,"Unable to submit your review right now."
+评价已提交，审核通过后会公开展示。,"Review submitted. It will be public after approval."
 "Product ID cannot be empty.","Product ID cannot be empty."
 "Product Reviews","Product Reviews"
 "Unsupported review provider operation: %{1}","Unsupported review provider operation: %{1}"
+"Please sign in before replying.","Please sign in before replying."
+"Review and reply content are required.","Review and reply content are required."
+"Unable to submit reply right now.","Unable to submit reply right now."
+"Reply submitted.","Reply submitted."
+商品不能为空。,"Product is required."
+已选择匿名评论。,"Anonymous review selected."
+已选择下单后评论。,"Order-required review selected."
+未查询到该商品订单，已选择匿名评论。,"No order was found for this product, so anonymous review was selected."
 "Review Query","Review Query"
 "Provides frontend review operations through the worker API.","Provides frontend review operations through the worker API."
-"Submit a frontend product review.","Submit a frontend product review."
+点击写评论时自动判断本次评价方式；未登录前端直接选择匿名，已登录才查询是否购买过该商品。,"Automatically resolve the review mode when the customer clicks to write a review. The storefront selects anonymous directly for guests and checks purchase eligibility only for logged-in customers."
+"Reply to a product review. Mentions such as @customer:123 notify the mentioned customer.","Reply to a product review. Mentions such as @customer:123 notify the mentioned customer."
+提交商品评价，匿名模式允许游客提交，下单后评论模式要求登录并购买过该商品。,"Submit product reviews. Anonymous mode allows guest submissions; order-required mode requires login and a purchase of this product."
 "Product review tab content","Product review tab content"
 "Render the customer review block inside product detail tabs.","Render the customer review block inside product detail tabs."
 "Review Page Hooks","Review Page Hooks"
@@ -30,55 +45,108 @@ Rejected,Rejected
 "3 Stars","3 Stars"
 "4 Stars","4 Stars"
 "5 Stars","5 Stars"
+下单后评论,"Order-required reviews"
+匿名评论,"Anonymous reviews"
 Anonymous,Anonymous
+评价项名称不能为空,"Rating option label cannot be empty"
+新增评价项需要同时填写编码和名称,"New rating options require both code and label"
+评价项编码已存在,"Rating option code already exists"
+"Review, customer and reply content are required.","Review, customer and reply content are required."
+"Review does not exist or is not visible.","Review does not exist or is not visible."
+"Reply target does not exist.","Reply target does not exist."
+"Customer #%{1}","Customer #%{1}"
+"Your review has a new reply","Your review has a new reply"
+"Customer %{1} replied in a product review.","Customer %{1} replied in a product review."
+Customer,Customer
+匿名用户,Anonymous
+加载当前产品评价失败：%{1},"Failed to load reviews for this product: %{1}"
+"Approve Review","Approve Review"
+"Are you sure you want to approve this review?","Are you sure you want to approve this review?"
+Approve,Approve
+"Failed to approve review","Failed to approve review"
+"Reject Review","Reject Review"
+"Are you sure you want to reject this review?","Are you sure you want to reject this review?"
+Reject,Reject
+"Failed to reject review","Failed to reject review"
+"Delete Review","Delete Review"
+"Are you sure you want to delete this review? This action cannot be undone.","Are you sure you want to delete this review? This action cannot be undone."
+Delete,Delete
+"Failed to delete review","Failed to delete review"
+"Request failed","Request failed"
+当前产品评价,"Current product reviews"
+在产品编辑时查看并处理当前产品的买家评价。,"View and manage buyer reviews for this product while editing it."
+查看全部评价,"View all reviews"
+评价设置,"Review settings"
+保存产品后即可管理评价。,"Save the product before managing reviews."
+"Total Reviews","Total Reviews"
+Pending,Pending
+当前产品暂无评价。,"This product has no reviews yet."
+"Review ID","Review ID"
+Rating,Rating
+细分评分,"Detailed ratings"
+媒体,Media
+Content,Content
+Status,Status
+"Created At","Created At"
+Actions,Actions
+视频,Videos
+View,View
+评价,Reviews
+当前产品,"Current product"
 "Customer Voices","Customer Voices"
 "Latest Reviews","Latest Reviews"
 "View All Reviews","View All Reviews"
-Rating,Rating
 "No product reviews yet. Be the first to share your experience.","No product reviews yet. Be the first to share your experience."
+评论管理,"Review Management"
+已配置评价项,"Configured rating options"
+返回评论列表,"Back to review list"
+暂无评价项，请运行安装升级或新增自定义评价项。,"No rating options are configured. Run setup upgrade or add a custom option."
+启用,Enabled
+编码,Code
+名称,Name
+排序,"Sort order"
+类型,Type
+系统项,System
+自定义,Custom
+评价模式,"Review mode"
+游客可直接提交评价，后台审核通过后才会公开展示；提交后仅当前浏览器会立即看到待审核评价。,"Guests can submit reviews directly. Reviews become public only after backend approval; the pending review is visible only in the current browser after submission."
+客户需要登录，并且购买过当前商品后才能提交评价。,"Customers must log in and have purchased this product before submitting a review."
+新增自定义评价项,"Add custom rating option"
+仅支持小写字母、数字和下划线，保存时会自动规范化。,"Only lowercase letters, numbers, and underscores are supported. The code is normalized on save."
+包装体验,"Packaging experience"
+保存后立即启用,"Enable after saving"
+启用的评价项会展示在前台评价表单中，买家提交后会随评价一起保存并展示在后台详情和产品评价区。,"Enabled rating options appear in the storefront review form and are saved with each review for backend details and product review areas."
+取消,Cancel
+保存配置,"Save settings"
 WeShop,WeShop
 Review,Review
 "Review List","Review List"
-"Total Reviews","Total Reviews"
-Pending,Pending
 "Filter Reviews","Filter Reviews"
 "Product ID","Product ID"
 "Enter product ID","Enter product ID"
 "Customer ID","Customer ID"
 "Enter customer ID","Enter customer ID"
-Status,Status
 "All Statuses","All Statuses"
 "All Ratings","All Ratings"
 Star(s),Star(s)
 "Apply Filters","Apply Filters"
 Reset,Reset
-Export,Export
 "No reviews found","No reviews found"
-"Review ID","Review ID"
 Title,Title
-Content,Content
-"Created At","Created At"
-Actions,Actions
-View,View
-Approve,Approve
-Reject,Reject
-Delete,Delete
+图片,Images
 Previous,Previous
 Next,Next
 "Page %{1} of %{2}","Page %{1} of %{2}"
-"Approve Review","Approve Review"
-"Are you sure you want to approve this review?","Are you sure you want to approve this review?"
-"Failed to approve review","Failed to approve review"
-"Request failed","Request failed"
-"Reject Review","Reject Review"
-"Are you sure you want to reject this review?","Are you sure you want to reject this review?"
-"Failed to reject review","Failed to reject review"
-"Delete Review","Delete Review"
-"Are you sure you want to delete this review? This action cannot be undone.","Are you sure you want to delete this review? This action cannot be undone."
-"Failed to delete review","Failed to delete review"
 Detail,Detail
 "Back to List","Back to List"
 "Review Content","Review Content"
+这条评价没有提交细分评分。,"This review did not include detailed ratings."
+图文视频,"Images and videos"
+这条评价没有提交图片或视频。,"This review did not include images or videos."
+"Review Replies","Review Replies"
+"Reply to","Reply to"
+"Mentioned customers","Mentioned customers"
+"No replies yet.","No replies yet."
 "Review History","Review History"
 "Review Submitted","Review Submitted"
 "Last Updated","Last Updated"
@@ -88,3 +156,4 @@ Detail,Detail
 "Customer Name","Customer Name"
 Email,Email
 Metadata,Metadata
+评论视频,"Review video"

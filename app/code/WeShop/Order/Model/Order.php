@@ -41,6 +41,8 @@ class Order extends Model
     public const schema_fields_payment_method = 'payment_method';
     #[Col(type: 'text', nullable: true, comment: 'Shipping address JSON')]
     public const schema_fields_shipping_address = 'shipping_address';
+    #[Col(type: 'text', nullable: true, comment: 'Billing address JSON')]
+    public const schema_fields_billing_address = 'billing_address';
     #[Col(type: 'varchar', length: 120, nullable: true, comment: 'Fulfillment carrier')]
     public const schema_fields_fulfillment_carrier = 'fulfillment_carrier';
     #[Col(type: 'varchar', length: 120, nullable: true, comment: 'Fulfillment tracking number')]

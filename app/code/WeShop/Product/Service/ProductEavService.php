@@ -7,10 +7,13 @@ namespace WeShop\Product\Service;
 use WeShop\Product\Model\Product;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
+use Weline\Eav\Model\EavAttribute\LocalDescription as AttributeLocalDescription;
 use Weline\Eav\Model\EavAttribute\Option;
+use Weline\Eav\Model\EavAttribute\Option\LocalDescription as OptionLocalDescription;
 use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavEntity;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -562,6 +565,7 @@ class ProductEavService
     {
         $attributes = $this->getProductAttributes($productId, $setId);
         $viewModel = [];
+        $localeCode = $this->getCurrentLocaleCode();
 
         foreach ($attributes as $group) {
             $groupAttributes = [];
@@ -571,12 +575,20 @@ class ProductEavService
                     continue;
                 }
 
+                $selectedOptions = is_array($attribute['selected_options'] ?? null) ? $attribute['selected_options'] : [];
+                $localizedSelectedOptions = $this->localizeSelectedOptions($selectedOptions, $localeCode);
+                $displayValue = $this->resolveLocalizedDisplayValue($attribute, $localizedSelectedOptions);
+
                 $groupAttributes[] = [
-                    'label' => $attribute['name'],
-                    'value' => $attribute['display_value'] ?: $attribute['value'],
+                    'label' => $this->localizeAttributeName(
+                        (int)($attribute['attribute_id'] ?? 0),
+                        (string)($attribute['name'] ?? ''),
+                        $localeCode
+                    ),
+                    'value' => $displayValue,
                     'code' => $attribute['code'],
-                    'is_swatch' => $this->hasSwatchOptions($attribute['selected_options']),
-                    'swatch_data' => $this->getSwatchData($attribute['selected_options']),
+                    'is_swatch' => $this->hasSwatchOptions($localizedSelectedOptions),
+                    'swatch_data' => $this->getSwatchData($localizedSelectedOptions),
                 ];
             }
 
@@ -590,6 +602,108 @@ class ProductEavService
         }
 
         return $viewModel;
+    }
+
+    private function getCurrentLocaleCode(): string
+    {
+        try {
+            return trim(Cookie::getLangLocal());
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function localizeAttributeName(int $attributeId, string $originName, string $localeCode): string
+    {
+        if ($attributeId <= 0 || $localeCode === '') {
+            return $originName;
+        }
+
+        try {
+            $localDescription = ObjectManager::getInstance(AttributeLocalDescription::class);
+            $row = $localDescription->reset()->clearData()
+                ->where(AttributeLocalDescription::fields_ID, $attributeId)
+                ->where(AttributeLocalDescription::schema_fields_local_code, $localeCode)
+                ->find()
+                ->fetch();
+            $localizedName = trim((string)($row[AttributeLocalDescription::schema_fields_name] ?? ''));
+
+            return $localizedName !== '' ? $localizedName : $originName;
+        } catch (\Throwable) {
+            return $originName;
+        }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $selectedOptions
+     * @return array<int, array<string, mixed>>
+     */
+    private function localizeSelectedOptions(array $selectedOptions, string $localeCode): array
+    {
+        if ($selectedOptions === [] || $localeCode === '') {
+            return $selectedOptions;
+        }
+
+        foreach ($selectedOptions as &$option) {
+            if (!is_array($option)) {
+                continue;
+            }
+
+            $optionId = (int)($option['option_id'] ?? $option[Option::fields_option_id] ?? 0);
+            if ($optionId <= 0) {
+                continue;
+            }
+
+            $originValue = (string)($option['value'] ?? $option[Option::fields_value] ?? '');
+            $localizedValue = $this->localizeOptionValue($optionId, $originValue, $localeCode);
+            $option['value'] = $localizedValue;
+            $option[Option::fields_value] = $localizedValue;
+        }
+        unset($option);
+
+        return $selectedOptions;
+    }
+
+    private function localizeOptionValue(int $optionId, string $originValue, string $localeCode): string
+    {
+        if ($optionId <= 0 || $localeCode === '') {
+            return $originValue;
+        }
+
+        try {
+            $localDescription = ObjectManager::getInstance(OptionLocalDescription::class);
+            $row = $localDescription->reset()->clearData()
+                ->where(OptionLocalDescription::fields_ID, $optionId)
+                ->where(OptionLocalDescription::schema_fields_local_code, $localeCode)
+                ->find()
+                ->fetch();
+            $localizedValue = trim((string)($row[Option::schema_fields_value] ?? ''));
+
+            return $localizedValue !== '' ? $localizedValue : $originValue;
+        } catch (\Throwable) {
+            return $originValue;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $attribute
+     * @param array<int, array<string, mixed>> $localizedSelectedOptions
+     */
+    private function resolveLocalizedDisplayValue(array $attribute, array $localizedSelectedOptions): mixed
+    {
+        $displayValues = [];
+        foreach ($localizedSelectedOptions as $option) {
+            $value = trim((string)($option['value'] ?? $option[Option::fields_value] ?? ''));
+            if ($value !== '') {
+                $displayValues[] = $value;
+            }
+        }
+
+        if ($displayValues !== []) {
+            return implode(', ', $displayValues);
+        }
+
+        return $attribute['display_value'] ?: $attribute['value'];
     }
 
     private function hasSwatchOptions(array $options): bool

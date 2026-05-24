@@ -35,6 +35,8 @@ class Cart extends Model
     public const schema_fields_PRODUCT_IMAGE = 'product_image';
     #[Col(type: 'varchar', length: 150, nullable: true, comment: '商品快照SKU')]
     public const schema_fields_PRODUCT_SKU = 'product_sku';
+    #[Col('text', nullable: true, comment: 'Product option snapshot JSON')]
+    public const schema_fields_PRODUCT_OPTIONS = 'product_options';
     #[Col('integer', 0, nullable: false, default: 1, comment: '数量')]
     public const schema_fields_QUANTITY = 'quantity';
     #[Col('decimal', '10,2', nullable: false, default: 0.00, comment: '单价')]

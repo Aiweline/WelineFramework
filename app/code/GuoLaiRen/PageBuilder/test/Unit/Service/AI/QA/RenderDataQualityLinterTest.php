@@ -107,4 +107,67 @@ final class RenderDataQualityLinterTest extends TestCase
         $rules = \array_map(static fn(array $finding): string => (string)$finding['rule'], $findings);
         self::assertContains('design.malformed_html_structure', $rules);
     }
+
+    public function testLintFlagsNonTargetLanguageCopyInsideBlockConfig(): void
+    {
+        $findings = (new RenderDataQualityLinter())->lint([
+            'payload' => [
+                'content_locale' => 'pt_BR',
+                'page_type_layouts' => [
+                    'home_page' => [
+                        'title' => 'Teenipiya',
+                        'description' => 'Baixe o APK com regras claras e suporte seguro.',
+                        'h1' => 'Teen Patti de Confianca',
+                        'content' => [
+                            [
+                                'code' => 'hero',
+                                'component' => 'content/home-page-hero',
+                                'title' => 'Teen Patti de Confianca',
+                                'config' => [
+                                    'body' => 'Teenipiya '
+                                        . "\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}"
+                                        . "\u{3001}\u{4FE1}\u{4EFB}\u{4FE1}\u{606F}\u{548C}\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}",
+                                ],
+                                'design_tags' => ['visual' => ['trust card']],
+                            ],
+                        ],
+                    ],
+                ],
+                'materialized_pages_by_type' => [
+                    'home_page' => [
+                        'seo_title' => 'Teenipiya APK Seguro',
+                        'seo_description' => 'Baixe o APK com regras claras, suporte seguro e orientacao para jogar.',
+                        'h1' => 'Teen Patti de Confianca',
+                    ],
+                ],
+            ],
+        ]);
+
+        $rules = \array_map(static fn(array $finding): string => (string)$finding['rule'], $findings);
+        self::assertContains('copy.locale_mismatch', $rules);
+    }
+
+    public function testLintFlagsShortNonTargetLanguageCtaCopyInsideBlockConfig(): void
+    {
+        $findings = (new RenderDataQualityLinter())->lint([
+            'payload' => [
+                'content_locale' => 'pt_BR',
+                'page_type_layouts' => [
+                    'home_page' => [
+                        'content' => [[
+                            'code' => 'hero',
+                            'component' => 'content/home-page-hero',
+                            'config' => [
+                                'title' => 'Teen Patti de Confianca',
+                                'cta_text' => "\u{4E0B}\u{8F7D}Teenipiya APK",
+                            ],
+                        ]],
+                    ],
+                ],
+            ],
+        ]);
+
+        $rules = \array_map(static fn(array $finding): string => (string)$finding['rule'], $findings);
+        self::assertContains('copy.locale_mismatch', $rules);
+    }
 }

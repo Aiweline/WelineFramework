@@ -171,6 +171,14 @@ $orderJsText = [
     .weshop-order-product-main { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
     .weshop-order-product-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .weshop-order-product-main span { color: var(--weshop-text-secondary); font-size: var(--weshop-font-size-xs); }
+    .weshop-order-product-options { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.4rem; white-space: normal; line-height: 1.35; }
+    .weshop-order-product-options .weshop-product-option { display: inline-flex; align-items: center; gap: 0.25rem; min-width: 0; }
+    .weshop-order-product-options .weshop-product-option__label { font-weight: var(--weshop-font-weight-medium); color: var(--weshop-text-primary); }
+    .weshop-order-product-options .weshop-product-option__separator { color: var(--weshop-text-secondary); }
+    .weshop-order-product-options .weshop-product-option__swatch { width: 0.95rem; height: 0.95rem; flex: 0 0 0.95rem; border: 1px solid rgba(17, 24, 39, 0.18); background: #fff; }
+    .weshop-order-product-options .weshop-product-option__swatch--color { border-radius: 999px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.62); }
+    .weshop-order-product-options .weshop-product-option__swatch--image { border-radius: 0.25rem; overflow: hidden; }
+    .weshop-order-product-options .weshop-product-option__swatch img { width: 100%; height: 100%; display: block; object-fit: cover; }
     .weshop-order-more-items { align-self: flex-start; background: transparent; border: 0; color: var(--weshop-primary); cursor: pointer; font-weight: var(--weshop-font-weight-medium); padding: 0.25rem 0; }
     .weshop-order-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .weshop-action-link { background: transparent; border: 0; color: var(--weshop-primary); cursor: pointer; padding: 0; text-decoration: none; font-size: var(--weshop-font-size-sm); font-weight: var(--weshop-font-weight-medium); }
@@ -470,6 +478,80 @@ $orderJsText = [
         return String(pattern || '').replace('%{1}', String(arg == null ? '' : arg));
     }
 
+    function sanitizeOrdersCssColor(value) {
+        value = String(value == null ? '' : value).trim();
+        if (/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)) {
+            return value;
+        }
+        if (/^(?:rgb|rgba|hsl|hsla)\([0-9.,%\s]+\)$/i.test(value)) {
+            return value;
+        }
+        return '';
+    }
+
+    function sanitizeOrdersImageUrl(value) {
+        value = String(value == null ? '' : value).replace(/[\r\n]/g, '').trim();
+        if (!value || /^(?:javascript|vbscript|data):/i.test(value)) {
+            return '';
+        }
+        return value;
+    }
+
+    function renderOrderOptionSwatch(option) {
+        var type = String(option && option.swatch_type ? option.swatch_type : '').trim().toLowerCase();
+        var value = String(option && option.swatch_value ? option.swatch_value : '').trim();
+        if (!type || !value) {
+            return '';
+        }
+        if (type === 'color') {
+            var color = sanitizeOrdersCssColor(value);
+            return color
+                ? '<span class="weshop-product-option__swatch weshop-product-option__swatch--color" style="background-color:' + escapeOrdersHtml(color) + '"></span>'
+                : '';
+        }
+        if (type === 'image') {
+            var imageUrl = sanitizeOrdersImageUrl(value);
+            return imageUrl
+                ? '<span class="weshop-product-option__swatch weshop-product-option__swatch--image"><img src="' + escapeOrdersHtml(imageUrl) + '" alt=""></span>'
+                : '';
+        }
+        return '';
+    }
+
+    function renderOrderOptions(item) {
+        var optionItems = Array.isArray(item.option_items) ? item.option_items : [];
+        if (optionItems.length === 0) {
+            return item.options
+                ? '<span class="weshop-order-product-options">' + escapeOrdersHtml(item.options) + '</span>'
+                : '';
+        }
+
+        var parts = [];
+        optionItems.forEach(function (option) {
+            if (!option || typeof option !== 'object') {
+                return;
+            }
+            var value = String(option.value == null ? '' : option.value).trim();
+            if (!value) {
+                return;
+            }
+            var label = String(option.label == null ? '' : option.label).trim();
+            var html = '<span class="weshop-product-option">'
+                + (label ? '<span class="weshop-product-option__label">' + escapeOrdersHtml(label) + ':</span>' : '')
+                + renderOrderOptionSwatch(option)
+                + '<span class="weshop-product-option__value">' + escapeOrdersHtml(value) + '</span>'
+                + '</span>';
+            if (parts.length > 0) {
+                parts.push('<span class="weshop-product-option__separator">/</span>');
+            }
+            parts.push(html);
+        });
+
+        return parts.length > 0
+            ? '<span class="weshop-order-product-options">' + parts.join('') + '</span>'
+            : '';
+    }
+
     function renderSummaryItems(order, labels) {
         if (!order.summary_items || order.summary_items.length === 0) {
             return '<span class="weshop-order-muted">' + escapeOrdersHtml(labels.items_missing) + '</span>';
@@ -484,6 +566,7 @@ $orderJsText = [
                 + '</div>'
                 + '<div class="weshop-order-product-main"><strong>' + escapeOrdersHtml(item.name) + '</strong>'
                 + (item.sku ? '<span>SKU: ' + escapeOrdersHtml(item.sku) + '</span>' : '')
+                + renderOrderOptions(item)
                 + '</div><span>x' + escapeOrdersHtml(item.qty) + '</span>'
                 + '<span>' + escapeOrdersHtml(item.price_formatted) + '</span>'
                 + '<strong>' + escapeOrdersHtml(item.total_formatted) + '</strong></div>';
@@ -507,7 +590,9 @@ $orderJsText = [
                 + (item.image
                     ? '<img src="' + escapeOrdersHtml(item.image) + '" alt="' + escapeOrdersHtml(item.name) + '" loading="lazy">'
                     : '<i class="ri-image-line" aria-hidden="true"></i>')
-                + '</div><div><strong>' + escapeOrdersHtml(item.name) + '</strong><span>' + escapeOrdersHtml(item.sku) + '</span></div>'
+                + '</div><div><strong>' + escapeOrdersHtml(item.name) + '</strong><span>' + escapeOrdersHtml(item.sku) + '</span>'
+                + renderOrderOptions(item)
+                + '</div>'
                 + '<div>' + escapeOrdersHtml(formatOrdersLabel(labels.qty, item.qty)) + '</div>'
                 + '<div>' + escapeOrdersHtml(item.total_formatted) + '</div></div>';
         });

@@ -9,6 +9,9 @@ use Weline\Framework\Context;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeInterface;
 use Weline\Framework\View\TemplateEnvView;
 use Weline\Framework\View\TemplateRequestView;
 use Weline\Framework\View\Template;
@@ -28,6 +31,8 @@ final class TemplateRequestRefreshTest extends TestCase
     {
         ObjectManager::setInstance(Request::class, $this->originalRequest);
         Template::resetInstance();
+        FiberOutputBuffer::uninstall();
+        Runtime::resetModeCache();
         Context::leave();
         parent::tearDown();
     }
@@ -95,6 +100,41 @@ final class TemplateRequestRefreshTest extends TestCase
 
         ObjectManager::setInstance(Request::class, $this->createRequestStub('http://second.test/two'));
         self::assertSame('http://second.test/two', $reqView['url'] ?? null);
+    }
+
+    public function testObFileRestoresTemporaryTemplateDataWhenFiberCaptureOverflows(): void
+    {
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
+        FiberOutputBuffer::install();
+
+        ObjectManager::setInstance(Request::class, $this->createRequestStub('http://overflow.test/workspace'));
+        $template = Template::getInstance();
+        $template->setData('existing_marker', 'stable');
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'weline-template-overflow-');
+        if ($tempFile === false) {
+            self::fail('Failed to allocate temp template file.');
+        }
+
+        file_put_contents(
+            $tempFile,
+            '<?php for ($i = 0; $i < 18; $i++) { echo str_repeat("x", 1024 * 1024); }'
+        );
+
+        try {
+            $template->ob_file($tempFile, [
+                'leak_marker' => 'temporary',
+                'existing_marker' => 'temporary',
+            ]);
+            self::fail('Expected oversized template capture to throw.');
+        } catch (\OverflowException $exception) {
+            self::assertStringContainsString('reason=capture_limit', $exception->getMessage());
+        } finally {
+            @unlink($tempFile);
+        }
+
+        self::assertFalse($template->hasData('leak_marker'));
+        self::assertSame('stable', $template->getData('existing_marker'));
     }
 
     public function testInitUsesLazyEnvProxy(): void

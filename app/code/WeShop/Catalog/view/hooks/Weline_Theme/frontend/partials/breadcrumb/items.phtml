@@ -100,16 +100,17 @@ if (empty($items)) {
     return;
 }
 ?>
-<ol class="breadcrumb-list">
+<ol class="breadcrumb-list" itemscope itemtype="https://schema.org/BreadcrumbList">
     <?php foreach ($items as $index => $item): ?>
-        <li class="breadcrumb-item <?= empty($item['url']) ? 'active' : '' ?>">
+        <li class="breadcrumb-item <?= empty($item['url']) ? 'active' : '' ?>" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
             <?php if (!empty($item['url'])): ?>
-                <a href="<?= htmlspecialchars($item['url']) ?>">
-                    <?= htmlspecialchars($item['text'] ?? '') ?>
+                <a href="<?= htmlspecialchars($item['url']) ?>" itemprop="item">
+                    <span itemprop="name"><?= htmlspecialchars($item['text'] ?? '') ?></span>
                 </a>
             <?php else: ?>
-                <span><?= htmlspecialchars($item['text'] ?? '') ?></span>
+                <span itemprop="name"><?= htmlspecialchars($item['text'] ?? '') ?></span>
             <?php endif; ?>
+            <meta itemprop="position" content="<?= $index + 1 ?>">
         </li>
         <?php if ($index < count($items) - 1): ?>
             <span class="breadcrumb-separator"><?= htmlspecialchars($separator) ?></span>

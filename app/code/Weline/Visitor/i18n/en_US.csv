@@ -67,6 +67,14 @@
 解密后的数据格式错误,解密后的数据格式错误
 获取站点统计摘要失败：%{1},"Failed to fetch site statistics summary: %{1}"
 获取趋势数据失败：%{1},"Failed to fetch trend data: %{1}"
+站点筛选参数无效,"Invalid site filter parameter"
+事件筛选参数过长,"Event filter parameter is too long"
+时间范围参数无效,"Invalid time range parameter"
+自定义时间范围需要开始日期和结束日期,"Custom time range requires a start date and an end date"
+开始日期不能晚于结束日期,"Start date cannot be later than end date"
+"时间范围不能超过 366 天","Time range cannot exceed 366 days"
+"站点 %{1}","Site %{1}"
+"日期格式无效，请使用 YYYY-MM-DD","Invalid date format. Use YYYY-MM-DD"
 数量,Quantity
 "最近 7 天像素趋势","Pixel Trend for the Last 7 Days"
 像素统计,"Pixel Statistics"
@@ -115,16 +123,53 @@ Pixel沙箱环境,"Pixel sandbox environment"
 占比,Percentage
 今天,Today
 昨天,Yesterday
-像素统计面板,"Pixel Statistics Panel"
+多站点事件监听看板,"Multi-site Event Monitoring Dashboard"
+按站点、事件和时间范围查看像素事件、实时趋势、来源与最近触发记录。,"View pixel events, real-time trends, sources, and recent triggers by site, event, and time range."
 刷新,Refresh
-导出,Export
-自动刷新,"Auto Refresh"
-站点数量,"Number of Sites"
-最近7天趋势,"Last 7 days trend"
-总价值：,"Total Value:"
-事件分布,"Event Distribution"
-站点统计,"Site Statistics"
-站点ID,"Site ID"
-操作,Operation
-查看详情,"View Details"
-记录数,"Record Count"
+"导出 CSV","Export CSV"
+站点,Site
+全部站点,"All Sites"
+事件,Event
+全部事件,"All Events"
+时间范围,"Time Range"
+开始日期,"Start Date"
+结束日期,"End Date"
+应用筛选,"Apply Filters"
+重置,Reset
+事件总数,"Total Events"
+较上一周期,"vs previous period"
+活跃用户,"Active Users"
+人均事件,"Events per User"
+事件类型,"Event Types"
+活跃站点,"Active Sites"
+累计价值,"Total Value"
+价值事件占比,"Valued Event Share"
+事件趋势,"Event Trend"
+服务端统计,"Server-side Statistics"
+暂无趋势数据。,"No trend data."
+"最近 60 分钟","Last 60 minutes"
+"最近 60 分钟暂无事件。","No events in the last 60 minutes."
+处理完成率,"Processing Completion Rate"
+事件排行,"Event Ranking"
+次数,Count
+用户,Users
+最近触发,"Last Triggered"
+暂无事件排行数据。,"No event ranking data."
+站点对比,"Site Comparison"
+类型,Types
+查看,View
+暂无站点对比数据。,"No site comparison data."
+来源,Sources
+暂无来源数据。,"No source data."
+最近事件,"Recent Events"
+时间,Time
+URL,URL
+IP,IP
+暂无最近事件。,"No recent events."
+今日,Today
+昨日,Yesterday
+"近 7 天","Last 7 days"
+"近 30 天","Last 30 days"
+"近 90 天","Last 90 days"
+自定义,Custom
+直接访问,Direct

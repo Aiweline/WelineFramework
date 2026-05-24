@@ -12,6 +12,19 @@ use Weline\Taglib\TaglibInterface;
 
 class LanguageSwitcher implements TaglibInterface
 {
+    private const SWITCHER_HTML_CACHE_TTL = 60.0;
+    private const SWITCHER_LANGUAGE_CACHE_TTL = 300.0;
+
+    /**
+     * @var array<string, array{expires: float, html: string}>
+     */
+    private static array $htmlCache = [];
+
+    /**
+     * @var array<string, array{expires: float, languages: array}>
+     */
+    private static array $languageCache = [];
+
     public static function name(): string
     {
         return 'i18n:language:switcher';
@@ -56,11 +69,8 @@ class LanguageSwitcher implements TaglibInterface
                 $isBackendArea = false;
             }
 
-            /** @var I18n $i18n */
-            $i18n = ObjectManager::getInstance(I18n::class);
             // 后台读取完整 locale 集合，再按 Locals 激活状态过滤；避免仅“已安装语言包目录”导致的漏项。
-            $installedOnly = !$isBackendArea;
-            $welineLanguages = $i18n->getLocalesWithFlagsDisplaySelf(State::getLangLocal(), 24, 18, $installedOnly, true);
+            $welineLanguages = self::getLanguageOptions(State::getLangLocal(), $isBackendArea, $websiteId);
 
             if ($isBackendArea) {
                 // 后台：读取 i18n 模块已安装且已激活语言
@@ -154,6 +164,22 @@ class LanguageSwitcher implements TaglibInterface
                 $backendRoute = trim((string)($request->getServer('WELINE_AREA_ROUTE') ?? ''), '/');
             }
             $currentCurrency = State::getCurrency();
+            $htmlCacheKey = self::buildHtmlCacheKey(
+                $isBackendArea,
+                $websiteId,
+                $renderFor,
+                $currentCode,
+                $currentCurrency,
+                $currentPath,
+                $currentSearch,
+                $backendRoute,
+                \array_keys($welineLanguages)
+            );
+            $now = \microtime(true);
+            if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
+                return self::$htmlCache[$htmlCacheKey]['html'];
+            }
+            unset(self::$htmlCache[$htmlCacheKey]);
 
             $html = [];
             $html[] = '<div class="dropdown d-inline-block" data-i18n-switcher data-i18n-switcher-id="' . $switcherId . '">';
@@ -257,8 +283,150 @@ class LanguageSwitcher implements TaglibInterface
                 $html[] = '})();</script>';
             }
 
-            return implode("\n", $html);
+            $output = implode("\n", $html);
+            self::$htmlCache[$htmlCacheKey] = [
+                'expires' => $now + self::SWITCHER_HTML_CACHE_TTL,
+                'html' => $output,
+            ];
+
+            return $output;
         };
+    }
+
+    /**
+     * @param string[] $displayLocales
+     */
+    public static function warmBackendCaches(array $displayLocales = []): void
+    {
+        if ($displayLocales === []) {
+            $displayLocales = [State::getLangLocal(), 'zh_Hans_CN', 'en_US'];
+        }
+
+        $seen = [];
+        foreach ($displayLocales as $displayLocale) {
+            $displayLocale = \trim((string)$displayLocale);
+            if ($displayLocale === '') {
+                continue;
+            }
+            $cacheKey = \strtolower($displayLocale);
+            if (isset($seen[$cacheKey])) {
+                continue;
+            }
+            $seen[$cacheKey] = true;
+            self::getLanguageOptions($displayLocale, true, 0);
+        }
+    }
+
+    private static function getLanguageOptions(string $displayLocale, bool $isBackendArea, int $websiteId): array
+    {
+        $displayLocale = \trim($displayLocale) !== '' ? $displayLocale : 'zh_Hans_CN';
+        $installedOnly = !$isBackendArea;
+        $scopeKey = $isBackendArea ? 'backend' : 'frontend:' . $websiteId;
+        $cacheKey = $scopeKey . '|' . $displayLocale . '|' . (int)$installedOnly;
+        $now = \microtime(true);
+        if (isset(self::$languageCache[$cacheKey]) && self::$languageCache[$cacheKey]['expires'] >= $now) {
+            return self::$languageCache[$cacheKey]['languages'];
+        }
+        unset(self::$languageCache[$cacheKey]);
+
+        /** @var I18n $i18n */
+        $i18n = ObjectManager::getInstance(I18n::class);
+        $welineLanguages = $i18n->getLocalesWithFlagsDisplaySelf($displayLocale, 24, 18, $installedOnly, true);
+
+        if ($isBackendArea) {
+            $welineLanguages = self::filterBackendLanguages($welineLanguages);
+        } elseif ($websiteId > 0) {
+            $welineLanguages = self::filterFrontendLanguages($welineLanguages, $websiteId);
+        }
+
+        self::$languageCache[$cacheKey] = [
+            'expires' => $now + self::SWITCHER_LANGUAGE_CACHE_TTL,
+            'languages' => $welineLanguages,
+        ];
+
+        return $welineLanguages;
+    }
+
+    private static function filterBackendLanguages(array $welineLanguages): array
+    {
+        try {
+            /** @var ActiveLocaleCodeProvider $activeLocaleCodeProvider */
+            $activeLocaleCodeProvider = ObjectManager::getInstance(ActiveLocaleCodeProvider::class);
+            $allowedMap = $activeLocaleCodeProvider->getInstalledActiveCodeMap();
+            if ($allowedMap === []) {
+                return $welineLanguages;
+            }
+
+            $allowedMapLower = [];
+            foreach (\array_keys($allowedMap) as $allowedCode) {
+                $allowedMapLower[\strtolower((string)$allowedCode)] = true;
+            }
+
+            $filteredLanguages = [];
+            foreach ($welineLanguages as $languageCode => $languageData) {
+                if (isset($allowedMap[(string)$languageCode]) || isset($allowedMapLower[\strtolower((string)$languageCode)])) {
+                    $filteredLanguages[$languageCode] = $languageData;
+                }
+            }
+
+            return $filteredLanguages;
+        } catch (\Throwable) {
+            return $welineLanguages;
+        }
+    }
+
+    private static function filterFrontendLanguages(array $welineLanguages, int $websiteId): array
+    {
+        $websiteLanguageCodes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
+        if (!is_array($websiteLanguageCodes) || $websiteLanguageCodes === []) {
+            return $welineLanguages;
+        }
+
+        $allowedMap = [];
+        foreach ($websiteLanguageCodes as $websiteLanguageCode) {
+            $websiteLanguageCode = (string)$websiteLanguageCode;
+            if ($websiteLanguageCode !== '') {
+                $allowedMap[$websiteLanguageCode] = true;
+            }
+        }
+        if ($allowedMap === []) {
+            return $welineLanguages;
+        }
+
+        $filteredLanguages = [];
+        foreach ($welineLanguages as $languageCode => $languageData) {
+            if (isset($allowedMap[(string)$languageCode])) {
+                $filteredLanguages[$languageCode] = $languageData;
+            }
+        }
+
+        return $filteredLanguages !== [] ? $filteredLanguages : $welineLanguages;
+    }
+
+    /**
+     * @param string[] $languageCodes
+     */
+    private static function buildHtmlCacheKey(
+        bool $isBackendArea,
+        int $websiteId,
+        string $renderFor,
+        string $currentCode,
+        string $currentCurrency,
+        string $currentPath,
+        string $currentSearch,
+        string $backendRoute,
+        array $languageCodes
+    ): string {
+        return \md5(\json_encode([
+            'scope' => $isBackendArea ? 'backend' : 'frontend:' . $websiteId,
+            'for' => $renderFor,
+            'lang' => $currentCode,
+            'currency' => $currentCurrency,
+            'path' => $currentPath,
+            'search' => self::sanitizeLanguageSearch($currentSearch),
+            'backend_route' => $backendRoute,
+            'languages' => $languageCodes,
+        ], \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE) ?: '');
     }
 
     private static function sanitizeInlineFlagMarkup(string $markup): string

@@ -19,7 +19,7 @@ use WeShop\Catalog\Model\Category;
  */
 class CategoryService
 {
-    private const CATEGORY_TREE_CACHE_TTL_SECONDS = 60.0;
+    private const CATEGORY_TREE_CACHE_TTL_SECONDS = 600.0;
     private const CACHE_NAMESPACE = 'weline_site_runtime';
 
     /**
@@ -296,9 +296,18 @@ class CategoryService
 
         $normalizedParentPath = trim($parentPath, '/');
         $segments = $normalizedParentPath === '' ? [] : array_values(array_filter(explode('/', $normalizedParentPath), static fn (string $segment): bool => $segment !== ''));
-        $segments[] = rawurlencode($handle);
+        $handleSegments = array_values(array_filter(explode('/', $handle), static fn (string $segment): bool => trim($segment) !== ''));
+        $maxOverlap = min(count($segments), count($handleSegments));
+        $overlap = 0;
+        for ($length = $maxOverlap; $length > 0; $length--) {
+            if (array_slice($segments, -$length) === array_slice($handleSegments, 0, $length)) {
+                $overlap = $length;
+                break;
+            }
+        }
+        $segments = array_merge($segments, array_slice($handleSegments, $overlap));
 
-        return 'catalog/category/' . implode('/', $segments);
+        return 'catalog/category/' . implode('/', array_map('rawurlencode', $segments));
     }
 
     private function buildHeaderMenuItem(array $category, string $categoryBaseUrl, string $parentPath = ''): ?array
