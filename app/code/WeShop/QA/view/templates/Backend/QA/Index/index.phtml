@@ -36,6 +36,7 @@
                                 <th data-priority="1"><?= __('ID') ?></th>
                                 <th data-priority="1"><?= __('Product ID') ?></th>
                                 <th data-priority="1"><?= __('Customer ID') ?></th>
+                                <th data-priority="2"><?= __('来源') ?></th>
                                 <th data-priority="2"><?= __('Question') ?></th>
                                 <th data-priority="2"><?= __('Answer') ?></th>
                                 <th data-priority="3"><?= __('Status') ?></th>
@@ -74,6 +75,19 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: 'question_id', name: 'question_id' },
             { data: 'product_id', name: 'product_id' },
             { data: 'customer_id', name: 'customer_id' },
+            { data: 'source_type', name: 'source_type', render: function(data, type, row) {
+                const sourceMap = {
+                    'system': '<?= __('系统推荐') ?>',
+                    'order': '<?= __('已下单用户') ?>',
+                    'anonymous': '<?= __('匿名用户') ?>',
+                    'customer': '<?= __('客户问答') ?>'
+                };
+                const label = sourceMap[data] || data || 'customer';
+                const recommended = parseInt(row.is_recommended || 0, 10) === 1
+                    ? ' <span class="badge bg-info"><?= __('推荐') ?></span>'
+                    : '';
+                return '<span class="badge bg-secondary">' + htmlEscape(label) + '</span>' + recommended;
+            }},
             { data: 'question', name: 'question', render: function(data) {
                 if (data && data.length > 100) {
                     return '<span title="' + htmlEscape(data) + '">' + htmlEscape(data.substring(0, 100)) + '...</span>';

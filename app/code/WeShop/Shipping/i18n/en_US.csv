@@ -42,7 +42,7 @@ FedEx标准配送,"FedEx Standard Shipping"
 "由 %{1} 提供配送服务。","Shipping service provided by %{1}."
 "%{1}-%{2} 天","%{1}-%{2} days"
 "%{1} 天","%{1} day(s)"
-当前结账上下文没有可用配送方式。,当前结账上下文没有可用配送方式。
+当前结账上下文没有可用配送方式。,"No shipping methods are available for the current checkout context."
 WeShop,WeShop
 Shipping,Shipping
 Configuration,Configuration

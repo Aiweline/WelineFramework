@@ -276,7 +276,7 @@ class ConfigurableProductService
         // 获取本地化描述
         $localDesc = clone $this->attributeLocalDescription;
         $localDescs = $localDesc->reset()->clearData()
-            ->where(AttributeLocalDescription::schema_fields_ID, $attributeIds, 'in')
+            ->where(AttributeLocalDescription::fields_ID, $attributeIds, 'in')
             ->where(AttributeLocalDescription::schema_fields_local_code, $localeCode)
             ->select()
             ->fetchArray();
@@ -284,7 +284,7 @@ class ConfigurableProductService
         // 构建本地化映射
         $localMap = [];
         foreach ($localDescs as $ld) {
-            $localMap[(int)$ld[AttributeLocalDescription::schema_fields_ID]] = $ld;
+            $localMap[(int)$ld[AttributeLocalDescription::fields_ID]] = $ld;
         }
 
         // 组装结果
@@ -326,7 +326,7 @@ class ConfigurableProductService
         // 获取本地化描述
         $localDesc = clone $this->optionLocalDescription;
         $localDescs = $localDesc->reset()->clearData()
-            ->where(OptionLocalDescription::schema_fields_ID, $optionIds, 'in')
+            ->where(OptionLocalDescription::fields_ID, $optionIds, 'in')
             ->where(OptionLocalDescription::schema_fields_local_code, $localeCode)
             ->select()
             ->fetchArray();
@@ -334,7 +334,7 @@ class ConfigurableProductService
         // 构建本地化映射
         $localMap = [];
         foreach ($localDescs as $ld) {
-            $localMap[(int)$ld[OptionLocalDescription::schema_fields_ID]] = $ld;
+            $localMap[(int)$ld[OptionLocalDescription::fields_ID]] = $ld;
         }
 
         // 组装结果

@@ -416,6 +416,60 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertSame('', $result['reason']);
     }
 
+    public function testGenerateReplacementPromptCarriesLanguageAndCurrentBlockContract(): void
+    {
+        $scope = $this->scopeWithBuildPlanTaskLanguageAndContract();
+        $read = (new AiSiteBlockPartialPatchService())->readCurrentBlockFromScope($scope, 'home', 'hero');
+        $replacement = $this->block(
+            'hero',
+            'Reservierung starten',
+            '<section class="pb-c-root"><h2>Reservierung starten</h2></section>',
+            'content/hero'
+        );
+        $response = \json_encode([
+            'block' => $replacement,
+            'change_summary' => 'Updated the localized block headline.',
+            'changed_fields' => ['config.headline', 'html'],
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        self::assertIsString($response);
+
+        $captured = [];
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(static function (
+                string $prompt,
+                callable $callback,
+                ?string $modelCode = null,
+                ?string $scenarioCode = null,
+                ?string $locale = null,
+                array $params = []
+            ) use (&$captured, $response): void {
+                $captured = [
+                    'prompt' => $prompt,
+                    'locale' => $locale,
+                    'params' => $params,
+                ];
+                $callback($response);
+            });
+
+        $service = new AiSiteBlockPartialPatchService(aiService: $aiService);
+        $result = $service->generateReplacementBlock($read, $scope, 'Make the headline more direct.');
+
+        self::assertSame('Reservierung starten', $result['block']['config']['headline'] ?? null);
+        self::assertSame('de_DE', $captured['locale'] ?? null);
+        self::assertStringContainsString('CTX_WEBSITE_LANGUAGE', $captured['prompt'] ?? '');
+        self::assertStringContainsString('source_of_truth_locale', $captured['prompt'] ?? '');
+        self::assertStringContainsString('de_DE', $captured['prompt'] ?? '');
+        self::assertStringContainsString('CTX_CURRENT_BLOCK_CONTEXT', $captured['prompt'] ?? '');
+        self::assertStringContainsString('current_block_context', $captured['prompt'] ?? '');
+        self::assertStringContainsString('block_context_source', $captured['prompt'] ?? '');
+        self::assertStringContainsString('confirmed_build_task', $captured['prompt'] ?? '');
+        self::assertStringContainsString('editorial_split_media', $captured['prompt'] ?? '');
+        self::assertStringContainsString('Patch block-context execution rule', $captured['prompt'] ?? '');
+        self::assertStringContainsString('Patch anti-repetition rule', $captured['prompt'] ?? '');
+    }
+
     public function testRejectsReplacementWithoutHtml(): void
     {
         $service = new AiSiteBlockPartialPatchService();
@@ -574,6 +628,78 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
                 ],
             ],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function scopeWithBuildPlanTaskLanguageAndContract(): array
+    {
+        $scope = $this->scope();
+        $scope['plan_locale'] = 'en_US';
+        $scope['website_profile'] = [
+            'default_locale' => 'de_DE',
+            'content_locale' => 'de_DE',
+        ];
+        $scope['build_blueprint'] = [
+            'source' => 'build_plan_v2',
+            'tasks' => [
+                [
+                    'task_key' => 'page:home:content/hero',
+                    'task_type' => 'page_section',
+                    'page_type' => 'home',
+                    'section_code' => 'content/hero',
+                    'section_key' => 'hero',
+                    'block_key' => 'hero',
+                    'runtime_context' => [
+                        'content_locale' => 'de_DE',
+                        'language_contract' => [
+                            'source_of_truth_locale' => 'de_DE',
+                            'visible_copy_rule' => 'German visible copy only.',
+                        ],
+                    ],
+                    'plan_context' => [
+                        'block' => [
+                            'block_id' => 'block.home.hero',
+                            'block_contract' => [
+                                'morphology_id' => 'editorial_split_media',
+                                'block_goal' => 'Convert visitors to restaurant reservations.',
+                                'media_strategy' => [
+                                    'needs_real_image' => true,
+                                    'asset_slot_id' => 'page:home:hero',
+                                ],
+                                'diversity_constraints' => [
+                                    'must_differ_from_previous_block' => ['morphology_id', 'media_placement'],
+                                ],
+                            ],
+                            'image_intent' => [
+                                'needs_image' => true,
+                                'asset_slot_id' => 'page:home:hero',
+                            ],
+                        ],
+                    ],
+                    'block_task' => [
+                        'content_plan' => [
+                            'headline' => 'Plan intent only; rewrite into German before output.',
+                        ],
+                        'image_intent' => [
+                            'needs_image' => true,
+                            'asset_slot_id' => 'page:home:hero',
+                        ],
+                    ],
+                    'task_script' => [
+                        'output_contract' => [
+                            'html' => 'Localized section HTML matching the confirmed block contract.',
+                        ],
+                        'acceptance' => [
+                            'must_follow_current_block_contract' => true,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        return $scope;
     }
 
     /**

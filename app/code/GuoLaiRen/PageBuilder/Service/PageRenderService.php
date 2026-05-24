@@ -1162,6 +1162,7 @@ class PageRenderService
         try {
             $componentHtml = $this->renderPhtmlString($templateContent, $vars);
             $componentHtml = $this->applyVirtualThemeConfigOverridesToStaticHtml($componentHtml, $defaultConfig, $componentConfig);
+            $componentHtml = $this->applyVirtualThemeGeneratedComponentRuntimeFramework($componentHtml);
         } catch (\Throwable $throwable) {
             return '<!-- Error rendering virtual theme component ' . \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
                 . ': ' . \htmlspecialchars($throwable->getMessage(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . " -->\n";
@@ -1176,6 +1177,93 @@ class PageRenderService
         }
 
         return $marker . $componentHtml . "\n<!-- Component {$code} rendered successfully -->\n";
+    }
+
+    private function applyVirtualThemeGeneratedComponentRuntimeFramework(string $html): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        $html = $this->flattenRenderedVirtualThemeNestedResponsiveMedia($html);
+        if (\stripos($html, 'data-pb-ai-action') !== false && \strpos($html, 'pb:cta') === false) {
+            $html .= "\n" . $this->buildVirtualThemeAiActionBridgeScript();
+        }
+
+        return $html;
+    }
+
+    private function flattenRenderedVirtualThemeNestedResponsiveMedia(string $html): string
+    {
+        if (\stripos($html, '@media') === false) {
+            return $html;
+        }
+
+        return (string)\preg_replace_callback(
+            '/<style\b([^>]*)>(.*?)<\/style>/isu',
+            function (array $matches): string {
+                $attrs = (string)($matches[1] ?? '');
+                $css = (string)($matches[2] ?? '');
+                $lines = \preg_split('/\R/', $css) ?: [];
+                $keptLines = [];
+                $mediaBlocks = [];
+                foreach ($lines as $line) {
+                    if (\preg_match('/^[ \t]+((?:@media\s*\(\s*max-width\s*:\s*(?:768|420)px\s*\)\s*\{[^\r\n]*\})+)[ \t]*$/i', (string)$line, $lineMatch) === 1) {
+                        $mediaBlock = \trim((string)($lineMatch[1] ?? ''));
+                        if ($mediaBlock !== '') {
+                            $mediaBlocks[$mediaBlock] = true;
+                        }
+                        continue;
+                    }
+                    $keptLines[] = (string)$line;
+                }
+                if ($mediaBlocks === []) {
+                    return '<style' . $attrs . '>' . $css . '</style>';
+                }
+
+                $css = \implode("\n", $keptLines);
+                $css = \rtrim($css) . "\n\n" . \implode("\n", \array_keys($mediaBlocks)) . "\n";
+
+                return '<style' . $attrs . '>' . $css . '</style>';
+            },
+            $html
+        );
+    }
+
+    private function buildVirtualThemeAiActionBridgeScript(): string
+    {
+        return <<<'HTML'
+<script>
+(function() {
+    var script = document.currentScript;
+    var root = script ? script.previousElementSibling : null;
+    if (!root || !root.querySelectorAll) {
+        return;
+    }
+    var controls = root.querySelectorAll('[data-pb-ai-action]');
+    controls.forEach(function(control) {
+        if (control.getAttribute('data-pb-ai-bound') === '1') {
+            return;
+        }
+        control.setAttribute('data-pb-ai-bound', '1');
+        control.addEventListener('click', function(event) {
+            var action = control.getAttribute('data-pb-ai-action') || '';
+            var target = control.getAttribute('data-pb-ai-target') || control.getAttribute('href') || '';
+            var label = (control.textContent || '').trim();
+            var detail = { action: action, target: target, label: label, source: control, originalEvent: event };
+            var actionEvent;
+            if (typeof CustomEvent === 'function') {
+                actionEvent = new CustomEvent('pb:cta', { bubbles: true, detail: detail });
+            } else {
+                actionEvent = document.createEvent('CustomEvent');
+                actionEvent.initCustomEvent('pb:cta', true, false, detail);
+            }
+            root.dispatchEvent(actionEvent);
+        });
+    });
+})();
+</script>
+HTML;
     }
 
     /**
@@ -2255,9 +2343,10 @@ JS;
         $baseCssTag = $baseCssUrl !== ''
             ? '<link rel="stylesheet" href="' . htmlspecialchars($baseCssUrl, ENT_QUOTES, 'UTF-8') . '">'
             : '';
+        $htmlLang = $this->resolveDocumentLanguage();
         
         return '<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="' . \htmlspecialchars($htmlLang, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

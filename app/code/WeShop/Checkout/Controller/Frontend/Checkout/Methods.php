@@ -32,7 +32,10 @@ class Methods extends FrontendController
 
             $data = $this->checkoutPageDataService->buildDynamicMethodData($cartCustomerId, [
                 'shipping_address_id' => $isGuestCheckout ? 0 : (int) ($this->readRequestValue('shipping_address_id') ?? 0),
+                'billing_address_id' => $isGuestCheckout ? 0 : (int) ($this->readRequestValue('billing_address_id') ?? 0),
+                'billing_same_as_shipping' => $this->readBillingSameAsShipping(),
                 'shipping_address' => $this->readShippingAddress(),
+                'billing_address' => $this->readBillingAddress(),
                 'shipping_method' => (string) ($this->readRequestValue('shipping_method') ?? ''),
                 'payment_method' => (string) ($this->readRequestValue('payment_method') ?? ''),
                 'order_id' => (int) (($this->readRequestValue('order_id') ?? $this->readRequestValue('retry_order_id')) ?? 0),
@@ -77,6 +80,33 @@ class Methods extends FrontendController
         }
 
         return \is_array($shippingAddress) ? $shippingAddress : [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function readBillingAddress(): array
+    {
+        $billingAddress = $this->readRequestValue('billing_address');
+        if (!\is_array($billingAddress) || $billingAddress === []) {
+            $billingAddress = $this->readRequestValue('billing');
+        }
+
+        return \is_array($billingAddress) ? $billingAddress : [];
+    }
+
+    protected function readBillingSameAsShipping(): bool
+    {
+        $value = $this->readRequestValue('billing_same_as_shipping');
+        if ($value === null) {
+            return true;
+        }
+
+        if (\is_bool($value)) {
+            return $value;
+        }
+
+        return !\in_array(strtolower(trim((string) $value)), ['0', 'false', 'off', 'no'], true);
     }
 
     private function getCartIdentityService(): CartIdentityService

@@ -32,6 +32,10 @@ class MemoryServerProvider extends AbstractServiceProvider
 
     public function isEnabled(ServiceContext $context): bool
     {
+        if ($this->isSharedStateRuntimeManaged($context, 'memory')) {
+            return false;
+        }
+
         $m = ($context->envConfig['wls'] ?? [])['memory_service'] ?? [];
         return (bool) ($m['enabled'] ?? true);
     }

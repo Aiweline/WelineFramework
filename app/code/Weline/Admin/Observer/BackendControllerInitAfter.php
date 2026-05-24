@@ -4,6 +4,7 @@ namespace Weline\Admin\Observer;
 
 use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Admin\Service\BackendRememberLoginService;
+use Weline\Backend\Service\BackendWarmupContext;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
@@ -34,6 +35,13 @@ class BackendControllerInitAfter implements ObserverInterface
     {
         // WLS 下 Observer 可能复用旧实例，这里强制切到当前请求上下文。
         $this->request = ObjectManager::getInstance(Request::class);
+
+        if (\class_exists(BackendWarmupContext::class)
+            && BackendWarmupContext::isInternalWarmupRequest($this->request)
+            && BackendWarmupContext::isActive()
+        ) {
+            return;
+        }
 
         $currentRoutePath = trim($this->request->getRouteUrlPath(), '/');
         // 真实登录提交阶段不执行 remember-me 自动登录，避免干扰本次账号密码登录流程。

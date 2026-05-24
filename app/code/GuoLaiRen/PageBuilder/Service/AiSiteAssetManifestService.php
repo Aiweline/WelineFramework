@@ -76,11 +76,16 @@ final class AiSiteAssetManifestService
         }
         $nextSignature = \trim((string)($next['planning_signature'] ?? ''));
         $samePlanning = $existingSignature !== '' && $nextSignature !== '' && \hash_equals($existingSignature, $nextSignature);
+        $existingContextHash = \trim((string)($existing['planning_context_hash'] ?? ''));
+        $nextContextHash = \trim((string)($next['planning_context_hash'] ?? ''));
+        $samePlanningContext = $existingContextHash !== ''
+            && $nextContextHash !== ''
+            && \hash_equals($existingContextHash, $nextContextHash);
         $existingFinalUrl = \trim((string)($existing['final_url'] ?? ''));
         if (
             ((int)($existing['locked_by_user'] ?? 0) === 1 && $existingFinalUrl !== '')
             || (
-                $samePlanning
+                ($samePlanning || $samePlanningContext)
                 && (
                     $existingFinalUrl !== ''
                     || \in_array($existingStatus, ['queued', 'generating', 'done', 'error', 'locked'], true)
@@ -1214,12 +1219,31 @@ final class AiSiteAssetManifestService
             $imageIntent = \is_array($block['image_intent'] ?? null)
                 ? $block['image_intent']
                 : (\is_array($block['visual']['image_intent'] ?? null) ? $block['visual']['image_intent'] : []);
+            $blockContract = \is_array($block['block_contract'] ?? null)
+                ? $block['block_contract']
+                : (\is_array($block['visual']['block_contract'] ?? null) ? $block['visual']['block_contract'] : []);
+            $mediaStrategy = \is_array($blockContract['media_strategy'] ?? null) ? $blockContract['media_strategy'] : [];
+            if ($imageIntent === [] && $mediaStrategy !== []) {
+                $imageIntent = [
+                    'needs_image' => !empty($mediaStrategy['needs_real_image']),
+                    'image_role' => (string)($block['page_flow_role'] ?? '') === 'opening' ? 'hero_image' : 'section_image',
+                    'image_subject' => (string)($mediaStrategy['image_subject'] ?? ''),
+                    'placement' => (string)($mediaStrategy['placement'] ?? ''),
+                    'visual_atmosphere' => 'aligned with confirmed block contract',
+                    'image_treatment' => (string)($mediaStrategy['image_treatment'] ?? ''),
+                    'reuse_policy' => 'reuse_when_intent_matches',
+                    'css_motif' => (string)($mediaStrategy['css_motif'] ?? ''),
+                ];
+            }
             if (!$this->blockShouldRequireGeneratedImage($block, $imageIntent)) {
                 continue;
             }
 
             $sectionCode = $this->buildSectionCodeFromBlockKey($pageType, $blockKey);
-            $slotId = $this->normalizeSlotId('page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode));
+            $slotId = $this->normalizeSlotId($this->firstString([
+                $mediaStrategy['asset_slot_id'] ?? null,
+                'page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode),
+            ]));
             $titleCopy = $this->extractBuildPlanBlockContentText($block, $contentItems);
             $brief = $this->buildContentBlockImageSubjectBrief($blockKey, $block, $imageIntent, $businessContext);
             $briefParts = [];
@@ -1237,6 +1261,11 @@ final class AiSiteAssetManifestService
                     . '; atmosphere=' . $this->firstString([$imageIntent['visual_atmosphere'] ?? null])
                     . '; treatment=' . $this->firstString([$imageIntent['image_treatment'] ?? null])
                     . '; reuse_policy=' . $this->firstString([$imageIntent['reuse_policy'] ?? null]);
+            }
+            if ($mediaStrategy !== []) {
+                $briefParts[] = 'Block contract media strategy: ' . $this->firstString([$mediaStrategy['image_subject'] ?? null])
+                    . '; placement=' . $this->firstString([$mediaStrategy['placement'] ?? null])
+                    . '; treatment=' . $this->firstString([$mediaStrategy['image_treatment'] ?? null]);
             }
             $briefParts[] = 'Stage-1 visual signature: ' . $this->firstString([
                 $block['visual_signature']['composition_pattern'] ?? null,
@@ -1272,6 +1301,7 @@ final class AiSiteAssetManifestService
                 'required' => 1,
                 'desired_image' => 1,
                 'image_intent' => $imageIntent,
+                'block_contract' => $blockContract,
                 'visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
                 'locked_by_user' => 0,
             ];
@@ -1411,6 +1441,12 @@ final class AiSiteAssetManifestService
      */
     private function blockShouldRequireGeneratedImage(array $block, array $imageIntent): bool
     {
+        $blockContract = \is_array($block['block_contract'] ?? null)
+            ? $block['block_contract']
+            : (\is_array($block['visual']['block_contract'] ?? null) ? $block['visual']['block_contract'] : []);
+        if (!empty($blockContract['media_strategy']['needs_real_image'])) {
+            return true;
+        }
         if ($imageIntent !== []) {
             if ($this->imageIntentNeedsImage($imageIntent)) {
                 return true;
@@ -2016,6 +2052,9 @@ final class AiSiteAssetManifestService
         }
         $parts = \explode(':', $slotId, 3);
         $slotTail = \trim((string)($parts[2] ?? ''));
+        if (\str_contains($slotTail, ':')) {
+            return false;
+        }
 
         return $slotTail !== '' && !\str_starts_with($slotTail, 'content-');
     }

@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
+use WeShop\Product\Model\Product\LocalDescription as ProductLocalDescription;
 use WeShop\Product\Model\ProductCategory;
 use WeShop\Product\Service\ProductEavCompatibilityService;
 
@@ -19,6 +20,18 @@ use WeShop\Product\Service\ProductEavCompatibilityService;
  */
 class ProductQueryProvider implements QueryProviderInterface
 {
+    /**
+     * @var array<string, string>
+     */
+    private const LOCALIZED_FIELD_MAP = [
+        'local_name' => Product::schema_fields_name,
+        'local_short_description' => Product::schema_fields_short_description,
+        'local_description' => Product::schema_fields_description,
+        'local_meta_name' => Product::schema_fields_meta_name,
+        'local_meta_description' => Product::schema_fields_meta_description,
+        'local_meta_keywords' => Product::schema_fields_meta_keywords,
+    ];
+
     private ?int $productEavEntityId = null;
 
     private readonly ProductCategory $productCategoryModel;
@@ -68,12 +81,14 @@ class ProductQueryProvider implements QueryProviderInterface
         if ($productId <= 0) {
             return null;
         }
-        $product = clone $this->productModel;
-        $product->load($productId);
-        if (!$product->getId()) {
+
+        $rows = $this->fetchLocalizedProductRows([$productId]);
+        $row = is_array($rows[0] ?? null) ? $rows[0] : null;
+        if ($row === null) {
             return null;
         }
-        return $this->productToArray($product);
+
+        return $this->productRowToArray($row);
     }
 
     private function getProductByIds(array $params): array
@@ -86,15 +101,13 @@ class ProductQueryProvider implements QueryProviderInterface
         if (empty($ids)) {
             return [];
         }
-        $product = clone $this->productModel;
-        $product->clear()->where(Product::schema_fields_ID, $ids, 'in');
-        $items = $product->select()->fetch()->getItems();
         $list = [];
-        foreach ($items as $p) {
-            if ($p->getId()) {
-                $list[] = $this->productToArray($p);
+        foreach ($this->fetchLocalizedProductRows($ids) as $row) {
+            if (is_array($row) && $this->extractProductId($row) > 0) {
+                $list[] = $this->productRowToArray($row);
             }
         }
+
         return $list;
     }
 
@@ -134,23 +147,78 @@ class ProductQueryProvider implements QueryProviderInterface
         }
     }
 
-    private function productToArray(object $product): array
+    /**
+     * @param array<int, int> $ids
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchLocalizedProductRows(array $ids): array
     {
+        $ids = \array_values(\array_unique(\array_filter(\array_map('intval', $ids))));
+        if ($ids === []) {
+            return [];
+        }
+
+        $product = clone $this->productModel;
+
+        return $product->clear()
+            ->loadLocalDescription()
+            ->fields($this->localizedSelectFields())
+            ->where('main_table.' . Product::schema_fields_ID, $ids, 'in')
+            ->select()
+            ->fetchArray();
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function productRowToArray(array $row): array
+    {
+        $row = $this->mergeLocalizedProductRow($row);
+
         return $this->priceService->resolveProductData([
-            'product_id' => (int)$product->getId(),
-            'name' => $product->getData(Product::schema_fields_name),
-            'short_description' => $product->getData(Product::schema_fields_short_description),
-            'description' => $product->getData(Product::schema_fields_description),
-            'sku' => $product->getData(Product::schema_fields_sku),
-            'spu' => $product->getData(Product::schema_fields_spu),
-            'price' => (float)($product->getData(Product::schema_fields_price) ?? 0),
-            'cost' => (float)($product->getData(Product::schema_fields_cost) ?? 0),
-            'stock' => (int)($product->getData(Product::schema_fields_stock) ?? 0),
-            'image' => $product->getData(Product::schema_fields_image),
-            'images' => $product->getData(Product::schema_fields_images),
-            'status' => (int)($product->getData(Product::schema_fields_status) ?? 0),
-            'handle' => $product->getData(Product::schema_fields_HANDLE),
-            'parent_id' => (int)($product->getData(Product::schema_fields_parent_id) ?? 0),
+            'product_id' => $this->extractProductId($row),
+            'name' => $row[Product::schema_fields_name] ?? '',
+            'short_description' => $row[Product::schema_fields_short_description] ?? '',
+            'description' => $row[Product::schema_fields_description] ?? '',
+            'sku' => $row[Product::schema_fields_sku] ?? '',
+            'spu' => $row[Product::schema_fields_spu] ?? '',
+            'price' => (float)($row[Product::schema_fields_price] ?? 0),
+            'cost' => (float)($row[Product::schema_fields_cost] ?? 0),
+            'stock' => (int)($row[Product::schema_fields_stock] ?? 0),
+            'image' => $row[Product::schema_fields_image] ?? '',
+            'images' => $row[Product::schema_fields_images] ?? '',
+            'status' => (int)($row[Product::schema_fields_status] ?? 0),
+            'handle' => $row[Product::schema_fields_HANDLE] ?? '',
+            'parent_id' => (int)($row[Product::schema_fields_parent_id] ?? 0),
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function mergeLocalizedProductRow(array $row): array
+    {
+        foreach (self::LOCALIZED_FIELD_MAP as $localField => $field) {
+            $localizedValue = trim((string)($row[$localField] ?? ''));
+            if ($localizedValue !== '') {
+                $row[$field] = $localizedValue;
+            }
+        }
+
+        return $row;
+    }
+
+    private function localizedSelectFields(): string
+    {
+        return \implode(',', [
+            'main_table.*',
+            'local.' . ProductLocalDescription::schema_fields_NAME . ' AS local_name',
+            'local.' . ProductLocalDescription::schema_fields_SHORT_DESCRIPTION . ' AS local_short_description',
+            'local.' . ProductLocalDescription::schema_fields_DESCRIPTION . ' AS local_description',
+            'local.' . ProductLocalDescription::schema_fields_META_NAME . ' AS local_meta_name',
+            'local.' . ProductLocalDescription::schema_fields_META_DESCRIPTION . ' AS local_meta_description',
+            'local.' . ProductLocalDescription::schema_fields_META_KEYWORDS . ' AS local_meta_keywords',
         ]);
     }
 

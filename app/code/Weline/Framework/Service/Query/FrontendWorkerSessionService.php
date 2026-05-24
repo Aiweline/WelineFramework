@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Service\Query;
 
+use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
+
 final class FrontendWorkerSessionService
 {
     private const SESSION_KEY = 'weline_frontend_worker_sessions';
@@ -13,6 +16,7 @@ final class FrontendWorkerSessionService
     private const STREAM_TICKET_TTL = 60;
     private const CLEANUP_INTERVAL_SECONDS = 15;
     private const STORE_FORCE_CLEANUP_BYTES = 131072;
+    private const DEFAULT_LOCK_TIMEOUT_MS = 120;
     private const MAX_ACTIVE_SESSIONS = 256;
     private const MAX_NONCES_PER_SCOPE = 128;
     private const STORE_FILE = BP . 'var' . DS . 'cache' . DS . 'frontend_worker_store.json';
@@ -370,20 +374,54 @@ final class FrontendWorkerSessionService
             throw new FrontendQueryException('auth_error', 'Worker session store lock is unavailable.', 503);
         }
 
+        $locked = false;
         try {
-            if (!\flock($lock, LOCK_EX)) {
-                throw new FrontendQueryException('auth_error', 'Worker session store is locked.', 503);
-            }
+            $locked = $this->acquireStoreLock($lock);
 
             $store = $this->readStore();
             $result = $callback($store);
             $this->writeStore($store);
-            \flock($lock, LOCK_UN);
 
             return $result;
         } finally {
+            if ($locked) {
+                \flock($lock, LOCK_UN);
+            }
             \fclose($lock);
         }
+    }
+
+    /**
+     * @param resource $lock
+     */
+    private function acquireStoreLock(mixed $lock): bool
+    {
+        $timeoutMs = $this->resolveLockTimeoutMs();
+        $deadline = \microtime(true) + ($timeoutMs / 1000);
+
+        do {
+            if (\flock($lock, LOCK_EX | LOCK_NB)) {
+                return true;
+            }
+
+            SchedulerSystem::usleep(1000);
+        } while (\microtime(true) < $deadline);
+
+        throw new FrontendQueryException(
+            'auth_error',
+            'Worker session store is busy.',
+            503
+        );
+    }
+
+    private function resolveLockTimeoutMs(): int
+    {
+        $configured = (int)Env::get('wls.frontend_worker_session_lock_timeout_ms', self::DEFAULT_LOCK_TIMEOUT_MS);
+        if ($configured <= 0) {
+            return self::DEFAULT_LOCK_TIMEOUT_MS;
+        }
+
+        return \max(1, \min(1000, $configured));
     }
 
     private function ensureStoreDirectory(): void
@@ -423,7 +461,7 @@ final class FrontendWorkerSessionService
     private function writeStore(array $store): void
     {
         $json = \json_encode($store, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        if (\file_put_contents(self::STORE_FILE, $json, LOCK_EX) === false) {
+        if (\file_put_contents(self::STORE_FILE, $json) === false) {
             throw new FrontendQueryException('auth_error', 'Worker session store write failed.', 503);
         }
     }

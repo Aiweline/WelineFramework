@@ -25,6 +25,7 @@ class KillPort extends CommandAbstract
     {
         $port = (int) ($args['p'] ?? $args['port'] ?? 0);
         $force = isset($args['f']) || isset($args['force']);
+        $allowForeign = isset($args['allow-foreign']) || isset($args['allow_foreign']) || isset($args['yes']);
         $positionalArgs = [];
         foreach ($args as $key => $arg) {
             if (\is_int($key) && !\str_starts_with((string)$arg, '-')) {
@@ -70,11 +71,18 @@ class KillPort extends CommandAbstract
             return;
         }
         
-        if (!$isWeline && $force) {
+        if (!$isWeline && $force && !$allowForeign) {
+            $this->printer->error(__('拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。'));
+            $this->printer->note(__('如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。'));
+            $this->printer->note(__('  php bin/w server:kill-port %{1} -f --allow-foreign', [$port]));
+            return;
+        }
+
+        if (!$isWeline && $force && $allowForeign) {
             if ($state === 'orphan') {
                 $this->printer->warning(__('警告：端口占用者处于异常状态（PID 失效），强制模式可能仍无法释放端口。'));
             } else {
-                $this->printer->warning(__('警告：即将杀死非框架进程！'));
+                $this->printer->warning(__('警告：即将杀死非 WLS 进程！'));
             }
         }
 
@@ -112,13 +120,14 @@ class KillPort extends CommandAbstract
             [
                 '[port]' => __('端口号（默认 443）'),
                 '-p, --port' => __('端口号'),
-                '-f, --force' => __('强制模式：杀死非框架进程（危险！默认只杀框架进程）'),
+                '-f, --force' => __('强制模式：仅强制释放 WLS 归属进程'),
+                '--allow-foreign' => __('与 -f 同用时允许杀死非 WLS 进程（危险）'),
                 '--help' => __('显示帮助信息'),
             ],
             [],
             [
                 __('结束占用 443 的框架进程') => 'php bin/w server:kill-port 443',
-                __('强制杀死任何进程（危险）') => 'php bin/w server:kill-port 19443 -f',
+                __('强制杀死非 WLS 进程（危险）') => 'php bin/w server:kill-port 19443 -f --allow-foreign',
             ]
         );
     }

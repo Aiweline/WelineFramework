@@ -17,9 +17,8 @@ class DefaultThemeProductHookHostTest extends TestCase
         $this->assertStringContainsString('WeShop_Product::frontend::product::add-to-cart::options-popup', $template);
         $this->assertStringContainsString('WeShop_Product::frontend::layouts::product::tabs-content', $template);
         $this->assertStringContainsString('WeShop_Product::detail::after_add_to_cart', $template);
-        $this->assertStringContainsString('cart/frontend/api/add', $template);
-        $this->assertStringContainsString('window.WeShop.cartAddUrl', $template);
         $this->assertStringContainsString('class="add-to-cart', $template);
+        $this->assertStringContainsString('data-product-id', $template);
         $this->assertStringContainsString('You Might Also Like', $template);
     }
 
@@ -30,5 +29,14 @@ class DefaultThemeProductHookHostTest extends TestCase
 
         $this->assertStringContainsString('WeShop_QA::frontend::layouts::product-questions::content', $template);
         $this->assertStringContainsString('WeShop_Review::frontend::layouts::product-reviews::content', $template);
+    }
+
+    public function testBackendProductEditHostsReviewManagementHooks(): void
+    {
+        $template = file_get_contents(__DIR__ . '/../../../view/templates/Backend/Product/Edit/index.phtml');
+        $this->assertIsString($template);
+
+        $this->assertStringContainsString('WeShop_Product::backend::product::edit::nav-after', $template);
+        $this->assertStringContainsString('WeShop_Product::backend::product::edit::content-after', $template);
     }
 }

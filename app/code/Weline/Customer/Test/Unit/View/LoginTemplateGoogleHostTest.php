@@ -24,6 +24,8 @@ class LoginTemplateGoogleHostTest extends TestCase
         $this->assertStringNotContainsString('WeShop_GoogleAuth::templates/Frontend/Auth/login-provider-button.phtml', $content);
         $this->assertStringNotContainsString('getModuleStatus(\'WeShop_GoogleAuth\')', $content);
         $this->assertStringContainsString('/customer/account/forgot-password', $content);
+        $this->assertStringContainsString('function setLoginLoading(loading)', $content);
+        $this->assertStringContainsString('if ((username.value || \'\').trim() && password.value)', $content);
     }
 
     public function testCustomerModuleDeclaresLoginProviderHook(): void

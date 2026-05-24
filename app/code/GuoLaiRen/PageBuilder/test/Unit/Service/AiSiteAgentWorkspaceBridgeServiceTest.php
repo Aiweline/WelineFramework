@@ -79,6 +79,50 @@ final class AiSiteAgentWorkspaceBridgeServiceTest extends TestCase
         self::assertSame(12, $selection['preferred_registrar_account_id']);
     }
 
+    public function testBuildWorkspaceRegistrarSelectionForcesLocalRegistrarOnlyInLocalEnvironment(): void
+    {
+        $service = $this->createService();
+        $accounts = [
+            [
+                'account_id' => 900001,
+                'label' => '本地供应商 - 本地默认账号',
+                'registrar_name' => '本地供应商',
+                'registrar_code' => 'local_demo',
+                'account_name' => '本地默认账号',
+            ],
+            [
+                'account_id' => 12,
+                'label' => 'Spaceship - Backup',
+                'registrar_name' => 'Spaceship',
+                'registrar_code' => 'spaceship',
+                'account_name' => 'Backup',
+            ],
+        ];
+
+        $localSelection = $service->buildWorkspaceRegistrarSelection([], [], $accounts, true);
+        self::assertSame(900001, $localSelection['preferred_registrar_account_id']);
+
+        $onlineSelection = $service->buildWorkspaceRegistrarSelection(
+            ['preferred_registrar_account_id' => 900001, 'recommended_registrar_label' => '本地供应商 - 本地默认账号'],
+            [],
+            $accounts,
+            false
+        );
+        self::assertSame(0, $onlineSelection['preferred_registrar_account_id']);
+        self::assertSame('', $onlineSelection['recommended_registrar_label']);
+    }
+
+    public function testIsLocalDomainEnvironmentUsesConfiguredWlsHostPolicy(): void
+    {
+        $service = $this->createService();
+
+        self::assertTrue($service->isLocalDomainEnvironment('p11005ce4.weline.test'));
+        self::assertTrue($service->isLocalDomainEnvironment('http://127.0.0.1:9501'));
+        self::assertTrue($service->isLocalDomainEnvironment('192.168.1.20'));
+        self::assertFalse($service->isLocalDomainEnvironment('www.example.com'));
+        self::assertFalse($service->isLocalDomainEnvironment('https://shop.example.com:9501'));
+    }
+
     public function testBuildLinkedWebsitesScopeFallsBackToTargetDomainRecommendation(): void
     {
         $scopeCompatibility = $this->createMock(AiSiteScopeCompatibilityService::class);

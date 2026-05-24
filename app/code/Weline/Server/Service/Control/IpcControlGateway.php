@@ -7,20 +7,10 @@ use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Timeouts;
 
 class IpcControlGateway implements IpcControlGatewayInterface
 {
-    /**
-     * CLI/后台异步派发常用 0.8s 级读超时；若与连接共用会导致 stream_socket_client 在 Windows/高负载下频繁误判失败。
-     * 连接阶段单独使用不低于本值的超时，读 ACK 仍用调用方传入的 $timeout。
-     */
-    private const CONTROL_CONNECT_TIMEOUT_CAP_SEC = 0.35;
-
-    /** 控制端口瞬时不可达（Master 忙、系统更新）时短暂重试 */
-    private const CONTROL_CONNECT_ATTEMPTS = 2;
-
-    private const CONTROL_CONNECT_RETRY_USEC = 50_000;
-
     public function command(
         string $instanceName,
         string $action,
@@ -28,6 +18,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
         array $payload = [],
         float $timeout = 6.0
     ): array {
+        $requestId = (string)($payload['msg_id'] ?? ControlCommandResult::requestId($action));
+        $payload['msg_id'] = $requestId;
         if ($action === ControlMessage::ACTION_STOP && !isset($payload['stop_intent'])) {
             $payload['stop_intent'] = 'explicit';
         }
@@ -41,18 +33,20 @@ class IpcControlGateway implements IpcControlGatewayInterface
         $endpoint = $this->resolveControlEndpoint($instanceName);
         $controlPort = (int)$endpoint['port'];
         if ($controlPort <= 0) {
-            return [
+            return ControlCommandResult::normalize([
                 'success' => false,
                 'message' => (string)__('实例 %{1} 的 Master 未运行，无法通过 IPC 控制。', [$instanceName]),
                 'data' => [],
-            ];
+            ], $instanceName, $action, $requestId);
         }
 
-        return $this->sendCommand(
+        $result = $this->sendCommand(
             $controlPort,
             ControlMessage::command($action, $reloadType, $payload, (string)$endpoint['control_token']),
             $timeout
         );
+
+        return ControlCommandResult::normalize($result, $instanceName, $action, $requestId);
     }
 
     public function reloadAsync(
@@ -113,7 +107,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
 
     public function getStatus(string $instanceName = 'default', float $timeout = 4.0): array
     {
-        return $this->command($instanceName, ControlMessage::ACTION_STATUS, '', [], $timeout);
+        return $this->command($instanceName, ControlMessage::ACTION_STATUS, '', [], $timeout ?: Timeouts::CONTROL_CMD_STATUS_READ_SEC);
     }
 
     public function getStatusBrief(string $instanceName = 'default', float $timeout = 1.5): array
@@ -124,7 +118,45 @@ class IpcControlGateway implements IpcControlGatewayInterface
     public function reloadSslCert(string $instanceName = 'default', array $domains = []): array
     {
         $payload = empty($domains) ? [] : ['domains' => \array_values(\array_unique($domains))];
-        return $this->command($instanceName, ControlMessage::ACTION_SSL_CERT_RELOAD, '', $payload);
+        return $this->command($instanceName, ControlMessage::ACTION_SSL_CERT_RELOAD, '', $payload, Timeouts::CONTROL_CMD_DEFAULT_READ_SEC);
+    }
+
+    public function securityUnblock(string $instanceName = 'default', ?string $ip = null, bool $clearAll = false): array
+    {
+        $payload = ['clear_all' => $clearAll];
+        if ($ip !== null && $ip !== '') {
+            $payload['ip'] = $ip;
+        }
+
+        return $this->command(
+            $instanceName,
+            ControlMessage::ACTION_SECURITY_UNBLOCK,
+            '',
+            $payload,
+            Timeouts::CONTROL_CMD_DEFAULT_READ_SEC
+        );
+    }
+
+    public function scaleWorkers(string $instanceName, int $targetWorkers, float $timeout = 10.0): array
+    {
+        return $this->command(
+            $instanceName,
+            ControlMessage::ACTION_SCALE_WORKERS,
+            '',
+            ['target_workers' => $targetWorkers],
+            $timeout
+        );
+    }
+
+    public function scalingStatus(string $instanceName, float $timeout = 4.0): array
+    {
+        return $this->command(
+            $instanceName,
+            ControlMessage::ACTION_SCALING_STATUS,
+            '',
+            [],
+            $timeout
+        );
     }
 
     // ==================== 并发批量派发（P0-3） ====================
@@ -290,20 +322,26 @@ class IpcControlGateway implements IpcControlGatewayInterface
         foreach ($instanceNames as $name) {
             $endpoint = $this->resolveControlEndpoint($name);
             $port = (int)$endpoint['port'];
+            $requestId = ControlCommandResult::requestId($action);
             if ($port <= 0) {
-                $results[$name] = [
+                $results[$name] = ControlCommandResult::normalize([
                     'success' => false,
                     'message' => (string)__('实例 %{1} 的 Master 未运行，无法通过 IPC 控制。', [$name]),
                     'data' => [],
-                ];
+                ], $name, $action, $requestId, $asyncAck);
                 continue;
             }
+            $payloadWithId = $payload;
+            $payloadWithId['msg_id'] = $requestId;
             $commands[$name] = [
                 'port' => $port,
+                'action' => $action,
+                'request_id' => $requestId,
+                'async' => $asyncAck,
                 'command' => ControlMessage::command(
                     $action,
                     $reloadType,
-                    $payload,
+                    $payloadWithId,
                     (string)$endpoint['control_token']
                 ),
             ];
@@ -315,7 +353,14 @@ class IpcControlGateway implements IpcControlGatewayInterface
 
         $parallel = $this->sendCommandsParallel($commands, $timeout, $asyncAck, $acceptedMessage);
         foreach ($parallel as $name => $r) {
-            $results[$name] = $r;
+            $meta = $commands[$name] ?? [];
+            $results[$name] = ControlCommandResult::normalize(
+                $r,
+                $name,
+                (string)($meta['action'] ?? $action),
+                (string)($meta['request_id'] ?? ''),
+                (bool)($meta['async'] ?? $asyncAck)
+            );
         }
         return $results;
     }
@@ -342,7 +387,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
         }
 
         $readTimeout = \max(0.05, $timeout);
-        $connectTimeout = \max(0.05, \min($readTimeout, self::CONTROL_CONNECT_TIMEOUT_CAP_SEC));
+        $connectTimeout = \max(Timeouts::CONTROL_MIN_CONNECT_TIMEOUT_SEC, $readTimeout);
 
         /** @var array<string, resource> $connections */
         $connections = [];
@@ -355,7 +400,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
             $errno = 0;
             $errstr = '';
             $conn = null;
-            for ($attempt = 1; $attempt <= self::CONTROL_CONNECT_ATTEMPTS; $attempt++) {
+            for ($attempt = 1; $attempt <= Timeouts::CONTROL_CONNECT_ATTEMPTS; $attempt++) {
                 $conn = @\stream_socket_client(
                     "tcp://127.0.0.1:{$port}",
                     $errno,
@@ -365,8 +410,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 if ($conn) {
                     break;
                 }
-                if ($attempt < self::CONTROL_CONNECT_ATTEMPTS) {
-                    SchedulerSystem::usleep(self::CONTROL_CONNECT_RETRY_USEC);
+                if ($attempt < Timeouts::CONTROL_CONNECT_ATTEMPTS) {
+                    SchedulerSystem::usleep(Timeouts::CONTROL_CONNECT_RETRY_USEC);
                 }
             }
             if (!$conn) {
@@ -555,23 +600,27 @@ class IpcControlGateway implements IpcControlGatewayInterface
         float $timeout = 5.0,
         string $acceptedMessage = 'Command queued'
     ): array {
+        $requestId = (string)($payload['msg_id'] ?? ControlCommandResult::requestId($action));
+        $payload['msg_id'] = $requestId;
         $endpoint = $this->resolveControlEndpoint($instanceName);
         $controlPort = (int)$endpoint['port'];
         if ($controlPort <= 0) {
-            return [
+            return ControlCommandResult::normalize([
                 'success' => false,
                 'message' => (string)__('实例 %{1} 的 Master 未运行，无法通过 IPC 控制。', [$instanceName]),
                 'data' => [],
-            ];
+            ], $instanceName, $action, $requestId, true);
         }
 
-        return $this->sendCommand(
+        $result = $this->sendCommand(
             $controlPort,
             ControlMessage::command($action, $reloadType, $payload, (string)$endpoint['control_token']),
             $timeout,
             true,
             $acceptedMessage
         );
+
+        return ControlCommandResult::normalize($result, $instanceName, $action, $requestId, true);
     }
 
     /**
@@ -663,12 +712,12 @@ class IpcControlGateway implements IpcControlGatewayInterface
     ): array
     {
         $readTimeout = \max(0.05, $timeout);
-        $connectTimeout = \max(0.05, \min($readTimeout, self::CONTROL_CONNECT_TIMEOUT_CAP_SEC));
+        $connectTimeout = \max(Timeouts::CONTROL_MIN_CONNECT_TIMEOUT_SEC, $readTimeout);
 
         $conn = null;
         $errno = 0;
         $errstr = '';
-        for ($attempt = 1; $attempt <= self::CONTROL_CONNECT_ATTEMPTS; $attempt++) {
+        for ($attempt = 1; $attempt <= Timeouts::CONTROL_CONNECT_ATTEMPTS; $attempt++) {
             $conn = @\stream_socket_client(
                 "tcp://127.0.0.1:{$controlPort}",
                 $errno,
@@ -678,8 +727,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
             if ($conn) {
                 break;
             }
-            if ($attempt < self::CONTROL_CONNECT_ATTEMPTS) {
-                SchedulerSystem::usleep(self::CONTROL_CONNECT_RETRY_USEC);
+            if ($attempt < Timeouts::CONTROL_CONNECT_ATTEMPTS) {
+                SchedulerSystem::usleep(Timeouts::CONTROL_CONNECT_RETRY_USEC);
             }
         }
         if (!$conn) {

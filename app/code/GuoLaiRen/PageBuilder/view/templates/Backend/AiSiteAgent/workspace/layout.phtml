@@ -14,6 +14,47 @@
     .pb-ai-expert-log-card .card-body {
         padding-inline: 1.25rem;
     }
+    .pb-ai-domain-inline {
+        display: grid;
+        gap: .5rem .75rem;
+        align-items: start;
+    }
+    .pb-ai-domain-inline > .pb-ai-domain-provider-field {
+        grid-row: 1;
+        margin-top: 0 !important;
+    }
+    .pb-ai-domain-inline > .pb-ai-domain-target-heading {
+        grid-row: 2;
+    }
+    .pb-ai-domain-inline > .pb-ai-domain-target-input {
+        grid-row: 3;
+    }
+    .pb-ai-domain-inline > .pb-ai-domain-choice-field {
+        grid-row: 4;
+    }
+    @media (min-width: 992px) {
+        .pb-ai-domain-inline {
+            grid-template-columns: minmax(12rem, .95fr) minmax(16rem, 1.35fr);
+        }
+        .pb-ai-domain-inline > .pb-ai-domain-provider-field {
+            grid-column: 1;
+            grid-row: 1 / span 3;
+        }
+        .pb-ai-domain-inline > .pb-ai-domain-target-heading,
+        .pb-ai-domain-inline > .pb-ai-domain-target-input,
+        .pb-ai-domain-inline > .pb-ai-domain-choice-field {
+            grid-column: 2;
+        }
+        .pb-ai-domain-inline > .pb-ai-domain-target-heading {
+            grid-row: 1;
+        }
+        .pb-ai-domain-inline > .pb-ai-domain-target-input {
+            grid-row: 2;
+        }
+        .pb-ai-domain-inline > .pb-ai-domain-choice-field {
+            grid-row: 3;
+        }
+    }
     .pb-ai-expert-event-card .card-body {
         max-height: min(28rem, 42vh);
         overflow: auto;
@@ -726,14 +767,35 @@ $pbAiStageGuide = match ((string)$currentStage) {
                         </h5>
                         <p class="text-muted small mb-3"><?= htmlspecialchars((string)__('填写网站名称、目标域名、定位、设计方向和页面范围，AI 会据此生成可落地的建站方案。'), ENT_QUOTES, 'UTF-8') ?></p>
                         <div class="row g-3">
-                        <div class="col-md-8">
+                        <div class="col-md-5">
                             <label class="form-label" for="pb-ai-site-title"><?= htmlspecialchars((string)__('网站名称'), ENT_QUOTES, 'UTF-8') ?></label>
                             <input class="form-control" id="pb-ai-site-title" type="text"
                                    value="<?= htmlspecialchars($guidedWorkspaceSiteTitle, ENT_QUOTES, 'UTF-8') ?>"
                                    placeholder="@lang{示例：时尚精品店}">
                         </div>
-                        <div class="col-md-4">
-                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                        <div class="col-md-7 pb-ai-domain-inline">
+                            <div class="mt-2 pb-ai-domain-provider-field">
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                                    <label class="form-label mb-0" for="pb-ai-registrar-account_trigger"><?= htmlspecialchars((string)__('域名供应商'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    <span class="badge <?= !empty($domainChoiceEnvironment['is_local'] ?? false) ? 'bg-soft-info text-info' : 'bg-soft-success text-success' ?>" id="pb-ai-domain-environment-badge">
+                                        <?= htmlspecialchars(!empty($domainChoiceEnvironment['is_local'] ?? false) ? (string)__('本地测试') : (string)__('线上环境'), ENT_QUOTES, 'UTF-8') ?>
+                                    </span>
+                                </div>
+                                <w:websites:registrar:select
+                                    id="pb-ai-registrar-account"
+                                    name="preferred_registrar_account_id"
+                                    value="preferredRegistrarAccountId"
+                                    display="recommendedRegistrarLabel"
+                                    options="registrarSelectOptionsJson"
+                                    empty-label="@lang(选择域名供应商)"
+                                    placeholder="@lang(搜索域名供应商账号...)"
+                                    class="w-100 pb-ai-domain-provider-select"
+                                />
+                                <div class="form-text" id="pb-ai-registrar-help">
+                                    <?= htmlspecialchars($recommendedRegistrarLabel !== '' ? (string)__('当前供应商：%{label}', ['label' => $recommendedRegistrarLabel]) : (string)__('请选择域名供应商后，再从下方选择或推荐域名。'), ENT_QUOTES, 'UTF-8') ?>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1 pb-ai-domain-target-heading">
                                 <div class="d-flex align-items-center gap-1 min-w-0">
                                     <label class="form-label mb-0" for="pb-ai-target-domain"><?= htmlspecialchars((string)__('目标域名（必填）'), ENT_QUOTES, 'UTF-8') ?></label>
                                     <button type="button" class="btn btn-link p-0 text-muted lh-1 align-middle border-0 shadow-none" style="min-width:auto;" id="pb-ai-target-domain-help" title="<?= htmlspecialchars($pbAiTargetDomainHelpTitle, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($pbAiTargetDomainHelpTitle, ENT_QUOTES, 'UTF-8') ?>">
@@ -744,7 +806,7 @@ $pbAiStageGuide = match ((string)$currentStage) {
                                     <i class="mdi mdi-refresh-auto me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('AI 推荐'), ENT_QUOTES, 'UTF-8') ?>
                                 </button>
                             </div>
-                            <input class="form-control pb-ai-target-domain-sync" id="pb-ai-target-domain" type="text" list="pb-ai-target-domain-options"
+                            <input class="form-control pb-ai-target-domain-sync pb-ai-domain-target-input" id="pb-ai-target-domain" type="text" list="pb-ai-target-domain-options"
                                    value="<?= htmlspecialchars((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                    placeholder="@lang{请先填写要绑定的目标域名}">
                             <datalist id="pb-ai-target-domain-options">
@@ -752,6 +814,16 @@ $pbAiStageGuide = match ((string)$currentStage) {
                                     <option value="<?= htmlspecialchars((string)$recommendedDomain, ENT_QUOTES, 'UTF-8') ?>"></option>
                                 <?php endforeach; ?>
                             </datalist>
+                            <div class="mt-2 pb-ai-domain-choice-field" id="pb-ai-domain-choice-wrap">
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                                    <span class="small fw-semibold text-muted"><?= htmlspecialchars((string)__('域名选择'), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <span class="small text-muted" id="pb-ai-domain-choice-provider-label"><?= htmlspecialchars($domainChoiceSelectedRegistrarLabel !== '' ? $domainChoiceSelectedRegistrarLabel : (string)__('未选择供应商'), ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-1" id="pb-ai-domain-choice-tags"></div>
+                                <div class="form-text d-none" id="pb-ai-domain-choice-empty"><?= htmlspecialchars((string)__('当前供应商暂无可选域名，可点击 AI 推荐生成。'), ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="alert alert-light border d-none mb-0 mt-2 small" id="pb-ai-domain-recommendation"></div>
+                                <div class="d-none" id="pb-ai-recommended-domain-list"></div>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="pb-ai-default-locale"><lang>默认语言</lang></label>
@@ -1264,18 +1336,9 @@ $pbAiStageGuide = match ((string)$currentStage) {
                     <?= htmlspecialchars((string)__('域名与注册商'), ENT_QUOTES, 'UTF-8') ?>
                 </h6>
                 <div class="mb-3">
-                    <label class="form-label" for="pb-ai-registrar-account_trigger"><?= htmlspecialchars((string)__('注册商账号'), ENT_QUOTES, 'UTF-8') ?></label>
-                    <w:websites:registrar:select
-                        id="pb-ai-registrar-account"
-                        name="preferred_registrar_account_id"
-                        value="preferredRegistrarAccountId"
-                        display="recommendedRegistrarLabel"
-                        options="registrarSelectOptionsJson"
-                        empty-label="@lang(由 AI 自动选择)"
-                        placeholder="@lang(搜索服务商账号...)"
-                        class="w-100"
-                    />
-                    <div class="form-text" id="pb-ai-registrar-help">
+                    <div class="text-muted mb-1"><?= htmlspecialchars((string)__('已选择域名供应商'), ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="fw-semibold" id="pb-ai-registrar-selected-label"><?= htmlspecialchars($domainChoiceSelectedRegistrarLabel !== '' ? $domainChoiceSelectedRegistrarLabel : (string)__('未选择供应商'), ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="form-text" id="pb-ai-registrar-sidebar-help">
                         <?= htmlspecialchars($recommendedRegistrarLabel !== '' ? (string)__('AI 推荐：{label}', ['label' => $recommendedRegistrarLabel]) : (string)__(''), ENT_QUOTES, 'UTF-8') ?>
                     </div>
                 </div>

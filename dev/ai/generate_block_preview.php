@@ -149,7 +149,84 @@ if (preg_match_all('/([^{}]+)\{([^}]*)\}/iu', $cssExtra, $cssRules, PREG_SET_ORD
 }
 $hasResponsive = preg_match('/@media\s*\(\s*max-width\s*:\s*768px\s*\)/iu', $cssResponsive) === 1
     && preg_match('/@media\s*\(\s*max-width\s*:\s*420px\s*\)/iu', $cssResponsive) === 1;
-$imgCount = preg_match_all('/<img\b/iu', $html);
+$imgCount = (int)preg_match_all('/<img\b/iu', $html);
+$renderContext = is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : [];
+$defaultConfig = is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [];
+$buildPlanTask = is_array($renderContext['_build_plan_task'] ?? null) ? $renderContext['_build_plan_task'] : [];
+$runtimeContext = is_array($buildPlanTask['runtime_context'] ?? null) ? $buildPlanTask['runtime_context'] : [];
+$blockContract = [];
+foreach ([
+    $runtimeContext['block_contract']['contract_v2'] ?? null,
+    $runtimeContext['block_contract'] ?? null,
+    $buildPlanTask['block_contract'] ?? null,
+    $buildPlanTask['output_contract']['block_contract'] ?? null,
+] as $candidate) {
+    if (is_array($candidate) && $candidate !== []) {
+        $blockContract = $candidate;
+        break;
+    }
+}
+$mediaStrategy = is_array($blockContract['media_strategy'] ?? null) ? $blockContract['media_strategy'] : [];
+$imageIntent = is_array($blockContract['image_intent'] ?? null)
+    ? $blockContract['image_intent']
+    : (is_array($buildPlanTask['image_intent'] ?? null) ? $buildPlanTask['image_intent'] : []);
+$morphologyId = trim((string)($blockContract['morphology_id'] ?? $buildPlanTask['morphology_id'] ?? ''));
+$flowRole = strtolower(trim((string)($blockContract['page_flow_role'] ?? $buildPlanTask['page_flow_role'] ?? '')));
+$needsRealImage = !empty($mediaStrategy['needs_real_image']) || !empty($imageIntent['needs_image']);
+$requiredImageSlotId = trim((string)($mediaStrategy['asset_slot_id'] ?? $defaultConfig['runtime.section_image_slot_id'] ?? ''));
+$requiredImageUsed = $requiredImageSlotId !== ''
+    && (
+        str_contains($html, $requiredImageSlotId)
+        || str_contains(json_encode($result['default_config'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '', $requiredImageSlotId)
+    );
+$nonHeroImage = $imgCount > 0 && !in_array($flowRole, ['opening', 'hero'], true);
+$signalHaystack = strtolower($html . "\n" . $cssExtra . "\n" . $cssResponsive);
+$visualSignals = [];
+foreach ([
+    'gradient' => 'gradient',
+    'shadow' => 'box-shadow',
+    'radius' => 'border-radius',
+    'grid' => 'grid',
+    'media_frame' => '<img',
+    'figure' => '<figure',
+    'badge' => 'badge',
+    'metric' => 'metric',
+    'quote' => 'quote',
+    'timeline' => 'timeline',
+    'card' => 'card',
+    'surface' => 'surface',
+] as $signal => $needle) {
+    if (str_contains($signalHaystack, $needle)) {
+        $visualSignals[] = $signal;
+    }
+}
+$hasSkeletonOnly = preg_match('/<h[1-6]\b/i', $html) === 1
+    && preg_match('/<p\b/i', $html) === 1
+    && preg_match('/<(?:a|button)\b/i', $html) === 1
+    && preg_match('/<(?:img|picture|figure|ul|ol|li|blockquote|form|input|textarea|select)\b/i', $html) !== 1
+    && preg_match('/(?:metric|stat|timeline|quote|card|grid|media|proof|gallery|map|faq)/i', $html) !== 1;
+$skeletonScore = $hasSkeletonOnly ? 1 : 0;
+$acceptanceChecks = is_array($blockContract['acceptance_checks'] ?? null) ? $blockContract['acceptance_checks'] : [];
+$acceptanceFailures = [];
+if ($blockContract === []) {
+    $acceptanceFailures[] = 'block_contract_missing';
+}
+if ($morphologyId === '') {
+    $acceptanceFailures[] = 'morphology_id_missing';
+}
+if ($needsRealImage && ($imgCount === 0 || !$requiredImageUsed)) {
+    $acceptanceFailures[] = 'required_image_not_used';
+}
+if (
+    in_array($flowRole, ['proof', 'details', 'support'], true)
+    && empty($mediaStrategy['allow_css_only'])
+    && $imgCount === 0
+) {
+    $acceptanceFailures[] = 'non_hero_media_missing';
+}
+if ($skeletonScore > 0) {
+    $acceptanceFailures[] = 'generic_title_paragraph_cta_skeleton';
+}
 
 $componentId = 'pb-block-qa-' . substr(sha1($publicId . '|' . $pageType . '|' . $sectionCode . '|' . microtime(true)), 0, 10);
 $renderedHtml = str_replace('#componentId', '#' . $componentId, $html);
@@ -175,7 +252,7 @@ file_put_contents($filePath, $preview);
 
 $relativeUrl = '/pub/media/pagebuilder-block-qa/' . $fileName;
 $report = [
-    'ok' => !$hasEnglishLeak && !$hasDefaultFontOnly && $hasFontFamily && $hasHeadingFont && $hasBodyFont && $hasResponsive && $html !== '',
+    'ok' => !$hasEnglishLeak && !$hasDefaultFontOnly && $hasFontFamily && $hasHeadingFont && $hasBodyFont && $hasResponsive && $html !== '' && $acceptanceFailures === [],
     'public_id' => $publicId,
     'page_type' => $pageType,
     'section_code' => $sectionCode,
@@ -191,6 +268,17 @@ $report = [
     'has_default_font_only' => $hasDefaultFontOnly,
     'has_responsive' => $hasResponsive,
     'image_count' => $imgCount,
+    'block_contract_found' => $blockContract !== [],
+    'morphology_id' => $morphologyId,
+    'required_image_slot_id' => $requiredImageSlotId,
+    'required_image_used' => $requiredImageUsed,
+    'non_hero_image' => $nonHeroImage,
+    'skeleton_score' => $skeletonScore,
+    'visual_depth_signal_count' => \count($visualSignals),
+    'visual_depth_signals' => $visualSignals,
+    'acceptance_checks' => $acceptanceChecks,
+    'acceptance_checks_passed' => $acceptanceFailures === [],
+    'acceptance_failures' => $acceptanceFailures,
     'has_english_brief_leak' => $hasEnglishLeak,
     'text_excerpt' => mb_substr($visibleText, 0, 500),
 ];

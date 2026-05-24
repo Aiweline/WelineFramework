@@ -8,8 +8,7 @@ use WeShop\Frontend\Controller\BaseController;
 use WeShop\Product\Service\ProductViewPageDataService;
 use WeShop\RecentlyViewed\Service\StorefrontRecentlyViewedRecorder;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
-use Weline\Framework\Cache\KeyBuilder;
-use Weline\Framework\Http\Cookie;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
@@ -20,7 +19,7 @@ class View extends BaseController
 {
     private const PRODUCT_LIST_ROUTE = 'weshop/product/list';
     private const CONTENT_TEMPLATE = 'WeShop_Product::templates/frontend/product/view.phtml';
-    private const VIEW_PAYLOAD_CACHE_TTL = 120;
+    private const VIEW_PAYLOAD_CACHE_TTL = 600;
 
     /** @var array<string, array{expires_at: float, data: array<string, mixed>}> */
     private static array $viewPayloadCache = [];
@@ -29,13 +28,17 @@ class View extends BaseController
     private static string $lastRuntimeCacheGetStatus = 'none';
     /** @var list<array{name:string, duration_ms:float, meta:array<string, mixed>}> */
     private array $productProfileSteps = [];
+    private ?StorefrontRecentlyViewedRecorder $storefrontRecentlyViewedRecorder = null;
+    private ?ProductViewPageDataService $productViewPageDataService = null;
 
     protected ?string $layoutType = 'product';
 
     public function __construct(
-        private readonly StorefrontRecentlyViewedRecorder $storefrontRecentlyViewedRecorder,
-        private readonly ProductViewPageDataService $productViewPageDataService
+        ?StorefrontRecentlyViewedRecorder $storefrontRecentlyViewedRecorder = null,
+        ?ProductViewPageDataService $productViewPageDataService = null
     ) {
+        $this->storefrontRecentlyViewedRecorder = $storefrontRecentlyViewedRecorder;
+        $this->productViewPageDataService = $productViewPageDataService;
     }
 
     public function index(): string
@@ -51,15 +54,10 @@ class View extends BaseController
             return '';
         }
 
-        $this->traceProductStep(
-            'product::record_recently_viewed',
-            fn () => $this->recordRecentlyViewed($productId),
-            ['product_id' => $productId]
-        );
-
         $cacheKey = $this->buildViewPayloadCacheKey($productId);
         $cachedView = $this->getViewPayloadCache($cacheKey);
         if (is_array($cachedView) && isset($cachedView['html'])) {
+            $this->recordRecentlyViewedIfNeeded($productId);
             $this->applyCachedViewPayload($cachedView);
             return (string)$cachedView['html'];
         }
@@ -67,7 +65,7 @@ class View extends BaseController
         $this->cooperativeControllerYield();
         $pageData = $this->traceProductStep(
             'product::build_page_data',
-            fn (): ?array => $this->productViewPageDataService->build($productId),
+            fn (): ?array => $this->productViewPageDataService()->build($productId),
             ['product_id' => $productId]
         );
         $this->cooperativeControllerYield();
@@ -77,6 +75,7 @@ class View extends BaseController
             return '';
         }
 
+        $this->recordRecentlyViewedIfNeeded($productId);
         $this->assignPageData($pageData);
         $this->cooperativeControllerYield();
         $html = $this->traceProductStep(
@@ -101,7 +100,47 @@ class View extends BaseController
 
     private function recordRecentlyViewed(int $productId): void
     {
-        $this->storefrontRecentlyViewedRecorder->recordProductView($productId);
+        $this->storefrontRecentlyViewedRecorder()->recordProductView($productId);
+    }
+
+    private function recordRecentlyViewedIfNeeded(int $productId): void
+    {
+        if (!$this->shouldRecordRecentlyViewed()) {
+            return;
+        }
+
+        $this->traceProductStep(
+            'product::record_recently_viewed',
+            fn () => $this->recordRecentlyViewed($productId),
+            ['product_id' => $productId]
+        );
+    }
+
+    private function shouldRecordRecentlyViewed(): bool
+    {
+        return (string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') !== '1'
+            && (string)($_SERVER['HTTP_X_WLS_DYNAMIC_WARMUP'] ?? '') !== '1'
+            && (string)($_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? '') !== '1'
+            && (string)($_SERVER['WLS_INTERNAL_WARMUP'] ?? '') !== '1'
+            && (string)($_SERVER['HTTP_WELINE_INTERNAL_WARMUP'] ?? '') !== '1';
+    }
+
+    private function storefrontRecentlyViewedRecorder(): StorefrontRecentlyViewedRecorder
+    {
+        if ($this->storefrontRecentlyViewedRecorder instanceof StorefrontRecentlyViewedRecorder) {
+            return $this->storefrontRecentlyViewedRecorder;
+        }
+
+        return $this->storefrontRecentlyViewedRecorder = ObjectManager::getInstance(StorefrontRecentlyViewedRecorder::class);
+    }
+
+    private function productViewPageDataService(): ProductViewPageDataService
+    {
+        if ($this->productViewPageDataService instanceof ProductViewPageDataService) {
+            return $this->productViewPageDataService;
+        }
+
+        return $this->productViewPageDataService = ObjectManager::getInstance(ProductViewPageDataService::class);
     }
 
     /**
@@ -263,11 +302,64 @@ class View extends BaseController
 
     private function buildViewPayloadCacheKey(int $productId): string
     {
-        return KeyBuilder::environmentHash([
-            'scope' => 'product-view-payload-v6',
+        $host = $this->normalizeViewPayloadCacheHost(\function_exists('w_env_http_host') ? (string)\w_env_http_host() : '');
+
+        return \sha1((string)\json_encode([
+            'v' => 14,
+            'scope' => 'product-view-payload',
             'product_id' => $productId,
-            'lang' => Cookie::getLang(),
-        ]);
+            'website' => \function_exists('w_env') ? (string)(\w_env('website_code', '') ?: \w_env('website.id', '') ?: '') : '',
+            'lang' => State::getLang(),
+            'lang_local' => State::getLangLocal(),
+            'currency' => State::getCurrency(),
+            'host' => $host,
+        ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function normalizeViewPayloadCacheHost(string $host): string
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return '';
+        }
+
+        if (\str_contains($host, '://')) {
+            try {
+                $parsedHost = \parse_url($host, \PHP_URL_HOST);
+                $host = \is_string($parsedHost) ? \strtolower(\trim($parsedHost)) : $host;
+            } catch (\Throwable) {
+                return '';
+            }
+        }
+
+        $host = \trim($host, " \t\n\r\0\x0B/");
+        if ($host === '') {
+            return '';
+        }
+
+        if ($host[0] === '[') {
+            $end = \strpos($host, ']');
+            if ($end === false) {
+                return '';
+            }
+
+            $ip = \substr($host, 1, $end - 1);
+            return \filter_var($ip, \FILTER_VALIDATE_IP) ? '' : $host;
+        }
+
+        $colonCount = \substr_count($host, ':');
+        if ($colonCount === 1) {
+            $host = \preg_replace('/:\d+$/', '', $host) ?? $host;
+        } elseif ($colonCount > 1) {
+            return '';
+        }
+
+        $host = \trim($host, " \t\n\r\0\x0B[]/");
+        if ($host === '' || $host === 'localhost' || \filter_var($host, \FILTER_VALIDATE_IP)) {
+            return '';
+        }
+
+        return $host;
     }
 
     private function runtimeCacheGet(string $key): mixed

@@ -669,6 +669,77 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         self::assertSame('首页', $virtualPages[Page::TYPE_HOME]['title']);
     }
 
+    public function testPortugueseVirtualPagesAndFooterLabelsDoNotFallBackToEnglish(): void
+    {
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder->expects($this->never())
+            ->method('buildPlaceholderBlocksForPageType');
+
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer(), $blocksBuilder);
+        $scope = [
+            'website_profile' => [
+                'site_title' => 'Teenipiya',
+                'default_locale' => 'pt_BR',
+                'content_locale' => 'pt_BR',
+            ],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => ['page_type' => Page::TYPE_HOME, 'title' => 'Home', 'locale' => 'pt_BR'],
+                Page::TYPE_ABOUT => ['page_type' => Page::TYPE_ABOUT, 'title' => 'About', 'locale' => 'pt_BR'],
+                Page::TYPE_CONTACT => ['page_type' => Page::TYPE_CONTACT, 'title' => 'Contact', 'locale' => 'pt_BR'],
+                Page::TYPE_PRIVACY_POLICY => ['page_type' => Page::TYPE_PRIVACY_POLICY, 'title' => 'Privacy Policy', 'locale' => 'pt_BR'],
+                Page::TYPE_TERMS_OF_SERVICE => ['page_type' => Page::TYPE_TERMS_OF_SERVICE, 'title' => 'Terms of Service', 'locale' => 'pt_BR'],
+            ],
+            'page_type_layouts' => [
+                Page::TYPE_HOME => [
+                    'header' => ['component' => 'header/ai-site-header', 'config' => []],
+                    'content' => [],
+                    'footer' => ['component' => 'footer/ai-site-footer', 'config' => []],
+                ],
+            ],
+        ];
+
+        $virtualPages = $service->buildVirtualPagesByType([
+            Page::TYPE_HOME,
+            Page::TYPE_ABOUT,
+            Page::TYPE_CONTACT,
+            Page::TYPE_PRIVACY_POLICY,
+            Page::TYPE_TERMS_OF_SERVICE,
+        ], $scope, false);
+
+        self::assertSame('Início', $virtualPages[Page::TYPE_HOME]['title']);
+        self::assertSame('Sobre', $virtualPages[Page::TYPE_ABOUT]['title']);
+        self::assertSame('Contato', $virtualPages[Page::TYPE_CONTACT]['title']);
+        self::assertSame('Política de Privacidade', $virtualPages[Page::TYPE_PRIVACY_POLICY]['title']);
+        self::assertSame('Termos de Serviço', $virtualPages[Page::TYPE_TERMS_OF_SERVICE]['title']);
+
+        $layout = $service->localizeSharedLayoutConfigForScope([
+            'footer' => [
+                'component' => 'footer/ai-site-footer',
+                'config' => [
+                    'links.column2_title' => 'Policy Info',
+                    'links.column2_items' => [
+                        ['label' => 'Privacy Policy', 'href' => '/privacy'],
+                        ['label' => 'Terms of Service', 'href' => '/terms'],
+                    ],
+                    'links.column3_title' => 'All Pages',
+                    'links.column3_items' => [
+                        ['label' => 'Home', 'href' => '/'],
+                        ['label' => 'About', 'href' => '/about'],
+                        ['label' => 'Contact', 'href' => '/contact'],
+                    ],
+                ],
+            ],
+        ], $scope);
+
+        self::assertSame('Informações legais', $layout['footer']['config']['links.column2_title']);
+        self::assertSame('Política de Privacidade', $layout['footer']['config']['links.column2_items'][0]['label']);
+        self::assertSame('Termos de Serviço', $layout['footer']['config']['links.column2_items'][1]['label']);
+        self::assertSame('Todas as páginas', $layout['footer']['config']['links.column3_title']);
+        self::assertSame('Início', $layout['footer']['config']['links.column3_items'][0]['label']);
+        self::assertSame('Sobre', $layout['footer']['config']['links.column3_items'][1]['label']);
+        self::assertSame('Contato', $layout['footer']['config']['links.column3_items'][2]['label']);
+    }
+
     /**
      * 补充 htmlTrackHasCompleteBlocks 的正向/负向用例：所有 page type 必须同时具备非空 blocks 才算完整。
      */

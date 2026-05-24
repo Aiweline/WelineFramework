@@ -25,8 +25,12 @@ final class EventLoopFactoryTest extends TestCase
     public function testCreateAutoLoopResolvesByExtension(): void
     {
         $result = EventLoopFactory::create('auto');
-        self::assertSame('select', $result['resolved']);
-        self::assertSame('select', $result['loop']->backend());
+        $expected = \extension_loaded('event') && \class_exists(\EventBase::class) && \class_exists(\Event::class)
+            ? 'event'
+            : 'select';
+
+        self::assertSame($expected, $result['resolved']);
+        self::assertSame($expected, $result['loop']->backend());
     }
 
     public function testCreateEventLoopRequiresExtension(): void

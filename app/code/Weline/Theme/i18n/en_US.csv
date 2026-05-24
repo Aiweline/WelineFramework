@@ -1298,9 +1298,9 @@ Banner,Banner
 数据列表,"Data List"
 "共 %{1} 条","Total %{1} Entries"
 Close,Close
-登录页工具,登录页工具
-切换为暗色主题,切换为暗色主题
-切换为亮色主题,切换为亮色主题
+登录页工具,"Login page tools"
+切换为暗色主题,"Switch to dark theme"
+切换为亮色主题,"Switch to light theme"
 精彩活动进行中,"Exciting events are ongoing"
 "这里是活动专题默认页面，你可以通过 PageBuilder 自由配置 Banner、活动亮点和活动商品区块。","This is the default page for the campaign. You can freely configure the Banner, campaign highlights, and campaign product blocks using PageBuilder."
 活动亮点示例,"Event Highlight Example"
@@ -1388,7 +1388,7 @@ Next,Next
 "3.3 您应承担以下义务：","3.3 You shall bear the following obligations:"
 （1）提供真实、准确、完整的个人信息；,"(1) Providing true, accurate, and complete personal information;"
 （2）妥善保管账户信息，不得将账户出借、转让或授权他人使用；,"(2) Safeguard your account information properly; do not lend, transfer, or authorize others to use your account."
-（3）不得利用本网站从事任何违法、违规或损害他人合法权益的行为；,"(3) Do not use this website for any illegal,违规, or activities that harm the legitimate rights and interests of others."
+（3）不得利用本网站从事任何违法、违规或损害他人合法权益的行为；,"(3) Do not use this website for any illegal, non-compliant, or rights-infringing activities."
 （4）遵守本政策及本网站的其他规则和制度。,"(4) Comply with this policy and other rules and regulations of this website."
 四、服务条款,"4. Terms of Service"
 "4.1 本网站提供的服务包括但不限于：商品展示、在线交易、订单管理、客户服务等。","4.1 The services provided by this website include but are not limited to: product display, online transactions, order management, customer service, etc."
@@ -1810,7 +1810,7 @@ SALE,SALE
 开始探索,"Start exploring"
 上一张,"Previous picture"
 下一张,Next
-第%d张,第%d张
+第%d张,"Slide %d"
 限时特惠！全场满300减50,"Limited Time Offer! Spend $300 and save $50 on your entire order"
 剩余,Remaining
 天,Day(s)
@@ -1818,7 +1818,7 @@ SALE,SALE
 分,Minute
 秒,second
 面包屑导航,"Breadcrumb Navigation"
-"轮播产品 %d","轮播产品 %d"
+"轮播产品 %d","Carousel product %d"
 热门分类,"Popular Categories"
 浏览我们的商品分类,"Browse Our Product Categories"
 服装鞋帽,"Clothing, Shoes & Hats"
@@ -1917,39 +1917,38 @@ Cookie政策,"Cookie Policy"
 我们不会向您发送垃圾邮件,"We will not send you spam"
 第一页,"First Page"
 最后一页,"Last page"
-热销产品,"Hot Selling Products"
-最受欢迎的商品,"Most popular products"
 快速查看,"Quick View"
 已售,Sold
 经常一起购买,"Frequently bought together"
-"搭配产品 %d","搭配产品 %d"
+"搭配产品 %d","Matching product %d"
 总价,"Total Price"
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
-"特价产品 %d","特价产品 %d"
+"特价产品 %d","Sale product %d"
 距离结束,"Ends in"
 立即抢购,"Buy Now"
 推荐产品,"Recommended product"
 为您精选的优质商品,"High-quality products selected for you"
-"示例产品 %d","示例产品 %d"
+"示例产品 %d","Sample product %d"
 加入对比,"Add to Compare"
 发现最新商品,"Found the latest product"
-"新品产品 %d","新品产品 %d"
+"新品产品 %d","New product %d"
 上架,"On the shelves"
 查看全部新品,"View all new products"
-最近浏览,"Recently viewed"
-相关产品,"Related products"
-上一组,上一组
-下一组,下一组
+上一组,"Previous group"
+下一组,"Next group"
+已加入收藏,已加入收藏
+加入收藏失败，请稍后重试,加入收藏失败，请稍后重试
+请先登录,请先登录
 您可能还喜欢,"You may also like"
-"升级产品 %d","升级产品 %d"
+"升级产品 %d","Upgrade product %d"
 更大容量,"Larger capacity"
 更多功能,"More features"
 升级版,"Upgrade Version"
 猜你喜欢,"Recommended for You"
 根据您的浏览记录推荐,"Recommended based on your browsing history"
-"推荐产品 %d","推荐产品 %d"
+"推荐产品 %d","Recommended product %d"
 匹配,Match
 热搜,"Hot search."
 "示例商品 1","Example Item 1"

@@ -25,6 +25,8 @@ class AiSiteAgentSession extends Model
 {
     private const SCOPE_LOG_MAX_ITEMS = 80;
     private const SCOPE_LOG_MESSAGE_MAX_LEN = 800;
+    private const ASSET_IMAGE_FAILURE_MAX_ITEMS = 80;
+    private const ASSET_IMAGE_FAILURE_MESSAGE_MAX_LEN = 800;
     private const WORKSPACE_TRACK_VIRTUAL_THEME = 'virtual_theme';
     /**
      * build_tasks should keep mutable execution state only; task definitions live
@@ -65,6 +67,9 @@ class AiSiteAgentSession extends Model
             'plan_projection' => [['plan_projection'], []],
             'content_manifest' => [['content_manifest'], []],
             'build_blueprint' => [['build_blueprint'], []],
+            'build_workbench' => [['build_workbench'], []],
+            'build_contracts' => [['build_contracts'], []],
+            'render_data_contract' => [['render_data_contract'], []],
             'task_results' => [['task_results'], []],
             'qa_report' => [['qa_report_v2'], []],
             'repair_patch' => [['repair_patch'], []],
@@ -266,6 +271,9 @@ class AiSiteAgentSession extends Model
         foreach (['events', 'top_logs'] as $field) {
             $scope[$field] = $this->compactScopeLogEntries($scope[$field] ?? []);
         }
+        $scope['asset_image_generation_failures'] = $this->compactAssetImageGenerationFailures(
+            $scope['asset_image_generation_failures'] ?? []
+        );
 
         $scope = $this->stripArtifactBackedPayloadsForStorage($scope);
         $scope = $this->compactBuildArtifactsBeforeStorage($scope);
@@ -835,6 +843,37 @@ class AiSiteAgentSession extends Model
                         $entry['payload']['message'] = \mb_substr($payloadMessage, 0, self::SCOPE_LOG_MESSAGE_MAX_LEN) . '...';
                     }
                 }
+            }
+        }
+        unset($entry);
+
+        return $entries;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function compactAssetImageGenerationFailures(mixed $entries): array
+    {
+        if (!\is_array($entries) || $entries === []) {
+            return [];
+        }
+
+        $entries = \array_values(\array_filter($entries, static fn($entry): bool => \is_array($entry)));
+        if (\count($entries) > self::ASSET_IMAGE_FAILURE_MAX_ITEMS) {
+            $entries = \array_slice($entries, -self::ASSET_IMAGE_FAILURE_MAX_ITEMS);
+        }
+
+        foreach ($entries as &$entry) {
+            $slotId = \trim((string)($entry['slot_id'] ?? $entry['slotId'] ?? ''));
+            if ($slotId !== '') {
+                $entry['slot_id'] = $slotId;
+            }
+            unset($entry['slotId']);
+
+            $message = \trim((string)($entry['message'] ?? ''));
+            if ($message !== '' && \mb_strlen($message) > self::ASSET_IMAGE_FAILURE_MESSAGE_MAX_LEN) {
+                $entry['message'] = \mb_substr($message, 0, self::ASSET_IMAGE_FAILURE_MESSAGE_MAX_LEN) . '...';
             }
         }
         unset($entry);

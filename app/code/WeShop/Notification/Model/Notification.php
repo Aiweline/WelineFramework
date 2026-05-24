@@ -31,12 +31,13 @@ class Notification extends Model
     public const schema_fields_TITLE = 'title';
     #[Col('text', 0, nullable: true, comment: '内容')]
     public const schema_fields_CONTENT = 'content';
+    #[Col('varchar', 500, nullable: true, comment: '目标链接')]
+    public const schema_fields_TARGET_URL = 'target_url';
     #[Col('smallint', 1, nullable: false, default: 0, comment: '是否已读')]
     public const schema_fields_IS_READ = 'is_read';
     #[Col('datetime', 0, nullable: false, comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
 
     public array $_unit_primary_keys = ['notification_id'];
-    public array $_index_sort_keys = ['customer_id', 'is_read', 'created_at'];
+    public array $_index_sort_keys = ['customer_id', 'type', 'is_read', 'created_at'];
 }
-

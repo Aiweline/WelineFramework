@@ -7,6 +7,7 @@ namespace WeShop\Product\Service;
 use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
 use WeShop\QA\Service\QAService;
+use WeShop\Review\Service\ReviewRatingOptionService;
 use WeShop\Review\Service\ReviewService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -15,6 +16,7 @@ class ProductViewPageDataService
     private const REVIEW_PAGE_SIZE = 5;
 
     private ?ConfigurableProductService $configurableProductService;
+    private ?ReviewRatingOptionService $ratingOptionService;
 
     public function __construct(
         private readonly ProductService $productService,
@@ -23,11 +25,13 @@ class ProductViewPageDataService
         private readonly ProductRecommendationService $productRecommendationService,
         private readonly ReviewService $reviewService,
         private readonly QAService $qaService,
-        mixed $configurableProductService = null
+        mixed $configurableProductService = null,
+        ?ReviewRatingOptionService $ratingOptionService = null
     ) {
         $this->configurableProductService = $configurableProductService instanceof ConfigurableProductService
             ? $configurableProductService
             : null;
+        $this->ratingOptionService = $ratingOptionService;
     }
 
     /**
@@ -75,6 +79,7 @@ class ProductViewPageDataService
             'configurable_options' => $configurableOptions,
             'related_products' => $this->productRecommendationService->getRecommendations([$productId], 4),
             'reviews' => $reviewsPayload['items'],
+            'rating_options' => $this->getRatingOptionService()->getEnabledOptions(),
             'qa' => $questions,
             'breadcrumbs' => $this->buildBreadcrumbs($product),
             'title' => $productData['name'],
@@ -147,7 +152,7 @@ class ProductViewPageDataService
             $total = (int) ($reviews['total'] ?? count($items));
 
             return [
-                'items' => $items,
+                'items' => $this->mapReviews($items),
                 'total' => $total,
                 'average' => $this->reviewService->getAverageRating($productId),
             ];
@@ -217,6 +222,31 @@ class ProductViewPageDataService
             'review_count' => (int) $reviewsPayload['total'],
             'rating_distribution' => $ratingDistribution,
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $reviews
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mapReviews(array $reviews): array
+    {
+        $mapped = [];
+        foreach ($reviews as $review) {
+            if (!is_array($review)) {
+                continue;
+            }
+
+            $review['media_items'] = $this->reviewService->decodeMediaItems($review['media_items'] ?? '');
+            $review['rating_scores'] = $this->reviewService->decodeRatingScores($review['rating_scores'] ?? '');
+            $mapped[] = $review;
+        }
+
+        return $mapped;
+    }
+
+    private function getRatingOptionService(): ReviewRatingOptionService
+    {
+        return $this->ratingOptionService ?? ObjectManager::getInstance(ReviewRatingOptionService::class);
     }
 
     /**

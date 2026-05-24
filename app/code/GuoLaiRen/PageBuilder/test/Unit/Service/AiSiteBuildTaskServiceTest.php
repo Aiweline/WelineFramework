@@ -61,18 +61,22 @@ class AiSiteBuildTaskServiceTest extends TestCase
                                 'block_key' => 'hero',
                                 'title' => 'Launch reliable AI workflows',
                                 'goal' => 'Show the core value with a direct CTA.',
+                                'page_flow_role' => 'opening_conversions',
+                                'visual_signature' => $this->buildStageOneVisualSignature('hero'),
                                 'field_plan' => [
                                     ['field' => 'description', 'sample' => 'A concise proof-led section helps visitors understand the next step.'],
-                                    ['field' => 'cta', 'sample' => 'Contact us'],
+                                    ['field' => 'cta', 'sample' => 'Schedule the AI workflow review'],
                                 ],
                             ],
                             [
                                 'block_key' => 'trust',
                                 'title' => 'Proof that operations stay reliable',
                                 'goal' => 'Show concrete evidence before conversion.',
+                                'page_flow_role' => 'proof_builder',
+                                'visual_signature' => $this->buildStageOneVisualSignature('trust'),
                                 'field_plan' => [
                                     ['field' => 'description', 'sample' => 'Reliable operations are supported by clear proof and next steps.'],
-                                    ['field' => 'cta', 'sample' => 'See proof'],
+                                    ['field' => 'cta', 'sample' => 'Review reliability evidence'],
                                 ],
                             ],
                         ],
@@ -219,25 +223,25 @@ class AiSiteBuildTaskServiceTest extends TestCase
                         'title' => 'Home',
                         'page_goal' => 'Convert qualified buyers.',
                         'blocks' => [
-                            ['block_key' => 'hero', 'title' => 'Clear home hero', 'goal' => 'Open with value.', 'field_plan' => [['field' => 'description', 'sample' => 'A focused opening explains the offer clearly.']]],
-                            ['block_key' => 'trust', 'title' => 'Reliable proof', 'goal' => 'Build trust.', 'field_plan' => [['field' => 'description', 'sample' => 'Proof points help visitors evaluate the offer.']]],
-                            ['block_key' => 'cta', 'title' => 'Next step', 'goal' => 'Drive action.', 'field_plan' => [['field' => 'description', 'sample' => 'A direct call to action moves qualified visitors forward.']]],
+                            $this->buildStageOneBlock('hero', 'Clear home hero', 'Open with value.', 'A focused opening explains the offer clearly.', 'Request the home offer review'),
+                            $this->buildStageOneBlock('trust', 'Reliable proof', 'Build trust.', 'Proof points help visitors evaluate the offer.', 'Review the buyer proof'),
+                            $this->buildStageOneBlock('cta', 'Next step', 'Drive action.', 'A direct call to action moves qualified visitors forward.', 'Plan the next step'),
                         ],
                     ],
                     'about_page' => [
                         'title' => 'About',
                         'page_goal' => 'Explain the company story.',
                         'blocks' => [
-                            ['block_key' => 'story', 'title' => 'Company story', 'goal' => 'Explain the company.', 'field_plan' => [['field' => 'description', 'sample' => 'The story clarifies why the team can deliver.']]],
-                            ['block_key' => 'team', 'title' => 'Team proof', 'goal' => 'Show credibility.', 'field_plan' => [['field' => 'description', 'sample' => 'Team details support trust and credibility.']]],
+                            $this->buildStageOneBlock('story', 'Company story', 'Explain the company.', 'The story clarifies why the team can deliver.', 'Read the delivery story'),
+                            $this->buildStageOneBlock('team', 'Team proof', 'Show credibility.', 'Team details support trust and credibility.', 'Meet the delivery team'),
                         ],
                     ],
                     'contact_page' => [
                         'title' => 'Contact',
                         'page_goal' => 'Make contact easy.',
                         'blocks' => [
-                            ['block_key' => 'form', 'title' => 'Contact form', 'goal' => 'Make contact easy.', 'field_plan' => [['field' => 'description', 'sample' => 'Simple contact guidance helps visitors reach the team.']]],
-                            ['block_key' => 'faq', 'title' => 'Common questions', 'goal' => 'Reduce hesitation.', 'field_plan' => [['field' => 'description', 'sample' => 'Clear answers remove friction before contact.']]],
+                            $this->buildStageOneBlock('form', 'Contact form', 'Make contact easy.', 'Simple contact guidance helps visitors reach the team.', 'Send the project details'),
+                            $this->buildStageOneBlock('faq', 'Common questions', 'Reduce hesitation.', 'Clear answers remove friction before contact.', 'Review contact answers'),
                         ],
                     ],
                 ],
@@ -589,7 +593,7 @@ class AiSiteBuildTaskServiceTest extends TestCase
 
         $this->assertContains('page:home_page:content/home-page-hero', $pickedKeys);
         $this->assertContains('page:about_page:content/about-page-hero', $pickedKeys);
-        $this->assertGreaterThan(2, \count($pickedKeys));
+        $this->assertSame(2, \count($pickedKeys));
     }
 
     public function testPickConcurrentTasksHonorsNonParallelTasks(): void
@@ -740,6 +744,29 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertSame([], $scope['build_tasks'][$pageTaskKey]['result_ref'] ?? null);
         $this->assertContains('shared:header', $pendingKeys);
         $this->assertContains($pageTaskKey, $pendingKeys);
+    }
+
+    public function testClearBuildArtifactsForRegenerationClearsImageFailureTrail(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->clearBuildArtifactsForRegeneration([
+            'virtual_pages_by_type' => ['home_page' => ['blocks' => [['code' => 'hero']]]],
+            'asset_image_generation_failures' => [
+                [
+                    'slot_id' => 'home:hero',
+                    'message' => 'Old provider failure',
+                    'updated_at' => '2026-05-24 08:00:00',
+                ],
+            ],
+            'latest_build_failed' => 1,
+            'publish_blocked_reason' => 'Old failure',
+        ]);
+
+        self::assertSame([], $scope['virtual_pages_by_type'] ?? null);
+        self::assertSame([], $scope['asset_image_generation_failures'] ?? null);
+        self::assertSame(0, $scope['latest_build_failed'] ?? null);
+        self::assertSame('', $scope['publish_blocked_reason'] ?? null);
     }
 
     public function testForceRebuildResetRetriesDoneTaskWhenGeneratedArtifactIsMissing(): void
@@ -1143,6 +1170,56 @@ class AiSiteBuildTaskServiceTest extends TestCase
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function buildStageOneBlock(string $blockKey, string $title, string $goal, string $copy, string $cta = ''): array
+    {
+        $fieldPlan = [
+            ['field' => 'description', 'sample' => $copy],
+        ];
+        if (\trim($cta) !== '') {
+            $fieldPlan[] = ['field' => 'cta', 'sample' => $cta];
+        }
+
+        return [
+            'block_key' => $blockKey,
+            'title' => $title,
+            'goal' => $goal,
+            'page_flow_role' => $this->buildStageOnePageFlowRole($blockKey),
+            'visual_signature' => $this->buildStageOneVisualSignature($blockKey),
+            'field_plan' => $fieldPlan,
+        ];
+    }
+
+    private function buildStageOnePageFlowRole(string $blockKey): string
+    {
+        return match ($blockKey) {
+            'hero' => 'opening_conversion',
+            'trust' => 'evidence_builder',
+            'cta' => 'decision_prompt',
+            'story' => 'credibility_context',
+            'team' => 'operator_proof',
+            'form' => 'conversion_capture',
+            'faq' => 'objection_reducer',
+            default => 'page_section_' . \str_replace('-', '_', $blockKey),
+        };
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function buildStageOneVisualSignature(string $blockKey): array
+    {
+        return [
+            'composition_pattern' => $blockKey . ' section with a clear content hierarchy and purposeful supporting detail',
+            'spatial_rhythm' => 'balanced vertical rhythm with distinct heading, copy, action, and evidence zones',
+            'media_strategy' => 'integrated media or CSS motif that supports the block message without decorative filler',
+            'surface_treatment' => 'clean contrast, restrained depth, and readable content surfaces',
+            'interaction_pattern' => 'subtle focus and hover feedback on actionable elements',
+        ];
+    }
+
+    /**
      * @param list<string> $pageTypes
      * @return array<string, mixed>
      */
@@ -1154,15 +1231,13 @@ class AiSiteBuildTaskServiceTest extends TestCase
                 'title' => \ucwords(\str_replace('_', ' ', $pageType)),
                 'page_goal' => 'Explain the offer clearly and move qualified visitors to the next step.',
                 'blocks' => [
-                    [
-                        'block_key' => 'hero',
-                        'title' => 'Clear offer for qualified visitors',
-                        'goal' => 'Show the core value with a direct CTA.',
-                        'field_plan' => [
-                            ['field' => 'description', 'sample' => 'A concise proof-led section helps visitors understand the next step.'],
-                            ['field' => 'cta', 'sample' => 'Contact us'],
-                        ],
-                    ],
+                    $this->buildStageOneBlock(
+                        'hero',
+                        'Clear offer for qualified visitors',
+                        'Show the core value with a direct CTA.',
+                        'A concise proof-led section helps visitors understand the next step.',
+                        'Request the ' . \str_replace('_', ' ', $pageType) . ' consultation'
+                    ),
                 ],
             ];
         }

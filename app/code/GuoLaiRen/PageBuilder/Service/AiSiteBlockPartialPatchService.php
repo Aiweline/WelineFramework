@@ -1477,12 +1477,28 @@ class AiSiteBlockPartialPatchService
         $page = \is_array($scope['virtual_pages_by_type'][$pageType] ?? null)
             ? $scope['virtual_pages_by_type'][$pageType]
             : [];
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        $contentLocale = '';
+        foreach ([
+            $scope['content_locale'] ?? null,
+            $websiteProfile['content_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $page['locale'] ?? null,
+            $scope['plan_locale'] ?? null,
+        ] as $candidate) {
+            if (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
+                $contentLocale = \trim((string)$candidate);
+                break;
+            }
+        }
 
         return [
             'page_type' => $pageType,
             'title' => (string)($page['title'] ?? ''),
             'handle' => (string)($page['handle'] ?? ''),
             'locale' => (string)($page['locale'] ?? $scope['plan_locale'] ?? ''),
+            'content_locale' => $contentLocale,
             'workspace_track' => (string)($scope['workspace_track'] ?? ''),
             'website_profile' => $this->compactPromptValue(\is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : []),
         ];
@@ -1659,14 +1675,22 @@ class AiSiteBlockPartialPatchService
     private function buildPatchPrompt(array $read, array $scope, string $instruction): string
     {
         $visualContract = $this->buildPatchVisualContractPrompt($read, $scope);
+        $currentBlockContext = $this->buildPatchCurrentBlockContext($read, $scope);
+        $contentLocale = (string)($currentBlockContext['content_locale'] ?? $this->resolveLocale($read, $scope) ?? '');
+        $languageContract = \is_array($currentBlockContext['language_contract'] ?? null)
+            ? $currentBlockContext['language_contract']
+            : $this->buildPatchLanguageContract([], $contentLocale);
         $payload = [
             'instruction' => $instruction,
+            'content_locale' => $contentLocale,
+            'language_contract' => $languageContract,
             'target' => [
                 'page_type' => (string)($read['page_type'] ?? ''),
                 'block_id' => (string)($read['block_id'] ?? ''),
                 'component_code' => (string)($read['component_code'] ?? ''),
             ],
             'current_block' => $this->buildSafePatchPromptBlock(\is_array($read['block'] ?? null) ? $read['block'] : []),
+            'current_block_context' => $currentBlockContext,
             'page_context' => \is_array($read['page_context'] ?? null) ? $read['page_context'] : [],
             'layout_context' => \is_array($read['layout_context'] ?? null) ? $read['layout_context'] : [],
         ];
@@ -1680,6 +1704,14 @@ class AiSiteBlockPartialPatchService
         }
 
         return "You are modifying one PageBuilder block in-place.\n"
+            . "CTX_WEBSITE_LANGUAGE (hard patch-local language contract):\n"
+            . "- source_of_truth_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . "\n"
+            . "- language_contract: " . $this->jsonEncodeForPrompt($languageContract, 900) . "\n"
+            . "- HARD LANGUAGE CONTRACT: every visitor-visible string changed or newly generated for this block must be in source_of_truth_locale. Translate/rewrite plan text, existing copied labels, CTA labels, alt/title/aria text, placeholders, and form labels before returning JSON.\n\n"
+            . "CTX_CURRENT_BLOCK_CONTEXT (hard patch-local block contract): "
+            . $this->jsonEncodeForPrompt($currentBlockContext, 2200) . "\n"
+            . "- Patch block-context execution rule: patch only this current block. Preserve the confirmed task/block goal, morphology_id, media strategy, required generated image bindings, output_contract, and acceptance rules unless the user's instruction directly edits a visitor-facing field allowed by this block.\n"
+            . "- Patch anti-repetition rule: do not turn this block into the same title/paragraph/card/CTA shell as adjacent or sibling blocks; if the contract has morphology_id or diversity_constraints, keep the visible structure distinct.\n\n"
             . "Return one JSON object only. Required top-level keys: block, change_summary, changed_fields.\n"
             . "The first non-whitespace character must be { and the last non-whitespace character must be }.\n"
             . "Rules:\n"
@@ -1697,12 +1729,56 @@ class AiSiteBlockPartialPatchService
             . 'Example replacement JSON shape (copy structure, not content): {"block":{"block_id":"same-block-id","type":"content","config":{"content.title":"Finished localized title","cta.text":"Finished CTA"},"html":"<section class=\'pb-c-root\'><h2>Finished localized title</h2></section>","field_schema":{"preserve":"current schema unless changed"}},"change_summary":"Updated visible copy and styling for the requested block.","changed_fields":["config.content.title","html"]}' . "\n\n"
             . ($visualContract !== '' ? $visualContract . "\n" : '')
             . "Visible copy governance:\n"
-            . "- Visitor-facing copy and attributes must use the target website content locale.\n"
+            . "- Visitor-facing copy and attributes must use source_of_truth_locale/content_locale exactly.\n"
             . "- Task labels, component labels, section labels, image-slot labels, queue/build-plan labels, and schema role labels are internal metadata. Never render them verbatim as headings, card titles, badges, CTA text, alt/title/aria text, or body copy.\n"
             . "- Before returning, compare all headings, card titles, badges, CTA labels, alt/title/aria attributes, and paragraphs against current_block labels/config labels/layout labels. Exact copies, title-cased copies, or instruction-shaped sentences starting with Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, or Close are invalid; rewrite them into final customer-facing copy.\n"
             . "- Preserve the required generated image src and data-pb-ai-asset-slot attributes, but rewrite alt/title/aria text into concise visitor-facing descriptions instead of copying slot labels or prompt briefs.\n\n"
             . "- Never leave a browser-default `<a>` in block.html or template fields. If a link is necessary, it must have a component-prefixed class and explicit CSS in the same block/template; otherwise remove the link and use plain text.\n\n"
             . $payloadJson;
+    }
+
+    /**
+     * @param array<string, mixed> $read
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildPatchCurrentBlockContext(array $read, array $scope): array
+    {
+        $pageType = \trim((string)($read['page_type'] ?? ''));
+        $blockId = \trim((string)($read['block_id'] ?? ''));
+        $componentCode = \trim((string)($read['component_code'] ?? ''));
+        $layoutContext = \is_array($read['layout_context'] ?? null) ? $read['layout_context'] : [];
+        $task = $this->resolvePatchBuildTask($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        $contentLocale = $this->resolvePatchContentLocale($read, $scope, $task);
+        $languageContract = $this->buildPatchLanguageContract($task, $contentLocale);
+        $blockContract = $this->resolvePatchBlockContract($task, $scope, $pageType, $blockId, $componentCode, $layoutContext);
+        $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
+        $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+        $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+
+        return [
+            'block_context_source' => $task !== [] ? 'confirmed_build_task' : 'current_rendered_block',
+            'content_locale' => $contentLocale,
+            'language_contract' => $languageContract,
+            'task_identity' => [
+                'task_key' => (string)($task['task_key'] ?? ''),
+                'task_type' => (string)($task['task_type'] ?? ''),
+                'page_type' => $pageType,
+                'section_code' => (string)($task['section_code'] ?? $componentCode),
+                'section_key' => (string)($task['section_key'] ?? ''),
+                'block_key' => (string)($task['block_key'] ?? $blockId),
+                'block_id' => $blockId,
+                'component_code' => $componentCode,
+            ],
+            'block_contract' => $blockContract,
+            'image_intent' => \is_array($blockTask['image_intent'] ?? null)
+                ? $blockTask['image_intent']
+                : (\is_array($planContext['block_image_intent'] ?? null) ? $planContext['block_image_intent'] : []),
+            'content_plan' => \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [],
+            'output_contract' => \is_array($taskScript['output_contract'] ?? null) ? $taskScript['output_contract'] : [],
+            'acceptance' => \is_array($taskScript['acceptance'] ?? null) ? $taskScript['acceptance'] : [],
+            'diversity_constraints' => \is_array($blockContract['diversity_constraints'] ?? null) ? $blockContract['diversity_constraints'] : [],
+        ];
     }
 
     /**
@@ -1786,7 +1862,7 @@ class AiSiteBlockPartialPatchService
         ]);
 
         return [
-            'content_locale' => (string)$this->resolveLocale($read, $scope),
+            'content_locale' => $this->resolvePatchContentLocale($read, $scope, $task),
             'task_key' => (string)($task['task_key'] ?? ''),
             'section_code' => (string)($task['section_code'] ?? $componentCode),
             'block_key' => $blockKey,
@@ -1853,10 +1929,20 @@ class AiSiteBlockPartialPatchService
         string $componentCode,
         array $layoutContext
     ): array {
-        $buildTasks = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
+        $buildTasks = $this->collectPatchBuildTaskDefinitions($scope, $pageType);
         $blockKey = \trim((string)($layoutContext['block_key'] ?? ''));
+        $sharedRegion = $this->resolveSharedComponentRegionForBlockId($pageType, $componentCode !== '' ? $componentCode : $blockId);
         foreach ($buildTasks as $task) {
-            if (!\is_array($task) || \trim((string)($task['page_type'] ?? '')) !== $pageType) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskPageType = \trim((string)($task['page_type'] ?? ''));
+            $taskRegion = \trim((string)($task['region'] ?? $task['shared_region'] ?? ''));
+            if ($sharedRegion !== '') {
+                if ($taskRegion !== $sharedRegion && \trim((string)($task['task_key'] ?? '')) !== 'shared:' . $sharedRegion) {
+                    continue;
+                }
+            } elseif ($taskPageType !== $pageType) {
                 continue;
             }
             if ($blockKey !== '' && \trim((string)($task['block_key'] ?? '')) === $blockKey) {
@@ -1871,6 +1957,64 @@ class AiSiteBlockPartialPatchService
         }
 
         return [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function collectPatchBuildTaskDefinitions(array $scope, string $pageType): array
+    {
+        $tasks = [];
+        $seen = [];
+        $append = static function (array $task) use (&$tasks, &$seen): void {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            $fingerprint = $taskKey !== ''
+                ? $taskKey
+                : \sha1(\json_encode($task, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: \serialize($task));
+            if (isset($seen[$fingerprint])) {
+                return;
+            }
+            $seen[$fingerprint] = true;
+            $tasks[] = $task;
+        };
+
+        $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
+        foreach (\is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [] as $task) {
+            if (\is_array($task)) {
+                $append($task);
+            }
+        }
+
+        foreach (\is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [] as $taskKey => $state) {
+            if (!\is_array($state)) {
+                continue;
+            }
+            $stateTaskKey = \trim((string)($state['task_key'] ?? (\is_scalar($taskKey) ? (string)$taskKey : '')));
+            $definition = $stateTaskKey !== '' ? $this->buildTaskService()->getTaskDefinition($scope, $stateTaskKey) : null;
+            if (\is_array($definition)) {
+                $append(\array_replace($definition, $state));
+                continue;
+            }
+            $append($stateTaskKey !== '' ? \array_replace(['task_key' => $stateTaskKey], $state) : $state);
+        }
+
+        if ($blueprint !== [] || \is_array($scope['build_tasks'] ?? null)) {
+            foreach ($this->buildTaskService()->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
+                $definition = $this->buildTaskService()->getTaskDefinition($scope, $taskKey);
+                if (\is_array($definition)) {
+                    $append($definition);
+                }
+            }
+            foreach (['shared:header', 'shared:footer'] as $taskKey) {
+                $definition = $this->buildTaskService()->getTaskDefinition($scope, $taskKey);
+                if (\is_array($definition)) {
+                    $append($definition);
+                }
+            }
+        }
+
+        return $tasks;
     }
 
     /**
@@ -2005,10 +2149,129 @@ class AiSiteBlockPartialPatchService
      */
     private function resolveLocale(array $read, array $scope): ?string
     {
-        $pageContext = \is_array($read['page_context'] ?? null) ? $read['page_context'] : [];
-        $locale = \trim((string)($pageContext['locale'] ?? $scope['plan_locale'] ?? ''));
+        $pageType = \trim((string)($read['page_type'] ?? ''));
+        $blockId = \trim((string)($read['block_id'] ?? ''));
+        $componentCode = \trim((string)($read['component_code'] ?? ''));
+        $layoutContext = \is_array($read['layout_context'] ?? null) ? $read['layout_context'] : [];
+        $task = $this->resolvePatchBuildTask($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        $locale = $this->resolvePatchContentLocale($read, $scope, $task);
 
         return $locale !== '' ? $locale : null;
+    }
+
+    /**
+     * @param array<string, mixed> $read
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $task
+     */
+    private function resolvePatchContentLocale(array $read, array $scope, array $task = []): string
+    {
+        $pageContext = \is_array($read['page_context'] ?? null) ? $read['page_context'] : [];
+        $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
+        $languageContract = \is_array($runtimeContext['language_contract'] ?? null) ? $runtimeContext['language_contract'] : [];
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+
+        foreach ([
+            $runtimeContext['content_locale'] ?? null,
+            $languageContract['source_of_truth_locale'] ?? null,
+            $task['content_locale'] ?? null,
+            $pageContext['content_locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $websiteProfile['content_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $pageContext['locale'] ?? null,
+            $scope['plan_locale'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return 'zh_Hans_CN';
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @return array<string, mixed>
+     */
+    private function buildPatchLanguageContract(array $task, string $contentLocale): array
+    {
+        $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
+        $languageContract = \is_array($runtimeContext['language_contract'] ?? null)
+            ? $runtimeContext['language_contract']
+            : [];
+        $contentLocale = \trim($contentLocale);
+        if ($contentLocale === '') {
+            $contentLocale = \trim((string)($languageContract['source_of_truth_locale'] ?? 'zh_Hans_CN'));
+        }
+
+        return \array_replace([
+            'source_of_truth_locale' => $contentLocale,
+            'visible_copy_rule' => 'All visitor-facing copy and attributes changed by this block patch must use source_of_truth_locale.',
+            'plan_text_rule' => 'Confirmed plan text is intent only; rewrite it into source_of_truth_locale before rendering.',
+            'patch_scope_rule' => 'Patch only the current block; do not use sibling or full-page context as replacement content.',
+        ], $languageContract, [
+            'source_of_truth_locale' => $contentLocale,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $layoutContext
+     * @return array<string, mixed>
+     */
+    private function resolvePatchBlockContract(
+        array $task,
+        array $scope,
+        string $pageType,
+        string $blockId,
+        string $componentCode,
+        array $layoutContext
+    ): array {
+        foreach ([
+            $task['block_contract'] ?? null,
+            $task['block_task']['block_contract'] ?? null,
+            $task['block_task']['style_plan']['block_contract'] ?? null,
+            $task['plan_context']['block']['block_contract'] ?? null,
+            $task['plan_context']['block_contract'] ?? null,
+            $task['implementation_contract']['block_contract'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        $pagePlanBlock = $this->resolvePatchPagePlanBlock($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        if (\is_array($pagePlanBlock['block_contract'] ?? null) && $pagePlanBlock['block_contract'] !== []) {
+            return $pagePlanBlock['block_contract'];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $value
+     */
+    private function jsonEncodeForPrompt(array $value, int $limit): string
+    {
+        $json = \json_encode(
+            $value,
+            \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        if (!\is_string($json) || $json === '') {
+            return '{}';
+        }
+        if ($limit > 0 && \strlen($json) > $limit) {
+            return \substr($json, 0, \max(1, $limit - 20)) . '...truncated';
+        }
+
+        return $json;
     }
 
     /**
