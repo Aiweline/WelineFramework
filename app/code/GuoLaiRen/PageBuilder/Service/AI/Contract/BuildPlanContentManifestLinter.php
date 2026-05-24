@@ -48,10 +48,10 @@ final class BuildPlanContentManifestLinter
             if ($this->looksLikePlaceholder($value)) {
                 $errors[] = 'content_manifest item has placeholder copy: ' . $key;
             }
-            if ($this->looksLikePlanningOrImplementationCopy($value)) {
+            if (!$this->isPolicyMetadataContentKey($key) && $this->looksLikePlanningOrImplementationCopy($value)) {
                 $errors[] = 'content_manifest item has planning or implementation copy: ' . $key;
             }
-            if ($this->looksLikeLocaleLeak($value, $effectiveLocale, $key, $allowedLatinWords)) {
+            if (!$this->isPolicyMetadataContentKey($key) && $this->looksLikeLocaleLeak($value, $effectiveLocale, $key, $allowedLatinWords)) {
                 $errors[] = 'content_manifest item has locale leakage: ' . $key;
             }
         }
@@ -128,6 +128,14 @@ final class BuildPlanContentManifestLinter
         }
 
         return \implode(' ', $this->collectVisibleTextLeaves($value));
+    }
+
+    private function isPolicyMetadataContentKey(string $key): bool
+    {
+        return \in_array($key, [
+            'site.allowed_brand_terms',
+            'site.forbidden_template_brand_terms',
+        ], true);
     }
 
     /**
@@ -242,6 +250,12 @@ final class BuildPlanContentManifestLinter
         }
 
         foreach (['lorem ipsum', 'todo', 'placeholder', 'dummy copy', 'sample text', 'your text here', '待填写', '示例文案'] as $needle) {
+            if ($needle === 'todo') {
+                if (\preg_match('/(?:^|[^a-z0-9_])todo(?:$|[^a-z0-9_])/i', $normalized) === 1) {
+                    return true;
+                }
+                continue;
+            }
             if (\str_contains($normalized, \strtolower($needle))) {
                 return true;
             }

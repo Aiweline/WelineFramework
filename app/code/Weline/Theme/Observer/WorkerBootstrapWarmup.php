@@ -39,6 +39,10 @@ class WorkerBootstrapWarmup implements ObserverInterface
         });
         SchedulerSystem::yield();
         $warmed += $this->tryWarm(function (): void {
+            $this->warmBackendThemeData();
+        });
+        SchedulerSystem::yield();
+        $warmed += $this->tryWarm(function (): void {
             $this->warmHotTemplateFiles();
         });
         SchedulerSystem::yield();
@@ -77,6 +81,27 @@ class WorkerBootstrapWarmup implements ObserverInterface
         ObjectManager::getInstance(LayoutSlotRenderer::class);
         ObjectManager::getInstance(QueryProviderRegistry::class)->getAllDescriptors();
         ObjectManager::getInstance(FrontendWorkerSessionService::class)->cleanupExpired();
+
+        if (\class_exists(\Weline\Backend\Config\MenuXmlReader::class)) {
+            ObjectManager::getInstance(\Weline\Backend\Config\MenuXmlReader::class)->read();
+        }
+
+        foreach ([
+            \Weline\Backend\Service\MenuService::class,
+            \Weline\Admin\Service\MenuRenderService::class,
+            \Weline\Admin\Service\FastMenuRenderService::class,
+            \Weline\Backend\Block\ThemeConfig::class,
+            \Weline\Backend\Model\Config::class,
+            \Weline\Framework\Ui\FormKey::class,
+        ] as $className) {
+            if (\class_exists($className)) {
+                ObjectManager::getInstance($className);
+            }
+        }
+
+        if (\class_exists(\Weline\I18n\Taglib\LanguageSwitcher::class)) {
+            \Weline\I18n\Taglib\LanguageSwitcher::warmBackendCaches(['zh_Hans_CN', 'en_US']);
+        }
     }
 
     private function warmFrontendThemeData(): void
@@ -105,6 +130,34 @@ class WorkerBootstrapWarmup implements ObserverInterface
         }
     }
 
+    private function warmBackendThemeData(): void
+    {
+        /** @var ThemeContextService $themeContext */
+        $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+        $theme = $themeContext->resolveTheme('backend', null, false);
+        if ($theme instanceof WelineTheme && $theme->getId()) {
+            ThemeData::setCurrentTheme($theme);
+        }
+
+        ThemeData::setCurrentArea('backend');
+        ThemeData::performanceLoad('theme.backend', 'theme.backend.*', 'default', null);
+
+        $layoutPath = LayoutPathResolver::buildLayoutPath('', 'backend', 'default', 'default');
+        if ($theme instanceof WelineTheme && $theme->getId()) {
+            $resolved = LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, 'backend');
+            if (\is_string($resolved) && $resolved !== '') {
+                $source = LayoutPathResolver::getLayoutFilePath($resolved, $theme, 'backend');
+                if (\is_string($source) && $source !== '') {
+                    @\is_file($source);
+                    @\filemtime($source);
+                    @\filesize($source);
+                }
+            }
+        }
+
+        ThemeData::resetRequestState();
+    }
+
     private function warmHotTemplateFiles(): void
     {
         $template = Template::getInstance();
@@ -128,7 +181,7 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'WeShop_Product::templates/frontend/product/view.phtml',
             'WeShop_Filters::templates/Frontend/filters.phtml',
         ] as $fileName) {
-            $this->warmCompiledFile((string)$template->getFetchFile($fileName));
+            $this->warmViewTemplate($template, $fileName);
             SchedulerSystem::yield();
         }
 
@@ -148,7 +201,58 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'WeShop_Filters::Weline_Theme/frontend/layouts/category/filters-sidebar.phtml',
             'WeShop_Filters::Weline_Theme/frontend/layouts/base/body-end.phtml',
         ] as $hookFile) {
-            $this->warmCompiledFile((string)$template->fetchTagSource('hooks', $hookFile));
+            $this->warmTagTemplate($template, 'hooks', $hookFile);
+            SchedulerSystem::yield();
+        }
+
+        foreach ([
+            'Weline_Admin::templates/Login/fast.phtml',
+            'Weline_Admin::templates/Login/index.phtml',
+            'Weline_Admin::templates/Login/head.phtml',
+            'Weline_Admin::templates/Login/footer.phtml',
+            'Weline_Admin::templates/common/head.phtml',
+            'Weline_Admin::templates/common/footer.phtml',
+            'Weline_Admin::templates/common/left-sidebar.phtml',
+            'Weline_Admin::templates/common/right-sidebar.phtml',
+            'Weline_Admin::templates/common/page/loading.phtml',
+            'Weline_Backend::templates/public/head.phtml',
+            'Weline_Backend::templates/public/footer.phtml',
+            'Weline_Theme::theme/backend/layouts/default/default.phtml',
+            'Weline_Theme::theme/backend/layouts/default/blank.phtml',
+            'Weline_Theme::theme/backend/layouts/login/default.phtml',
+            'Weline_Theme::theme/backend/partials/head/default.phtml',
+            'Weline_Theme::theme/backend/partials/loading/default.phtml',
+            'Weline_Theme::theme/backend/partials/topbar/default.phtml',
+            'Weline_Theme::theme/backend/partials/topnav/default.phtml',
+            'Weline_Theme::theme/backend/partials/sidebar/left.phtml',
+            'Weline_Theme::theme/backend/partials/sidebar/default.phtml',
+            'Weline_Theme::theme/backend/partials/right-sidebar/default.phtml',
+            'Weline_Theme::theme/backend/partials/layout/main-content.phtml',
+            'Weline_Theme::theme/backend/partials/layout/content.phtml',
+            'Weline_Theme::theme/backend/partials/scripts/default.phtml',
+            'Weline_Theme::theme/backend/partials/footer/default.phtml',
+            'Weline_Theme::theme/backend/components/card.phtml',
+            'Weline_Theme::theme/backend/components/table.phtml',
+            'Weline_Theme::theme/backend/components/button.phtml',
+            'Weline_Theme::theme/backend/components/form-group.phtml',
+            'GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/index.phtml',
+            'GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace.phtml',
+            'GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/layout.phtml',
+            'GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-main.phtml',
+            'GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-runtime.phtml',
+            'GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/modals.phtml',
+        ] as $fileName) {
+            $this->warmViewTemplate($template, $fileName);
+            SchedulerSystem::yield();
+        }
+
+        foreach ([
+            'Weline_Backend::header/base.phtml',
+            'Weline_Backend::footer/base.phtml',
+            'Weline_Backend::version.phtml',
+            'Weline_Backend::system/notification.phtml',
+        ] as $blockFile) {
+            $this->warmTagTemplate($template, 'blocks', $blockFile);
             SchedulerSystem::yield();
         }
     }
@@ -178,6 +282,25 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'Weline_Theme::frontend::layouts::account::sidebar-after',
             'account.sidebar',
             'account.sidebar.content',
+            'Weline_Admin::backend::partials::login::providers',
+            'Weline_Theme::backend::layouts::base::head-before',
+            'Weline_Theme::backend::layouts::base::head-after',
+            'Weline_Theme::backend::layouts::base::body-start',
+            'Weline_Theme::backend::layouts::base::body-end',
+            'Weline_Theme::backend::layouts::base::content-before',
+            'Weline_Theme::backend::layouts::base::content-after',
+            'Weline_Theme::backend::partials::head::module-declarations',
+            'Weline_Theme::backend::partials::topbar::logo',
+            'Weline_Theme::backend::partials::topbar::before',
+            'Weline_Theme::backend::partials::topbar::after',
+            'Weline_Theme::backend::partials::topnav::before',
+            'Weline_Theme::backend::partials::topnav::after',
+            'Weline_Theme::backend::partials::sidebar::before',
+            'Weline_Theme::backend::partials::sidebar::after',
+            'Weline_Theme::backend::partials::right-sidebar::before',
+            'Weline_Theme::backend::partials::right-sidebar::after',
+            'Weline_Theme::backend::partials::scripts::before',
+            'Weline_Theme::backend::partials::scripts::after',
         ] as $hookName) {
             /** @var HookReader $reader */
             $reader = ObjectManager::make(HookReader::class);
@@ -198,6 +321,30 @@ class WorkerBootstrapWarmup implements ObserverInterface
             BP . '/app/code/Weline/Frontend/view/statics/js/weline-api.js',
             BP . '/app/code/Weline/Frontend/view/statics/js/weline-api-worker.js',
             BP . '/app/code/Weline/Theme/view/theme/frontend/assets/js/theme.js',
+            BP . '/app/code/Weline/Admin/view/statics/assets/css/bootstrap.min.css',
+            BP . '/app/code/Weline/Admin/view/statics/assets/css/bootstrap-dark.min.css',
+            BP . '/app/code/Weline/Admin/view/statics/assets/css/icons.min.css',
+            BP . '/app/code/Weline/Admin/view/statics/assets/css/app.min.css',
+            BP . '/app/code/Weline/Admin/view/statics/assets/css/app-dark.min.css',
+            BP . '/app/code/Weline/Admin/view/statics/assets/libs/bootstrap/js/bootstrap.bundle.min.js',
+            BP . '/app/code/Weline/Admin/view/statics/assets/libs/jquery/jquery.min.js',
+            BP . '/app/code/Weline/Admin/view/statics/assets/libs/metismenu/metisMenu.min.js',
+            BP . '/app/code/Weline/Admin/view/statics/assets/libs/simplebar/simplebar.min.js',
+            BP . '/app/code/Weline/Admin/view/statics/assets/libs/node-waves/waves.min.js',
+            BP . '/app/code/Weline/Admin/view/statics/assets/js/app.js',
+            BP . '/app/code/Weline/Backend/view/statics/base/weline.modules.js',
+            BP . '/app/code/Weline/Backend/view/statics/backend/weline.modules.js',
+            BP . '/app/code/Weline/Backend/view/statics/js/url-backend.js',
+            BP . '/app/code/Weline/Backend/view/statics/js/cookie.js',
+            BP . '/app/code/Weline/Theme/view/theme/backend/assets/css/theme.css',
+            BP . '/app/code/Weline/Theme/view/theme/backend/assets/js/theme.js',
+            BP . '/app/code/Weline/Theme/view/theme/backend/assets/js/backend-components.js',
+            BP . '/app/code/Weline/Theme/view/theme/backend/colors/_default.css',
+            BP . '/app/code/Weline/Theme/view/theme/backend/colors/_dark.css',
+            BP . '/app/code/Weline/Theme/view/theme/backend/colors/_light.css',
+            BP . '/app/code/Weline/Theme/view/theme/backend/variables/_colors.css',
+            BP . '/app/code/Weline/Theme/view/theme/backend/variables/_spacing.css',
+            BP . '/app/code/Weline/Theme/view/theme/backend/variables/_typography.css',
         ] as $path) {
             if (!\is_file($path)) {
                 continue;
@@ -347,6 +494,11 @@ class WorkerBootstrapWarmup implements ObserverInterface
             '/USD/en_US/catalog/category/sports',
             '/zh_Hans_CN/catalog/category/sports',
             '/CNY/zh_Hans_CN/catalog/category/sports',
+            '/catalog/category/clothing',
+            '/en_US/catalog/category/clothing',
+            '/USD/en_US/catalog/category/clothing',
+            '/zh_Hans_CN/catalog/category/clothing',
+            '/CNY/zh_Hans_CN/catalog/category/clothing',
             '/en_US/catalog/category/men/shirts',
             '/USD/en_US/catalog/category/men/shirts',
             '/zh_Hans_CN/catalog/category/men/shirts',
@@ -485,6 +637,28 @@ class WorkerBootstrapWarmup implements ObserverInterface
                 \w_log_warning('[ThemeWorkerWarmup] ' . $e->getMessage());
             }
             return 0;
+        }
+    }
+
+    private function warmViewTemplate(Template $template, string $fileName): void
+    {
+        try {
+            $this->warmCompiledFile((string)$template->getFetchFile($fileName));
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[ThemeWorkerWarmup] template ' . $fileName . ': ' . $e->getMessage());
+            }
+        }
+    }
+
+    private function warmTagTemplate(Template $template, string $type, string $source): void
+    {
+        try {
+            $this->warmCompiledFile((string)$template->fetchTagSource($type, $source));
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[ThemeWorkerWarmup] ' . $type . ' ' . $source . ': ' . $e->getMessage());
+            }
         }
     }
 

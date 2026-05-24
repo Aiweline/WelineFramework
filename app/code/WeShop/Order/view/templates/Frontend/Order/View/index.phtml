@@ -129,12 +129,18 @@ $formatPrice = static function (float $amount): string {
         <?php else: ?>
             <div class="order-detail__items-list">
                 <?php foreach ($items as $item): ?>
+                    <?php $itemOptions = is_array($item['options'] ?? null) ? $item['options'] : []; ?>
                     <article class="order-item">
                         <div class="order-item__info">
                             <h3 class="order-item__name"><?= $escape($item['product_name'] ?? '') ?></h3>
                             <p class="order-item__sku">
                                 SKU: <?= $escape($item['product_sku'] ?? '') ?>
                             </p>
+                            <?php if ($itemOptions !== []): ?>
+                                <div class="order-item__options">
+                                    <?= \WeShop\Product\Helper\ProductOptionRenderer::renderItems($itemOptions) ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         <div class="order-item__details">
                             <p class="order-item__detail">
@@ -426,6 +432,54 @@ $formatPrice = static function (float $amount): string {
     margin-top: 0.25rem;
     font-size: 0.875rem;
     color: var(--color-text-secondary);
+}
+
+.order-item__options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.6rem;
+    margin-top: 0.35rem;
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.order-item__options .weshop-product-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.order-item__options .weshop-product-option__label {
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.order-item__options .weshop-product-option__swatch {
+    width: 0.95rem;
+    height: 0.95rem;
+    flex: 0 0 0.95rem;
+    border: 1px solid rgba(17, 24, 39, 0.18);
+    background: #fff;
+}
+
+.order-item__options .weshop-product-option__swatch--color {
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.62);
+}
+
+.order-item__options .weshop-product-option__swatch--image {
+    border-radius: 0.25rem;
+    overflow: hidden;
+}
+
+.order-item__options .weshop-product-option__swatch img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 
 .order-item__details {

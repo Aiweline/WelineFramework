@@ -18,7 +18,7 @@
  */
 (function(window, document) {
     'use strict';
-    
+
     // 声明依赖模块
     if (window.Weline) {
         Weline.declare('api');
@@ -34,6 +34,8 @@
         itemsContainer: null,
         loadingElement: null,
         emptyElement: null,
+        loadingStateHtml: '',
+        emptyStateHtml: '',
         footerElement: null,
         cartCountElements: [],
         subtotalElement: null,
@@ -43,6 +45,7 @@
         isLoading: false,
         config: null,
         cartApiPromise: null,
+        hasLoadedItems: false,
 
         normalizeApiPayload(payload) {
             if (!payload || typeof payload !== 'object') {
@@ -60,20 +63,58 @@
                 success: code >= 200 && code < 300 && payload.data.success !== false,
             }, payload.data);
         },
-        
-        /**
-         * 初始化
-         */
-        init() {
-            // 获取配置
-            this.config = window.__WelineMiniCartConfig || {
+
+        translate(text) {
+            if (window.Weline?.i18n?.translate) {
+                return window.Weline.i18n.translate(text);
+            }
+            if (window.WelineI18n?.translate) {
+                return window.WelineI18n.translate(text);
+            }
+            if (typeof window.__ === 'function') {
+                return window.__(text);
+            }
+            return text;
+        },
+
+        defaultConfig() {
+            return {
                 position: 'right',
                 autoOpen: true,
                 cart: {
                     count: 0,
                     subtotal: 0,
                 },
+                labels: {
+                    decreaseQty: this.translate('减少数量'),
+                    increaseQty: this.translate('增加数量'),
+                    removeItem: this.translate('删除商品'),
+                    loading: this.translate('正在加载购物车...'),
+                    emptyCart: this.translate('购物车是空的'),
+                    startShopping: this.translate('开始购物'),
+                    loadFailed: this.translate('购物车内容加载失败，请重试。'),
+                    retry: this.translate('重试'),
+                },
+                icons: {},
             };
+        },
+
+        mergeConfig(config) {
+            const defaults = this.defaultConfig();
+            const incoming = config && typeof config === 'object' ? config : {};
+            return Object.assign({}, defaults, incoming, {
+                cart: Object.assign({}, defaults.cart, incoming.cart || {}),
+                labels: Object.assign({}, defaults.labels, incoming.labels || {}),
+                icons: Object.assign({}, defaults.icons, incoming.icons || {}),
+            });
+        },
+
+        /**
+         * 初始化
+         */
+        init() {
+            // 获取配置
+            this.config = this.mergeConfig(window.__WelineMiniCartConfig);
             
             // 获取 DOM 元素
             this.drawer = document.getElementById('mini-cart-drawer');
@@ -81,6 +122,8 @@
             this.itemsContainer = document.getElementById('mini-cart-items');
             this.loadingElement = document.getElementById('mini-cart-loading');
             this.emptyElement = document.getElementById('mini-cart-empty');
+            this.loadingStateHtml = this.loadingElement ? this.loadingElement.outerHTML : '';
+            this.emptyStateHtml = this.emptyElement ? this.emptyElement.outerHTML : '';
             this.footerElement = document.querySelector('[data-cart-footer]');
             this.cartCountElements = document.querySelectorAll('[data-cart-count]');
             this.subtotalElement = document.querySelector('[data-mini-cart-subtotal]');
@@ -101,14 +144,292 @@
 
         getCartApi() {
             if (!this.cartApiPromise) {
-                if (!window.Weline?.Api?.resource) {
+                if (window.WelineApiModule?.__full === true && typeof window.WelineApiModule.resource === 'function') {
+                    this.cartApiPromise = Promise.resolve(window.WelineApiModule.resource('cart'));
+                } else if (typeof window.Weline?.Api?.resource === 'function') {
+                    this.cartApiPromise = Promise.resolve(window.Weline.Api.resource('cart'));
+                } else {
                     return Promise.reject(new Error('Weline.Api.resource is not available'));
                 }
-                this.cartApiPromise = Promise.resolve(window.Weline.Api.resource('cart'));
             }
             return this.cartApiPromise;
         },
-        
+
+        normalizeCount(count) {
+            const normalized = parseInt(String(count ?? 0).replace(/[^0-9]/g, ''), 10);
+            return Number.isNaN(normalized) ? 0 : Math.max(0, normalized);
+        },
+
+        getCurrentCount() {
+            let count = 0;
+            let hasCountElement = false;
+
+            document.querySelectorAll('[data-cart-count]').forEach(el => {
+                hasCountElement = true;
+                count = Math.max(count, this.normalizeCount(el.textContent));
+            });
+
+            if (!hasCountElement) {
+                count = this.normalizeCount(this.config?.cart?.count);
+                const hydrateRoot = document.querySelector('[data-weshop-cart-hydrate]');
+                if (hydrateRoot?.dataset.cartCountSeed !== undefined) {
+                    count = Math.max(count, this.normalizeCount(hydrateRoot.dataset.cartCountSeed));
+                }
+            }
+
+            return count;
+        },
+
+        hasRenderedItems() {
+            return !!this.itemsContainer?.querySelector('.mini-cart-item');
+        },
+
+        ensureEmptyStateElement() {
+            this.emptyElement = document.getElementById('mini-cart-empty');
+            if (!this.emptyStateHtml) {
+                this.emptyStateHtml = this.renderEmptyState();
+            }
+
+            if (!this.emptyElement && this.itemsContainer && this.emptyStateHtml && !this.hasRenderedItems()) {
+                const loadingElement = document.getElementById('mini-cart-loading');
+                if (loadingElement) {
+                    loadingElement.insertAdjacentHTML('beforebegin', this.emptyStateHtml);
+                } else {
+                    this.itemsContainer.insertAdjacentHTML('beforeend', this.emptyStateHtml);
+                }
+                this.emptyElement = document.getElementById('mini-cart-empty');
+            }
+
+            return this.emptyElement;
+        },
+
+        ensureLoadingElement() {
+            this.loadingElement = document.getElementById('mini-cart-loading');
+            if (!this.loadingStateHtml) {
+                this.loadingStateHtml = this.renderLoadingState();
+            }
+
+            if (!this.loadingElement && this.itemsContainer && this.loadingStateHtml) {
+                this.itemsContainer.insertAdjacentHTML('beforeend', this.loadingStateHtml);
+                this.loadingElement = document.getElementById('mini-cart-loading');
+            }
+
+            return this.loadingElement;
+        },
+
+        escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        },
+
+        sanitizeUrl(value) {
+            const url = String(value ?? '').trim();
+            if (url === '' || url === '#') {
+                return '#';
+            }
+            if (url.startsWith('/') || /^https?:\/\//i.test(url)) {
+                return url;
+            }
+            return '#';
+        },
+
+        sanitizeCssColor(value) {
+            const color = String(value ?? '').trim();
+            if (/^#[0-9a-f]{3,8}$/i.test(color)) {
+                return color;
+            }
+            if (/^(rgb|rgba|hsl|hsla)\([0-9%,.\s-]+\)$/i.test(color)) {
+                return color;
+            }
+            return '';
+        },
+
+        getIcon(name) {
+            return String(this.config?.icons?.[name] || '');
+        },
+
+        getLabel(name) {
+            return String(this.config?.labels?.[name] || '');
+        },
+
+        renderItems(items) {
+            if (!Array.isArray(items) || items.length === 0) {
+                return this.emptyStateHtml || this.renderEmptyState();
+            }
+
+            return items
+                .filter(item => item && typeof item === 'object')
+                .map(item => this.renderItem(item))
+                .join('');
+        },
+
+        renderLoadingState() {
+            return [
+                '<div class="mini-cart-drawer__loading" id="mini-cart-loading" style="display:none;">',
+                '<div class="mini-cart-drawer__spinner"></div>',
+                `<p class="mini-cart-drawer__loading-text">${this.escapeHtml(this.getLabel('loading'))}</p>`,
+                '</div>',
+            ].join('');
+        },
+
+        renderEmptyState() {
+            return [
+                '<div class="mini-cart-items__empty" id="mini-cart-empty" style="display:none;">',
+                '<div class="mini-cart-empty">',
+                `<span class="mini-cart-empty__icon mini-cart-icon" aria-hidden="true">${this.getIcon('cart')}</span>`,
+                `<p class="mini-cart-empty__message">${this.escapeHtml(this.getLabel('emptyCart'))}</p>`,
+                `<a href="/" class="mini-cart-empty__link" data-action="close-mini-cart">${this.escapeHtml(this.getLabel('startShopping'))}</a>`,
+                '</div>',
+                '</div>',
+            ].join('');
+        },
+
+        renderErrorState(message) {
+            const errorMessage = this.escapeHtml(message || this.getLabel('loadFailed'));
+            return [
+                '<div class="mini-cart-error" role="alert">',
+                `<p class="mini-cart-error__message">${errorMessage}</p>`,
+                `<button type="button" class="mini-cart-error__retry" data-action="retry-mini-cart">${this.escapeHtml(this.getLabel('retry'))}</button>`,
+                '</div>',
+            ].join('');
+        },
+
+        formatItemOptions(item) {
+            const directOptions = String(item.options || '').trim();
+            if (directOptions !== '') {
+                return directOptions;
+            }
+
+            const optionItems = Array.isArray(item.option_items) ? item.option_items : [];
+            return optionItems
+                .filter(option => option && typeof option === 'object')
+                .map(option => {
+                    const label = String(option.label || '').trim();
+                    const value = String(option.value || '').trim();
+                    if (value === '') {
+                        return '';
+                    }
+                    return label !== '' ? `${label}: ${value}` : value;
+                })
+                .filter(Boolean)
+                .join(' / ');
+        },
+
+        normalizeItemOptionItems(item) {
+            const optionItems = Array.isArray(item.option_items) ? item.option_items : [];
+            return optionItems
+                .filter(option => option && typeof option === 'object')
+                .map(option => ({
+                    label: String(option.label || '').trim(),
+                    value: String(option.value || '').trim(),
+                    swatchType: String(option.swatch_type || '').trim().toLowerCase(),
+                    swatchValue: String(option.swatch_value || '').trim(),
+                }))
+                .filter(option => option.value !== '');
+        },
+
+        renderOptionSwatch(option) {
+            if (option.swatchType === 'color') {
+                const color = this.sanitizeCssColor(option.swatchValue);
+                if (color !== '') {
+                    return `<span class="mini-cart-item__option-swatch mini-cart-item__option-swatch--color" style="background-color:${this.escapeHtml(color)}"></span>`;
+                }
+            }
+
+            if (option.swatchType === 'image') {
+                const image = this.sanitizeUrl(option.swatchValue);
+                if (image !== '#') {
+                    return `<span class="mini-cart-item__option-swatch mini-cart-item__option-swatch--image"><img src="${this.escapeHtml(image)}" alt="" loading="lazy"></span>`;
+                }
+            }
+
+            return '';
+        },
+
+        renderItemOptions(item) {
+            const optionItems = this.normalizeItemOptionItems(item);
+            if (optionItems.length === 0) {
+                const options = this.formatItemOptions(item);
+                return options !== ''
+                    ? `<div class="mini-cart-item__options">${this.escapeHtml(options)}</div>`
+                    : '';
+            }
+
+            const optionsHtml = optionItems.map(option => {
+                const label = option.label !== ''
+                    ? `<span class="mini-cart-item__option-label">${this.escapeHtml(option.label)}:</span>`
+                    : '';
+                const swatch = this.renderOptionSwatch(option);
+                return [
+                    '<span class="mini-cart-item__option">',
+                    label,
+                    swatch,
+                    `<span class="mini-cart-item__option-value">${this.escapeHtml(option.value)}</span>`,
+                    '</span>',
+                ].join('');
+            }).join('<span class="mini-cart-item__option-separator">/</span>');
+
+            return `<div class="mini-cart-item__options">${optionsHtml}</div>`;
+        },
+
+        renderItem(item) {
+            const cartId = this.normalizeCount(item.cart_id ?? item.item_id);
+            const productId = this.normalizeCount(item.product_id);
+            const name = this.escapeHtml(item.name || '');
+            const url = this.escapeHtml(this.sanitizeUrl(item.url || '#'));
+            const image = this.sanitizeUrl(item.image || '');
+            const price = this.escapeHtml(item.price_formatted || '');
+            const quantity = Math.max(1, this.normalizeCount(item.quantity || 1));
+            const optionsHtml = this.renderItemOptions(item);
+            const imageHtml = image !== ''
+                ? `<img src="${this.escapeHtml(image)}" alt="${name}" loading="lazy"/>`
+                : `<div class="mini-cart-item__placeholder"><span class="mini-cart-icon" aria-hidden="true">${this.getIcon('image')}</span></div>`;
+            const decreaseLabel = this.escapeHtml(this.getLabel('decreaseQty'));
+            const increaseLabel = this.escapeHtml(this.getLabel('increaseQty'));
+            const removeLabel = this.escapeHtml(this.getLabel('removeItem'));
+
+            return [
+                `<div class="mini-cart-item" data-item-id="${cartId}" data-product-id="${productId}">`,
+                `<div class="mini-cart-item__image">${imageHtml}</div>`,
+                '<div class="mini-cart-item__details">',
+                `<a href="${url}" class="mini-cart-item__name">${name}</a>`,
+                optionsHtml,
+                `<div class="mini-cart-item__price">${price}</div>`,
+                '<div class="mini-cart-item__qty">',
+                `<button type="button" class="mini-cart-item__qty-btn" data-action="decrease-qty" data-item-id="${cartId}" aria-label="${decreaseLabel}">`,
+                `<span class="mini-cart-icon" aria-hidden="true">${this.getIcon('minus')}</span>`,
+                '</button>',
+                `<span class="mini-cart-item__qty-value">${quantity}</span>`,
+                `<button type="button" class="mini-cart-item__qty-btn" data-action="increase-qty" data-item-id="${cartId}" aria-label="${increaseLabel}">`,
+                `<span class="mini-cart-icon" aria-hidden="true">${this.getIcon('plus')}</span>`,
+                '</button>',
+                '</div>',
+                '</div>',
+                `<button type="button" class="mini-cart-item__remove" data-action="remove-item" data-item-id="${cartId}" aria-label="${removeLabel}">`,
+                `<span class="mini-cart-icon" aria-hidden="true">${this.getIcon('trash')}</span>`,
+                '</button>',
+                '</div>',
+            ].join('');
+        },
+
+        showErrorState(message) {
+            if (!this.itemsContainer) {
+                return;
+            }
+
+            this.itemsContainer.innerHTML = this.renderErrorState(message);
+            this.ensureLoadingElement();
+            this.itemsContainer.dataset.needsRefresh = 'true';
+            this.hasLoadedItems = false;
+            if (this.footerElement) {
+                this.footerElement.style.display = 'none';
+            }
+        },
+
         /**
          * 绑定事件
          */
@@ -157,6 +478,15 @@
                     this.removeItem(itemId);
                     return;
                 }
+
+                if (target.closest('[data-action="retry-mini-cart"]')) {
+                    e.preventDefault();
+                    if (this.itemsContainer) {
+                        this.itemsContainer.dataset.needsRefresh = 'true';
+                    }
+                    this.loadItems();
+                    return;
+                }
             });
             
             // ESC 键关闭
@@ -181,17 +511,26 @@
                 // 自动打开 MiniCart
                 if (this.config.autoOpen) {
                     this.open();
-                } else {
-                    // 不自动打开，但刷新数据
-                    this.loadItems();
                 }
             });
             
             // 监听购物车更新事件
             document.addEventListener('weshop:cart:updated', (e) => {
                 const detail = e.detail || {};
-                if (detail.cart_count !== undefined) {
-                    this.updateCount(detail.cart_count);
+                const rawCount = detail.cart_count ?? detail.count;
+                const hasCount = rawCount !== undefined;
+                const count = hasCount ? this.normalizeCount(rawCount) : null;
+
+                if (hasCount) {
+                    this.updateCount(count);
+                    if (this.itemsContainer && count > 0 && !this.hasRenderedItems()) {
+                        this.itemsContainer.dataset.needsRefresh = 'true';
+                        if (this.isOpen) {
+                            this.loadItems();
+                        }
+                    } else if (count === 0) {
+                        this.updateEmptyState(0);
+                    }
                 }
                 if (detail.subtotal !== undefined) {
                     this.updateSubtotal(detail.subtotal, detail.subtotal_formatted);
@@ -207,7 +546,9 @@
                 if (detail.cart_count !== undefined) {
                     this.updateCount(detail.cart_count);
                 }
-                this.loadItems();
+                if (this.isOpen && detail.source !== 'mini-cart') {
+                    this.loadItems();
+                }
             });
         },
         
@@ -306,6 +647,10 @@
             if (this.isLoading || !this.itemsContainer) return;
             
             this.isLoading = true;
+            const existingError = this.itemsContainer.querySelector('.mini-cart-error');
+            if (existingError) {
+                existingError.remove();
+            }
             this.setLoading(true);
             
             try {
@@ -313,11 +658,24 @@
                 const raw = await CartApi.miniItems({});
                 const response = this.normalizeApiPayload(raw);
                 if (response.success) {
-                    // 更新商品列表 HTML
-                    if (response.html) {
-                        this.itemsContainer.innerHTML = response.html;
+                    const items = Array.isArray(response.items) ? response.items : null;
+                    const html = typeof response.html === 'string' ? response.html.trim() : '';
+                    const totalCount = this.normalizeCount(response.totals?.count ?? response.cart_count ?? response.count ?? (items ? items.length : 0));
+
+                    if (items !== null && items.length > 0) {
+                        this.itemsContainer.innerHTML = this.renderItems(items);
+                    } else if (html !== '') {
+                        this.itemsContainer.innerHTML = html;
+                    } else if (totalCount === 0) {
+                        this.itemsContainer.innerHTML = this.renderItems([]);
+                    } else {
+                        this.showErrorState(response.message || this.getLabel('loadFailed'));
+                        return;
                     }
+                    this.ensureLoadingElement();
+                    this.ensureEmptyStateElement();
                     this.itemsContainer.dataset.needsRefresh = 'false';
+                    this.hasLoadedItems = true;
                     
                     // 更新小计
                     if (response.totals) {
@@ -338,9 +696,11 @@
                     }));
                 } else {
                     console.error('[MiniCart] Load failed:', response.message);
+                    this.showErrorState(response.message || this.getLabel('loadFailed'));
                 }
             } catch (error) {
                 console.error('[MiniCart] Load error:', error);
+                this.showErrorState(error.message || this.getLabel('loadFailed'));
             } finally {
                 this.isLoading = false;
                 this.setLoading(false);
@@ -396,6 +756,7 @@
                             cart_count: response.totals?.count,
                             subtotal: response.totals?.subtotal,
                             subtotal_formatted: response.totals?.subtotal_formatted,
+                            source: 'mini-cart',
                         }
                     }));
                 } else {
@@ -450,6 +811,7 @@
                             item_id: itemId,
                             cart_count: response.totals?.count,
                             subtotal: response.totals?.subtotal,
+                            source: 'mini-cart',
                         }
                     }));
                 } else {
@@ -469,14 +831,17 @@
          * @param {number} count 商品数量
          */
         updateCount(count) {
+            const normalized = this.normalizeCount(count);
             // 更新所有数量显示元素
             this.cartCountElements = document.querySelectorAll('[data-cart-count]');
             this.cartCountElements.forEach(el => {
-                el.textContent = count > 99 ? '99+' : count;
-                el.style.display = count > 0 ? '' : 'none';
+                el.textContent = normalized > 99 ? '99+' : normalized;
+
+                const isHeaderBadge = el.classList.contains('cart-count') || !!el.closest('.header-cart-trigger');
+                el.style.display = isHeaderBadge && normalized === 0 ? 'none' : '';
                 
                 // 添加动画效果
-                if (count > 0) {
+                if (normalized > 0) {
                     el.classList.add('has-items');
                 } else {
                     el.classList.remove('has-items');
@@ -486,7 +851,8 @@
             // 更新 Header 购物车标题中的数量
             const countBadge = document.querySelector('[data-cart-count-badge] [data-cart-count]');
             if (countBadge) {
-                countBadge.textContent = count;
+                countBadge.textContent = normalized;
+                countBadge.style.display = '';
             }
         },
         
@@ -507,19 +873,24 @@
          * @param {number} count 商品数量
          */
         updateEmptyState(count) {
-            this.emptyElement = document.getElementById('mini-cart-empty');
             this.footerElement = document.querySelector('[data-cart-footer]');
-            
-            if (count === 0) {
-                // 显示空状态
-                if (this.emptyElement) {
-                    this.emptyElement.style.display = '';
+
+            const normalized = this.normalizeCount(count);
+
+            if (normalized === 0) {
+                const emptyElement = this.ensureEmptyStateElement();
+                if (emptyElement) {
+                    emptyElement.style.display = '';
                 }
                 if (this.footerElement) {
                     this.footerElement.style.display = 'none';
                 }
+            } else if (!this.hasRenderedItems()) {
+                if (this.footerElement) {
+                    this.footerElement.style.display = 'none';
+                }
             } else {
-                // 隐藏空状态
+                this.emptyElement = document.getElementById('mini-cart-empty');
                 if (this.emptyElement) {
                     this.emptyElement.style.display = 'none';
                 }
@@ -538,7 +909,11 @@
                 return true;
             }
 
-            return !this.itemsContainer.querySelector('.mini-cart-item, #mini-cart-empty');
+            if (!this.hasLoadedItems) {
+                return true;
+            }
+
+            return !this.hasRenderedItems() && !this.itemsContainer.querySelector('#mini-cart-empty');
         },
         
         /**
@@ -546,8 +921,13 @@
          * @param {boolean} loading 是否加载中
          */
         setLoading(loading) {
-            if (this.loadingElement) {
-                this.loadingElement.style.display = loading ? 'flex' : 'none';
+            const loadingElement = this.ensureLoadingElement();
+            if (loadingElement) {
+                loadingElement.style.display = loading ? 'flex' : 'none';
+            }
+            this.emptyElement = document.getElementById('mini-cart-empty');
+            if (this.emptyElement && loading) {
+                this.emptyElement.style.display = 'none';
             }
             if (this.itemsContainer) {
                 this.itemsContainer.dataset.loading = loading ? 'true' : 'false';

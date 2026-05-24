@@ -42,6 +42,9 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
         if (!isset($config['prefer_direct_connect']) && \defined('WLS_MODE') && WLS_MODE) {
             $config['prefer_direct_connect'] = true;
         }
+        if (!isset($config['fail_fast_on_unhealthy']) && \defined('WLS_MODE') && WLS_MODE) {
+            $config['fail_fast_on_unhealthy'] = true;
+        }
 
         if ($this->attemptDirectBootstrap($config, $manager, $sharedMemoryService, $cacheMemoryService, $stateClient)) {
             return;

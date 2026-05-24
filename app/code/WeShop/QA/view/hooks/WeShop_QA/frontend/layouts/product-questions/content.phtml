@@ -25,6 +25,20 @@ $productId = (int) ($product['product_id'] ?? $this->getData('product_id') ?? 0)
         <div class="mt-5 space-y-3">
             <?php foreach (array_slice($qaList, 0, 3) as $qaItem): ?>
                 <article class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
+                    <div class="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                        <?php if (!empty($qaItem['is_recommended']) || (string) ($qaItem['source_type'] ?? '') === 'system'): ?>
+                            <span class="rounded-full bg-primary/10 px-3 py-1 text-primary"><?= __('系统推荐') ?></span>
+                        <?php elseif ((string) ($qaItem['source_type'] ?? '') === 'order'): ?>
+                            <span class="rounded-full bg-primary/10 px-3 py-1 text-primary"><?= __('已下单用户') ?></span>
+                        <?php elseif ((string) ($qaItem['source_type'] ?? '') === 'anonymous'): ?>
+                            <span class="rounded-full bg-primary/10 px-3 py-1 text-primary"><?= __('匿名用户') ?></span>
+                        <?php else: ?>
+                            <span class="rounded-full bg-primary/10 px-3 py-1 text-primary"><?= __('客户问答') ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($qaItem['display_name'])): ?>
+                            <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) $qaItem['display_name'], ENT_QUOTES) ?></span>
+                        <?php endif; ?>
+                    </div>
                     <p class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($qaItem['question'] ?? ''), ENT_QUOTES) ?></p>
                     <?php if (!empty($qaItem['answer'])): ?>
                         <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) $qaItem['answer'], ENT_QUOTES) ?></p>

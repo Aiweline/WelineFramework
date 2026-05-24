@@ -77,10 +77,95 @@ class OrderDetailPageDataService
                 'item_id' => (int) ($item['item_id'] ?? 0),
                 'product_name' => (string) ($item['product_name'] ?? $item['name'] ?? ''),
                 'product_sku' => (string) ($item['product_sku'] ?? $item['sku'] ?? ''),
+                'options' => self::normalizeOptions($item['options'] ?? $item['product_options'] ?? null),
                 'quantity' => (int) ($item['quantity'] ?? $item['qty'] ?? 0),
                 'price' => (float) ($item['price'] ?? 0),
                 'total' => (float) ($item['total'] ?? 0),
             ];
         }, $items);
+    }
+
+    /**
+     * @return array<int, array<string, string>>
+     */
+    private static function normalizeOptions(mixed $rawOptions): array
+    {
+        if (\is_string($rawOptions)) {
+            $rawOptions = \trim($rawOptions);
+            if ($rawOptions === '') {
+                return [];
+            }
+
+            $decoded = \json_decode($rawOptions, true);
+            if (\is_array($decoded)) {
+                return self::normalizeOptions($decoded);
+            }
+
+            return [[
+                'label' => (string) __('规格'),
+                'value' => $rawOptions,
+            ]];
+        }
+
+        if (!\is_array($rawOptions) || $rawOptions === []) {
+            return [];
+        }
+
+        $isAssoc = \array_keys($rawOptions) !== \range(0, \count($rawOptions) - 1);
+        if ($isAssoc) {
+            $options = [];
+            foreach ($rawOptions as $label => $value) {
+                if (\is_scalar($value) && \trim((string) $value) !== '') {
+                    $options[] = [
+                        'label' => \trim((string) $label) !== '' ? \trim((string) $label) : (string) __('规格'),
+                        'value' => \trim((string) $value),
+                    ];
+                }
+            }
+
+            return $options;
+        }
+
+        $options = [];
+        foreach ($rawOptions as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+
+            $value = \trim((string) ($option['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized = [
+                'label' => \trim((string) ($option['label'] ?? '')) !== ''
+                    ? \trim((string) ($option['label'] ?? ''))
+                    : (string) __('规格'),
+                'value' => $value,
+            ];
+
+            foreach (['attribute_id', 'option_id'] as $idKey) {
+                $id = (int) ($option[$idKey] ?? 0);
+                if ($id > 0) {
+                    $normalized[$idKey] = $id;
+                }
+            }
+
+            $code = \trim((string) ($option['code'] ?? ''));
+            if ($code !== '') {
+                $normalized['code'] = $code;
+            }
+
+            $swatchType = \trim((string) ($option['swatch_type'] ?? ''));
+            $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
+            if ($swatchType !== '' && $swatchValue !== '') {
+                $normalized['swatch_type'] = $swatchType;
+                $normalized['swatch_value'] = $swatchValue;
+            }
+
+            $options[] = $normalized;
+        }
+
+        return $options;
     }
 }

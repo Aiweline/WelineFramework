@@ -44,6 +44,50 @@ final class BuildPlanContractValidatorTest extends TestCase
         self::assertContains('Field cannot be both frozen and mutable: pages', $result['errors']);
     }
 
+    public function testRejectsTaskMissingStrongBuildContractFields(): void
+    {
+        $contract = $this->validContract();
+        unset(
+            $contract['tasks'][0]['runtime_context'],
+            $contract['tasks'][0]['output_contract'],
+            $contract['tasks'][0]['acceptance']
+        );
+
+        $result = (new BuildPlanContractValidator())->validate($contract);
+
+        self::assertFalse($result['valid']);
+        self::assertContains('Task task.hero is missing required field: runtime_context', $result['errors']);
+        self::assertContains('Task task.hero is missing required field: output_contract', $result['errors']);
+        self::assertContains('Task task.hero is missing required field: acceptance', $result['errors']);
+    }
+
+    public function testRejectsBroadRuntimeContextSources(): void
+    {
+        $contract = $this->validContract();
+        $contract['tasks'][0]['runtime_context']['debug'] = [
+            'execution_blueprint' => ['pages' => []],
+            'plan_workbench' => ['draft' => []],
+        ];
+
+        $result = (new BuildPlanContractValidator())->validate($contract);
+
+        self::assertFalse($result['valid']);
+        self::assertTrue($this->hasErrorContaining($result['errors'], 'runtime_context contains forbidden broad context: runtime_context.debug.execution_blueprint'));
+        self::assertTrue($this->hasErrorContaining($result['errors'], 'runtime_context contains forbidden broad context: runtime_context.debug.plan_workbench'));
+    }
+
+    public function testRejectsMissingTaskLanguageRuntimeContract(): void
+    {
+        $contract = $this->validContract();
+        unset($contract['tasks'][0]['runtime_context']['content_locale'], $contract['tasks'][0]['runtime_context']['language_contract']);
+
+        $result = (new BuildPlanContractValidator())->validate($contract);
+
+        self::assertFalse($result['valid']);
+        self::assertContains('Task task.hero runtime_context.content_locale is required', $result['errors']);
+        self::assertContains('Task task.hero runtime_context.language_contract is required', $result['errors']);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -142,6 +186,11 @@ final class BuildPlanContractValidatorTest extends TestCase
                     'input_scope' => ['page_id' => 'home', 'block_id' => 'home.hero'],
                     'runtime_context' => [
                         'target' => ['page_id' => 'home', 'block_id' => 'home.hero'],
+                        'content_locale' => 'en_US',
+                        'language_contract' => [
+                            'source_of_truth_locale' => 'en_US',
+                            'visible_copy_rule' => 'All visitor-facing copy uses en_US.',
+                        ],
                         'block_contract' => ['content_keys' => ['home.hero.title', 'home.hero.cta']],
                     ],
                     'output_contract' => [

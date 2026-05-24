@@ -268,6 +268,13 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $eventUser = $event->getData('user');
             $eventRole = $event->getData('role');
             $eventAccessSources = $event->getData('access_sources');
+            $warmupUserId = 0;
+            if (\class_exists(\Weline\Backend\Service\BackendWarmupContext::class)
+                && \Weline\Backend\Service\BackendWarmupContext::isInternalWarmupRequest($request)
+                && \Weline\Backend\Service\BackendWarmupContext::isActive()
+            ) {
+                $warmupUserId = \Weline\Backend\Service\BackendWarmupContext::currentUserId();
+            }
 
             $t0 = microtime(true);
             if ($eventUser) {
@@ -277,6 +284,28 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     $role = call_user_func([$user, 'getRoleModel']);
                 }
                 $access_sources = $eventAccessSources ?? [];
+            } elseif ($warmupUserId > 0) {
+                $tAcl = microtime(true);
+                try {
+                    $sessionAclContext = BackendUser::getAclContext($warmupUserId);
+                } catch (\Throwable) {
+                    $sessionAclContext = null;
+                }
+                if ($sessionAclContext !== null) {
+                    $roleId = (int)($sessionAclContext['role_id'] ?? 0);
+                } else {
+                    $roleId = 0;
+                    $sessionAclContext = ['user_id' => $warmupUserId, 'role_id' => 0, 'is_enabled' => 1, '_user_not_found' => true];
+                }
+                w_auth_log('acl_backend_warmup_context', '后台内部预热上下文作为 ACL 用户来源', [
+                    'uri' => $uri,
+                    'userId' => $warmupUserId,
+                    'roleId' => $roleId,
+                    '_user_not_found' => (bool)($sessionAclContext['_user_not_found'] ?? false),
+                ]);
+                if (RequestLifecycleTrace::isEnabled()) {
+                    RequestLifecycleTrace::recordSpan('acl::RouteBefore::warmupAclContext', (microtime(true) - $tAcl) * 1000, 'observer', $parent);
+                }
             } else {
                 // Session 分支：精确定位耗时。读 var/session 小文件本身不会几百毫秒；若仍慢，多为：
                 // - WLS 下 getBackendSession() 首次创建 WlsSharedStorage 并 sessionClient->connect() 建连 Session Server（TCP）

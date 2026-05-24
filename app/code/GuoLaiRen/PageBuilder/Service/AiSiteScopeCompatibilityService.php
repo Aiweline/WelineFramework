@@ -1512,6 +1512,23 @@ class AiSiteScopeCompatibilityService
                 'brand_summary' => 'A curated destination with clear information, trusted support, and simple next steps.',
                 'download_now' => 'Download Now',
             ],
+            'pt' => [
+                'home' => 'Início',
+                'about' => 'Sobre',
+                'contact' => 'Contato',
+                'blog' => 'Blog',
+                'privacy_policy' => 'Política de Privacidade',
+                'terms_of_service' => 'Termos de Serviço',
+                'refund_policy' => 'Política de Reembolso',
+                'shipping_policy' => 'Política de Envio',
+                'cookie_policy' => 'Política de Cookies',
+                'policy_info' => 'Informações legais',
+                'featured_pages' => 'Páginas principais',
+                'all_pages' => 'Todas as páginas',
+                'all_rights_reserved' => 'Todos os direitos reservados.',
+                'brand_summary' => 'Destino confiável para baixar APK de jogos de cartas, consultar regras e obter suporte.',
+                'download_now' => 'Baixar Agora',
+            ],
             'th' => [
                 'home' => 'หน้าแรก',
                 'about' => 'เกี่ยวกับเรา',
@@ -1688,6 +1705,10 @@ class AiSiteScopeCompatibilityService
             return $labelMap[$normalized];
         }
 
+        if (\trim($href) === '') {
+            return '';
+        }
+
         $path = \strtolower(\trim((string)(\parse_url($href, PHP_URL_PATH) ?: $href)));
         $path = '/' . \trim($path, '/');
         return match ($path) {
@@ -1752,6 +1773,9 @@ class AiSiteScopeCompatibilityService
         }
         if ($this->isRussianLocale($locale)) {
             return 'ru';
+        }
+        if ($this->isPortugueseLocale($locale)) {
+            return 'pt';
         }
 
         return 'en';
@@ -1821,6 +1845,11 @@ class AiSiteScopeCompatibilityService
     private function isHindiLocale(string $locale): bool
     {
         return \preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', \trim($locale)) === 1;
+    }
+
+    private function isPortugueseLocale(string $locale): bool
+    {
+        return \preg_match('/^pt(?:[_-]|$)/i', \trim($locale)) === 1;
     }
 
     private function isNonCjkLocale(string $locale): bool

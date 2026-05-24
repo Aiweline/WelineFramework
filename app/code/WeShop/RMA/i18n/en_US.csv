@@ -1,4 +1,4 @@
-﻿"售后单 ID 不能为空","RMA ID is required"
+﻿"售后单 ID 不能为空","售后单 ID 不能为空"
 RMA已批准,"RMA approved"
 "售后单 ID 不能为空。","RMA ID is required."
 售后单已拒绝。,"RMA has been rejected."
@@ -24,7 +24,7 @@ RMA已批准,"RMA approved"
 商品与描述不符,"Item not as described"
 改变主意,"Changed my mind"
 其他,Other
-订单没有可售后商品,订单没有可售后商品
+订单没有可售后商品,"Order has no eligible after-sales items"
 订单已取消或已退款,"Order has been cancelled or refunded"
 订单尚未完成支付,"Order payment is not complete"
 请填写退换货原因。,"Return reason is required."
@@ -39,7 +39,7 @@ x%{1},x%{1}
 已选择售后订单,"Selected return order"
 已切换到当前页售后区，可直接提交或查看进度。,"Switched to the after-sales section on this page. You can submit a request or review progress here."
 正在提交售后申请...,"Submitting RMA request..."
-售后申请已提交。,售后申请已提交。
+售后申请已提交。,"RMA request submitted."
 暂时无法提交售后申请。,"Unable to submit your RMA request right now."
 请选择可售后订单,"Select an eligible order"
 已选订单商品,"Selected order items"

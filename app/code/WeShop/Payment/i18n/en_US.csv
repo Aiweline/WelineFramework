@@ -69,10 +69,10 @@ PayPal,PayPal
 "Payment method %{1} is missing required configuration: %{2}","Payment method %{1} is missing required configuration: %{2}"
 "Payment provider is not configured for %{1}.","Payment provider is not configured for %{1}."
 "Payment provider is invalid for %{1}.","Payment provider is invalid for %{1}."
-"2. 支付方式","2. 支付方式"
-当前结账上下文没有可用支付方式。,当前结账上下文没有可用支付方式。
-支付流程：%{1},支付流程：%{1}
-确认订单后完成该支付流程。,确认订单后完成该支付流程。
+"2. 支付方式","2. Payment method"
+当前结账上下文没有可用支付方式。,"No payment methods are available for the current checkout context."
+支付流程：%{1},"Payment flow: %{1}"
+确认订单后完成该支付流程。,"Complete this payment flow after confirming the order."
 支付管理,"Payment Management"
 支付方式,"Payment Methods"
 "Total Methods","Total Methods"

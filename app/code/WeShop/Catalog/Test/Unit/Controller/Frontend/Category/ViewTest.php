@@ -61,6 +61,17 @@ class ViewTest extends TestCase
         $this->assertSame(['red', 'blue'], $filters['color']);
     }
 
+    public function testFullHtmlLocalCacheCanHoldReadyGateAndTierTwoWarmupPaths(): void
+    {
+        $reflection = new \ReflectionClass(View::class);
+
+        $maxItems = $reflection->getReflectionConstant('VIEW_PAYLOAD_FULL_HTML_MAX_ITEMS')?->getValue();
+        $retainItems = $reflection->getReflectionConstant('VIEW_PAYLOAD_FULL_HTML_RETAIN_ITEMS')?->getValue();
+
+        $this->assertGreaterThanOrEqual(64, $maxItems);
+        $this->assertGreaterThanOrEqual(32, $retainItems);
+    }
+
     private function newControllerWithoutConstructor(): View
     {
         $reflection = new \ReflectionClass(View::class);

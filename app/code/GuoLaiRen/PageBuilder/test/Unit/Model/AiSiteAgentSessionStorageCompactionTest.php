@@ -226,6 +226,9 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
                 ],
                 AiSiteAgentSession::STAGE_VISUAL_EDIT => [
                     'build_blueprint' => ['storage' => 'session_artifact_v1', 'hash' => 'build-blueprint-hash'],
+                    'build_workbench' => ['storage' => 'session_artifact_v1', 'hash' => 'build-workbench-hash'],
+                    'build_contracts' => ['storage' => 'session_artifact_v1', 'hash' => 'build-contracts-hash'],
+                    'render_data_contract' => ['storage' => 'session_artifact_v1', 'hash' => 'render-contract-hash'],
                 ],
             ],
             'plan_json' => ['pages' => ['home_page' => ['heavy' => \str_repeat('a', 1024)]]],
@@ -234,6 +237,9 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
             'plan_projection' => ['pages' => ['home_page' => ['blocks' => ['hero']]]],
             'content_manifest' => ['pages' => ['home_page' => ['copy' => \str_repeat('d', 1024)]]],
             'build_blueprint' => ['tasks' => [['task_key' => 'page:home_page:hero', 'heavy' => \str_repeat('e', 1024)]]],
+            'build_workbench' => ['heavy' => \str_repeat('f', 1024)],
+            'build_contracts' => ['heavy' => \str_repeat('g', 1024)],
+            'render_data_contract' => ['heavy' => \str_repeat('h', 1024)],
         ]);
 
         $stored = $session->getScopeArray();
@@ -244,6 +250,35 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertSame([], $stored['plan_projection'] ?? null);
         self::assertSame([], $stored['content_manifest'] ?? null);
         self::assertSame([], $stored['build_blueprint'] ?? null);
+        self::assertSame([], $stored['build_workbench'] ?? null);
+        self::assertSame([], $stored['build_contracts'] ?? null);
+        self::assertSame([], $stored['render_data_contract'] ?? null);
         self::assertSame('build-plan-hash', $stored['_artifact_refs'][AiSiteAgentSession::STAGE_PLAN]['build_plan_v2']['hash'] ?? null);
+        self::assertSame('render-contract-hash', $stored['_artifact_refs'][AiSiteAgentSession::STAGE_VISUAL_EDIT]['render_data_contract']['hash'] ?? null);
+    }
+
+    public function testAssetImageGenerationFailuresAreCompactedBeforeStorage(): void
+    {
+        $session = new AiSiteAgentSession();
+        $failures = [];
+        for ($i = 0; $i < 85; $i++) {
+            $failures[] = [
+                'slotId' => 'slot-' . $i,
+                'message' => \str_repeat((string)($i % 10), 900),
+                'updated_at' => '2026-05-24 08:00:00',
+            ];
+        }
+
+        $session->setScopeArray([
+            'asset_image_generation_failures' => $failures,
+        ]);
+
+        $stored = $session->getScopeArray();
+        $storedFailures = $stored['asset_image_generation_failures'] ?? [];
+
+        self::assertCount(80, $storedFailures);
+        self::assertSame('slot-5', $storedFailures[0]['slot_id'] ?? null);
+        self::assertArrayNotHasKey('slotId', $storedFailures[0]);
+        self::assertLessThanOrEqual(803, \mb_strlen((string)($storedFailures[0]['message'] ?? '')));
     }
 }

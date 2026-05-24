@@ -38,10 +38,6 @@ class QaQueryProvider implements QueryProviderInterface
     private function add(array $params): array
     {
         $customerId = $this->getCustomerId();
-        if ($customerId <= 0) {
-            return $this->loginRequired((string)__('Please log in to ask a question.'));
-        }
-
         $productId = (int)($params['product_id'] ?? 0);
         $question = trim((string)($params['question'] ?? ''));
         if ($productId <= 0 || $question === '') {
@@ -55,11 +51,13 @@ class QaQueryProvider implements QueryProviderInterface
             'product_id' => $productId,
             'customer_id' => $customerId,
             'question' => $question,
+            'mentioned_customer_ids' => $params['mentioned_customer_ids'] ?? [],
+            'display_name' => trim((string)($params['display_name'] ?? '')),
         ]);
 
         return [
             'success' => true,
-            'message' => (string)__('Your question has been submitted and is pending review.'),
+            'message' => (string)__('您的问题已发布。'),
         ];
     }
 
@@ -123,6 +121,7 @@ class QaQueryProvider implements QueryProviderInterface
                     'params' => [
                         'product_id' => ['type' => 'int', 'required' => true, 'min' => 1],
                         'question' => ['type' => 'string', 'required' => true, 'max_length' => 1000],
+                        'mentioned_customer_ids' => ['type' => 'array', 'required' => false],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Submit product question',

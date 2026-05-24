@@ -4,6 +4,7 @@ $notification = $this->getData('notification') ?? [];
 $notificationIndexUrl = (string) ($this->getData('notificationIndexUrl') ?? $this->getBackendUrl('*/backend/notification'));
 $notificationMarkReadUrl = (string) ($this->getData('notificationMarkReadUrl') ?? $this->getBackendUrl('*/backend/notification/mark-read'));
 $notificationId = (int) ($notification['notification_id'] ?? 0);
+$targetUrl = trim((string) ($notification['target_url'] ?? ''));
 ?>
 
 <div class="container-fluid py-3">
@@ -39,6 +40,13 @@ $notificationId = (int) ($notification['notification_id'] ?? 0);
 
                         <dt class="col-sm-5"><?= __('Created At') ?></dt>
                         <dd class="col-sm-7"><?= htmlspecialchars((string) ($notification['created_at'] ?? ''), ENT_QUOTES) ?></dd>
+
+                        <?php if ($targetUrl !== ''): ?>
+                            <dt class="col-sm-5"><?= __('目标链接') ?></dt>
+                            <dd class="col-sm-7">
+                                <a href="<?= htmlspecialchars($targetUrl, ENT_QUOTES) ?>" target="_blank" rel="noopener"><?= __('打开') ?></a>
+                            </dd>
+                        <?php endif; ?>
                     </dl>
                 </div>
             </div>

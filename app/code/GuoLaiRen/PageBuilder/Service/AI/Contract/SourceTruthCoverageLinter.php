@@ -42,7 +42,7 @@ final class SourceTruthCoverageLinter
 
         foreach ($missedFacts as $factId => $factText) {
             $findings[] = [
-                'severity' => 'warning',
+                'severity' => 'error',
                 'category' => 'content_quality',
                 'contract_type' => 'source_truth',
                 'message' => "Missing must-include fact [{$factId}]: {$factText}",
@@ -121,7 +121,7 @@ final class SourceTruthCoverageLinter
         $findings = [];
         foreach ($missedFacts as $factId => $factText) {
             $findings[] = [
-                'severity' => 'warning',
+                'severity' => 'error',
                 'category' => 'content_quality',
                 'contract_type' => 'source_truth',
                 'message' => "Missing must-include fact [{$factId}]: {$factText}",

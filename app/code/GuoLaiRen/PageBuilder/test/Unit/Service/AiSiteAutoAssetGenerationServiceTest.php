@@ -71,6 +71,58 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
+    public function testGenerateSlotAssetUsesPreverifiedAssetWithoutCallingImageProvider(): void
+    {
+        $publicId = 'asset-preverified-' . \bin2hex(\random_bytes(4));
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
+
+        $slotId = 'home:hero';
+        $finalUrl = '/pub/media/page-build/ai-generated/' . $publicId . '/home-hero.png';
+        $generatorCalled = false;
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static function () use (&$generatorCalled): array {
+                $generatorCalled = true;
+                throw new \RuntimeException('Preverified asset should bypass image generation.');
+            }
+        );
+
+        $result = $service->generateSlotAsset($session, 2, [
+            'site_title' => 'Preverified Asset Test',
+            'verified_assets' => [
+                $slotId => $finalUrl,
+            ],
+            'asset_manifest' => [
+                'slots' => [
+                    $slotId => [
+                        'slot_id' => $slotId,
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home',
+                        'label' => 'Hero visual',
+                        'brief' => 'A preverified homepage hero image.',
+                        'required' => 1,
+                        'desired_image' => 1,
+                        'status' => 'pending',
+                        'source' => 'build_plan_v2',
+                    ],
+                ],
+            ],
+        ], $slotId);
+
+        $resultScope = $result['scope'];
+        $slot = $resultScope['asset_manifest']['slots'][$slotId] ?? [];
+
+        self::assertFalse($generatorCalled);
+        self::assertFalse($result['generated']);
+        self::assertSame($slotId, $result['slot_id']);
+        self::assertSame($finalUrl, $result['final_url']);
+        self::assertSame($finalUrl, (string)($slot['final_url'] ?? ''));
+        self::assertSame($finalUrl, (string)($resultScope['verified_assets'][$slotId] ?? ''));
+        self::assertSame([], $resultScope['asset_image_generation_failures'] ?? []);
+    }
+
     public function testPrepareBuildAssetsGeneratesLogoAndTitleIconBeforeHeroWhenLimited(): void
     {
         $publicId = 'asset-identity-first-' . \bin2hex(\random_bytes(4));
@@ -732,6 +784,57 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         self::assertGreaterThanOrEqual(1, \count($failTrail));
         self::assertSame('home:hero', (string)($failTrail[\count($failTrail) - 1]['slot_id'] ?? ''));
         self::assertStringContainsString('No text2image model configured.', (string)($failTrail[\count($failTrail) - 1]['message'] ?? ''));
+    }
+
+    public function testPrepareBuildAssetsCompactsHistoricalFailureTrail(): void
+    {
+        $publicId = 'asset-failure-compact-' . \bin2hex(\random_bytes(4));
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
+
+        $failureTrail = [];
+        for ($i = 0; $i < 100; $i++) {
+            $failureTrail[] = [
+                'slotId' => 'old-slot-' . $i,
+                'message' => \str_repeat((string)($i % 10), 900),
+                'updated_at' => '2026-05-24 08:00:00',
+            ];
+        }
+
+        $scope = [
+            'site_title' => 'Asset Failure Compaction Test',
+            'asset_image_generation_failures' => $failureTrail,
+            'asset_manifest' => [
+                'slots' => [
+                    'home:hero' => [
+                        'slot_id' => 'home:hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home',
+                        'label' => 'Hero visual',
+                        'brief' => 'A premium homepage hero image for the generated site.',
+                    ],
+                ],
+            ],
+        ];
+
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static function (): array {
+                throw new \RuntimeException(\str_repeat('provider failure ', 90));
+            }
+        );
+
+        $result = $service->prepareBuildAssets($session, 2, $scope, 1);
+        $failTrail = \is_array($result['scope']['asset_image_generation_failures'] ?? null)
+            ? $result['scope']['asset_image_generation_failures']
+            : [];
+
+        self::assertCount(80, $failTrail);
+        self::assertSame('old-slot-21', (string)($failTrail[0]['slot_id'] ?? ''));
+        self::assertArrayNotHasKey('slotId', $failTrail[0]);
+        self::assertContains((string)($failTrail[79]['slot_id'] ?? ''), \array_column($result['failed_slots'], 'slot_id'));
+        self::assertLessThanOrEqual(803, \mb_strlen((string)($failTrail[79]['message'] ?? '')));
     }
 
     public function testPrepareBuildAssetsClearsHistoricalFailureWhenSlotGeneratesSuccessfully(): void

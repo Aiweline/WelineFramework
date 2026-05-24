@@ -234,7 +234,9 @@ class MasterProcess
      */
     public function run(): void
     {
+        $this->traceStartupPhase('master-run:enter');
         (new LongRunningPhpRuntime())->apply();
+        $this->traceStartupPhase('master-runtime:applied');
 
         // Master 不经 WlsRuntime::bootstrap()，须显式进入 WLS 模式，否则 Runtime::isWls() 为 false，
         // SchedulerWaitObserver 不注册 yield 定时器，runLoop 内延迟启动 Fiber 会永久挂起、子进程无法拉起。
@@ -244,6 +246,7 @@ class MasterProcess
         Runtime::resetModeCache();
 
         $this->applyProcessTitle();
+        $this->traceStartupPhase('master-process-title:after');
 
         // 当前 Master 进程 PID；finally 中 finalizeInstanceRuntimeAfterMasterExit() 需要此值，
         // 若 run() 早期 throw，getmypid() 仍能返回当前进程 PID（不会是 false，Master 必然在进程中运行）。
@@ -257,12 +260,16 @@ class MasterProcess
 
         try {
             // 注册 Master PID 到索引（用于快速检测 Master 是否退出）
+            $this->traceStartupPhase('master-register-pid:before');
             $this->registerMasterPid();
+            $this->traceStartupPhase('master-register-pid:after');
             $this->log(__('  已注册 Master PID'));
             $this->logger->flush(true);
 
             // 标记/清理孤儿 endpoint；运行态恢复必须回到 Master IPC。
+            $this->traceStartupPhase('master-stale-cleanup:before');
             $this->cleanupStaleInstanceFiles();
+            $this->traceStartupPhase('master-stale-cleanup:after');
             $this->logger->flush(true);
 
             // 初始化控制端口：
@@ -281,6 +288,11 @@ class MasterProcess
                 $scanMax = 1;
             }
 
+            $this->traceStartupPhase('master-control-port-select:before', [
+                'configured_control_port' => $configuredControlPort,
+                'auto_assign' => $autoAssign,
+                'scan_max' => $scanMax,
+            ]);
             if ($autoAssign) {
                 $projectOffset = self::getProjectPortOffset();
                 $preferredBase = 20000 + $this->mainPort + $projectOffset;
@@ -326,6 +338,11 @@ class MasterProcess
                 $chosenFallback = $autoAssign && $i > 0;
                 break;
             }
+            $this->traceStartupPhase('master-control-port-select:after', [
+                'control_port' => $this->controlPort,
+                'preferred_base' => $preferredBase,
+                'fallback' => $chosenFallback,
+            ]);
 
             if ($this->controlPort <= 0) {
                 throw new \RuntimeException(
@@ -345,37 +362,64 @@ class MasterProcess
 
             // ========== 启动前清理：检查端口占用并清理僵尸进程 ==========
             $this->log(__('检查控制端口是否被占用...'));
+            $this->traceStartupPhase('master-preboot-cleanup:before', [
+                'control_port' => $this->controlPort,
+            ]);
             if (!MasterCleanupBootstrap::preBoot($this->instanceName, $this->controlPort)) {
                 throw new \RuntimeException(
                     "无法清理控制端口 {$this->controlPort}，该端口被其他进程占用。" .
                     "请确保没有其他 WLS 实例运行，或手动杀死占用该端口的进程。"
                 );
             }
-            
+            $this->traceStartupPhase('master-preboot-cleanup:after');
+             
             // 清理陈旧的锁文件（Master 上次崩溃留下的）
+            $this->traceStartupPhase('master-lock-cleanup:before');
             MasterCleanupBootstrap::cleanupLockFiles($this->instanceName);
+            $this->traceStartupPhase('master-lock-cleanup:after');
 
             // 构建 ServiceContext
+            $this->traceStartupPhase('master-build-context:before');
             $this->context = $this->buildContext();
+            $this->traceStartupPhase('master-build-context:after', [
+                'epoch' => $this->context->epoch,
+                'control_port' => $this->context->controlPort,
+            ]);
 
             // 创建 Orchestrator
+            $this->traceStartupPhase('master-orchestrator-create:before');
             $this->orchestrator = new ServiceOrchestrator();
+            $this->traceStartupPhase('master-orchestrator-create:after');
+            $this->traceStartupPhase('master-load-providers:before');
             $this->orchestrator->loadProviders();
+            $this->traceStartupPhase('master-load-providers:after');
             $this->log(__('Master 启动阶段：Orchestrator providers 已加载'));
             $this->logger->flush(true);
 
             // 注册信号处理
+            $this->traceStartupPhase('master-signal-handlers:before');
             $this->registerSignalHandlers();
+            $this->traceStartupPhase('master-signal-handlers:after');
             $this->log(__('Master 启动阶段：信号处理器已注册'));
             $this->logger->flush(true);
 
             // 先拉起控制面并落盘 Master 信息，让后台启动确认不再被子服务启动阶段阻塞
+            $this->traceStartupPhase('master-control-plane:before');
             $this->orchestrator->bootstrapControlPlane($this->context);
             $this->context = $this->orchestrator->getContext() ?? $this->context;
             $this->controlPort = $this->context?->controlPort ?? $this->controlPort;
+            $this->traceStartupPhase('master-control-plane:after', [
+                'control_port' => $this->controlPort,
+            ]);
             $this->log(__('Master 启动阶段：控制面已启动'));
             $this->logger->flush(true);
+            $this->traceStartupPhase('master-save-info:before', [
+                'startup_phase' => 'bootstrapping',
+            ]);
             $this->saveMasterInfo('bootstrapping');
+            $this->traceStartupPhase('master-save-info:after', [
+                'startup_phase' => 'bootstrapping',
+            ]);
             $this->log(__('Master 启动阶段：bootstrapping 实例信息已写入'));
             $this->logger->flush(true);
 
@@ -387,6 +431,7 @@ class MasterProcess
             // 进入主循环；子服务在 Fiber 中拉起，等待期间仍可 poll 控制面 IPC（启动完成后再释放启动锁，方案 B）
             $this->log(__('Master 进入主循环，监控子进程...'));
             $this->logger->flush(true);
+            $this->traceStartupPhase('master-run-loop:before');
             $this->orchestrator->runLoopWithDeferredChildStartup($this->context, function (): void {
                 $this->releaseStartupLock();
             });
@@ -597,6 +642,24 @@ class MasterProcess
                 $this->config['dispatcher_memory_limit'],
                 ServiceContext::normalizeMemoryLimit($wls['worker_memory_limit'] ?? '256M')
             );
+        }
+        if (isset($this->config['event_loop'])) {
+            if (!isset($wls['loop']) || !\is_array($wls['loop'])) {
+                $wls['loop'] = [];
+            }
+            $wls['loop']['driver'] = (string)$this->config['event_loop'];
+        }
+        if (isset($this->config['loop']) && \is_array($this->config['loop'])) {
+            $wls['loop'] = \array_merge(\is_array($wls['loop'] ?? null) ? $wls['loop'] : [], $this->config['loop']);
+        }
+        if (isset($this->config['supervisor']) && \is_array($this->config['supervisor'])) {
+            $wls['supervisor'] = \array_merge(\is_array($wls['supervisor'] ?? null) ? $wls['supervisor'] : [], $this->config['supervisor']);
+        }
+        if (isset($this->config['runtime_strategy']) || isset($this->config['topology'])) {
+            $wls['runtime'] = \array_merge(\is_array($wls['runtime'] ?? null) ? $wls['runtime'] : [], [
+                'strategy' => (string)($this->config['runtime_strategy'] ?? ($wls['runtime']['strategy'] ?? 'auto')),
+                'topology' => (string)($this->config['topology'] ?? ($wls['runtime']['topology'] ?? 'auto')),
+            ]);
         }
 
         if ($wls !== []) {
@@ -955,6 +1018,41 @@ class MasterProcess
     }
 
     /**
+     * Lightweight startup trace used only when explicitly enabled.
+     *
+     * @param array<string, mixed> $context
+     */
+    private function traceStartupPhase(string $phase, array $context = []): void
+    {
+        if ((string)\getenv('WLS_STARTUP_TRACE') !== '1') {
+            return;
+        }
+        if (!\defined('BP')) {
+            return;
+        }
+
+        $context['memory_mb'] = (int)\round(\memory_get_usage(true) / 1048576);
+        $payload = [
+            'ts' => \date('Y-m-d H:i:s'),
+            'pid' => (int)\getmypid(),
+            'instance' => $this->instanceName,
+            'phase' => $phase,
+            'context' => $context,
+        ];
+
+        $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR;
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+
+        @\file_put_contents(
+            $dir . 'wls-startup-trace.log',
+            \json_encode($payload, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . \PHP_EOL,
+            \FILE_APPEND | \LOCK_EX
+        );
+    }
+
+    /**
      * Keep only launch metadata plus the Master IPC endpoint in the instance
      * file. Service topology is not persisted here.
      *
@@ -991,6 +1089,8 @@ class MasterProcess
             'control_token_created_at',
             'epoch',
             'master_epoch',
+            'startup_event_seq',
+            'startup_events',
             'slot_generations',
             'slot_generations_updated_at',
         ];

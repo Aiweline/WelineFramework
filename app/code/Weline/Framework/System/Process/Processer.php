@@ -1251,7 +1251,7 @@ class Processer
         string $expectedLaunchId = '',
         ?string $expectedPname = null
     ): bool {
-        if ($pid <= 0 || !self::isRunningByPid($pid)) {
+        if ($pid <= 0) {
             return false;
         }
 
@@ -2222,7 +2222,17 @@ class Processer
         if (!$skipCheck && !self::isProcessManagerCreated($pid)) {
             return false;
         }
-        
+
+        if (IS_WIN && $skipCheck) {
+            $result = self::dispatchBatchSignal([$pid], 9);
+            self::untrustPid($pid);
+            if (($result[$pid] ?? false) === true) {
+                self::finalizeBatchGracefulKillPid($pid, 'force kill dispatched async');
+            }
+
+            return (bool) ($result[$pid] ?? false);
+        }
+
         $pname   = self::getNameByPid($pid);
         $logfile = '';
         if ($pname && $pname !== 'unknown') {
@@ -2264,6 +2274,13 @@ class Processer
         // 己方进程校验：非己方进程拒绝杀
         if (!$skipCheck && !self::isProcessManagerCreated($pid)) {
             return false;
+        }
+
+        if (IS_WIN && $skipCheck) {
+            $result = self::dispatchBatchKillProcessTreesWindows([$pid]);
+            self::untrustPid($pid);
+
+            return (int) ($result['killed'] ?? 0) > 0;
         }
 
         $pname = self::getNameByPid($pid);
@@ -2428,6 +2445,17 @@ class Processer
         if (empty($validPids)) {
             return $result;
         }
+
+        if (IS_WIN) {
+            $batched = self::batchKillProcessTreesWindows($validPids);
+            if ($batched !== null) {
+                $result['killed'] += $batched['killed'];
+                $result['failed'] += $batched['failed'];
+                $result['remaining'] = $batched['remaining'];
+
+                return $result;
+            }
+        }
         
         self::batchSendSignal($validPids, 15);
         if ($timeout > 0.0) {
@@ -2499,7 +2527,8 @@ class Processer
 
     /**
      * Dispatch process-tree termination without waiting for Windows taskkill to
-     * finish walking every child. Callers must verify remaining PIDs separately.
+     * finish walking every child. Hot stop paths should treat dispatch as the
+     * completion signal and leave any later residue to the next cleanup pass.
      *
      * @param int[] $pids
      * @return array{killed: int, failed: int, remaining: int[]}
@@ -3149,6 +3178,54 @@ class Processer
         return "'" . \str_replace("'", "''", $value) . "'";
     }
 
+    private static function quoteWindowsCommandLineArg(string $argument): string
+    {
+        if ($argument === '') {
+            return '""';
+        }
+
+        if (!\preg_match('/[\s"]/', $argument)) {
+            return $argument;
+        }
+
+        $quoted = '"';
+        $slashes = 0;
+        $length = \strlen($argument);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $argument[$i];
+            if ($char === '\\') {
+                $slashes++;
+                continue;
+            }
+            if ($char === '"') {
+                $quoted .= \str_repeat('\\', ($slashes * 2) + 1) . '"';
+                $slashes = 0;
+                continue;
+            }
+            if ($slashes > 0) {
+                $quoted .= \str_repeat('\\', $slashes);
+                $slashes = 0;
+            }
+            $quoted .= $char;
+        }
+        if ($slashes > 0) {
+            $quoted .= \str_repeat('\\', $slashes * 2);
+        }
+
+        return $quoted . '"';
+    }
+
+    /**
+     * @param list<string> $argv
+     */
+    private static function buildWindowsCommandLineFromArgv(array $argv): string
+    {
+        return \implode(' ', \array_map(
+            static fn (string $argument): string => self::quoteWindowsCommandLineArg($argument),
+            $argv
+        ));
+    }
+
     /**
      * @param list<string> $values
      */
@@ -3177,35 +3254,28 @@ class Processer
             return null;
         }
 
-        $argLines = [];
-        for ($i = 1, $n = \count($argv); $i < $n; $i++) {
-            $argLines[] = '    ' . self::toPowerShellSingleQuoted((string) $argv[$i]);
-        }
-        $argListBody = \implode(",\n", $argLines);
+        $commandLine = self::buildWindowsCommandLineFromArgv(\array_map('strval', $argv));
 
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
-$phpExe = __PHP__
+$commandLine = __COMMAND_LINE__
 $wd = __WD__
-$argList = @(
-__ARGS__
-)
 try {
     Set-Location -LiteralPath $wd -ErrorAction Stop
 } catch {
     [Console]::Error.WriteLine("Failed to set working directory: $($_.Exception.Message)")
     exit 1
 }
-$startArgs = @{
-    FilePath = $phpExe
-    WindowStyle = 'Hidden'
-    PassThru = $true
-    ErrorAction = 'Stop'
-    ArgumentList = $argList
-}
 try {
-    $p = Start-Process @startArgs
-    [Console]::Out.WriteLine([string]$p.Id)
+    $startup = ([WMIClass]'Win32_ProcessStartup').CreateInstance()
+    $startup.ShowWindow = 0
+    $result = Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList $commandLine, $wd, $startup -ErrorAction Stop
+    if ([int]$result.ReturnValue -eq 0 -and [int]$result.ProcessId -gt 0) {
+        [Console]::Out.WriteLine([string]$result.ProcessId)
+        exit 0
+    }
+    [Console]::Error.WriteLine("Win32_Process.Create failed: return_value=$($result.ReturnValue)")
+    exit 1
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
@@ -3213,8 +3283,11 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__PHP__', '__WD__', '__ARGS__'],
-            [self::toPowerShellSingleQuoted((string) $argv[0]), self::toPowerShellSingleQuoted($workingDir), $argListBody],
+            ['__COMMAND_LINE__', '__WD__'],
+            [
+                self::toPowerShellSingleQuoted($commandLine),
+                self::toPowerShellSingleQuoted($workingDir),
+            ],
             $template
         );
 
@@ -3237,9 +3310,14 @@ POWERSHELL;
 
     private static function writeWindowsStartScript(string $phpBinary, string $arguments, string $workingDir): ?string
     {
+        $commandLine = self::quoteWindowsCommandLineArg($phpBinary);
+        if (\trim($arguments) !== '') {
+            $commandLine .= ' ' . \trim($arguments);
+        }
+
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
-$arguments = '__ARGUMENTS__'
+$commandLine = '__COMMAND_LINE__'
 $wd = '__WORKING_DIR__'
 try {
     Set-Location -LiteralPath $wd -ErrorAction Stop
@@ -3247,18 +3325,16 @@ try {
     [Console]::Error.WriteLine("Failed to set working directory: $($_.Exception.Message)")
     exit 1
 }
-$startArgs = @{
-    FilePath = '__PHP_BINARY__'
-    WindowStyle = 'Hidden'
-    PassThru = $true
-    ErrorAction = 'Stop'
-}
-if ($arguments -ne '') {
-    $startArgs.ArgumentList = $arguments
-}
 try {
-    $p = Start-Process @startArgs
-    [Console]::Out.WriteLine([string]$p.Id)
+    $startup = ([WMIClass]'Win32_ProcessStartup').CreateInstance()
+    $startup.ShowWindow = 0
+    $result = Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList $commandLine, $wd, $startup -ErrorAction Stop
+    if ([int]$result.ReturnValue -eq 0 -and [int]$result.ProcessId -gt 0) {
+        [Console]::Out.WriteLine([string]$result.ProcessId)
+        exit 0
+    }
+    [Console]::Error.WriteLine("Win32_Process.Create failed: return_value=$($result.ReturnValue)")
+    exit 1
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
@@ -3266,10 +3342,9 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__PHP_BINARY__', '__ARGUMENTS__', '__WORKING_DIR__'],
+            ['__COMMAND_LINE__', '__WORKING_DIR__'],
             [
-                self::escapePowerShellLiteral($phpBinary),
-                self::escapePowerShellLiteral($arguments),
+                self::escapePowerShellLiteral($commandLine),
                 self::escapePowerShellLiteral($workingDir),
             ],
             $template
@@ -3989,6 +4064,7 @@ POWERSHELL;
 
         foreach ($pids as $pid) {
             $result['killed']++;
+            self::untrustPid((int) $pid);
             self::finalizeBatchGracefulKillPid($pid, 'force tree kill dispatched');
         }
 
@@ -4022,6 +4098,7 @@ POWERSHELL;
 
         foreach ($pids as $pid) {
             $result['killed']++;
+            self::untrustPid((int) $pid);
             self::finalizeBatchGracefulKillPid((int) $pid, 'force tree kill dispatched async');
         }
 
@@ -4265,13 +4342,19 @@ POWERSHELL;
             'exited' => [],
         ];
 
+        $validPids = [];
         foreach ($pids as $pid) {
             $pid = (int) $pid;
             if ($pid <= 0) {
                 continue;
             }
 
-            if (self::isRunningByPid($pid)) {
+            $validPids[$pid] = $pid;
+        }
+
+        $runningMap = self::batchCheckRunning(\array_values($validPids));
+        foreach ($validPids as $pid) {
+            if ($runningMap[$pid] ?? false) {
                 $state['running'][] = $pid;
             } else {
                 $state['exited'][] = $pid;
@@ -4385,9 +4468,10 @@ POWERSHELL;
         $stillRunning = \array_map('intval', $pids);
         
         while (\microtime(true) - $startTime < $timeout && !empty($stillRunning)) {
+            $runningMap = self::batchCheckRunning($stillRunning);
             $newStillRunning = [];
             foreach ($stillRunning as $pid) {
-                if (self::isRunningByPid($pid)) {
+                if ($runningMap[$pid] ?? false) {
                     $newStillRunning[] = $pid;
                 } else {
                     $result['exited'][] = $pid;
@@ -4954,25 +5038,32 @@ POWERSHELL;
         }
 
         $identitySource = $pname;
-        if ($pid !== \getmypid()) {
+        $processName = self::extractCommandLineArg($identitySource, 'name');
+        $launchId = self::extractCommandLineArg($identitySource, 'launch-id');
+        $epoch = self::extractCommandLineArg($identitySource, 'epoch');
+
+        // Newly-created managed processes already carry stable identity flags in
+        // the command we used to launch them. Avoid an immediate WMI command-line
+        // query on Windows startup; later control paths still verify live PIDs.
+        if ($pid !== \getmypid() && $processName === '' && $launchId === '' && $epoch === '') {
             $cmdLine = self::getProcessCommandLine($pid);
             if ($cmdLine !== '') {
                 $identitySource = $cmdLine;
                 $record['command_line_hash'] = \sha1($cmdLine);
+                $processName = self::extractCommandLineArg($identitySource, 'name');
+                $launchId = self::extractCommandLineArg($identitySource, 'launch-id');
+                $epoch = self::extractCommandLineArg($identitySource, 'epoch');
             }
         }
 
-        $processName = self::extractCommandLineArg($identitySource, 'name');
         if ($processName !== '') {
             $record['process_name'] = self::normalizeName($processName);
         }
 
-        $launchId = self::extractCommandLineArg($identitySource, 'launch-id');
         if ($launchId !== '') {
             $record['launch_id'] = $launchId;
         }
 
-        $epoch = self::extractCommandLineArg($identitySource, 'epoch');
         if ($epoch !== '' && \is_numeric($epoch)) {
             $record['epoch'] = (int) $epoch;
         }

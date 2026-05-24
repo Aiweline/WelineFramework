@@ -10,6 +10,7 @@ final class WorkerResponseMemoryGuard
     private const RUNTIME_CACHE_PRESSURE_THRESHOLD = 0.70;
     private const RUNTIME_CACHE_HARD_PRESSURE_THRESHOLD = 0.85;
     private static ?array $runtimeCacheThresholds = null;
+    private static ?string $drainAfterResponseReason = null;
 
     /** SSE 等长连接写队列上限：客户端读慢时防止无限积压导致 Worker OOM */
     public const SSE_MAX_PENDING_WRITE_BYTES = 8388608;
@@ -77,6 +78,20 @@ final class WorkerResponseMemoryGuard
     public static function shouldCompactAfterDrain(int $releasedBytes): bool
     {
         return $releasedBytes >= self::LARGE_RESPONSE_BYTES;
+    }
+
+    public static function requestDrainAfterResponse(string $reason): void
+    {
+        $reason = \trim($reason);
+        self::$drainAfterResponseReason = $reason !== '' ? $reason : 'memory_pressure';
+    }
+
+    public static function consumeDrainAfterResponseReason(): ?string
+    {
+        $reason = self::$drainAfterResponseReason;
+        self::$drainAfterResponseReason = null;
+
+        return $reason;
     }
 
     public static function sseWriteBufferWouldExceed(int $currentBufferedBytes, int $appendBytes): bool

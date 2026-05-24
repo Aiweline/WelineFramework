@@ -13,6 +13,7 @@ namespace Weline\Admin\Service;
 
 use Weline\Acl\Model\Role;
 use Weline\Admin\Model\MenuAccessLog;
+use Weline\Backend\Service\BackendWarmupContext;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
@@ -33,6 +34,9 @@ use Weline\Framework\Http\Request;
  */
 class MenuRenderService
 {
+    private const FREQUENT_MENU_CACHE_TTL = 30.0;
+    private const RENDER_MENU_CACHE_TTL = 60.0;
+
     /**
      * @var MenuAccessLog
      */
@@ -47,6 +51,16 @@ class MenuRenderService
      * @var array<string, array<string, string>>
      */
     private array $moduleLocaleWords = [];
+
+    /**
+     * @var array<string, array{expires: float, data: array}>
+     */
+    private static array $frequentMenusCache = [];
+
+    /**
+     * @var array<string, array{expires: float, html: string}>
+     */
+    private static array $renderedMenuCache = [];
 
     /**
      * 构造函数
@@ -116,6 +130,14 @@ class MenuRenderService
      */
     public function getCurrentUser(): ?BackendUser
     {
+        if (\class_exists(BackendWarmupContext::class)) {
+            $warmupUser = BackendWarmupContext::currentUser();
+            if ($warmupUser instanceof BackendUser) {
+                return $warmupUser;
+            }
+        }
+
+        $this->session = SessionFactory::getInstance()->createBackendSession();
         return $this->session->getLoginUser();
     }
 
@@ -155,14 +177,22 @@ class MenuRenderService
             ];
         }
 
+        $cacheKey = (int)$user->getId() . '|' . $limit . '|' . $days;
+        $now = microtime(true);
+        if (isset(self::$frequentMenusCache[$cacheKey]) && self::$frequentMenusCache[$cacheKey]['expires'] >= $now) {
+            return self::$frequentMenusCache[$cacheKey]['data'];
+        }
+
         $recentMenus = $this->menuAccessLogModel->getRecentMenus($user->getId(), $limit, $days);
         $frequentMenus = $this->menuAccessLogModel->getFrequentlyUsedMenus($user->getId(), $limit, $days);
 
-        return [
+        $data = [
             'recentMenus' => $recentMenus,
             'frequentMenus' => $frequentMenus,
             'hasFrequentMenus' => !empty($recentMenus) || !empty($frequentMenus)
         ];
+        self::$frequentMenusCache[$cacheKey] = ['expires' => $now + self::FREQUENT_MENU_CACHE_TTL, 'data' => $data];
+        return $data;
     }
 
     /**
@@ -417,6 +447,21 @@ class MenuRenderService
         $this->cachedCurrentUrl = null;
         $this->menuUrlActiveCache = [];
         $this->menuNodeActiveCache = [];
+
+        $user = $this->getCurrentUser();
+        $currentUrl = $this->getCurrentUrl();
+        $cacheKey = implode('|', [
+            (string)(($user && $user->getId()) ? (int)$user->getId() : 0),
+            State::getLangLocal(),
+            $this->cachedBackendUrlPrefix,
+            $this->cachedFrontendUrlPrefix,
+            $currentUrl,
+            md5(json_encode($menus, JSON_INVALID_UTF8_SUBSTITUTE) ?: ''),
+        ]);
+        $now = microtime(true);
+        if (isset(self::$renderedMenuCache[$cacheKey]) && self::$renderedMenuCache[$cacheKey]['expires'] >= $now) {
+            return self::$renderedMenuCache[$cacheKey]['html'];
+        }
         
         foreach ($menus as $menu) {
             if (!isset($menu['is_enable']) || !$menu['is_enable']) {
@@ -481,6 +526,7 @@ class MenuRenderService
             }
         }
         
+        self::$renderedMenuCache[$cacheKey] = ['expires' => $now + self::RENDER_MENU_CACHE_TTL, 'html' => $html];
         return $html;
     }
 

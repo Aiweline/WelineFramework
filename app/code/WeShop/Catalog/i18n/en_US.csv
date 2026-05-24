@@ -1,5 +1,6 @@
 ﻿"Category not found.","Category not found."
 "Category is unavailable.","Category is unavailable."
+首页,Homepage
 分类加载后,"After category is loaded"
 分类页面加载后触发，筛选模块可监听以收集筛选器。,"Triggered after category page loads, the filter module can listen to collect filters."
 分类保存后,"After category is saved"
@@ -37,32 +38,19 @@
 显示图标,"Show icon"
 上级分类,"Superior classification"
 子分类,Sub-Category
-首页,Homepage
 展开子菜单,"Expand submenu"
 更多分类,"More categories"
 更多,More
 选择分类,"Select Category"
 全部分类,"All Categories"
 商品列表,"Product List"
-"共 %d 件商品","共 %d 件商品"
+"共 %d 件商品","%d products"
 缺货,"Out of Stock"
 收藏,Favorite
 该分类下暂无商品,"No products in this category yet."
 返回首页,"Return to Homepage"
+分类目录,"Category Directory"
+相关分类,"Related Categories"
+"浏览 %{category} 的相关分类","Browse related categories for %{category}"
 "%{count} 个子分类","%{count} subcategory"
 "SKU: %{sku}","SKU: %{sku}"
-电子产品,Electronics
-服装服饰,"Clothing & Accessories"
-家居用品,"Home & Living"
-运动户外,"Sports & Outdoors"
-图书音像,"Books & Media"
-食品饮料,"Food & Drinks"
-手机通讯,"Mobile Phones & Communication"
-家具,Furniture
-家纺,"Home Textiles"
-厨房用品,"Kitchen Supplies"
-装饰用品,"Decorative Items"
-男装,"Men's Clothing"
-女装,"Women's Clothing"
-童装,"Children's Clothing"
-运动服饰,Sportswear

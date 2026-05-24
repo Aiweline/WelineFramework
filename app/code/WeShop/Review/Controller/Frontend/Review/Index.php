@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace WeShop\Review\Controller\Frontend\Review;
 
+use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Review\Service\ReviewPageDataService;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 
 class Index extends BaseController
 {
@@ -14,7 +16,8 @@ class Index extends BaseController
 
     public function __construct(
         private readonly ReviewPageDataService $reviewPageDataService,
-        private readonly Url $url
+        private readonly Url $url,
+        private readonly ?CustomerContextInterface $customerContext = null
     ) {
     }
 
@@ -36,8 +39,20 @@ class Index extends BaseController
 
         $this->assign('product_id', $productId);
         $this->assign('create_url', $this->url->getUrl('review/create'));
+        $this->assign('is_customer_logged_in', $this->isCustomerLoggedIn());
         $this->assign('title', __('Product Reviews'));
 
         return $this->fetch();
+    }
+
+    private function isCustomerLoggedIn(): bool
+    {
+        try {
+            $customerContext = $this->customerContext ?? ObjectManager::getInstance(CustomerContextInterface::class);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return (int) ($customerContext->getUserId() ?? 0) > 0;
     }
 }

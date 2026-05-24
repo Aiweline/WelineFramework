@@ -47,14 +47,25 @@ for ($i = 1; $i <= $limit; $i++) {
 
 $realProducts = [];
 try {
-    $currentProduct = (array)($this->getData('product') ?? []);
-    $seedProductId = (int)($currentProduct['product_id'] ?? $this->getData('product_id') ?? 0);
+    $currentProduct = $this->getData('product');
+    $seedProductId = (int)($this->getData('product_id') ?? 0);
+    if ($seedProductId <= 0 && is_object($currentProduct)) {
+        if (method_exists($currentProduct, 'getId')) {
+            $seedProductId = (int)$currentProduct->getId();
+        }
+        if ($seedProductId <= 0 && method_exists($currentProduct, 'getData')) {
+            $seedProductId = (int)($currentProduct->getData('product_id') ?? $currentProduct->getData('entity_id') ?? 0);
+        }
+    } elseif ($seedProductId <= 0 && is_array($currentProduct)) {
+        $seedProductId = (int)($currentProduct['product_id'] ?? $currentProduct['entity_id'] ?? 0);
+    }
     if ($seedProductId <= 0) {
         $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
         $requestPath = parse_url($requestUri, PHP_URL_PATH) ?: '';
-        $productPathPrefix = '/product/';
-        if (strncmp($requestPath, $productPathPrefix, strlen($productPathPrefix)) === 0) {
-            $handle = rawurldecode(trim(substr($requestPath, strlen($productPathPrefix)), '/'));
+        $pathParts = array_values(array_filter(explode('/', trim($requestPath, '/')), static fn(string $part): bool => $part !== ''));
+        $productPartIndex = array_search('product', $pathParts, true);
+        if ($productPartIndex !== false && isset($pathParts[$productPartIndex + 1])) {
+            $handle = rawurldecode((string)$pathParts[$productPartIndex + 1]);
             /** @var \WeShop\Product\Service\ProductService $productService */
             $productService = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Product\Service\ProductService::class);
             $currentProductModel = $productService->getProductByHandle($handle);

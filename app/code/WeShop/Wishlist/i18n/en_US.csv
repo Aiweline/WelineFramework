@@ -14,10 +14,10 @@
 心愿单数量已加载。,"Wishlist count loaded."
 心愿单查询,"Wishlist Query"
 "通过 Worker API 提供前台心愿单操作。","Provides frontend wishlist operations through the worker API."
-前台心愿单添加操作。,前台心愿单添加操作。
-前台心愿单移除操作。,前台心愿单移除操作。
-前台稍后购买（从购物车移入）操作。,前台稍后购买（从购物车移入）操作。
-前台心愿单数量查询操作。,前台心愿单数量查询操作。
+前台心愿单添加操作。,"Frontend wishlist add operation."
+前台心愿单移除操作。,"Frontend wishlist remove operation."
+前台稍后购买（从购物车移入）操作。,"Frontend save-for-later operation (move from cart)."
+前台心愿单数量查询操作。,"Frontend wishlist count query operation."
 您无权移除此心愿单条目。,"You are not allowed to remove this wishlist item."
 心愿单,Wishlist
 "继续浏览已保存的 %{1} 件商品","Resume with %{1} saved item(s)"

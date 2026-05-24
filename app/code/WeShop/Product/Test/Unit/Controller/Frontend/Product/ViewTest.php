@@ -44,6 +44,20 @@ class ViewTest extends TestCase
         $this->assertSame('product', $property->getValue($controller));
     }
 
+    public function testProductViewCacheHostNormalizesLoopbackAndPorts(): void
+    {
+        $controller = new View(
+            $this->createMock(StorefrontRecentlyViewedRecorder::class),
+            $this->createMock(ProductViewPageDataService::class)
+        );
+        $method = new \ReflectionMethod(View::class, 'normalizeViewPayloadCacheHost');
+        $method->setAccessible(true);
+
+        self::assertSame('', $method->invoke($controller, '127.0.0.1:9503'));
+        self::assertSame('', $method->invoke($controller, 'localhost:9503'));
+        self::assertSame('shop.example.test', $method->invoke($controller, 'shop.example.test:9503'));
+    }
+
     public function testIndexRedirectsWhenProductIdIsMissing(): void
     {
         $recorder = $this->createMock(StorefrontRecentlyViewedRecorder::class);

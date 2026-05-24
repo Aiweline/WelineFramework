@@ -99,6 +99,7 @@ use WeShop\Order\Service\OrderService;
                                 $summaryName = (string)($summaryItem[OrderItem::schema_fields_PRODUCT_NAME] ?? $summaryItem['product_name'] ?? '');
                                 $summarySku = (string)($summaryItem[OrderItem::schema_fields_PRODUCT_SKU] ?? $summaryItem['product_sku'] ?? '');
                                 $summaryImage = (string)($summaryItem[OrderItem::schema_fields_PRODUCT_IMAGE] ?? $summaryItem['product_image'] ?? $summaryItem['image'] ?? '');
+                                $summaryOptions = is_array($summaryItem['options'] ?? null) ? $summaryItem['options'] : [];
                                 $summaryQty = (int)($summaryItem[OrderItem::schema_fields_QUANTITY] ?? $summaryItem['quantity'] ?? 1);
                                 $summaryPrice = (float)($summaryItem[OrderItem::schema_fields_PRICE] ?? $summaryItem['price'] ?? 0);
                                 $summaryTotal = (float)($summaryItem[OrderItem::schema_fields_TOTAL] ?? $summaryItem['total'] ?? 0);
@@ -114,6 +115,11 @@ use WeShop\Order\Service\OrderService;
                                     <div class="weshop-order-product-main">
                                         <strong><?= $escape($summaryName !== '' ? $summaryName : '-') ?></strong>
                                         <?php if ($summarySku !== ''): ?><span>SKU: <?= $escape($summarySku) ?></span><?php endif; ?>
+                                        <?php if ($summaryOptions !== []): ?>
+                                            <span class="weshop-order-product-options">
+                                                <?= \WeShop\Product\Helper\ProductOptionRenderer::renderItems($summaryOptions, true) ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </div>
                                     <span>x<?= $summaryQty ?></span>
                                     <span><?= $this->formatPrice($summaryPrice) ?></span>
@@ -179,6 +185,7 @@ use WeShop\Order\Service\OrderService;
                                 $itemName = (string)($item[OrderItem::schema_fields_PRODUCT_NAME] ?? $item['product_name'] ?? '');
                                 $itemSku = (string)($item[OrderItem::schema_fields_PRODUCT_SKU] ?? $item['product_sku'] ?? '');
                                 $itemImage = (string)($item[OrderItem::schema_fields_PRODUCT_IMAGE] ?? $item['product_image'] ?? $item['image'] ?? '');
+                                $itemOptions = is_array($item['options'] ?? null) ? $item['options'] : [];
                                 $itemQty = (int)($item[OrderItem::schema_fields_QUANTITY] ?? $item['quantity'] ?? 1);
                                 $itemTotal = (float)($item[OrderItem::schema_fields_TOTAL] ?? $item['total'] ?? 0);
                                 ?>
@@ -193,6 +200,11 @@ use WeShop\Order\Service\OrderService;
                                     <div>
                                         <strong><?= $escape($itemName !== '' ? $itemName : '-') ?></strong>
                                         <span><?= $escape($itemSku) ?></span>
+                                        <?php if ($itemOptions !== []): ?>
+                                            <span class="weshop-order-product-options">
+                                                <?= \WeShop\Product\Helper\ProductOptionRenderer::renderItems($itemOptions, true) ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </div>
                                     <div><?= __('×%{1}', [$itemQty]) ?></div>
                                     <div><?= $this->formatPrice($itemTotal) ?></div>

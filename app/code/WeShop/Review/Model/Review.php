@@ -16,6 +16,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_product_id', columns: ['product_id'], type: 'KEY', comment: '产品ID索引')]
 #[Index(name: 'idx_customer_id', columns: ['customer_id'], type: 'KEY', comment: '客户ID索引')]
 #[Index(name: 'idx_status', columns: ['status'], type: 'KEY', comment: '状态索引')]
+#[Index(name: 'idx_product_status_created', columns: ['product_id', 'status', 'created_at'], type: 'KEY', comment: '产品状态时间索引')]
 class Review extends Model
 {
     public const schema_table = 'weshop_review';
@@ -38,6 +39,10 @@ class Review extends Model
     public const schema_fields_TITLE = 'title';
     #[Col(type: 'text', nullable: true, comment: '评价内容')]
     public const schema_fields_CONTENT = 'content';
+    #[Col(type: 'text', nullable: true, comment: '评价媒体JSON（图片/视频）')]
+    public const schema_fields_MEDIA_ITEMS = 'media_items';
+    #[Col(type: 'text', nullable: true, comment: '细分评分JSON')]
+    public const schema_fields_RATING_SCORES = 'rating_scores';
     #[Col(type: 'varchar', length: 20, nullable: true, default: 'pending', comment: '状态（pending/approved/rejected）')]
     public const schema_fields_STATUS = 'status';
     #[Col(type: 'datetime', nullable: false, comment: '创建时间')]

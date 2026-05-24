@@ -381,11 +381,50 @@ $cartJsUrl = '/WeShop/Cart/view/statics/js/cart.js?v=20260517-cart-page-4';
     }
 
     .cart-option-list {
-        display: grid;
-        gap: 4px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 8px;
         margin: 0 0 14px;
         color: var(--cart-muted);
         font-size: 14px;
+    }
+
+    .cart-option-list .weshop-product-option {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .cart-option-list .weshop-product-option__label {
+        font-weight: 700;
+        color: var(--cart-text);
+    }
+
+    .cart-option-list .weshop-product-option__swatch {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+        border: 1px solid rgba(17, 24, 39, 0.18);
+        background: #fff;
+    }
+
+    .cart-option-list .weshop-product-option__swatch--color {
+        border-radius: 999px;
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.62);
+    }
+
+    .cart-option-list .weshop-product-option__swatch--image {
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .cart-option-list .weshop-product-option__swatch img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
     }
 
     .cart-item-controls {
@@ -884,6 +923,7 @@ $cartJsUrl = '/WeShop/Cart/view/statics/js/cart.js?v=20260517-cart-page-4';
                         $priceFormatted = (string) ($item['price_formatted'] ?? '');
                         $rowTotalFormatted = (string) ($item['row_total_formatted'] ?? '');
                         $originalRowTotalFormatted = (string) ($item['original_row_total_formatted'] ?? '');
+                        $itemOptions = is_array($item['options'] ?? null) ? $item['options'] : [];
                         ?>
                         <article class="cart-item" data-item-id="<?= $itemId ?>" data-product-id="<?= $productId ?>">
                             <w:hook name="WeShop_Cart::frontend::partials::cart::item-before"/>
@@ -910,11 +950,9 @@ $cartJsUrl = '/WeShop/Cart/view/statics/js/cart.js?v=20260517-cart-page-4';
                                     <span class="cart-badge"><?= __('支持配送') ?></span>
                                 </div>
 
-                                <?php if (!empty($item['options'])): ?>
+                                <?php if ($itemOptions !== []): ?>
                                     <div class="cart-option-list">
-                                        <?php foreach ($item['options'] as $option): ?>
-                                            <span><?= htmlspecialchars((string) ($option['label'] ?? '')) ?>: <?= htmlspecialchars((string) ($option['value'] ?? '')) ?></span>
-                                        <?php endforeach; ?>
+                                        <?= \WeShop\Product\Helper\ProductOptionRenderer::renderItems($itemOptions) ?>
                                     </div>
                                 <?php endif; ?>
 

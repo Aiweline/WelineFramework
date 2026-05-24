@@ -155,6 +155,44 @@ final class AiSiteQualityGateServiceTest extends TestCase
         self::assertNotSame([], $report['page_reports']['home_page']['language_violations'] ?? []);
     }
 
+    public function testInspectScopeRejectsWrongLanguageCopyStoredInLayoutConfig(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['locale'] = 'pt_BR';
+        $scope['website_profile']['site_title'] = 'Teenipiya';
+        $scope['virtual_pages_by_type']['home_page']['blocks'][1]['config'] = [
+            'description' => 'Teenipiya '
+                . "\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}"
+                . "\u{3001}\u{4FE1}\u{4EFB}\u{4FE1}\u{606F}\u{548C}\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}",
+            'section_intro' => 'Teenipiya '
+                . "\u{5E2E}\u{52A9}\u{5370}\u{5EA6}\u{73A9}\u{5BB6}\u{5FEB}\u{901F}\u{7406}\u{89E3}\u{3001}\u{4FE1}\u{4EFB}\u{5E76}\u{4E0B}\u{8F7D}APK",
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle() . '<header>Teenipiya</header><main><section style="color:#111827;background:linear-gradient(135deg,#fff7d6,#ffffff);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><h1>Teen Patti de Confianca</h1><p>Baixe o APK com regras claras e suporte seguro.</p></section></main><footer>Rodape</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'language_consistency')['ok'] ?? true));
+        self::assertNotSame([], $report['page_reports']['home_page']['language_violations'] ?? []);
+    }
+
+    public function testInspectScopeRejectsShortWrongLanguageCtaCopy(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['locale'] = 'pt_BR';
+        $scope['website_profile']['site_title'] = 'Teenipiya';
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->responsiveStyle()
+                . '<header>Teenipiya <a>下载Teenipiya APK</a></header><main><section style="color:#111827;background:linear-gradient(135deg,#fff7d6,#ffffff);display:grid;box-shadow:0 20px 60px rgba(0,0,0,.2);border-radius:24px;transition:transform .2s ease"><h1>Teen Patti de Confianca</h1><p>Baixe o APK com regras claras e suporte seguro.</p></section></main><footer>Rodape</footer>',
+        ]);
+
+        self::assertFalse((bool)($this->findItem($report['items'], 'language_consistency')['ok'] ?? true));
+        self::assertStringContainsString('non_target_cjk_visible_copy', \implode("\n", $report['page_reports']['home_page']['language_violations'] ?? []));
+    }
+
     public function testInspectScopeRejectsVisibleContractFieldLeak(): void
     {
         $service = $this->createService();
@@ -427,7 +465,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         /** @var list<array<string,mixed>> $normalized */
         $normalized = $reflection->invoke($service, $items, $pageReports);
 
-        self::assertCount(13, $normalized);
+        self::assertCount(18, $normalized);
         self::assertSame(
             ['demo', 'example.com'],
             $this->findItem($normalized, 'content_quality')['value']['home_page'] ?? []
@@ -445,6 +483,183 @@ final class AiSiteQualityGateServiceTest extends TestCase
             $this->findItem($normalized, 'theme_visible')['label'] ?? ''
         );
         self::assertSame([], $this->findItem($normalized, 'not_in_contract'));
+    }
+
+    public function testDesignContractQualityReportsMorphologyAndRequiredImageGates(): void
+    {
+        $service = $this->createService();
+        $reflection = new \ReflectionMethod(AiSiteQualityGateService::class, 'inspectDesignContractQuality');
+        $reflection->setAccessible(true);
+
+        $scope = [
+            'build_plan_v2' => [
+                'blocks' => [
+                    $this->qualityGateContractBlock('home.hero', 'home', 'opening', 'editorial_split_media', true, 'asset:home:hero:opening:image'),
+                    $this->qualityGateContractBlock('home.services', 'home', 'details', 'bento_feature_grid', true, 'asset:home:services:details:image'),
+                    $this->qualityGateContractBlock('home.proof', 'home', 'proof', 'metric_proof_strip', true, 'asset:home:proof:proof:image'),
+                    $this->qualityGateContractBlock('home.cta', 'home', 'cta', 'conversion_cta_panel', false, ''),
+                ],
+            ],
+            'virtual_pages_by_type' => [
+                'home' => [
+                    'blocks' => [
+                        ['html_content' => '<img data-pb-ai-asset-slot="asset:home:hero:opening:image" src="/media/hero.webp">'],
+                        ['html_content' => '<img data-pb-ai-asset-slot="asset:home:services:details:image" src="/media/services.webp">'],
+                        ['html_content' => '<img data-pb-ai-asset-slot="asset:home:proof:proof:image" src="/media/proof.webp">'],
+                    ],
+                ],
+            ],
+        ];
+
+        /** @var array<string,mixed> $report */
+        $report = $reflection->invoke($service, $scope);
+
+        self::assertTrue($report['evaluated']);
+        self::assertTrue($report['block_contract_coverage_ok']);
+        self::assertTrue($report['morphology_diversity_ok']);
+        self::assertTrue($report['non_hero_asset_distribution_ok']);
+        self::assertTrue($report['required_image_contract_ok']);
+        self::assertTrue($report['generic_skeleton_guard_ok']);
+    }
+
+    public function testDesignContractQualityRejectsMissingRequiredImageSlot(): void
+    {
+        $service = $this->createService();
+        $reflection = new \ReflectionMethod(AiSiteQualityGateService::class, 'inspectDesignContractQuality');
+        $reflection->setAccessible(true);
+
+        $scope = [
+            'build_plan_v2' => [
+                'blocks' => [
+                    $this->qualityGateContractBlock('home.hero', 'home', 'opening', 'editorial_split_media', true, ''),
+                ],
+            ],
+        ];
+
+        /** @var array<string,mixed> $report */
+        $report = $reflection->invoke($service, $scope);
+
+        self::assertFalse($report['required_image_contract_ok']);
+        self::assertContains('missing_slot:home.hero', $report['required_image_errors']);
+    }
+
+    public function testDesignContractQualityRejectsMissingBuildPlanBlocks(): void
+    {
+        $service = $this->createService();
+        $reflection = new \ReflectionMethod(AiSiteQualityGateService::class, 'inspectDesignContractQuality');
+        $reflection->setAccessible(true);
+
+        /** @var array<string,mixed> $report */
+        $report = $reflection->invoke($service, ['build_plan_v2' => []]);
+
+        self::assertFalse($report['evaluated']);
+        self::assertFalse($report['block_contract_coverage_ok']);
+        self::assertFalse($report['required_image_contract_ok']);
+        self::assertContains('missing_build_plan_v2_blocks', $report['errors']);
+    }
+
+    public function testDesignContractQualityRejectsUnusedRequiredImageSlot(): void
+    {
+        $service = $this->createService();
+        $reflection = new \ReflectionMethod(AiSiteQualityGateService::class, 'inspectDesignContractQuality');
+        $reflection->setAccessible(true);
+
+        $scope = [
+            'build_plan_v2' => [
+                'blocks' => [
+                    $this->qualityGateContractBlock('home.proof', 'home', 'proof', 'metric_proof_strip', true, 'asset:home:proof:proof:image'),
+                ],
+            ],
+            'virtual_pages_by_type' => [
+                'home' => [
+                    'blocks' => [
+                        ['html_content' => '<section><h2>Proof</h2><p>Content without generated image.</p></section>'],
+                    ],
+                ],
+            ],
+        ];
+
+        /** @var array<string,mixed> $report */
+        $report = $reflection->invoke($service, $scope);
+
+        self::assertFalse($report['required_image_contract_ok']);
+        self::assertContains('slot_not_used:asset:home:proof:proof:image', $report['required_image_errors']);
+        self::assertContains('asset:home:proof:proof:image', $report['page_reports']['home']['missing_required_image_slot_ids'] ?? []);
+    }
+
+    public function testDesignContractQualityRequiresPerPageMorphologyDiversity(): void
+    {
+        $service = $this->createService();
+        $reflection = new \ReflectionMethod(AiSiteQualityGateService::class, 'inspectDesignContractQuality');
+        $reflection->setAccessible(true);
+
+        $scope = [
+            'build_plan_v2' => [
+                'blocks' => [
+                    $this->qualityGateContractBlock('home.hero', 'home', 'opening', 'editorial_split_media', false, ''),
+                    $this->qualityGateContractBlock('home.features', 'home', 'details', 'bento_feature_grid', false, ''),
+                    $this->qualityGateContractBlock('home.proof', 'home', 'proof', 'editorial_split_media', false, ''),
+                    $this->qualityGateContractBlock('home.support', 'home', 'support', 'bento_feature_grid', false, ''),
+                ],
+                'asset_distribution_policy' => [
+                    'per_page' => [
+                        'home' => [
+                            'target_real_image_slots' => 0,
+                            'min_non_hero_real_image_slots' => 0,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        /** @var array<string,mixed> $report */
+        $report = $reflection->invoke($service, $scope);
+
+        self::assertFalse($report['morphology_diversity_ok']);
+        self::assertSame(2, (int)($report['page_reports']['home']['unique_morphology_count'] ?? 0));
+        self::assertSame(3, (int)($report['page_reports']['home']['expected_unique_morphology_count'] ?? 0));
+    }
+
+    public function testDesignContractQualityRequiresPolicyTargetedNonHeroImages(): void
+    {
+        $service = $this->createService();
+        $reflection = new \ReflectionMethod(AiSiteQualityGateService::class, 'inspectDesignContractQuality');
+        $reflection->setAccessible(true);
+
+        $scope = [
+            'build_plan_v2' => [
+                'asset_distribution_policy' => [
+                    'per_page' => [
+                        'home' => [
+                            'target_real_image_slots' => 3,
+                            'min_non_hero_real_image_slots' => 2,
+                        ],
+                    ],
+                ],
+                'blocks' => [
+                    $this->qualityGateContractBlock('home.hero', 'home', 'opening', 'editorial_split_media', true, 'asset:home:hero:opening:image'),
+                    $this->qualityGateContractBlock('home.features', 'home', 'details', 'bento_feature_grid', false, ''),
+                    $this->qualityGateContractBlock('home.proof', 'home', 'proof', 'metric_proof_strip', false, ''),
+                    $this->qualityGateContractBlock('home.cta', 'home', 'cta', 'conversion_cta_panel', false, ''),
+                ],
+            ],
+            'virtual_pages_by_type' => [
+                'home' => [
+                    'blocks' => [
+                        ['html_content' => '<img data-pb-ai-asset-slot="asset:home:hero:opening:image" src="/media/hero.webp">'],
+                    ],
+                ],
+            ],
+        ];
+
+        /** @var array<string,mixed> $report */
+        $report = $reflection->invoke($service, $scope);
+
+        self::assertFalse($report['non_hero_asset_distribution_ok']);
+        self::assertFalse($report['page_reports']['home']['real_image_slot_count_ok'] ?? true);
+        self::assertFalse($report['page_reports']['home']['non_hero_image_slot_count_ok'] ?? true);
+        self::assertSame(1, (int)($report['page_reports']['home']['required_image_blocks'] ?? 0));
+        self::assertSame(0, (int)($report['page_reports']['home']['non_hero_required_image_blocks'] ?? 0));
     }
 
     public function testInspectScopeTaskCoveragePassesWhenScheduledMatchesExpected(): void
@@ -729,6 +944,11 @@ final class AiSiteQualityGateServiceTest extends TestCase
             'build_tasks' => [
                 'page:home_page:hero_banner' => ['task_key' => 'page:home_page:hero_banner', 'status' => 'done'],
             ],
+            'build_plan_v2' => [
+                'blocks' => [
+                    $this->qualityGateContractBlock('home-page-hero-banner', 'home_page', 'opening', 'editorial_split_media', false, ''),
+                ],
+            ],
             'execution_blueprint' => [
                 'palette' => ['primary' => '#FFD700', 'secondary' => '#8B0000', 'accent' => '#228B22'],
                 'pages' => [
@@ -749,10 +969,57 @@ final class AiSiteQualityGateServiceTest extends TestCase
                 'home_page' => [
                     'blocks' => [
                         ['block_id' => 'header-ai-site-header', 'type' => 'ai_generated_shared_header'],
-                        ['block_id' => 'home-page-hero-banner', 'type' => 'ai_generated_section'],
+                        ['block_id' => 'home-page-hero-banner', 'section_code' => 'content/home-page-hero-banner', 'code' => 'content/home-page-hero-banner', 'type' => 'ai_generated_section'],
                         ['block_id' => 'footer-ai-site-footer', 'type' => 'ai_generated_shared_footer'],
                     ],
                 ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function qualityGateContractBlock(
+        string $blockId,
+        string $pageId,
+        string $role,
+        string $morphologyId,
+        bool $needsImage,
+        string $slotId
+    ): array {
+        return [
+            'block_id' => $blockId,
+            'page_id' => $pageId,
+            'page_flow_role' => $role,
+            'visual_signature' => [
+                'composition_pattern' => $morphologyId . ' section',
+                'media_strategy' => $needsImage ? 'Generated image slot ' . $slotId : 'CSS-only/no generated image; structured motif',
+            ],
+            'image_intent' => [
+                'needs_image' => $needsImage,
+                'css_motif' => $needsImage ? '' : 'structured motif',
+            ],
+            'asset_requirements' => $needsImage && $slotId !== '' ? [
+                ['slot_id' => $slotId, 'required' => true, 'final_url' => '/media/' . \str_replace([':', '.'], '-', $slotId) . '.webp'],
+            ] : [],
+            'block_contract' => [
+                'version' => '2.2',
+                'page_flow_role' => $role,
+                'morphology_id' => $morphologyId,
+                'composition_pattern' => ['layout_keywords' => [$morphologyId]],
+                'media_strategy' => [
+                    'needs_real_image' => $needsImage,
+                    'asset_slot_id' => $slotId,
+                    'final_url' => $needsImage && $slotId !== '' ? '/media/' . \str_replace([':', '.'], '-', $slotId) . '.webp' : '',
+                    'css_motif' => $needsImage ? '' : 'structured motif',
+                ],
+                'diversity_constraints' => [
+                    'must_not_render_as_title_paragraph_cta_only' => true,
+                    'forbidden_repetition' => ['same title+paragraph+button skeleton'],
+                ],
+                'responsive_contract' => ['desktop' => 'grid', 'mobile' => 'stack'],
+                'acceptance_checks' => ['responsive_desktop_mobile_pass'],
             ],
         ];
     }

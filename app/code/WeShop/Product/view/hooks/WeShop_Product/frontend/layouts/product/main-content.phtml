@@ -15,7 +15,10 @@
 // 获取产品数据（由控制器传递）
 $product = $this->getData('product');
 $attributes = $this->getData('attributes') ?? [];
-$configurableOptions = is_array($product['configurable_options'] ?? null) ? $product['configurable_options'] : [];
+$pageConfigurableOptions = $this->getData('configurable_options');
+$configurableOptions = is_array($product['configurable_options'] ?? null)
+    ? $product['configurable_options']
+    : (is_array($pageConfigurableOptions) ? $pageConfigurableOptions : []);
 $configurableAttributes = is_array($configurableOptions['attributes'] ?? null) ? $configurableOptions['attributes'] : [];
 $configurableVariants = is_array($configurableOptions['variants'] ?? null) ? $configurableOptions['variants'] : [];
 
@@ -38,6 +41,44 @@ $stockStatus = $product['stock_status'] ?? ($inStock ? 'in_stock' : 'out_of_stoc
 $weight = (float)($product['weight'] ?? 0);
 $mainImage = $product['image'] ?? '';
 $images = $product['images'] ?? [];
+$fullDescription = trim((string)($product['description'] ?? ''));
+$reviewsPayload = $this->getData('reviews');
+$reviewItems = is_array($reviewsPayload['items'] ?? null)
+    ? $reviewsPayload['items']
+    : (is_array($reviewsPayload) ? $reviewsPayload : []);
+$reviewTotal = is_array($reviewsPayload) ? (int)($reviewsPayload['total'] ?? 0) : 0;
+$reviewAverage = is_array($reviewsPayload) ? (float)($reviewsPayload['average'] ?? 0) : 0.0;
+if (($reviewTotal <= 0 || $reviewAverage <= 0.0) && $productId > 0) {
+    try {
+        $reviewService = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Review\Service\ReviewService::class);
+        if ($reviewTotal <= 0) {
+            $reviewResult = $reviewService->getProductReviews((int)$productId, 1, 1);
+            $reviewTotal = (int)($reviewResult['total'] ?? count($reviewItems));
+        }
+        if ($reviewAverage <= 0.0 && $reviewTotal > 0) {
+            $reviewAverage = (float)$reviewService->getAverageRating((int)$productId);
+        }
+    } catch (\Throwable) {
+        $reviewTotal = $reviewTotal > 0 ? $reviewTotal : count($reviewItems);
+    }
+}
+$qaItems = is_array($this->getData('qa') ?? null) ? $this->getData('qa') : [];
+$productRating = (float)($product['rating'] ?? 0);
+$rating = $productRating > 0.0 ? $productRating : $reviewAverage;
+$productReviewCount = (int)($product['review_count'] ?? 0);
+$reviewCount = $productReviewCount > 0 ? $productReviewCount : ($reviewTotal > 0 ? $reviewTotal : count($reviewItems));
+$ratingDistribution = is_array($product['rating_distribution'] ?? null) ? $product['rating_distribution'] : [];
+if ($ratingDistribution === [] && $reviewItems !== []) {
+    $ratingDistribution = array_fill(1, 5, 0);
+    foreach ($reviewItems as $reviewItem) {
+        $reviewRating = max(1, min(5, (int)round((float)($reviewItem['rating'] ?? 0))));
+        ++$ratingDistribution[$reviewRating];
+    }
+    $distributionBase = count($reviewItems);
+    foreach ($ratingDistribution as $star => $ratingCount) {
+        $ratingDistribution[$star] = $distributionBase > 0 ? (int)round(($ratingCount / $distributionBase) * 100) : 0;
+    }
+}
 $formattedPrice = \Weline\Currency\Helper\CurrencyFormatter::formatConverted($price);
 $formattedOriginalPrice = \Weline\Currency\Helper\CurrencyFormatter::formatConverted($originalPrice);
 $currencyRateService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class);
@@ -45,6 +86,20 @@ $baseCurrencyCode = $currencyRateService->getBaseCurrency();
 $currentCurrencyCode = \Weline\Framework\App\State::getCurrency();
 $displayCurrencyDefinition = $currencyRateService->getCurrencyDefinition($currentCurrencyCode);
 $currencyDisplayFactor = \Weline\Currency\Helper\CurrencyFormatter::convert(1.0, $baseCurrencyCode, $currentCurrencyCode);
+
+$renderStars = static function (float $value): string {
+    $safeValue = max(0.0, min(5.0, $value));
+    $filled = (int)floor($safeValue);
+    $half = ($safeValue - $filled) >= 0.5;
+    $html = '<span class="product-stars" aria-label="' . htmlspecialchars((string)__('评分'), ENT_QUOTES, 'UTF-8') . ' ' . htmlspecialchars(number_format($safeValue, 1), ENT_QUOTES, 'UTF-8') . '">';
+    for ($star = 1; $star <= 5; $star++) {
+        $class = $star <= $filled ? 'is-filled' : ($star === ($filled + 1) && $half ? 'is-half' : '');
+        $html .= '<span class="' . $class . '">★</span>';
+    }
+    return $html . '</span>';
+};
+
+$descriptionText = trim(strip_tags(str_replace(['<br>', '<br/>', '<br />', '</p>'], "\n", $fullDescription)));
 
 if ($configurableAttributes === [] && $productId > 0) {
     try {
@@ -174,7 +229,25 @@ $productImageVariant = static function (string $url, int $width): string {
 <div class="product-detail-view" data-product-id="<?= (int)$productId ?>">
     <div class="product-detail-row">
         <!-- 产品图片区域 -->
-        <div class="product-gallery">
+        <div class="product-gallery <?= count($images) > 1 ? 'has-thumbnails' : '' ?>">
+            <?php if (count($images) > 1): ?>
+            <div class="product-thumbnails">
+                <?php foreach ($images as $index => $img): ?>
+                <?php $thumbnailImage = $productImageVariant((string)$img, 180); ?>
+                <button type="button"
+                        class="thumbnail-item <?= $index === 0 ? 'active' : '' ?>"
+                        data-index="<?= $index ?>"
+                        data-src="<?= htmlspecialchars($img, ENT_QUOTES, 'UTF-8') ?>">
+                    <img src="<?= htmlspecialchars($thumbnailImage, ENT_QUOTES, 'UTF-8') ?>"
+                         alt="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?> - <?= $index + 1 ?>"
+                         loading="lazy"
+                         decoding="async"
+                         fetchpriority="low" />
+                </button>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+
             <div class="product-main-image">
                 <?php if (!empty($images)): ?>
                 <button type="button" class="product-zoom-indicator" aria-label="<?= htmlspecialchars((string) __('放大查看'), ENT_QUOTES, 'UTF-8') ?>">
@@ -182,9 +255,9 @@ $productImageVariant = static function (string $url, int $width): string {
                 </button>
                 <div class="product-image-lens" aria-hidden="true"></div>
                 <div class="product-image-zoom-preview" aria-hidden="true"></div>
-                <img id="main-product-image" 
-                     src="<?= htmlspecialchars($images[0] ?? '') ?>" 
-                     alt="<?= htmlspecialchars($name) ?>"
+                <img id="main-product-image"
+                     src="<?= htmlspecialchars($images[0] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                     alt="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
                      class="product-image-main"
                      loading="eager"
                      decoding="async"
@@ -196,41 +269,36 @@ $productImageVariant = static function (string $url, int $width): string {
                 </div>
                 <?php endif; ?>
             </div>
-            
-            <?php if (count($images) > 1): ?>
-            <div class="product-thumbnails">
-                <?php foreach ($images as $index => $img): ?>
-                <?php $thumbnailImage = $productImageVariant((string)$img, 180); ?>
-                <div class="thumbnail-item <?= $index === 0 ? 'active' : '' ?>" 
-                     data-index="<?= $index ?>" 
-                     data-src="<?= htmlspecialchars($img) ?>">
-                    <img src="<?= htmlspecialchars($thumbnailImage) ?>"
-                         alt="<?= htmlspecialchars($name) ?> - <?= $index + 1 ?>"
-                         loading="lazy"
-                         decoding="async"
-                         fetchpriority="low" />
-                </div>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
         </div>
-        
+
         <!-- 产品信息区域 -->
         <div class="product-info-section">
-            <h1 class="product-title"><?= htmlspecialchars($name) ?></h1>
-            
-            <?php if (!empty($shortDescription)): ?>
-            <p class="product-short-description"><?= htmlspecialchars($shortDescription) ?></p>
-            <?php endif; ?>
-            
+            <div class="product-title-block">
+                <h1 class="product-title"><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></h1>
+
+                <?php if ($rating > 0 || $reviewCount > 0): ?>
+                <div class="product-rating-summary">
+                    <?= $renderStars($rating) ?>
+                    <span class="product-rating-score"><?= htmlspecialchars(number_format($rating, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php if ($reviewCount > 0): ?>
+                    <span class="product-rating-count"><?= htmlspecialchars((string)__('基于 %{1} 条评价', [$reviewCount]), ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!empty($shortDescription)): ?>
+                <p class="product-short-description"><?= htmlspecialchars($shortDescription, ENT_QUOTES, 'UTF-8') ?></p>
+                <?php endif; ?>
+            </div>
+
             <div class="product-meta">
                 <?php if (!empty($sku)): ?>
                 <div class="product-sku">
                     <span class="meta-label"><?= __('SKU') ?>:</span>
-                    <span class="meta-value"><?= htmlspecialchars($sku) ?></span>
+                    <span class="meta-value"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
                 <?php endif; ?>
-                
+
                 <div class="product-availability <?= $inStock ? 'in-stock' : 'out-of-stock' ?>">
                     <span class="meta-label"><?= __('库存状态') ?>:</span>
                     <span class="meta-value"><?= $inStock ? __('有货') : __('缺货') ?></span>
@@ -239,7 +307,89 @@ $productImageVariant = static function (string $url, int $width): string {
                     <?php endif; ?>
                 </div>
             </div>
-            
+
+            <?php if ($configurableAttributes !== []): ?>
+            <div class="product-configurable-options">
+                <?php foreach ($configurableAttributes as $attribute): ?>
+                    <?php
+                    $attributeId = (int)($attribute['attribute_id'] ?? 0);
+                    $attributeCode = (string)($attribute['code'] ?? ('attribute_' . $attributeId));
+                    $attributeName = (string)($attribute['name'] ?? $attributeCode);
+                    $options = is_array($attribute['options'] ?? null) ? $attribute['options'] : [];
+                    $isColorAttribute = stripos($attributeCode, 'color') !== false || str_contains($attributeName, '色');
+                    ?>
+                    <?php if ($attributeId > 0 && $options !== []): ?>
+                    <fieldset class="product-option-group" data-attribute-id="<?= $attributeId ?>" data-attribute-code="<?= htmlspecialchars($attributeCode, ENT_QUOTES, 'UTF-8') ?>">
+                        <legend class="product-option-title">
+                            <?= htmlspecialchars($attributeName, ENT_QUOTES, 'UTF-8') ?>
+                            <span class="product-option-selected" data-selected-label-for="<?= $attributeId ?>"></span>
+                        </legend>
+                        <div class="<?= $isColorAttribute ? 'product-option-swatches' : 'product-option-pills' ?>">
+                            <?php foreach ($options as $option): ?>
+                                <?php
+                                $optionId = (int)($option['option_id'] ?? 0);
+                                $optionCode = (string)($option['code'] ?? '');
+                                $optionLabel = (string)($option['value'] ?? $option['code'] ?? $optionId);
+                                $swatchType = (string)($option['swatch_type'] ?? '');
+                                $swatchValue = (string)($option['swatch_value'] ?? '');
+                                $optionImage = (string)($option['option_image'] ?? '');
+                                ?>
+                                <?php if ($optionId > 0): ?>
+                                <button type="button"
+                                        class="product-option-choice <?= $isColorAttribute ? 'product-option-choice--swatch' : 'product-option-choice--pill' ?>"
+                                        data-option-id="<?= $optionId ?>"
+                                        data-option-code="<?= htmlspecialchars($optionCode, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-option-label="<?= htmlspecialchars($optionLabel, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-option-image="<?= htmlspecialchars($optionImage, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-swatch-type="<?= htmlspecialchars($swatchType, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-attribute-id="<?= $attributeId ?>"
+                                        data-attribute-code="<?= htmlspecialchars($attributeCode, ENT_QUOTES, 'UTF-8') ?>"
+                                        aria-pressed="false">
+                                    <?php if ($isColorAttribute): ?>
+                                        <?php if ($optionImage !== ''): ?>
+                                            <span class="product-option-image" style="background-image: url('<?= htmlspecialchars($optionImage, ENT_QUOTES, 'UTF-8') ?>')"></span>
+                                        <?php elseif ($swatchType === 'image' && $swatchValue !== ''): ?>
+                                            <span class="product-option-image" style="background-image: url('<?= htmlspecialchars($swatchValue, ENT_QUOTES, 'UTF-8') ?>')"></span>
+                                        <?php else: ?>
+                                            <span class="product-option-color" style="background: <?= htmlspecialchars($swatchValue !== '' ? $swatchValue : '#d1d5db', ENT_QUOTES, 'UTF-8') ?>"></span>
+                                        <?php endif; ?>
+                                    <?php elseif ($optionImage !== ''): ?>
+                                        <span class="product-option-image" style="background-image: url('<?= htmlspecialchars($optionImage, ENT_QUOTES, 'UTF-8') ?>')"></span>
+                                    <?php endif; ?>
+                                    <span class="product-option-text"><?= htmlspecialchars($optionLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                                </button>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    </fieldset>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+                <div class="product-option-status" data-option-status></div>
+            </div>
+            <?php endif; ?>
+
+            <!-- 产品属性列表 -->
+            <?php if (!empty($attributes)): ?>
+            <div class="product-attributes">
+                <h3 class="attributes-title"><?= __('产品规格') ?></h3>
+                <table class="attributes-table">
+                    <tbody>
+                        <?php foreach ($attributes as $group): ?>
+                            <?php foreach (($group['items'] ?? []) as $attr): ?>
+                            <tr>
+                                <th><?= htmlspecialchars((string)($attr['label'] ?? $attr['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></th>
+                                <td><?= htmlspecialchars((string)($attr['value'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- 购买区域 -->
+        <aside class="product-purchase-card">
             <div class="product-price-box">
                 <span class="product-price-label"><?= __('价格') ?>:</span>
                 <span class="product-price-value">
@@ -252,116 +402,153 @@ $productImageVariant = static function (string $url, int $width): string {
                 <span class="product-discount"><?= round((1 - $price / $cost) * 100) ?>% <?= __('优惠') ?></span>
                 <?php endif; ?>
             </div>
-            
-            <!-- 购买区域 -->
-            <div class="product-actions">
-                <?php if ($configurableAttributes !== []): ?>
-                <div class="product-configurable-options">
-                    <?php foreach ($configurableAttributes as $attribute): ?>
-                        <?php
-                        $attributeId = (int)($attribute['attribute_id'] ?? 0);
-                        $attributeCode = (string)($attribute['code'] ?? ('attribute_' . $attributeId));
-                        $attributeName = (string)($attribute['name'] ?? $attributeCode);
-                        $options = is_array($attribute['options'] ?? null) ? $attribute['options'] : [];
-                        $isColorAttribute = stripos($attributeCode, 'color') !== false || str_contains($attributeName, '色');
-                        ?>
-                        <?php if ($attributeId > 0 && $options !== []): ?>
-                        <fieldset class="product-option-group" data-attribute-id="<?= $attributeId ?>" data-attribute-code="<?= htmlspecialchars($attributeCode, ENT_QUOTES, 'UTF-8') ?>">
-                            <legend class="product-option-title">
-                                <?= htmlspecialchars($attributeName, ENT_QUOTES, 'UTF-8') ?>
-                                <span class="product-option-selected" data-selected-label-for="<?= $attributeId ?>"></span>
-                            </legend>
-                            <div class="<?= $isColorAttribute ? 'product-option-swatches' : 'product-option-pills' ?>">
-                                <?php foreach ($options as $option): ?>
-                                    <?php
-                                    $optionId = (int)($option['option_id'] ?? 0);
-                                    $optionLabel = (string)($option['value'] ?? $option['code'] ?? $optionId);
-                                    $swatchType = (string)($option['swatch_type'] ?? '');
-                                    $swatchValue = (string)($option['swatch_value'] ?? '');
-                                    $optionImage = (string)($option['option_image'] ?? '');
-                                    ?>
-                                    <?php if ($optionId > 0): ?>
-                                    <button type="button"
-                                            class="product-option-choice <?= $isColorAttribute ? 'product-option-choice--swatch' : 'product-option-choice--pill' ?>"
-                                            data-option-id="<?= $optionId ?>"
-                                            data-option-label="<?= htmlspecialchars($optionLabel, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-option-image="<?= htmlspecialchars($optionImage, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-swatch-type="<?= htmlspecialchars($swatchType, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-attribute-id="<?= $attributeId ?>"
-                                            aria-pressed="false">
-                                        <?php if ($isColorAttribute): ?>
-                                            <?php if ($swatchType === 'image' && $swatchValue !== ''): ?>
-                                                <span class="product-option-image" style="background-image: url('<?= htmlspecialchars($swatchValue, ENT_QUOTES, 'UTF-8') ?>')"></span>
-                                            <?php else: ?>
-                                                <span class="product-option-color" style="background: <?= htmlspecialchars($swatchValue !== '' ? $swatchValue : '#d1d5db', ENT_QUOTES, 'UTF-8') ?>"></span>
-                                            <?php endif; ?>
-                                        <?php elseif ($optionImage !== ''): ?>
-                                            <span class="product-option-image" style="background-image: url('<?= htmlspecialchars($optionImage, ENT_QUOTES, 'UTF-8') ?>')"></span>
-                                        <?php endif; ?>
-                                        <span class="product-option-text"><?= htmlspecialchars($optionLabel, ENT_QUOTES, 'UTF-8') ?></span>
-                                    </button>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
-                            </div>
-                        </fieldset>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                    <div class="product-option-status" data-option-status></div>
-                </div>
-                <?php endif; ?>
 
-                <div class="quantity-selector">
-                    <label for="product-qty"><?= __('数量') ?>:</label>
-                    <div class="qty-input-group">
-                        <button type="button" class="qty-btn qty-minus" data-action="minus">-</button>
-                        <input type="number" id="product-qty" name="qty" value="1" min="1" max="<?= $stock > 0 ? $stock : 99 ?>" class="qty-input" />
-                        <button type="button" class="qty-btn qty-plus" data-action="plus">+</button>
-                    </div>
+            <div class="purchase-card-stock product-availability <?= $inStock ? 'in-stock' : 'out-of-stock' ?>">
+                <span class="meta-value"><?= $inStock ? __('有货') : __('缺货') ?></span>
+                <?php if ($inStock && $stock > 0): ?>
+                <span class="stock-count">(<?= $stock ?> <?= __('件') ?>)</span>
+                <?php endif; ?>
+            </div>
+
+            <div class="quantity-selector">
+                <label for="product-qty"><?= __('数量') ?>:</label>
+                <div class="qty-input-group">
+                    <button type="button" class="qty-btn qty-minus" data-action="minus">-</button>
+                    <input type="number" id="product-qty" name="qty" value="1" min="1" max="<?= $stock > 0 ? $stock : 99 ?>" class="qty-input" />
+                    <button type="button" class="qty-btn qty-plus" data-action="plus">+</button>
                 </div>
-                
+            </div>
+
+            <div class="product-actions">
                 <div class="action-buttons">
-                    <button type="button" 
-                            class="btn btn-primary btn-add-to-cart weline-pixel::add_to_cart" 
+                    <button type="button"
+                            class="btn btn-primary btn-add-to-cart weline-pixel::add_to_cart"
                             data-product-id="<?= (int)$productId ?>"
-                            <?= !$inStock ? 'disabled' : '' ?>>
+                            <?= !$inStock ? 'disabled data-stock-disabled="1"' : '' ?>>
                         <span class="btn-icon">🛒</span>
                         <span class="btn-text weline-pixel::add_to_cart"><?= $inStock ? __('加入购物车') : __('缺货') ?></span>
                     </button>
-                    
-                    <button type="button" 
-                            class="btn btn-secondary btn-buy-now" 
+
+                    <button type="button"
+                            class="btn btn-secondary btn-buy-now"
                             data-product-id="<?= (int)$productId ?>"
-                            <?= !$inStock ? 'disabled' : '' ?>>
+                            <?= !$inStock ? 'disabled data-stock-disabled="1"' : '' ?>>
                         <span class="btn-text"><?= __('立即购买') ?></span>
                     </button>
-                    
-                    <button type="button" 
-                            class="btn btn-outline btn-wishlist weline-pixel::add_to_wishlist" 
+
+                    <button type="button"
+                            class="btn btn-outline btn-wishlist weline-pixel::add_to_wishlist"
                             data-product-id="<?= (int)$productId ?>">
                         <span class="btn-icon weline-pixel::add_to_wishlist">❤</span>
                     </button>
                 </div>
             </div>
-            
-            <!-- 产品属性列表 -->
-            <?php if (!empty($attributes)): ?>
-            <div class="product-attributes">
-                <h3 class="attributes-title"><?= __('产品规格') ?></h3>
-                <table class="attributes-table">
-                    <tbody>
-                        <?php foreach ($attributes as $group): ?>
-                            <?php foreach (($group['items'] ?? []) as $attr): ?>
-                            <tr>
-                                <th><?= htmlspecialchars((string)($attr['label'] ?? $attr['code'] ?? '')) ?></th>
-                                <td><?= htmlspecialchars((string)($attr['value'] ?? '')) ?></td>
-                            </tr>
-                            <?php endforeach; ?>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+        </aside>
+    </div>
+
+    <div class="product-detail-lower">
+        <section class="product-detail-panel product-description-panel">
+            <h2 class="product-section-title"><?= __('商品详情') ?></h2>
+            <?php if ($descriptionText !== ''): ?>
+            <div class="product-description-text"><?= nl2br(htmlspecialchars($descriptionText, ENT_QUOTES, 'UTF-8')) ?></div>
+            <?php else: ?>
+            <p class="product-empty-state"><?= __('暂无商品详情') ?></p>
             <?php endif; ?>
-        </div>
+        </section>
+
+        <section class="product-detail-panel product-reviews-panel">
+            <h2 class="product-section-title"><?= __('顾客评价') ?></h2>
+            <div class="product-review-layout">
+                <div class="product-review-overview">
+                    <div class="product-review-score">
+                        <span class="product-review-score-number"><?= htmlspecialchars(number_format($rating, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                        <?= $renderStars($rating) ?>
+                        <span class="product-review-total"><?= htmlspecialchars((string)__('基于 %{1} 条评价', [$reviewCount]), ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                    <?php if ($ratingDistribution !== []): ?>
+                    <div class="product-rating-bars">
+                        <?php for ($star = 5; $star >= 1; $star--): ?>
+                            <?php $barValue = max(0, min(100, (float)($ratingDistribution[$star] ?? $ratingDistribution[(string)$star] ?? 0))); ?>
+                            <div class="product-rating-bar-row">
+                                <span><?= $star ?> <?= __('星') ?></span>
+                                <span class="product-rating-bar-track"><span style="width: <?= htmlspecialchars((string)$barValue, ENT_QUOTES, 'UTF-8') ?>%"></span></span>
+                                <span><?= htmlspecialchars((string)round($barValue), ENT_QUOTES, 'UTF-8') ?>%</span>
+                            </div>
+                        <?php endfor; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="product-review-list">
+                    <?php if ($reviewItems !== []): ?>
+                        <?php foreach ($reviewItems as $review): ?>
+                            <?php
+                            if (!is_array($review)) {
+                                continue;
+                            }
+                            $reviewRating = (float)($review['rating'] ?? 0);
+                            $reviewTitle = trim((string)($review['title'] ?? ''));
+                            $reviewContent = trim((string)($review['content'] ?? $review['comment'] ?? ''));
+                            $reviewAuthor = trim((string)($review['nickname'] ?? $review['customer_name'] ?? $review['author'] ?? ''));
+                            $reviewDate = trim((string)($review['created_at'] ?? $review['created'] ?? ''));
+                            ?>
+                            <article class="product-review-item">
+                                <div class="product-review-item-head">
+                                    <span class="product-review-author"><?= htmlspecialchars($reviewAuthor !== '' ? $reviewAuthor : (string)__('匿名用户'), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php if ($reviewDate !== ''): ?>
+                                    <span class="product-review-date"><?= htmlspecialchars($reviewDate, ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="product-review-title-row">
+                                    <?= $renderStars($reviewRating) ?>
+                                    <?php if ($reviewTitle !== ''): ?>
+                                    <strong><?= htmlspecialchars($reviewTitle, ENT_QUOTES, 'UTF-8') ?></strong>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if ($reviewContent !== ''): ?>
+                                <p><?= nl2br(htmlspecialchars($reviewContent, ENT_QUOTES, 'UTF-8')) ?></p>
+                                <?php endif; ?>
+                            </article>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                    <p class="product-empty-state"><?= __('暂无评价') ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </section>
+
+        <section class="product-detail-panel product-qa-panel">
+            <h2 class="product-section-title"><?= __('商品问答') ?></h2>
+            <?php if ($qaItems !== []): ?>
+            <div class="product-qa-list">
+                <?php foreach ($qaItems as $qaItem): ?>
+                    <?php
+                    if (!is_array($qaItem)) {
+                        continue;
+                    }
+                    $questionText = trim((string)($qaItem['question'] ?? $qaItem['content'] ?? ''));
+                    $answerText = trim((string)($qaItem['answer'] ?? $qaItem['answer_content'] ?? ''));
+                    $answeredBy = trim((string)($qaItem['answered_by'] ?? ''));
+                    ?>
+                    <?php if ($questionText !== '' || $answerText !== ''): ?>
+                    <article class="product-qa-item">
+                        <?php if ($questionText !== ''): ?>
+                        <p class="product-qa-question"><span><?= __('问') ?>:</span> <?= htmlspecialchars($questionText, ENT_QUOTES, 'UTF-8') ?></p>
+                        <?php endif; ?>
+                        <?php if ($answerText !== ''): ?>
+                        <p class="product-qa-answer"><span><?= __('答') ?>:</span> <?= htmlspecialchars($answerText, ENT_QUOTES, 'UTF-8') ?></p>
+                        <?php endif; ?>
+                        <?php if ($answeredBy !== ''): ?>
+                        <p class="product-qa-meta"><?= htmlspecialchars($answeredBy, ENT_QUOTES, 'UTF-8') ?></p>
+                        <?php endif; ?>
+                    </article>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <p class="product-empty-state"><?= __('暂无问答') ?></p>
+            <?php endif; ?>
+        </section>
     </div>
 </div>
 
@@ -371,56 +558,81 @@ $productImageVariant = static function (string $url, int $width): string {
    ======================================== */
 .product-detail-view {
     width: 100%;
+    max-width: 1460px;
+    margin: 0 auto;
+    padding: .75rem clamp(1rem, 2.5vw, 2rem) 2rem;
+    color: #0f1111;
+}
+
+.product-detail-view *,
+.product-detail-view *::before,
+.product-detail-view *::after {
+    box-sizing: border-box;
 }
 
 .product-detail-row {
-    display: flex;
-    gap: 2rem;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(420px, 520px) minmax(420px, 1fr) minmax(244px, 260px);
+    gap: clamp(1.1rem, 1.8vw, 1.6rem);
+    align-items: start;
 }
 
 /* 产品图片区域 */
 .product-gallery {
-    flex: 0 0 45%;
-    max-width: 500px;
+    position: sticky;
+    top: 1rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .75rem;
+    min-width: 0;
+}
+
+.product-gallery.has-thumbnails {
+    grid-template-columns: 54px minmax(0, 1fr);
 }
 
 .product-main-image {
     position: relative;
     width: 100%;
     aspect-ratio: 1;
-    border: 1px solid var(--color-border-light, #e5e7eb);
-    border-radius: 8px;
+    min-height: min(620px, 50vw);
+    border: 0;
+    border-radius: 0;
     overflow: hidden;
-    background: var(--color-bg-secondary, #f8f9fa);
+    background: #f7f7f7;
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.product-gallery.has-thumbnails .product-main-image {
+    grid-column: 2;
 }
 
 .product-image-main {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    padding: clamp(.25rem, 1vw, .65rem);
 }
 
 .product-zoom-indicator {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: 14px;
+    right: 14px;
     z-index: 3;
-    width: 40px;
-    height: 40px;
-    border: 1px solid rgba(255, 255, 255, 0.85);
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(15, 17, 17, .08);
     border-radius: 999px;
-    background: rgba(17, 24, 39, 0.68);
-    color: #fff;
+    background: rgba(255, 255, 255, .95);
+    color: #0f1111;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.1rem;
+    font-size: 1rem;
     line-height: 1;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+    box-shadow: 0 2px 8px rgba(15, 17, 17, .16);
     pointer-events: none;
     opacity: 0.88;
 }
@@ -480,25 +692,30 @@ $productImageVariant = static function (string $url, int $width): string {
 
 .product-thumbnails {
     display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-    overflow-x: auto;
+    flex-direction: column;
+    gap: .55rem;
+    max-height: min(620px, 40vw);
+    overflow-y: auto;
+    padding: .1rem .2rem .1rem 0;
 }
 
 .thumbnail-item {
-    flex: 0 0 60px;
-    width: 60px;
-    height: 60px;
-    border: 2px solid var(--color-border-light, #e5e7eb);
+    flex: 0 0 50px;
+    width: 50px;
+    height: 50px;
+    padding: 2px;
+    border: 1px solid #d5d9d9;
     border-radius: 6px;
     overflow: hidden;
+    background: #fff;
     cursor: pointer;
-    transition: border-color 0.2s;
+    transition: border-color .16s ease, box-shadow .16s ease;
 }
 
 .thumbnail-item.active,
 .thumbnail-item:hover {
-    border-color: var(--color-accent, #3b82f6);
+    border-color: #007185;
+    box-shadow: 0 0 0 2px rgba(0, 113, 133, .24);
 }
 
 .thumbnail-item img {
@@ -509,112 +726,129 @@ $productImageVariant = static function (string $url, int $width): string {
 
 /* 产品信息区域 */
 .product-info-section {
-    flex: 1;
-    min-width: 300px;
+    min-width: 0;
+}
+
+.product-title-block {
+    margin-bottom: .8rem;
 }
 
 .product-title {
-    font-size: 1.75rem;
-    font-weight: 600;
-    color: var(--color-text-primary, #111827);
-    margin: 0 0 0.75rem;
-    line-height: 1.3;
+    margin: 0 0 .55rem;
+    color: #565959;
+    font-size: clamp(1.4rem, 1.7vw, 1.62rem);
+    font-weight: 500;
+    line-height: 1.28;
 }
 
 .product-short-description {
-    font-size: 0.95rem;
-    color: var(--color-text-secondary, #6b7280);
-    margin: 0 0 1rem;
-    line-height: 1.6;
+    max-width: 68ch;
+    margin: 0;
+    color: #565959;
+    font-size: .95rem;
+    line-height: 1.55;
 }
 
 .product-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
-    margin-bottom: 1.25rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+    gap: .55rem 1.25rem;
+    margin: 0 0 1.15rem;
 }
 
 .product-sku,
 .product-availability {
-    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: baseline;
+    gap: .3rem;
+    font-size: .88rem;
 }
 
 .meta-label {
-    color: var(--color-text-muted, #6c757d);
+    color: #565959;
 }
 
 .meta-value {
-    color: var(--color-text-primary, #111827);
-    font-weight: 500;
+    color: #0f1111;
+    font-weight: 700;
 }
 
 .product-availability.in-stock .meta-value {
-    color: #059669;
+    color: #007600;
 }
 
 .product-availability.out-of-stock .meta-value {
-    color: #dc2626;
+    color: #b12704;
 }
 
 .stock-count {
-    color: var(--color-text-muted, #6c757d);
-    font-size: 0.8rem;
+    color: #565959;
+    font-size: .82rem;
 }
 
 /* 价格区域 */
 .product-price-box {
-    margin-bottom: 1.5rem;
     display: flex;
     align-items: baseline;
-    gap: 0.75rem;
+    gap: .5rem .7rem;
     flex-wrap: wrap;
+    margin-bottom: 1rem;
 }
 
 .product-price-label {
-    font-size: 0.875rem;
-    color: var(--color-text-muted, #6c757d);
+    flex: 0 0 100%;
+    color: #565959;
+    font-size: .85rem;
 }
 
 .product-price-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: #dc2626;
-}
-
-.product-price-box .currency-symbol {
-    display: none;
+    color: #b12704;
+    font-size: clamp(1.8rem, 2.2vw, 2.25rem);
+    font-weight: 500;
+    line-height: 1.05;
 }
 
 .product-original-price {
-    font-size: 1rem;
-    color: var(--color-text-muted, #9ca3af);
+    color: #565959;
+    font-size: .95rem;
     text-decoration: line-through;
 }
 
 .product-discount {
-    font-size: 0.75rem;
-    background: #fef2f2;
-    color: #dc2626;
-    padding: 0.25rem 0.5rem;
+    padding: .2rem .45rem;
     border-radius: 4px;
+    background: #cc0c39;
+    color: #fff;
+    font-size: .76rem;
+    font-weight: 700;
 }
 
 /* 购买区域 */
+.product-purchase-card {
+    position: sticky;
+    top: 1rem;
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid #d5d9d9;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 2px 5px rgba(15, 17, 17, .08);
+}
+
+.purchase-card-stock {
+    margin-bottom: 1rem;
+    padding: .15rem 0;
+}
+
 .product-actions {
-    margin-bottom: 1.5rem;
+    margin-top: 1rem;
 }
 
 .product-configurable-options {
     display: grid;
     gap: 1rem;
-    margin-bottom: 1rem;
-    padding: 1rem;
-    border: 1px solid var(--color-border-light, #e5e7eb);
-    border-radius: 12px;
-    background: var(--color-bg-secondary, #f8fafc);
+    margin: 0 0 1.35rem;
+    padding: 0;
 }
 
 .product-option-group {
@@ -628,47 +862,47 @@ $productImageVariant = static function (string $url, int $width): string {
     align-items: baseline;
     gap: .5rem;
     margin-bottom: .65rem;
-    color: var(--color-text-primary, #111827);
+    color: #0f1111;
     font-size: .95rem;
     font-weight: 700;
 }
 
 .product-option-selected,
 .product-option-status {
-    color: var(--color-text-secondary, #64748b);
+    color: #565959;
     font-size: .85rem;
 }
 
 .product-option-status.is-error {
-    color: var(--color-danger, #dc2626);
+    color: #b12704;
 }
 
 .product-option-swatches,
 .product-option-pills {
     display: flex;
     flex-wrap: wrap;
-    gap: .65rem;
+    gap: .55rem;
 }
 
 .product-option-choice {
-    min-height: 2.5rem;
-    border: 1px solid var(--color-border-light, #d1d5db);
-    border-radius: 999px;
-    background: var(--color-bg-primary, #fff);
-    color: var(--color-text-primary, #111827);
+    min-height: 2.45rem;
+    border: 1px solid #888c8c;
+    border-radius: 6px;
+    background: #fff;
+    color: #0f1111;
     cursor: pointer;
-    font-weight: 650;
+    font-weight: 600;
     transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
 }
 
 .product-option-choice:hover:not(:disabled) {
-    border-color: var(--color-primary, #f0c14b);
+    border-color: #007185;
     transform: translateY(-1px);
 }
 
 .product-option-choice.is-selected {
-    border-color: var(--color-primary, #f0c14b);
-    box-shadow: 0 0 0 3px rgba(240, 193, 75, .22);
+    border-color: #007185;
+    box-shadow: 0 0 0 2px rgba(0, 113, 133, .28);
 }
 
 .product-option-choice--pill {
@@ -685,7 +919,7 @@ $productImageVariant = static function (string $url, int $width): string {
 .product-option-color {
     width: 1.65rem;
     height: 1.65rem;
-    border: 1px solid rgba(15, 23, 42, .12);
+    border: 1px solid rgba(15, 17, 17, .18);
     border-radius: 999px;
     box-shadow: inset 0 0 0 2px rgba(255,255,255,.75);
 }
@@ -693,55 +927,61 @@ $productImageVariant = static function (string $url, int $width): string {
 .product-option-image {
     width: 2rem;
     height: 2rem;
-    border: 1px solid rgba(15, 23, 42, .12);
+    border: 1px solid rgba(15, 17, 17, .18);
     border-radius: 999px;
     background-position: center;
     background-repeat: no-repeat;
     background-size: cover;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, .12);
+    box-shadow: 0 2px 8px rgba(15, 17, 17, .12);
 }
 
 .quantity-selector {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-bottom: .8rem;
 }
 
 .quantity-selector label {
-    font-size: 0.875rem;
-    color: var(--color-text-muted, #6c757d);
+    color: #0f1111;
+    font-size: .88rem;
+    font-weight: 600;
 }
 
 .qty-input-group {
     display: flex;
-    border: 1px solid var(--color-border-light, #e5e7eb);
-    border-radius: 6px;
+    border: 1px solid #d5d9d9;
+    border-radius: 8px;
     overflow: hidden;
+    background: #f0f2f2;
+    box-shadow: 0 2px 5px rgba(15, 17, 17, .08);
 }
 
 .qty-btn {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     border: none;
-    background: var(--color-bg-secondary, #f8f9fa);
-    font-size: 1.25rem;
+    background: #f0f2f2;
+    color: #0f1111;
+    font-size: 1.05rem;
     cursor: pointer;
     transition: background-color 0.2s;
 }
 
 .qty-btn:hover {
-    background: var(--color-border-light, #e5e7eb);
+    background: #e3e6e6;
 }
 
 .qty-input {
-    width: 60px;
-    height: 36px;
+    width: 52px;
+    height: 34px;
     border: none;
-    border-left: 1px solid var(--color-border-light, #e5e7eb);
-    border-right: 1px solid var(--color-border-light, #e5e7eb);
+    border-left: 1px solid #d5d9d9;
+    border-right: 1px solid #d5d9d9;
+    background: #fff;
     text-align: center;
-    font-size: 1rem;
+    font-size: .94rem;
     -moz-appearance: textfield;
 }
 
@@ -752,51 +992,66 @@ $productImageVariant = static function (string $url, int $width): string {
 }
 
 .action-buttons {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: .65rem;
 }
 
 .btn {
-    padding: 0.75rem 1.5rem;
-    border-radius: 6px;
-    font-size: 0.95rem;
-    font-weight: 500;
+    min-height: 42px;
+    padding: .62rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: .92rem;
+    font-weight: 650;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
-    border: none;
+    line-height: 1.1;
 }
 
 .btn-primary {
-    background: var(--color-accent, #3b82f6);
-    color: #fff;
+    grid-column: 1;
+    background: #ffd814;
+    border-color: #fcd200;
+    color: #0f1111;
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: #2563eb;
+    background: #f7ca00;
+    border-color: #f2c200;
 }
 
 .btn-secondary {
-    background: #f97316;
-    color: #fff;
+    grid-column: 1 / -1;
+    background: #ffa41c;
+    border-color: #ff8f00;
+    color: #0f1111;
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: #ea580c;
+    background: #fa8900;
+    border-color: #e77600;
 }
 
 .btn-outline {
-    background: transparent;
-    border: 1px solid var(--color-border-light, #e5e7eb);
-    color: var(--color-text-primary, #111827);
+    grid-column: 2;
+    grid-row: 1;
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    background: #fff;
+    border-color: #d5d9d9;
+    color: #0f1111;
 }
 
 .btn-outline:hover {
-    border-color: var(--color-accent, #3b82f6);
-    color: var(--color-accent, #3b82f6);
+    border-color: #007185;
+    color: #007185;
+    box-shadow: 0 0 0 2px rgba(0, 113, 133, .16);
 }
 
 .btn:disabled {
@@ -811,10 +1066,10 @@ $productImageVariant = static function (string $url, int $width): string {
     z-index: 9999;
     max-width: min(360px, calc(100vw - 2rem));
     padding: .8rem 1rem;
-    border-radius: 10px;
-    background: #111827;
+    border-radius: 8px;
+    background: #0f1111;
     color: #fff;
-    box-shadow: 0 14px 40px rgba(15, 23, 42, .22);
+    box-shadow: 0 14px 40px rgba(15, 17, 17, .22);
     font-size: .92rem;
     font-weight: 700;
     opacity: 0;
@@ -836,21 +1091,20 @@ $productImageVariant = static function (string $url, int $width): string {
 }
 
 .btn-wishlist {
-    padding: 0.75rem;
+    padding: 0;
 }
 
 /* 产品属性 */
 .product-attributes {
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--color-border-light, #e5e7eb);
+    margin-top: 1.25rem;
+    padding-top: .2rem;
 }
 
 .attributes-title {
     font-size: 1rem;
-    font-weight: 600;
-    margin: 0 0 0.75rem;
-    color: var(--color-text-primary, #111827);
+    font-weight: 700;
+    margin: 0 0 .75rem;
+    color: #0f1111;
 }
 
 .attributes-table {
@@ -860,63 +1114,289 @@ $productImageVariant = static function (string $url, int $width): string {
 
 .attributes-table th,
 .attributes-table td {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
+    padding: .56rem .75rem;
+    font-size: .88rem;
     text-align: left;
-    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
 }
 
 .attributes-table th {
     width: 35%;
-    color: var(--color-text-muted, #6c757d);
-    font-weight: 500;
-    background: var(--color-bg-secondary, #f8f9fa);
+    color: #565959;
+    font-weight: 650;
 }
 
 .attributes-table td {
-    color: var(--color-text-primary, #111827);
+    color: #0f1111;
+}
+
+.product-rating-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem .55rem;
+    margin: -.15rem 0 .55rem;
+    color: #565959;
+    font-size: .88rem;
+}
+
+.product-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    color: #c7c7c7;
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+.product-stars span {
+    color: #c7c7c7;
+}
+
+.product-stars .is-filled,
+.product-stars .is-half {
+    color: #ffa41c;
+}
+
+.product-rating-score {
+    color: #0f1111;
+    font-weight: 700;
+}
+
+.product-rating-count {
+    color: #007185;
+}
+
+.product-detail-lower {
+    display: grid;
+    gap: 1.5rem;
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #d5d9d9;
+}
+
+.product-detail-panel {
+    max-width: 1060px;
+}
+
+.product-section-title {
+    margin: 0 0 .8rem;
+    color: #0f1111;
+    font-size: 1.25rem;
+    line-height: 1.25;
+    font-weight: 700;
+}
+
+.product-description-text {
+    max-width: 92ch;
+    color: #0f1111;
+    font-size: .95rem;
+    line-height: 1.72;
+    white-space: normal;
+}
+
+.product-empty-state {
+    margin: 0;
+    color: #565959;
+    font-size: .92rem;
+}
+
+.product-review-layout {
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    gap: 1.4rem;
+    align-items: start;
+}
+
+.product-review-overview {
+    display: grid;
+    gap: .9rem;
+}
+
+.product-review-score {
+    display: grid;
+    gap: .4rem;
+}
+
+.product-review-score-number {
+    color: #0f1111;
+    font-size: 2rem;
+    line-height: 1;
+    font-weight: 700;
+}
+
+.product-review-total {
+    color: #565959;
+    font-size: .88rem;
+}
+
+.product-rating-bars {
+    display: grid;
+    gap: .35rem;
+}
+
+.product-rating-bar-row {
+    display: grid;
+    grid-template-columns: 44px minmax(90px, 1fr) 38px;
+    gap: .45rem;
+    align-items: center;
+    color: #565959;
+    font-size: .82rem;
+}
+
+.product-rating-bar-track {
+    height: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #f0f2f2;
+    box-shadow: inset 0 0 0 1px rgba(15, 17, 17, .1);
+}
+
+.product-rating-bar-track span {
+    display: block;
+    height: 100%;
+    background: #ffa41c;
+}
+
+.product-review-list,
+.product-qa-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.product-review-item,
+.product-qa-item {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e7e7e7;
+}
+
+.product-review-item:last-child,
+.product-qa-item:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.product-review-item-head,
+.product-review-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem .6rem;
+}
+
+.product-review-author,
+.product-review-title-row strong {
+    color: #0f1111;
+    font-size: .92rem;
+    font-weight: 700;
+}
+
+.product-review-date {
+    color: #565959;
+    font-size: .82rem;
+}
+
+.product-review-title-row {
+    margin-top: .35rem;
+}
+
+.product-review-item p {
+    margin: .55rem 0 0;
+    color: #0f1111;
+    font-size: .93rem;
+    line-height: 1.6;
+}
+
+.product-qa-question,
+.product-qa-answer,
+.product-qa-meta {
+    margin: 0;
+    font-size: .93rem;
+    line-height: 1.58;
+}
+
+.product-qa-answer {
+    margin-top: .35rem;
+    color: #0f1111;
+}
+
+.product-qa-question span,
+.product-qa-answer span {
+    color: #0f1111;
+    font-weight: 700;
+}
+
+.product-qa-meta {
+    margin-top: .4rem;
+    color: #565959;
+    font-size: .82rem;
 }
 
 /* 响应式设计 */
-@media (max-width: 768px) {
+@media (max-width: 1180px) {
     .product-detail-row {
-        flex-direction: column;
+        grid-template-columns: minmax(320px, 48%) minmax(300px, 1fr);
     }
-    
-    .product-gallery {
-        flex: 0 0 100%;
-        max-width: 100%;
+
+    .product-purchase-card {
+        position: static;
+        grid-column: 2;
+    }
+}
+
+@media (max-width: 860px) {
+    .product-detail-view {
+        padding-inline: 1rem;
+    }
+
+    .product-detail-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .product-gallery,
+    .product-purchase-card {
+        position: static;
+    }
+
+    .product-gallery.has-thumbnails {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .product-gallery.has-thumbnails .product-main-image {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .product-thumbnails {
+        grid-row: 2;
+        flex-direction: row;
+        max-height: none;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: .15rem 0 .2rem;
+    }
+
+    .product-main-image {
+        min-height: auto;
     }
 
     .product-image-lens,
     .product-image-zoom-preview {
         display: none;
     }
-    
-    .product-info-section {
-        min-width: 100%;
-    }
-    
     .product-title {
         font-size: 1.5rem;
     }
-    
+
     .product-price-value {
-        font-size: 1.5rem;
+        font-size: 1.8rem;
     }
-    
-    .action-buttons {
-        flex-direction: column;
+
+    .product-purchase-card {
+        grid-column: 1;
     }
-    
-    .btn {
-        width: 100%;
-        justify-content: center;
-    }
-    
-    .btn-wishlist {
-        width: auto;
-        align-self: flex-start;
+
+    .product-review-layout {
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 </style>
@@ -931,9 +1411,145 @@ var productDetailCurrencyConfig = {
 };
 var productDetailConfigurableVariants = <?= json_encode($configurableVariants, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>;
 var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+var productDetailI18n = <?= json_encode([
+    'checkoutUrlMissing' => (string) __('结算页地址未配置'),
+    'cartApiAddUnsupported' => (string) __('购物车 API 不支持 add 操作'),
+    'cartApiNotInitialized' => (string) __('购物车 API 未初始化'),
+    'addToCartFailed' => (string) __('加入购物车失败'),
+    'addedToCart' => (string) __('已加入购物车'),
+    'addedToCartSuccess' => (string) __('已成功加入购物车。'),
+    'choosePrefix' => (string) __('请选择'),
+    'listSeparator' => (string) __('、'),
+    'selectedPrefix' => (string) __('已选'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+var productDetailApiMessageI18n = <?= json_encode([
+    '已成功加入购物车。' => (string) __('已成功加入购物车。'),
+    '已加入购物车' => (string) __('已加入购物车'),
+    '加入购物车失败' => (string) __('加入购物车失败'),
+    '添加购物车失败' => (string) __('添加购物车失败'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
 (function() {
     var productDetailRoot = document.querySelector('.product-detail-view[data-product-id="<?= (int)$productId ?>"]');
+
+    function productDetailText(key) {
+        return productDetailI18n[key] || key;
+    }
+
+    function productDetailMessage(message, fallbackKey) {
+        var text = String(message || '').trim();
+        if (!text) {
+            return productDetailText(fallbackKey);
+        }
+        return productDetailApiMessageI18n[text] || text;
+    }
+
+    function normalizeProductDetailUrlKey(value) {
+        var normalized = String(value || '').trim().toLowerCase()
+            .replace(/[^a-z0-9_]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        return normalized;
+    }
+
+    function normalizeProductDetailUrlToken(value) {
+        return String(value || '').trim().toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/_/g, '-');
+    }
+
+    function getProductOptionUrlKey(group) {
+        var code = normalizeProductDetailUrlKey(group && group.dataset ? group.dataset.attributeCode : '');
+        if (code) {
+            return code;
+        }
+        var attributeId = group && group.dataset ? String(group.dataset.attributeId || '').trim() : '';
+        return attributeId ? 'attribute_' + attributeId : '';
+    }
+
+    function getProductDetailUrlParam(params, keys) {
+        var entries = Array.from(params.entries());
+        for (var i = 0; i < keys.length; i++) {
+            if (params.has(keys[i])) {
+                return params.get(keys[i]);
+            }
+        }
+        var lowerKeys = keys.map(function(key) { return String(key).toLowerCase(); });
+        for (var entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+            if (lowerKeys.indexOf(String(entries[entryIndex][0]).toLowerCase()) !== -1) {
+                return entries[entryIndex][1];
+            }
+        }
+        return null;
+    }
+
+    function getProductOptionChoiceUrlValue(choice) {
+        return String(choice.dataset.optionCode || choice.dataset.optionId || choice.dataset.optionLabel || '').trim();
+    }
+
+    function optionChoiceMatchesUrlValue(choice, value) {
+        var wanted = normalizeProductDetailUrlToken(value);
+        if (!wanted) {
+            return false;
+        }
+        return [
+            choice.dataset.optionId,
+            choice.dataset.optionCode,
+            choice.dataset.optionLabel
+        ].some(function(candidate) {
+            return normalizeProductDetailUrlToken(candidate) === wanted;
+        });
+    }
+
+    function parseProductDetailOptionIds(value) {
+        var text = String(value || '').trim();
+        if (!text) {
+            return [];
+        }
+        if (text.charAt(0) === '[') {
+            try {
+                var decoded = JSON.parse(text);
+                if (Array.isArray(decoded)) {
+                    return decoded.map(Number).filter(Boolean);
+                }
+            } catch (error) {
+                return [];
+            }
+        }
+        return text.split(',').map(function(item) {
+            return Number(String(item).trim());
+        }).filter(Boolean);
+    }
+
+    function findProductDetailVariantByOptions(selectedOptions) {
+        var selected = selectedOptions.map(Number).filter(Boolean).sort(function(a, b) { return a - b; });
+        if (selected.length === 0) {
+            return null;
+        }
+        if (Array.isArray(productDetailConfigurableVariants) && productDetailConfigurableVariants.length > 0) {
+            return productDetailConfigurableVariants.find(function(item) {
+                var optionIds = Array.isArray(item.option_ids) ? item.option_ids.map(Number).filter(Boolean).sort(function(a, b) { return a - b; }) : [];
+                return optionIds.length === selected.length && optionIds.every(function(optionId, index) {
+                    return optionId === selected[index];
+                });
+            }) || null;
+        }
+
+        return null;
+    }
+
+    function findProductDetailVariantByUrlValue(value) {
+        var wanted = normalizeProductDetailUrlToken(value);
+        if (!wanted) {
+            return null;
+        }
+        if (Array.isArray(productDetailConfigurableVariants) && productDetailConfigurableVariants.length > 0) {
+            return productDetailConfigurableVariants.find(function(item) {
+                return normalizeProductDetailUrlToken(item.product_id) === wanted
+                    || normalizeProductDetailUrlToken(item.sku) === wanted;
+            }) || null;
+        }
+        return null;
+    }
 
     function formatConvertedCurrency(amount) {
         var definition = productDetailCurrencyConfig.currencyDefinition || {};
@@ -1132,10 +1748,47 @@ var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_U
         return { selectedOptions: selected.filter(Boolean), labels: labels, missing: missing };
     }
 
-    function updateVariantState() {
+    function syncProductOptionUrl(state) {
+        if (!productDetailRoot || !window.history || typeof URLSearchParams === 'undefined') {
+            return;
+        }
+
+        var params = new URLSearchParams(window.location.search);
+        productDetailRoot.querySelectorAll('.product-option-group').forEach(function(group) {
+            var key = getProductOptionUrlKey(group);
+            if (!key) {
+                return;
+            }
+            var selectedButton = group.querySelector('.product-option-choice.is-selected');
+            if (!selectedButton) {
+                params.delete(key);
+                return;
+            }
+            params.set(key, getProductOptionChoiceUrlValue(selectedButton));
+        });
+
+        var variant = state && state.missing.length === 0
+            ? findProductDetailVariantByOptions(state.selectedOptions)
+            : null;
+        if (variant && variant.product_id) {
+            params.set('variant', String(variant.product_id));
+        } else {
+            params.delete('variant');
+        }
+
+        var query = params.toString();
+        var nextUrl = window.location.pathname + (query ? '?' + query : '') + window.location.hash;
+        var currentUrl = window.location.pathname + window.location.search + window.location.hash;
+        if (nextUrl !== currentUrl) {
+            window.history.replaceState(window.history.state, '', nextUrl);
+        }
+    }
+
+    function updateVariantState(options) {
         if (!productDetailRoot) {
             return;
         }
+        options = options || {};
         var state = getProductOptionState();
         var statusNode = productDetailRoot.querySelector('[data-option-status]');
         var complete = state.missing.length === 0;
@@ -1146,24 +1799,18 @@ var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_U
         });
         if (statusNode) {
             statusNode.classList.toggle('is-error', !complete);
-            statusNode.textContent = complete ? state.labels.join(' / ') : '请选择：' + state.missing.join('、');
+            statusNode.textContent = complete ? state.labels.join(' / ') : productDetailText('choosePrefix') + ': ' + state.missing.join(productDetailText('listSeparator'));
         }
         if (complete) {
             updateSelectedVariantImage(state.selectedOptions);
         }
+        if (options.syncUrl !== false) {
+            syncProductOptionUrl(state);
+        }
     }
 
     function updateSelectedVariantImage(selectedOptions) {
-        if (!Array.isArray(productDetailConfigurableVariants) || productDetailConfigurableVariants.length === 0) {
-            return;
-        }
-        var selected = selectedOptions.map(Number).sort(function(a, b) { return a - b; });
-        var variant = productDetailConfigurableVariants.find(function(item) {
-            var optionIds = Array.isArray(item.option_ids) ? item.option_ids.map(Number).sort(function(a, b) { return a - b; }) : [];
-            return optionIds.length === selected.length && optionIds.every(function(optionId, index) {
-                return optionId === selected[index];
-            });
-        });
+        var variant = findProductDetailVariantByOptions(selectedOptions);
         if (!variant || !variant.image) {
             return;
         }
@@ -1176,6 +1823,74 @@ var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_U
         productDetailRoot.querySelectorAll('.thumbnail-item').forEach(function(item) {
             item.classList.toggle('active', item.dataset.src === variant.image);
         });
+    }
+
+    function selectProductOptionChoice(choice) {
+        var group = choice ? choice.closest('.product-option-group') : null;
+        if (!group) {
+            return false;
+        }
+        group.querySelectorAll('.product-option-choice').forEach(function(item) {
+            item.classList.remove('is-selected');
+            item.setAttribute('aria-pressed', 'false');
+        });
+        choice.classList.add('is-selected');
+        choice.setAttribute('aria-pressed', 'true');
+        var label = productDetailRoot.querySelector('[data-selected-label-for="' + choice.dataset.attributeId + '"]');
+        if (label) {
+            label.textContent = choice.dataset.optionLabel ? productDetailText('selectedPrefix') + ' ' + choice.dataset.optionLabel : '';
+        }
+        return true;
+    }
+
+    function findProductOptionChoiceFromUrl(group, params, optionIds) {
+        var key = getProductOptionUrlKey(group);
+        var attributeId = String(group.dataset.attributeId || '').trim();
+        var value = getProductDetailUrlParam(params, [
+            key,
+            'option_' + key,
+            key + '_option',
+            attributeId ? 'attribute_' + attributeId : ''
+        ].filter(Boolean));
+
+        var choices = Array.from(group.querySelectorAll('.product-option-choice:not(:disabled)'));
+        if (optionIds.length > 0) {
+            var optionIdChoice = choices.find(function(choice) {
+                return optionIds.indexOf(Number(choice.dataset.optionId)) !== -1;
+            });
+            if (optionIdChoice) {
+                return optionIdChoice;
+            }
+        }
+        if (!value) {
+            return null;
+        }
+        return choices.find(function(choice) {
+            return optionChoiceMatchesUrlValue(choice, value);
+        }) || null;
+    }
+
+    function applyProductOptionUrlSelection() {
+        if (!productDetailRoot || typeof URLSearchParams === 'undefined') {
+            return false;
+        }
+
+        var params = new URLSearchParams(window.location.search);
+        var variantValue = getProductDetailUrlParam(params, ['variant', 'variant_id', 'variant_sku']);
+        var variant = findProductDetailVariantByUrlValue(variantValue);
+        var optionIds = variant && Array.isArray(variant.option_ids)
+            ? variant.option_ids.map(Number).filter(Boolean)
+            : parseProductDetailOptionIds(getProductDetailUrlParam(params, ['option_ids', 'options', 'selected_options']));
+        var applied = false;
+
+        productDetailRoot.querySelectorAll('.product-option-group').forEach(function(group) {
+            var choice = findProductOptionChoiceFromUrl(group, params, optionIds);
+            if (choice && selectProductOptionChoice(choice)) {
+                applied = true;
+            }
+        });
+
+        return applied;
     }
 
     var productDetailCartApiPromise = null;
@@ -1234,7 +1949,7 @@ var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_U
                     if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
                         return window.Weline.Api.resource('cart');
                     }
-                    throw new Error('购物车 API 未初始化');
+                    throw new Error(productDetailText('cartApiNotInitialized'));
                 });
             });
         }
@@ -1286,7 +2001,7 @@ var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_U
     function redirectToProductDetailCheckout() {
         var checkoutUrl = String(productDetailCheckoutUrl || '').trim();
         if (!checkoutUrl) {
-            throw new Error('结算页地址未配置');
+            throw new Error(productDetailText('checkoutUrlMissing'));
         }
 
         window.location.href = checkoutUrl;
@@ -1297,18 +2012,19 @@ var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_U
         return getProductDetailCartApi()
             .then(function(CartApi) {
                 if (!CartApi || typeof CartApi.add !== 'function') {
-                    throw new Error('购物车 API 不支持 add 操作');
+                    throw new Error(productDetailText('cartApiAddUnsupported'));
                 }
                 return CartApi.add({
                     product_id: Number(productId),
                     qty: qty,
-                    selected_options: selectedOptions
+                    selected_options: selectedOptions,
+                    selected_option_labels: selectedOptionLabels || []
                 });
             })
             .then(normalizeCartPayload)
             .then(function(result) {
                 if (!result || result.success === false) {
-                    throw new Error((result && (result.message || result.msg)) || '加入购物车失败');
+                    throw new Error(productDetailMessage(result && (result.message || result.msg), 'addToCartFailed'));
                 }
                 updateProductDetailCartCount(result.cart_count);
                 document.dispatchEvent(new CustomEvent('weshop:cart:added', {
@@ -1339,7 +2055,7 @@ var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_U
                         subtotal_formatted: result.cart_total_formatted
                     }
                 }));
-                showProductDetailCartMessage(result.message || '已加入购物车', 'success');
+                showProductDetailCartMessage(productDetailMessage(result.message || result.msg, 'addedToCartSuccess'), 'success');
                 return result;
             })
             .catch(function(error) {
@@ -1351,7 +2067,7 @@ var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_U
                         error: error.message || String(error)
                     }
                 }));
-                showProductDetailCartMessage(error.message || '加入购物车失败', 'error');
+                showProductDetailCartMessage(productDetailMessage(error.message || String(error), 'addToCartFailed'), 'error');
                 throw error;
             })
             .finally(function() {
@@ -1361,31 +2077,27 @@ var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_U
 
     if (productDetailRoot) productDetailRoot.querySelectorAll('.product-option-choice').forEach(function(choice) {
         choice.addEventListener('click', function() {
-            var group = this.closest('.product-option-group');
-            if (!group) {
-                return;
-            }
-            group.querySelectorAll('.product-option-choice').forEach(function(item) {
-                item.classList.remove('is-selected');
-                item.setAttribute('aria-pressed', 'false');
-            });
-            this.classList.add('is-selected');
-            this.setAttribute('aria-pressed', 'true');
-            var label = productDetailRoot.querySelector('[data-selected-label-for="' + this.dataset.attributeId + '"]');
-            if (label) {
-                label.textContent = this.dataset.optionLabel ? '已选 ' + this.dataset.optionLabel : '';
-            }
+            selectProductOptionChoice(this);
             updateVariantState();
         });
     });
 
+    applyProductOptionUrlSelection();
     if (productDetailRoot) productDetailRoot.querySelectorAll('.product-option-group').forEach(function(group) {
+        if (group.querySelector('.product-option-choice.is-selected')) {
+            return;
+        }
         var firstAvailable = group.querySelector('.product-option-choice:not(:disabled)');
         if (firstAvailable) {
-            firstAvailable.click();
+            selectProductOptionChoice(firstAvailable);
         }
     });
     updateVariantState();
+
+    window.addEventListener('popstate', function() {
+        applyProductOptionUrlSelection();
+        updateVariantState({ syncUrl: false });
+    });
 
     // 加入购物车
     if (productDetailRoot) productDetailRoot.querySelectorAll('.product-actions .btn-add-to-cart').forEach(function(btn) {
