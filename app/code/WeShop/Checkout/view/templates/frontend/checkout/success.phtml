@@ -52,6 +52,7 @@ $orderNumber = (string) ($order['increment_id'] ?? '');
                         <?php
                         $itemName = (string) ($item['name'] ?? '');
                         $itemImage = (string) ($item['image'] ?? '');
+                        $itemOptions = is_array($item['options'] ?? null) ? $item['options'] : [];
                         ?>
                         <article class="weshop-success-item">
                             <div class="weshop-success-item-media">
@@ -63,6 +64,11 @@ $orderNumber = (string) ($order['increment_id'] ?? '');
                             </div>
                             <div>
                                 <h3><?= htmlspecialchars($itemName) ?></h3>
+                                <?php if ($itemOptions !== []): ?>
+                                    <div class="weshop-success-item-options">
+                                        <?= \WeShop\Product\Helper\ProductOptionRenderer::renderItems($itemOptions) ?>
+                                    </div>
+                                <?php endif; ?>
                                 <p><?= __('数量：%{1}', $item['qty'] ?? 1) ?></p>
                             </div>
                             <strong><?= $formatSuccessPrice($item['row_total'] ?? 0) ?></strong>
@@ -394,6 +400,54 @@ $orderNumber = (string) ($order['increment_id'] ?? '');
 .weshop-success-steps p {
     margin: .25rem 0 0;
     color: var(--ws-muted);
+}
+
+.weshop-success-item-options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .25rem .6rem;
+    margin-top: .3rem;
+    color: var(--ws-muted);
+    font-size: .82rem;
+    line-height: 1.35;
+}
+
+.weshop-success-item-options .weshop-product-option {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    min-width: 0;
+}
+
+.weshop-success-item-options .weshop-product-option__label {
+    font-weight: 700;
+    color: var(--ws-text);
+}
+
+.weshop-success-item-options .weshop-product-option__swatch {
+    width: .95rem;
+    height: .95rem;
+    flex: 0 0 .95rem;
+    border: 1px solid rgba(17, 24, 39, .18);
+    background: #fff;
+}
+
+.weshop-success-item-options .weshop-product-option__swatch--color {
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .62);
+}
+
+.weshop-success-item-options .weshop-product-option__swatch--image {
+    border-radius: .25rem;
+    overflow: hidden;
+}
+
+.weshop-success-item-options .weshop-product-option__swatch img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 
 .weshop-success-info-grid,

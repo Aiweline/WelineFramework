@@ -78,11 +78,27 @@ class GlobalsEmulator
             'argc',
             'argv',
         ];
+        $requestScopedKeys = [
+            'WLS_INTERNAL_WARMUP',
+            'WLS_INTERNAL_DYNAMIC_WARMUP',
+            'WLS_INTERNAL_BACKEND_WARMUP',
+            'WLS_INTERNAL_BACKEND_WARMUP_USER_ID',
+            'WLS_FPC_BYPASS',
+        ];
 
         $server = [];
         foreach ($keepKeys as $key) {
-            if (isset($_SERVER[$key])) {
+            $requestValue = \method_exists($request, 'getServer') ? $request->getServer($key) : null;
+            if ($requestValue !== null && $requestValue !== '') {
+                $server[$key] = $requestValue;
+            } elseif (isset($_SERVER[$key])) {
                 $server[$key] = $_SERVER[$key];
+            }
+        }
+        foreach ($requestScopedKeys as $key) {
+            $requestValue = \method_exists($request, 'getServer') ? $request->getServer($key) : null;
+            if ($requestValue !== null && $requestValue !== '') {
+                $server[$key] = $requestValue;
             }
         }
 

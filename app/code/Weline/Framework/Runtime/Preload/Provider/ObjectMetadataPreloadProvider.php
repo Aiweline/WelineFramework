@@ -18,7 +18,7 @@ final class ObjectMetadataPreloadProvider implements WorkerPreloadProviderInterf
 
     public function phase(): string
     {
-        return WorkerPreloadContext::PHASE_READY_GATE;
+        return WorkerPreloadContext::PHASE_BOOTSTRAP;
     }
 
     public function priority(): int

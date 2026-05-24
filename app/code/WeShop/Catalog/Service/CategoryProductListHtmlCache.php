@@ -11,7 +11,7 @@ use Weline\Server\Service\MemoryStateFacade;
 
 final class CategoryProductListHtmlCache
 {
-    private const TTL = 300;
+    private const TTL = 600;
 
     /** @var array<string, array{expires_at: float, html: string}> */
     private static array $cache = [];

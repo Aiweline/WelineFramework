@@ -295,6 +295,7 @@ class AiSiteBuildTaskService
             'build_contracts',
             'render_data_contract',
             'qa_report_contract',
+            'asset_image_generation_failures',
             'publish_verification',
             'pre_publish_visual_urls',
         ] as $key) {
@@ -581,69 +582,6 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * Confirmed BuildPlan is derived state from the stage-1 source of truth. Rebuild
-     * the contract before task graph assembly so prompt/manifest contract fixes
-     * take effect without mutating generated output directly.
-     *
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $websiteProfile
-     * @return array<string, mixed>
-     */
-    private function refreshConfirmedBuildPlanContract(array $scope, array $websiteProfile, string $workspaceTrack): array
-    {
-        if (!$this->shouldRefreshConfirmedBuildPlanContract($scope)) {
-            return $scope;
-        }
-
-        try {
-            /** @var AiSiteBuildPlanTaskScheduler $scheduler */
-            $scheduler = ObjectManager::getInstance(AiSiteBuildPlanTaskScheduler::class);
-            $patch = $scheduler->buildConfirmationScopePatch($scope, $websiteProfile, $workspaceTrack);
-        } catch (\Throwable $throwable) {
-            $scope['build_plan_v2_validation'] = [
-                'valid' => false,
-                'errors' => [$throwable->getMessage()],
-            ];
-            $scope['build_plan_confirmed'] = 0;
-            $scope['has_build_plan_v2'] = 0;
-
-            return $scope;
-        }
-
-        if ((int)($patch['build_plan_confirmed'] ?? 0) !== 1) {
-            if (\array_key_exists('build_plan_v2_validation', $patch)) {
-                $scope['build_plan_v2_validation'] = \is_array($patch['build_plan_v2_validation'] ?? null)
-                    ? $patch['build_plan_v2_validation']
-                    : [];
-            }
-            $scope['build_plan_confirmed'] = 0;
-            $scope['has_build_plan_v2'] = 0;
-
-            return $scope;
-        }
-
-        foreach ($this->buildPlanDerivedScopeKeys() as $key) {
-            if (\array_key_exists($key, $patch)) {
-                $scope[$key] = $patch[$key];
-            }
-        }
-
-        return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function shouldRefreshConfirmedBuildPlanContract(array $scope): bool
-    {
-        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
-        $status = \strtolower(\trim((string)($meta['status'] ?? '')));
-
-        return (int)($scope['build_plan_confirmed'] ?? 0) === 1 || $status === 'confirmed';
-    }
-
-    /**
      * @return list<string>
      */
     public function buildPlanDerivedScopeKeys(): array
@@ -905,6 +843,16 @@ class AiSiteBuildTaskService
             if ($imageIntent !== []) {
                 $planContext['block_image_intent'] = $imageIntent;
             }
+            $contentLocale = $this->firstNonEmptyBuildPlanText([
+                $taskRuntimeContext['content_locale'] ?? null,
+                $contract['i18n']['primary_locale'] ?? null,
+                $contentManifest['primary_locale'] ?? null,
+                $scope['content_locale'] ?? null,
+                $scope['default_locale'] ?? null,
+            ]);
+            $languageContract = \is_array($taskRuntimeContext['language_contract'] ?? null)
+                ? $taskRuntimeContext['language_contract']
+                : $this->buildLanguageRuntimeContract($contentLocale);
 
             $tasks[] = [
                 'task_key' => $taskId,
@@ -939,7 +887,8 @@ class AiSiteBuildTaskService
                     : ['page_type' => $pageType, 'section_code' => $sectionCode],
                 'runtime_context' => \array_replace($taskRuntimeContext, [
                     'build_plan_contract_id' => (string)($meta['id'] ?? ''),
-                    'content_locale' => (string)($contract['i18n']['primary_locale'] ?? $scope['default_locale'] ?? ''),
+                    'content_locale' => $contentLocale,
+                    'language_contract' => $languageContract,
                     'context_refs' => [
                         'site_brief_ref' => 'build_plan_v2.site_brief',
                         'design_manifest_ref' => 'build_plan_v2.design_manifest',
@@ -1296,6 +1245,20 @@ class AiSiteBuildTaskService
         }
 
         return '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildLanguageRuntimeContract(string $locale): array
+    {
+        return [
+            'source_of_truth_locale' => $locale,
+            'visible_copy_rule' => 'All visitor-facing copy for headings, body, buttons, navigation, footer, form labels, alt/title/aria/placeholder text must use source_of_truth_locale.',
+            'plan_text_rule' => 'BuildPlan text is intent only; translate or rewrite it before rendering visible copy.',
+            'proper_noun_rule' => 'Brand names, product names, domain names, URLs, acronyms, model names, and user-provided proper nouns may retain original spelling when natural.',
+            'failure_mode' => 'Visible copy in a different main language is a build contract violation.',
+        ];
     }
 
     /**

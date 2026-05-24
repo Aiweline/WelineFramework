@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Review\Test\Unit\Controller\Frontend\Review;
 
 use PHPUnit\Framework\TestCase;
+use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Review\Controller\Frontend\Review\Index;
 use WeShop\Review\Service\ReviewPageDataService;
 use Weline\Framework\Http\Request;
@@ -65,6 +66,9 @@ class IndexTest extends TestCase
         $url = $this->createMock(\Weline\Framework\Http\Url::class);
         $url->expects($this->once())->method('getUrl')->with('review/create')->willReturn('/review/create');
 
+        $customerContext = $this->createMock(CustomerContextInterface::class);
+        $customerContext->expects($this->once())->method('getUserId')->willReturn(null);
+
         $request = $this->createMock(Request::class);
         $request->method('getParam')->willReturnMap([
             ['product_id', null, 88],
@@ -73,16 +77,27 @@ class IndexTest extends TestCase
         ]);
 
         $controller = $this->getMockBuilder(Index::class)
-            ->setConstructorArgs([$pageDataService, $url])
+            ->setConstructorArgs([$pageDataService, $url, $customerContext])
             ->onlyMethods(['assign', 'fetch', 'redirect'])
             ->getMock();
 
         $controller->expects($this->never())->method('redirect');
-        $controller->expects($this->exactly(5))->method('assign');
+        $controller->expects($this->exactly(6))->method('assign');
         $controller->expects($this->once())->method('fetch')->willReturn('page');
         $this->setProtectedProperty($controller, 'request', $request);
 
         $this->assertSame('page', $controller->index());
+    }
+
+    public function testDefaultFrontendTemplateExists(): void
+    {
+        $template = __DIR__ . '/../../../../../view/templates/Frontend/Review/Index/index.phtml';
+
+        $this->assertFileExists($template);
+        $content = (string) file_get_contents($template);
+        $this->assertStringContainsString('pages', $content);
+        $this->assertStringContainsString('review', $content);
+        $this->assertStringContainsString('index.phtml', $content);
     }
 
     private function setProtectedProperty(object $target, string $property, mixed $value): void

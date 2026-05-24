@@ -17,6 +17,13 @@ use WeShop\Payment\Provider\WeChatPay;
 
 class PaymentService
 {
+    private ?PaymentMethodLocalDescriptionService $localDescriptionService = null;
+
+    public function __construct(?PaymentMethodLocalDescriptionService $localDescriptionService = null)
+    {
+        $this->localDescriptionService = $localDescriptionService;
+    }
+
     /**
      * @return array<string, array<string, mixed>>
      */
@@ -246,7 +253,7 @@ class PaymentService
             return null;
         }
 
-        return $this->applyRuntimeOverrides($this->normalizeMethod($registry[$code]));
+        return $this->localizeMethod($this->applyRuntimeOverrides($this->normalizeMethod($registry[$code])));
     }
 
     public function getAvailablePaymentMethods(array $context = []): array
@@ -273,6 +280,7 @@ class PaymentService
         foreach ($this->getMethodRegistry() as $method) {
             $method = $this->normalizeMethod($method);
             $method = $this->applyRuntimeOverrides($method);
+            $method = $this->localizeMethod($method, (string) ($context['locale'] ?? ''));
             if ($enabledOnly && (!$this->isEnabled($method) || !$this->isConfigured($method))) {
                 continue;
             }
@@ -360,12 +368,14 @@ class PaymentService
             'is_default' => (bool) ($method['is_default'] ?? false),
             'sort_order' => (int) ($method['sort_order'] ?? 0),
             'icon' => (string) ($method['icon'] ?? ''),
+            'checkout_note' => (string) ($method['checkout_note'] ?? ''),
             'areas' => array_values(array_map(static fn(mixed $value): string => (string) $value, (array) ($method['areas'] ?? []))),
             'currencies' => array_values(array_map(static fn(mixed $value): string => strtoupper((string) $value), (array) ($method['currencies'] ?? []))),
             'countries' => array_values(array_map(static fn(mixed $value): string => strtoupper((string) $value), (array) ($method['countries'] ?? []))),
             'config' => \is_array($method['config'] ?? null) ? $method['config'] : [],
             'config_fields' => \is_array($method['config_fields'] ?? null) ? $method['config_fields'] : [],
             'required_config' => array_values(array_map(static fn(mixed $value): string => (string) $value, (array) ($method['required_config'] ?? []))),
+            'local_descriptions' => \is_array($method['local_descriptions'] ?? null) ? $method['local_descriptions'] : [],
             'missing_config' => [],
             'is_configured' => true,
         ];
@@ -393,10 +403,16 @@ class PaymentService
             return $method;
         }
 
-        foreach (['title', 'description', 'icon'] as $key) {
+        foreach (['title', 'description', 'icon', 'checkout_note'] as $key) {
             if (array_key_exists($key, $override)) {
                 $method[$key] = (string) $override[$key];
             }
+        }
+        if (\is_array($override['local_descriptions'] ?? null)) {
+            $method['local_descriptions'] = $override['local_descriptions'];
+        }
+        if (\is_array($override['local_description'] ?? null)) {
+            $method['local_descriptions'] = $override['local_description'];
         }
         foreach (['enabled', 'is_default'] as $key) {
             if (array_key_exists($key, $override)) {
@@ -422,6 +438,24 @@ class PaymentService
         $method['is_configured'] = $method['missing_config'] === [];
 
         return $method;
+    }
+
+    /**
+     * @param array<string, mixed> $method
+     * @return array<string, mixed>
+     */
+    protected function localizeMethod(array $method, string $locale = ''): array
+    {
+        return $this->getLocalDescriptionService()->localize($method, $locale !== '' ? $locale : null);
+    }
+
+    protected function getLocalDescriptionService(): PaymentMethodLocalDescriptionService
+    {
+        if ($this->localDescriptionService === null) {
+            $this->localDescriptionService = new PaymentMethodLocalDescriptionService();
+        }
+
+        return $this->localDescriptionService;
     }
 
     /**

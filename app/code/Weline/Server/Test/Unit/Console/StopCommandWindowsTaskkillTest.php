@@ -50,9 +50,6 @@ final class StopCommandWindowsTaskkillTest extends TestCase
         self::assertSame(
             [
                 ['pid' => 18628, 'tree' => true],
-                ['pid' => 18628, 'tree' => true],
-                ['pid' => 18628, 'tree' => true],
-                ['pid' => 18628, 'tree' => false],
             ],
             $stop->calls
         );
@@ -94,7 +91,6 @@ final class StopCommandWindowsTaskkillTest extends TestCase
         self::assertTrue($stop->killPid(15364));
         self::assertSame(
             [
-                ['pid' => 15364, 'tree' => false],
                 ['pid' => 15364, 'tree' => false],
             ],
             $stop->calls

@@ -12,6 +12,7 @@ use WeShop\Product\Service\ProductRecommendationService;
 use WeShop\Product\Service\ProductService;
 use WeShop\Product\Service\ProductViewPageDataService;
 use WeShop\QA\Service\QAService;
+use WeShop\Review\Service\ReviewRatingOptionService;
 use WeShop\Review\Service\ReviewService;
 
 class ProductViewPageDataServiceTest extends TestCase
@@ -21,6 +22,7 @@ class ProductViewPageDataServiceTest extends TestCase
     private ProductEavService $productEavService;
     private ProductRecommendationService $productRecommendationService;
     private ReviewService $reviewService;
+    private ReviewRatingOptionService $ratingOptionService;
     private QAService $qaService;
     private ProductViewPageDataService $service;
 
@@ -33,6 +35,7 @@ class ProductViewPageDataServiceTest extends TestCase
         $this->productEavService = $this->createMock(ProductEavService::class);
         $this->productRecommendationService = $this->createMock(ProductRecommendationService::class);
         $this->reviewService = $this->createMock(ReviewService::class);
+        $this->ratingOptionService = $this->createMock(ReviewRatingOptionService::class);
         $this->qaService = $this->createMock(QAService::class);
 
         $this->service = new ProductViewPageDataService(
@@ -41,7 +44,9 @@ class ProductViewPageDataServiceTest extends TestCase
             $this->productEavService,
             $this->productRecommendationService,
             $this->reviewService,
-            $this->qaService
+            $this->qaService,
+            null,
+            $this->ratingOptionService
         );
     }
 
@@ -104,7 +109,7 @@ class ProductViewPageDataServiceTest extends TestCase
             ->willReturn($product);
         $this->priceService->expects($this->once())
             ->method('resolveProduct')
-            ->with($product, null, 1, [])
+            ->with($product)
             ->willReturn([
                 'price' => 99.9,
                 'original_price' => 129.5,
@@ -156,6 +161,14 @@ class ProductViewPageDataServiceTest extends TestCase
             ->method('getAverageRating')
             ->with(42)
             ->willReturn(4.7);
+        $this->reviewService->method('decodeMediaItems')->willReturn([]);
+        $this->reviewService->method('decodeRatingScores')->willReturn([]);
+
+        $this->ratingOptionService->expects($this->once())
+            ->method('getEnabledOptions')
+            ->willReturn([
+                ['code' => 'quality', 'label' => '商品质量'],
+            ]);
 
         $this->qaService->expects($this->once())
             ->method('getProductQuestions')
@@ -181,6 +194,7 @@ class ProductViewPageDataServiceTest extends TestCase
         $this->assertSame('Nylon', $result['product']['specifications'][0]['value']);
         $this->assertSame('Trail Jacket Meta', $result['meta_title']);
         $this->assertCount(1, $result['related_products']);
+        $this->assertSame([['code' => 'quality', 'label' => '商品质量']], $result['rating_options']);
         $this->assertCount(1, $result['qa']);
     }
 

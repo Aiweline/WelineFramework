@@ -91,6 +91,64 @@ final class StopCommandProgressHeuristicTest extends TestCase
         ));
     }
 
+    public function testParsesCurrentFiveStepStopStage(): void
+    {
+        $stop = new Stop();
+
+        self::assertSame(5, $this->invokeProtected(
+            $stop,
+            'updateObservedStopStage',
+            '阶段5/5: 关闭 IPC 服务器',
+            0
+        ));
+    }
+
+    public function testRecognizesCurrentFinalChildrenExitedProgress(): void
+    {
+        $stop = new Stop();
+
+        self::assertTrue($this->invokeProtected(
+            $stop,
+            'isChildrenFullyExitedProgress',
+            '所有子进程已完整退出，Master 即将退出进程'
+        ));
+    }
+
+    public function testCompletedIpcStopDoesNotRequireSlowMasterExitWait(): void
+    {
+        $stop = new class extends Stop {
+            public bool $waitedForIndexCleanup = false;
+
+            protected function waitForMasterPidIndexCleanupAfterFinalProgress(int $masterPid): bool
+            {
+                unset($masterPid);
+                $this->waitedForIndexCleanup = true;
+                return false;
+            }
+
+            protected function waitForMasterExit(int $masterPid): bool
+            {
+                unset($masterPid);
+                throw new \RuntimeException('slow process-table wait should not be called after final STOP completion');
+            }
+
+            protected function ipcMsg(string $message, string $type = 'info'): void
+            {
+                unset($message, $type);
+            }
+        };
+
+        self::assertTrue($this->invokeProtected(
+            $stop,
+            'finishCompletedIpcStopAfterFinalProgress',
+            12345,
+            true,
+            false,
+            0
+        ));
+        self::assertTrue($stop->waitedForIndexCleanup);
+    }
+
     public function testBypassesGracefulStopWhenInstanceIsStillBootstrapping(): void
     {
         $stop = new Stop();

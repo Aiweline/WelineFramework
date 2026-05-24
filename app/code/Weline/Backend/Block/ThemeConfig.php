@@ -25,6 +25,9 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public const        theme_Session_Config = 'backend_theme_config';
     private AuthenticatedSessionInterface $userSession;
     private BackendUserConfig $userConfig;
+    private ?string $originThemeConfigCacheKey = null;
+    private ?array $originThemeConfigCacheValue = null;
+    private float $originThemeConfigCacheExpiresAt = 0.0;
 
     public function __construct(BackendUserConfig $userConfig, array $data = [])
     {
@@ -48,7 +51,18 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function getOriginThemeConfig($key = '')
     {
         $this->userSession = $this->resolveSession();
-        $themeConfig = $this->userSession->getData(self::theme_Session_Config);
+        $sessionConfig = $this->userSession->getData(self::theme_Session_Config);
+        $userId = (int)($this->userSession->getUserId() ?? 0);
+        $cacheKey = $userId . '|' . md5(json_encode($sessionConfig) ?: '');
+        if (
+            $this->originThemeConfigCacheKey === $cacheKey
+            && $this->originThemeConfigCacheValue !== null
+            && $this->originThemeConfigCacheExpiresAt >= microtime(true)
+        ) {
+            return $key ? ($this->originThemeConfigCacheValue[$key] ?? '') : $this->originThemeConfigCacheValue;
+        }
+
+        $themeConfig = $sessionConfig;
         if (empty($themeConfig) && $this->userSession->isLoggedIn()) {
             $configValue = $this->userConfig->getConfig(self::theme_Session_Config, 'Weline_Backend', '主题设置');
             if ($configValue) {
@@ -71,6 +85,9 @@ class ThemeConfig extends \Weline\Framework\View\Block
             $layouts['data-layout-mode'] = $mode;
             $themeConfig['layouts'] = $layouts;
         }
+        $this->originThemeConfigCacheKey = $cacheKey;
+        $this->originThemeConfigCacheValue = $themeConfig;
+        $this->originThemeConfigCacheExpiresAt = microtime(true) + 30.0;
         return $key ? ($themeConfig[$key] ?? '') : $themeConfig;
     }
 
@@ -114,15 +131,16 @@ class ThemeConfig extends \Weline\Framework\View\Block
         } catch (\Throwable) {
         }
 
-        $themeModeFromSwitch = $this->getThemeConfig('theme-mode-switch');
+        $themeConfig = $this->getOriginThemeConfig();
+        $themeModeFromSwitch = $themeConfig['theme-mode-switch'] ?? '';
         $themeMode = $this->resolveThemeModeFromConfig(
-            $this->getThemeConfig(),
+            $themeConfig,
             \is_string($themeModeFromSwitch) ? $themeModeFromSwitch : ''
         );
         if ($themeMode !== '') {
             return $themeMode === 'light' ? '' : $themeMode;
         }
-        if ($this->getThemeConfig('rtl-mode-switch')) {
+        if (!empty($themeConfig['rtl-mode-switch'])) {
             return 'rtl';
         }
         return '';
@@ -131,6 +149,9 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function setThemeConfig(string|array $key, mixed $value = ''): static
     {
         $this->userSession = $this->resolveSession();
+        $this->originThemeConfigCacheKey = null;
+        $this->originThemeConfigCacheValue = null;
+        $this->originThemeConfigCacheExpiresAt = 0.0;
         if (is_array($key)) {
             $originConfig = $this->getOriginThemeConfig();
             if (!\is_array($originConfig)) {
@@ -157,20 +178,24 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function getLayouts()
     {
         $this->userSession = $this->resolveSession();
-        $body_attributes = $this->userSession->getData(self::theme_Session_Config)['layouts'] ?? [];
-        if (empty($body_attributes)) {
+        $themeConfig = $this->getOriginThemeConfig();
+        $body_attributes = $themeConfig['layouts'] ?? [];
+        if (!\is_array($body_attributes)) {
             $configData = $this->userConfig->getConfig(self::theme_Session_Config, 'Weline_Backend', '主题设置');
             if ($configData) {
                 $decoded = json_decode($configData, true);
                 $body_attributes = $decoded['layouts'] ?? [];
             }
         }
+        if (!\is_array($body_attributes)) {
+            $body_attributes = [];
+        }
         $body_attributes_str = '';
         $class_value = '';
         // Always sync rendered theme attributes from current mode to avoid stale layout residue.
-        $themeModeFromSwitch = $this->getThemeConfig('theme-mode-switch');
+        $themeModeFromSwitch = $themeConfig['theme-mode-switch'] ?? '';
         $themeMode = $this->resolveThemeModeFromConfig(
-            $this->getThemeConfig(),
+            $themeConfig,
             \is_string($themeModeFromSwitch) ? $themeModeFromSwitch : ''
         );
         if ($themeMode !== '') {

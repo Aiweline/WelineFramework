@@ -180,10 +180,14 @@ class AccountOrdersListApiService
             $qty = (int) ($item[OrderItem::schema_fields_QUANTITY] ?? $item['quantity'] ?? 1);
             $price = (float) ($item[OrderItem::schema_fields_PRICE] ?? $item['price'] ?? 0);
             $rowTotal = (float) ($item[OrderItem::schema_fields_TOTAL] ?? $item['total'] ?? 0);
+            $optionItems = $this->normalizeOptions($item['options'] ?? $item['product_options'] ?? null);
+            $options = $this->formatOptionItems($optionItems);
             $rows[] = [
                 'name' => $name !== '' ? $name : '-',
                 'sku' => $sku,
                 'image' => $image,
+                'options' => $options,
+                'option_items' => $optionItems,
                 'qty' => $qty,
                 'price_formatted' => CurrencyFormatter::formatConverted($price),
                 'total_formatted' => CurrencyFormatter::formatConverted($rowTotal),
@@ -191,6 +195,112 @@ class AccountOrdersListApiService
         }
 
         return $rows;
+    }
+
+    private function formatOptions(mixed $rawOptions): string
+    {
+        return $this->formatOptionItems($this->normalizeOptions($rawOptions));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $options
+     */
+    private function formatOptionItems(array $options): string
+    {
+        $parts = [];
+        foreach ($options as $option) {
+            $label = \trim((string) ($option['label'] ?? ''));
+            $value = \trim((string) ($option['value'] ?? ''));
+            if ($value !== '') {
+                $parts[] = $label !== '' ? $label . ': ' . $value : $value;
+            }
+        }
+
+        return \implode(' / ', $parts);
+    }
+
+    /**
+     * @return array<int, array<string, string>>
+     */
+    private function normalizeOptions(mixed $rawOptions): array
+    {
+        if (\is_string($rawOptions)) {
+            $rawOptions = \trim($rawOptions);
+            if ($rawOptions === '') {
+                return [];
+            }
+
+            $decoded = \json_decode($rawOptions, true);
+            if (\is_array($decoded)) {
+                return $this->normalizeOptions($decoded);
+            }
+
+            return [[
+                'label' => (string) __('规格'),
+                'value' => $rawOptions,
+            ]];
+        }
+
+        if (!\is_array($rawOptions) || $rawOptions === []) {
+            return [];
+        }
+
+        $isAssoc = \array_keys($rawOptions) !== \range(0, \count($rawOptions) - 1);
+        if ($isAssoc) {
+            $options = [];
+            foreach ($rawOptions as $label => $value) {
+                if (\is_scalar($value) && \trim((string) $value) !== '') {
+                    $options[] = [
+                        'label' => \trim((string) $label) !== '' ? \trim((string) $label) : (string) __('规格'),
+                        'value' => \trim((string) $value),
+                    ];
+                }
+            }
+
+            return $options;
+        }
+
+        $options = [];
+        foreach ($rawOptions as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+
+            $value = \trim((string) ($option['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized = [
+                'label' => \trim((string) ($option['label'] ?? '')) !== ''
+                    ? \trim((string) ($option['label'] ?? ''))
+                    : (string) __('规格'),
+                'value' => $value,
+            ];
+
+            foreach (['attribute_id', 'option_id'] as $idKey) {
+                $id = (int) ($option[$idKey] ?? 0);
+                if ($id > 0) {
+                    $normalized[$idKey] = $id;
+                }
+            }
+
+            $code = \trim((string) ($option['code'] ?? ''));
+            if ($code !== '') {
+                $normalized['code'] = $code;
+            }
+
+            $swatchType = \trim((string) ($option['swatch_type'] ?? ''));
+            $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
+            if ($swatchType !== '' && $swatchValue !== '') {
+                $normalized['swatch_type'] = $swatchType;
+                $normalized['swatch_value'] = $swatchValue;
+            }
+
+            $options[] = $normalized;
+        }
+
+        return $options;
     }
 
     /**

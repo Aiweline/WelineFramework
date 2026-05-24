@@ -43,6 +43,17 @@ class Restart extends CommandAbstract
                 return;
             }
 
+            if ($this->hasStartupChangingArgs($args)) {
+                $this->printer->warning(__('检测到端口/拓扑/Worker/SSL 等启动参数变更，restart -r 将自动切换为完整重启。'));
+                $args['r'] = true;
+                if (!isset($args['f'])) {
+                    $this->printer->note(__('将先执行平滑停机，再使用新启动参数重新拉起实例。'));
+                }
+                $startCommand = ObjectManager::getInstance(Start::class);
+                $startCommand->execute($args, $data);
+                return;
+            }
+
             // 强制重启：保持 Master 运行，通过 IPC 发送 reload 命令，由 Orchestrator 执行维护模式+滚动重载
             // 只有 server:stop 才会停止 Master
             if ($forceSwitch) {
@@ -109,6 +120,25 @@ class Restart extends CommandAbstract
             return true;
         }
         
+        return false;
+    }
+
+    protected function hasStartupChangingArgs(array $args): bool
+    {
+        $keys = [
+            'p', 'port', 'host', 'h', 'count', 'c',
+            'no-ssl', 'no_ssl', 'ssl-cert', 'ssl-key',
+            'direct', 'dispatcher', 'force-dispatcher', 'no-dispatcher', 'no_dispatcher',
+            'topology', 'runtime-strategy', 'runtime_strategy',
+            'event-loop', 'event_loop', 'loop-driver', 'loop_driver',
+            'worker-memory-limit', 'worker_memory_limit', 'dispatcher-memory-limit', 'dispatcher_memory_limit',
+        ];
+        foreach ($keys as $key) {
+            if (isset($args[$key])) {
+                return true;
+            }
+        }
+
         return false;
     }
     

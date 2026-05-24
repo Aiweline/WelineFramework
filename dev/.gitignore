@@ -14,6 +14,10 @@
 !ai/
 !ai/**
 
+# 保留部署 webhook 脚本与示例配置
+!deploy/
+!deploy/**
+
 # 但排除 codex tasks 全目录（本地任务日志不入库）
 ai/codex/tasks/
 

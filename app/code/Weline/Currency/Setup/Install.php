@@ -58,5 +58,7 @@ class Install implements InstallInterface
             }
         } catch (\Throwable $e) {
         }
+
+        ObjectManager::getInstance(CurrencyLocalDescriptionSeed::class)->seedDefaults();
     }
 }

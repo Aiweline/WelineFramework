@@ -27,6 +27,11 @@ final class AiSiteQualityGateService
         'visual_depth' => ['label' => '页面块具备视觉层次与美术分层', 'page_report_field' => 'visual_depth_signals'],
         'language_consistency' => ['label' => '每个块使用指定网站语言', 'page_report_field' => 'language_violations'],
         'responsive_support' => ['label' => '页面具备 AI 生成的响应式支持', 'page_report_field' => 'responsive_signals'],
+        'morphology_diversity' => ['label' => '页面区块形态多样'],
+        'non_hero_asset_distribution' => ['label' => '非 Hero 真实图片分布达标'],
+        'block_contract_coverage' => ['label' => '内容区块均具备设计执行契约'],
+        'required_image_contract' => ['label' => '必需图片插槽已生成并被页面使用'],
+        'generic_skeleton_guard' => ['label' => '页面没有重复的通用骨架区块'],
     ];
 
     private readonly AiSiteBuildTaskService $buildTaskService;
@@ -165,6 +170,7 @@ final class AiSiteQualityGateService
             }
         }
         $qaReportFindings = $this->collectQaReportFindings($scope);
+        $designContractReport = $this->inspectDesignContractQuality($scope);
 
         $items = $this->normalizeQualityItems([
             $this->buildItem('build_tasks_done', '构建任务全部完成', $allTasksDone, $taskSummary),
@@ -180,6 +186,11 @@ final class AiSiteQualityGateService
             $this->buildItem('visual_depth', '页面块具备视觉层次与美术分层', $allVisualDepth, $this->extractPageValues($pageReports, 'visual_depth_signals')),
             $this->buildItem('language_consistency', '每个块使用指定网站语言', $allLanguageConsistent, $this->extractPageValues($pageReports, 'language_violations')),
             $this->buildItem('responsive_support', '页面具备 AI 生成的响应式支持', $allResponsive, $this->extractPageValues($pageReports, 'responsive_signals')),
+            $this->buildItem('morphology_diversity', '页面区块形态多样', (bool)($designContractReport['morphology_diversity_ok'] ?? false), $designContractReport),
+            $this->buildItem('non_hero_asset_distribution', '非 Hero 真实图片分布达标', (bool)($designContractReport['non_hero_asset_distribution_ok'] ?? false), $designContractReport),
+            $this->buildItem('block_contract_coverage', '内容区块均具备设计执行契约', (bool)($designContractReport['block_contract_coverage_ok'] ?? false), $designContractReport),
+            $this->buildItem('required_image_contract', '必需图片插槽已生成并被页面使用', (bool)($designContractReport['required_image_contract_ok'] ?? false), $designContractReport),
+            $this->buildItem('generic_skeleton_guard', '页面没有重复的通用骨架区块', (bool)($designContractReport['generic_skeleton_guard_ok'] ?? false), $designContractReport),
         ], $pageReports);
 
         $items = $this->finalizeQualityItems($items, $scope);
@@ -276,7 +287,11 @@ final class AiSiteQualityGateService
     ): array {
         $layoutJson = (string)\json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
         $combined = $html . "\n" . $layoutJson;
+        $layoutVisibleCopy = $this->extractLayoutVisibleCopyText($layout);
         $badMatches = $this->matchBadContent($this->stripNonVisibleQualityGateHtml($html));
+        if ($layoutVisibleCopy !== '') {
+            $badMatches = \array_merge($badMatches, $this->matchBadContent($layoutVisibleCopy));
+        }
         if (\preg_match('/\bai-site-fallback\b|Image Placeholder|Text-to-image is not connected yet/iu', $html) === 1) {
             $badMatches[] = 'plan-derived fallback visual';
         }
@@ -287,6 +302,13 @@ final class AiSiteQualityGateService
         $sharedBlocks = $this->detectSharedBlocks($layout, $html);
         $expectedLocale = $this->resolveExpectedContentLocale($scope, $pageType);
         $languageViolations = $this->matchLanguageViolations($html, $expectedLocale, $scope);
+        if ($layoutVisibleCopy !== '') {
+            $languageViolations = \array_merge(
+                $languageViolations,
+                $this->matchLanguageViolations($layoutVisibleCopy, $expectedLocale, $scope)
+            );
+            $languageViolations = \array_values(\array_unique($languageViolations));
+        }
         $responsiveSignals = $this->matchResponsiveSignals($html);
         $hasSvgVisual = \preg_match('/<svg\b|data:image\/svg\+xml|ai-site-svg-visual/i', $html) === 1;
         $hasAnyImageNeed = \preg_match('/\b(?:image|visual|media|asset|logo|icon|cards?|board|avatar|shield)\b/iu', $combined) === 1;
@@ -481,6 +503,76 @@ final class AiSiteQualityGateService
     }
 
     /**
+     * @param array<string, mixed> $layout
+     */
+    private function extractLayoutVisibleCopyText(array $layout): string
+    {
+        $parts = [];
+        $this->collectLayoutVisibleCopyText($layout, $parts, '', 0);
+
+        return \trim(\preg_replace('/\s+/u', ' ', \implode(' ', \array_unique($parts))) ?? '');
+    }
+
+    /**
+     * @param list<string> $parts
+     */
+    private function collectLayoutVisibleCopyText(mixed $value, array &$parts, string $path, int $depth): void
+    {
+        if ($depth > 8) {
+            return;
+        }
+        if (\is_array($value)) {
+            foreach ($value as $key => $item) {
+                $key = \is_int($key) ? (string)$key : \trim((string)$key);
+                $nextPath = $path === '' ? $key : $path . '.' . $key;
+                if ($this->isInternalLayoutCopyPath($nextPath)) {
+                    continue;
+                }
+                $this->collectLayoutVisibleCopyText($item, $parts, $nextPath, $depth + 1);
+            }
+            return;
+        }
+        if (!\is_scalar($value) && !$value instanceof \Stringable) {
+            return;
+        }
+        if (!$this->isVisibleLayoutCopyPath($path)) {
+            return;
+        }
+
+        $text = \trim((string)$value);
+        if ($text === '' || \preg_match('/^(?:https?:)?\/\/|^\/(?:pub\/)?media\/|^#[0-9a-f]{3,8}$/iu', $text) === 1) {
+            return;
+        }
+        $text = $this->stripNonVisibleQualityGateHtml($text);
+        if ($text !== '') {
+            $parts[] = $text;
+        }
+    }
+
+    private function isInternalLayoutCopyPath(string $path): bool
+    {
+        $path = \strtolower(\str_replace(['[', ']'], '.', $path));
+
+        return \preg_match('/(?:^|\.)(runtime|contract|style|layout|design_tokens|design_tags|visual_signature|image_intent|asset_requirements|css_extra|css_responsive|js_content)(?:\.|$)/', $path) === 1;
+    }
+
+    private function isVisibleLayoutCopyPath(string $path): bool
+    {
+        $path = \strtolower(\str_replace(['[', ']'], '.', $path));
+        if ($path === '') {
+            return false;
+        }
+        if (\preg_match('/(?:^|\.)(url|href|src|image_url|logo|color|font|shadow|padding|margin|width|height)(?:\.|$)/', $path) === 1) {
+            return false;
+        }
+
+        return \preg_match(
+            '/(?:^|\.)(title|heading|headline|subtitle|description|summary|body|copy|text|section_intro|button_text|cta_text|label|alt|aria-label|aria_label|placeholder|html|html_content|html_extra|html_extra_column)$/',
+            $path
+        ) === 1;
+    }
+
+    /**
      * @return list<string>
      */
     private function matchPolicyPageBodyCtaViolations(string $pageType, string $html): array
@@ -595,20 +687,6 @@ final class AiSiteQualityGateService
             '/欢迎访问|默认页面模板|Default Page Template|This is the default page/iu',
             '/访客看到|用户看到|让访客看到|从而产生|信任感增强|知道如何|Visitors?\s+(?:see|can review|can verify|understand how|ready to)|before publishing|reviewable page content/iu',
         ];
-        $patterns = [
-            '/plan-derived fallback visual|ai-site-fallback|Image Placeholder|Text-to-image is not connected yet/iu',
-            '/AI_GENERATED_SECTION|task_key|section_code|block_key|page_type|field_content_requirements/iu',
-            '/\b(?:websiteProfile|Website\s+Profile|site\s+profile|target_domain)\b/iu',
-            '/content\/(?:home|about|contact|product|service)-page-[a-z0-9_-]+/iu',
-            '/AI content placeholder|ai-empty|placeholder content|placeholder/iu',
-            '/example\.com|placeholder\.com|placehold\.co|via\.placeholder|dummyimage\.com|picsum\.photos/iu',
-            '/Generated visual|Visual preview generated/iu',
-            '/(?:<|&lt;)\s*\/?\s*[a-z0-9][^>\n]{0,120}(?:>|&gt;)|\bclass\s*=\s*(["\']).{1,120}\1/iu',
-            '/Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|content_fill_rule|field_content_requirements|task_script|stage3_directive/iu',
-            '/\b(?:planning_reason|why_this_block|why_add_this_block|block_reason|page_goal|block_goal|content_contract|design_contract|interaction_contract|implementation_contract|data_contract|render_contract|visual_contract|stage1_contract|stage2_context|plan_context|theme_context|contract_context|requirement_expansion|design_manifest|content_manifest|selected_skill_codes|skill_snapshots|qa_report_contract|build_blueprint|build_tasks)\b/iu',
-            '/\b(?:page\s+contract|block\s+plan|block\s+contract|contract\s+description|implementation\s+notes?|design\s+notes?|plan\s+context|task\s+context|base\s+prompt|system\s+prompt)\b/iu',
-            '/Default Page Template|This is the default page/iu',
-        ];
         $matches = [];
         foreach ($patterns as $pattern) {
             if (\preg_match_all($pattern, $text, $found) < 1) {
@@ -661,6 +739,9 @@ final class AiSiteQualityGateService
             $scope['execution_blueprint']['content_locale'] ?? null,
             $scope['plan_json']['content_locale'] ?? null,
             $scope['plan_json']['i18n']['content_locale'] ?? null,
+            $scope['locale'] ?? null,
+            $websiteProfile['locale'] ?? null,
+            $scope['website_locale'] ?? null,
             $virtualPage['default_locale'] ?? null,
             $virtualPage['locale'] ?? null,
             $pageRecord['content_locale'] ?? null,
@@ -715,7 +796,7 @@ final class AiSiteQualityGateService
         }
 
         if ($this->isLatinScriptLocale($expectedLocale)) {
-            return $this->matchLargeCjkProseBlocks($text);
+            return $this->matchAnyCjkVisibleCopy($text);
         }
 
         return $this->matchLargeLatinProseBlocks($text);
@@ -796,6 +877,26 @@ final class AiSiteQualityGateService
             $match = \trim((string)$match);
             if ($match !== '') {
                 $violations[] = 'large_foreign_language_block: ' . $this->excerptQualityGateText($match, 140);
+            }
+        }
+
+        return \array_slice(\array_values(\array_unique($violations)), 0, 8);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function matchAnyCjkVisibleCopy(string $text): array
+    {
+        if (\preg_match_all('/[^\s<>"\']{0,32}[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}][^\s<>"\']{0,32}/u', $text, $found) < 1) {
+            return [];
+        }
+
+        $violations = [];
+        foreach ($found[0] ?? [] as $match) {
+            $match = \trim((string)$match);
+            if ($match !== '') {
+                $violations[] = 'non_target_cjk_visible_copy: ' . $this->excerptQualityGateText($match, 140);
             }
         }
 
@@ -1623,6 +1724,481 @@ final class AiSiteQualityGateService
     }
 
     /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function inspectDesignContractQuality(array $scope): array
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $blocks = $this->normalizeQualityGateBlocks($contract['blocks'] ?? []);
+        if ($blocks === []) {
+            return [
+                'evaluated' => false,
+                'errors' => ['missing_build_plan_v2_blocks'],
+                'page_reports' => [],
+                'morphology_diversity_ok' => false,
+                'non_hero_asset_distribution_ok' => false,
+                'block_contract_coverage_ok' => false,
+                'required_image_contract_ok' => false,
+                'generic_skeleton_guard_ok' => false,
+            ];
+        }
+
+        $total = \count($blocks);
+        $withContract = 0;
+        $morphologies = [];
+        $adjacentDuplicates = [];
+        $requiredImages = 0;
+        $nonHeroRequiredImages = 0;
+        $requiredImageErrors = [];
+        $skeletonErrors = [];
+        $byPage = [];
+        $pageReports = [];
+        $assetSlots = $this->normalizeQualityGateAssetSlots($scope['asset_manifest']['slots'] ?? []);
+        $renderedSlotUsage = $this->collectRenderedSlotUsage($scope);
+        $previousMorphologyByPage = [];
+
+        foreach ($blocks as $index => $block) {
+            $pageId = \trim((string)($block['page_id'] ?? $block['page_type'] ?? 'page'));
+            $byPage[$pageId][] = $block;
+            if (!isset($pageReports[$pageId])) {
+                $pageReports[$pageId] = [
+                    'block_count' => 0,
+                    'blocks_with_contract' => 0,
+                    'morphologies' => [],
+                    'unique_morphology_count' => 0,
+                    'expected_unique_morphology_count' => 0,
+                    'morphology_diversity_ok' => false,
+                    'adjacent_duplicate_morphologies' => [],
+                    'required_image_blocks' => 0,
+                    'non_hero_required_image_blocks' => 0,
+                    'target_real_image_slots' => 0,
+                    'min_non_hero_real_image_slots' => 0,
+                    'real_image_slot_count_ok' => false,
+                    'non_hero_image_slot_count_ok' => false,
+                    'required_image_slot_ids' => [],
+                    'used_required_image_slot_ids' => [],
+                    'missing_required_image_slot_ids' => [],
+                    'required_image_errors' => [],
+                    'generic_skeleton_blocks' => [],
+                    'asset_distribution_policy' => $this->resolveQualityPageAssetPolicy($contract, $scope, $pageId),
+                ];
+            }
+            $pageReports[$pageId]['block_count']++;
+            $contractBlock = $this->resolveQualityBlockContract($block);
+            if ($contractBlock !== []) {
+                $withContract++;
+                $pageReports[$pageId]['blocks_with_contract']++;
+            }
+            $morphology = \trim((string)($contractBlock['morphology_id'] ?? $block['morphology_id'] ?? ''));
+            if ($morphology !== '') {
+                $morphologies[] = $morphology;
+                $pageReports[$pageId]['morphologies'][] = $morphology;
+            }
+            $previousMorphology = (string)($previousMorphologyByPage[$pageId] ?? '');
+            if ($morphology !== '' && $previousMorphology !== '' && $morphology === $previousMorphology) {
+                $duplicateRef = (string)($block['block_id'] ?? $block['section_key'] ?? $index);
+                $adjacentDuplicates[] = $duplicateRef;
+                $pageReports[$pageId]['adjacent_duplicate_morphologies'][] = $duplicateRef;
+            }
+            if ($morphology !== '') {
+                $previousMorphologyByPage[$pageId] = $morphology;
+            }
+
+            $mediaStrategy = \is_array($contractBlock['media_strategy'] ?? null) ? $contractBlock['media_strategy'] : [];
+            $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+            $needsRealImage = !empty($mediaStrategy['needs_real_image']) || !empty($imageIntent['needs_image']);
+            if ($needsRealImage) {
+                $requiredImages++;
+                $pageReports[$pageId]['required_image_blocks']++;
+                $role = \strtolower(\trim((string)($contractBlock['page_flow_role'] ?? $block['page_flow_role'] ?? '')));
+                if ($role !== 'opening' && $role !== 'hero') {
+                    $nonHeroRequiredImages++;
+                    $pageReports[$pageId]['non_hero_required_image_blocks']++;
+                }
+                $slotId = \trim((string)($mediaStrategy['asset_slot_id'] ?? ''));
+                $assetRequirements = \is_array($block['asset_requirements'] ?? null) ? $block['asset_requirements'] : [];
+                $blockRef = (string)($block['block_id'] ?? $block['section_key'] ?? $index);
+                if ($slotId === '') {
+                    $requiredImageErrors[] = 'missing_slot:' . $blockRef;
+                    $pageReports[$pageId]['required_image_errors'][] = 'missing_slot:' . $blockRef;
+                }
+                if ($assetRequirements === []) {
+                    $requiredImageErrors[] = 'missing_asset_requirement:' . $blockRef;
+                    $pageReports[$pageId]['required_image_errors'][] = 'missing_asset_requirement:' . $blockRef;
+                }
+                if ($slotId !== '') {
+                    $pageReports[$pageId]['required_image_slot_ids'][] = $slotId;
+                    $finalUrl = $this->resolveQualityGateRequiredImageFinalUrl($slotId, $mediaStrategy, $assetRequirements, $assetSlots);
+                    if ($finalUrl === '') {
+                        $requiredImageErrors[] = 'missing_final_url:' . $slotId;
+                        $pageReports[$pageId]['required_image_errors'][] = 'missing_final_url:' . $slotId;
+                        $pageReports[$pageId]['missing_required_image_slot_ids'][] = $slotId;
+                    }
+                    $slotUsed = $this->qualityGateSlotIsUsed($slotId, $finalUrl, $renderedSlotUsage);
+                    if (!$slotUsed) {
+                        $requiredImageErrors[] = 'slot_not_used:' . $slotId;
+                        $pageReports[$pageId]['required_image_errors'][] = 'slot_not_used:' . $slotId;
+                        if (!\in_array($slotId, $pageReports[$pageId]['missing_required_image_slot_ids'], true)) {
+                            $pageReports[$pageId]['missing_required_image_slot_ids'][] = $slotId;
+                        }
+                    } else {
+                        $pageReports[$pageId]['used_required_image_slot_ids'][] = $slotId;
+                    }
+                }
+            }
+
+            $visualSignature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+            $composition = \trim((string)($visualSignature['composition_pattern'] ?? $contractBlock['composition_pattern']['layout_keywords'][0] ?? ''));
+            $cssMotif = \trim((string)($mediaStrategy['css_motif'] ?? $imageIntent['css_motif'] ?? ''));
+            if (
+                $contractBlock === []
+                || $morphology === ''
+                || ($composition === '' && !$needsRealImage && $cssMotif === '')
+                || $this->qualityGateBlockLooksLikeGenericSkeleton($block, $contractBlock, $scope)
+            ) {
+                $skeletonRef = (string)($block['block_id'] ?? $block['section_key'] ?? $index);
+                $skeletonErrors[] = $skeletonRef;
+                $pageReports[$pageId]['generic_skeleton_blocks'][] = $skeletonRef;
+            }
+        }
+
+        $uniqueMorphologyCount = \count(\array_unique($morphologies));
+        $morphologyDiversityOk = true;
+        $blockContractCoverageOk = $withContract === $total;
+        $requiredImageContractOk = $requiredImageErrors === [];
+        $genericSkeletonGuardOk = $skeletonErrors === [];
+        $nonHeroAssetDistributionOk = true;
+        foreach ($byPage as $pageId => $pageBlocks) {
+            $pageReport = \is_array($pageReports[$pageId] ?? null) ? $pageReports[$pageId] : [];
+            $pageMorphologies = \array_values(\array_unique(\array_values(\array_filter(\array_map(
+                static fn(mixed $value): string => \trim((string)$value),
+                \is_array($pageReport['morphologies'] ?? null) ? $pageReport['morphologies'] : []
+            ), static fn(string $value): bool => $value !== ''))));
+            $expectedUniqueMorphologies = $this->expectedQualityGateMorphologyCount(\count($pageBlocks));
+            $pageAdjacentDuplicates = \is_array($pageReport['adjacent_duplicate_morphologies'] ?? null)
+                ? $pageReport['adjacent_duplicate_morphologies']
+                : [];
+            $pageMorphologyOk = \count($pageMorphologies) >= $expectedUniqueMorphologies && $pageAdjacentDuplicates === [];
+            $pageReports[$pageId]['unique_morphology_count'] = \count($pageMorphologies);
+            $pageReports[$pageId]['expected_unique_morphology_count'] = $expectedUniqueMorphologies;
+            $pageReports[$pageId]['morphology_diversity_ok'] = $pageMorphologyOk;
+            if (!$pageMorphologyOk) {
+                $morphologyDiversityOk = false;
+            }
+
+            $policy = \is_array($pageReport['asset_distribution_policy'] ?? null) ? $pageReport['asset_distribution_policy'] : [];
+            $targetSlots = (int)($policy['target_real_image_slots'] ?? (\count($pageBlocks) >= 4 ? \min(3, \count($pageBlocks)) : 0));
+            $minNonHero = (int)($policy['min_non_hero_real_image_slots'] ?? (\count($pageBlocks) >= 4 ? 2 : 0));
+            $pageRequired = (int)($pageReport['required_image_blocks'] ?? 0);
+            $pageNonHero = (int)($pageReport['non_hero_required_image_blocks'] ?? 0);
+            $targetSlots = \max(0, \min($targetSlots, \count($pageBlocks)));
+            $minNonHero = \max(0, \min($minNonHero, \max(0, \count($pageBlocks) - 1)));
+            $realImageSlotCountOk = $targetSlots <= 0 || $pageRequired >= $targetSlots;
+            $nonHeroSlotCountOk = $minNonHero <= 0 || $pageNonHero >= $minNonHero;
+            $pageReports[$pageId]['target_real_image_slots'] = $targetSlots;
+            $pageReports[$pageId]['min_non_hero_real_image_slots'] = $minNonHero;
+            $pageReports[$pageId]['real_image_slot_count_ok'] = $realImageSlotCountOk;
+            $pageReports[$pageId]['non_hero_image_slot_count_ok'] = $nonHeroSlotCountOk;
+            $pageReports[$pageId]['non_hero_asset_distribution_ok'] = $realImageSlotCountOk && $nonHeroSlotCountOk;
+            if (!$realImageSlotCountOk || !$nonHeroSlotCountOk) {
+                $nonHeroAssetDistributionOk = false;
+            }
+        }
+
+        return [
+            'evaluated' => true,
+            'page_reports' => $pageReports,
+            'total_blocks' => $total,
+            'blocks_with_contract' => $withContract,
+            'unique_morphology_count' => $uniqueMorphologyCount,
+            'adjacent_duplicate_morphologies' => $adjacentDuplicates,
+            'required_image_blocks' => $requiredImages,
+            'non_hero_required_image_blocks' => $nonHeroRequiredImages,
+            'required_image_errors' => $requiredImageErrors,
+            'generic_skeleton_blocks' => $skeletonErrors,
+            'morphology_diversity_ok' => $morphologyDiversityOk,
+            'non_hero_asset_distribution_ok' => $nonHeroAssetDistributionOk,
+            'block_contract_coverage_ok' => $blockContractCoverageOk,
+            'required_image_contract_ok' => $requiredImageContractOk,
+            'generic_skeleton_guard_ok' => $genericSkeletonGuardOk,
+        ];
+    }
+
+    private function expectedQualityGateMorphologyCount(int $blockCount): int
+    {
+        if ($blockCount <= 0) {
+            return 0;
+        }
+        if ($blockCount < 3) {
+            return $blockCount;
+        }
+
+        return 3;
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function normalizeQualityGateBlocks(mixed $blocks): array
+    {
+        if (!\is_array($blocks)) {
+            return [];
+        }
+        $out = [];
+        foreach ($blocks as $block) {
+            if (\is_array($block)) {
+                $out[] = $block;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string,mixed> $block
+     * @return array<string,mixed>
+     */
+    private function resolveQualityBlockContract(array $block): array
+    {
+        foreach ([
+            $block['block_contract'] ?? null,
+            $block['visual']['block_contract'] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @return array<string,array<string,mixed>>
+     */
+    private function normalizeQualityGateAssetSlots(mixed $slots): array
+    {
+        if (!\is_array($slots)) {
+            return [];
+        }
+        $out = [];
+        foreach ($slots as $key => $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            $slotId = \trim((string)($slot['slot_id'] ?? (\is_string($key) ? $key : '')));
+            if ($slotId === '') {
+                continue;
+            }
+            $out[$slotId] = $slot;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array{slot_ids:array<string,bool>,text:string}
+     */
+    private function collectRenderedSlotUsage(array $scope): array
+    {
+        $textParts = [];
+        $slotIds = [];
+        foreach ([
+            $scope['render_data_contract'] ?? null,
+            $scope['build_workbench'] ?? null,
+            $scope['build_contracts'] ?? null,
+            $scope['shared_components'] ?? null,
+        ] as $source) {
+            if (!\is_array($source) || $source === []) {
+                continue;
+            }
+            $encoded = (string)\json_encode($source, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+            $textParts[] = $encoded;
+            if (\preg_match_all('/data-pb-ai-asset-slot=["\']([^"\']+)["\']/i', $encoded, $matches) > 0) {
+                foreach ($matches[1] ?? [] as $slotId) {
+                    $slotIds[(string)$slotId] = true;
+                }
+            }
+        }
+        $pages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        foreach ($pages as $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $encoded = (string)\json_encode($block, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+                $textParts[] = $encoded;
+                if (\preg_match_all('/data-pb-ai-asset-slot=["\']([^"\']+)["\']/i', $encoded, $matches) > 0) {
+                    foreach ($matches[1] ?? [] as $slotId) {
+                        $slotIds[(string)$slotId] = true;
+                    }
+                }
+                foreach (['runtime.section_image_slot_id', 'visual.image_slot_id'] as $configKey) {
+                    foreach (['default_config', 'config'] as $containerKey) {
+                        $container = \is_array($block[$containerKey] ?? null) ? $block[$containerKey] : [];
+                        $slotId = \trim((string)($container[$configKey] ?? ''));
+                        if ($slotId !== '') {
+                            $slotIds[$slotId] = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return [
+            'slot_ids' => $slotIds,
+            'text' => \implode("\n", $textParts),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $mediaStrategy
+     * @param list<array<string,mixed>> $assetRequirements
+     * @param array<string,array<string,mixed>> $assetSlots
+     */
+    private function resolveQualityGateRequiredImageFinalUrl(
+        string $slotId,
+        array $mediaStrategy,
+        array $assetRequirements,
+        array $assetSlots
+    ): string {
+        foreach ([
+            $mediaStrategy['final_url'] ?? null,
+            $mediaStrategy['image_url'] ?? null,
+            $assetSlots[$slotId]['final_url'] ?? null,
+            $assetSlots[$slotId]['url'] ?? null,
+        ] as $candidate) {
+            $url = \trim((string)$candidate);
+            if ($url !== '') {
+                return $url;
+            }
+        }
+        foreach ($assetRequirements as $requirement) {
+            if (!\is_array($requirement)) {
+                continue;
+            }
+            $requirementSlot = \trim((string)($requirement['slot_id'] ?? ''));
+            if ($requirementSlot !== '' && $requirementSlot !== $slotId) {
+                continue;
+            }
+            foreach ([$requirement['final_url'] ?? null, $requirement['url'] ?? null] as $candidate) {
+                $url = \trim((string)$candidate);
+                if ($url !== '') {
+                    return $url;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array{slot_ids:array<string,bool>,text:string} $renderedSlotUsage
+     */
+    private function qualityGateSlotIsUsed(string $slotId, string $finalUrl, array $renderedSlotUsage): bool
+    {
+        $slotIds = \is_array($renderedSlotUsage['slot_ids'] ?? null) ? $renderedSlotUsage['slot_ids'] : [];
+        if (isset($slotIds[$slotId])) {
+            return true;
+        }
+        $text = (string)($renderedSlotUsage['text'] ?? '');
+        if ($text !== '' && $slotId !== '' && \str_contains($text, $slotId)) {
+            return true;
+        }
+
+        return $text !== '' && $finalUrl !== '' && \str_contains($text, $finalUrl);
+    }
+
+    private function qualityGateBlockLooksLikeGenericSkeleton(array $block, array $contractBlock, array $scope): bool
+    {
+        $diversity = \is_array($contractBlock['diversity_constraints'] ?? null) ? $contractBlock['diversity_constraints'] : [];
+        $guardsSkeleton = !empty($diversity['must_not_render_as_title_paragraph_cta_only'])
+            || \in_array('must_not_render_as_title_paragraph_cta_only', \is_array($contractBlock['acceptance_checks'] ?? null) ? $contractBlock['acceptance_checks'] : [], true);
+        if (!$guardsSkeleton) {
+            return false;
+        }
+        $html = $this->resolveQualityGateBlockRenderedHtml($block, $scope);
+        if (\trim($html) === '') {
+            return false;
+        }
+        $hasHeading = \preg_match('/<h[1-6]\b/i', $html) === 1;
+        $hasParagraph = \preg_match('/<p\b/i', $html) === 1;
+        $hasAction = \preg_match('/<(?:a|button)\b/i', $html) === 1;
+        if (!$hasHeading || !$hasParagraph || !$hasAction) {
+            return false;
+        }
+
+        return \preg_match('/<(?:img|picture|figure|ul|ol|li|blockquote|form|input|textarea|select)\b/i', $html) !== 1
+            && \preg_match('/(?:data-pb-ai-asset-slot|metric|stat|timeline|quote|card|grid|media|proof|gallery|map|faq)/i', $html) !== 1;
+    }
+
+    private function resolveQualityGateBlockRenderedHtml(array $block, array $scope): string
+    {
+        foreach (['html_content', 'html', 'phtml'] as $key) {
+            $html = \trim((string)($block[$key] ?? ''));
+            if ($html !== '') {
+                return $html;
+            }
+        }
+        $blockRefs = \array_filter([
+            (string)($block['block_id'] ?? ''),
+            (string)($block['section_key'] ?? ''),
+            (string)($block['section_code'] ?? ''),
+            (string)($block['block_key'] ?? ''),
+        ], static fn(string $value): bool => \trim($value) !== '');
+        if ($blockRefs === []) {
+            return '';
+        }
+        $pages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        foreach ($pages as $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $candidate) {
+                if (!\is_array($candidate)) {
+                    continue;
+                }
+                $candidateRefs = [
+                    (string)($candidate['block_id'] ?? ''),
+                    (string)($candidate['section_key'] ?? ''),
+                    (string)($candidate['section_code'] ?? ''),
+                    (string)($candidate['code'] ?? ''),
+                ];
+                if (\array_intersect($blockRefs, $candidateRefs) === []) {
+                    continue;
+                }
+                foreach (['html_content', 'html', 'phtml'] as $key) {
+                    $html = \trim((string)($candidate[$key] ?? ''));
+                    if ($html !== '') {
+                        return $html;
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function resolveQualityPageAssetPolicy(array $contract, array $scope, string $pageId): array
+    {
+        foreach ([
+            $contract['design_manifest']['asset_distribution_policy']['per_page'][$pageId] ?? null,
+            $contract['asset_distribution_policy']['per_page'][$pageId] ?? null,
+            $scope['plan_json']['asset_distribution_policy']['per_page'][$pageId] ?? null,
+            $scope['execution_blueprint']['asset_distribution_policy']['per_page'][$pageId] ?? null,
+        ] as $candidate) {
+            if (\is_array($candidate) && $candidate !== []) {
+                return $candidate;
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * Keep the quality gate contract stable:
      * - if an item key/label drifts, map it back to the canonical item;
      * - if an item is not part of the contract, drop it;
@@ -1752,7 +2328,12 @@ final class AiSiteQualityGateService
                 'task_coverage' => '已确认方案中的页面区块均已拆成构建任务。',
                 'source_truth_coverage' => '必含事实、必需首页区块与禁忌规则均已覆盖。',
                 'render_data_quality' => '渲染数据契约的结构、文案与 SEO 校验已通过。',
-                'build_tasks_done' => '全部构建任务已完成。',
+            'build_tasks_done' => '全部构建任务已完成。',
+                'morphology_diversity',
+                'non_hero_asset_distribution',
+                'block_contract_coverage',
+                'required_image_contract',
+                'generic_skeleton_guard' => '设计执行契约门禁已通过。',
                 default => '',
             };
         }
@@ -1770,8 +2351,73 @@ final class AiSiteQualityGateService
             'build_tasks_done' => $this->formatBuildTasksFailureDetail(\is_array($value) ? $value : []),
             'content_quality' => $this->formatContentQualityFailureDetail(\is_array($value) ? $value : []),
             'shared_blocks_ready' => $this->formatSharedBlocksFailureDetail(\is_array($value) ? $value : [], $scope),
+            'morphology_diversity' => $this->formatDesignContractFailureDetail(\is_array($value) ? $value : [], 'morphology_diversity'),
+            'non_hero_asset_distribution' => $this->formatDesignContractFailureDetail(\is_array($value) ? $value : [], 'non_hero_asset_distribution'),
+            'block_contract_coverage' => $this->formatDesignContractFailureDetail(\is_array($value) ? $value : [], 'block_contract_coverage'),
+            'required_image_contract' => $this->formatDesignContractFailureDetail(\is_array($value) ? $value : [], 'required_image_contract'),
+            'generic_skeleton_guard' => $this->formatDesignContractFailureDetail(\is_array($value) ? $value : [], 'generic_skeleton_guard'),
             default => '',
         };
+    }
+
+    /**
+     * @param array<string, mixed> $report
+     */
+    private function formatDesignContractFailureDetail(array $report, string $key): string
+    {
+        $messages = [];
+        foreach (\is_array($report['errors'] ?? null) ? $report['errors'] : [] as $error) {
+            $error = \trim((string)$error);
+            if ($error !== '') {
+                $messages[] = $error;
+            }
+        }
+        foreach (\is_array($report['page_reports'] ?? null) ? $report['page_reports'] : [] as $pageId => $pageReport) {
+            if (!\is_array($pageReport)) {
+                continue;
+            }
+            if ($key === 'morphology_diversity' && empty($pageReport['morphology_diversity_ok'])) {
+                $messages[] = (string)$pageId . ' 区块形态 '
+                    . (int)($pageReport['unique_morphology_count'] ?? 0)
+                    . '/'
+                    . (int)($pageReport['expected_unique_morphology_count'] ?? 0)
+                    . '，相邻重复 '
+                    . \count(\is_array($pageReport['adjacent_duplicate_morphologies'] ?? null) ? $pageReport['adjacent_duplicate_morphologies'] : []);
+            } elseif ($key === 'non_hero_asset_distribution' && empty($pageReport['non_hero_asset_distribution_ok'])) {
+                $messages[] = (string)$pageId . ' 真实图片 '
+                    . (int)($pageReport['required_image_blocks'] ?? 0)
+                    . '/'
+                    . (int)($pageReport['target_real_image_slots'] ?? 0)
+                    . '，非 Hero '
+                    . (int)($pageReport['non_hero_required_image_blocks'] ?? 0)
+                    . '/'
+                    . (int)($pageReport['min_non_hero_real_image_slots'] ?? 0);
+            } elseif ($key === 'block_contract_coverage') {
+                $blockCount = (int)($pageReport['block_count'] ?? 0);
+                $withContract = (int)($pageReport['blocks_with_contract'] ?? 0);
+                if ($withContract < $blockCount) {
+                    $messages[] = (string)$pageId . ' block_contract ' . $withContract . '/' . $blockCount;
+                }
+            } elseif ($key === 'required_image_contract') {
+                foreach (\is_array($pageReport['required_image_errors'] ?? null) ? $pageReport['required_image_errors'] : [] as $error) {
+                    $error = \trim((string)$error);
+                    if ($error !== '') {
+                        $messages[] = (string)$pageId . ' ' . $error;
+                    }
+                }
+            } elseif ($key === 'generic_skeleton_guard') {
+                $blocks = \is_array($pageReport['generic_skeleton_blocks'] ?? null) ? $pageReport['generic_skeleton_blocks'] : [];
+                if ($blocks !== []) {
+                    $messages[] = (string)$pageId . ' 通用骨架区块：' . \implode('、', \array_slice(\array_map('strval', $blocks), 0, 5));
+                }
+            }
+        }
+
+        if ($messages === []) {
+            return '设计执行契约未通过，请查看 quality_gate.value.page_reports 定位页面、区块与插槽。';
+        }
+
+        return \implode('；', \array_slice(\array_values(\array_unique($messages)), 0, 5));
     }
 
     /**

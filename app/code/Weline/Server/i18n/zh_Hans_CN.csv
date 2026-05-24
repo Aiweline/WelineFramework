@@ -134,12 +134,16 @@ P99：%{1},P99：%{1}
 "清除 WLS 路由缓存...","清除 WLS 路由缓存..."
 实例不存在,实例不存在
 实例未运行,实例未运行
-连接控制端口失败,连接控制端口失败
-路由缓存已清除,路由缓存已清除
+发送路由缓存清除命令,发送路由缓存清除命令
+"路由缓存清除命令已被 Master 接收","路由缓存清除命令已被 Master 接收"
+状态：%{1},状态：%{1}
 清除缓存失败,清除缓存失败
-未收到响应,未收到响应
 "清除 WLS Dispatcher 路由缓存","清除 WLS Dispatcher 路由缓存"
 "清理未运行的 WLS 实例记录","清理未运行的 WLS 实例记录"
+未发现可安全清理的未运行实例记录。,未发现可安全清理的未运行实例记录。
+"默认 dry-run 未修改任何文件。","默认 dry-run 未修改任何文件。"
+"默认 dry-run：发现 %{1} 个可清理实例，但未删除。","默认 dry-run：发现 %{1} 个可清理实例，但未删除。"
+可清理实例：%{1},可清理实例：%{1}
 未发现需要清理的未运行实例记录。,未发现需要清理的未运行实例记录。
 "可使用 server:status 或 server:listing 查看当前实例状态。","可使用 server:status 或 server:listing 查看当前实例状态。"
 "已清理 %{1} 个未运行实例记录。","已清理 %{1} 个未运行实例记录。"
@@ -147,7 +151,9 @@ P99：%{1},P99：%{1}
 "可使用 server:status 或 server:listing 查看清理后的实例状态。","可使用 server:status 或 server:listing 查看清理后的实例状态。"
 "清理已无运行进程但仍残留实例文件的 WLS 实例记录","清理已无运行进程但仍残留实例文件的 WLS 实例记录"
 "清理那些已经没有运行但仍占着实例文件的 WLS 实例记录","清理那些已经没有运行但仍占着实例文件的 WLS 实例记录"
-清理未运行实例记录,清理未运行实例记录
+"执行清理；默认仅 dry-run 检查","执行清理；默认仅 dry-run 检查"
+预览未运行实例记录,预览未运行实例记录
+确认清理未运行实例记录,确认清理未运行实例记录
 清理后查看实例状态,清理后查看实例状态
 "Weline Server 性能优化指南","Weline Server 性能优化指南"
 "📋 您的 PHP 环境","📋 您的 PHP 环境"
@@ -195,15 +201,23 @@ P99：%{1},P99：%{1}
 "IPC stop_test 诊断","IPC stop_test 诊断"
 "发送 stop_test，输出 Orchestrator 诊断 JSON","发送 stop_test，输出 Orchestrator 诊断 JSON"
 诊断默认实例,诊断默认实例
-"即将结束系统中所有 PHP 进程（含 WLS、CLI 服务器等）","即将结束系统中所有 PHP 进程（含 WLS、CLI 服务器等）"
-正在执行…,正在执行…
-"已结束所有 php.exe 进程","已结束所有 php.exe 进程"
-"未检测到运行中的 php.exe，或已全部结束","未检测到运行中的 php.exe，或已全部结束"
-"已结束所有 php 进程","已结束所有 php 进程"
-"未检测到运行中的 php 进程，或已全部结束","未检测到运行中的 php 进程，或已全部结束"
-"一键结束系统中所有 PHP 进程（Windows: taskkill /F /IM php.exe /T；Linux/Mac: pkill -9 php）","一键结束系统中所有 PHP 进程（Windows: taskkill /F /IM php.exe /T；Linux/Mac: pkill -9 php）"
-"一键结束系统中所有 PHP 进程","一键结束系统中所有 PHP 进程"
-"执行后端口会释放，可再运行 server:start","执行后端口会释放，可再运行 server:start"
+"拒绝执行全局 PHP 进程杀伤。","拒绝执行全局 PHP 进程杀伤。"
+"如确需杀死系统中所有 PHP 进程，请显式使用 --all-php --yes。","如确需杀死系统中所有 PHP 进程，请显式使用 --all-php --yes。"
+"未发现 WLS 实例记录；不会执行全局 php.exe/pkill。","未发现 WLS 实例记录；不会执行全局 php.exe/pkill。"
+"未找到可清理的 WLS 进程前缀。","未找到可清理的 WLS 进程前缀。"
+"将仅结束当前项目 WLS 归属的 PHP 进程，不会杀死系统中所有 PHP。","将仅结束当前项目 WLS 归属的 PHP 进程，不会杀死系统中所有 PHP。"
+"已发送 WLS 归属 PHP 进程清理请求。","已发送 WLS 归属 PHP 进程清理请求。"
+"即将结束系统中所有 PHP 进程（包含非 WLS 进程）。","即将结束系统中所有 PHP 进程（包含非 WLS 进程）。"
+"已执行全局 PHP 进程清理。","已执行全局 PHP 进程清理。"
+"未检测到运行中的 PHP 进程，或系统拒绝执行。","未检测到运行中的 PHP 进程，或系统拒绝执行。"
+"结束 WLS 归属 PHP 进程；全局 PHP 清理必须显式 --all-php --yes","结束 WLS 归属 PHP 进程；全局 PHP 清理必须显式 --all-php --yes"
+"默认只结束当前项目 WLS 归属 PHP 进程","默认只结束当前项目 WLS 归属 PHP 进程"
+"危险：杀死系统中所有 PHP 进程","危险：杀死系统中所有 PHP 进程"
+"与 --all-php 同用，确认全局杀伤","与 --all-php 同用，确认全局杀伤"
+安全默认,安全默认
+"不再执行 taskkill /IM php.exe 或 pkill -9 php，除非显式 --all-php --yes","不再执行 taskkill /IM php.exe 或 pkill -9 php，除非显式 --all-php --yes"
+"清理 WLS 归属进程","清理 WLS 归属进程"
+全局清理（危险）,全局清理（危险）
 "端口 %{1} 当前没有进程在监听","端口 %{1} 当前没有进程在监听"
 框架进程,框架进程
 异常占用,异常占用
@@ -214,8 +228,10 @@ P99：%{1},P99：%{1}
 "如果确定要杀死该进程，请使用 -f 参数:","如果确定要杀死该进程，请使用 -f 参数:"
 或手动执行:,或手动执行:
 "taskkill /F /PID %{1}","taskkill /F /PID %{1}"
+"拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。","拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。"
+"如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。","如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。"
 "警告：端口占用者处于异常状态（PID 失效），强制模式可能仍无法释放端口。","警告：端口占用者处于异常状态（PID 失效），强制模式可能仍无法释放端口。"
-警告：即将杀死非框架进程！,警告：即将杀死非框架进程！
+"警告：即将杀死非 WLS 进程！","警告：即将杀死非 WLS 进程！"
 正在释放端口...,正在释放端口...
 "端口 %{1} 已成功释放","端口 %{1} 已成功释放"
 端口释放失败，请尝试：,端口释放失败，请尝试：
@@ -225,9 +241,10 @@ P99：%{1},P99：%{1}
 结束占用指定端口的进程,结束占用指定端口的进程
 "端口号（默认 443）","端口号（默认 443）"
 端口号,端口号
-强制模式：杀死非框架进程（危险！默认只杀框架进程）,强制模式：杀死非框架进程（危险！默认只杀框架进程）
+"强制模式：仅强制释放 WLS 归属进程","强制模式：仅强制释放 WLS 归属进程"
+"与 -f 同用时允许杀死非 WLS 进程（危险）","与 -f 同用时允许杀死非 WLS 进程（危险）"
 "结束占用 443 的框架进程","结束占用 443 的框架进程"
-强制杀死任何进程（危险）,强制杀死任何进程（危险）
+"强制杀死非 WLS 进程（危险）","强制杀死非 WLS 进程（危险）"
 "Weline Server","Weline Server"
 运行中,运行中
 已停止,已停止
@@ -330,8 +347,7 @@ P99：%{1},P99：%{1}
 "✓ 热重载命令已发送","✓ 热重载命令已发送"
 "等待实例 [%{1}] 的 Orchestrator 完成滚动重启...","等待实例 [%{1}] 的 Orchestrator 完成滚动重启..."
 "控制连接已断开，Orchestrator 可能仍在后台继续执行；请用 server:status 查看结果","控制连接已断开，Orchestrator 可能仍在后台继续执行；请用 server:status 查看结果"
-"等待重载进度超时（%{1}s 无新消息），已停止前台等待，Orchestrator 仍可能在后台执行","等待重载进度超时（%{1}s 无新消息），已停止前台等待，Orchestrator 仍可能在后台执行"
-"可执行 server:status 查看当前重载状态，或稍后再次执行 server:reload -n","可执行 server:status 查看当前重载状态，或稍后再次执行 server:reload -n"
+"仍在等待 Master 回传 reload 进度（已等待 %{1}s，剩余 %{2}s）；不会主动断开控制连接。","仍在等待 Master 回传 reload 进度（已等待 %{1}s，剩余 %{2}s）；不会主动断开控制连接。"
 "可用 server:status 查看当前状态","可用 server:status 查看当前状态"
 "✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）","✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）"
 "✗ 滚动重启失败：Worker #%{1} - %{2}","✗ 滚动重启失败：Worker #%{1} - %{2}"
@@ -368,6 +384,8 @@ P99：%{1},P99：%{1}
 滚动重载（默认等待）,滚动重载（默认等待）
 不等待,不等待
 强制重载,强制重载
+"检测到端口/拓扑/Worker/SSL 等启动参数变更，restart -r 将自动切换为完整重启。","检测到端口/拓扑/Worker/SSL 等启动参数变更，restart -r 将自动切换为完整重启。"
+将先执行平滑停机，再使用新启动参数重新拉起实例。,将先执行平滑停机，再使用新启动参数重新拉起实例。
 "检测到服务器已运行，-f 强制模式：单批次重启 Worker（Master 保持运行）...","检测到服务器已运行，-f 强制模式：单批次重启 Worker（Master 保持运行）..."
 "检测到服务器已运行，执行滚动重启（Master 保持运行）...","检测到服务器已运行，执行滚动重启（Master 保持运行）..."
 服务器未运行，正在启动...,服务器未运行，正在启动...
@@ -388,7 +406,8 @@ P99：%{1},P99：%{1}
 重启并更改端口,重启并更改端口
 "请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁","请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁"
 "未检测到运行中的 WLS Dispatcher，无需执行解封","未检测到运行中的 WLS Dispatcher，无需执行解封"
-"命令已发送，若 Dispatcher 正在运行应已生效","命令已发送，若 Dispatcher 正在运行应已生效"
+解封命令已接收,解封命令已接收
+解封命令失败,解封命令失败
 "Memory Service disabled by configuration.","Memory Service disabled by configuration."
 "启动全局共享 Session/Memory 服务","启动全局共享 Session/Memory 服务"
 "启动或重启全局共享 Session/Memory 服务","启动或重启全局共享 Session/Memory 服务"
@@ -457,10 +476,6 @@ P99：%{1},P99：%{1}
 检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...,检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...
 "所有 Worker 已空闲，开始切换...","所有 Worker 已空闲，开始切换..."
 等待超时，强制切换...,等待超时，强制切换...
-"启用直连模式：%{1} 个 Worker 直接监听端口 %{2}（SO_REUSEPORT）","启用直连模式：%{1} 个 Worker 直接监听端口 %{2}（SO_REUSEPORT）"
-"当前系统不支持 SO_REUSEPORT，无法启用直连模式，回退到 Dispatcher 模式","当前系统不支持 SO_REUSEPORT，无法启用直连模式，回退到 Dispatcher 模式"
-"禁用 Dispatcher，每个 Worker 使用独立端口（智能分配）","禁用 Dispatcher，每个 Worker 使用独立端口（智能分配）"
-"使用 Dispatcher 模式（TCP 透传）","使用 Dispatcher 模式（TCP 透传）"
 "Worker基础端口: %{1}","Worker基础端口: %{1}"
 "共享状态运行时: %{1}","共享状态运行时: %{1}"
 "共享状态运行时解析失败: %{1}","共享状态运行时解析失败: %{1}"
@@ -724,18 +739,24 @@ env.wls,env.wls
 "SSL 私钥文件路径（启用 HTTPS）","SSL 私钥文件路径（启用 HTTPS）"
 "Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）","Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）"
 "Dispatcher 进程 PHP memory_limit（默认跟随 Worker）","Dispatcher 进程 PHP memory_limit（默认跟随 Worker）"
+"运行策略：auto/performance/stability/compatibility（默认 auto）","运行策略：auto/performance/stability/compatibility（默认 auto）"
+"拓扑：auto/direct/dispatcher/independent（默认 auto）","拓扑：auto/direct/dispatcher/independent（默认 auto）"
+"事件循环：auto/event/select（默认 auto）","事件循环：auto/event/select（默认 auto）"
+"Supervisor：auto/true/false（默认 auto）","Supervisor：auto/true/false（默认 auto）"
 "直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）","直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）"
 "独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口","独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口"
-"强制 Dispatcher 模式（默认）","强制 Dispatcher 模式（默认）"
+"强制 Dispatcher 模式","强制 Dispatcher 模式"
 配置优先级,配置优先级
 "命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值","命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值"
 多实例支持,多实例支持
 "可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动","可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动"
 配置记忆,配置记忆
 "首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443","首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443"
-"worker_count 设为 ""auto"" 时：开发环境固定 4 个 Worker，生产环境根据 CPU 核心数自动计算","worker_count 设为 ""auto"" 时：开发环境固定 4 个 Worker，生产环境根据 CPU 核心数自动计算"
+"worker_count 设为 ""auto"" 时由运行时策略按 OS/CPU/内存自动计算","worker_count 设为 ""auto"" 时由运行时策略按 OS/CPU/内存自动计算"
 事件循环,事件循环
-"自动选择最优：Event 扩展 > stream_select","自动选择最优：Event 扩展 > stream_select"
+"auto 会优先使用可用的 Event 扩展，否则降级 stream_select 并提示原因","auto 会优先使用可用的 Event 扩展，否则降级 stream_select 并提示原因"
+默认拓扑,默认拓扑
+"Linux/Mac 支持 SO_REUSEPORT 时 auto 默认 direct；Windows 默认 Dispatcher 兼容路径","Linux/Mac 支持 SO_REUSEPORT 时 auto 默认 direct；Windows 默认 Dispatcher 兼容路径"
 多进程,多进程
 "优先级：proc_open > pcntl_fork > exec","优先级：proc_open > pcntl_fork > exec"
 "HTTPS 支持","HTTPS 支持"
@@ -815,9 +836,13 @@ unknown,unknown
 "查看服务器实例状态，树形展示所有 Worker 进程","查看服务器实例状态，树形展示所有 Worker 进程"
 实例名称（默认显示所有实例）,实例名称（默认显示所有实例）
 "Watch 模式：每 3 秒自动刷新，Ctrl+C 退出","Watch 模式：每 3 秒自动刷新，Ctrl+C 退出"
+"显示 WLS 运行时策略、降级原因和优化建议","显示 WLS 运行时策略、降级原因和优化建议"
+"与 --doctor 同用时输出 JSON","与 --doctor 同用时输出 JSON"
 查看所有实例,查看所有实例
 查看指定实例,查看指定实例
 "实时监控（watch 模式）","实时监控（watch 模式）"
+运行时诊断,运行时诊断
+清理未运行实例记录,清理未运行实例记录
 "`--all` 与 `-pre/--prefix` 不能同时使用。","`--all` 与 `-pre/--prefix` 不能同时使用。"
 请二选一：要么停止所有实例，要么只停止某个前缀。,请二选一：要么停止所有实例，要么只停止某个前缀。
 "另一个 server:stop 任务正在处理中，请稍后再试。","另一个 server:stop 任务正在处理中，请稍后再试。"
@@ -1458,12 +1483,6 @@ DDoS攻击,DDoS攻击
 已可用,已可用
 "proc_open 函数已启用","proc_open 函数已启用"
 "找到 disable_functions 行，删除 proc_open","找到 disable_functions 行，删除 proc_open"
-"重载未正常结束：未收到完整回执（可能因 IPC 抢占中止、内部提前返回或控制连接异常）","重载未正常结束：未收到完整回执（可能因 IPC 抢占中止、内部提前返回或控制连接异常）"
-"已聚合 %{1} 个 Worker 的 Fiber 池统计","已聚合 %{1} 个 Worker 的 Fiber 池统计"
-"Fiber 统计已超时，返回已收到的 %{1} 个 Worker 数据","Fiber 统计已超时，返回已收到的 %{1} 个 Worker 数据"
-"维护 Worker #%{1} 启动失败","维护 Worker #%{1} 启动失败"
-"维护 Worker 未在 %{1}s 内全部 READY（IPC）","维护 Worker 未在 %{1}s 内全部 READY（IPC）"
-"维护模式已启用: Dispatcher 已切至维护池, 维护进程 %{1} 个","维护模式已启用: Dispatcher 已切至维护池, 维护进程 %{1} 个"
 "当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}","当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}"
 "[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书","[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书"
 "[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请","[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请"

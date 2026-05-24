@@ -793,17 +793,22 @@ class Template extends DataObject
      */
     public function fetchHtml(string $fileName, array $dictionary = []) 
     {
+        $this->addSourceModuleToRequest(DataInterface::dir_type_TEMPLATE, $fileName);
+
+        $comFileName = $this->getFetchFile($fileName);
+        $result = $this->ob_file($comFileName, $dictionary);
+        return $result;
+    }
+
+    private function addSourceModuleToRequest(string $type, string $source): void
+    {
         try {
-            [, $moduleName] = $this->processModuleSourceFilePath(DataInterface::dir_type_TEMPLATE, $fileName);
+            [, $moduleName] = $this->processModuleSourceFilePath($type, $source);
             if ($moduleName !== '') {
                 ObjectManager::getInstance(Request::class)->addModule($moduleName);
             }
         } catch (\Throwable) {
         }
-
-        $comFileName = $this->getFetchFile($fileName);
-        $result = $this->ob_file($comFileName, $dictionary);
-        return $result;
     }
 
     /**
@@ -819,12 +824,16 @@ class Template extends DataObject
      */
     public function fetchTagHtml(string $tag, string $fileName, array $dictionary = [])
     {
+        $this->addSourceModuleToRequest($tag, $fileName);
+
         $comFileName = $this->fetchTagSource($tag, $fileName);
         return $this->ob_file($comFileName, $dictionary);
     }
 
     private function fetchHookHtml(string $hookFile): string
     {
+        $this->addSourceModuleToRequest('hooks', $hookFile);
+
         $analyticsRenderFlag = $this->analyticsHookRenderFlag($hookFile);
         if ($analyticsRenderFlag !== null && !empty($GLOBALS[$analyticsRenderFlag])) {
             return '';
@@ -1165,6 +1174,7 @@ class Template extends DataObject
         }
         FiberOutputBuffer::beginCapture();
         $temporaryTemplateData = $this->pushTemporaryTemplateData($dictionary);
+        $captureEnding = false;
         try {
             // 框架级保障：模板内 $block 永远指向当前 Template 实例。
             // 兼容历史模板（含 view/tpl 编译产物）中的 $block->setTitle()/getBackendUrl() 调用。
@@ -1193,14 +1203,17 @@ class Template extends DataObject
                 ]);
             }
             self::cooperativeTemplateYield();
+            $captureEnding = true;
+            /** Get output buffer. */
+            $result = FiberOutputBuffer::endCapture();
         } catch (\Throwable $exception) {
-            FiberOutputBuffer::discardCapture();
-            $this->popTemporaryTemplateData($temporaryTemplateData);
+            if (!$captureEnding) {
+                FiberOutputBuffer::discardCapture();
+            }
             throw $exception;
+        } finally {
+            $this->popTemporaryTemplateData($temporaryTemplateData);
         }
-        /** Get output buffer. */
-        $result = FiberOutputBuffer::endCapture();
-        $this->popTemporaryTemplateData($temporaryTemplateData);
         if ($reusableTemplateCacheKey !== null && !$this->isEmptyCacheHtml($result)) {
             $this->rememberReusableTemplateOutput(
                 $reusableTemplateCacheKey,

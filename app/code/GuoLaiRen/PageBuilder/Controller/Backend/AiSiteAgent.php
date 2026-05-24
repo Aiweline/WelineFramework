@@ -81,6 +81,85 @@ class AiSiteAgent extends BaseController
     private const STREAM_LEASE_SCOPE_KEY = '_workspace_stream_lease';
     private const STREAM_LEASE_TTL_SEC = 60;
     private const WORKSPACE_STREAM_MAX_EVENT_REPLAY = 300;
+    private const WORKSPACE_FAST_VIEW_ARTIFACT_KEYS_BY_STAGE = [
+        AiSiteAgentSession::STAGE_PLAN => [
+            'plan_json',
+            'plan_structured',
+            'plan_markdown',
+        ],
+    ];
+    private const WORKSPACE_FAST_VIEW_SCOPE_KEYS = [
+        '_artifact_refs',
+        'active_operation',
+        'active_operations',
+        'asset_image_generation_failures',
+        'asset_manifest',
+        'brief_description',
+        'build_plan_confirmed',
+        'build_plan_confirmed_at',
+        'build_queue_info',
+        'build_summary',
+        'build_task_summary',
+        'can_publish',
+        'default_language',
+        'default_locale',
+        'design_direction_code',
+        'design_direction_custom_id',
+        'design_direction_hash',
+        'design_direction_locked',
+        'design_direction_match_reason',
+        'design_direction_mode',
+        'design_direction_snapshot',
+        'draft_website_id',
+        'execution_blueprint_confirmed_at',
+        'execution_blueprint_confirmed_signature',
+        'extra_page_types_panel_open',
+        'fake_mode',
+        'has_build_plan_v2',
+        'latest_build_failed',
+        'latest_build_failure',
+        'locales',
+        'page_type_layouts',
+        'page_types',
+        'page_types_user_customized',
+        'pagebuilder_pages_by_type',
+        'pending_generation_page_types',
+        'plan_confirmed',
+        'plan_confirmed_at',
+        'plan_locale',
+        'plan_queue_info',
+        'preferred_registrar_account_id',
+        'pre_publish_visual_urls',
+        'preview_full_url',
+        'preview_page_id',
+        'preview_page_type',
+        'publish_blocked_by_latest_ai_failure',
+        'publish_blocked_reason',
+        'publish_status',
+        'recommended_domain_list',
+        'recommended_registrar_label',
+        'reference_images',
+        'registrar_account_id',
+        'retryable_ai_failure_count',
+        'retryable_ai_failures',
+        'selected_domain',
+        'selected_skill_codes',
+        'selected_website_id',
+        'site_profile_manual',
+        'site_tagline',
+        'site_title',
+        'target_domain',
+        'user_description',
+        'verified_assets',
+        'virtual_pages_by_type',
+        'virtual_theme_id',
+        'visual_edit_url',
+        'visual_preview_url',
+        'website_id',
+        'website_profile',
+        'workspace_status',
+        'workspace_track',
+    ];
     /**
      * 工作区 stream-sse 续约窗口：超过此时间未收到续约请求（POST post-touch-stream-lease）则视为断连，
      * 服务端将结束事件流并清理与本 lease 关联的排队/运行中操作。
@@ -93,7 +172,7 @@ class AiSiteAgent extends BaseController
     private const STALE_ACTIVE_OPERATION_TTL_SEC = 600;
     private const OBSERVER_QUEUE_SETTLE_DELAY_MS = 3000;
     private const BUILD_TASK_MAX_GENERATION_ATTEMPTS = 3;
-    private const PAGE_SECTION_BUILD_DISPATCH_WINDOW = 3;
+    private const PAGE_SECTION_BUILD_DISPATCH_WINDOW = 1;
     private const AI_SITE_QUEUE_CONTENT_LIGHT_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key';
     private const AI_SITE_QUEUE_CONTENT_PAYLOAD_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key,content,process,result';
     private const AI_SITE_QUEUE_MAX_CONTENT_JSON_DECODE_BYTES = 262144;
@@ -264,12 +343,14 @@ class AiSiteAgent extends BaseController
         $domainPurchaseState = $linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession
             ? $this->workspaceBridgeService->buildDomainPurchaseState($linkedWebsitesSession)
             : [];
+        $domainChoiceEnvironment = $this->workspaceBridgeService->buildDomainChoiceEnvironment();
+        $isLocalDomainEnvironment = !empty($domainChoiceEnvironment['is_local']);
         $registrarAccounts = $this->workspaceBridgeService->buildRegistrarAccountOptions();
         $registrarSelection = $this->workspaceBridgeService->buildWorkspaceRegistrarSelection(
             $linkedWebsitesScope,
             \is_array($viewState['scope'] ?? null) ? $viewState['scope'] : [],
             $registrarAccounts,
-            \defined('DEV') && DEV
+            $isLocalDomainEnvironment
         );
         $recommendedDomainList = $registrarSelection['recommended_domain_list'];
         $recommendedRegistrarLabel = $registrarSelection['recommended_registrar_label'];
@@ -332,6 +413,7 @@ class AiSiteAgent extends BaseController
         $this->assign('recommended_registrar_label', $recommendedRegistrarLabel);
         $this->assign('preferred_registrar_account_id', $preferredRegistrarAccountId);
         $this->assign('registrar_accounts', $registrarAccounts);
+        $this->assign('domain_choice_environment', $domainChoiceEnvironment);
         $this->assign('linked_workbench_public_id', $linkedWebsitesSession?->getPublicId() ?? '');
         $this->assign('back_url', $this->url->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => 'pagebuilder']));
         $this->assign('stage_options', $this->getStageOptions());
@@ -388,6 +470,7 @@ class AiSiteAgent extends BaseController
         $this->assign('design_direction_list_url', $this->url->getBackendUrlPath('ai/backend/style/post-catalog'));
         $this->assign('design_direction_save_url', $this->url->getBackendUrlPath('ai/backend/style/post-save'));
         $this->assign('design_direction_disable_url', $this->url->getBackendUrlPath('ai/backend/style/post-disable'));
+        $this->assign('design_direction_delete_url', $this->url->getBackendUrlPath('ai/backend/style/post-delete'));
         $this->assign('design_direction_clone_builtin_url', $this->url->getBackendUrlPath('ai/backend/style/post-clone-builtin'));
         $this->assign('back_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/index'));
 
@@ -505,8 +588,8 @@ class AiSiteAgent extends BaseController
             $virtualPages[$pageType] = $virtualPage;
         }
         $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
-        $previewTitle = $this->sanitizeAiSiteVisitorTitle((string)($virtualPage['title'] ?? ''), $scope);
-        $previewMetaTitle = $this->sanitizeAiSiteVisitorTitle((string)($virtualPage['meta_title'] ?? ''), $scope);
+        $previewTitle = $this->sanitizeAiSiteVisitorTitle((string)($virtualPage['title'] ?? ''), $scope, $locale);
+        $previewMetaTitle = $this->sanitizeAiSiteVisitorTitle((string)($virtualPage['meta_title'] ?? ''), $scope, $locale);
         if ($previewMetaTitle === '') {
             $previewMetaTitle = $previewTitle;
         }
@@ -665,11 +748,11 @@ class AiSiteAgent extends BaseController
         return \is_array($rows[0] ?? null) ? $rows[0] : [];
     }
 
-    private function sanitizeAiSiteVisitorTitle(string $value, array $scope): string
+    private function sanitizeAiSiteVisitorTitle(string $value, array $scope, string $locale = ''): string
     {
         $title = \preg_replace('/\b(?:website\s*profile|websiteProfile|site\s*profile|profile_json|scope_json|target_domain)\b/iu', '', $value) ?? $value;
         $title = \preg_replace('/\s+/u', ' ', \trim($title)) ?? \trim($title);
-        $localized = $this->localizeAiSiteGenericVisitorTitle($title, $scope);
+        $localized = $this->localizeAiSiteGenericVisitorTitle($title, $scope, $locale);
         if ($localized !== '') {
             return $localized;
         }
@@ -696,28 +779,32 @@ class AiSiteAgent extends BaseController
         return 'Website';
     }
 
-    private function localizeAiSiteGenericVisitorTitle(string $title, array $scope): string
+    private function localizeAiSiteGenericVisitorTitle(string $title, array $scope, string $explicitLocale = ''): string
     {
-        $key = match (\strtolower(\trim($title))) {
-            'home', 'homepage' => 'home',
-            'about', 'about us' => 'about',
-            'contact', 'contact us' => 'contact',
-            'privacy policy', 'privacy' => 'privacy_policy',
-            'terms of service', 'terms' => 'terms_of_service',
+        $normalizedTitle = \strtolower(\trim($title));
+        $key = match ($normalizedTitle) {
+            'home', 'homepage', "\u{9996}\u{9875}", "\u{4E3B}\u{9875}" => 'home',
+            'about', 'about us', "\u{5173}\u{4E8E}", "\u{5173}\u{4E8E}\u{6211}\u{4EEC}" => 'about',
+            'contact', 'contact us', "\u{8054}\u{7CFB}", "\u{8054}\u{7CFB}\u{6211}\u{4EEC}" => 'contact',
+            'privacy policy', 'privacy', "\u{9690}\u{79C1}\u{653F}\u{7B56}" => 'privacy_policy',
+            'terms of service', 'terms', "\u{670D}\u{52A1}\u{6761}\u{6B3E}", "\u{670D}\u{52A1}\u{6761}\u{6B3E}\u{548C}\u{6761}\u{4EF6}" => 'terms_of_service',
             default => '',
         };
         if ($key === '') {
             return '';
         }
 
-        $locale = \trim((string)(
-            $scope['content_locale']
-                ?? $scope['website_profile']['content_locale']
-                ?? $scope['default_locale']
-                ?? $scope['default_language']
-                ?? $scope['website_profile']['default_locale']
-                ?? ''
-        ));
+        $locale = \trim($explicitLocale);
+        if ($locale === '') {
+            $locale = \trim((string)(
+                $scope['content_locale']
+                    ?? $scope['website_profile']['content_locale']
+                    ?? $scope['default_locale']
+                    ?? $scope['default_language']
+                    ?? $scope['website_profile']['default_locale']
+                    ?? ''
+            ));
+        }
 
         if (\preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', $locale) === 1) {
             return match ($key) {
@@ -747,6 +834,16 @@ class AiSiteAgent extends BaseController
                 'contact' => 'संपर्क करें',
                 'privacy_policy' => 'गोपनीयता नीति',
                 'terms_of_service' => 'सेवा की शर्तें',
+                default => '',
+            };
+        }
+        if (\preg_match('/^pt(?:[_-]|$)/i', $locale) === 1) {
+            return match ($key) {
+                'home' => 'Início',
+                'about' => 'Sobre',
+                'contact' => 'Contato',
+                'privacy_policy' => 'Política de Privacidade',
+                'terms_of_service' => 'Termos de Serviço',
                 default => '',
             };
         }
@@ -1990,11 +2087,12 @@ class AiSiteAgent extends BaseController
                     $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null)
                         ? $scope['execution_blueprint_draft']
                         : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
+                    $existingBuildPlanV2 = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
                 } catch (\Throwable) {
                 }
             }
         }
-        if ($executionBlueprintDraft === []) {
+        if ($executionBlueprintDraft === [] && $existingBuildPlanV2 === []) {
             return $this->jsonError('PLAN_NOT_READY', (string)__('尚未生成方案，请先完成方案生成'), ['public_id']);
         }
 
@@ -5879,7 +5977,7 @@ class AiSiteAgent extends BaseController
     ): array {
         $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, $stage)
+            $this->sessionService->loadScopeFragment($session, self::WORKSPACE_FAST_VIEW_SCOPE_KEYS)
         );
         $scope = $this->discardForeignAiSiteQueueRuntimeState($scope, (int)$session->getId());
 
@@ -5983,10 +6081,9 @@ class AiSiteAgent extends BaseController
             'plan_confirmed_at' => (string)($scope['plan_confirmed_at'] ?? ''),
             'build_plan_confirmed' => (int)($scope['build_plan_confirmed'] ?? 0),
             'build_plan_confirmed_at' => (string)($scope['build_plan_confirmed_at'] ?? ''),
-            'has_build_plan_v2' => !empty($scope['has_build_plan_v2'])
-                || (\is_array($scope['build_plan_v2'] ?? null) && $scope['build_plan_v2'] !== []),
-            'has_execution_blueprint' => \is_array($scope['execution_blueprint'] ?? null) && $scope['execution_blueprint'] !== [],
-            'has_stage_one_plan' => $this->scopeCompatibilityService->hasPersistedStageOnePlan($scope),
+            'has_build_plan_v2' => $this->workspaceFastViewHasBuildPlan($scope),
+            'has_execution_blueprint' => $this->workspaceFastViewHasExecutionBlueprint($scope),
+            'has_stage_one_plan' => $this->workspaceFastViewHasStageOnePlan($scope),
             'scope' => [
                 'plan_confirmed' => (int)($scope['plan_confirmed'] ?? 0),
                 'build_plan_confirmed' => (int)($scope['build_plan_confirmed'] ?? 0),
@@ -6001,6 +6098,75 @@ class AiSiteAgent extends BaseController
         ];
 
         return $this->decorateWorkspaceStateWithPollingPayload($state);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function workspaceFastViewScopeKeys(string $stage): array
+    {
+        if ($stage !== AiSiteAgentSession::STAGE_PLAN) {
+            return self::WORKSPACE_FAST_VIEW_SCOPE_KEYS;
+        }
+
+        return \array_values(\array_unique(\array_merge(self::WORKSPACE_FAST_VIEW_SCOPE_KEYS, [
+            'plan_json',
+            'plan_structured',
+            'plan_markdown',
+        ])));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function workspaceFastViewArtifactKeys(string $stage): array
+    {
+        return self::WORKSPACE_FAST_VIEW_ARTIFACT_KEYS_BY_STAGE[$stage] ?? [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function workspaceFastViewHasStageOnePlan(array $scope): bool
+    {
+        return $this->scopeCompatibilityService->hasPersistedStageOnePlan($scope)
+            || (int)($scope['plan_confirmed'] ?? 0) === 1
+            || \trim((string)($scope['execution_blueprint_confirmed_signature'] ?? '')) !== ''
+            || $this->workspaceScopeHasArtifactRef($scope, AiSiteAgentSession::STAGE_PLAN, 'plan_json')
+            || $this->workspaceScopeHasArtifactRef($scope, AiSiteAgentSession::STAGE_PLAN, 'plan_structured')
+            || $this->workspaceScopeHasArtifactRef($scope, AiSiteAgentSession::STAGE_PLAN, 'plan_markdown');
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function workspaceFastViewHasExecutionBlueprint(array $scope): bool
+    {
+        return (\is_array($scope['execution_blueprint'] ?? null) && $scope['execution_blueprint'] !== [])
+            || (\is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== [])
+            || \trim((string)($scope['execution_blueprint_confirmed_signature'] ?? '')) !== ''
+            || \trim((string)($scope['execution_blueprint_confirmed_at'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function workspaceFastViewHasBuildPlan(array $scope): bool
+    {
+        return !empty($scope['has_build_plan_v2'])
+            || (\is_array($scope['build_plan_v2'] ?? null) && $scope['build_plan_v2'] !== [])
+            || $this->workspaceScopeHasArtifactRef($scope, AiSiteAgentSession::STAGE_PLAN, 'build_plan_v2');
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function workspaceScopeHasArtifactRef(array $scope, string $stage, string $artifactKey): bool
+    {
+        $refs = \is_array($scope['_artifact_refs'] ?? null) ? $scope['_artifact_refs'] : [];
+        $stageRefs = \is_array($refs[$stage] ?? null) ? $refs[$stage] : [];
+
+        return \is_array($stageRefs[$artifactKey] ?? null);
     }
 
     private function normalizeWorkspaceQueuePollOperation(string $operation): string
@@ -6024,13 +6190,18 @@ class AiSiteAgent extends BaseController
     {
         $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, $stage)
+            $this->sessionService->loadScopeFragment(
+                $session,
+                $this->workspaceFastViewScopeKeys($stage),
+                $this->workspaceFastViewArtifactKeys($stage)
+            )
         );
         $scope = $this->discardForeignAiSiteQueueRuntimeState($scope, (int)$session->getId());
         $scope['reference_images'] = $this->resolveReferenceImagesFromScope($scope);
         $scope = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($scope);
-        $scope = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $scope);
-        $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
+        if ($stage === AiSiteAgentSession::STAGE_PLAN) {
+            $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
+        }
         $scope = $this->normalizeBuildPlanConfirmationForBuild($scope);
 
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
@@ -6098,7 +6269,9 @@ class AiSiteAgent extends BaseController
                 'default_locale' => (string)($scope['default_locale'] ?? $scope['default_language'] ?? ''),
             ];
         }
-        $hasStageOnePlan = $this->scopeCompatibilityService->hasPersistedStageOnePlan($scope);
+        $hasStageOnePlan = $this->workspaceFastViewHasStageOnePlan($scope);
+        $hasExecutionBlueprint = $this->workspaceFastViewHasExecutionBlueprint($scope);
+        $hasBuildPlanV2 = $this->workspaceFastViewHasBuildPlan($scope);
         $taskReady = $this->taskSummaryIndicatesCompleted($buildTaskSummary);
         $titleOk = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? '')) !== '';
         $canPublish = !empty($scope['can_publish']) || (($virtualThemeId > 0 || $taskReady) && $titleOk);
@@ -6152,11 +6325,10 @@ class AiSiteAgent extends BaseController
             'confirmed_plan_markdown' => (string)($scope['plan_markdown'] ?? ''),
             'confirmed_plan_signature' => (string)($scope['execution_blueprint_confirmed_signature'] ?? ''),
             'has_stage_one_plan' => $hasStageOnePlan,
-            'has_execution_blueprint' => \is_array($scope['execution_blueprint'] ?? null) && $scope['execution_blueprint'] !== [],
+            'has_execution_blueprint' => $hasExecutionBlueprint,
             'build_plan_confirmed' => (int)($scope['build_plan_confirmed'] ?? 0),
             'build_plan_confirmed_at' => (string)($scope['build_plan_confirmed_at'] ?? ''),
-            'has_build_plan_v2' => !empty($scope['has_build_plan_v2'])
-                || (\is_array($scope['build_plan_v2'] ?? null) && $scope['build_plan_v2'] !== []),
+            'has_build_plan_v2' => $hasBuildPlanV2,
             'plan_projection' => \is_array($scope['plan_projection'] ?? null) ? $scope['plan_projection'] : [],
             'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [],
@@ -9203,7 +9375,19 @@ class AiSiteAgent extends BaseController
         }
 
         try {
-            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+            $patch = [
+                'active_operation' => \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
+                'active_operations' => \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [],
+                'workspace_status' => (string)($scope['workspace_status'] ?? ''),
+            ];
+            if ($operation === 'plan') {
+                if (\array_key_exists('plan_queue_info', $scope)) {
+                    $patch['plan_queue_info'] = \is_array($scope['plan_queue_info'] ?? null) ? $scope['plan_queue_info'] : [];
+                }
+            } elseif (\array_key_exists('build_queue_info', $scope)) {
+                $patch['build_queue_info'] = \is_array($scope['build_queue_info'] ?? null) ? $scope['build_queue_info'] : [];
+            }
+            $this->sessionService->mergeScope($session->getId(), $adminId, $patch);
         } catch (\Throwable $throwable) {
             \error_log('[AiSiteWorkspaceQueueRecovery] failed to persist recovered operation state ' . \json_encode([
                 'session_id' => (int)$session->getId(),
@@ -15582,7 +15766,8 @@ class AiSiteAgent extends BaseController
                 'final_url' => '',
                 'locked_by_user' => 0,
             ];
-            $result = $assetService->generateSlotAsset($session, $adminId, $assetScope, $slotId, $slotSeed);
+            $latestAssetScope = $this->refreshInlineImageStateFromPersistedScope($session, $adminId, $assetScope);
+            $result = $assetService->generateSlotAsset($session, $adminId, $latestAssetScope, $slotId, $slotSeed);
             if (\trim((string)($result['final_url'] ?? '')) === '' && \is_array($result['failed_slot'] ?? null)) {
                 throw new \RuntimeException('Inline block image generation failed for ' . $slotId . ': ' . (string)($result['failed_slot']['message'] ?? 'unknown error'));
             }
@@ -15649,6 +15834,8 @@ class AiSiteAgent extends BaseController
      */
     private function persistInlineImageScopePatch(AiSiteAgentSession $session, int $adminId, array $resultScope): void
     {
+        $currentScope = $this->sessionService->loadScope($session);
+        $resultScope = $this->mergeInlineImageResultScope($currentScope, $resultScope);
         $patch = [];
         foreach (['asset_manifest', 'asset_block_cache', 'verified_assets', 'asset_image_generation_failures'] as $key) {
             if (\array_key_exists($key, $resultScope)) {
@@ -15663,6 +15850,114 @@ class AiSiteAgent extends BaseController
         if ($patch !== []) {
             $this->sessionService->mergeScope((int)$session->getId(), $adminId, $patch);
         }
+    }
+
+    /**
+     * Concurrent block image generation starts from a task-local scope slice.
+     * Merge image state by slot so one completed task cannot overwrite another
+     * task's generated final_url with its older pending manifest snapshot.
+     *
+     * @param array<string,mixed> $currentScope
+     * @param array<string,mixed> $resultScope
+     * @return array<string,mixed>
+     */
+    private function mergeInlineImageResultScope(array $currentScope, array $resultScope): array
+    {
+        if (\is_array($resultScope['asset_manifest'] ?? null)) {
+            $resultScope['asset_manifest'] = $this->mergeInlineAssetManifest(
+                \is_array($currentScope['asset_manifest'] ?? null) ? $currentScope['asset_manifest'] : [],
+                $resultScope['asset_manifest']
+            );
+            $resultScope['verified_assets'] = $this->assetManifestService()->extractVerifiedAssets($resultScope['asset_manifest']);
+        }
+
+        if (\is_array($resultScope['asset_block_cache'] ?? null)) {
+            $resultScope['asset_block_cache'] = $this->mergeInlineAssetBlockCache(
+                \is_array($currentScope['asset_block_cache'] ?? null) ? $currentScope['asset_block_cache'] : [],
+                $resultScope['asset_block_cache']
+            );
+        }
+
+        if (\is_array($currentScope['asset_image_generation_failures'] ?? null)
+            && \is_array($resultScope['asset_image_generation_failures'] ?? null)
+        ) {
+            $resultScope['asset_image_generation_failures'] = \array_values(\array_merge(
+                $currentScope['asset_image_generation_failures'],
+                $resultScope['asset_image_generation_failures']
+            ));
+        }
+
+        return $resultScope;
+    }
+
+    /**
+     * @param array<string,mixed> $currentManifest
+     * @param array<string,mixed> $incomingManifest
+     * @return array<string,mixed>
+     */
+    private function mergeInlineAssetManifest(array $currentManifest, array $incomingManifest): array
+    {
+        $assetManifestService = $this->assetManifestService();
+        $current = $assetManifestService->normalize($currentManifest);
+        $incoming = $assetManifestService->normalize($incomingManifest);
+        $slots = \is_array($current['slots'] ?? null) ? $current['slots'] : [];
+
+        foreach (\is_array($incoming['slots'] ?? null) ? $incoming['slots'] : [] as $slotId => $incomingSlot) {
+            if (!\is_array($incomingSlot)) {
+                continue;
+            }
+            $slotId = (string)$slotId;
+            $currentSlot = \is_array($slots[$slotId] ?? null) ? $slots[$slotId] : [];
+            $incomingFinalUrl = \trim((string)($incomingSlot['final_url'] ?? ''));
+            $currentFinalUrl = \trim((string)($currentSlot['final_url'] ?? ''));
+            $mergedSlot = \array_replace($currentSlot, $incomingSlot);
+            if ($incomingFinalUrl === '' && $currentFinalUrl !== '') {
+                foreach (['final_url', 'url', 'source', 'status', 'variants', 'error_message', 'execution_token'] as $field) {
+                    if (\array_key_exists($field, $currentSlot)) {
+                        $mergedSlot[$field] = $currentSlot[$field];
+                    }
+                }
+            }
+            $slots[$slotId] = $mergedSlot;
+        }
+
+        return [
+            'version' => (int)($incoming['version'] ?? $current['version'] ?? 1),
+            'updated_at' => \date('Y-m-d H:i:s'),
+            'slots' => $slots,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $currentCache
+     * @param array<string,mixed> $incomingCache
+     * @return array<string,mixed>
+     */
+    private function mergeInlineAssetBlockCache(array $currentCache, array $incomingCache): array
+    {
+        $currentSlots = \is_array($currentCache['slots'] ?? null) ? $currentCache['slots'] : [];
+        $incomingSlots = \is_array($incomingCache['slots'] ?? null) ? $incomingCache['slots'] : [];
+
+        return \array_replace($currentCache, $incomingCache, [
+            'version' => (int)($incomingCache['version'] ?? $currentCache['version'] ?? 1),
+            'updated_at' => \date('Y-m-d H:i:s'),
+            'slots' => \array_replace($currentSlots, $incomingSlots),
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function refreshInlineImageStateFromPersistedScope(AiSiteAgentSession $session, int $adminId, array $scope): array
+    {
+        $fresh = $this->sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $persistedScope = $this->sessionService->loadScope($fresh);
+
+        return $this->mergeInlineImageResultScope(
+            \is_array($persistedScope) ? $persistedScope : [],
+            $scope
+        );
     }
 
     /**
@@ -16382,6 +16677,7 @@ class AiSiteAgent extends BaseController
                     $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? $pageType));
                     $scope = $this->buildTaskService->markTaskDone($scope, (string)$taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
                     $scope = $this->dropPrePublishMaterializedPagesFromVirtualThemeScope($scope, $session);
+                    $scope = $this->refreshInlineImageStateFromPersistedScope($session, $adminId, $scope);
                     $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
                     $pageId = 0;
@@ -16519,6 +16815,7 @@ class AiSiteAgent extends BaseController
 
         $scope = $this->buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
         $scope = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
+        $scope = $this->refreshInlineImageStateFromPersistedScope($session, $adminId, $scope);
 
         $now = \date('Y-m-d H:i:s');
         $buildRegeneration = \is_array($scope['_build_regeneration'] ?? null) ? $scope['_build_regeneration'] : [];

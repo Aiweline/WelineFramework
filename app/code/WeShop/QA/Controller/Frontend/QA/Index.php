@@ -29,7 +29,11 @@ class Index extends BaseController
             return '';
         }
 
-        foreach ($this->qaQuestionPageDataService->build($productId) as $key => $value) {
+        $page = (int) ($this->request->getParam('page') ?? 1);
+        $pageSize = (int) ($this->request->getParam('page_size') ?? $this->request->getParam('pageSize') ?? 10);
+        $targetQuestionId = (int) ($this->request->getParam('question_id') ?? $this->request->getParam('qa_id') ?? 0);
+
+        foreach ($this->qaQuestionPageDataService->build($productId, $page, $pageSize, $targetQuestionId) as $key => $value) {
             $this->assign($key, $value);
         }
 

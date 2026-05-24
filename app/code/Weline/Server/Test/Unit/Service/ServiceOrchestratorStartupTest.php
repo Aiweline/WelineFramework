@@ -62,7 +62,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
     public function testCheckAndNotifyServerReadyRequiresStartupArm(): void
     {
-        $orchestrator = new ServiceOrchestrator();
+        $orchestrator = new class extends ServiceOrchestrator {};
         $orchestrator->getRegistry()->addInstance(new ServiceInstance(
             role: 'dispatcher',
             instanceId: 1,
@@ -117,6 +117,87 @@ class ServiceOrchestratorStartupTest extends TestCase
             'instanceName' => 'test',
             'totalServices' => 2,
         ]], $orchestrator->startupReadyMarks);
+    }
+
+    public function testServerReadyNotificationWaitsForEveryBusinessWorkerByDefault(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var list<array{instanceName:string,totalServices:int}> */
+            public array $startupReadyMarks = [];
+
+            protected function markStartupPhaseRunning(ServiceContext $context, int $totalServices): void
+            {
+                $this->startupReadyMarks[] = [
+                    'instanceName' => $context->instanceName,
+                    'totalServices' => $totalServices,
+                ];
+            }
+        };
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: 'dispatcher',
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: 'worker',
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: 'worker',
+            instanceId: 2,
+            state: ServiceInstance::STATE_STARTING,
+        ));
+        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+        $this->writePrivate($orchestrator, 'serverReadyNotificationArmed', true);
+
+        $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
+
+        self::assertFalse($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
+        self::assertSame([], $orchestrator->startupReadyMarks);
+
+        $worker = $registry->getInstance('worker', 2);
+        self::assertInstanceOf(ServiceInstance::class, $worker);
+        $worker->state = ServiceInstance::STATE_READY;
+        $registry->updateInstance($worker);
+
+        $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
+
+        self::assertTrue($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
+        self::assertSame([[
+            'instanceName' => 'test',
+            'totalServices' => 3,
+        ]], $orchestrator->startupReadyMarks);
+    }
+
+    public function testStartupAcceptanceRequiresEveryBusinessWorkerReadyByDefault(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        self::assertSame(8, $this->invokePrivateWithArgs(
+            $orchestrator,
+            'resolveStartupAcceptanceMinReady',
+            [ControlMessage::ROLE_WORKER, 8]
+        ));
+        $this->writePrivate($orchestrator, 'context', $this->createFrontendContext([
+            'worker_startup_min_ready' => 'legacy',
+        ]));
+        self::assertSame(1, $this->invokePrivateWithArgs(
+            $orchestrator,
+            'resolveStartupAcceptanceMinReady',
+            [ControlMessage::ROLE_WORKER, 8]
+        ));
+        self::assertSame(2, $this->invokePrivateWithArgs(
+            $orchestrator,
+            'resolveStartupAcceptanceMinReady',
+            [ControlMessage::ROLE_DISPATCHER, 2]
+        ));
+        self::assertSame(0, $this->invokePrivateWithArgs(
+            $orchestrator,
+            'resolveStartupAcceptanceMinReady',
+            [ControlMessage::ROLE_WORKER, 0]
+        ));
     }
 
     public function testMarkStartupPhaseRunningRestoresControlMetadataWhenInstanceFileIsPartial(): void
@@ -815,15 +896,19 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
         };
 
-        $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [
-            [new DispatcherProvider()],
-            $this->createWorkerInfraContext(),
-        ]);
+        try {
+            $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [
+                [new DispatcherProvider()],
+                $this->createWorkerInfraContext(),
+            ]);
+            self::fail('Dispatcher startup must fail fast when its launch port is unavailable.');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('dispatcher#1 port 8080 is unavailable', $e->getMessage());
+        }
 
         self::assertSame([[ControlMessage::ROLE_DISPATCHER, 8080]], $orchestrator->prepareCalls);
         self::assertSame([], $orchestrator->capturedCommands);
-        self::assertSame([], $result);
-        self::assertSame(1, $orchestrator->batchCreateCalls);
+        self::assertSame(0, $orchestrator->batchCreateCalls);
     }
 
     public function testMarkSpawnedInstancePreservesLowLevelSpawnTransportAndKeepsForegroundPidAsLauncherOnly(): void
@@ -1797,14 +1882,11 @@ class ServiceOrchestratorStartupTest extends TestCase
         $this->invokePrivateWithArgs($orchestrator, 'startAllChildServicesBody', [$context]);
 
         self::assertSame('concurrent_batch', $orchestrator->events[0] ?? null);
-        self::assertSame('wait:dispatcher', $orchestrator->events[1] ?? null);
+        self::assertSame('wait:dispatcher,worker', $orchestrator->events[1] ?? null);
         self::assertCount(2, $orchestrator->events);
     }
 
-    /**
-     * 鍏变韩鏈嶅姟浣滀负鏅€氭湇鍔″弬涓庡苟鍙戝惎鍔ㄦ壒娆★紙鏃犵壒娈?probe/ensure锛夈€?
-     */
-    public function testSharedServicesIncludedInPhaseOneBatch(): void
+    public function testSharedServicesAreExcludedFromLocalStartupBatch(): void
     {
         $events = new \ArrayObject();
 
@@ -1868,10 +1950,10 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $eventList = \iterator_to_array($events, false);
         self::assertNotEmpty($eventList);
-        // 楠岃瘉鍏变韩鏈嶅姟鍖呭惈鍦ㄦ壒閲忓惎鍔ㄤ腑
         $batchEvent = $eventList[0] ?? '';
-        self::assertStringContainsString(ControlMessage::ROLE_SESSION_SERVER, $batchEvent);
-        self::assertStringContainsString(ControlMessage::ROLE_MEMORY_SERVER, $batchEvent);
+        self::assertStringNotContainsString(ControlMessage::ROLE_SESSION_SERVER, $batchEvent);
+        self::assertStringNotContainsString(ControlMessage::ROLE_MEMORY_SERVER, $batchEvent);
+        self::assertStringContainsString(ControlMessage::ROLE_DISPATCHER, $batchEvent);
     }
 
     /**
@@ -2740,7 +2822,21 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
         };
 
-        $orchestrator = new ServiceOrchestrator();
+        $orchestrator = new class extends ServiceOrchestrator {
+            protected function prepareLocalPortForStart(string $role, int $port): bool
+            {
+                unset($role, $port);
+
+                return true;
+            }
+
+            protected function batchCreateProcesses(array $commands): array
+            {
+                unset($commands);
+
+                return ['1' => 0];
+            }
+        };
 
         $registry = $orchestrator->getRegistry();
         if (!$registry->hasProvider(ControlMessage::ROLE_DISPATCHER)) {
@@ -2779,7 +2875,10 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(0, $readyBefore);
         self::assertSame(0, $readyAfter);
         $dispatcher = $registry->getInstance(ControlMessage::ROLE_DISPATCHER, 1);
-        self::assertNull($dispatcher);
+        self::assertInstanceOf(ServiceInstance::class, $dispatcher);
+        self::assertSame(ServiceInstance::STATE_STARTING, $dispatcher->state);
+        self::assertNull($dispatcher->ipcClientId);
+        self::assertNotSame('dispatcher-stale-ipc', $dispatcher->launchId);
     }
 
     public function testMasterSelfAuditKeepsReadyDispatcherWhenWrapperRootStillAlive(): void
@@ -3639,7 +3738,8 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
         }
 
-        self::assertSame([], $poolMessages);
+        self::assertCount(1, $poolMessages);
+        self::assertSame([18080, 18081], $poolMessages[0]['ports'] ?? null);
         self::assertSame('18080,18081', $this->readPrivate($orchestrator, 'lastDispatcherRouteTableSignature'));
     }
 

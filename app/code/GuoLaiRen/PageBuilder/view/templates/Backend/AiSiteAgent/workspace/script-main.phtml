@@ -913,15 +913,57 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         });
     }
 
+    function getPhaseOnePlanLastError(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        if (state.plan_generation_last_error && typeof state.plan_generation_last_error === 'object') {
+            return state.plan_generation_last_error;
+        }
+        if (scope.plan_generation_last_error && typeof scope.plan_generation_last_error === 'object') {
+            return scope.plan_generation_last_error;
+        }
+        return {};
+    }
+
+    function getPhaseOnePlanBlockingErrorMessage(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        if (hasRetryableAiFailures(state, 'plan')) {
+            return getRetryableAiFailureMessage(state, 'plan');
+        }
+        var failedOperation = findPlanFailureOperationFromWorkspaceState(state);
+        if (failedOperation) {
+            return resolvePlanFailureMessageFromWorkspaceState(state, failedOperation);
+        }
+        var planError = getPhaseOnePlanLastError(state);
+        var planErrorMessage = String(planError.message || planError.error_message || planError.error || '').trim();
+        if (planErrorMessage !== '') {
+            return normalizePlanFailureMessage(planErrorMessage);
+        }
+        if (parseInt(String(state.partial_retry_required || scope.partial_retry_required || 0), 10) === 1) {
+            return getRetryableAiFailureMessage(state, 'plan');
+        }
+        return '';
+    }
+
+    function hasPhaseOnePlanBlockingErrors(workspaceState) {
+        return getPhaseOnePlanBlockingErrorMessage(workspaceState) !== '';
+    }
+
     function syncConfirmPlanButtonEnabled() {
         var confirmBtn = document.getElementById('pb-ai-confirm-plan');
         if (!confirmBtn) {
             return;
         }
+        var state = getLatestWorkspaceStateForQueuePrompt();
         confirmBtn.disabled = planGenerationActionLockActive
             || !hasCurrentPhaseOnePlanDraft()
             || isPhaseOneQueueUnfinished()
-            || hasRetryableAiFailures(getLatestWorkspaceStateForQueuePrompt(), 'plan');
+            || hasPhaseOnePlanBlockingErrors(state);
     }
 
     function syncPlanRebuildButtonVisibility() {
@@ -1011,6 +1053,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     }
     var messages = {
         networkError: <?= \json_encode((string)__('网络错误，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planErrorNoDetail: <?= \json_encode((string)__('建站方案生成失败，但后端未返回具体错误详情。请查看队列日志，或刷新工作区后重试失败项。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStreamStartFailed: <?= \json_encode((string)__('建站方案进度流创建失败，请检查当前登录态、路由和本地服务状态。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         saveSuccess: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         saveFailed: <?= \json_encode((string)__('自动保存失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         orchestrated: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1151,16 +1195,16 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         buildReady: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         operationDuplicateStream: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         leaveDuringBuild: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainNeedBrief: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainNeedRegistrar: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainRecommendLoading: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainRecommendEmpty: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainCheckNeedRegistrar: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainConfirmCheckFailed: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainNeedBrief: <?= \json_encode((string)__('请先填写站点名称和需求描述。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainNeedRegistrar: <?= \json_encode((string)__('请先选择域名供应商。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRecommendLoading: <?= \json_encode((string)__('正在根据当前站点信息推荐域名...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRecommendEmpty: <?= \json_encode((string)__('暂无可用域名推荐，请调整站点名称或手动输入域名。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainCheckNeedRegistrar: <?= \json_encode((string)__('线上域名需要先选择正式域名供应商。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainConfirmCheckFailed: <?= \json_encode((string)__('域名可用性校验未通过，请更换域名或供应商。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         domainPurchaseFailed: <?= \json_encode((string)__('购买域名失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseDialogLoadFailed: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainPurchaseQueued: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        domainPurchased: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseDialogLoadFailed: <?= \json_encode((string)__('域名购买确认面板加载失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainPurchaseQueued: <?= \json_encode((string)__('域名购买任务已提交。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainPurchased: <?= \json_encode((string)__('域名已完成购买。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishStartUnavailable: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishChecking: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishRunning: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1730,9 +1774,10 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
-        var planBlocked = hasRetryableAiFailures(state, 'plan');
+        var planBlockMessage = getPhaseOnePlanBlockingErrorMessage(state);
+        var planBlocked = planBlockMessage !== '';
         var buildBlocked = hasRetryableAiFailures(state, 'build');
-        setRetryableGuardedControlState(document.getElementById('pb-ai-confirm-plan'), planBlocked, getRetryableAiFailureMessage(state, 'plan'));
+        setRetryableGuardedControlState(document.getElementById('pb-ai-confirm-plan'), planBlocked, planBlockMessage);
         setRetryableGuardedControlState(document.getElementById('pb-ai-start-build-site'), buildBlocked, getRetryableAiFailureMessage(state, 'build'));
         setRetryableGuardedControlState(document.getElementById('pb-ai-start-publish'), buildBlocked, getRetryableAiFailureMessage(state, 'build'));
         setRetryableGuardedControlState(document.getElementById('pb-ai-go-publish-stage'), buildBlocked, getRetryableAiFailureMessage(state, 'build'));
@@ -1753,6 +1798,19 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }
         syncPlanFailureListFromWorkspaceState(state);
         syncPublishFailureListFromWorkspaceState(state);
+        syncConfirmPlanButtonEnabled();
+    }
+
+    function guardPhaseOnePlanConfirmation() {
+        var state = getLatestWorkspaceStateForQueuePrompt();
+        var message = getPhaseOnePlanBlockingErrorMessage(state);
+        if (message === '') {
+            return true;
+        }
+        toast('warning', message);
+        syncConfirmPlanButtonEnabled();
+        syncRetryableAiFailureActionGuards(state);
+        return false;
     }
 
     function guardRetryableAiFailuresBeforeProgress(operation) {
@@ -4034,6 +4092,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     var recommendationBoxEl = document.getElementById('pb-ai-domain-recommendation');
     var recommendationListEl = document.getElementById('pb-ai-recommended-domain-list');
     var domainPurchaseState = <?= \json_encode($domainPurchaseState, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var domainChoiceState = <?= $domainChoiceStateJson ?? '{}' ?>;
     var domainPurchaseSource = null;
     var domainPurchaseSourceStartTimer = null;
 
@@ -4082,8 +4141,10 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
 
     function getRegistrarSelection() {
         var hidden = document.getElementById('pb-ai-registrar-account_value');
+        var fallbackAccountId = parseInt(String((domainChoiceState && domainChoiceState.selected_provider_id) || '0'), 10) || 0;
+        var fallbackLabel = String((domainChoiceState && domainChoiceState.selected_provider_label) || '').trim();
         if (!hidden) {
-            return { accountId: 0, label: '' };
+            return { accountId: fallbackAccountId, label: fallbackLabel };
         }
         var accountId = parseInt(String(hidden.value || '0'), 10) || 0;
         var label = '';
@@ -4094,7 +4155,212 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 label = String(items[0].label || '').trim();
             }
         }
+        if (!label && accountId > 0) {
+            label = getRegistrarOptionLabel(accountId) || fallbackLabel;
+        }
         return { accountId: accountId, label: label };
+    }
+
+    function ensureDomainChoiceState() {
+        if (!domainChoiceState || typeof domainChoiceState !== 'object') {
+            domainChoiceState = {};
+        }
+        if (!Array.isArray(domainChoiceState.domains)) {
+            domainChoiceState.domains = [];
+        }
+        if (!Array.isArray(domainChoiceState.providers)) {
+            domainChoiceState.providers = [];
+        }
+        if (!domainChoiceState.environment || typeof domainChoiceState.environment !== 'object') {
+            domainChoiceState.environment = {};
+        }
+        return domainChoiceState;
+    }
+
+    function getRegistrarOptionLabel(accountId) {
+        accountId = parseInt(String(accountId || '0'), 10) || 0;
+        if (accountId <= 0) {
+            return '';
+        }
+        var state = ensureDomainChoiceState();
+        for (var i = 0; i < state.providers.length; i += 1) {
+            var provider = state.providers[i] || {};
+            if (parseInt(String(provider.value || provider.account_id || '0'), 10) === accountId) {
+                return String(provider.label || '').trim();
+            }
+        }
+        return '';
+    }
+
+    function setRegistrarSelectionValue(accountId) {
+        accountId = parseInt(String(accountId || '0'), 10) || 0;
+        var value = accountId > 0 ? String(accountId) : '';
+        var api = window.WelineRegistrarSelect && window.WelineRegistrarSelect['pb-ai-registrar-account'];
+        if (api && typeof api.setValue === 'function') {
+            api.setValue(value);
+        }
+        var hidden = document.getElementById('pb-ai-registrar-account_value');
+        if (hidden) {
+            hidden.value = value;
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function domainChoiceSourceLabel(choice) {
+        var label = String((choice && choice.source_label) || '').trim();
+        if (label) {
+            return label;
+        }
+        var source = String((choice && choice.source) || '').trim();
+        if (source === 'purchase') {
+            return '购买记录';
+        }
+        if (source === 'recommended' || source === 'ai_recommended' || source === 'local_recommended') {
+            return 'AI 推荐';
+        }
+        return '当前域名';
+    }
+
+    function isManagedLocalDomainChoice(domain) {
+        var value = String(domain || '').trim().toLowerCase();
+        if (!value) {
+            return false;
+        }
+        var state = ensureDomainChoiceState();
+        var roots = Array.isArray(state.environment.local_root_domains)
+            ? state.environment.local_root_domains
+            : ['weline.test', 'local.test', 'weline.localhost'];
+        return roots.some(function (root) {
+            root = String(root || '').trim().toLowerCase();
+            return root !== '' && (value === root || value.endsWith('.' + root));
+        });
+    }
+
+    function addDomainChoiceItems(domains, accountId, registrarLabel, source, sourceLabel) {
+        var state = ensureDomainChoiceState();
+        var registrarAccountId = parseInt(String(accountId || '0'), 10) || 0;
+        var label = String(registrarLabel || '').trim();
+        var seen = {};
+        state.domains.forEach(function (choice) {
+            var existingDomain = String((choice && choice.domain) || '').trim().toLowerCase();
+            var existingAccountId = parseInt(String((choice && choice.account_id) || '0'), 10) || 0;
+            if (existingDomain) {
+                seen[existingAccountId + '|' + existingDomain] = true;
+            }
+        });
+        (Array.isArray(domains) ? domains : []).forEach(function (domain) {
+            var value = String(domain || '').trim().toLowerCase();
+            if (!value) {
+                return;
+            }
+            var key = registrarAccountId + '|' + value;
+            if (seen[key]) {
+                return;
+            }
+            seen[key] = true;
+            state.domains.push({
+                domain: value,
+                account_id: registrarAccountId,
+                registrar_label: label,
+                source: source || 'recommended',
+                source_label: sourceLabel || ''
+            });
+        });
+    }
+
+    function updateRegistrarSelectionSummary() {
+        var selection = getRegistrarSelection();
+        var label = selection.label || (selection.accountId > 0 ? getRegistrarOptionLabel(selection.accountId) : '');
+        var display = label || '未选择供应商';
+        ['pb-ai-domain-choice-provider-label', 'pb-ai-registrar-selected-label'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.textContent = display;
+            }
+        });
+        var help = document.getElementById('pb-ai-registrar-help');
+        if (help) {
+            var env = ensureDomainChoiceState().environment || {};
+            if (label) {
+                help.textContent = '当前供应商：' + label;
+            } else if (env && env.is_local) {
+                help.textContent = '本地环境默认使用 local 本地测试供应商。';
+            } else {
+                help.textContent = '线上环境需要选择正式域名供应商。';
+            }
+        }
+        var sidebarHelp = document.getElementById('pb-ai-registrar-sidebar-help');
+        if (sidebarHelp) {
+            sidebarHelp.textContent = label ? ('当前供应商：' + label) : '';
+        }
+    }
+
+    function updateDomainActionButtons() {
+        var state = domainPurchaseState || {};
+        var locked = ['queued', 'running'].indexOf(String(state.status || 'idle')) !== -1;
+        var domain = getTargetDomainTrimmed();
+        var registrarSelection = getRegistrarSelection();
+        document.querySelectorAll('#pb-ai-purchase-domain-btn, #site-builder-start-domain-purchase').forEach(function (buttonEl) {
+            buttonEl.disabled = locked || !domain || registrarSelection.accountId <= 0;
+        });
+    }
+
+    function renderDomainChoiceTags() {
+        var container = document.getElementById('pb-ai-domain-choice-tags');
+        if (!container) {
+            return;
+        }
+        var state = ensureDomainChoiceState();
+        var registrarSelection = getRegistrarSelection();
+        var selectedAccountId = registrarSelection.accountId;
+        var currentDomain = getTargetDomainTrimmed().toLowerCase();
+        if (currentDomain) {
+            addDomainChoiceItems([currentDomain], selectedAccountId, registrarSelection.label, 'current', '当前域名');
+        }
+        var visible = state.domains.filter(function (choice) {
+            var domain = String((choice && choice.domain) || '').trim();
+            if (!domain) {
+                return false;
+            }
+            var choiceAccountId = parseInt(String((choice && choice.account_id) || '0'), 10) || 0;
+            return choiceAccountId <= 0 || selectedAccountId <= 0 || choiceAccountId === selectedAccountId;
+        });
+        container.innerHTML = '';
+        visible.forEach(function (choice) {
+            var domain = String(choice.domain || '').trim();
+            var sourceLabel = domainChoiceSourceLabel(choice);
+            var choiceAccountId = parseInt(String(choice.account_id || '0'), 10) || 0;
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-sm ' + (domain.toLowerCase() === currentDomain ? 'btn-primary' : 'btn-outline-secondary');
+            button.setAttribute('data-domain', domain);
+            button.setAttribute('data-account-id', String(choiceAccountId));
+            button.textContent = sourceLabel ? (domain + ' · ' + sourceLabel) : domain;
+            button.addEventListener('click', function () {
+                if (choiceAccountId > 0 && choiceAccountId !== getRegistrarSelection().accountId) {
+                    setRegistrarSelectionValue(choiceAccountId);
+                }
+                setAllTargetDomainInputs(domain);
+                siteProfileManual.target_domain = true;
+                persistDomainSelection({
+                    target_domain: domain,
+                    selected_domain: domain,
+                    preferred_registrar_account_id: choiceAccountId > 0 ? choiceAccountId : getRegistrarSelection().accountId,
+                    registrar_account_id: choiceAccountId > 0 ? choiceAccountId : getRegistrarSelection().accountId,
+                    recommended_registrar_label: choice.registrar_label || getRegistrarSelection().label
+                });
+                autoSaveScope();
+                renderDomainChoiceTags();
+                updateDomainActionButtons();
+            });
+            container.appendChild(button);
+        });
+        var emptyEl = document.getElementById('pb-ai-domain-choice-empty');
+        if (emptyEl) {
+            emptyEl.classList.toggle('d-none', visible.length > 0);
+        }
+        updateRegistrarSelectionSummary();
+        updateDomainActionButtons();
     }
 
     function setDomainRecommendationState(type, message) {
@@ -4152,7 +4418,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var domainEl = document.getElementById('site-builder-domain-progress-domain');
         var stageEl = document.getElementById('site-builder-domain-stage');
         var orderEl = document.getElementById('site-builder-domain-order-id');
-        var buttonEl = document.getElementById('site-builder-start-domain-purchase');
+        var buttonEl = document.getElementById('pb-ai-purchase-domain-btn') || document.getElementById('site-builder-start-domain-purchase');
 
         if (badge) {
             badge.className = 'badge ' + (
@@ -4178,6 +4444,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (buttonEl) {
             buttonEl.disabled = ['queued', 'running'].indexOf(String(domainPurchaseState.status || 'idle')) !== -1;
         }
+        renderDomainChoiceTags();
     }
 
     function closeDomainPurchaseSource() {
@@ -4272,7 +4539,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var registrarSelection = getRegistrarSelection();
         var patch = Object.assign({
             target_domain: getTargetDomainTrimmed(),
+            selected_domain: getTargetDomainTrimmed(),
             preferred_registrar_account_id: registrarSelection.accountId,
+            registrar_account_id: registrarSelection.accountId,
             recommended_registrar_label: registrarSelection.label
         }, extraPatch || {});
         return postForm(mergeScopeUrl, {
@@ -4325,6 +4594,14 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             if (recommendedDomain) {
                 setAllTargetDomainInputs(recommendedDomain);
             }
+            addDomainChoiceItems(
+                candidates,
+                registrarSelection.accountId,
+                registrarSelection.label,
+                fakeSession ? 'local_recommended' : 'ai_recommended',
+                fakeSession ? '本地推荐' : 'AI 推荐'
+            );
+            renderDomainChoiceTags();
             renderRecommendedDomains(candidates);
             setDomainRecommendationState('success', String(data.message || recommendedDomain));
             persistDomainSelection({
@@ -4412,6 +4689,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                     return;
                 }
                 syncDomainPurchaseCard(data.state || {});
+                addDomainChoiceItems([domain], registrarSelection.accountId, registrarSelection.label, 'purchase', '购买记录');
+                renderDomainChoiceTags();
                 persistDomainSelection({
                     target_domain: domain,
                     preferred_registrar_account_id: registrarSelection.accountId,
@@ -4441,12 +4720,33 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             recommendDomainsFromWorkbench();
         });
     });
-    var startDomainPurchaseBtn = document.getElementById('site-builder-start-domain-purchase');
-    if (startDomainPurchaseBtn) {
+    document.querySelectorAll('#pb-ai-purchase-domain-btn, #site-builder-start-domain-purchase').forEach(function (startDomainPurchaseBtn) {
         startDomainPurchaseBtn.addEventListener('click', function () {
             startDomainPurchaseFromWorkbench();
         });
+    });
+    var registrarHiddenInput = document.getElementById('pb-ai-registrar-account_value');
+    if (registrarHiddenInput) {
+        registrarHiddenInput.addEventListener('change', function () {
+            var registrarSelection = getRegistrarSelection();
+            var state = ensureDomainChoiceState();
+            state.selected_provider_id = registrarSelection.accountId;
+            state.selected_provider_label = registrarSelection.label;
+            renderDomainChoiceTags();
+            persistDomainSelection({
+                preferred_registrar_account_id: registrarSelection.accountId,
+                registrar_account_id: registrarSelection.accountId,
+                recommended_registrar_label: registrarSelection.label
+            });
+        });
     }
+    getTargetDomainInputs().forEach(function (targetDomainInput) {
+        targetDomainInput.addEventListener('input', updateDomainActionButtons);
+        targetDomainInput.addEventListener('change', function () {
+            renderDomainChoiceTags();
+        });
+    });
+    renderDomainChoiceTags();
 
     // T36：打开已确认方案/执行蓝图只读预览弹层。
     function showConfirmedPlanModal(planType) {
@@ -5770,7 +6070,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             toast('warning', messages.domainRequiredForBuild);
             return Promise.resolve(false);
         }
-        if (/\.weline\.local$/i.test(domain)) {
+        if (isManagedLocalDomainChoice(domain)) {
             return Promise.resolve(true);
         }
         if (isGuidedFakeModeSession()) {
@@ -12652,7 +12952,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             toast('error', messages.planStartUnavailable);
             return Promise.resolve(false);
         }
-        if (!guardRetryableAiFailuresBeforeProgress('plan')) {
+        if (!guardPhaseOnePlanConfirmation()) {
             return Promise.resolve(false);
         }
         return persistStageOneInlineEdits(true).then(function (patched) {
@@ -14043,16 +14343,137 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return {};
     }
 
-    function resolvePlanTerminalErrorMessage(event, payload) {
+    function isGenericPlanTerminalErrorMessage(message) {
+        var text = String(message || '').trim();
+        if (text === '') {
+            return true;
+        }
+        return text === String(messages.networkError || '').trim()
+            || text.toLowerCase() === 'network error, please try again later';
+    }
+
+    function compactPlanTerminalErrorMessage(message) {
+        var text = String(message || '').replace(/\s+/g, ' ').trim();
+        if (text.length <= 260) {
+            return text;
+        }
+        return text.slice(0, 259).replace(/\s+\S*$/, '') + '…';
+    }
+
+    function readPlanTerminalObjectFailureMessage(source) {
+        if (!source || typeof source !== 'object') {
+            return '';
+        }
+        var status = readQueueStatusForPrompt(source);
+        if (status !== '' && !isPlanFailureStatusForWorkspaceUi(status)) {
+            return '';
+        }
+        var snapshot = source.snapshot && typeof source.snapshot === 'object' ? source.snapshot : {};
+        var candidates = [
+            source.message,
+            source.error_message,
+            source.error,
+            snapshot.message,
+            snapshot.error_message,
+            snapshot.error,
+            source.process,
+            snapshot.process
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var value = compactPlanTerminalErrorMessage(candidates[i]);
+            if (value !== '' && !isGenericPlanTerminalErrorMessage(value)) {
+                return normalizePlanFailureMessage(value);
+            }
+        }
+        return '';
+    }
+
+    function resolvePlanTerminalStateFailureMessage(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        if (!state || Object.keys(state).length === 0) {
+            return '';
+        }
+        var blockingMessage = getPhaseOnePlanBlockingErrorMessage(state);
+        if (blockingMessage !== '' && !isGenericPlanTerminalErrorMessage(blockingMessage)) {
+            return blockingMessage;
+        }
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var candidates = [];
+        [state.active_operation, scope.active_operation].forEach(function (operation) {
+            if (operation && typeof operation === 'object') {
+                candidates.push(operation);
+            }
+        });
+        [state.active_operations, scope.active_operations].forEach(function (operations) {
+            if (operations && typeof operations === 'object' && operations.plan && typeof operations.plan === 'object') {
+                candidates.push(operations.plan);
+            }
+        });
+        [state.plan_queue_info, scope.plan_queue_info].forEach(function (queueInfo) {
+            if (queueInfo && typeof queueInfo === 'object') {
+                candidates.push(queueInfo);
+            }
+        });
+        for (var i = 0; i < candidates.length; i += 1) {
+            var message = readPlanTerminalObjectFailureMessage(candidates[i]);
+            if (message !== '') {
+                return message;
+            }
+        }
+        return '';
+    }
+
+    function resolvePlanTerminalPayloadFailureMessage(payload) {
         var parsed = payload && typeof payload === 'object' ? payload : {};
-        var message = String((parsed && parsed.message) || '');
-        if (message !== '') {
+        var nestedData = parsed.data && typeof parsed.data === 'object' ? parsed.data : {};
+        var nestedPayload = parsed.payload && typeof parsed.payload === 'object' ? parsed.payload : {};
+        var directMessage = compactPlanTerminalErrorMessage(
+            parsed.message
+            || parsed.error_message
+            || parsed.error
+            || nestedData.message
+            || nestedData.error_message
+            || nestedData.error
+            || nestedPayload.message
+            || nestedPayload.error_message
+            || nestedPayload.error
+            || ''
+        );
+        if (directMessage !== '' && !isGenericPlanTerminalErrorMessage(directMessage)) {
+            return normalizePlanFailureMessage(directMessage);
+        }
+        var stateCandidates = [
+            parsed.state,
+            parsed.workspace_state,
+            parsed.data,
+            parsed.payload,
+            getLatestWorkspaceStateForQueuePrompt()
+        ];
+        for (var i = 0; i < stateCandidates.length; i += 1) {
+            var stateMessage = resolvePlanTerminalStateFailureMessage(stateCandidates[i]);
+            if (stateMessage !== '') {
+                return stateMessage;
+            }
+        }
+        var queueMessage = readPlanTerminalObjectFailureMessage(parsed.queue_info || parsed.queue_snapshot || parsed.active_operation || {});
+        if (queueMessage !== '') {
+            return queueMessage;
+        }
+        return directMessage;
+    }
+
+    function resolvePlanTerminalErrorMessage(event, payload) {
+        var message = resolvePlanTerminalPayloadFailureMessage(payload);
+        if (message !== '' && !isGenericPlanTerminalErrorMessage(message)) {
             return message;
         }
         if (event && typeof event.data === 'string' && String(event.data).trim() !== '') {
-            return String(event.data);
+            var eventText = compactPlanTerminalErrorMessage(event.data);
+            if (eventText !== '' && !isGenericPlanTerminalErrorMessage(eventText)) {
+                return normalizePlanFailureMessage(eventText);
+            }
         }
-        return messages.networkError || '';
+        return messages.planErrorNoDetail || messages.networkError || '';
     }
 
     function isBenignPlanInProgressConflict(payload, message) {
@@ -14529,11 +14950,14 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             try {
                 terminal.start(streamUrl, { method: 'POST', body: formData });
             } catch (error) {
+                var startErrorMessage = (error && error.message)
+                    ? String(error.message)
+                    : (messages.planStreamStartFailed || messages.planErrorNoDetail || messages.networkError);
                 planSseRunning = false;
                 setPlanModeRunButtonLoading(false);
                 setPlanGenerationActionLock(false);
-                setPlanModeStatus((error && error.message) ? String(error.message) : messages.networkError);
-                setPlanModalProgress(messages.networkError, 100, false);
+                setPlanModeStatus(startErrorMessage);
+                setPlanModalProgress(startErrorMessage, 100, false, 'error');
             }
         }, PB_SSE_CONNECT_DELAY_MS);
         return true;
@@ -15447,7 +15871,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             toast('error', messages.planStartUnavailable);
             return;
         }
-        if (!guardRetryableAiFailuresBeforeProgress('plan')) {
+        if (!guardPhaseOnePlanConfirmation()) {
             return;
         }
         persistStageOneInlineEdits(true).then(function (patched) {

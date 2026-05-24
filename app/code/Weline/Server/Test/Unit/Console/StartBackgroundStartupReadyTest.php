@@ -40,6 +40,33 @@ final class StartBackgroundStartupReadyTest extends TestCase
         self::assertSame('running', $result['data']['startup_phase']);
     }
 
+    public function testWaitForBackgroundStartupReadyStopsOnTerminalFailure(): void
+    {
+        $file = $this->createTempInstanceFile([
+            'startup_phase' => 'master_exited',
+            'startup_failure_reason' => 'session_server port is occupied',
+            'started_timestamp' => 200,
+            'startup_failure_timestamp' => 201,
+        ]);
+        $start = new class extends Start {
+            protected function emitBackgroundStartupProgress(string $progress, string $lastProgress): void
+            {
+                unset($progress, $lastProgress);
+            }
+
+            protected function finishBackgroundStartupProgress(string $lastProgress): void
+            {
+                unset($lastProgress);
+            }
+        };
+
+        $result = $this->invokeProtected($start, 'waitForBackgroundStartupReady', $file, 500, 50);
+
+        self::assertFalse($result['ready']);
+        self::assertSame(0, $result['waited_ms']);
+        self::assertSame('master_exited', $result['data']['startup_phase']);
+    }
+
     public function testResolveBackgroundStartupReadyWaitMsScalesWithStartupShape(): void
     {
         $start = new class extends Start {

@@ -27,11 +27,16 @@ use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\SharedSidecarInspector;
 use Weline\Server\Service\SharedStateRuntimeResolver;
+use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
 use Weline\Server\Log\LogConfig;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Service\Runtime\RuntimeCapabilityDetector;
+use Weline\Server\Service\Runtime\RuntimeDiagnosticsFormatter;
+use Weline\Server\Service\Runtime\RuntimeStrategyResolver;
+use Weline\Server\Service\Runtime\WlsRuntimeProfile;
 
 /**
  * server:start - 启动常驻内存服务器
@@ -258,9 +263,15 @@ class Start extends CommandAbstract
         $host = $config['host'];
         $port = $config['port'];
         $count = $config['worker_count'];
+        $this->traceStartupPhase($instanceName, 'host-allowlist:before', [
+            'host' => (string)$host,
+        ]);
         if (!$this->validateExternalHostAllowlist($instanceName, $host, $config)) {
             return;
         }
+        $this->traceStartupPhase($instanceName, 'host-allowlist:after', [
+            'public_host' => (string)($config['public_host'] ?? $host),
+        ]);
         $publicHost = (string)($config['public_host'] ?? $host);
         $daemon = $this->resolveDaemonMode($config, $foregroundMode);
         
@@ -322,10 +333,40 @@ class Start extends CommandAbstract
         // 容易让用户在毫不知情下进入"停旧实例 + 等空闲"分支，移除以减少认知裂缝。
         $forceRestart = isset($args['r']) || isset($args['restart']);
         $forceSwitch = isset($args['f']); // -f：直接切换，不进入平滑重启（不开维护模式、不等待）
-        $mainStop = ObjectManager::getInstance(MainStop::class);
-        $occupantWls = $mainStop->findWelineServerInstanceNameByPort($port);
-        $cliStatus = $cliService->getCliServerStatus();
-        $occupantCli = $cliStatus && (($cliStatus['port'] ?? 0) === (int) $port);
+        $mainStop = null;
+        $skipPostStopPortInspection = $forceRestart && $forceSwitch;
+        $fastRestartMetadata = $this->resolveFastRestartInstanceMetadata($instanceName, $port, $forceRestart, $forceSwitch);
+        $this->traceStartupPhase($instanceName, 'occupant-detect:before', [
+            'port' => (int)$port,
+            'fast_metadata' => $fastRestartMetadata !== null,
+            'skip_port_reverse_lookup' => $skipPostStopPortInspection,
+        ]);
+        $mainPortInspect = ['in_use' => false];
+        if ($fastRestartMetadata !== null) {
+            $occupantWls = $instanceName;
+            $occupantCli = false;
+        } elseif ($skipPostStopPortInspection) {
+            $occupantWls = null;
+            $occupantCli = false;
+        } elseif (!$skipPostStopPortInspection) {
+            $mainPortInspect = $this->inspectStartupPortIfOccupied($port);
+            if ($mainPortInspect['in_use'] ?? false) {
+                $mainStop = ObjectManager::getInstance(MainStop::class);
+                $occupantWls = $mainStop->findWelineServerInstanceNameByPort($port);
+                $cliStatus = $cliService->getCliServerStatus();
+                $occupantCli = $cliStatus && (($cliStatus['port'] ?? 0) === (int) $port);
+            } else {
+                $occupantWls = null;
+                $occupantCli = false;
+            }
+        }
+        $this->traceStartupPhase($instanceName, 'occupant-detect:after', [
+            'occupant_wls' => $occupantWls,
+            'occupant_cli' => $occupantCli,
+            'port_in_use' => (bool)($mainPortInspect['in_use'] ?? false),
+            'fast_metadata' => $fastRestartMetadata !== null,
+            'skip_port_reverse_lookup' => $skipPostStopPortInspection,
+        ]);
 
         // 同端口已被其他 WLS 实例占用 → 报错提示，不自动停旧实例（支持多实例并行）
         if ($occupantWls !== null && $occupantWls !== $instanceName) {
@@ -344,7 +385,9 @@ class Start extends CommandAbstract
 
         // 跨项目作用域占用：另一项目（不同 BP 目录哈希派生的 pXXXXXXXX）的 WLS 占了该端口。
         // 这里要立刻友好报错，禁止冒充自家 default 实例进入 -r -f 空转的清理流程。
-        $foreignScope = $mainStop->findForeignWelineServerScopeByPort($port);
+        $foreignScope = ($fastRestartMetadata !== null || !($mainPortInspect['in_use'] ?? false))
+            ? null
+            : ($mainStop !== null ? $mainStop->findForeignWelineServerScopeByPort($port) : null);
         if ($foreignScope !== null && $foreignScope !== '' && $foreignScope !== MasterProcess::getProjectScopeToken()) {
             $this->printer->error(__('端口 %{1} 已被其他项目的 Weline Server 占用（项目作用域：%{2}）', [$port, $foreignScope]));
             $this->printer->note('');
@@ -367,15 +410,33 @@ class Start extends CommandAbstract
         // 预探测 HTTPS=443 时的 HTTP Redirect 端口占用归属：
         // 旧实例可能只残留 Redirect 子进程（80），主端口已释放，此时也应纳入 -r 重启清理路径。
         $preflightHttpRedirectPort = ($sslEnabled && $port === self::DEFAULT_PORT_HTTPS) ? self::DEFAULT_PORT : 0;
-        $redirectOccupantWls = $preflightHttpRedirectPort > 0
-            ? $mainStop->findWelineServerInstanceNameByPort($preflightHttpRedirectPort)
-            : null;
+        $redirectOccupantWls = null;
+        if ($preflightHttpRedirectPort > 0) {
+            if ($fastRestartMetadata !== null) {
+                $redirectOccupantWls = $this->resolveFastRestartRedirectOccupant($fastRestartMetadata, $preflightHttpRedirectPort, $instanceName);
+            } elseif (!$skipPostStopPortInspection) {
+                $redirectPortInspect = $this->inspectStartupPortIfOccupied($preflightHttpRedirectPort);
+                if ($redirectPortInspect['in_use'] ?? false) {
+                    $mainStop ??= ObjectManager::getInstance(MainStop::class);
+                    $redirectOccupantWls = $mainStop->findWelineServerInstanceNameByPort($preflightHttpRedirectPort);
+                }
+            }
+        }
 
         // 本实例已运行（含 Redirect 残留）：未指定 -r 则提示并退出；指定 -r 则平滑重启（先维护模式+等待）或 -f 直接切换
         $maintenanceEnabledByUs = false;
         $maintenanceResetAfterForceSwitch = false;
-        $instanceRunning = ($occupantWls === $instanceName) || $this->isServerRunning($instanceName, $port);
+        $instanceRunning = $fastRestartMetadata !== null
+            || ($occupantWls === $instanceName)
+            || (!$skipPostStopPortInspection && $this->isServerRunning($instanceName, $port));
         $instanceRedirectResidue = ($redirectOccupantWls === $instanceName) && !$instanceRunning;
+        $this->traceStartupPhase($instanceName, 'restart-preflight:after', [
+            'force_restart' => $forceRestart,
+            'force_switch' => $forceSwitch,
+            'instance_running' => $instanceRunning,
+            'redirect_residue' => $instanceRedirectResidue,
+            'redirect_occupant' => $redirectOccupantWls,
+        ]);
         if ($instanceRunning || $instanceRedirectResidue) {
             if (!$forceRestart) {
                 $this->showAlreadyRunningInfo($instanceName, $port);
@@ -389,33 +450,25 @@ class Start extends CommandAbstract
                     $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
                 }
                 $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
-                if (!$this->stopExistingServer($instanceName, $port, $count, true)) {
+                $forceSwitchStopStart = \microtime(true);
+                $this->traceStartupPhase($instanceName, 'force-switch-stop:before');
+                if (!$this->stopExistingServer($instanceName, $port, $count, true, 0, true)) {
                     return;
                 }
+                $this->traceStartupPhase($instanceName, 'force-switch-stop:after', [
+                    'elapsed_ms' => (int) \round((\microtime(true) - $forceSwitchStopStart) * 1000),
+                ]);
                 // -r -f 是停机型切换：新实例启动后默认恢复到业务流量态，避免残留 system.maintenance 让 WLS 继续 sticky 维护。
                 $maintenanceResetAfterForceSwitch = true;
-                // Windows 下端口释放需要更长时间（TIME_WAIT 状态）
-                // 等待最多 3 秒让端口完全释放
-                $maxWaitMs = 3000;
-                $waitStep = 200;
                 $waited = 0;
-                while ($waited < $maxWaitMs) {
-                    SchedulerSystem::usleep($waitStep * 1000);
-                    $waited += $waitStep;
-                    // 检查主要端口是否已释放
-                    if (!Processer::isPortInUse($port)) {
-                        break;
-                    }
-                }
-                // 端口仍被占用时不能盲目继续：直接拉起新实例会被后续 checkAndReleasePort 报错返回，
-                // 期间却已经把旧 Master 杀掉，再让维护态被 finalize 清掉，会造成裸 RST。
-                // 这里立刻拉起维护态再退出，把流量稳在 503 友好态，让用户手动处理端口占用。
-                if (Processer::isPortInUse($port)) {
-                    $this->printer->error(__('-r -f 强制切换后主端口 %{1} 在 %{2}ms 内仍未释放，已中止启动以避免裸 RST。', [$port, $maxWaitMs]));
-                    $this->printer->note(__('已开启维护模式保护流量，请人工排查端口占用后再启动；可执行 php bin/w server:kill-port %{1} --info 查看占用进程。', [$port]));
-                    $this->enableMaintenanceMode($instanceName);
-                    return;
-                }
+                $this->traceStartupPhase($instanceName, 'force-switch-port-settle:before', [
+                    'skipped' => true,
+                    'reason' => 'restart_hot_path_uses_master_bind_result',
+                ]);
+                $this->traceStartupPhase($instanceName, 'force-switch-port-settle:after', [
+                    'waited_ms' => $waited,
+                    'skipped' => true,
+                ]);
             } else {
                 $this->printer->warning(__('检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...'));
                 $this->enableMaintenanceMode($instanceName);
@@ -453,63 +506,50 @@ class Start extends CommandAbstract
         // --direct: 启用直连模式（SO_REUSEPORT，多 Worker 复用同一端口）
         // --no-dispatcher: 禁用 Dispatcher，每个 Worker 使用独立端口
         // --dispatcher / --force-dispatcher: 强制 Dispatcher 模式
-        $directMode = isset($args['direct']);
-        $noDispatcher = isset($args['no-dispatcher']) || isset($args['no_dispatcher']);
-        $forceDispatcher = isset($args['dispatcher']) || isset($args['force-dispatcher']);
+        $this->traceStartupPhase($instanceName, 'runtime-strategy:before');
+        $runtimeProfile = $this->detectRuntimeProfile();
+        try {
+            $runtimeStrategy = (new RuntimeStrategyResolver())->resolve($config, $args, $runtimeProfile);
+        } catch (\RuntimeException $exception) {
+            $this->printer->error($exception->getMessage());
+            return;
+        }
+        $count = (int)$runtimeStrategy['worker_count'];
+        $config['worker_count'] = $count;
+        $config['runtime_strategy'] = (string)$runtimeStrategy['runtime_strategy'];
+        $config['topology'] = (string)$runtimeStrategy['topology'];
+        $config['event_loop'] = (string)$runtimeStrategy['event_loop_driver'];
+        $config['loop']['driver'] = (string)$runtimeStrategy['event_loop_driver'];
+        $config['supervisor']['enabled'] = (bool)$runtimeStrategy['supervisor_enabled'];
+        $dispatcherEnabled = (bool)$runtimeStrategy['dispatcher_enabled'];
+        $supportsReusePort = $runtimeProfile->supportsReusePort();
+        $useDirectMode = (bool)$runtimeStrategy['direct_reuse_port'];
 
-        // 检测 SO_REUSEPORT 支持（Linux 3.9+, macOS）
-        $supportsReusePort = false;
-        if (!IS_WIN && PHP_OS === 'Linux') {
-            $release = \php_uname('r');
-            if (\version_compare($release, '3.9', '>=')) {
-                $supportsReusePort = true;
-            }
-        } elseif (!IS_WIN && PHP_OS === 'Darwin') {
-            // macOS 也支持 SO_REUSEPORT（默认走直连模式）
-            $supportsReusePort = true;
-        }
-        
-        // 决定使用哪种架构
-        // 优先级：
-        //   1. 单 Worker：无需 Dispatcher（直接监听）
-        //   2. --direct：显式启用直连模式（需要 SO_REUSEPORT 支持）
-        //   3. --no-dispatcher：禁用 Dispatcher，每个 Worker 独立端口
-        //   4. 默认：Dispatcher 模式（所有平台统一，稳定可靠）
-        if ($count <= 1) {
-            // 单 Worker 无需 Dispatcher
-            $dispatcherEnabled = false;
-        } elseif ($directMode) {
-            // --direct：显式请求直连模式
-            if ($supportsReusePort) {
-                $dispatcherEnabled = false;
-                $this->printer->success(__('启用直连模式：%{1} 个 Worker 直接监听端口 %{2}（SO_REUSEPORT）', [$count, $port]));
+        foreach ((new RuntimeDiagnosticsFormatter())->formatStartupSummary($runtimeProfile, $runtimeStrategy) as $runtimeLine) {
+            if (\str_starts_with($runtimeLine, 'WARNING:') || \str_starts_with($runtimeLine, 'Warning:')) {
+                $this->printer->warning($runtimeLine);
             } else {
-                $this->printer->warning(__('当前系统不支持 SO_REUSEPORT，无法启用直连模式，回退到 Dispatcher 模式'));
-                $dispatcherEnabled = true;
+                $this->printer->note($runtimeLine);
             }
-        } elseif ($noDispatcher) {
-            // --no-dispatcher：每个 Worker 独立端口（无 Dispatcher，无直连）
-            $dispatcherEnabled = false;
-            $this->printer->note(__('禁用 Dispatcher，每个 Worker 使用独立端口（智能分配）'));
-        } else {
-            // 默认：Dispatcher 模式（所有平台统一）
-            $dispatcherEnabled = true;
-            $this->printer->note(__('使用 Dispatcher 模式（TCP 透传）'));
         }
-        
-        // Linux 统一透传：不论是否传 --direct，Linux 均使用 Dispatcher 透传（与 Windows 一致）
-        $isLinux = (\defined('PHP_OS_FAMILY') && PHP_OS_FAMILY === 'Linux');
-        if ($isLinux && $count > 1 && !$noDispatcher) {
-            $dispatcherEnabled = true;
-        }
+        $this->traceStartupPhase($instanceName, 'runtime-strategy:after', [
+            'topology' => (string)$runtimeStrategy['topology'],
+            'event_loop' => (string)$runtimeStrategy['event_loop_driver'],
+            'workers' => (int)$count,
+        ]);
 
         // Worker 基础端口：默认 10000 + 项目偏移量，确保多项目不冲突
         $defaultWorkerBasePort = 10000 + MasterProcess::getProjectPortOffset();
         $workerBasePort = (int) ($config['worker_base_port'] ?? $defaultWorkerBasePort);
         $this->printer->note(__('Worker基础端口: %{1}', [$workerBasePort]));
         try {
+            $this->traceStartupPhase($instanceName, 'shared-runtime:before');
             $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart, $windowMode);
             $this->printer->note(__('共享状态运行时: %{1}', [$sharedStateRuntime]));
+            $this->traceStartupPhase($instanceName, 'shared-runtime:after', [
+                'session_port' => (int)($sharedStateRuntime['session']['port'] ?? 0),
+                'memory_port' => (int)($sharedStateRuntime['memory']['port'] ?? 0),
+            ]);
         } catch (\RuntimeException $exception) {
             $this->printer->note(__('共享状态运行时解析失败: %{1}', [$exception->getMessage()]));
             $this->printer->error($exception->getMessage());
@@ -530,8 +570,7 @@ class Start extends CommandAbstract
         $config['shared_state'] = $sharedStateRuntime;
         $this->printSharedStateRuntimeSummary($instanceName, $sharedStateRuntime);
 
-        // Worker 端口计算移至端口冲突检测之后（第 534-540 行），避免重复计算
-        $useDirectMode = !$dispatcherEnabled && $supportsReusePort && $directMode && !$isLinux;
+        // Worker 端口计算移至端口冲突检测之后，避免重复计算
         // Dispatcher 只做 TCP 透传和流量控制，不做 SSL 握手
         // SSL 握手始终由 Worker 处理（无论是否使用 Dispatcher）
         $workerSslEnabled = $sslEnabled;
@@ -549,7 +588,10 @@ class Start extends CommandAbstract
         // - 用户未指定 -p 且端口为 80/443（通用 web 端口，可能被宝塔/nginx 占用）→ 自动降级到 9981
         // - 用户指定了 -p 或降级端口 9981 也被占用 → 报错退出
         $autoDowngradedFromDefaultPort = false;
-        $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
+        $this->traceStartupPhase($instanceName, 'main-port-preflight:before', [
+            'port' => (int)$port,
+        ]);
+        $mainPortInspect = $this->inspectStartupPortIfOccupied($port, $skipPostStopPortInspection);
         if ($forceRestart && ($mainPortInspect['in_use'] ?? false)) {
             $this->printer->error(__('强制重启后主端口 %{1} 仍被占用，已中止启动，避免同名实例切换到新端口。', [$port]));
             $this->printer->note(__('请先确认旧实例已完全停止，再重新执行启动命令。'));
@@ -564,7 +606,7 @@ class Start extends CommandAbstract
                 $autoDowngradedFromDefaultPort = true;
             }
             // 降级后的端口占用由下方统一处理：异常占用尝试自动切换，其他场景保持报错。
-            $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
+            $mainPortInspect = $this->inspectStartupPortIfOccupied($port, $skipPostStopPortInspection);
         }
 
         $fallbackPort = $this->resolveOrphanMainPortFallback(
@@ -578,7 +620,7 @@ class Start extends CommandAbstract
                 $this->printer->note(__('自动切换仅对未显式指定端口的异常占用生效；启动成功后会记住新端口'));
                 $port = $fallbackPort;
                 $config['port'] = $port;
-                $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
+                $mainPortInspect = $this->inspectStartupPortIfOccupied($port, $skipPostStopPortInspection);
             }
         if (($mainPortInspect['in_use'] ?? false) && !($mainPortInspect['is_weline'] ?? false)) {
             if (($mainPortInspect['state'] ?? '') === 'orphan') {
@@ -596,23 +638,36 @@ class Start extends CommandAbstract
             $this->printer->note('     php bin/w server:kill-port ' . $port . ' --info');
             return;
         }
+        $this->traceStartupPhase($instanceName, 'main-port-preflight:after', [
+            'port' => (int)$port,
+            'in_use' => (bool)($mainPortInspect['in_use'] ?? false),
+        ]);
 
         $reservedWorkerPorts = $this->getWorkerAllocationReservedPorts($port, $dispatcherEnabled);
         $requiresWorkerPortAllocationLock = !$useDirectMode && $count > 1;
         $workerPortAllocationLocked = false;
         if ($requiresWorkerPortAllocationLock) {
+            $this->traceStartupPhase($instanceName, 'worker-port-lock:before', [
+                'workers' => (int)$count,
+            ]);
             if (!$this->acquireWorkerPortAllocationLock()) {
                 $this->printer->error(__('无法分配 Worker 端口：全局端口分配锁正被其他启动流程占用'));
                 $this->printer->note(__('请稍后重试，或等待其他实例启动完成'));
                 return;
             }
             $workerPortAllocationLocked = true;
+            $this->traceStartupPhase($instanceName, 'worker-port-lock:after');
         }
 
         try {
+            $this->traceStartupPhase($instanceName, 'worker-port-plan:before', [
+                'worker_base_port' => (int)$workerBasePort,
+                'dispatcher' => $dispatcherEnabled,
+                'direct' => $useDirectMode,
+            ]);
             $workerPort = $this->resolveInitialWorkerPort($port, $workerBasePort, $count, $dispatcherEnabled, $useDirectMode);
 
-            if ($forceRestart && $this->hasRestartCleanupResidue($instanceName, $port, $count, $workerPort)) {
+            if ($forceRestart && !$skipPostStopPortInspection && $this->hasRestartCleanupResidue($instanceName, $port, $count, $workerPort, $forceSwitch)) {
                 $this->printer->error(__('强制重启前仍检测到旧实例 [%{1}] 的残留 WLS 进程或端口，已中止启动。', [$instanceName]));
                 $this->printer->note(__('必须先完成旧实例清理，禁止自动切换主端口或 Worker 端口启动第二个同名实例。'));
                 return;
@@ -639,17 +694,23 @@ class Start extends CommandAbstract
                 $workerPort = $nextWorkerPort;
             }
         }
+        $this->traceStartupPhase($instanceName, 'worker-port-plan:after', [
+            'worker_port' => (int)$workerPort,
+            'workers' => (int)$count,
+        ]);
 
         // HTTP Redirect 端口被非框架进程占用时：先展示占用进程详情（PID/名称/命令行），
         // 在交互式终端询问是否强制结束；用户同意则尝试释放，后续晚判会二次校验；
         // 用户拒绝或处于非交互模式则按既有方案给出指引并退出，避免误杀宝塔/Nginx 等关键进程。
-        $httpRedirectOwner = ($sslEnabled && $httpRedirectPort > 0)
-            ? $mainStop->findWelineServerInstanceNameByPort($httpRedirectPort)
-            : null;
-        $httpRedirectInspect = ($sslEnabled && $httpRedirectPort > 0)
-            ? Processer::inspectPortOccupantWithHistory($httpRedirectPort)
+        $httpRedirectInspect = (!$skipPostStopPortInspection && $sslEnabled && $httpRedirectPort > 0)
+            ? $this->inspectStartupPortIfOccupied($httpRedirectPort)
             : [];
-        if ($sslEnabled && $httpRedirectPort > 0
+        $httpRedirectOwner = null;
+        if (($httpRedirectInspect['in_use'] ?? false) && $fastRestartMetadata === null) {
+            $mainStop ??= ObjectManager::getInstance(MainStop::class);
+            $httpRedirectOwner = $mainStop->findWelineServerInstanceNameByPort($httpRedirectPort);
+        }
+        if (!$skipPostStopPortInspection && $sslEnabled && $httpRedirectPort > 0
             && ($httpRedirectInspect['in_use'] ?? false)
             && !$this->isFrameworkOwnedHttpRedirectPortOccupant($httpRedirectInspect, $httpRedirectOwner)
         ) {
@@ -722,10 +783,10 @@ class Start extends CommandAbstract
             }
 
             $this->printer->success(__('端口 %{1} 已释放，HTTP 重定向 Worker 将正常启动', [$httpRedirectPort]));
-            $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
         }
 
         // Linux/Mac 非 root 绑定特权端口时，自动触发 sudo 密码输入并重启当前命令
+        $this->traceStartupPhase($instanceName, 'permission-check:before');
         if (!$this->ensurePrivilegedPortPermission($port, $httpRedirectPort, $sslEnabled)) {
             return;
         }
@@ -734,6 +795,7 @@ class Start extends CommandAbstract
         if (!$this->ensureUnixSocketPermission($host, $port)) {
             return;
         }
+        $this->traceStartupPhase($instanceName, 'permission-check:after');
         
         // 显示启动信息
         // 使用 $useDirectMode 而非重新计算，确保与架构选择逻辑一致
@@ -748,7 +810,14 @@ class Start extends CommandAbstract
         }
 
         // 检查端口是否被占用（框架进程占用时最多重试 3 次，仍占用则按 Master 前缀清理逃逸 Master 后再试）
-        if ($dispatcherEnabled) {
+        $this->traceStartupPhase($instanceName, 'port-release-check:before', [
+            'main_port' => (int)$port,
+            'worker_port' => (int)$workerPort,
+            'workers' => (int)$count,
+            'dispatcher' => $dispatcherEnabled,
+            'skipped' => $skipPostStopPortInspection,
+        ]);
+        if (!$skipPostStopPortInspection && $dispatcherEnabled) {
             // Dispatcher 模式：检查主端口（Dispatcher 用）+ Worker 内网端口
             if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'Dispatcher', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs) || !empty($maintenanceResetAfterForceSwitch)) {
@@ -764,7 +833,7 @@ class Start extends CommandAbstract
                 }
                 return;
             }
-        } else {
+        } elseif (!$skipPostStopPortInspection) {
             // 直连模式：
             // - SO_REUSEPORT: 多 Worker 复用同一端口，只检查主端口
             // - 非 SO_REUSEPORT: 仍按连续端口检查
@@ -779,13 +848,18 @@ class Start extends CommandAbstract
                 return;
             }
         }
+        $this->traceStartupPhase($instanceName, 'port-release-check:after', [
+            'skipped' => $skipPostStopPortInspection,
+        ]);
         
         // ========== 检查 HTTP 重定向端口（在启动前检测，避免启动到一半才报错） ==========
-        if ($sslEnabled && $httpRedirectPort > 0) {
+        if (!$skipPostStopPortInspection && $sslEnabled && $httpRedirectPort > 0) {
             // HTTP Redirect 端口被占用时，提示用户确认是否强制停用
             if (Processer::isPortInUse($httpRedirectPort)) {
-                $portInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
-                $redirectOwner = $mainStop->findWelineServerInstanceNameByPort($httpRedirectPort);
+                $portInspect = $this->inspectStartupPortIfOccupied($httpRedirectPort);
+                $redirectOwner = $fastRestartMetadata === null && $mainStop !== null
+                    ? $mainStop->findWelineServerInstanceNameByPort($httpRedirectPort)
+                    : null;
                 $isWelineOccupant = $this->isFrameworkOwnedHttpRedirectPortOccupant($portInspect, $redirectOwner);
                 $shouldAutoRelease = $this->shouldAutoReleaseHttpRedirectPortOccupant($portInspect) || $redirectOwner === $instanceName;
                 $processName = $this->resolvePortOccupantDisplayName($portInspect, $redirectOwner ?? $instanceName);
@@ -854,7 +928,9 @@ class Start extends CommandAbstract
             $workerScript = $this->ensureWorkerScript($workerSslEnabled);
             $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($windowMode);
             $listenHost = $this->resolveServerListenHost((string)$host);
+            $this->traceStartupPhase($instanceName, 'save-instance:before');
             $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, $dispatcherEnabled, $workerPort, $httpRedirectPort, $windowMode, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), $publicHost);
+            $this->traceStartupPhase($instanceName, 'save-instance:after');
         } finally {
             if ($workerPortAllocationLocked) {
                 $this->releaseWorkerPortAllocationLock();
@@ -863,16 +939,22 @@ class Start extends CommandAbstract
         
         // 保存实例配置（配置记忆：下次 server:start <name> 直接使用相同配置）
         // 同时将实际的 host/port/https 同步到 env.php，供 http:req 等 CLI 工具读取
+        $this->traceStartupPhase($instanceName, 'save-config:before');
         $this->saveInstanceConfig($instanceName, $args, $config);
         $this->syncServerConfigToEnv($host, $port, $sslEnabled);
+        $this->traceStartupPhase($instanceName, 'save-config:after');
         
         // 显示优化建议
+        $this->traceStartupPhase($instanceName, 'optimization-tips:before');
         $this->showOptimizationTips($count, $config['mode'] ?? 'io');
+        $this->traceStartupPhase($instanceName, 'optimization-tips:after');
         
         // 显示使用说明（按实际协议显示 http/https）
         
         // ========== 开发模式热重载支持 ==========
+        $this->traceStartupPhase($instanceName, 'hot-reload:before');
         $this->startHotReloadIfEnabled($config, $instanceName);
+        $this->traceStartupPhase($instanceName, 'hot-reload:after');
         // ========== 热重载结束 ==========
         
         // 注意：平滑重启 / -r -f 引入的维护态不在此处提前关闭。
@@ -894,7 +976,11 @@ class Start extends CommandAbstract
 
         if ($daemon) {
             $this->wlsChildProcessesMayExist = true;
+            $this->traceStartupPhase($instanceName, 'master-background:before');
             $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port, $foregroundMode, $windowMode);
+            $this->traceStartupPhase($instanceName, 'master-background:after', [
+                'completed' => $startupCompleted,
+            ]);
             $this->wlsStartupProcessHandoffDone = true;
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
@@ -1317,6 +1403,7 @@ class Start extends CommandAbstract
             'session_server_token_file_name' => (string) ($data['session_server_token_file_name'] ?? 'session_server.token'),
             'memory_server_port' => (int) ($data['memory_server_port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'memory_server_token_file_name' => (string) ($data['memory_server_token_file_name'] ?? 'memory_server.token'),
+            'shared_state' => \is_array($data['shared_state'] ?? null) ? $data['shared_state'] : [],
             'daemon' => (bool) ($data['daemon'] ?? true),
             'orchestrator_runtime_options' => $orchestratorRuntimeOptions,
         ];
@@ -1381,6 +1468,11 @@ class Start extends CommandAbstract
         $masterName = MasterProcess::getMasterProcessName($instanceName);
         $cmd = $this->buildMasterBackgroundCommand($phpBinary, $script, $instanceName, $masterName, $foregroundMode, $windowMode);
         $spawnedMasterPid = 0;
+        $this->traceStartupPhase($instanceName, 'master-spawn:before', [
+            'windows' => IS_WIN,
+            'foreground' => $foregroundMode,
+            'window_mode' => $windowMode,
+        ]);
         if (IS_WIN) {
             if ($foregroundMode) {
                 $foregroundPid = $this->startForegroundManagedProcess($cmd);
@@ -1409,6 +1501,9 @@ class Start extends CommandAbstract
         } else {
             Processer::create($cmd, false);
         }
+        $this->traceStartupPhase($instanceName, 'master-spawn:after', [
+            'spawned_pid' => $spawnedMasterPid,
+        ]);
         
         // ========== 启动确认机制 ==========
         // 轮询检查后台 Master 是否成功启动
@@ -1424,10 +1519,14 @@ class Start extends CommandAbstract
         $lastStartupPhase = '';
         $readyResult = null;
         
-        // 阶段 A：等待 master_pid + control_port 写入实例文件
-        // 超过软超时（$maxWaitMs）后，仅当我们拉起的 Master 仍存活时才继续延展到硬超时（$hardWaitMs），
-        // 否则视为启动失败，跳出循环走失败诊断；避免在 8 秒边界把"慢启动"误判为"已挂"。
-        while ($waited < $hardWaitMs) {
+        // 阶段 A：等待 master_pid + control_port 写入实例文件。
+        // 启动确认只相信 Master 控制面上报，不再用 tasklist/PID 反查判断存活。
+        $this->traceStartupPhase($instanceName, 'master-control-wait:before', [
+            'soft_wait_ms' => $maxWaitMs,
+            'hard_wait_ms' => $hardWaitMs,
+            'spawned_pid' => $spawnedMasterPid,
+        ]);
+        while ($waited < $maxWaitMs) {
             SchedulerSystem::usleep($waitStepMs * 1000);
             $waited += $waitStepMs;
             
@@ -1444,36 +1543,34 @@ class Start extends CommandAbstract
                         // 检测到新的 master_pid 和 control_port
                         if ($masterPid > 0 && $controlPort > 0) {
                             // 验证进程是否存活
-                            if (Processer::processExists($masterPid)) {
-                                $masterStarted = true;
-                                $lastMasterPid = $masterPid;
-                                $lastControlPort = $controlPort;
-                                $lastStartupPhase = $startupPhase;
-                                break;
-                            }
+                            // The instance file is the Master control-plane handshake; do not probe PID here.
+                            $masterStarted = true;
+                            $lastMasterPid = $masterPid;
+                            $lastControlPort = $controlPort;
+                            $lastStartupPhase = $startupPhase;
+                            break;
                         }
                     }
                 }
             }
 
-            // 软超时后做一次"我们拉起的 Master 是否还活着"的校验
-            if ($waited >= $maxWaitMs) {
-                if ($spawnedMasterPid > 0 && !$this->isSpawnedBackgroundMasterAlive($spawnedMasterPid)) {
-                    // 我们拉起的 Master 已死，没必要继续等到硬超时
-                    break;
-                }
-                if ($spawnedMasterPid <= 0) {
-                    // 没拿到 Spawn PID（非 Windows 路径或 PowerShell 回退）：用软超时为准
-                    break;
-                }
-            }
         }
+        $this->traceStartupPhase($instanceName, 'master-control-wait:after', [
+            'waited_ms' => $waited,
+            'started' => $masterStarted,
+            'master_pid' => $lastMasterPid,
+            'control_port' => $lastControlPort,
+            'phase' => $lastStartupPhase,
+        ]);
 
         if ($masterStarted) {
             if ($lastStartupPhase !== 'running') {
                 $this->printer->note(__('Master 已启动，等待所有服务就绪...'));
                 $backgroundStartupData = $this->readBackgroundStartupData($instanceFile);
                 $readyWaitMs = $this->resolveBackgroundStartupReadyWaitMs($backgroundStartupData);
+                $this->traceStartupPhase($instanceName, 'background-ready-wait:before', [
+                    'wait_ms' => $readyWaitMs,
+                ]);
                 $readyResult = $this->waitForBackgroundStartupReady(
                     $instanceFile,
                     $readyWaitMs,
@@ -1482,6 +1579,11 @@ class Start extends CommandAbstract
                 );
                 $startupCompleted = $readyResult['ready'];
                 $lastStartupPhase = (string) ($readyResult['data']['startup_phase'] ?? $lastStartupPhase);
+                $this->traceStartupPhase($instanceName, 'background-ready-wait:after', [
+                    'waited_ms' => (int)($readyResult['waited_ms'] ?? 0),
+                    'ready' => $startupCompleted,
+                    'phase' => $lastStartupPhase,
+                ]);
             } else {
                 $startupCompleted = true;
             }
@@ -1493,7 +1595,13 @@ class Start extends CommandAbstract
             } else {
                 $phaseLabel = $this->normalizeBackgroundStartupPhase($lastStartupPhase !== '' ? $lastStartupPhase : 'bootstrapping');
                 $readyWaitSec = \max(1, (int) \ceil(((int) ($readyResult['waited_ms'] ?? 0)) / 1000));
-                $this->printer->warning(__('Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。', [$lastMasterPid, $lastControlPort, $readyWaitSec, $phaseLabel]));
+                $startupTerminalFailure = $this->isBackgroundStartupTerminalFailure((array)($readyResult['data'] ?? []));
+                if ($startupTerminalFailure) {
+                    $this->printer->error('WLS background startup failed (phase: ' . $phaseLabel . ', waited: ' . $readyWaitSec . 's).');
+                }
+                if (!$startupTerminalFailure) {
+                    $this->printer->warning(__('Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。', [$lastMasterPid, $lastControlPort, $readyWaitSec, $phaseLabel]));
+                }
                 $failureReason = $this->readStartupFailureReason((array) ($readyResult['data'] ?? []));
                 if ($failureReason !== '') {
                     $this->printer->warning(__('启动失败原因：%{1}', [$failureReason]));
@@ -1503,24 +1611,16 @@ class Start extends CommandAbstract
                 $this->printer->note(__('  php bin/w server:status --all'));
             }
         } else {
-            $spawnedMasterAlive = $spawnedMasterPid > 0 && $this->isSpawnedBackgroundMasterAlive($spawnedMasterPid);
-            if ($spawnedMasterAlive) {
-                $this->printer->warning(__('后台 Master 进程已创建（PID: %{1}），控制面仍在初始化；已停止阻塞等待。', [$spawnedMasterPid]));
-                $this->printer->note(__('稍后执行以下命令检查启动进度：'));
-                $this->printer->note(__('  php bin/w server:status %{1}', [$instanceName]));
-                $this->printer->note(__('  php bin/w server:status --all'));
-            } else {
-                // 启动确认失败：输出警告而非假成功
-                $this->printer->warning(__('后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。', [$maxWaitMs / 1000]));
-                $this->printer->note(__('可能原因：'));
-                $this->printer->note(__('  1. 框架加载耗时较长（首次启动或 opcache 未预热）'));
-                $this->printer->note(__('  2. 端口被占用导致启动失败'));
-                $this->printer->note(__('  3. 权限不足（特权端口需要 root/sudo）'));
-                $this->printer->note(__(''));
-                $this->printer->note(__('请执行以下命令检查状态：'));
-                $this->printer->note(__('  php bin/w server:status'));
-                $this->printer->note(__('  php bin/w server:status --all'));
-            }
+            // 启动确认失败：只依据 Master 控制面上报，不再用 tasklist/PID 反查判断存活。
+            $this->printer->warning(__('后台启动已发起，但未能在 %{1} 秒内确认 Master 控制面就绪。', [$maxWaitMs / 1000]));
+            $this->printer->note(__('可能原因：'));
+            $this->printer->note(__('  1. 框架加载耗时较长（首次启动或 opcache 未预热）'));
+            $this->printer->note(__('  2. 端口被占用导致启动失败'));
+            $this->printer->note(__('  3. 权限不足（特权端口需要 root/sudo）'));
+            $this->printer->note(__(''));
+            $this->printer->note(__('请执行以下命令检查状态：'));
+            $this->printer->note(__('  php bin/w server:status'));
+            $this->printer->note(__('  php bin/w server:status --all'));
 
             // 输出日志文件路径便于排查
             $logDir = WlsLogService::getLogDir($instanceName);
@@ -1630,16 +1730,20 @@ class Start extends CommandAbstract
             return (int) \round(\max(0.5, \min(60.0, $configuredSec)) * 1000);
         }
 
-        // Windows Start-Process can return the Master PID before the control plane writes
-        // instance metadata. Keep a bounded wait so normal starts still print the final
-        // access URL table instead of returning at the "control plane initializing" hint.
+        // Windows can create the PHP process several seconds before the Master control
+        // plane writes instance metadata. Do not use tasklist/PID probing here; wait only
+        // for the control-plane report, with a bounded Windows window to avoid false
+        // "not ready" warnings on cold starts.
+        if (IS_WIN) {
+            return 18000;
+        }
+
         return $spawnedMasterPid > 0 ? 8000 : 5000;
     }
 
     /**
-     * 控制面确认的硬超时：在软超时（resolveBackgroundMasterConfirmWaitMs）到达后，
-     * 若我们拉起的 Master 仍然存活，最多继续等待到这个上限。
-     * 超时仍未拿到 master_pid+control_port → 走启动失败诊断。
+     * 控制面确认的硬上限，保留给显式配置和 trace 展示。
+     * 默认启动确认不再做 PID 存活反查；实际等待以控制面上报窗口为准。
      */
     protected function resolveBackgroundMasterControlHardWaitMs(int $spawnedMasterPid = 0): int
     {
@@ -1648,25 +1752,8 @@ class Start extends CommandAbstract
             return (int) \round(\max(0.5, \min(120.0, $configuredSec)) * 1000);
         }
         $softMs = $this->resolveBackgroundMasterConfirmWaitMs($spawnedMasterPid);
-        // 硬超时默认为软超时的 4 倍，封顶 60 秒；
-        // 覆盖 Windows + HTTPS + 共享 Session/Memory + 多 Worker 的首启 opcache 冷启动场景。
+        // 硬上限默认为控制面上报窗口的 4 倍，封顶 60 秒。
         return (int) \min(60000, \max($softMs, $softMs * 4));
-    }
-
-    protected function isSpawnedBackgroundMasterAlive(int $pid): bool
-    {
-        if ($pid <= 0) {
-            return false;
-        }
-        // 早先版本因担心 Windows tasklist 慢而直接 return $pid > 0，
-        // 导致 Master 启动崩溃时仍打印"后台 Master 进程已创建"的乐观假成功。
-        // 这里改为真正调用 processExists()：成本远小于一次启动失败误报。
-        try {
-            return Processer::processExists($pid);
-        } catch (\Throwable $e) {
-            // 探测异常按"未知"处理：不阻断后续诊断输出，但不做乐观判定。
-            return false;
-        }
     }
 
     protected function resolveBackgroundStartupReadyWaitMs(array $instanceData = []): int
@@ -1679,24 +1766,13 @@ class Start extends CommandAbstract
         $workerCount = \max(1, (int) ($instanceData['count'] ?? $instanceData['worker_count'] ?? 1));
         $dispatcherEnabled = (bool) ($instanceData['dispatcher_enabled'] ?? false);
         $sslEnabled = (bool) ($instanceData['ssl_enabled'] ?? false);
-        $sharedState = $instanceData['shared_state'] ?? [];
-        $sharedServiceCount = 0;
-        if (\is_array($sharedState)) {
-            foreach (['session', 'memory'] as $sharedRole) {
-                if (!empty($sharedState[$sharedRole])) {
-                    $sharedServiceCount++;
-                }
-            }
-        }
-
         $startupTimeout = $this->getEnvironmentValue('wls.orchestrator.startup_timeout_sec', null);
         if ($startupTimeout !== null && (float) $startupTimeout > 0.0) {
             $startupTimeoutSec = \max(5.0, \min(300.0, (float) $startupTimeout));
             $timeoutSec = $startupTimeoutSec
                 + \max(0, $workerCount - 1) * 4.0
                 + ($dispatcherEnabled ? 8.0 : 0.0)
-                + ($sslEnabled ? 5.0 : 0.0)
-                + $sharedServiceCount * 3.0;
+                + ($sslEnabled ? 5.0 : 0.0);
 
             return (int) \round(\max(5.0, \min(180.0, $timeoutSec)) * 1000);
         }
@@ -1705,20 +1781,10 @@ class Start extends CommandAbstract
         $workerCount = \max(1, (int) ($instanceData['count'] ?? $instanceData['worker_count'] ?? 1));
         $dispatcherEnabled = (bool) ($instanceData['dispatcher_enabled'] ?? false);
         $sslEnabled = (bool) ($instanceData['ssl_enabled'] ?? false);
-        $sharedState = $instanceData['shared_state'] ?? [];
-        $sharedServiceCount = 0;
-        if (\is_array($sharedState)) {
-            foreach (['session', 'memory'] as $sharedRole) {
-                if (!empty($sharedState[$sharedRole])) {
-                    $sharedServiceCount++;
-                }
-            }
-        }
         $softSec = 12.0
             + \max(0, $workerCount - 1) * 2.5
             + ($dispatcherEnabled ? 4.0 : 0.0)
-            + ($sslEnabled ? 3.0 : 0.0)
-            + $sharedServiceCount * 2.0;
+            + ($sslEnabled ? 3.0 : 0.0);
 
         return (int) \round(\max(15.0, \min(90.0, $softSec)) * 1000);
     }
@@ -1859,11 +1925,16 @@ class Start extends CommandAbstract
         $lastData = $this->readBackgroundStartupData($instanceFile);
         $lastProgressToken = $this->buildBackgroundStartupProgressToken($lastData);
         $lastProgress = $this->formatBackgroundStartupProgress($lastData, $waited);
+        $lastStartupEventSeq = 0;
 
         if ($this->isBackgroundStartupReady($lastData)) {
             return ['ready' => true, 'data' => $lastData, 'waited_ms' => 0];
         }
+        if ($this->isBackgroundStartupTerminalFailure($lastData)) {
+            return ['ready' => false, 'data' => $lastData, 'waited_ms' => 0];
+        }
 
+        [$lastStartupEventSeq, $lastProgress] = $this->emitBackgroundStartupEvents($lastData, $lastStartupEventSeq, $lastProgress);
         if ($lastProgress !== '') {
             $this->emitBackgroundStartupProgress($lastProgress, '');
         }
@@ -1872,6 +1943,7 @@ class Start extends CommandAbstract
             SchedulerSystem::usleep($waitStepMs * 1000);
             $waited += $waitStepMs;
             $lastData = $this->readBackgroundStartupData($instanceFile);
+            [$lastStartupEventSeq, $lastProgress] = $this->emitBackgroundStartupEvents($lastData, $lastStartupEventSeq, $lastProgress);
             $progress = $this->formatBackgroundStartupProgress($lastData, $waited);
             if ($progress !== '') {
                 $this->emitBackgroundStartupProgress($progress, $lastProgress);
@@ -1884,8 +1956,18 @@ class Start extends CommandAbstract
             }
 
             if ($this->isBackgroundStartupReady($lastData)) {
+                [$lastStartupEventSeq, $lastProgress] = $this->drainBackgroundStartupEventsAfterReady(
+                    $instanceFile,
+                    $lastStartupEventSeq,
+                    $lastProgress,
+                    $waitStepMs
+                );
                 $this->finishBackgroundStartupProgress($lastProgress);
                 return ['ready' => true, 'data' => $lastData, 'waited_ms' => $waited];
+            }
+            if ($this->isBackgroundStartupTerminalFailure($lastData)) {
+                $this->finishBackgroundStartupProgress($lastProgress);
+                return ['ready' => false, 'data' => $lastData, 'waited_ms' => $waited];
             }
         }
 
@@ -1923,6 +2005,41 @@ class Start extends CommandAbstract
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $instanceData
+     */
+    protected function isBackgroundStartupTerminalFailure(array $instanceData): bool
+    {
+        if ($this->isBackgroundStartupReady($instanceData)) {
+            return false;
+        }
+
+        $reason = $this->readStartupFailureReason($instanceData);
+        if ($reason === '') {
+            return false;
+        }
+
+        $failureTs = (int)($instanceData['startup_failure_timestamp'] ?? 0);
+        $startedTs = (int)($instanceData['started_timestamp'] ?? 0);
+        if ($startedTs <= 0) {
+            $startedAt = \trim((string)($instanceData['started_at'] ?? $instanceData['master_started_at'] ?? ''));
+            if ($startedAt !== '') {
+                $parsed = \strtotime($startedAt);
+                $startedTs = $parsed !== false ? (int)$parsed : 0;
+            }
+        }
+        if ($failureTs > 0 && $startedTs > 0 && $failureTs < $startedTs) {
+            return false;
+        }
+
+        $phase = \trim((string)($instanceData['startup_phase'] ?? ''));
+        if (\in_array($phase, ['master_exited', 'stopped', 'stopping', 'failed'], true)) {
+            return true;
+        }
+
+        return $failureTs > 0;
     }
 
     /**
@@ -2042,6 +2159,7 @@ class Start extends CommandAbstract
             'ready' => $summary['ready'],
             'total' => $summary['total'],
             'pending' => $summary['pending_detail'],
+            'event_seq' => (int)($instanceData['startup_event_seq'] ?? 0),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
     }
 
@@ -2061,6 +2179,83 @@ class Start extends CommandAbstract
         if ($lastProgress !== '') {
             echo "\n";
         }
+    }
+
+    /**
+     * @return array{0:int,1:string}
+     */
+    protected function emitBackgroundStartupEvents(array $instanceData, int $lastSeq, string $lastProgress): array
+    {
+        $events = $instanceData['startup_events'] ?? [];
+        if (!\is_array($events) || $events === []) {
+            return [$lastSeq, $lastProgress];
+        }
+
+        foreach ($events as $event) {
+            if (!\is_array($event)) {
+                continue;
+            }
+            $seq = (int)($event['seq'] ?? 0);
+            if ($seq <= $lastSeq) {
+                continue;
+            }
+            $message = $this->formatBackgroundStartupEventMessage($event);
+            if ($message === '') {
+                $lastSeq = \max($lastSeq, $seq);
+                continue;
+            }
+            if ($lastProgress !== '') {
+                $this->finishBackgroundStartupProgress($lastProgress);
+                $lastProgress = '';
+            }
+
+            echo '  ' . $message . "\n";
+            $lastSeq = \max($lastSeq, $seq);
+        }
+
+        return [$lastSeq, $lastProgress];
+    }
+
+    protected function formatBackgroundStartupEventMessage(array $event): string
+    {
+        $workerId = (int)($event['worker_id'] ?? $event['instance_id'] ?? 0);
+        $label = 'Worker' . ($workerId > 0 ? $workerId : '');
+        return match ((string)($event['kind'] ?? '')) {
+            'worker_ready' => $label . ' 已就绪',
+            'worker_warmup_started' => $label . ' 已就绪，正在预热...',
+            'worker_warmup_success' => $label . ' 预热成功',
+            'worker_warmup_failed' => $label . ' 预热失败',
+            default => \trim(\str_replace(["\r", "\n"], ' ', (string)($event['message'] ?? ''))),
+        };
+    }
+
+    /**
+     * @return array{0:int,1:string}
+     */
+    protected function drainBackgroundStartupEventsAfterReady(
+        string $instanceFile,
+        int $lastSeq,
+        string $lastProgress,
+        int $waitStepMs
+    ): array {
+        $maxDrainMs = 1200;
+        $quietMs = 0;
+        $drainedMs = 0;
+        $waitStepMs = \max(50, \min(250, $waitStepMs));
+
+        while ($drainedMs < $maxDrainMs && $quietMs < 400) {
+            SchedulerSystem::usleep($waitStepMs * 1000);
+            $drainedMs += $waitStepMs;
+            $beforeSeq = $lastSeq;
+            [$lastSeq, $lastProgress] = $this->emitBackgroundStartupEvents(
+                $this->readBackgroundStartupData($instanceFile),
+                $lastSeq,
+                $lastProgress
+            );
+            $quietMs = $lastSeq > $beforeSeq ? 0 : $quietMs + $waitStepMs;
+        }
+
+        return [$lastSeq, $lastProgress];
     }
     
     /**
@@ -2221,6 +2416,11 @@ class Start extends CommandAbstract
         return ObjectManager::getInstance(SharedStateRuntimeResolver::class);
     }
 
+    protected function createSharedStateServiceManager(): SharedStateServiceManager
+    {
+        return ObjectManager::getInstance(SharedStateServiceManager::class);
+    }
+
     protected function resolveSharedStateRuntimeConfig(string $instanceName, array $config, bool $forceRestart = false, bool $windowMode = false): array
     {
         $envConfig = $this->getEnvConfig();
@@ -2230,6 +2430,23 @@ class Start extends CommandAbstract
 
         $resolvedRuntime = $this->createSharedStateRuntimeResolver()->resolve($config, $envConfig, $instanceName);
         if (\is_array($resolvedRuntime['session'] ?? null) && \is_array($resolvedRuntime['memory'] ?? null)) {
+            $managerConfig = $config;
+            $managerConfig['session_server_port'] = (int)($resolvedRuntime['session']['port'] ?? 0);
+            $managerConfig['session_server_token_file_name'] = (string)($resolvedRuntime['session']['token_file_name'] ?? 'session_server.token');
+            $managerConfig['memory_server_port'] = (int)($resolvedRuntime['memory']['port'] ?? 0);
+            $managerConfig['memory_server_token_file_name'] = (string)($resolvedRuntime['memory']['token_file_name'] ?? 'memory_server.token');
+
+            $ensuredRuntime = $this->createSharedStateServiceManager()->ensureRuntime(
+                $instanceName,
+                $managerConfig,
+                $envConfig,
+                $windowMode,
+                $forceRestart
+            );
+            if (\is_array($ensuredRuntime['session'] ?? null) && \is_array($ensuredRuntime['memory'] ?? null)) {
+                return $ensuredRuntime;
+            }
+
             return $resolvedRuntime;
         }
 
@@ -2694,6 +2911,11 @@ class Start extends CommandAbstract
             'ssl_key' => '',   // SSL 私钥路径
             'worker_base_port' => 10000 + MasterProcess::getProjectPortOffset(),  // Dispatcher 模式下 Worker 内网端口基数 + 项目偏移
             'worker_memory_limit' => '256M',
+            'runtime_strategy' => 'auto',
+            'topology' => 'auto',
+            'event_loop' => 'auto',
+            'loop' => ['driver' => 'auto'],
+            'supervisor' => ['enabled' => 'auto'],
             'source' => __('默认值'),
         ];
         
@@ -2761,6 +2983,36 @@ class Start extends CommandAbstract
         }
         if (isset($args['count']) || isset($args['c'])) {
             $config['worker_count'] = (int) ($args['count'] ?? $args['c']);
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
+        if (isset($args['runtime-strategy']) || isset($args['runtime_strategy'])) {
+            $config['runtime_strategy'] = (string)($args['runtime-strategy'] ?? $args['runtime_strategy']);
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
+        if (isset($args['topology'])) {
+            $config['topology'] = (string)$args['topology'];
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
+        $eventLoopArg = $args['event-loop']
+            ?? $args['event_loop']
+            ?? $args['loop-driver']
+            ?? $args['loop_driver']
+            ?? null;
+        if ($eventLoopArg !== null) {
+            $config['event_loop'] = (string)$eventLoopArg;
+            $config['loop']['driver'] = (string)$eventLoopArg;
+            $config['source'] = __('命令行参数');
+            $hasCliOverride = true;
+        }
+        $supervisorArg = $args['supervisor']
+            ?? $args['supervisor-enabled']
+            ?? $args['supervisor_enabled']
+            ?? null;
+        if ($supervisorArg !== null) {
+            $config['supervisor']['enabled'] = (string)$supervisorArg;
             $config['source'] = __('命令行参数');
             $hasCliOverride = true;
         }
@@ -2894,10 +3146,14 @@ class Start extends CommandAbstract
             $this->traceStartupPhase($instanceName, 'certificate-map:skipped-http-only');
         }
         
-        // 4. 计算实际 Worker 数量（智能模式）
-        $config['worker_count'] = $this->calculateWorkerCount(
+        // 4. 计算实际 Worker 数量（runtime auto strategy）
+        $profile = $this->detectRuntimeProfile();
+        $strategyName = (string)($config['runtime_strategy'] ?? ($config['runtime']['strategy'] ?? 'auto'));
+        $config['worker_count'] = (new RuntimeStrategyResolver())->resolveWorkerCount(
             $config['worker_count'],
-            $config['mode'] ?? 'io'
+            (string)($config['mode'] ?? 'io'),
+            $strategyName,
+            $profile
         );
         $config['worker_memory_limit'] = ServiceContext::normalizeMemoryLimit($config['worker_memory_limit'] ?? '256M');
         if (isset($config['dispatcher_memory_limit'])) {
@@ -3259,10 +3515,7 @@ class Start extends CommandAbstract
      */
     protected function resolveAcmeWebrootForStartup(string $instanceName, array $config): string
     {
-        $port = (int)($config['port'] ?? self::DEFAULT_PORT_HTTPS);
-        $mainStop = ObjectManager::getInstance(MainStop::class);
-        $runningInstance = $mainStop->findWelineServerInstanceNameByPort($port);
-        if ($runningInstance !== null && $runningInstance === $instanceName) {
+        if ($this->isServerRunning($instanceName, (int)($config['port'] ?? self::DEFAULT_PORT_HTTPS))) {
             return SslCertificateService::WEBROOT_WLS_VIRTUAL;
         }
 
@@ -3593,6 +3846,11 @@ class Start extends CommandAbstract
         
         return 4; // 默认 4 核
     }
+
+    protected function detectRuntimeProfile(): WlsRuntimeProfile
+    {
+        return (new RuntimeCapabilityDetector())->detect();
+    }
     
     /**
      * 解析实例名称
@@ -3627,6 +3885,16 @@ class Start extends CommandAbstract
             'memory_port',
             'memory-token-file-name',
             'memory_token_file_name',
+            'runtime-strategy',
+            'runtime_strategy',
+            'topology',
+            'event-loop',
+            'event_loop',
+            'loop-driver',
+            'loop_driver',
+            'supervisor',
+            'supervisor-enabled',
+            'supervisor_enabled',
         ];
         foreach ($valueOptions as $opt) {
             if (isset($args[$opt])) {
@@ -4059,104 +4327,70 @@ class Start extends CommandAbstract
      * 
      * 注：进程名仅用于判断是否可以安全杀死，不用于存活检测
      */
-    protected function isServerRunning(string $instanceName, int $port): bool
-    {
-        $status = (new IpcControlGateway())->getStatus($instanceName, 0.5);
-        if (!empty($status['success']) && \is_array($status['data'] ?? null) && (bool)($status['data']['running'] ?? false)) {
-            return true;
+    /**
+     * Fast path for `server:start -r -f`: the user explicitly targets the current
+     * instance, so the persisted endpoint record is enough to enter cleanup.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function resolveFastRestartInstanceMetadata(
+        string $instanceName,
+        int $port,
+        bool $forceRestart,
+        bool $forceSwitch
+    ): ?array {
+        if (!$forceRestart || !$forceSwitch) {
+            return null;
         }
 
-        // 检查实例文件（无实例文件 = 从未启动过）
         $instanceFile = $this->getRuntimeInstanceFile($instanceName);
         if (!\is_file($instanceFile)) {
-            return $this->isPortOccupiedByWelineProcess($port)
-                || $this->hasRecoverableManagedProcessHint($instanceName);
-        }
-        
-        $instanceData = \json_decode(\file_get_contents($instanceFile), true);
-        if (!$instanceData) {
-            return $this->isPortOccupiedByWelineProcess($port)
-                || $this->hasRecoverableManagedProcessHint($instanceName);
-        }
-        
-        $count = (int) ($instanceData['count'] ?? 4);
-        $workerPortBase = (int)($instanceData['worker_port'] ?? $port);
-        
-        // ========== 方案1：Processer 文件映射获取 PID（最快！） ==========
-        // Worker 和 Dispatcher 启动时会调用 Processer::setPid 保存映射
-        // getData() 直接读文件（< 1ms），isRunningByPid() 用 tasklist 精确匹配（10-50ms）
-        
-        // 检查 Dispatcher PID
-        $dispatcherProcessName = '--name=' . MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName);
-        $dispatcherPid = (int) Processer::getData($dispatcherProcessName, 'pid');
-        if ($dispatcherPid > 0 && Processer::isRunningByPid($dispatcherPid)) {
-            return true;
-        }
-        // 检查 Worker PIDs
-        for ($i = 1; $i <= $count; $i++) {
-            $workerProcessName = '--name=' . MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName, $i);
-            $workerPid = (int) Processer::getData($workerProcessName, 'pid');
-            if ($workerPid > 0 && Processer::isRunningByPid($workerPid)) {
-                return true;
-            }
-        }
-        
-        // ========== 方案2：端口检测（服务是否可用） ==========
-        // 与 server:status 使用相同的 Processer::isPortInUse 逻辑
-        // 严格按项目作用域：外项目作用域占用不算自家在跑，避免跨项目误识
-        $ownScope = $this->getCurrentProjectScopeToken();
-
-        // 检查主端口（Dispatcher 或直连）
-        $mainPortInspect = $this->inspectPortOccupantWithHistory($port);
-        if (($mainPortInspect['pid_running'] ?? false) && ($mainPortInspect['is_weline'] ?? false)) {
-            $mainScope = (string) ($mainPortInspect['scope'] ?? '');
-            if ($mainScope !== '' && $mainScope === $ownScope) {
-                return true;
-            }
+            return null;
         }
 
-        // 检查 Worker 端口
-        for ($i = 0; $i < $count; $i++) {
-            $workerPort = $workerPortBase + $i;
-            $workerPortInspect = $this->inspectPortOccupantWithHistory($workerPort);
-            if (($workerPortInspect['pid_running'] ?? false) && ($workerPortInspect['is_weline'] ?? false)) {
-                $workerScope = (string) ($workerPortInspect['scope'] ?? '');
-                if ($workerScope !== '' && $workerScope === $ownScope) {
-                    return true;
-                }
-            }
+        $raw = @\file_get_contents($instanceFile);
+        if (!\is_string($raw) || $raw === '') {
+            return null;
         }
-        
-        return false;
+
+        $data = \json_decode($raw, true);
+        if (!\is_array($data)) {
+            return null;
+        }
+
+        $recordName = (string) ($data['instance_name'] ?? $data['name'] ?? '');
+        if ($recordName !== '' && $recordName !== $instanceName) {
+            return null;
+        }
+
+        $recordPort = (int) ($data['main_port'] ?? $data['port'] ?? 0);
+        if ($recordPort !== $port) {
+            return null;
+        }
+
+        if ((int) ($data['master_pid'] ?? $data['pid'] ?? 0) <= 0) {
+            return null;
+        }
+
+        return $data;
     }
 
     /**
-     * 端口是否被本项目作用域的 Weline 管理进程占用。
-     *
-     * 严格按项目作用域 token（{@see MasterProcess::getProjectScopeToken()}）判定：
-     * - 本项目自己的 WLS 进程（scope 与自家一致）→ true
-     * - 无作用域段的 WLS 进程（scope='') → false
-     * - 其它项目作用域的 WLS 进程 → false（不视为自家占用，避免误触发 -r -f 空转）
+     * @param array<string, mixed> $metadata
      */
-    protected function isPortOccupiedByWelineProcess(int $port): bool
+    protected function resolveFastRestartRedirectOccupant(array $metadata, int $redirectPort, string $instanceName): ?string
     {
-        if ($port <= 0) {
-            return false;
-        }
+        return (int) ($metadata['http_redirect_port'] ?? 0) === $redirectPort
+            ? $instanceName
+            : null;
+    }
 
-        $inspect = $this->inspectPortOccupantWithHistory($port);
-        if (($inspect['pid_running'] ?? false) && ($inspect['is_weline'] ?? false)) {
-            $scope = (string) ($inspect['scope'] ?? '');
-            $own = $this->getCurrentProjectScopeToken();
-            if ($scope !== '' && $scope === $own) {
-                return true;
-            }
-            return false;
-        }
-
-        /** @var MainStop $mainStop */
-        $mainStop = ObjectManager::getInstance(MainStop::class);
-        return $mainStop->findWelineServerInstanceNameByPort($port) !== null;
+    protected function isServerRunning(string $instanceName, int $port): bool
+    {
+        $status = (new IpcControlGateway())->getStatus($instanceName, 0.5);
+        return !empty($status['success'])
+            && \is_array($status['data'] ?? null)
+            && (bool)($status['data']['running'] ?? false);
     }
 
     /**
@@ -4170,6 +4404,25 @@ class Start extends CommandAbstract
     }
 
     /**
+     * Startup can test if a port is occupied, but owner reverse lookup is only
+     * allowed after occupation is confirmed and a conflict diagnostic is needed.
+     *
+     * @return array{in_use?:bool,pid?:int,pid_running?:bool,is_weline?:bool,state?:string,pname?:string,scope?:string,skipped?:bool}
+     */
+    protected function inspectStartupPortIfOccupied(int $port, bool $skipReverseLookup = false): array
+    {
+        if ($skipReverseLookup || $port <= 0) {
+            return ['in_use' => false, 'skipped' => $skipReverseLookup];
+        }
+
+        if (!Processer::isPortInUse($port)) {
+            return ['in_use' => false];
+        }
+
+        return $this->inspectPortOccupantWithHistory($port);
+    }
+
+    /**
      * 当前项目的作用域 token（用于跨项目隔离判定）。
      *
      * 抽离为方法以便测试覆盖，正常运行时与 {@see MasterProcess::getProjectScopeToken()} 一致。
@@ -4179,57 +4432,6 @@ class Start extends CommandAbstract
         return MasterProcess::getProjectScopeToken();
     }
 
-    /**
-     * 判断当前实例是否存在可恢复的受管进程线索
-     */
-    protected function hasRecoverableManagedProcessHint(string $instanceName): bool
-    {
-        $processNames = [
-            MasterProcess::getMasterProcessName($instanceName),
-            MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
-            MasterProcess::buildScopedProcessName('weline-wls-session', $instanceName),
-            MasterProcess::buildScopedProcessName('weline-wls-memory', $instanceName),
-            MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $instanceName),
-        ];
-
-        foreach ($processNames as $processName) {
-            $pname = '--name=' . $processName;
-            $pid = (int) Processer::getData($pname, 'pid');
-            if ($pid > 0 && Processer::isManagedProcessRunning($pid, $processName, '', $pname)) {
-                return true;
-            }
-        }
-
-        $scopedInstance = MasterProcess::getScopedInstanceName($instanceName);
-        $prefixes = [
-            MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName) . '-',
-            MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName) . '-',
-            'weline-wls-worker-http-' . $scopedInstance . '-',
-            'weline-wls-worker-ssl-' . $scopedInstance . '-',
-            'weline-wls-maintenance-http-' . $scopedInstance . '-',
-            'weline-wls-maintenance-ssl-' . $scopedInstance . '-',
-        ];
-
-        foreach ($prefixes as $prefix) {
-            foreach (Processer::getProcessNamesByPrefix($prefix) as $pname) {
-                $pname = (string) $pname;
-                if ($pname === '') {
-                    continue;
-                }
-
-                $processName = \str_starts_with($pname, '--name=')
-                    ? \substr($pname, 7)
-                    : $pname;
-                $pid = (int) Processer::getData($pname, 'pid');
-                if ($pid > 0 && Processer::isManagedProcessRunning($pid, $processName, '', $pname)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-    
     /**
      * 显示服务器已运行的提示信息
      */
@@ -4264,11 +4466,18 @@ class Start extends CommandAbstract
      * 委托给 server:stop 统一执行：先停 Master，再按进程名杀 Worker/Dispatcher 并清理 PID 文件，
      * 避免重复逻辑与 var/process/pid 残留。
      */
-    protected function stopExistingServer(string $instanceName, int $port, int $count, bool $fastLocal = false): bool
+    protected function stopExistingServer(
+        string $instanceName,
+        int $port,
+        int $count,
+        bool $fastLocal = false,
+        int $workerPort = 0,
+        bool $restartCleanup = false
+    ): bool
     {
         $mainStop = ObjectManager::getInstance(MainStop::class);
-        $mainStop->execute($this->buildStopExistingServerArgs($instanceName, $fastLocal), []);
-        if ($this->waitForRestartCleanupComplete($instanceName, $port, $count)) {
+        $mainStop->execute($this->buildStopExistingServerArgs($instanceName, $fastLocal, $restartCleanup), []);
+        if ($this->waitForRestartCleanupComplete($instanceName, $port, $count, $workerPort, $fastLocal)) {
             return true;
         }
 
@@ -4277,33 +4486,56 @@ class Start extends CommandAbstract
         return false;
     }
 
-    protected function waitForRestartCleanupComplete(string $instanceName, int $mainPort, int $workerCount): bool
+    protected function waitForRestartCleanupComplete(
+        string $instanceName,
+        int $mainPort,
+        int $workerCount,
+        int $workerPort = 0,
+        bool $fastLocal = false
+    ): bool
     {
-        $deadline = \microtime(true) + 12.0;
+        if ($fastLocal) {
+            return true;
+        }
+
+        $deadline = \microtime(true) + ($fastLocal ? 1.5 : 12.0);
         do {
             Processer::clearPortCache();
-            if (!$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount)) {
+            if (!$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount, $workerPort, $fastLocal)) {
                 return true;
             }
-            SchedulerSystem::usleep(300000);
+            SchedulerSystem::usleep($fastLocal ? 100000 : 300000);
         } while (\microtime(true) < $deadline);
 
         Processer::clearPortCache();
-        return !$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount);
+        return !$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount, $workerPort, $fastLocal);
     }
 
-    protected function hasRestartCleanupResidue(string $instanceName, int $mainPort, int $workerCount, int $workerPort = 0): bool
+    protected function hasRestartCleanupResidue(
+        string $instanceName,
+        int $mainPort,
+        int $workerCount,
+        int $workerPort = 0,
+        bool $fastLocal = false
+    ): bool
     {
+        if ($fastLocal) {
+            return false;
+        }
+
         $ports = [$mainPort, $this->resolvePreferredControlPort($mainPort)];
         if ($mainPort === self::DEFAULT_PORT_HTTPS) {
             $ports[] = self::DEFAULT_PORT;
         }
 
-        $workerBase = $workerPort > 0
-            ? $workerPort
-            : (10000 + MasterProcess::getProjectPortOffset() + $mainPort);
-        for ($i = 0; $i < $workerCount; $i++) {
-            $ports[] = $workerBase + $i;
+        $includeWorkerPorts = !$fastLocal || $workerPort > 0;
+        if ($includeWorkerPorts) {
+            $workerBase = $workerPort > 0
+                ? $workerPort
+                : (10000 + MasterProcess::getProjectPortOffset() + $mainPort);
+            for ($i = 0; $i < $workerCount; $i++) {
+                $ports[] = $workerBase + $i;
+            }
         }
 
         $ownScope = $this->getCurrentProjectScopeToken();
@@ -4322,9 +4554,11 @@ class Start extends CommandAbstract
             }
         }
 
-        foreach ($this->getRestartCleanupProcessPrefixes($instanceName) as $prefix) {
-            if (Processer::getProcessIdsByPrefix($prefix) !== []) {
-                return true;
+        if (!$fastLocal) {
+            foreach ($this->getRestartCleanupProcessPrefixes($instanceName) as $prefix) {
+                if (Processer::getProcessIdsByPrefix($prefix) !== []) {
+                    return true;
+                }
             }
         }
 
@@ -4339,8 +4573,6 @@ class Start extends CommandAbstract
         return [
             MasterProcess::buildScopedProcessName(MasterProcess::MASTER_PROCESS_NAME_PREFIX, $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
-            MasterProcess::buildScopedProcessName('weline-wls-session', $instanceName),
-            MasterProcess::buildScopedProcessName('weline-wls-memory', $instanceName),
             MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName),
             MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName),
@@ -4350,13 +4582,20 @@ class Start extends CommandAbstract
     /**
      * @return array<int|string, mixed>
      */
-    protected function buildStopExistingServerArgs(string $instanceName, bool $fastLocal = false): array
+    protected function buildStopExistingServerArgs(
+        string $instanceName,
+        bool $fastLocal = false,
+        bool $restartCleanup = false
+    ): array
     {
         $args = [0 => 'server:stop', 1 => $instanceName];
         if ($fastLocal) {
             $args['force'] = true;
             $args['f'] = true;
             $args['fast-local'] = true;
+        }
+        if ($restartCleanup) {
+            $args['restart-cleanup'] = true;
         }
 
         return $args;
@@ -4921,23 +5160,6 @@ class Start extends CommandAbstract
             return false;
         }
 
-        $activePids = [];
-        $starterPid = (int) ($instanceData['pid'] ?? 0);
-        if ($starterPid > 0) {
-            $activePids[] = $starterPid;
-        }
-
-        $masterPid = (int) ($instanceData['master_pid'] ?? 0);
-        if ($masterPid > 0) {
-            $activePids[] = $masterPid;
-        }
-
-        foreach ($activePids as $activePid) {
-            if (Processer::processExists($activePid)) {
-                return true;
-            }
-        }
-
         $startedTimestamp = (int) ($instanceData['started_timestamp'] ?? 0);
         if ($startedTimestamp <= 0 && $instanceFile !== '' && \is_file($instanceFile)) {
             $startedTimestamp = (int) (@\filemtime($instanceFile) ?: 0);
@@ -4988,6 +5210,19 @@ class Start extends CommandAbstract
             'launcher_pid' => 0,
             'master_enabled' => false,
             'master_pid' => 0,
+            'startup_phase' => 'bootstrapping',
+            'lifecycle_state' => 'starting',
+            'server_ready_at' => null,
+            'server_ready_service_count' => 0,
+            'startup_event_seq' => 0,
+            'startup_events' => [],
+            'startup_failure_reason' => '',
+            'startup_failure_at' => '',
+            'startup_failure_timestamp' => 0,
+            'startup_failure_pending' => [],
+            'stopped_reason' => '',
+            'stopped_at' => '',
+            'stopped_timestamp' => 0,
             // Dispatcher 模式信息
             'dispatcher_enabled' => $dispatcherEnabled,
             'dispatcher_port' => $dispatcherEnabled ? $port : 0,
@@ -5958,17 +6193,22 @@ PHP;
                 '--ssl-key <path>' => __('SSL 私钥文件路径（启用 HTTPS）'),
                 '--worker-memory-limit <size>' => __('Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）'),
                 '--dispatcher-memory-limit <size>' => __('Dispatcher 进程 PHP memory_limit（默认跟随 Worker）'),
+                '--runtime-strategy <mode>' => __('运行策略：auto/performance/stability/compatibility（默认 auto）'),
+                '--topology <mode>' => __('拓扑：auto/direct/dispatcher/independent（默认 auto）'),
+                '--event-loop <driver>' => __('事件循环：auto/event/select（默认 auto）'),
+                '--supervisor <value>' => __('Supervisor：auto/true/false（默认 auto）'),
                 '--direct' => __('直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）'),
                 '--no-dispatcher' => __('独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口'),
-                '--dispatcher' => __('强制 Dispatcher 模式（默认）'),
+                '--dispatcher' => __('强制 Dispatcher 模式'),
                 '--help' => __('显示帮助信息'),
             ],
             [
                 __('配置优先级') => __('命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值'),
                 __('多实例支持') => __('可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动'),
                 __('配置记忆') => __('首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443'),
-                __('智能模式') => __('worker_count 设为 "auto" 时：开发环境固定 4 个 Worker，生产环境根据 CPU 核心数自动计算'),
-                __('事件循环') => __('自动选择最优：Event 扩展 > stream_select'),
+                __('智能模式') => __('worker_count 设为 "auto" 时由运行时策略按 OS/CPU/内存自动计算'),
+                __('事件循环') => __('auto 会优先使用可用的 Event 扩展，否则降级 stream_select 并提示原因'),
+                __('默认拓扑') => __('Linux/Mac 支持 SO_REUSEPORT 时 auto 默认 direct；Windows 默认 Dispatcher 兼容路径'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
                 __('禁用 HTTPS') => __('wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),

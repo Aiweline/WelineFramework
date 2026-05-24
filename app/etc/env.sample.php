@@ -239,17 +239,12 @@ return [
         // 显式设为 false/0/off 可关闭；默认开启，避免首个用户请求承担扫描成本。
         // 设为 sync 才会在 READY 前同步预热；默认不允许任何预热卡住启动。
         'worker_bootstrap_warmup' => true,
-        'worker_bootstrap_sync_warmup' => false,
         // Worker READY 后错峰协程执行主题/分类/store 等 observer 预热；显式 false/0/off 可关闭。
         'worker_deferred_bootstrap_warmup' => true,
         'worker_bootstrap_observer_warmup' => false,
         'worker_deferred_bootstrap_roles' => ['maintenance'],
         // Worker #1 READY 前先构建少量首访关键 FPC，避免 reload 后第一位用户承担分类/产品冷渲染。
         'worker' => [
-            'fpc_ready_gate_enabled' => true,
-            'fpc_ready_gate_owner_worker_id' => 1,
-            'fpc_ready_gate_hosts' => ['127.0.0.1'],
-            'fpc_ready_gate_max_paths' => 8,
             'fpc_buildahead_roles' => ['maintenance'],
         ],
         'worker_count' => 'auto',

@@ -123,6 +123,7 @@
                         </span>
                     </a>
                 </li>
+                <w:hook name="WeShop_Product::backend::product::edit::nav-after"/>
             </ul>
 
             <div id='bar' class='progress mt-5'>
@@ -380,6 +381,8 @@
                             </div>
                         </div>
                     </div>
+                    <w:hook name="WeShop_Product::backend::product::edit::content-after"/>
+                </div>
             </form>
         </div>
         <ul class='pager wizard twitter-bs-wizard-pager-link'>

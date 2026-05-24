@@ -44,7 +44,10 @@ class Checkout extends FrontendRestController
         try {
             $data = $this->checkoutPageDataService->buildDynamicMethodData($cartCustomerId, [
                 'shipping_address_id' => $isGuestCheckout ? 0 : (int) ($this->readRequestValue('shipping_address_id') ?? 0),
+                'billing_address_id' => $isGuestCheckout ? 0 : (int) ($this->readRequestValue('billing_address_id') ?? 0),
+                'billing_same_as_shipping' => $this->readBillingSameAsShipping(),
                 'shipping_address' => $this->readShippingAddress(),
+                'billing_address' => $this->readBillingAddress(),
                 'shipping_method' => (string) ($this->readRequestValue('shipping_method') ?? ''),
                 'payment_method' => (string) ($this->readRequestValue('payment_method') ?? ''),
                 'order_id' => (int) (($this->readRequestValue('order_id') ?? $this->readRequestValue('retry_order_id')) ?? 0),
@@ -57,7 +60,7 @@ class Checkout extends FrontendRestController
 
             return $this->fetchJson([
                 'code' => 200,
-                'msg' => (string) __('Checkout methods resolved successfully.'),
+                'msg' => (string) __('结账方式解析成功。'),
                 'data' => $data,
             ]);
         } catch (\Throwable $throwable) {
@@ -91,6 +94,33 @@ class Checkout extends FrontendRestController
         }
 
         return \is_array($shippingAddress) ? $shippingAddress : [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readBillingAddress(): array
+    {
+        $billingAddress = $this->readRequestValue('billing_address');
+        if (!\is_array($billingAddress) || $billingAddress === []) {
+            $billingAddress = $this->readRequestValue('billing');
+        }
+
+        return \is_array($billingAddress) ? $billingAddress : [];
+    }
+
+    private function readBillingSameAsShipping(): bool
+    {
+        $value = $this->readRequestValue('billing_same_as_shipping');
+        if ($value === null) {
+            return true;
+        }
+
+        if (\is_bool($value)) {
+            return $value;
+        }
+
+        return !\in_array(strtolower(trim((string) $value)), ['0', 'false', 'off', 'no'], true);
     }
 
     private function readRequestValue(string $key): mixed
@@ -127,6 +157,9 @@ class Checkout extends FrontendRestController
             'selected_shipping_address_id' => 0,
             'shipping_methods' => [],
             'payment_methods' => [],
+            'billing_addresses' => [],
+            'selected_billing_address_id' => 0,
+            'billing_same_as_shipping' => true,
             'cart_summary' => [
                 'subtotal' => 0.0,
                 'shipping' => 0.0,

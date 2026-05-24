@@ -4,7 +4,11 @@
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
 
 // 获取当前布局配置
-$currentLayouts = $themeConfig->getOriginThemeConfig('layouts') ?? [];
+$themeConfigData = $themeConfig->getOriginThemeConfig();
+if (!is_array($themeConfigData)) {
+    $themeConfigData = [];
+}
+$currentLayouts = isset($themeConfigData['layouts']) && is_array($themeConfigData['layouts']) ? $themeConfigData['layouts'] : [];
 $dataLayout = $currentLayouts['data-layout'] ?? '';
 $dataTopbar = $currentLayouts['data-topbar'] ?? '';
 $dataSidebar = $currentLayouts['data-sidebar'] ?? '';
@@ -12,6 +16,10 @@ $dataSidebarSize = $currentLayouts['data-sidebar-size'] ?? '';
 $dataLayoutSize = $currentLayouts['data-layout-size'] ?? '';
 $dataKeepEnlarged = $currentLayouts['data-keep-enlarged'] ?? '';
 $layoutClass = $currentLayouts['class'] ?? '';
+$themeModeSwitch = (string)($themeConfigData['theme-mode-switch'] ?? '');
+$lightModeSwitch = !empty($themeConfigData['light-mode-switch']);
+$darkModeSwitch = !empty($themeConfigData['dark-mode-switch']);
+$rtlModeSwitch = !empty($themeConfigData['rtl-mode-switch']);
 ?>
 <!-- Right Sidebar -->
 <div class='right-bar'>
@@ -51,8 +59,8 @@ $layoutClass = $currentLayouts['class'] ?? '';
             <div class="mb-3">
                 <label class="form-label"><?= __('选择主题模式') ?></label>
                 <select class="form-select theme-choice" id="theme-mode-switch">
-                    <option value="light" <?= ($themeConfig->getThemeConfig('theme-mode-switch') === 'light' || (empty($themeConfig->getThemeConfig('theme-mode-switch')) && $themeConfig->getThemeConfig('light-mode-switch'))) ? 'selected' : '' ?>><?= __('明亮模式') ?></option>
-                    <option value="dark" <?= ($themeConfig->getThemeConfig('theme-mode-switch') === 'dark' || $themeConfig->getThemeConfig('dark-mode-switch')) ? 'selected' : '' ?>><?= __('暗黑模式') ?></option>
+                    <option value="light" <?= ($themeModeSwitch === 'light' || ($themeModeSwitch === '' && $lightModeSwitch)) ? 'selected' : '' ?>><?= __('明亮模式') ?></option>
+                    <option value="dark" <?= ($themeModeSwitch === 'dark' || $darkModeSwitch) ? 'selected' : '' ?>><?= __('暗黑模式') ?></option>
                 </select>
             </div>
 
@@ -61,7 +69,7 @@ $layoutClass = $currentLayouts['class'] ?? '';
             </div>
             <div class="form-check form-switch mb-5">
                 <input class="form-check-input theme-choice" type="checkbox" id="rtl-mode-switch"
-                    <?= $themeConfig->getThemeConfig('rtl-mode-switch') ? 'checked' : '' ?>>
+                    <?= $rtlModeSwitch ? 'checked' : '' ?>>
                 <label class="form-check-label" for="rtl-mode-switch"><?= __('RTL模式') ?></label>
             </div>
         </div>

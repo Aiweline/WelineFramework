@@ -13,25 +13,32 @@ use GuoLaiRen\PageBuilder\Helper\PageHelper;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\MemoryStateFacade;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
 
 class Page extends FrontendController
 {
-    private const VIEW_HTML_CACHE_TTL = 60;
-    private const VIEW_HTML_CACHE_MAX_ENTRIES = 8;
-    private const VIEW_HTML_CACHE_KEEP_ENTRIES = 4;
-    private const VIEW_HTML_CACHE_MAX_BYTES = 8388608;
-    private const VIEW_HTML_CACHE_MAX_ITEM_BYTES = 524288;
+    private const VIEW_HTML_CACHE_TTL = 600;
+    private const VIEW_HTML_CACHE_MAX_ENTRIES = 64;
+    private const VIEW_HTML_CACHE_KEEP_ENTRIES = 32;
+    private const VIEW_HTML_CACHE_MAX_BYTES = 16777216;
+    private const VIEW_HTML_CACHE_MAX_ITEM_BYTES = 2097152;
+    private const RUNTIME_CACHE_NAMESPACE = 'guolairen_pagebuilder_runtime';
 
     /** @var array<string, array{expires_at: float, html: string}> */
     private static array $viewHtmlCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
+    private static string $lastRuntimeCacheGetStatus = 'none';
 
     private PageModel $pageModel;
     private PageHelper $pageHelper;
@@ -182,6 +189,9 @@ class Page extends FrontendController
         }
         if ($websiteId <= 0) {
             $websiteId = $this->resolveWebsiteIdFromCurrentHost() ?? 0;
+        }
+        if ($websiteId <= 0) {
+            $websiteId = $this->resolveDefaultWebsiteId() ?? 0;
         }
         if ($websiteId > 0) {
             $this->syncWebsiteContext($websiteId);
@@ -400,24 +410,40 @@ class Page extends FrontendController
         if (isset(self::$viewHtmlCache[$key])) {
             $cached = self::$viewHtmlCache[$key];
             if (($cached['expires_at'] ?? 0.0) >= $now) {
+                $this->setPerfHeader('X-WLS-PageBuilder-View-Cache', 'local');
                 return (string)($cached['html'] ?? '');
             }
             unset(self::$viewHtmlCache[$key]);
         }
 
+        $runtimeStart = \microtime(true);
+        $runtimeCached = $this->runtimeCacheGet('pagebuilder.view.html.' . $key);
+        $runtimeDurationMs = (\microtime(true) - $runtimeStart) * 1000;
+        $this->setPerfHeader('X-WLS-PageBuilder-View-Cache-Get-Ms', \sprintf('%.2f', $runtimeDurationMs));
+        if (\is_string($runtimeCached) && $runtimeCached !== '') {
+            $this->setPerfHeader('X-WLS-PageBuilder-View-Cache', 'shared');
+            self::rememberLocalViewHtmlCache($key, $runtimeCached, $now, $this->viewHtmlCacheTtl());
+            return $runtimeCached;
+        }
+
+        $this->setPerfHeader('X-WLS-PageBuilder-View-Cache', 'miss:' . self::$lastRuntimeCacheGetStatus);
         return null;
     }
 
     private function rememberViewHtmlCache(string $key, string $html): void
     {
         if ($html === '') {
+            $this->setPerfHeader('X-WLS-PageBuilder-View-Cache-Store', 'skip:empty');
             return;
         }
         if (\strlen($html) > self::VIEW_HTML_CACHE_MAX_ITEM_BYTES) {
+            $this->setPerfHeader('X-WLS-PageBuilder-View-Cache-Store', 'skip:too-large:' . \strlen($html));
             return;
         }
 
-        self::rememberLocalViewHtmlCache($key, $html, \microtime(true));
+        $ttl = $this->viewHtmlCacheTtl();
+        self::rememberLocalViewHtmlCache($key, $html, \microtime(true), $ttl);
+        $this->runtimeCacheSet('pagebuilder.view.html.' . $key, $html, $ttl);
     }
 
     public static function clearProcessCaches(bool $aggressive = false): void
@@ -441,7 +467,7 @@ class Page extends FrontendController
         ];
     }
 
-    private static function rememberLocalViewHtmlCache(string $key, string $html, float $now): void
+    private static function rememberLocalViewHtmlCache(string $key, string $html, float $now, ?int $ttl = null): void
     {
         if ($html === '' || \strlen($html) > self::VIEW_HTML_CACHE_MAX_ITEM_BYTES) {
             return;
@@ -449,10 +475,91 @@ class Page extends FrontendController
 
         self::pruneViewHtmlCache($now);
         self::$viewHtmlCache[$key] = [
-            'expires_at' => $now + self::VIEW_HTML_CACHE_TTL,
+            'expires_at' => $now + ($ttl ?? self::VIEW_HTML_CACHE_TTL),
             'html' => $html,
         ];
         self::trimViewHtmlCache();
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            self::$lastRuntimeCacheGetStatus = 'unavailable';
+            return null;
+        }
+
+        try {
+            $value = $cache->get(self::RUNTIME_CACHE_NAMESPACE, $key);
+            self::$lastRuntimeCacheGetStatus = $value === null ? 'empty' : 'value';
+            return $value;
+        } catch (\Throwable $throwable) {
+            self::$lastRuntimeCacheGetStatus = 'error:' . $throwable::class;
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, string $html, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            $this->setPerfHeader('X-WLS-PageBuilder-View-Cache-Store', 'local-only:unavailable');
+            return;
+        }
+
+        try {
+            $stored = $cache->set(self::RUNTIME_CACHE_NAMESPACE, $key, $html, \max(1, $ttl));
+            $this->setPerfHeader('X-WLS-PageBuilder-View-Cache-Store', $stored ? 'ok' : 'fail');
+        } catch (\Throwable $throwable) {
+            $this->setPerfHeader('X-WLS-PageBuilder-View-Cache-Store', 'error:' . $throwable::class);
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private function setPerfHeader(string $name, string $value): void
+    {
+        try {
+            $this->request->getResponse()->setHeader($name, $value);
+        } catch (\Throwable) {
+        }
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$runtimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => self::RUNTIME_CACHE_NAMESPACE,
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private function viewHtmlCacheTtl(): int
+    {
+        return self::cachePolicy()->ttl('page.home_view_ttl', self::VIEW_HTML_CACHE_TTL);
+    }
+
+    private static function cachePolicy(): RuntimeCachePolicy
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class);
     }
 
     private static function pruneViewHtmlCache(float $now): void
@@ -494,6 +601,8 @@ class Page extends FrontendController
     {
         $uri = \function_exists('w_env_request_uri') ? (string)\w_env_request_uri() : '';
         $host = \function_exists('w_env_http_host') ? (string)\w_env_http_host() : '';
+        $uri = $this->normalizeViewHtmlCacheUri($uri);
+        $host = $this->normalizeHostCandidate($host);
 
         return \sha1((string)\json_encode([
             'v' => 1,
@@ -506,6 +615,30 @@ class Page extends FrontendController
             'host' => $host,
             'uri' => $uri,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function normalizeViewHtmlCacheUri(string $uri): string
+    {
+        $uri = \trim($uri);
+        if ($uri === '') {
+            return '/';
+        }
+
+        if (\str_contains($uri, '://')) {
+            $path = \parse_url($uri, \PHP_URL_PATH);
+            $query = \parse_url($uri, \PHP_URL_QUERY);
+            $uri = (\is_string($path) && $path !== '') ? $path : '/';
+            if (\is_string($query) && $query !== '') {
+                $uri .= '?' . $query;
+            }
+        }
+
+        $uri = \str_replace('\\', '/', $uri);
+        if ($uri === '' || $uri[0] !== '/') {
+            $uri = '/' . $uri;
+        }
+
+        return \preg_replace('#/+#', '/', $uri) ?? $uri;
     }
     
     /**
@@ -522,6 +655,31 @@ class Page extends FrontendController
         }
 
         return null;
+    }
+
+    private function resolveDefaultWebsiteId(): ?int
+    {
+        try {
+            /** @var Website $websiteModel */
+            $websiteModel = ObjectManager::getInstance(Website::class);
+            $website = clone $websiteModel;
+            $website->clearData()->clearQuery()
+                ->where(Website::schema_fields_CODE, Website::CODE_DEFAULT)
+                ->find()
+                ->fetch();
+            if ($website->getId()) {
+                return (int)$website->getData(Website::schema_fields_ID);
+            }
+
+            $website = clone $websiteModel;
+            $website->clearData()->clearQuery()
+                ->order(Website::schema_fields_ID, 'ASC')
+                ->find()
+                ->fetch();
+            return $website->getId() ? (int)$website->getData(Website::schema_fields_ID) : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function normalizeRequestedLocale(mixed $locale): string

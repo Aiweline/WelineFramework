@@ -13,9 +13,11 @@ declare(strict_types=1);
 
 namespace Weline\Deploy\Console\Update;
 
+use Weline\Deploy\Service\DeployConfigService;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 
 class Core extends CommandAbstract
@@ -208,6 +210,13 @@ class Core extends CommandAbstract
                     }
                 }
             }
+        }
+        try {
+            /** @var DeployConfigService $deployConfigService */
+            $deployConfigService = ObjectManager::getInstance(DeployConfigService::class);
+            $config = array_merge($config, $deployConfigService->getCoreUpdateConfig());
+        } catch (\Throwable) {
+            // 后台配置不可用时继续使用 app/etc/env.php 或 .env，避免核心恢复入口失效。
         }
         return $config;
     }

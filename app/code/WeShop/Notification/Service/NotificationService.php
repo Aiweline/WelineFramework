@@ -23,6 +23,7 @@ class NotificationService
             ->setData(Notification::schema_fields_TYPE, (string) ($notificationData['type'] ?? 'info'))
             ->setData(Notification::schema_fields_TITLE, (string) ($notificationData['title'] ?? ''))
             ->setData(Notification::schema_fields_CONTENT, (string) ($notificationData['content'] ?? ''))
+            ->setData(Notification::schema_fields_TARGET_URL, $this->normalizeTargetUrl($notificationData['target_url'] ?? ''))
             ->setData(Notification::schema_fields_IS_READ, 0)
             ->setData(Notification::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
             ->save();
@@ -68,6 +69,7 @@ class NotificationService
             'payment' => (string) __('Payment'),
             'membership' => (string) __('Membership'),
             'promotion' => (string) __('Promotion'),
+            'qa_mention' => (string) __('商品问答提及'),
         ];
 
         $rows = $this->createNotificationModel()
@@ -187,5 +189,29 @@ class NotificationService
         /** @var Notification $notification */
         $notification = ObjectManager::getInstance(Notification::class);
         return $notification;
+    }
+
+    private function normalizeTargetUrl(mixed $targetUrl): string
+    {
+        $url = substr(trim((string) $targetUrl), 0, 500);
+        if ($url === '') {
+            return '';
+        }
+
+        $url = preg_replace('/[\x00-\x1F\x7F]/', '', $url) ?? '';
+        if ($url === '') {
+            return '';
+        }
+
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+            return $url;
+        }
+
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        if (in_array($scheme, ['http', 'https'], true)) {
+            return $url;
+        }
+
+        return '';
     }
 }

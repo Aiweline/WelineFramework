@@ -29,6 +29,7 @@ Order,订单
 Payment,支付
 Membership,会员
 Promotion,促销
+商品问答提及,商品问答提及
 "Manage customer notifications, read status, and delivery visibility for support teams.",管理客户通知、阅读状态和投递可见性，便于客服团队处理。
 "Total Notifications",通知总数
 "Unread Notifications",未读通知
@@ -54,6 +55,8 @@ View,查看
 "Back to Notifications",返回通知列表
 "Review notification metadata and content before support follow-up.",在客服跟进前审阅通知元信息和内容。
 "Basic Information",基础信息
+目标链接,目标链接
+打开,打开
 Content,内容
 "Already marked as read.",该通知已标记为已读。
 消息通知,消息通知
@@ -61,6 +64,7 @@ Content,内容
 全部消息,全部消息
 未读,未读
 标记已读,标记已读
+查看,查看
 当前还没有消息。后续订单、支付、配送和售后事件产生后，会自动出现在这里。,当前还没有消息。后续订单、支付、配送和售后事件产生后，会自动出现在这里。
 通知渠道设置,通知渠道设置
 配置订单、支付、配送和售后通知的接收方式，结账页会优先使用这里保存的偏好。,配置订单、支付、配送和售后通知的接收方式，结账页会优先使用这里保存的偏好。
@@ -83,6 +87,13 @@ Content,内容
 已保存联系人,已保存联系人
 通知设置,通知设置
 管理订单、支付与售后消息提醒,管理订单、支付与售后消息提醒
+订单通知渠道,订单通知渠道
+已选通知渠道,已选通知渠道
+未选择,未选择
+可用于本次订单通知。,可用于本次订单通知。
+请先在个人中心配置该渠道。,请先在个人中心配置该渠道。
+去个人中心管理通知渠道,去个人中心管理通知渠道
+访客结账仅使用邮箱接收本次订单通知，登录后可以保存更多通知渠道。,访客结账仅使用邮箱接收本次订单通知，登录后可以保存更多通知渠道。
 "Stay Updated",实时更新
 "Notification Center",通知中心
 "Open Center",打开中心

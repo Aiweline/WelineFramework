@@ -15,8 +15,7 @@ namespace Weline\Server\Console\Server\Security;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\IPC\ControlMessage;
-use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
@@ -50,60 +49,18 @@ class Unblock extends CommandAbstract
             return;
         }
 
-        $info = MasterProcess::getMasterEndpoint($instanceName);
-        $controlPort = (int) ($info['control_port'] ?? 0);
-        if ($controlPort <= 0) {
-            $this->printer->warning(__('无法获取控制端口，请检查 Master 是否运行'));
-            return;
-        }
-
-        $conn = @\stream_socket_client("tcp://127.0.0.1:{$controlPort}", $errno, $errstr, 5);
-        if (!$conn) {
-            $this->printer->warning(__('无法建立 IPC 连接: %{1}', [$errstr]));
-            return;
-        }
-
-        $payload = ['clear_all' => $clearAll];
-        if ($ip !== null && $ip !== '') {
-            $payload['ip'] = $ip;
-        }
-        $command = ControlMessage::command(
-            ControlMessage::ACTION_SECURITY_UNBLOCK,
-            '',
-            $payload,
-            (string)($info['control_token'] ?? '')
+        $result = (new IpcControlGateway())->securityUnblock(
+            $instanceName,
+            \is_string($ip) ? $ip : null,
+            $clearAll
         );
-        $written = @\fwrite($conn, $command);
-        @\stream_set_blocking($conn, true);
-        @\stream_set_timeout($conn, 3);
-        $response = @\stream_get_contents($conn);
-        @\fclose($conn);
-
-        if ($written === false || $written === 0) {
-            $this->printer->warning(__('发送命令失败'));
+        if (!empty($result['success'])) {
+            $this->printer->success((string)($result['message'] ?? __('解封命令已接收')));
+            $this->printer->note(__('状态：%{1}', [(string)($result['status'] ?? 'accepted')]));
             return;
         }
 
-        $lines = $response !== false ? \explode("\n", \trim($response)) : [];
-        foreach ($lines as $line) {
-            $line = \trim($line);
-            if ($line === '') {
-                continue;
-            }
-            $msg = ControlMessage::decode($line);
-            if ($msg !== null && ($msg['type'] ?? '') === ControlMessage::TYPE_COMMAND_RESULT) {
-                $success = !empty($msg['success']);
-                $message = $msg['message'] ?? '';
-                if ($success) {
-                    $this->printer->success($message);
-                } else {
-                    $this->printer->warning($message);
-                }
-                return;
-            }
-        }
-
-        $this->printer->success(__('命令已发送，若 Dispatcher 正在运行应已生效'));
+        $this->printer->warning((string)($result['message'] ?? __('解封命令失败')));
     }
 
     protected function parseInstanceName(array $args): string

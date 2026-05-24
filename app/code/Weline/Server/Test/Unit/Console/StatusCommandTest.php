@@ -241,7 +241,7 @@ final class StatusCommandTest extends TestCase
     public function testShowInstanceStatusUsesFastLookupAndLeavesLivenessToBatchProbe(): void
     {
         $manager = new class extends \Weline\Server\Service\ServerInstanceManager {
-            /** @var array<int, array{name: string, validateStale: bool}> */
+            /** @var array<int, array{name: string, validateStale: bool, ipcTimeout?: float}> */
             public array $calls = [];
 
             public function getInstanceInfo(string $name, bool $validateStale = true): ?ServerInstanceInfo
@@ -249,6 +249,17 @@ final class StatusCommandTest extends TestCase
                 $this->calls[] = [
                     'name' => $name,
                     'validateStale' => $validateStale,
+                ];
+
+                return null;
+            }
+
+            public function getInstanceInfoWithIpcTimeout(string $name, bool $validateStale, float $ipcTimeout): ?ServerInstanceInfo
+            {
+                $this->calls[] = [
+                    'name' => $name,
+                    'validateStale' => $validateStale,
+                    'ipcTimeout' => $ipcTimeout,
                 ];
 
                 return null;
@@ -287,7 +298,7 @@ final class StatusCommandTest extends TestCase
         }
 
         self::assertSame(
-            [['name' => 'test', 'validateStale' => false]],
+            [['name' => 'test', 'validateStale' => false, 'ipcTimeout' => 0.5]],
             $manager->calls
         );
         self::assertTrue($status->showAllCalled);

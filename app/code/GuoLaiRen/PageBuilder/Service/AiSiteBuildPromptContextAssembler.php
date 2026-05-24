@@ -30,10 +30,21 @@ final class AiSiteBuildPromptContextAssembler
             $task['page_flow_role'] ?? null,
             $inputScope['page_flow_role'] ?? null,
         ]);
+        $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
+        $contentLocale = $this->firstNonEmpty([
+            $runtimeContext['content_locale'] ?? null,
+            $contract['i18n']['primary_locale'] ?? null,
+            $contentManifest['primary_locale'] ?? null,
+        ]);
+        $languageContract = \is_array($runtimeContext['language_contract'] ?? null)
+            ? $runtimeContext['language_contract']
+            : $this->buildLanguageContract($contentLocale);
 
         $assembled = [
             'contract_id' => (string)($contract['contract_meta']['id'] ?? ''),
             'task' => $task,
+            'content_locale' => $contentLocale,
+            'language_contract' => $languageContract,
             'page' => $page,
             'page_goal' => (string)($pageIdentity['page_goal'] ?? ''),
             'page_flow_role' => $blockFlowRole,
@@ -42,7 +53,7 @@ final class AiSiteBuildPromptContextAssembler
             'block' => $block,
             'content_items' => $this->sliceContentItems($items, $this->stringList($block['content_keys'] ?? [])),
             'site_identity_contract' => $this->resolveSiteIdentityContract($contract, $items),
-            'runtime_context' => \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [],
+            'runtime_context' => $runtimeContext,
             'output_contract' => \is_array($task['output_contract'] ?? null) ? $task['output_contract'] : [],
             'acceptance' => \is_array($task['acceptance'] ?? null) ? $task['acceptance'] : [],
             'policy_ref' => \is_array($contract['policy_ref'] ?? null) ? $contract['policy_ref'] : [],
@@ -190,6 +201,18 @@ final class AiSiteBuildPromptContextAssembler
         }
 
         return '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildLanguageContract(string $locale): array
+    {
+        return [
+            'source_of_truth_locale' => $locale,
+            'visible_copy_rule' => 'All visitor-facing copy must use source_of_truth_locale.',
+            'plan_text_rule' => 'BuildPlan copy is intent only and must be rewritten before rendering.',
+        ];
     }
 
     /**
