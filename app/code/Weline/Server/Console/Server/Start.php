@@ -3645,6 +3645,71 @@ class Start extends CommandAbstract
         return $result;
     }
 
+    protected function tryUseStartupCertificateFiles(
+        SslCertificateService $sslService,
+        string $domain,
+        string $syncDomain
+    ): ?array {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return null;
+        }
+        if ($domain === '0.0.0.0') {
+            $domain = 'localhost';
+        }
+
+        $certDir = $sslService->getCertificateDir($domain);
+        $certPath = $certDir . 'fullchain.pem';
+        $keyPath = $certDir . 'privkey.pem';
+        if (!\is_file($certPath) || !\is_file($keyPath)) {
+            return null;
+        }
+        if (!$sslService->canReuseConfiguredCertificate($certPath, $keyPath)) {
+            return null;
+        }
+        if (!$sslService->certificateMatchesHost($certPath, $domain)) {
+            return null;
+        }
+
+        $recordDomain = \strtolower(\trim($syncDomain));
+        if ($recordDomain === '') {
+            $recordDomain = $domain;
+        }
+        $sslService->syncCertificateRecordFromFiles(
+            $recordDomain,
+            $certPath,
+            $keyPath,
+            0,
+            true,
+            '',
+            false
+        );
+        if ($recordDomain !== $domain) {
+            $sslService->syncCertificateRecordFromFiles(
+                $domain,
+                $certPath,
+                $keyPath,
+                0,
+                true,
+                '',
+                false
+            );
+        }
+        $sslService->regenerateCertificateMap(false);
+
+        $certInfo = $sslService->parseCertificate($certPath);
+        return [
+            'success' => true,
+            'message' => __('使用已有证书'),
+            'cert_path' => $certPath,
+            'key_path' => $keyPath,
+            'issuer' => $certInfo['issuer'] ?? __('已有证书'),
+            'expires_at' => $certInfo['expires_at'] ?? '',
+            'is_new' => false,
+            'ssl_enabled' => true,
+        ];
+    }
+
     /**
      * 真实公网 Host 启动前门闸：DNS A/AAAA 必须已经指向当前服务器。
      *
