@@ -27,16 +27,6 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertTrue((bool)($config['no_ssl'] ?? false));
     }
 
-    public function testDefaultPortPromotionOnlyAppliesWhenSslEnabled(): void
-    {
-        $start = $this->createProbe();
-
-        self::assertSame(443, $start->normalizePortForSslState(80, true));
-        self::assertSame(80, $start->normalizePortForSslState(80, true, true));
-        self::assertSame(80, $start->normalizePortForSslState(80, false));
-        self::assertSame(9981, $start->normalizePortForSslState(9981, true));
-    }
-
     public function testStartupCertificateFilesReenableHttpsForReusablePublicHostCertificate(): void
     {
         $certDir = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-start-cert-' . \str_replace('.', '', \uniqid('', true)) . DIRECTORY_SEPARATOR;
@@ -85,61 +75,6 @@ final class StartCommandArgsSolidificationTest extends TestCase
         }
     }
 
-    public function testPublicHostResolutionGuardAcceptsMatchingServerIp(): void
-    {
-        $sslService = $this->createMock(SslCertificateService::class);
-        $sslService->method('isLocalDomain')->with('pre.example.com')->willReturn(false);
-        $start = $this->createProbe(
-            null,
-            [],
-            ['pre.example.com' => ['203.0.113.10']],
-            ['203.0.113.10']
-        );
-
-        $result = $start->validatePublicHost($sslService, 'pre.example.com');
-
-        self::assertTrue((bool)($result['success'] ?? false));
-        self::assertSame(['203.0.113.10'], $result['resolved_ips'] ?? null);
-        self::assertSame(['203.0.113.10'], $result['server_ips'] ?? null);
-    }
-
-    public function testPublicHostResolutionGuardRejectsOffServerDns(): void
-    {
-        $sslService = $this->createMock(SslCertificateService::class);
-        $sslService->method('isLocalDomain')->with('pre.example.com')->willReturn(false);
-        $start = $this->createProbe(
-            null,
-            [],
-            ['pre.example.com' => ['203.0.113.10']],
-            ['198.51.100.20']
-        );
-
-        $result = $start->validatePublicHost($sslService, 'pre.example.com');
-
-        self::assertFalse((bool)($result['success'] ?? true));
-        $message = (string)($result['message'] ?? '');
-        self::assertStringContainsString('pre.example.com', $message);
-        self::assertStringContainsString('203.0.113.10', $message);
-        self::assertStringContainsString('198.51.100.20', $message);
-    }
-
-    public function testPublicHostResolutionGuardSkipsLocalDomains(): void
-    {
-        $sslService = $this->createMock(SslCertificateService::class);
-        $sslService->method('isLocalDomain')->with('unit-test.weline.test')->willReturn(true);
-        $start = $this->createProbe(
-            null,
-            [],
-            ['unit-test.weline.test' => ['203.0.113.10']],
-            []
-        );
-
-        $result = $start->validatePublicHost($sslService, 'unit-test.weline.test');
-
-        self::assertTrue((bool)($result['success'] ?? false));
-        self::assertTrue((bool)($result['skipped'] ?? false));
-    }
-
     public function testNoDaemonRunsForegroundUnlessRestartRequested(): void
     {
         $start = $this->createProbe();
@@ -171,56 +106,6 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $cliConfig = $this->createProbe(null, ['wls' => ['worker_memory_limit' => '384M']])
             ->resolveConfig('default', ['worker-memory-limit' => '768']);
         self::assertSame('768M', (string)($cliConfig['worker_memory_limit'] ?? ''));
-    }
-
-    public function testPanelModeDefaultsMemoryTo512MWhenUnconfigured(): void
-    {
-        $config = $this->createProbe(null, ['wls' => ['panel' => ['enabled' => true]]])
-            ->resolveConfig('default', []);
-
-        self::assertSame('512M', (string)($config['worker_memory_limit'] ?? ''));
-        self::assertSame('512M', (string)($config['dispatcher_memory_limit'] ?? ''));
-    }
-
-    public function testPanelModeCanBeEnabledByProcessEnvironment(): void
-    {
-        $previousEnabled = \getenv('WLS_PANEL_ENABLED');
-        $previousMode = \getenv('WLS_PANEL_MODE');
-        \putenv('WLS_PANEL_ENABLED=1');
-        \putenv('WLS_PANEL_MODE');
-
-        try {
-            $config = $this->createProbe()
-                ->resolveConfig('default', []);
-
-            self::assertSame('512M', (string)($config['worker_memory_limit'] ?? ''));
-            self::assertSame('512M', (string)($config['dispatcher_memory_limit'] ?? ''));
-        } finally {
-            $this->restoreEnvValue('WLS_PANEL_ENABLED', $previousEnabled);
-            $this->restoreEnvValue('WLS_PANEL_MODE', $previousMode);
-        }
-    }
-
-    public function testPanelModePreservesExplicitMemoryLimits(): void
-    {
-        $envConfig = $this->createProbe(
-            null,
-            [
-                'wls' => [
-                    'panel' => ['enabled' => true],
-                    'worker_memory_limit' => '384m',
-                    'dispatcher_memory_limit' => '448m',
-                ],
-            ]
-        )->resolveConfig('default', []);
-
-        self::assertSame('384M', (string)($envConfig['worker_memory_limit'] ?? ''));
-        self::assertSame('448M', (string)($envConfig['dispatcher_memory_limit'] ?? ''));
-
-        $cliConfig = $this->createProbe(null, ['wls' => ['panel' => ['enabled' => true]]])
-            ->resolveConfig('default', ['worker-memory-limit' => '768']);
-        self::assertSame('768M', (string)($cliConfig['worker_memory_limit'] ?? ''));
-        self::assertSame('768M', (string)($cliConfig['dispatcher_memory_limit'] ?? ''));
     }
 
     public function testDispatcherMemoryLimitDefaultsToWorkerWhenSolidified(): void
@@ -297,37 +182,6 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame('demo.internal.example', (string)($config['host'] ?? ''));
     }
 
-    public function testWildcardListenHostUsesServerHostAsPublicHostWithoutWarning(): void
-    {
-        $start = $this->createProbe(
-            null,
-            [
-                'wls' => ['host' => '0.0.0.0'],
-                'server' => ['host' => 'p11005ce4.weline.test'],
-            ]
-        );
-
-        $result = $start->validateExternalAllowlist('default', ['host' => '0.0.0.0']);
-
-        self::assertTrue($result['valid']);
-        self::assertSame('p11005ce4.weline.test', $result['config']['public_host'] ?? null);
-        self::assertNull($result['warning']);
-    }
-
-    public function testWildcardListenHostFallsBackToGeneratedProjectHostWithoutWarning(): void
-    {
-        $start = $this->createProbe(
-            null,
-            ['wls' => ['host' => '0.0.0.0']]
-        );
-
-        $result = $start->validateExternalAllowlist('default', ['host' => '0.0.0.0']);
-
-        self::assertTrue($result['valid']);
-        self::assertSame('unit-test.weline.test', $result['config']['public_host'] ?? null);
-        self::assertNull($result['warning']);
-    }
-
     public function testBaseGetEnvConfigReturnsArray(): void
     {
         $start = new StartBaseEnvConfigProbe();
@@ -335,7 +189,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertIsArray($start->readEnvConfig());
     }
 
-    public function testSaveInstanceInfoUsesManagerEndpointSemantics(): void
+    public function testSaveInstanceInfoUsesManagerAppendOnlySemantics(): void
     {
         $manager = new StartInstanceManagerProbe();
         $start = new StartInstanceInfoProbe($manager);
@@ -374,27 +228,12 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertInstanceOf(ServerInstanceManager::class, $start->readInstanceManager());
     }
 
-    private function createProbe(
-        ?array $savedConfig = null,
-        array $envConfig = [],
-        array $publicHostIps = [],
-        array $currentServerIps = []
-    ): StartConfigProbe
+    private function createProbe(?array $savedConfig = null, array $envConfig = []): StartConfigProbe
     {
         $sslServiceMock = $this->createMock(SslCertificateService::class);
         ObjectManager::setInstance(SslCertificateService::class, $sslServiceMock);
 
-        return new StartConfigProbe($savedConfig, $envConfig, $publicHostIps, $currentServerIps);
-    }
-
-    private function restoreEnvValue(string $name, string|false $value): void
-    {
-        if ($value === false) {
-            \putenv($name);
-            return;
-        }
-
-        \putenv($name . '=' . $value);
+        return new StartConfigProbe($savedConfig, $envConfig);
     }
 }
 
@@ -402,9 +241,7 @@ final class StartConfigProbe extends Start
 {
     public function __construct(
         private readonly ?array $savedConfig = null,
-        private readonly array $envConfig = [],
-        private readonly array $publicHostIps = [],
-        private readonly array $currentServerIps = []
+        private readonly array $envConfig = []
     ) {
     }
 
@@ -418,52 +255,12 @@ final class StartConfigProbe extends Start
         return $this->resolveServerListenHost($host);
     }
 
-    public function normalizePortForSslState(int $port, bool $sslEnabled, bool $portExplicit = false): int
-    {
-        return $this->normalizeDefaultPortForSslState($port, $sslEnabled, $portExplicit);
-    }
-
     public function useStartupCertificateFiles(
         SslCertificateService $sslService,
         string $domain,
         string $syncDomain
     ): ?array {
         return $this->tryUseStartupCertificateFiles($sslService, $domain, $syncDomain);
-    }
-
-    public function validatePublicHost(SslCertificateService $sslService, string $host): array
-    {
-        return $this->validatePublicHostResolvesToCurrentServer($host, $sslService);
-    }
-
-    /**
-     * @return array{valid: bool, config: array<string, mixed>, warning: string|null}
-     */
-    public function validateExternalAllowlist(string $instanceName, array $config): array
-    {
-        $host = (string)($config['host'] ?? '');
-        $valid = $this->validateExternalHostAllowlist($instanceName, $host, $config);
-
-        $warning = new \ReflectionProperty(Start::class, 'deferredStartupWarning');
-        $warning->setAccessible(true);
-
-        return [
-            'valid' => $valid,
-            'config' => $config,
-            'warning' => $warning->getValue($this),
-        ];
-    }
-
-    protected function resolvePublicHostIps(string $host): array
-    {
-        $host = \strtolower(\trim($host));
-
-        return $this->publicHostIps[$host] ?? [];
-    }
-
-    protected function detectCurrentServerIps(): array
-    {
-        return $this->currentServerIps;
     }
 
     protected function getDefaultHost(): string
@@ -581,6 +378,7 @@ final class StartInstanceInfoProbe extends Start
             true,
             '/tmp/cert.pem',
             '/tmp/key.pem',
+            [101, 102],
             true,
             19443,
             80,
@@ -605,6 +403,7 @@ final class StartInstanceInfoProbe extends Start
             true,
             '/tmp/cert.pem',
             '/tmp/key.pem',
+            [],
             true,
             19443,
             80,
