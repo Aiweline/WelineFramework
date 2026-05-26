@@ -4116,6 +4116,7 @@ class AiSiteBuildTaskService
         }
         $tasks[$taskKey] = \array_replace($existing, $patch);
         $scope['build_tasks'] = $tasks;
+        $scope['build_task_summary'] = $this->summarize($scope);
 
         return $scope;
     }
