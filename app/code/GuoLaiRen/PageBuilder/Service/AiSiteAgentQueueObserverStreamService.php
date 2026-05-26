@@ -29,13 +29,16 @@ class AiSiteAgentQueueObserverStreamService
 {
     private ?AiSiteQueueSnapshotService $queueSnapshotService;
     private ?AiSiteAgentQueueObserverHelperService $queueObserverHelperService;
+    private ?AiSiteSsePayloadNormalizer $ssePayloadNormalizer;
 
     public function __construct(
         ?AiSiteQueueSnapshotService $queueSnapshotService = null,
-        ?AiSiteAgentQueueObserverHelperService $queueObserverHelperService = null
+        ?AiSiteAgentQueueObserverHelperService $queueObserverHelperService = null,
+        ?AiSiteSsePayloadNormalizer $ssePayloadNormalizer = null
     ) {
         $this->queueSnapshotService = $queueSnapshotService;
         $this->queueObserverHelperService = $queueObserverHelperService;
+        $this->ssePayloadNormalizer = $ssePayloadNormalizer;
     }
 
     private function queueSnapshotService(): AiSiteQueueSnapshotService
@@ -52,6 +55,26 @@ class AiSiteAgentQueueObserverStreamService
             $this->queueObserverHelperService = ObjectManager::getInstance(AiSiteAgentQueueObserverHelperService::class);
         }
         return $this->queueObserverHelperService;
+    }
+
+    private function ssePayloadNormalizer(): AiSiteSsePayloadNormalizer
+    {
+        if ($this->ssePayloadNormalizer === null) {
+            $this->ssePayloadNormalizer = ObjectManager::getInstance(AiSiteSsePayloadNormalizer::class);
+        }
+        return $this->ssePayloadNormalizer;
+    }
+
+    /**
+     * 通过 normalizer 归一化 payload 后再发 SSE。所有本服务对外发的 SSE 事件都应该走这里，
+     * 保证 queue_status / task_summary / status / job_status 等家族字段一致性。
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function emitNormalizedSseEvent(SseWriter $sse, string $event, array $payload, ?int $eventId = null): void
+    {
+        $payload = $this->ssePayloadNormalizer()->normalize($payload);
+        $sse->sendEvent($event, $payload, $eventId);
     }
 
     private function isQueueWaitingForSystemScheduler(string $queueStatus, int $_queuePid): bool
@@ -280,7 +303,7 @@ class AiSiteAgentQueueObserverStreamService
             $lines[] = $schedulerWaitMessage;
         }
 
-        $sse->sendEvent('info', [
+        $this->emitNormalizedSseEvent($sse, 'info', [
             'message' => $waitingForScheduler ? $schedulerWaitMessage : (string)($lines[0] ?? ''),
             'detail_lines' => $lines,
             'queue_snapshot' => $snap,
@@ -334,7 +357,7 @@ class AiSiteAgentQueueObserverStreamService
         // 误判为 cancelled，触发"前端显示失败 → 用户重试 → 与正在运行的队列抢锁"的级联问题。
 
         if ($queueStatus !== '' && $lastQueueStatus !== '' && $queueStatus !== $lastQueueStatus) {
-            $sse->sendEvent('info', [
+            $this->emitNormalizedSseEvent($sse, 'info', [
                 'message' => (string)__('队列状态变更：%{from} → %{to}', [
                     'from' => $lastQueueStatus,
                     'to' => $queueStatus,
@@ -350,7 +373,7 @@ class AiSiteAgentQueueObserverStreamService
             ]);
         }
         if ($lastQueuePid === 0 && $queuePid > 0) {
-            $sse->sendEvent('info', [
+            $this->emitNormalizedSseEvent($sse, 'info', [
                 'message' => (string)__('队列已被 worker 领取执行（PID %{pid}）。', ['pid' => (string)$queuePid]),
                 'operation' => $operation,
                 'queue_id' => $queueId,
@@ -367,7 +390,7 @@ class AiSiteAgentQueueObserverStreamService
             $this->isQueueWaitingForSystemScheduler($queueStatus, $queuePid)
             && ($lastQueueStatus === '' || $queueStatus !== $lastQueueStatus || $queuePid !== $lastQueuePid)
         ) {
-            $sse->sendEvent('info', [
+            $this->emitNormalizedSseEvent($sse, 'info', [
                 'message' => $this->buildSystemSchedulerWaitMessage($queueId),
                 'operation' => $operation,
                 'queue_id' => $queueId,
@@ -390,7 +413,7 @@ class AiSiteAgentQueueObserverStreamService
             if ($message === '') {
                 $message = 'Queue operation failed.';
             }
-            $sse->sendEvent('error', [
+            $this->emitNormalizedSseEvent($sse, 'error', [
                 'message' => $message,
                 'operation' => $operation,
                 'queue_id' => $queueId,
@@ -408,7 +431,7 @@ class AiSiteAgentQueueObserverStreamService
 
         if ($process !== '' && $process !== $lastQueueProcess) {
             if ($helperService->shouldSuppressProcessMirror($operation)) {
-                $sse->sendEvent('info', [
+                $this->emitNormalizedSseEvent($sse, 'info', [
                     'message' => '',
                     'operation' => $operation,
                     'queue_id' => $queueId,
@@ -422,7 +445,7 @@ class AiSiteAgentQueueObserverStreamService
                     'queue_panel_update' => true,
                 ]);
             } else {
-                $sse->sendEvent('progress', [
+                $this->emitNormalizedSseEvent($sse, 'progress', [
                     'message' => $process,
                     'operation' => $operation,
                     'progress_percent' => 0,
@@ -451,7 +474,7 @@ class AiSiteAgentQueueObserverStreamService
                 if ($line === '' || $helperService->shouldSkipResultLine($operation, $line)) {
                     continue;
                 }
-                $sse->sendEvent('chunk', [
+                $this->emitNormalizedSseEvent($sse, 'chunk', [
                     'message' => $line,
                     'operation' => $operation,
                     'chunk' => $line . PHP_EOL,

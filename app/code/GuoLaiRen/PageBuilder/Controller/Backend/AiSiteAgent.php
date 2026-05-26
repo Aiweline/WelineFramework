@@ -34,6 +34,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQualityGateService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQueueSnapshotService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\AiSiteSsePayloadNormalizer;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceDebugDefaults;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
 use GuoLaiRen\PageBuilder\Service\AiSitePreviewLinkRewriteService;
@@ -199,6 +200,7 @@ class AiSiteAgent extends BaseController
     private readonly AiSiteAgentQueueObserverStreamService $queueObserverStreamService;
     private readonly AiSiteAgentRegeneratePageOperationService $regeneratePageOperationService;
     private readonly AiSiteAgentWorkspaceEntryNoticeService $workspaceEntryNoticeService;
+    private ?AiSiteSsePayloadNormalizer $ssePayloadNormalizer = null;
     private ?AiSiteBlockPartialPatchService $blockPartialPatchService = null;
     private readonly Url $url;
 
@@ -10026,14 +10028,15 @@ class AiSiteAgent extends BaseController
         ?array $queueRow = null,
         string $activeStatus = ''
     ): array {
+        // 只设置权威字段（task_summary / queue_status / operation / message / progress_*），
+        // 由 AiSiteSsePayloadNormalizer 在 emit 时统一镜像到 task_progress / build_task_summary /
+        // status / job_status 等过渡期别名，消除"调用方手动维护三键复发"的契约漂移。
         $payload = [
             'message' => $message,
             'operation' => $operation,
             'progress_percent' => \max(0, \min(100, $progressPercent)),
             'progress_kind' => 'task_progress',
-            'task_progress' => $summary,
             'task_summary' => $summary,
-            'build_task_summary' => $summary,
             'ai_generating' => $aiGenerating,
             'active_operation_status' => $activeStatus,
         ];
@@ -10052,6 +10055,11 @@ class AiSiteAgent extends BaseController
      * - task_progress: 任务面板专用实时事件（前端按 task summary 直接刷新）
      * - progress: 兼容旧订阅方，避免一次改动影响其它流转逻辑
      *
+     * payload 在发送前经 AiSiteSsePayloadNormalizer 归一：
+     *  - task_summary 自动镜像到 task_progress / build_task_summary（过渡期兼容）；
+     *  - queue_status 强制小写并镜像到 status / job_status；
+     * 这样调用方只需设置一份权威字段，所有兼容字段由 normalizer 写入。
+     *
      * @param array<string, mixed> $payload
      */
     private function emitTaskProgressSnapshotEvent(SseWriter $sse, array $payload): void
@@ -10059,8 +10067,17 @@ class AiSiteAgent extends BaseController
         if (!$sse->isAlive()) {
             return;
         }
+        $payload = $this->ssePayloadNormalizer()->normalize($payload);
         $sse->sendEvent('task_progress', $payload);
         $sse->sendEvent('progress', $payload);
+    }
+
+    private function ssePayloadNormalizer(): AiSiteSsePayloadNormalizer
+    {
+        if (!isset($this->ssePayloadNormalizer)) {
+            $this->ssePayloadNormalizer = ObjectManager::getInstance(AiSiteSsePayloadNormalizer::class);
+        }
+        return $this->ssePayloadNormalizer;
     }
 
     /**
@@ -10445,6 +10462,22 @@ class AiSiteAgent extends BaseController
             'shared_component_generated' => $this->buildObservedSharedComponentPayload($session, $adminId, $payload, $details),
             'page_generated' => $this->buildObservedPageGeneratedPayload($session, $adminId, $payload, $details),
             'task_completed' => $this->buildObservedTaskCompletedPayload($session, $adminId, $payload, $details),
+            // build_task_failed / task_failed 走与 task_completed 对称的 payload，承载 state + task_summary + task_key
+            // + failure_reason，让前端 task_failed 监听器可以一次性 hydrate workspace。
+            'task_failed', 'build_task_failed' => [
+                'message' => (string)($payload['message'] ?? $payload['failure_reason'] ?? __('任务执行失败')),
+                'operation' => (string)($payload['operation'] ?? ''),
+                'page_type' => (string)($payload['page_type'] ?? ''),
+                'task_key' => (string)($payload['task_key'] ?? ''),
+                'task_type' => (string)($payload['task_type'] ?? ''),
+                'failure_reason' => (string)($payload['failure_reason'] ?? $payload['error_message'] ?? ''),
+                'error_message' => (string)($payload['error_message'] ?? ''),
+                'error_code' => (string)($payload['error_code'] ?? ''),
+                'attempt_no' => isset($payload['attempt_no']) ? (int)$payload['attempt_no'] : 0,
+                'max_attempts' => isset($payload['max_attempts']) ? (int)$payload['max_attempts'] : 0,
+                'details' => $details,
+                'state' => $state,
+            ],
             'operation_failed' => [
                 'message' => (string)($payload['message'] ?? __('操作执行失败')),
                 'operation' => (string)($payload['operation'] ?? ''),

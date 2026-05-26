@@ -1,4 +1,4 @@
-﻿<script>
+<script>
 (function () {
     'use strict';
     var PB_SSE_CONNECT_DELAY_MS = 5000;
@@ -1076,6 +1076,10 @@
                 break;
             case 'error':
             case 'operation_failed':
+            // build_task_failed 是构建阶段单任务硬失败的 workspace event_type。补进 error 镜像，
+            // 保证 task 失败也能通过 workspace log 流 mirror 到 UI（与直接 SSE task_failed 互为冗余信号）。
+            case 'build_task_failed':
+            case 'task_failed':
                 mirroredKind = 'error';
                 break;
             default:
@@ -1294,6 +1298,13 @@
             || (String(eventKind || '') === 'done' && (!payload || payload.success !== false));
     }
 
+    /**
+     * 从 SSE/queue payload 中读取队列权威状态。
+     *
+     * 主字段：payload.queue_status（由 AiSiteSsePayloadNormalizer 写入并强制小写）。
+     * 过渡 fallback（normalizer 镜像）：payload.status / queue_info.status / snapshot.job_status 等。
+     * 契约稳定后可在 1-2 个 release 内仅保留 queue_status 主字段。
+     */
     function readQueueStatusFromPayload(operation, payload) {
         if (!payload || typeof payload !== 'object') {
             return '';
@@ -1980,6 +1991,11 @@
         if (!source || typeof source !== 'object') {
             return null;
         }
+        // 主字段优先：task_summary（normalizer 权威）。
+        // 过渡 fallback：build_task_summary（normalizer 镜像别名）。
+        if (source.task_summary && typeof source.task_summary === 'object') {
+            return source.task_summary;
+        }
         if (source.build_task_summary && typeof source.build_task_summary === 'object') {
             return source.build_task_summary;
         }
@@ -2079,11 +2095,14 @@
         if (!shouldConsumeBuildTaskProgressSummary(source)) {
             return null;
         }
-        if (source.task_progress && typeof source.task_progress === 'object') {
-            return source.task_progress;
-        }
+        // 主字段：task_summary（后端 AiSiteSsePayloadNormalizer 强制权威）。
+        // 过渡期 fallback：task_progress / build_task_summary 由 normalizer 自动镜像，
+        // 仅作为旧入口未升级的兜底；契约稳定后可在 1-2 个 release 内删除 fallback。
         if (source.task_summary && typeof source.task_summary === 'object') {
             return source.task_summary;
+        }
+        if (source.task_progress && typeof source.task_progress === 'object') {
+            return source.task_progress;
         }
         if (source.build_task_summary && typeof source.build_task_summary === 'object') {
             return source.build_task_summary;
@@ -2947,22 +2966,9 @@
                 }
             });
 
-            source.addEventListener('total', function (event) {
-                var payload = parsePayload(event);
-                if (!payload || typeof payload !== 'object') {
-                    return;
-                }
-                if (payload.state && typeof payload.state === 'object') {
-                    hydrateWorkspaceFromState(payload.state);
-                    updateTaskSummaryFromState(payload.state);
-                }
-                updateTaskSummaryFromState(payload);
-                var totalMessage = normalizeToastMessage(String(payload.message || getQueuedStageDefaultMessage(payload.operation || operation, 'total') || ''));
-                if (totalMessage) {
-                    logOperationToWorkspaceTerminal('total', payload, 'total', totalMessage);
-                    toast('info', totalMessage);
-                }
-            });
+            // 历史 'total' SSE 事件已废弃：后端不再发出，AiSiteSseEventContractTest 锁住此契约。
+            // 若将来需要批次总数事件，新增名应进 AiSiteSsePayloadNormalizer::authoritativeEventNames()
+            // 并同步前后端两端实现。
 
             source.addEventListener('environment_ready', function (event) {
             stopObserverSyncTerminalPulse();
@@ -3216,6 +3222,11 @@
         source.addEventListener('asset_generation_failed', function (event) {
             handleAssetGenerationStreamEvent(event, 'asset_generation_failed');
         });
+        // asset_generation_skipped：资产复用命中、跳过实际生成的提示。补齐前端监听让 workspace
+        // 收到"slot 被复用"的硬信号，避免与 *_started/*_done 不一致导致 UI 卡在 generating 态。
+        source.addEventListener('asset_generation_skipped', function (event) {
+            handleAssetGenerationStreamEvent(event, 'asset_generation_skipped');
+        });
 
         source.addEventListener('task_completed', function (event) {
             var payload = parsePayload(event);
@@ -3228,6 +3239,23 @@
             }
             var taskMessage = String(payload.message || <?= \json_encode((string)__('任务已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
             logOperationToWorkspaceTerminal('task_completed', payload, 'done', taskMessage);
+        });
+
+        // task_failed：单个构建任务失败的硬信号。后端直接 sse->sendEvent('task_failed', ...) 发出，
+        // 历史前端从未监听 → 失败信号丢失，UI 只能等 task_summary 间接刷新（延迟 + 易丢）。
+        // 这里 hydrate state + 刷新 task_summary + 把失败行写入 workspace terminal，与 task_completed 对称。
+        source.addEventListener('task_failed', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+            if (payload.state) {
+                hydrateWorkspaceFromState(payload.state);
+                updateTaskSummaryFromState(payload.state);
+            }
+            updateTaskSummaryFromState(payload);
+            var failureReason = String(payload.failure_reason || payload.error_message || payload.message || <?= \json_encode((string)__('任务执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            logOperationToWorkspaceTerminal('task_failed', payload, 'error', failureReason);
         });
 
         source.addEventListener('block_partial_patch_applied', function (event) {
