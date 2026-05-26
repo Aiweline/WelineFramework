@@ -735,7 +735,12 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         self::assertArrayHasKey(Page::TYPE_HOME, $virtualPages);
         self::assertSame([], $virtualPages[Page::TYPE_HOME]['blocks']);
-        self::assertSame('Home', $virtualPages[Page::TYPE_HOME]['title']);
+        // 非 CJK locale（en_US）下，home 标题不能保留 CJK 残留；当 site_title 在 scope 中存在时，
+        // 走"首页用站点名"路径（'Legacy Demo'），否则回退到本地化 page type 默认值（'Home'）。
+        $homeTitle = (string)$virtualPages[Page::TYPE_HOME]['title'];
+        self::assertNotSame('', $homeTitle);
+        self::assertSame(0, \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $homeTitle), 'home title 不应残留 CJK 文字');
+        self::assertContains($homeTitle, ['Legacy Demo', 'Home'], 'home title 必须是 site_title 或本地化 page label 之一');
     }
 
     public function testPortugueseVirtualPagesAndFooterLabelsDoNotFallBackToEnglish(): void
@@ -809,9 +814,54 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         self::assertSame('Contato', $layout['footer']['config']['links.column3_items'][2]['label']);
     }
 
-    /**
-     * 补充 htmlTrackHasCompleteBlocks 的正向/负向用例：所有 page type 必须同时具备非空 blocks 才算完整。
-     */
+    public function testEnglishSharedLayoutConfigLocalizesChineseHeaderAndFooterLabels(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $layout = $service->localizeSharedLayoutConfigForScope([
+            'header' => [
+                'component' => 'header/ai-site-header',
+                'config' => [
+                    'navigation.items' => "首页=>/\n关于我们=>/about",
+                    'nav_items' => [
+                        ['text' => '首页', 'href' => '/'],
+                        ['text' => '关于我们', 'href' => '/about'],
+                    ],
+                    'cta.text' => '下载APK',
+                ],
+            ],
+            'footer' => [
+                'component' => 'footer/ai-site-footer',
+                'config' => [
+                    'brand.description' => '驱动印度玩家下载BharatPlay，建立品牌信任。',
+                    'links.column1_title' => '重点页面',
+                    'links.column1_items' => "首页=>/\n关于我们=>/about",
+                    'links.column2_title' => '政策信息',
+                    'links.column3_title' => '全部页面',
+                    'copyright.text' => '保留所有权利。',
+                ],
+            ],
+        ], [
+            'content_locale' => 'en_US',
+            'default_locale' => 'en_US',
+            'website_profile' => ['content_locale' => 'en_US'],
+        ]);
+
+        self::assertSame("Home=>/\nAbout=>/about", $layout['header']['config']['navigation.items']);
+        self::assertSame('Home', $layout['header']['config']['nav_items'][0]['text']);
+        self::assertSame('About', $layout['header']['config']['nav_items'][1]['text']);
+        self::assertSame('Download Now', $layout['header']['config']['cta.text']);
+        self::assertSame('Featured Pages', $layout['footer']['config']['links.column1_title']);
+        self::assertSame("Home=>/\nAbout=>/about", $layout['footer']['config']['links.column1_items']);
+        self::assertSame('Policy Info', $layout['footer']['config']['links.column2_title']);
+        self::assertSame('All Pages', $layout['footer']['config']['links.column3_title']);
+        self::assertSame('All rights reserved.', $layout['footer']['config']['copyright.text']);
+        self::assertSame(
+            'A curated destination with clear information, trusted support, and simple next steps.',
+            $layout['footer']['config']['brand.description']
+        );
+    }
+
     public function testNormalizeScopePrefersSelectedLocaleOverStalePlanLocale(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());

@@ -995,7 +995,11 @@ class AiSiteScopeCompatibilityService
             }
         }
         foreach (['cta.text', 'cta.label'] as $key) {
-            if (\array_key_exists($key, $config) && $this->looksLikeEnglishNavOrFooterLabel((string)$config[$key])) {
+            if (!\array_key_exists($key, $config)) {
+                continue;
+            }
+            $value = \preg_replace('/\s+/u', ' ', \trim((string)$config[$key])) ?? \trim((string)$config[$key]);
+            if ($this->looksLikeEnglishNavOrFooterLabel($value) || ($this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($value))) {
                 $config[$key] = $this->localizeBuildText('download_now', $locale);
             }
         }
