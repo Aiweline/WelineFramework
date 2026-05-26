@@ -15,12 +15,33 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $workspace = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace.phtml');
         self::assertIsString($workspace);
 
-        $assignmentOffset = \strpos($workspace, '$workspaceTplData = \get_defined_vars();');
-        $firstFetchOffset = \strpos($workspace, "\$this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml', \$workspaceTplData)");
+        // 显式关联数组是稳定契约（取代依赖隐式 get_defined_vars 行为的旧实现），
+        // 确保所有子模板都能拿到同一份打包过的 workspace 数据。
+        $assignmentOffset = \strpos($workspace, '$workspaceTplData = [');
+        self::assertIsInt($assignmentOffset, '应在 workspace.phtml 中显式声明 $workspaceTplData 关联数组');
 
-        self::assertIsInt($assignmentOffset);
-        self::assertIsInt($firstFetchOffset);
-        self::assertLessThan($firstFetchOffset, $assignmentOffset);
+        $firstParameterizedFetchOffset = \strpos(
+            $workspace,
+            "\$this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/layout.phtml', \$workspaceTplData)"
+        );
+        self::assertIsInt($firstParameterizedFetchOffset, '至少一个子 fetch 必须接收 $workspaceTplData');
+        self::assertLessThan(
+            $firstParameterizedFetchOffset,
+            $assignmentOffset,
+            '$workspaceTplData 必须在传给子 fetch 之前赋值完成'
+        );
+
+        foreach ([
+            'script-main.phtml',
+            'script-runtime.phtml',
+            'layout.phtml',
+        ] as $childTemplate) {
+            self::assertStringContainsString(
+                "\$this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/{$childTemplate}', \$workspaceTplData)",
+                $workspace,
+                "{$childTemplate} 必须显式接收 \$workspaceTplData，避免依赖隐式变量传递"
+            );
+        }
     }
 
     public function testVirtualWorkspacePreviewUsesInjectedAiThemeLayoutBeforeStyleDefault(): void
@@ -63,7 +84,8 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
         self::assertStringContainsString('var context = resolveWorkspaceVisualComponentContext(payload);', $modalBody);
         self::assertStringContainsString('var currentBlock = findVirtualBlock(context.page_type, context.block_id) || findVirtualBlock(context.page_type, context.component_code);', $modalBody);
-        self::assertStringContainsString('var layoutItem = findWorkspaceVisualLayoutItem(context.page_type, context.component_code, context.block_id, context.region);', $modalBody);
+        // layoutItem 解析当前传入 5 个上下文维度（page_type/component_code/block_id/region/index），用于精确兜底。
+        self::assertStringContainsString('var layoutItem = findWorkspaceVisualLayoutItem(context.page_type, context.component_code, context.block_id, context.region, context.index);', $modalBody);
         self::assertStringContainsString('currentBlock = buildWorkspaceVisualFallbackBlock(context, layoutItem);', $modalBody);
         self::assertStringContainsString('var currentConfig = cloneJson(currentBlock.config || {});', $modalBody);
         self::assertStringContainsString('var fields = currentBlock.field_schema && typeof currentBlock.field_schema === \'object\'', $modalBody);
@@ -86,8 +108,13 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('await saveWorkspaceVirtualBlockConfig(context, promptSaveConfig);', $modalBody);
         self::assertStringContainsString('var saveResult = await saveWorkspaceVirtualBlockConfig(context, newConfig);', $modalBody);
         self::assertStringContainsString('hydrateWorkspaceFromState(saveResult.data);', $modalBody);
-        self::assertStringContainsString('updateVirtualBlockState(context.page_type, saveResult.block);', $modalBody);
-        self::assertStringContainsString('replaceCurrentBlockHtml(context.page_type, saveResult.block);', $modalBody);
+        // 保存返回的原始 block 需经 resolveUpdatedBlockFromResponse 归一为 refreshedBlock，
+        // 避免后端直接回灌 saveResult.block 形态差异导致前端状态污染。
+        self::assertStringContainsString('var refreshedBlock = resolveUpdatedBlockFromResponse(context.page_type, context.block_id, saveResult);', $modalBody);
+        self::assertStringContainsString('updateVirtualBlockState(context.page_type, refreshedBlock);', $modalBody);
+        self::assertStringContainsString('previewPatched = replaceCurrentBlockHtml(context.page_type, refreshedBlock);', $modalBody);
+        // 只有局部 HTML patch 未成功时才走完整预览重渲染，避免无谓刷帧。
+        self::assertStringContainsString('if (!previewPatched) {', $modalBody);
         self::assertStringContainsString('refreshEmbeddedPreviewPreservingScroll();', $modalBody);
     }
 
@@ -97,17 +124,34 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $controller = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
         self::assertIsString($controller);
 
-        self::assertStringContainsString('function buildStructuredPlanRootFromWorkbenchContracts(contracts)', $script);
-        self::assertStringContainsString('contracts.block_plan', $script);
-        self::assertStringContainsString('contracts.page_contract', $script);
-        self::assertStringContainsString('contracts.design_manifest', $script);
-        self::assertStringContainsString('contracts.site_brief', $script);
-        self::assertStringContainsString('buildStructuredPlanRootFromWorkbenchContracts(conf.contracts)', $script);
+        // Plan 预览统一入口：直接消费 workspace state 中已经序列化好的 plan 字段，
+        // 不再依赖前端再造一份 workbench contracts 中间层（旧 buildStructuredPlanRootFromWorkbenchContracts）。
+        self::assertStringContainsString('function buildStageOnePlanPayloadFromWorkspaceState(workspaceState)', $script);
         self::assertStringContainsString('function syncStageOnePlanPreviewFromWorkspaceState(workspaceState)', $script);
         self::assertStringContainsString('syncStageOnePlanPreviewFromWorkspaceState(workspaceState);', $script);
-        self::assertStringContainsString('plan_workbench: pickFirstNonEmptyPlanObject(state.plan_workbench, scope.plan_workbench, plan.plan_workbench)', $script);
-        self::assertStringContainsString('extractStageOneStructuredPlanFromContracts', $controller);
-        self::assertStringContainsString("\$confirmedContractsStructured = \$this->extractStageOneStructuredPlanFromContracts", $controller);
+
+        // 多源候选拼装契约：markdown / json / structured / execution_blueprint / build_plan_v2 必须都参与回退。
+        self::assertStringContainsString('markdown: pickFirstNonEmptyPlanText(plan.markdown, state.plan_markdown, scope.plan_markdown)', $script);
+        self::assertStringContainsString('json: pickFirstNonEmptyPlanObject(plan.json, state.plan_json, scope.plan_json)', $script);
+        self::assertStringContainsString('structured: pickFirstNonEmptyPlanObject(plan.structured, state.plan_structured, scope.plan_structured)', $script);
+        self::assertStringContainsString('execution_blueprint: pickFirstNonEmptyPlanObject(plan.execution_blueprint, state.execution_blueprint, scope.execution_blueprint)', $script);
+        self::assertStringContainsString('build_plan_v2: pickFirstNonEmptyPlanObject(plan.build_plan_v2, state.build_plan_v2, scope.build_plan_v2)', $script);
+
+        // 结构化 plan 归一化链：pickStructuredPlanRoot → normalizeStageOneStructuredRootForPreview。
+        self::assertStringContainsString('function pickStructuredPlanRoot(payload)', $script);
+        self::assertStringContainsString('function normalizeStageOneStructuredRootForPreview(root)', $script);
+        self::assertStringContainsString('var structuredRoot = pickStructuredPlanRoot(currentPlanPayload);', $script);
+        self::assertStringContainsString('currentPlanPayload.structured = normalizeStageOneStructuredRootForPreview(structuredRoot);', $script);
+
+        // 后端契约同步：confirmedScope 中的 plan 字段必须被串行序列化进 scope，前端才能消费。
+        self::assertStringContainsString("'plan_json'", $controller);
+        self::assertStringContainsString("'plan_structured'", $controller);
+        self::assertStringContainsString("'plan_markdown'", $controller);
+        self::assertStringContainsString("'has_build_plan_v2'", $controller);
+
+        // 旧的 workbench contracts 中间层不应再出现（防回退）。
+        self::assertStringNotContainsString('buildStructuredPlanRootFromWorkbenchContracts(', $script);
+        self::assertStringNotContainsString('extractStageOneStructuredPlanFromContracts', $controller);
     }
 
     public function testVisualEditPreviewTabsHydrateFromVirtualPagesWithoutEntityPageIds(): void
@@ -120,6 +164,17 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('upsertPreviewTab(pageType, label || normalizePageTypeLabel(pageType), pageId, shouldActivate);', $syncBody);
         self::assertStringContainsString("editorUrl.searchParams.set('page_type', String(pageType));", $urlBody);
         self::assertStringContainsString("editorUrl.searchParams.set('page_id', String(pageId));", $urlBody);
+    }
+
+    public function testWorkspacePreviewBackendUrlsAreForcedToCurrentHost(): void
+    {
+        $script = $this->workspaceScript();
+        $body = $this->extractFunctionBody($script, 'normalizeLocalPreviewUrlForCurrentHost');
+
+        self::assertStringContainsString("parsed.host !== currentUrl.host", $body);
+        self::assertStringContainsString("isSessionBoundBackendPath(parsed.pathname)", $body);
+        self::assertStringContainsString("parsed.host = currentUrl.host;", $body);
+        self::assertStringNotContainsString("isLocalAliasHost(currentHost)", $body);
     }
 
     public function testWorkspacePreviewClickAndMessageActionsOpenTheSharedBlockEditor(): void
@@ -191,7 +246,10 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
         $controller = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
         self::assertIsString($controller);
-        self::assertStringContainsString("'image_asset'], true", $controller);
+        // image_asset 必须注册为 queue-backed 的 AI 操作之一，由 AiSiteAssetQueue 承接（保证图片重生成走系统调度，
+        // 不在请求生命周期中直接执行图片生成）。
+        self::assertStringContainsString("'image_asset' => \\GuoLaiRen\\PageBuilder\\Queue\\AiSiteAssetQueue::class,", $controller);
+        self::assertStringContainsString("'image_asset', 'publish'], true", $controller);
         self::assertStringContainsString('\'stream_url\' => $streamUrl', $controller);
     }
 
@@ -223,13 +281,17 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringNotContainsString("optionList.classList.add('d-none');", $renderBody);
         self::assertStringContainsString('if (needsFormSkillOptions.length === 0) {', $renderBody);
         self::assertStringContainsString('emptyOption.textContent =', $renderBody);
-        self::assertStringContainsString('return postForm(skillListUrl, {})', $loadBody);
+        // 加载技能列表必须走 POST 表单（避免被旧 CSRF 网关挡掉），并携带 temporary skill codes
+        // 让后端保留用户在弹窗里勾选但还未持久化的选择，避免列表刷新清空。
+        self::assertStringContainsString('return postForm(skillListUrl, { selected_skill_codes: getNeedsFormTemporarySkillCodes() })', $loadBody);
         self::assertStringNotContainsString("method: 'GET'", $loadBody);
         self::assertStringContainsString("document.getElementById('pb-ai-skill-admin-close-btn')", $managerBody);
         self::assertStringContainsString('adminCloseBtn.addEventListener', $managerBody);
+        // 选中技能码的多源回退：扁平字段 → plan_workbench.contract_context（state 和 scope 各一份）。
         self::assertStringContainsString('state.selected_skill_codes', $resolveBody);
         self::assertStringContainsString('scope.selected_skill_codes', $resolveBody);
-        self::assertStringContainsString('scope.plan_workbench.confirmed.contract_context', $resolveBody);
+        self::assertStringContainsString('state.plan_workbench && state.plan_workbench.contract_context ? state.plan_workbench.contract_context.selected_skill_codes : null', $resolveBody);
+        self::assertStringContainsString('scope.plan_workbench && scope.plan_workbench.contract_context ? scope.plan_workbench.contract_context.selected_skill_codes : null', $resolveBody);
         self::assertStringContainsString('resolveSelectedSkillCodesFromWorkspaceState(workspaceState, getNeedsFormSelectedSkillCodes())', $script);
         self::assertStringContainsString("postNeedsFormScopePatch({ selected_skill_codes: selectedCodes })", $persistBody);
         self::assertStringContainsString('patchGuidedScopeDefaults({ selected_skill_codes: selectedCodes })', $persistBody);
@@ -293,8 +355,13 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
         $generationService = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSitePageComponentGenerationService.php');
         self::assertIsString($generationService);
-        self::assertStringContainsString('Responsive CSS is mandatory for every non-trivial component', $generationService);
-        self::assertStringContainsString('the renderer will not inject compatibility CSS/JS', $generationService);
+        // 强契约：组件生成 prompt 必须显式要求 css_responsive 同时覆盖 768px 与 420px 两档断点，
+        // 防止 AI 只交一档断点导致移动端破版（旧文案 "Responsive CSS is mandatory..." 已被更明确的硬规则取代）。
+        self::assertStringContainsString('@media (max-width: 768px)', $generationService);
+        self::assertStringContainsString('@media (max-width: 420px)', $generationService);
+        self::assertStringContainsString('css_responsive', $generationService);
+        // 硬预算：css_responsive 字数有上限，避免 AI 用"塞满超长 CSS"来兜底响应式不足的设计。
+        self::assertStringContainsString('css_responsive <= 700 chars', $generationService);
 
         $qualityGate = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteQualityGateService.php');
         self::assertIsString($qualityGate);
@@ -319,10 +386,15 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $script = $this->workspaceScript();
         $bindBody = $this->extractFunctionBody($script, 'bindPlanStageLogic');
         self::assertStringContainsString("var rebuildBuildStageBtn = document.getElementById('pb-ai-rebuild-build-stage');", $bindBody);
+        // 重建按钮必须显式绕过 plan generation lock，否则会被持续运行的 plan 操作锁锁住无法触发整站重建。
         self::assertStringContainsString("rebuildBuildStageBtn.dataset.pbPlanGenerationLockBypass = '1';", $bindBody);
-        self::assertStringContainsString('startFullBuildRebuild(this, selectedTypes, {});', $bindBody);
+        // 点击前必须经过 schemeRebuild 确认弹窗，避免误点直接清空已生成构建。
+        self::assertStringContainsString('confirmSchemeRebuild(messages.buildFullRebuildConfirmMessage', $bindBody);
+        self::assertStringContainsString('startFullBuildRebuild(triggerBtn, selectedTypes, {});', $bindBody);
 
         $rebuildBody = $this->extractFunctionBody($script, 'startFullBuildRebuild');
+        // startFullBuildRebuild 必须把 forceBuildRebuild=true 透传给统一的 generate-theme 入口，
+        // 由其在 requestPayload 上落下 _force_rebuild 强制重建标记。
         self::assertStringContainsString('forceBuildRebuild: true', $rebuildBody);
 
         $buildBody = $this->extractFunctionBody($script, 'pbAiConfirmGenerateThemeContinue');
@@ -785,7 +857,9 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('$hasConfirmedBuildPlan = $currentStage !== \'plan\' && (', $layout);
         self::assertStringContainsString('!empty($state[\'build_plan_confirmed\'])', $layout);
         self::assertStringContainsString('!empty($state[\'build_plan_confirmed_at\'])', $layout);
-        self::assertStringContainsString('var buildReadyForBuild = buildPlanConfirmed || planConfirmed || hasBuildPlanV2;', $runtime);
+        // build_plan_v2 替代旧 task_plan 后，build 阶段就绪只看 build_plan_confirmed 或 build_plan_v2 证据；
+        // plan_confirmed 单独构成另一条入口路径，不再 OR 进 buildReadyForBuild。
+        self::assertStringContainsString('var buildReadyForBuild = buildPlanConfirmed || hasBuildPlanV2;', $runtime);
         self::assertStringContainsString("getWorkspaceFlagState('getBuildPlanConfirmedState', false)", $runtime);
 
         self::assertStringNotContainsString('$showLegacyTaskPlanPanel', $workspace);
@@ -1033,13 +1107,26 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
     public function testPublishStageEntryPrefersRunningBuildStateOverRetryableFailureBanner(): void
     {
         $script = $this->workspaceScript();
+        $retryCountBody = $this->extractFunctionBody($script, 'getRetryableAiFailureCount');
         $failureBody = $this->extractFunctionBody($script, 'hasPublishBlockingLatestBuildFailureFromWorkspaceState');
         $entryBody = $this->extractFunctionBody($script, 'syncPublishStageEntryFromWorkspaceState');
 
+        self::assertStringContainsString("normalizedOperation === 'build' && !hasPublishBlockingAiOperationRunningFromWorkspaceState(state)", $retryCountBody);
+        self::assertStringContainsString('if (hasPublishBlockingAiOperationRunningFromWorkspaceState(state))', $failureBody);
         self::assertStringNotContainsString("hasRetryableAiFailures(state, 'build')", $failureBody);
         self::assertStringContainsString('var blockedByRunning = hasPublishBlockingAiOperationRunningFromWorkspaceState(state);', $entryBody);
         self::assertStringContainsString("var building = workspaceStatus === 'building'", $entryBody);
         self::assertStringContainsString('|| blockedByRunning', $entryBody);
+
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+        $syncBody = $this->extractFunctionBody($runtime, 'syncDeferredQueueWorkspaceState');
+        $loadBody = $this->extractFunctionBody($runtime, 'startActiveQueueObservationOnLoad');
+        self::assertStringContainsString("normalizedOperation === 'build' && isQueueStatusInProgressForWatch(queueStatus)", $syncBody);
+        self::assertStringContainsString('workspaceState.latest_build_failed = false;', $syncBody);
+        self::assertStringContainsString("workspaceState.workspace_status = 'building';", $syncBody);
+        self::assertStringContainsString("readQueueStatusForDeferredState(state, 'build')", $loadBody);
+        self::assertStringContainsString("operation: 'build'", $loadBody);
     }
 
     public function testRuntimeFailureDialogShowsDecisionSummaryInsteadOfRawQueueLog(): void
