@@ -129,6 +129,7 @@ URL别名已存在，请更换一个,"URL slug already exists"
 获取最近文章,"Get Recent Articles"
 增加文章浏览量,"Increase Article Views"
 获取带标签的文章（用于标签云）,"Get tagged articles (for tag cloud)"
+"GuoLaiRen Blog sitemap URL and news metadata provider","GuoLaiRen Blog sitemap URL and news metadata provider"
 启用,Enabled
 禁用,Disabled
 已发布,Published

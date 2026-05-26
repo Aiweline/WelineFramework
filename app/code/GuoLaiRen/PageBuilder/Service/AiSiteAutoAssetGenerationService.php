@@ -12,6 +12,8 @@ class AiSiteAutoAssetGenerationService
     private const DEFAULT_LIMIT = 4;
     private const FAILURE_TRAIL_MAX_ITEMS = 80;
     private const FAILURE_TRAIL_MESSAGE_MAX_LEN = 800;
+    private const IMAGE_GENERATION_TIMEOUT_SECONDS = 180;
+    private const IMAGE_GENERATION_MAX_ATTEMPTS = 2;
 
     public function __construct(
         private readonly AiSiteAssetManifestService $manifestService,
@@ -309,7 +311,8 @@ class AiSiteAutoAssetGenerationService
             $lastImageThrowable = null;
             $result = [];
             $image = [];
-            for ($attempt = 1; $attempt <= 2; $attempt++) {
+            $maxImageAttempts = $this->resolveImageGenerationMaxAttempts($slot);
+            for ($attempt = 1; $attempt <= $maxImageAttempts; $attempt++) {
                 try {
                     $result = $this->generateImage($prompt, $adminId, $slot);
                     $image = $this->firstGeneratedImage($result);
@@ -317,8 +320,8 @@ class AiSiteAutoAssetGenerationService
                     break;
                 } catch (\Throwable $imageThrowable) {
                     $lastImageThrowable = $imageThrowable;
-                    \w_log_warning('[AI Site Asset Image Retry] slot=' . $slotId . ' attempt=' . $attempt . '/2: ' . $imageThrowable->getMessage());
-                    if ($attempt >= 2) {
+                    \w_log_warning('[AI Site Asset Image Retry] slot=' . $slotId . ' attempt=' . $attempt . '/' . $maxImageAttempts . ': ' . $imageThrowable->getMessage());
+                    if ($attempt >= $maxImageAttempts) {
                         throw $imageThrowable;
                     }
                 }
@@ -705,6 +708,7 @@ class AiSiteAutoAssetGenerationService
             $result = ($this->imageGenerator)($prompt, $adminId, $slotId);
         } else {
             $identityParams = $this->buildIdentityImageGenerationParams($slotId, $slot);
+            $imageTimeout = $this->resolveImageGenerationTimeout($slot);
             $result = \w_query('ai', 'generateImage', [
                 'prompt' => $prompt,
                 'scenario_code' => 'pagebuilder_ai_site_assets',
@@ -718,7 +722,8 @@ class AiSiteAutoAssetGenerationService
                     'size' => $imageSize,
                     'target_size' => $targetSize,
                     'aspect_ratio' => $aspectRatio,
-                    'timeout' => 60,
+                    'timeout' => $imageTimeout,
+                    'image_timeout' => $imageTimeout,
                     'connect_timeout' => 10,
                 ] + $identityParams,
             ]);
@@ -729,6 +734,40 @@ class AiSiteAutoAssetGenerationService
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function resolveImageGenerationMaxAttempts(array $slot): int
+    {
+        foreach (['image_generation_max_attempts', 'max_image_generation_attempts'] as $key) {
+            if (\is_numeric($slot[$key] ?? null)) {
+                $attempts = (int)$slot[$key];
+                if ($attempts > 0) {
+                    return \max(1, \min(3, $attempts));
+                }
+            }
+        }
+
+        return self::IMAGE_GENERATION_MAX_ATTEMPTS;
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function resolveImageGenerationTimeout(array $slot): int
+    {
+        foreach (['image_timeout', 'image_generation_timeout', 'timeout'] as $key) {
+            if (\is_numeric($slot[$key] ?? null)) {
+                $timeout = (int)$slot[$key];
+                if ($timeout > 0) {
+                    return \max(1, $timeout);
+                }
+            }
+        }
+
+        return self::IMAGE_GENERATION_TIMEOUT_SECONDS;
     }
 
     /**

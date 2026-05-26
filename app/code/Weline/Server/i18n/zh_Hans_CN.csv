@@ -456,6 +456,9 @@ P99：%{1},P99：%{1}
 "参数 --frontend/-frontend 已弃用：窗口可见请用 --win；阻塞前台 Master 请用 --foreground。","参数 --frontend/-frontend 已弃用：窗口可见请用 --win；阻塞前台 Master 请用 --foreground。"
 "使用已保存的实例配置：%{1} (%{2}:%{3})","使用已保存的实例配置：%{1} (%{2}:%{3})"
 "以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。","以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。"
+"HTTPS 未启用：%{1}","HTTPS 未启用：%{1}"
+"SSL 证书服务返回 HTTP 模式","SSL 证书服务返回 HTTP 模式"
+"本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。","本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。"
 已生成新证书：%{1},已生成新证书：%{1}
 使用已有证书：%{1},使用已有证书：%{1}
 证书有效期至：%{1},证书有效期至：%{1}
@@ -472,7 +475,6 @@ P99：%{1},P99：%{1}
 "检测到旧实例仅残留 HTTP Redirect 子进程，先执行本地快速清场...","检测到旧实例仅残留 HTTP Redirect 子进程，先执行本地快速清场..."
 "检测到服务器已运行，-f 直接切换（不等待）...","检测到服务器已运行，-f 直接切换（不等待）..."
 "注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。","注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。"
-"-r -f 强制切换后主端口 %{1} 在 %{2}ms 内仍未释放，已中止启动以避免裸 RST。","-r -f 强制切换后主端口 %{1} 在 %{2}ms 内仍未释放，已中止启动以避免裸 RST。"
 检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...,检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...
 "所有 Worker 已空闲，开始切换...","所有 Worker 已空闲，开始切换..."
 等待超时，强制切换...,等待超时，强制切换...
@@ -529,7 +531,7 @@ PID：%{1},PID：%{1}
 维护模式已关闭。,维护模式已关闭。
 "检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED","检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED"
 "建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名","建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名"
-"当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host。","当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host。"
+"当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。","当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。"
 "启动已阻止：当前监听地址为 %{1}，且无法确定默认项目域名白名单。","启动已阻止：当前监听地址为 %{1}，且无法确定默认项目域名白名单。"
 "请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。","请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。"
 后台域名池域名不需要写入此处。,后台域名池域名不需要写入此处。
@@ -544,9 +546,7 @@ PID：%{1},PID：%{1}
 "Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。","Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。"
 启动失败原因：%{1},启动失败原因：%{1}
 本次启动未视为完成，请稍后执行以下命令检查状态：,本次启动未视为完成，请稍后执行以下命令检查状态：
-"后台 Master 进程已创建（PID: %{1}），控制面仍在初始化；已停止阻塞等待。","后台 Master 进程已创建（PID: %{1}），控制面仍在初始化；已停止阻塞等待。"
-稍后执行以下命令检查启动进度：,稍后执行以下命令检查启动进度：
-"后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。","后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。"
+"后台启动已发起，但未能在 %{1} 秒内确认 Master 控制面就绪。","后台启动已发起，但未能在 %{1} 秒内确认 Master 控制面就绪。"
 可能原因：,可能原因：
 "1. 框架加载耗时较长（首次启动或 opcache 未预热）","1. 框架加载耗时较长（首次启动或 opcache 未预热）"
 "2. 端口被占用导致启动失败","2. 端口被占用导致启动失败"
@@ -586,6 +586,7 @@ env.wls.servers.%{1},env.wls.servers.%{1}
 env.wls,env.wls
 命令行参数,命令行参数
 "参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。","参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。"
+"真实 Host 解析校验失败","真实 Host 解析校验失败"
 "SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动","SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动"
 "SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动","SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动"
 手动配置,手动配置
@@ -598,6 +599,11 @@ env.wls,env.wls
 未知,未知
 使用已有证书：%{1}（签发方：%{2}）,使用已有证书：%{1}（签发方：%{2}）
 "SSL 证书准备失败：%{1}（耗时 %{2}ms）— %{3}","SSL 证书准备失败：%{1}（耗时 %{2}ms）— %{3}"
+"启动已阻止：真实 Host %{1} 尚未解析到 A/AAAA 记录。请先把域名解析到当前服务器 IP 后再启动 WLS。","启动已阻止：真实 Host %{1} 尚未解析到 A/AAAA 记录。请先把域名解析到当前服务器 IP 后再启动 WLS。"
+"启动已阻止：无法确认当前服务器 IP，不能校验真实 Host %{1} 是否指向本机。请配置 app/etc/env.php -> wls.public_ip 后重试。","启动已阻止：无法确认当前服务器 IP，不能校验真实 Host %{1} 是否指向本机。请配置 app/etc/env.php -> wls.public_ip 后重试。"
+"启动已阻止：真实 Host %{1} 未解析到当前服务器 IP。当前解析：%{2}；本机 IP：%{3}。请先修正 DNS A/AAAA 后再启动 WLS。","启动已阻止：真实 Host %{1} 未解析到当前服务器 IP。当前解析：%{2}；本机 IP：%{3}。请先修正 DNS A/AAAA 后再启动 WLS。"
+使用已有证书,使用已有证书
+已有证书,已有证书
 "检测到冷启动阶段 ACME HTTP-01 校验失败：%{1}","检测到冷启动阶段 ACME HTTP-01 校验失败：%{1}"
 "已临时启用自签证书启动实例；待 Dispatcher/Worker 就绪后将自动重试正式证书申请。","已临时启用自签证书启动实例；待 Dispatcher/Worker 就绪后将自动重试正式证书申请。"
 "附加 Host 证书就绪：%{1}（签发方：%{2}）","附加 Host 证书就绪：%{1}（签发方：%{2}）"
@@ -686,6 +692,9 @@ env.wls,env.wls
 "从 disable_functions 中移除 proc_open","从 disable_functions 中移除 proc_open"
 函数被禁用：pcntl_fork,函数被禁用：pcntl_fork
 "从 disable_functions 中移除 pcntl_fork","从 disable_functions 中移除 pcntl_fork"
+"当前使用默认 Dispatcher 模式；Linux/Mac 可按压测结果评估 SO_REUSEPORT 直连模式","当前使用默认 Dispatcher 模式；Linux/Mac 可按压测结果评估 SO_REUSEPORT 直连模式"
+"可减少 Dispatcher 中转开销，但会改变流量分发与排障路径，建议仅在压测验证后启用","可减少 Dispatcher 中转开销，但会改变流量分发与排障路径，建议仅在压测验证后启用"
+"使用 --direct 或 wls.topology = direct 显式启用","使用 --direct 或 wls.topology = direct 显式启用"
 内存限制较低：%{1},内存限制较低：%{1}
 "在 php.ini 设置 memory_limit = 256M","在 php.ini 设置 memory_limit = 256M"
 "OPCache CLI 模式未启用","OPCache CLI 模式未启用"
@@ -756,7 +765,7 @@ env.wls,env.wls
 事件循环,事件循环
 "auto 会优先使用可用的 Event 扩展，否则降级 stream_select 并提示原因","auto 会优先使用可用的 Event 扩展，否则降级 stream_select 并提示原因"
 默认拓扑,默认拓扑
-"Linux/Mac 支持 SO_REUSEPORT 时 auto 默认 direct；Windows 默认 Dispatcher 兼容路径","Linux/Mac 支持 SO_REUSEPORT 时 auto 默认 direct；Windows 默认 Dispatcher 兼容路径"
+"auto 默认 Dispatcher；Linux/Mac 支持 SO_REUSEPORT 时可用 --direct 显式启用直连模式","auto 默认 Dispatcher；Linux/Mac 支持 SO_REUSEPORT 时可用 --direct 显式启用直连模式"
 多进程,多进程
 "优先级：proc_open > pcntl_fork > exec","优先级：proc_open > pcntl_fork > exec"
 "HTTPS 支持","HTTPS 支持"
@@ -828,6 +837,7 @@ unknown,unknown
 "状态：部分运行 (%{1}/%{2})","状态：部分运行 (%{1}/%{2})"
 "状态：全部停止 (%{1}/%{2})","状态：全部停止 (%{1}/%{2})"
 "测试请求：curl %{1}/","测试请求：curl %{1}/"
+启动失败详情：,启动失败详情：
 "● on (默认)","● on (默认)"
 "● on (env.php)","● on (env.php)"
 "○ off (env.php)","○ off (env.php)"
@@ -1488,7 +1498,6 @@ DDoS攻击,DDoS攻击
 "[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请","[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请"
 "子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书","子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书"
 "HTTPS 已在此域名禁用","HTTPS 已在此域名禁用"
-使用已有证书,使用已有证书
 "Failed to generate local CA private key","Failed to generate local CA private key"
 "Failed to generate local CA CSR","Failed to generate local CA CSR"
 "Failed to sign local CA certificate","Failed to sign local CA certificate"

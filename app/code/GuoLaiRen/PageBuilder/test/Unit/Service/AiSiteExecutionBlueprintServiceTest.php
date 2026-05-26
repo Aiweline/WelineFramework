@@ -17,6 +17,7 @@ use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
 use GuoLaiRen\PageBuilder\Service\AiSiteStageOneContractService;
 use GuoLaiRen\PageBuilder\Service\AiSiteStageOneContractValidator;
+use GuoLaiRen\PageBuilder\Service\AiSiteStageOnePromptContractRenderer;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
 
@@ -32,10 +33,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
             'pt_BR',
             (string)$method->invoke($service, [
                 'plan_locale' => 'zh_Hans_CN',
+                'content_locale' => 'zh_Hans_CN',
                 'default_locale' => 'pt_BR',
                 'website_profile' => [
                     'default_locale' => 'pt_BR',
-                    'content_locale' => '',
+                    'content_locale' => 'zh_Hans_CN',
                 ],
             ], 'zh_Hans_CN')
         );
@@ -43,13 +45,156 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertSame(
             'en_US',
             (string)$method->invoke($service, [
-                'content_locale' => 'en_US',
+                'ai_content_locale' => 'en_US',
+                'content_locale' => 'zh_Hans_CN',
                 'default_locale' => 'pt_BR',
                 'website_profile' => [
                     'default_locale' => 'pt_BR',
                 ],
             ], 'zh_Hans_CN')
         );
+    }
+
+    public function testStageOneJsonRetryParamsPreserveStrictBlockSegmentSchema(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $formatMethod = new \ReflectionMethod($service, 'buildStageOneBlockSegmentResponseFormat');
+        $formatMethod->setAccessible(true);
+        $retryMethod = new \ReflectionMethod($service, 'buildStageOneJsonRetryRequestParams');
+        $retryMethod->setAccessible(true);
+
+        $strictFormat = $formatMethod->invokeArgs($service, ['support_form_guidance', [], false]);
+        $params = $retryMethod->invoke($service, [
+            'max_tokens' => 512,
+            'response_format' => $strictFormat,
+        ]);
+
+        self::assertSame('json_schema', $params['response_format']['type'] ?? null);
+        self::assertSame(
+            ['support_form_guidance'],
+            $params['response_format']['json_schema']['schema']['properties']['blocks']['items']['properties']['block_key']['enum'] ?? null
+        );
+        self::assertSame(
+            ['support'],
+            $params['response_format']['json_schema']['schema']['properties']['blocks']['items']['properties']['page_flow_role']['enum'] ?? null
+        );
+        self::assertContains(
+            'page_flow_role',
+            $params['response_format']['json_schema']['schema']['properties']['blocks']['items']['required'] ?? []
+        );
+    }
+
+    public function testStageOneThemeResponseFormatLocksPageOverviewAndSharedComponents(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'buildStageOneThemeResponseFormat');
+        $method->setAccessible(true);
+
+        $format = $method->invoke($service, [Page::TYPE_HOME, Page::TYPE_CONTACT]);
+        $schema = $format['json_schema']['schema'] ?? [];
+
+        self::assertSame('json_schema', $format['type'] ?? null);
+        self::assertTrue((bool)($format['json_schema']['strict'] ?? false));
+        self::assertContains('page_type_overviews', $schema['required'] ?? []);
+        self::assertSame(
+            [Page::TYPE_HOME, Page::TYPE_CONTACT],
+            $schema['properties']['page_type_overviews']['required'] ?? null
+        );
+        self::assertSame(
+            ['label', 'target'],
+            $schema['properties']['shared_components']['properties']['header']['properties']['realtime_content']['properties']['cta']['items']['required'] ?? null
+        );
+    }
+
+    public function testStageOneJsonSchemaResponseFormatRequiresResolvedModelCapability(): void
+    {
+        $aiService = $this->getMockBuilder(AiService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolveModel'])
+            ->getMock();
+        $aiService->method('resolveModel')
+            ->with(null, 'pagebuilder_plan_generation')
+            ->willReturn([
+                'model_code' => 'deepseek-v4-flash',
+                'capabilities' => ['chat', 'reasoning', 'code', 'function_calling'],
+            ]);
+
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $aiService);
+        $formatMethod = new \ReflectionMethod($service, 'buildStageOneBlockSegmentResponseFormat');
+        $formatMethod->setAccessible(true);
+        $normalizeMethod = new \ReflectionMethod($service, 'normalizeStageOneJsonResponseFormatForScenario');
+        $normalizeMethod->setAccessible(true);
+
+        $params = $normalizeMethod->invoke($service, [
+            'response_format' => $formatMethod->invokeArgs($service, ['support_form_guidance', [], false]),
+        ], 'pagebuilder_plan_generation');
+
+        self::assertSame(['type' => 'json_object'], $params['response_format'] ?? null);
+    }
+
+    public function testStageOnePromptContractsAvoidCopyablePlaceholderVocabulary(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $preludeMethod = new \ReflectionMethod($service, 'buildStageOnePromptRolePrelude');
+        $preludeMethod->setAccessible(true);
+
+        $contract = (new AiSiteStageOneContractService())->build(
+            ['page_types' => [Page::TYPE_CONTACT]],
+            [Page::TYPE_CONTACT],
+            'zh_Hans_CN',
+            'pt_BR'
+        );
+        $pageLines = (new AiSiteStageOnePromptContractRenderer())->renderPageContract($contract, Page::TYPE_CONTACT);
+        $promptText = \mb_strtolower(\implode("\n", [
+            ...$preludeMethod->invoke($service),
+            ...$pageLines,
+        ]));
+
+        self::assertStringNotContainsString('placeholder', $promptText);
+        self::assertStringNotContainsString('占位', $promptText);
+        self::assertStringContainsString('html input hint attribute', $promptText);
+    }
+
+    public function testStageOnePagePromptProvidesExactBlockKeyFramework(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'buildAiStageOnePagePrompt');
+        $method->setAccessible(true);
+        $scope = [
+            'page_types' => [Page::TYPE_COOKIE_POLICY],
+            'brief_description' => 'Teenipiya APK site needs clear policy support content.',
+        ];
+        $contract = (new AiSiteStageOneContractService())->build(
+            $scope,
+            [Page::TYPE_COOKIE_POLICY],
+            'zh_Hans_CN',
+            'pt_BR'
+        );
+
+        $prompt = (string)$method->invoke(
+            $service,
+            \array_replace($scope, ['stage1_contract' => $contract]),
+            ['brief_description' => $scope['brief_description']],
+            [
+                'stage1_contract' => $contract,
+                'requirement_expansion' => [],
+                'theme_design' => [],
+                'shared_components' => [],
+            ],
+            Page::TYPE_COOKIE_POLICY,
+            'zh_Hans_CN',
+            'pt_BR',
+            '',
+            ''
+        );
+
+        self::assertStringContainsString('Exact block-key framework', $prompt);
+        self::assertStringContainsString(
+            '["cookie_overview","cookie_types","preference_controls","cookie_contact"]',
+            $prompt
+        );
+        self::assertStringContainsString('final CSS treatment itself', $prompt);
+        self::assertStringNotContainsString('CSS replaces the image', $prompt);
     }
 
     public function testStageOneBlockRepairNormalizesExecutionScriptTypo(): void

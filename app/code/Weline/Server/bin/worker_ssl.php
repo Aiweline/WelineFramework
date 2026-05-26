@@ -201,6 +201,7 @@ $deferSsl = false;      // 延迟 SSL 模式（用于 TCP 透传架构，先接�
 $wlsLoopDriver = 'auto';
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
+$workerCount = 1;
 
 // 先提取位置参数（跳过以 -- 开头的参数）
 $positionalArgs = [];
@@ -250,6 +251,8 @@ foreach ($argv as $arg) {
         $wlsLoopDriver = (string)\substr($arg, 18);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--worker-count=')) {
+        $workerCount = \max(1, (int)\substr($arg, 15));
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -301,6 +304,9 @@ $_ENV['WLS_INSTANCE'] = $instanceName;
 $_SERVER['WLS_WORKER_ID'] = (string)$workerId;
 $_ENV['WLS_WORKER_ID'] = (string)$workerId;
 @\putenv('WLS_WORKER_ID=' . (string)$workerId);
+$_SERVER['WLS_WORKER_COUNT'] = (string)$workerCount;
+$_ENV['WLS_WORKER_COUNT'] = (string)$workerCount;
+@\putenv('WLS_WORKER_COUNT=' . (string)$workerCount);
 $_SERVER['WLS_PORT'] = (string)$port;
 $_ENV['WLS_PORT'] = (string)$port;
 @\putenv('WLS_PORT=' . (string)$port);
@@ -5139,6 +5145,7 @@ function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http
     if ($backendPrefix !== '' && $uriPath !== '' && !\str_starts_with($uriPath, $backendPrefix . '/')) {
         $uri = $backendPrefix . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
     }
+    $uri = normalizeBackendReturnUri($uri);
 
     $scheme = $request->isSecure() ? 'https' : 'http';
     $host = (string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: 'localhost');
@@ -5150,6 +5157,41 @@ function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http
 
     $redirectUrl = removeBackendLoginReturnParams($redirectUrl);
     return $redirectUrl . (\str_contains($redirectUrl, '?') ? '&' : '?') . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+}
+
+function normalizeBackendReturnUri(string $uri): string
+{
+    $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: '');
+    if ($path === '') {
+        return $uri;
+    }
+
+    $segments = \explode('/', \trim($path, '/'));
+    $firstSegment = (string)($segments[0] ?? '');
+    if (!isset($segments[1], $segments[2], $segments[3])
+        || $firstSegment === ''
+        || !isBackendReturnCurrencySegment($segments[1])
+        || !isBackendReturnLocaleSegment($segments[2])
+        || $segments[3] !== $firstSegment
+    ) {
+        return $uri;
+    }
+
+    \array_splice($segments, 3, 1);
+    $normalized = '/' . \implode('/', $segments);
+    $query = (string)(\parse_url($uri, PHP_URL_QUERY) ?: '');
+    $fragment = (string)(\parse_url($uri, PHP_URL_FRAGMENT) ?: '');
+    return $normalized . ($query !== '' ? '?' . $query : '') . ($fragment !== '' ? '#' . $fragment : '');
+}
+
+function isBackendReturnCurrencySegment(string $segment): bool
+{
+    return \strlen($segment) === 3 && \ctype_upper($segment);
+}
+
+function isBackendReturnLocaleSegment(string $segment): bool
+{
+    return (bool)\preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
 }
 
 function removeBackendLoginReturnParams(string $url): string

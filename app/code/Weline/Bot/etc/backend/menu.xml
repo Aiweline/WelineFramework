@@ -5,8 +5,9 @@
     <menu source="Weline_Bot::bot"
           name="bot"
           title="AI Bot"
+          parent="Weline_Backend::ai_group"
           icon="mdi mdi-robot"
-          order="50">
+          order="10">
 
         <menu source="Weline_Bot::role"
               name="role"

@@ -166,6 +166,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                     ->setIsEnable($data->getData('is_enable') ?: true)
                     ->setIsBackend($data->getData('is_backend') ?: false)
                     ->setType($type);
+                $this->applyAccessMetadataDefaults($acl);
                 
                 // 控制器 #[Acl] 仅负责 pc 接口权限，type 固定为 pc
                 // type='menus' 仅由 MenuCollector（menu.xml）写入；侧栏菜单必须以 menu.xml 为准
@@ -451,6 +452,14 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             ->setClass($data->getData('class'))
             ->setMethod($requestMethod)
             ->setType($type);
+        $this->applyAccessMetadataDefaults($acl);
+    }
+
+    private function applyAccessMetadataDefaults($acl): void
+    {
+        $acl->setAccessMode(Acl::normalizeAccessMode($acl->getAccessMode(), $acl->getMethod()));
+        $acl->setScopeGroup(trim((string)$acl->getScopeGroup()));
+        $acl->setApiExposable($acl->getApiExposable());
     }
 
     /**

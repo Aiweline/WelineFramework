@@ -202,6 +202,7 @@ class BackendController extends PcController
         $query = \is_array($parsed) && isset($parsed['query']) && $parsed['query'] !== ''
             ? '?' . $parsed['query']
             : '';
+        $path = $this->normalizeBackendPathForSameOrigin($path);
         $scheme = $this->request->isSecure() ? 'https' : 'http';
         $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost');
 
@@ -234,9 +235,42 @@ class BackendController extends PcController
             return '';
         }
 
+        $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: $uri);
+        $query = (string)(\parse_url($uri, PHP_URL_QUERY) ?: '');
+        $uri = $this->normalizeBackendPathForSameOrigin($path) . ($query !== '' ? '?' . $query : '');
+
         $scheme = $this->request->isSecure() ? 'https' : 'http';
         $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost');
         return $scheme . '://' . $host . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
+    }
+
+    private function normalizeBackendPathForSameOrigin(string $path): string
+    {
+        $path = '/' . \trim($path, '/');
+        $segments = \explode('/', \trim($path, '/'));
+        $firstSegment = (string)($segments[0] ?? '');
+
+        if (isset($segments[1], $segments[2], $segments[3])
+            && $firstSegment !== ''
+            && $this->isCurrencySegment($segments[1])
+            && $this->isLocaleSegment($segments[2])
+            && $segments[3] === $firstSegment
+        ) {
+            \array_splice($segments, 3, 1);
+            return '/' . \implode('/', $segments);
+        }
+
+        return $path;
+    }
+
+    private function isCurrencySegment(string $segment): bool
+    {
+        return \strlen($segment) === 3 && \ctype_upper($segment);
+    }
+
+    private function isLocaleSegment(string $segment): bool
+    {
+        return (bool)\preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
     }
 
     private function isSseLikeRequest(): bool

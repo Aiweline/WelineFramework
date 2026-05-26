@@ -89,6 +89,8 @@ class ExtendsRegistry
         RegistryProgress::log('Extends organize registry data');
         $registry = $this->organizeRegistryData($scannedData, $completenessReport);
         RegistryProgress::count('Extends registry', count($registry), 'modules organized');
+        unset($scannedData, $completenessReport);
+        RegistryProgress::log('Extends raw scan data released');
 
         // 保存注册表
         return $this->saveRegistry($registry);
@@ -126,10 +128,13 @@ class ExtendsRegistry
         // 5. 组织新数据
         RegistryProgress::log('Extends incremental: organizing new data');
         $newRegistry = $this->organizeRegistryData($scannedData, $completenessReport);
+        unset($scannedData, $completenessReport);
+        RegistryProgress::log('Extends incremental raw scan data released');
         
         // 6. 合并到现有注册表
         RegistryProgress::log('Extends incremental: merging into current registry');
         $this->mergeExtendsRegistry($registry, $newRegistry);
+        unset($newRegistry);
         
         // 7. 保存注册表
         return $this->saveRegistry($registry);
@@ -542,6 +547,12 @@ class ExtendsRegistry
      * @param string $moduleName 模块名
      * @return bool
      */
+    public function clearMemoryCache(): void
+    {
+        $this->cachedRegistry = null;
+        $this->cachedFileMtime = null;
+    }
+
     public function hasExtends(string $moduleName): bool
     {
         $registry = $this->getRegistry();

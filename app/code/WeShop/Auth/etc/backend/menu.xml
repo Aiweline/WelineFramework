@@ -5,7 +5,7 @@
     <menu source="WeShop_Auth::security"
           name="weshop_auth_security"
           title="Account Security"
-          action=""
+          action="weshop/backend/security/index"
           parent="Weline_Backend::user_management"
           icon="mdi mdi-shield-account-outline"
           order="90">

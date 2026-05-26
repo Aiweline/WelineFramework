@@ -6,7 +6,7 @@ namespace WeShop\GoogleAuth\Controller\Frontend\Auth;
 
 use WeShop\Customer\Service\CustomerAccountService;
 use WeShop\Customer\Service\CustomerWebAuthService;
-use WeShop\GoogleAuth\Service\BackendWebAuthService;
+use WeShop\Auth\Service\BackendWebAuthService;
 use WeShop\GoogleAuth\Service\GoogleLoginService;
 use WeShop\GoogleAuth\Service\GoogleOAuthService;
 use Weline\Backend\Model\BackendUser;
@@ -74,7 +74,7 @@ class Callback extends FrontendController
                 $result = $this->handleBackendLogin($code, $redirectUrl);
                 if (($result['status'] ?? '') === 'challenge_required') {
                     $this->getMessageManager()->addWarning(__('Please complete two-factor verification to finish sign in.'));
-                    $this->redirect($this->url->getFrontendUrl('weshop_googleauth/frontend/auth/backend-challenge', [
+                    $this->redirect($this->url->getFrontendUrl('weshop/frontend/auth/backend-challenge', [
                         'challenge_token' => (string) ($result['challenge_token'] ?? ''),
                     ]));
                     return;

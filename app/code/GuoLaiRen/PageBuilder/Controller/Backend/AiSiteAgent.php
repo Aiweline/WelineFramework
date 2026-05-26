@@ -4956,7 +4956,7 @@ class AiSiteAgent extends BaseController
                 'message' => $doneMessage,
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]));
-            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
         }
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         SchedulerSystem::yield();
@@ -5994,6 +5994,7 @@ class AiSiteAgent extends BaseController
             'block_regenerate' => true,
             'block_partial_patch' => true,
             'image_asset' => true,
+            'publish' => true,
         ][$operation])) {
             $operation = 'build';
         }
@@ -6050,13 +6051,17 @@ class AiSiteAgent extends BaseController
         $websiteId = \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId());
         $virtualThemeId = \max((int)($scope['virtual_theme_id'] ?? 0), (int)$session->getVirtualThemeId());
         $buildTaskSummary = \is_array($scope['build_task_summary'] ?? null) ? $scope['build_task_summary'] : [];
+        $taskReady = $this->taskSummaryIndicatesCompleted($buildTaskSummary);
+        $titleOk = \trim((string)($scope['website_profile']['site_title'] ?? $scope['site_title'] ?? '')) !== '';
+        $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
+            || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
         $state = [
             'public_id' => $session->getPublicId(),
             'stage' => $stage,
             'stage_label' => $this->getStageLabel($stage),
             'workspace_status' => (string)($scope['workspace_status'] ?? ''),
             'publish_status' => $session->getPublishStatus(),
-            'can_publish' => !empty($scope['can_publish']),
+            'can_publish' => $published || (!empty($scope['can_publish']) && $taskReady && $titleOk),
             'latest_build_failed' => !empty($scope['latest_build_failed']),
             'latest_build_failure' => \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [],
             'publish_blocked_by_latest_ai_failure' => !empty($scope['publish_blocked_by_latest_ai_failure']),
@@ -6274,8 +6279,15 @@ class AiSiteAgent extends BaseController
         $hasBuildPlanV2 = $this->workspaceFastViewHasBuildPlan($scope);
         $taskReady = $this->taskSummaryIndicatesCompleted($buildTaskSummary);
         $titleOk = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? '')) !== '';
-        $canPublish = !empty($scope['can_publish']) || (($virtualThemeId > 0 || $taskReady) && $titleOk);
+        $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
+            || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
+        $canPublish = $published || (!empty($scope['can_publish']) && $taskReady && $titleOk);
         $workspaceStatus = (string)($scope['workspace_status'] ?? '');
+        if ($workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH && !$canPublish) {
+            $workspaceStatus = $taskReady
+                ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_EDITING
+                : (string)$stage;
+        }
         if ($workspaceStatus === '') {
             $workspaceStatus = $canPublish
                 ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
@@ -7774,7 +7786,7 @@ class AiSiteAgent extends BaseController
         );
         $scope = $this->writeActiveOperationStateToScope($scope, $nextOperation);
         if (($nextOperation['status'] ?? '') === 'done') {
-            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
         } elseif (\in_array((string)($nextOperation['status'] ?? ''), ['queued', 'running'], true)) {
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
         }
@@ -8266,19 +8278,6 @@ class AiSiteAgent extends BaseController
                 (int)($activeOperation['queue_id'] ?? 0)
             );
             if (!\is_array($queueRow) || $queueRow === []) {
-                $this->sendSseContractError(
-                    $sse,
-                    'OPERATION_QUEUE_NOT_FOUND',
-                    'Queue record not found. Start the operation again so the controller can create one queue row.',
-                    self::PARAMS_OPERATION_SSE,
-                    404
-                );
-                $sse->complete([
-                    'success' => false,
-                    'message' => 'Queue record not found. Start the operation again so the controller can create one queue row.',
-                    'operation' => $operation,
-                ]);
-                return;
                 if (!$this->shouldEnqueueOperation($operation)) {
                     $this->sendSseContractError(
                         $sse,
@@ -8292,7 +8291,7 @@ class AiSiteAgent extends BaseController
                 }
                 try {
                     // 断链补建无原始 HTTP 侧 scope_patch；build 等消费端会以会话库 scope 为准合并
-                    throw new \RuntimeException('operation_sse_missing_queue_record');
+                    $newQueueId = $this->enqueueOperationQueueTask($session, $adminId, $operation, $executionToken);
                     if ($newQueueId <= 0) {
                         throw new \RuntimeException('enqueue_queue_id');
                     }
@@ -8857,7 +8856,7 @@ class AiSiteAgent extends BaseController
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->sessionService->loadScopeForStage($fresh, $stageCode)
         );
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
         $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, (int)($activeOperation['queue_id'] ?? $queueId));
@@ -10884,9 +10883,9 @@ class AiSiteAgent extends BaseController
         $hasPublishBlockingRetryableAiFailures = (int)($planRetryableAiFailureSummary['count'] ?? 0) > 0
             || (int)($buildRetryableAiFailureSummary['count'] ?? 0) > 0;
         $taskReady = $this->taskSummaryIndicatesCompleted($taskSummary);
-        $canPublish = ($virtualThemeId > 0 || $taskReady)
-            && ($pendingGenerationPageTypes === [] || $taskReady)
-            && $titleOk;
+        $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
+            || (string)($normalized['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
+        $canPublish = $published || ($taskReady && $pendingGenerationPageTypes === [] && $titleOk);
         if ($hasPublishBlockingRetryableAiFailures) {
             $canPublish = false;
         }
@@ -13420,12 +13419,12 @@ class AiSiteAgent extends BaseController
 
     private function shouldEnqueueOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset', 'publish'], true);
     }
 
     private function isAiSiteQueueBackedOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset', 'publish'], true);
     }
 
     private function buildRunningOperationReuseMessage(string $operation): string
@@ -13887,7 +13886,7 @@ class AiSiteAgent extends BaseController
         }
         $content = $this->applyOperationDetailsToPayload($content, $operationDetails);
         if (\in_array($operation, ['build', 'block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
-            $content['scope_patch'] = $scopePatch;
+            $content['scope_patch'] = $this->compactAiSiteQueueScopePatchForStorage($operation, $scopePatch);
         }
 
         $queueName = $this->buildAiSiteQueueName($operation, $executionToken);
@@ -13948,6 +13947,50 @@ class AiSiteAgent extends BaseController
         }
 
         return $queueId;
+    }
+
+    /**
+     * Queue rows should identify the operation, not duplicate the session's
+     * persisted build contract/artifacts. The runner reloads session scope and
+     * composes the current task context at execution time.
+     *
+     * @param array<string, mixed> $scopePatch
+     * @return array<string, mixed>
+     */
+    private function compactAiSiteQueueScopePatchForStorage(string $operation, array $scopePatch): array
+    {
+        if (!\in_array($operation, ['build', 'block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
+            return $scopePatch;
+        }
+
+        $forceRebuild = (int)($scopePatch['_force_rebuild'] ?? 0) === 1;
+        $selectedSkillCodes = $scopePatch[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? null;
+        $scopePatch = $this->buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, []);
+        foreach ([
+            'build_blueprint',
+            'build_tasks',
+            'build_task_summary',
+            'build_plan_v2',
+            'plan_projection',
+            'content_manifest',
+            'build_workbench',
+            'build_contracts',
+            'render_data_contract',
+            'qa_report_contract',
+            'task_results',
+            'qa_report_v2',
+            'repair_patch',
+        ] as $key) {
+            unset($scopePatch[$key]);
+        }
+        if ($forceRebuild) {
+            $scopePatch['_force_rebuild'] = 1;
+        }
+        if ($selectedSkillCodes !== null && !\array_key_exists(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, $scopePatch)) {
+            $scopePatch[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] = $selectedSkillCodes;
+        }
+
+        return $scopePatch;
     }
 
     /**
@@ -14132,6 +14175,7 @@ class AiSiteAgent extends BaseController
             'block_partial_patch' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
             'regenerate_page' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
             'image_asset' => \GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue::class,
+            'publish' => \GuoLaiRen\PageBuilder\Queue\AiSitePublishQueue::class,
             default => '',
         };
     }
@@ -14243,10 +14287,13 @@ class AiSiteAgent extends BaseController
             $activeOperation['semantic_status'] = 'cancelled';
         }
 
+        $checkpointWorkspaceStatus = $operation === 'publish'
+            ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHING
+            : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
         $state = [
             'public_id' => (string)$session->getPublicId(),
             'stage' => $stageCode,
-            'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
+            'workspace_status' => $checkpointWorkspaceStatus,
             'active_operation' => $activeOperation,
         ];
         $queueInfoKey = match ($operation) {
@@ -15765,6 +15812,7 @@ class AiSiteAgent extends BaseController
                 'source' => 'planned',
                 'final_url' => '',
                 'locked_by_user' => 0,
+                'image_generation_max_attempts' => 1,
             ];
             $latestAssetScope = $this->refreshInlineImageStateFromPersistedScope($session, $adminId, $assetScope);
             $result = $assetService->generateSlotAsset($session, $adminId, $latestAssetScope, $slotId, $slotSeed);
@@ -17212,6 +17260,17 @@ class AiSiteAgent extends BaseController
                 $baseOperation = $activeOperations[$operation];
             }
         }
+        if ((string)($patch['status'] ?? '') === 'done') {
+            $patch = \array_replace([
+                'failure_mode' => '',
+                'retry_allowed' => 0,
+                'retryable_ai_failure_count' => 0,
+                'retryable_ai_failures' => [],
+                'semantic_status' => 'done',
+                'progress_percent' => 100,
+                'queue_waiting_for_scheduler' => false,
+            ], $patch);
+        }
         $nextActiveOperation = \array_replace($baseOperation, $patch, ['updated_at' => $updatedAt]);
         if ($operation !== '') {
             $nextActiveOperation['operation'] = $operation;
@@ -17811,7 +17870,7 @@ class AiSiteAgent extends BaseController
 
     private function supportsBackgroundOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset', 'publish'], true);
     }
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool

@@ -89,11 +89,13 @@ class CheckoutService
             ];
         }
 
+        $savedOrderItems = [];
         if ($orderItems !== []) {
-            $this->query('order', 'addOrderItems', [
+            $savedOrderItems = $this->query('order', 'addOrderItems', [
                 'order_id' => $orderId,
                 'items' => $orderItems,
             ]);
+            $savedOrderItems = \is_array($savedOrderItems) ? $savedOrderItems : [];
         }
 
         $this->query('cart', 'clearCart', [
@@ -109,10 +111,15 @@ class CheckoutService
 
         $eventData = [
             'order' => $order,
+            'order_id' => $orderId,
             'customer_id' => $customerId,
             'cart_customer_id' => $cartCustomerId,
+            'order_items' => $savedOrderItems !== [] ? $savedOrderItems : $orderItems,
+            'order_summary' => $summary,
             'is_guest_checkout' => !empty($checkoutData['is_guest_checkout']),
             'checkout_mode' => (string) ($checkoutData['checkout_mode'] ?? ''),
+            'shipping_method' => (string) ($checkoutData['shipping_method'] ?? ''),
+            'payment_method' => (string) ($checkoutData['payment_method'] ?? ''),
             'guest_email' => (string) ($checkoutData['guest_email'] ?? ''),
             'notification_channels' => is_array($checkoutData['notification_channels'] ?? null)
                 ? $checkoutData['notification_channels']
@@ -557,7 +564,7 @@ class CheckoutService
     }
 
     /**
-     * @return array<int, array<string, string>>
+     * @return array<int, array<string, mixed>>
      */
     protected function normalizeOptions(mixed $rawOptions): array
     {
@@ -622,16 +629,20 @@ class CheckoutService
                 }
             }
 
-            $code = \trim((string) ($option['code'] ?? ''));
-            if ($code !== '') {
-                $normalized['code'] = $code;
+            foreach (['code', 'attribute_code', 'option_code', 'swatch_type', 'swatch_value', 'option_image'] as $stringKey) {
+                $stringValue = \trim((string) ($option[$stringKey] ?? ''));
+                if ($stringValue !== '') {
+                    $normalized[$stringKey] = $stringValue;
+                }
             }
 
-            $swatchType = \trim((string) ($option['swatch_type'] ?? ''));
-            $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
-            if ($swatchType !== '' && $swatchValue !== '') {
-                $normalized['swatch_type'] = $swatchType;
-                $normalized['swatch_value'] = $swatchValue;
+            if (($normalized['swatch_type'] ?? '') === 'image') {
+                if (($normalized['swatch_value'] ?? '') === '' && ($normalized['option_image'] ?? '') !== '') {
+                    $normalized['swatch_value'] = $normalized['option_image'];
+                }
+                if (($normalized['option_image'] ?? '') === '' && ($normalized['swatch_value'] ?? '') !== '') {
+                    $normalized['option_image'] = $normalized['swatch_value'];
+                }
             }
 
             $options[] = $normalized;
@@ -641,7 +652,7 @@ class CheckoutService
     }
 
     /**
-     * @param array<int, array<string, string>> $options
+     * @param array<int, array<string, mixed>> $options
      */
     protected function encodeOptions(array $options): string
     {

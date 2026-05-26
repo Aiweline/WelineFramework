@@ -17,7 +17,7 @@ use Weline\Visitor\Service\PixelStatisticsService;
  * - 实时数据监控
  * - 站点统计
  */
-#[Acl('Weline_Visitor::pixel_dashboard', '像素统计面板', 'mdi-chart-line', '像素统计面板', 'Weline_Backend::pixel_dashboard')]
+#[Acl('Weline_Visitor::pixel_dashboard', '像素统计', 'mdi-chart-line', '像素统计', 'Weline_Backend::dashboard')]
 class PixelDashboard extends BackendController
 {
     /**

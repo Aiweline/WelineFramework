@@ -40,6 +40,7 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Framework\Router\Service\RouteUpdateService;
+use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Framework\Console\ParseModuleArgsTrait;
@@ -732,7 +733,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             'model_only' => $doModel,
             'args' => $args
         ];
-        $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after', $eventData);
+        RegistryProgress::run(function () use ($eventsManager, $eventData): void {
+            RegistryProgress::section('setup:upgrade after observers');
+            RegistryProgress::log('upgrade_after dispatch started');
+            $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after', $eventData);
+            RegistryProgress::log('upgrade_after dispatch finished');
+        });
         
         // 5. 检查是否需要再次收集（升级过程中可能有新模块安装）
         $this->checkAndRecollectIfNeeded();
@@ -1140,7 +1146,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note(
                     __('正在增量更新 Extends 及模块 %{1} 相关注册表…', [implode(', ', $moduleNames)])
                 );
-                $ok = $registryService->updateModuleRegistriesIncremental($moduleNames);
+                $ok = RegistryProgress::run(function () use ($registryService, $moduleNames): bool {
+                    RegistryProgress::section('setup:upgrade framework registry incremental collect');
+                    RegistryProgress::count('setup:upgrade framework registry incremental collect', count($moduleNames), 'modules');
+                    return $registryService->updateModuleRegistriesIncremental($moduleNames);
+                });
                 if ($ok) {
                     $this->printing->success(__('✓ Extends 与模块注册表增量更新完成。'));
                 } else {
@@ -1151,7 +1161,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     __('正在收集 Extends 及框架注册表（插件、事件、Hook、命令）…')
                 );
                 // 传入 false 强制跳过自动编译（升级流程中会在后面统一编译一次）
-                $ok = $registryService->updateAllRegistries(false, false, true);
+                $ok = RegistryProgress::run(function () use ($registryService): bool {
+                    RegistryProgress::section('setup:upgrade framework registry full collect');
+                    return $registryService->updateAllRegistries(false, false, true);
+                });
                 if ($ok) {
                     $this->printing->success(__('✓ Extends 与框架注册表已更新完成。'));
                 } else {
@@ -1185,7 +1198,21 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     'skip_template_cache_clear' => true,
                     'result' => null,
                 ];
-                $eventsManager->dispatch(self::EVENT_COLLECT_TAGLIB_REGISTRY, $taglibEventData);
+                RegistryProgress::run(function () use ($eventsManager, &$taglibEventData, $moduleNames): void {
+                    RegistryProgress::section('setup:upgrade taglib registry collect');
+                    if (!empty($moduleNames)) {
+                        RegistryProgress::count('setup:upgrade taglib registry collect', count($moduleNames), 'modules');
+                    }
+                    RegistryProgress::log('Taglib registry collect dispatch started');
+                    $eventsManager->dispatch(self::EVENT_COLLECT_TAGLIB_REGISTRY, $taglibEventData);
+                    RegistryProgress::log('Taglib registry collect dispatch returned');
+                    $taglibResult = $taglibEventData['result'] ?? null;
+                    if (is_array($taglibResult) && isset($taglibResult['success']) && !$taglibResult['success']) {
+                        RegistryProgress::log('Taglib registry collect failed: ' . (string)($taglibResult['message'] ?? ''));
+                        return;
+                    }
+                    RegistryProgress::log('Taglib registry collect finished');
+                });
                 $taglibResult = $taglibEventData['result'] ?? null;
                 if (is_array($taglibResult) && isset($taglibResult['success']) && !$taglibResult['success']) {
                     $this->printing->warning(__('标签注册表收集失败：%{1}', [$taglibResult['message'] ?? '']));
@@ -1226,6 +1253,45 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 标记本次升级已经收集过注册表
         $this->registryCollectedInThisRun = true;
     }
+
+    private function raiseCliMemoryLimit(string $targetLimit): void
+    {
+        $currentLimit = (string)\ini_get('memory_limit');
+        if ($currentLimit === '-1') {
+            return;
+        }
+
+        $currentBytes = $this->memoryLimitToBytes($currentLimit);
+        $targetBytes = $this->memoryLimitToBytes($targetLimit);
+        if ($targetBytes === null) {
+            return;
+        }
+
+        if ($currentBytes === null || $currentBytes < $targetBytes) {
+            @\ini_set('memory_limit', $targetLimit);
+        }
+    }
+
+    private function memoryLimitToBytes(string $limit): ?int
+    {
+        $limit = trim($limit);
+        if ($limit === '' || $limit === '-1') {
+            return $limit === '-1' ? PHP_INT_MAX : null;
+        }
+
+        if (!preg_match('/^(\d+)([KMG])?$/i', $limit, $matches)) {
+            return null;
+        }
+
+        $bytes = (int)$matches[1];
+        $unit = strtoupper($matches[2] ?? '');
+        return match ($unit) {
+            'G' => $bytes * 1024 * 1024 * 1024,
+            'M' => $bytes * 1024 * 1024,
+            'K' => $bytes * 1024,
+            default => $bytes,
+        };
+    }
     
     /**
      * 执行模块升级流程（原 module:upgrade 的功能）
@@ -1238,9 +1304,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private function executeModuleUpgrade(array $args = [], array $data = []): void
     {
         // setup:upgrade still runs post-upgrade observers and modules.json generation late in the CLI flow.
-        // Keep a generous limit for the rest of the process so those tail steps do not fall back to
-        // the shell default and fail after the main schema work already succeeded.
-        @\ini_set('memory_limit', '1024M');
+        // Raise low defaults without lowering an explicit higher or unlimited CLI memory limit.
+        $this->raiseCliMemoryLimit('2048M');
 
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
@@ -1421,7 +1486,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->note('指定模块升级，使用增量更新模式...');
             /** @var RegistryUpdateService $registryService */
             $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
-            $registryService->updateModuleRegistriesIncremental($argsModule);
+            RegistryProgress::run(function () use ($registryService, $argsModule): void {
+                RegistryProgress::section('setup:upgrade module registry incremental refresh');
+                RegistryProgress::count('setup:upgrade module registry incremental refresh', count($argsModule), 'modules');
+                $registryService->updateModuleRegistriesIncremental($argsModule);
+            });
             $i += 1;
         }
         
@@ -1490,45 +1559,78 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
         $this->printing->note(__('2)刷新注册表（事件/Hook/Extends）'));
         // 强制重读模块列表并清理 Env 中依赖模块的缓存（active_module_list、module_configs），使事件/Hook/Extends 刷新时能扫到刚在 1) 中完成 MODULE 注册的模块（Theme、I18n 等），否则 register_installer 观察者不在表内，后续 runPendingRegistrations 会仍用不存在的 Framework\Theme\Handle、Framework\I18n\Handle；先更新 Env 再刷新注册表，确保新模块的 event/hook/extends 立即生效
-        Env::getInstance()->getModuleList(true);
+        RegistryProgress::run(function (): void {
+            RegistryProgress::section('setup:upgrade step 2 module list refresh');
+            RegistryProgress::log('Active module list refresh started');
+            $activeModules = Env::getInstance()->getModuleList(true);
+            RegistryProgress::count('Active module list refresh finished', count($activeModules), 'modules');
+        });
         /** @var RegistryUpdateService $registryService */
         $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
         // 跳过命令更新，因为后面会单独执行 command:upgrade
         if (!empty($argsModule)) {
             // 增量更新模式：只更新指定模块的注册表
-            $registryService->updateModuleRegistriesIncremental($argsModule);
+            RegistryProgress::run(function () use ($registryService, $argsModule): void {
+                RegistryProgress::section('setup:upgrade step 2 incremental registry refresh');
+                RegistryProgress::count('setup:upgrade step 2 incremental registry refresh', count($argsModule), 'modules');
+                $registryService->updateModuleRegistriesIncremental($argsModule);
+            });
         } else {
             // 全量更新模式：更新所有注册表
-            $registryService->updateAllRegistries(true, false, true);
+            RegistryProgress::run(function () use ($registryService): void {
+                RegistryProgress::section('setup:upgrade step 2 full registry refresh');
+                $registryService->updateAllRegistries(true, false, true);
+            });
         }
         // 🔧 runPendingRegistrations 会触发 Theme Installer 等查询 m_weline_theme 等表，必须先提交 SchemaDiff 确保表结构完整（如 module_name 等缺失列已添加）
-        $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
-        $preSchemaFrameworkBootstrap = ObjectManager::make(FrameworkDbBootstrapStage::class, ['connectionFactory' => $connectionFactory]);
-        $preSchemaFrameworkBootstrap->prepare([]);
-        $preSchemaFrameworkBootstrap->commit();
-        /** @var Handle $preSchemaModuleHandle */
-        $preSchemaModuleHandle = ObjectManager::getInstance(Handle::class);
-        $preSchemaEavStage = ObjectManager::make(EavSchemaStage::class, [
-            'eventsManager' => ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class),
-            'migrationModel' => ObjectManager::getInstance(\Weline\Framework\Setup\Model\Migration::class),
-            'printing' => $this->printing,
-        ]);
-        $preSchemaEavStage->prepare([]);
-        $preSchemaEavStage->commit();
-        $preSchemaDiffStage = ObjectManager::make(SchemaDiffStage::class, [
-            'moduleHandle' => $preSchemaModuleHandle,
-            'moduleReader' => ObjectManager::getInstance(\Weline\Framework\Module\Config\ModuleFileReader::class),
-            'connectionFactory' => $connectionFactory,
-            'schemaParser' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaParser::class),
-            'dbSchemaReader' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\DbSchemaReader::class),
-            'diffEngine' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaDiffEngine::class),
-            'executor' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaMigrationExecutor::class),
-            'printing' => $this->printing,
-        ]);
-        $preSchemaDiffStage->prepare([]);
-        $preSchemaDiffStage->commit();
-        Register::runPendingRegistrations();
-        Register::clearRegisterPhase();
+        RegistryProgress::run(function (): void {
+            RegistryProgress::section('setup:upgrade post-registry database readiness');
+            RegistryProgress::log('Framework DB bootstrap prepare started');
+            $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
+            $preSchemaFrameworkBootstrap = ObjectManager::make(FrameworkDbBootstrapStage::class, ['connectionFactory' => $connectionFactory]);
+            $preSchemaFrameworkBootstrap->prepare([]);
+            RegistryProgress::log('Framework DB bootstrap commit started');
+            $preSchemaFrameworkBootstrap->commit();
+            RegistryProgress::log('Framework DB bootstrap finished');
+
+            RegistryProgress::section('setup:upgrade post-registry EAV schema');
+            /** @var Handle $preSchemaModuleHandle */
+            $preSchemaModuleHandle = ObjectManager::getInstance(Handle::class);
+            $preSchemaEavStage = ObjectManager::make(EavSchemaStage::class, [
+                'eventsManager' => ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class),
+                'migrationModel' => ObjectManager::getInstance(\Weline\Framework\Setup\Model\Migration::class),
+                'printing' => $this->printing,
+            ]);
+            RegistryProgress::log('EAV schema prepare started');
+            $preSchemaEavStage->prepare([]);
+            RegistryProgress::log('EAV schema commit started');
+            $preSchemaEavStage->commit();
+            RegistryProgress::log('EAV schema finished');
+
+            RegistryProgress::section('setup:upgrade post-registry schema diff');
+            $preSchemaDiffStage = ObjectManager::make(SchemaDiffStage::class, [
+                'moduleHandle' => $preSchemaModuleHandle,
+                'moduleReader' => ObjectManager::getInstance(\Weline\Framework\Module\Config\ModuleFileReader::class),
+                'connectionFactory' => $connectionFactory,
+                'schemaParser' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaParser::class),
+                'dbSchemaReader' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\DbSchemaReader::class),
+                'diffEngine' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaDiffEngine::class),
+                'executor' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaMigrationExecutor::class),
+                'printing' => $this->printing,
+            ]);
+            RegistryProgress::log('Schema diff prepare started');
+            $preSchemaDiffStage->prepare([]);
+            RegistryProgress::log('Schema diff commit started');
+            $preSchemaDiffStage->commit();
+            RegistryProgress::log('Schema diff finished');
+
+            RegistryProgress::section('setup:upgrade pending registrations');
+            RegistryProgress::log('Pending module registrations started');
+            Register::runPendingRegistrations();
+            RegistryProgress::log('Pending module registrations finished');
+            Register::clearRegisterPhase();
+            RegistryProgress::log('Register phase cleared');
+        });
         $modules = Env::getInstance()->getModuleList();
         $no_modules = [];
         $diff_base_path_modules = [];
@@ -2982,7 +3084,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         # 触发系统升级后事件
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
+        RegistryProgress::run(function () use ($eventsManager): void {
+            RegistryProgress::section('setup:upgrade after observers');
+            RegistryProgress::log('upgrade_after dispatch started');
+            $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
+            RegistryProgress::log('upgrade_after dispatch finished');
+        });
         
         $backendPrefix = Env::getAreaRoutePrefix('backend');
         $restBackendPrefix = Env::getAreaRoutePrefix('rest_backend');
@@ -3092,7 +3199,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
         /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
+        RegistryProgress::run(function () use ($eventsManager): void {
+            RegistryProgress::section('setup:upgrade after observers');
+            RegistryProgress::log('upgrade_after dispatch started');
+            $eventsManager->dispatch('Weline_Framework_Setup::upgrade_after');
+            RegistryProgress::log('upgrade_after dispatch finished');
+        });
 
         $backendPrefix = Env::getAreaRoutePrefix('backend');
         $restBackendPrefix = Env::getAreaRoutePrefix('rest_backend');

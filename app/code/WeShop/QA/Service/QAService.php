@@ -26,6 +26,10 @@ class QAService
     public const SOURCE_CUSTOMER = 'customer';
     public const SOURCE_ANONYMOUS = 'anonymous';
 
+    public const FRONTEND_ROUTE = 'qa/frontend/qa';
+    public const FRONTEND_ADD_ROUTE = 'qa/frontend/qa/add';
+    public const FRONTEND_REMOVE_ROUTE = 'qa/frontend/qa/remove';
+
     private const DEFAULT_PAGE_SIZE = 10;
     private const MAX_PAGE_SIZE = 50;
     private const MAX_MENTIONED_CUSTOMERS = 20;
@@ -104,6 +108,102 @@ class QAService
 
         return $this->createQuestion($questionData);
     }
+
+    /**
+     * @return array<int, array{question:string,answer:string}>
+     */
+    public function getDefaultCarProductFaqs(array $productData = []): array
+    {
+        return [
+            [
+                'question' => '这款车品适配哪些车型？',
+                'answer' => '请以商品详情中的车型、年款、安装位置和尺寸说明为准。下单前可以把车型和年款发给客服复核，避免买错版本。',
+            ],
+            [
+                'question' => '安装需要专业工具吗？',
+                'answer' => '简单装饰类车品通常可自行安装；涉及固定件、电路、内饰拆装或安全部件的商品，建议由专业门店安装。',
+            ],
+            [
+                'question' => '会影响原车质保或安全功能吗？',
+                'answer' => '非破坏式安装一般不影响日常使用。涉及电路、气囊、雷达、摄像头或驾驶辅助区域时，请先确认安装方案并保留原车结构。',
+            ],
+            [
+                'question' => '可以退换吗？',
+                'answer' => '未安装、未改装且包装配件完整的商品可按平台售后规则处理；定制件、已安装或影响二次销售的商品请先联系售后确认。',
+            ],
+        ];
+    }
+
+    public function isCarProductData(array $productData): bool
+    {
+        $values = [];
+        $this->collectSearchValues($productData, $values);
+        $haystack = mb_strtolower(strip_tags(implode(' ', $values)));
+        if ($haystack === '') {
+            return false;
+        }
+
+        foreach ($this->getCarProductKeywords() as $keyword) {
+            if (str_contains($haystack, mb_strtolower($keyword))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<int, array{index:int,question_id:int,question:string,created:bool,updated:bool}>
+     */
+    public function ensureDefaultCarProductFaqs(int $productId, array $productData = []): array
+    {
+        if ($productId <= 0) {
+            return [];
+        }
+
+        if ($productData !== [] && !$this->isCarProductData($productData)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($this->getDefaultCarProductFaqs($productData) as $index => $faq) {
+            $questionText = trim((string) ($faq['question'] ?? ''));
+            $answerText = trim((string) ($faq['answer'] ?? ''));
+            if ($questionText === '') {
+                continue;
+            }
+
+            $question = $this->findSystemQuestionByText($productId, $questionText);
+            $created = false;
+            $updated = false;
+            if ($question === null) {
+                $question = $this->createSystemQuestion([
+                    'product_id' => $productId,
+                    'question' => $questionText,
+                    'answer' => $answerText,
+                    'display_name' => (string) __('系统推荐'),
+                ]);
+                $created = true;
+            } else {
+                $updated = $this->normalizeDefaultFaqQuestion($question, $answerText);
+            }
+
+            $questionId = (int) $question->getId();
+            if ($questionId <= 0) {
+                continue;
+            }
+
+            $result[] = [
+                'index' => $index,
+                'question_id' => $questionId,
+                'question' => $questionText,
+                'created' => $created,
+                'updated' => $updated,
+            ];
+        }
+
+        return $result;
+    }
     
     /**
      * 获取产品问题列表
@@ -121,6 +221,67 @@ class QAService
         return $this->applyQuestionSort($question)
             ->select()
             ->fetchArray();
+    }
+
+    public function getProductQuestionAdminList(int $productId, int $limit = 20): array
+    {
+        if ($productId <= 0) {
+            return [];
+        }
+
+        $question = $this->createQuestionModel()
+            ->clear()
+            ->where(Question::schema_fields_PRODUCT_ID, $productId)
+            ->order(Question::schema_fields_IS_RECOMMENDED, 'DESC')
+            ->order(Question::schema_fields_CREATED_AT, 'DESC')
+            ->order(Question::schema_fields_ID, 'DESC');
+        if ($limit > 0) {
+            $question->limit($limit);
+        }
+
+        return $question->select()->fetchArray();
+    }
+
+    /**
+     * @return array{total:int,pending:int,approved:int,rejected:int,recommended:int,system:int,customer:int,order:int,anonymous:int}
+     */
+    public function getProductQuestionSummary(int $productId): array
+    {
+        $summary = [
+            'total' => 0,
+            'pending' => 0,
+            'approved' => 0,
+            'rejected' => 0,
+            'recommended' => 0,
+            'system' => 0,
+            'customer' => 0,
+            'order' => 0,
+            'anonymous' => 0,
+        ];
+        if ($productId <= 0) {
+            return $summary;
+        }
+
+        foreach ($this->getProductQuestionAdminList($productId, 0) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $summary['total']++;
+            $status = (string) ($row[Question::schema_fields_STATUS] ?? '');
+            if (isset($summary[$status])) {
+                $summary[$status]++;
+            }
+            $sourceType = (string) ($row[Question::schema_fields_SOURCE_TYPE] ?? self::SOURCE_CUSTOMER);
+            if (isset($summary[$sourceType])) {
+                $summary[$sourceType]++;
+            }
+            if ((int) ($row[Question::schema_fields_IS_RECOMMENDED] ?? 0) === 1) {
+                $summary['recommended']++;
+            }
+        }
+
+        return $summary;
     }
 
     /**
@@ -411,6 +572,110 @@ class QAService
         return min(self::MAX_PAGE_SIZE, max(1, $pageSize));
     }
 
+    private function findSystemQuestionByText(int $productId, string $questionText): ?Question
+    {
+        $row = $this->createQuestionModel()
+            ->clear()
+            ->where(Question::schema_fields_PRODUCT_ID, $productId)
+            ->where(Question::schema_fields_SOURCE_TYPE, self::SOURCE_SYSTEM)
+            ->where(Question::schema_fields_QUESTION, $questionText)
+            ->find()
+            ->fetch();
+
+        $questionId = (int) ($row[Question::schema_fields_ID] ?? 0);
+        if ($questionId <= 0) {
+            return null;
+        }
+
+        $question = $this->createQuestionModel();
+        $question->load($questionId);
+
+        return $question->getId() ? $question : null;
+    }
+
+    private function normalizeDefaultFaqQuestion(Question $question, string $answerText): bool
+    {
+        $changed = false;
+        $expected = [
+            Question::schema_fields_STATUS => self::STATUS_APPROVED,
+            Question::schema_fields_SOURCE_TYPE => self::SOURCE_SYSTEM,
+            Question::schema_fields_IS_RECOMMENDED => 1,
+            Question::schema_fields_IS_ANONYMOUS => 0,
+            Question::schema_fields_DISPLAY_NAME => (string) __('系统推荐'),
+        ];
+        foreach ($expected as $field => $value) {
+            if ((string) $question->getData($field) !== (string) $value) {
+                $question->setData($field, $value);
+                $changed = true;
+            }
+        }
+
+        if ($answerText !== '' && trim((string) $question->getData(Question::schema_fields_ANSWER)) !== $answerText) {
+            $question->setData(Question::schema_fields_ANSWER, $answerText);
+            $changed = true;
+        }
+
+        if (!$changed) {
+            return false;
+        }
+
+        $question->setData(Question::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))->save();
+
+        return true;
+    }
+
+    /**
+     * @param array<int, string> $values
+     */
+    private function collectSearchValues(mixed $value, array &$values): void
+    {
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                $this->collectSearchValues($item, $values);
+            }
+            return;
+        }
+
+        if (is_scalar($value)) {
+            $text = trim((string) $value);
+            if ($text !== '') {
+                $values[] = $text;
+            }
+        }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function getCarProductKeywords(): array
+    {
+        return [
+            'automotive',
+            'car-electronics',
+            'car-decor',
+            'car-care',
+            'car-seats',
+            'car-parts',
+            'vehicle',
+            'motor',
+            'tesla',
+            'model 3',
+            'model3',
+            'dashcam',
+            '汽车',
+            '车载',
+            '车品',
+            '车型',
+            '车模',
+            '车饰',
+            '车内',
+            '座椅',
+            '脚垫',
+            '行车记录仪',
+            '特斯拉',
+        ];
+    }
+
     /**
      * @return array{has_order: bool, order_id: int}
      */
@@ -547,21 +812,10 @@ class QAService
 
     private function buildQuestionTargetUrl(int $productId, int $questionId): string
     {
-        $path = '/qa?product_id=' . $productId . '&question_id=' . $questionId;
-        $url = $path;
-        $urlBuilder = $this->getUrlBuilder();
-        if ($urlBuilder) {
-            try {
-                $url = (string) $urlBuilder->getUrl('qa', [
-                    'product_id' => $productId,
-                    'question_id' => $questionId,
-                ]);
-            } catch (\Throwable) {
-                $url = $path;
-            }
-        }
-
-        return $url . '#qa-question-' . $questionId;
+        return '/' . self::FRONTEND_ROUTE
+            . '?product_id=' . $productId
+            . '&question_id=' . $questionId
+            . '#qa-question-' . $questionId;
     }
 
     private function createQuestionModel(): Question
@@ -592,16 +846,4 @@ class QAService
         }
     }
 
-    private function getUrlBuilder(): ?Url
-    {
-        if ($this->url) {
-            return $this->url;
-        }
-
-        try {
-            return ObjectManager::getInstance(Url::class);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
 }

@@ -500,7 +500,11 @@ $orderJsText = [
     function renderOrderOptionSwatch(option) {
         var type = String(option && option.swatch_type ? option.swatch_type : '').trim().toLowerCase();
         var value = String(option && option.swatch_value ? option.swatch_value : '').trim();
-        if (!type || !value) {
+        var optionImage = String(option && option.option_image ? option.option_image : '').trim();
+        if (!type && optionImage) {
+            type = 'image';
+        }
+        if (!type || (!value && !optionImage)) {
             return '';
         }
         if (type === 'color') {
@@ -510,7 +514,7 @@ $orderJsText = [
                 : '';
         }
         if (type === 'image') {
-            var imageUrl = sanitizeOrdersImageUrl(value);
+            var imageUrl = sanitizeOrdersImageUrl(value || optionImage);
             return imageUrl
                 ? '<span class="weshop-product-option__swatch weshop-product-option__swatch--image"><img src="' + escapeOrdersHtml(imageUrl) + '" alt=""></span>'
                 : '';

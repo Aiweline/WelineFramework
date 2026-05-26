@@ -104,6 +104,16 @@ flowchart TB
 
 **验收**：压力测试 + 内存曲线（避免 WeakMap 泄漏：Fiber 结束必须 unregister）。
 
+### P3.1 — ObjectManager / w_obj 对象生命周期规则
+
+- `w_obj()` API 不变，继续是 `ObjectManager::getInstance()` 包装；在 WLS 持久模式下，共享实例桶由 `ObjectManager` 按当前 `Fiber` 隔离。
+- 请求响应构建完成后，`WlsRuntime::reset()` 在 `StateManager::reset()` 与 reset event 完成之后调用 `ObjectManager::clearCurrentFiberInstances()`，只释放当前请求 Fiber 的 normal/origin 实例桶。
+- 该清理不触碰进程级实例，也不清理反射、解析类名、构造参数等 metadata 缓存；内存压力清理由 `WorkerResponseMemoryGuard::compact()` 处理可重建缓存。
+- `new` 允许用于短生命周期值对象、DTO、局部临时对象和测试夹具。
+- 服务对象优先构造注入或 `w_obj()`；需要明确新实例时使用 `ObjectManager::make()` 或 `ObjectManager::getInstance(..., shared: false)`。
+- Model/Controller/Observer/Request/Response/Session 等请求态对象禁止依赖进程级缓存复用；新增 WLS 敏感路径时必须审计是否会跨请求残留。
+- 不做全仓批量替换 direct `new`。只在 WLS 请求态、长连接、后台任务、全局缓存写入等敏感路径逐个审计和修改。
+
 ---
 
 ## 4. Worker / Runtime 边界（接口草案）

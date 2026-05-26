@@ -34,6 +34,20 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
+    public function testMatchesApiAppTokenRoutes(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        foreach (['token', 'refresh', 'revoke'] as $action) {
+            $this->assertTrue($matcher->matches($this->createRequestMock(
+                'api/rest/v1/apps/' . $action,
+                'Apps',
+                'post' . ucfirst($action),
+                'Weline\\Api\\Api\\Rest\\V1\\Apps'
+            )), $action);
+        }
+    }
+
     public function testMatchesWeShopContractChallengeVerifyRoute(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();

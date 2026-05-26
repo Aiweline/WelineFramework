@@ -147,7 +147,7 @@ class OrderAdminPageDataService
     }
 
     /**
-     * @return array<int, array<string, string>>
+     * @return array<int, array<string, mixed>>
      */
     private function normalizeOptions(mixed $rawOptions): array
     {
@@ -212,16 +212,20 @@ class OrderAdminPageDataService
                 }
             }
 
-            $code = \trim((string) ($option['code'] ?? ''));
-            if ($code !== '') {
-                $normalized['code'] = $code;
+            foreach (['code', 'attribute_code', 'option_code', 'swatch_type', 'swatch_value', 'option_image'] as $stringKey) {
+                $stringValue = \trim((string) ($option[$stringKey] ?? ''));
+                if ($stringValue !== '') {
+                    $normalized[$stringKey] = $stringValue;
+                }
             }
 
-            $swatchType = \trim((string) ($option['swatch_type'] ?? ''));
-            $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
-            if ($swatchType !== '' && $swatchValue !== '') {
-                $normalized['swatch_type'] = $swatchType;
-                $normalized['swatch_value'] = $swatchValue;
+            if (($normalized['swatch_type'] ?? '') === 'image') {
+                if (($normalized['swatch_value'] ?? '') === '' && ($normalized['option_image'] ?? '') !== '') {
+                    $normalized['swatch_value'] = $normalized['option_image'];
+                }
+                if (($normalized['option_image'] ?? '') === '' && ($normalized['swatch_value'] ?? '') !== '') {
+                    $normalized['option_image'] = $normalized['swatch_value'];
+                }
             }
 
             $options[] = $normalized;

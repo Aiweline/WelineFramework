@@ -16,7 +16,12 @@
 评价已提交，审核通过后会公开展示。,评价已提交，审核通过后会公开展示。
 "Product ID cannot be empty.",产品ID不能为空。
 "Product Reviews",商品评论
+评价已创建,评价已创建
+"商品评价创建后触发，负载包含 review、review_id、product_id、customer_id、rating、status。","商品评价创建后触发，负载包含 review、review_id、product_id、customer_id、rating、status。"
+评价状态已变更,评价状态已变更
+"评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。","评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。"
 "Unsupported review provider operation: %{1}","Unsupported review provider operation: %{1}"
+"Review form token prepared.","Review form token prepared."
 "Please sign in before replying.","Please sign in before replying."
 "Review and reply content are required.","Review and reply content are required."
 "Unable to submit reply right now.","Unable to submit reply right now."
@@ -27,9 +32,12 @@
 未查询到该商品订单，已选择匿名评论。,未查询到该商品订单，已选择匿名评论。
 "Review Query","Review Query"
 "Provides frontend review operations through the worker API.","Provides frontend review operations through the worker API."
+"Prepare a review form token only when the customer starts writing a review.","Prepare a review form token only when the customer starts writing a review."
 点击写评论时自动判断本次评价方式；未登录前端直接选择匿名，已登录才查询是否购买过该商品。,点击写评论时自动判断本次评价方式；未登录前端直接选择匿名，已登录才查询是否购买过该商品。
 "Reply to a product review. Mentions such as @customer:123 notify the mentioned customer.","Reply to a product review. Mentions such as @customer:123 notify the mentioned customer."
 提交商品评价，匿名模式允许游客提交，下单后评论模式要求登录并购买过该商品。,提交商品评价，匿名模式允许游客提交，下单后评论模式要求登录并购买过该商品。
+Anonymous,匿名用户
+"Review video","Review video"
 "Product review tab content",商品评论标签内容
 "Render the customer review block inside product detail tabs.",在商品详情标签中渲染客户评论模块。
 "Review Page Hooks",评论页面扩展位
@@ -47,7 +55,6 @@ Rejected,已拒绝
 "5 Stars",五星
 下单后评论,下单后评论
 匿名评论,匿名评论
-Anonymous,匿名用户
 评价项名称不能为空,评价项名称不能为空
 新增评价项需要同时填写编码和名称,新增评价项需要同时填写编码和名称
 评价项编码已存在,评价项编码已存在
@@ -55,7 +62,9 @@ Anonymous,匿名用户
 "Review does not exist or is not visible.","Review does not exist or is not visible."
 "Reply target does not exist.","Reply target does not exist."
 "Customer #%{1}","Customer #%{1}"
+"You were mentioned in a product review reply","You were mentioned in a product review reply"
 "Your review has a new reply","Your review has a new reply"
+"Customer %{1} mentioned you in a product review reply.","Customer %{1} mentioned you in a product review reply."
 "Customer %{1} replied in a product review.","Customer %{1} replied in a product review."
 Customer,Customer
 匿名用户,匿名用户
@@ -93,10 +102,48 @@ Actions,操作
 View,查看
 评价,评价
 当前产品,当前产品
+正在确认是否可以按订单评价...,正在确认是否可以按订单评价...
+当前会按匿名评论提交；审核通过前，这条评价只会在当前浏览器中显示。,当前会按匿名评论提交；审核通过前，这条评价只会在当前浏览器中显示。
+当前会按下单后评论提交，系统已确认你购买过该商品。,当前会按下单后评论提交，系统已确认你购买过该商品。
+未查询到该商品订单，已自动切换为匿名评论。,未查询到该商品订单，已自动切换为匿名评论。
+待审核,待审核
+仅当前浏览器可见,仅当前浏览器可见
+已验证购买,已验证购买
+评分,评分
+登录后评论,登录后评论
+登录失败，请检查用户名和密码。,登录失败，请检查用户名和密码。
+请输入用户名或邮箱。,请输入用户名或邮箱。
+请输入密码。,请输入密码。
+Translate,Translate
+Translating...,Translating...
+"Show original","Show original"
+"Show translation","Show translation"
+"Browser translation is unavailable in this Chrome session.","Browser translation is unavailable in this Chrome session."
+"This comment already matches the current language.","This comment already matches the current language."
 "Customer Voices",买家声音
 "Latest Reviews",最新评论
+我要评论,我要评论
 "View All Reviews",查看全部评论
+点击我要评论后自动判断评价方式,点击我要评论后自动判断评价方式
+未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。,未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。
+star,star
+不评分,不评分
+Title,标题
+"Write a headline for your review","Write a headline for your review"
+Review,Review
+"Describe your experience with this product","Describe your experience with this product"
+图片链接,图片链接
+每行一个图片链接,每行一个图片链接
+视频链接,视频链接
+每行一个视频链接,每行一个视频链接
+"Submit review","Submit review"
 "No product reviews yet. Be the first to share your experience.",暂无商品评论，欢迎成为第一个分享体验的用户。
+登录成功后会自动刷新评价资格。,登录成功后会自动刷新评价资格。
+关闭,关闭
+用户名或邮箱,用户名或邮箱
+密码,密码
+取消,取消
+登录并继续,登录并继续
 评论管理,评论管理
 已配置评价项,已配置评价项
 返回评论列表,返回评论列表
@@ -116,10 +163,8 @@ View,查看
 包装体验,包装体验
 保存后立即启用,保存后立即启用
 启用的评价项会展示在前台评价表单中，买家提交后会随评价一起保存并展示在后台详情和产品评价区。,启用的评价项会展示在前台评价表单中，买家提交后会随评价一起保存并展示在后台详情和产品评价区。
-取消,取消
 保存配置,保存配置
 WeShop,WeShop
-Review,Review
 "Review List",评论列表
 "Filter Reviews",筛选评论
 "Product ID",产品ID
@@ -132,7 +177,6 @@ Star(s),星
 "Apply Filters",应用筛选
 Reset,重置
 "No reviews found",未找到评论
-Title,标题
 图片,图片
 Previous,上一页
 Next,下一页
@@ -156,4 +200,3 @@ Detail,Detail
 "Customer Name",客户姓名
 Email,邮箱
 Metadata,元数据
-评论视频,评论视频

@@ -21,8 +21,11 @@ class ReviewPageDataService
     /**
      * @return array<string, mixed>
      */
-    public function build(int $productId, int $page, int $pageSize): array
+    public function build(int $productId, int $page, int $pageSize, int $targetReviewId = 0, int $targetReplyId = 0): array
     {
+        if ($targetReviewId > 0) {
+            $page = $this->reviewService->resolveReviewPage($productId, $targetReviewId, $pageSize, $page);
+        }
         $result = $this->reviewService->getProductReviews($productId, $page, $pageSize);
         $reviewRows = is_array($result['items'] ?? null) ? $result['items'] : [];
         $reviewIds = $this->extractReviewIds($reviewRows);
@@ -37,7 +40,7 @@ class ReviewPageDataService
 
         return [
             'product' => $product ? $product->getData() : ['product_id' => $productId],
-            'reviews' => $this->mapReviews($reviewRows, $replyMap),
+            'reviews' => $this->mapReviews($reviewRows, $replyMap, $targetReviewId, $targetReplyId),
             'total' => $total,
             'average_rating' => (float) $this->reviewService->getAverageRating($productId),
             'rating_options' => $this->getRatingOptionService()->getEnabledOptions(),
@@ -49,6 +52,8 @@ class ReviewPageDataService
             'page_count' => $pageCount,
             'has_previous' => $page > 1,
             'has_next' => $page < $pageCount,
+            'target_review_id' => $targetReviewId,
+            'target_reply_id' => $targetReplyId,
             'pagination' => $pagination,
         ];
     }
@@ -58,7 +63,7 @@ class ReviewPageDataService
      * @param array<int, array<int, array<string, mixed>>> $replyMap
      * @return array<int, array<string, mixed>>
      */
-    protected function mapReviews(array $reviews, array $replyMap = []): array
+    protected function mapReviews(array $reviews, array $replyMap = [], int $targetReviewId = 0, int $targetReplyId = 0): array
     {
         $mapped = [];
         foreach ($reviews as $review) {
@@ -67,8 +72,19 @@ class ReviewPageDataService
             }
 
             $reviewId = (int) ($review['review_id'] ?? $review['id'] ?? 0);
+            $replies = $replyMap[$reviewId] ?? [];
+            if ($targetReplyId > 0) {
+                foreach ($replies as $index => $reply) {
+                    if (!is_array($reply)) {
+                        continue;
+                    }
+                    $reply['is_target'] = (int) ($reply['reply_id'] ?? 0) === $targetReplyId;
+                    $replies[$index] = $reply;
+                }
+            }
             $mapped[] = [
                 'review_id' => $reviewId,
+                'customer_id' => (int) ($review['customer_id'] ?? 0),
                 'customer_name' => (string) ($review['customer_name'] ?? $review['name'] ?? __('Anonymous')),
                 'rating' => (float) ($review['rating'] ?? 0),
                 'title' => (string) ($review['title'] ?? ''),
@@ -77,7 +93,8 @@ class ReviewPageDataService
                 'rating_scores' => $this->reviewService->decodeRatingScores($review['rating_scores'] ?? ''),
                 'created_at' => (string) ($review['created_at'] ?? ''),
                 'verified_purchase' => !empty($review['verified_purchase']) || (int) ($review['customer_id'] ?? 0) > 0,
-                'replies' => $replyMap[$reviewId] ?? [],
+                'is_target' => $targetReviewId > 0 && $reviewId === $targetReviewId && $targetReplyId <= 0,
+                'replies' => $replies,
             ];
         }
 

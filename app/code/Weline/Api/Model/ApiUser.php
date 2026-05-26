@@ -24,6 +24,16 @@ use Weline\Framework\Manager\ObjectManager;
 #[Index(name: 'idx_w_api_user_user_agent_restriction_enabled', columns: ['user_agent_restriction_enabled'], comment: 'UA限制')]
 class ApiUser extends Model
 {
+    public const DEFAULT_TOKEN_EXPIRE_TIME = 604800;
+    public const DEFAULT_REFRESH_TOKEN_EXPIRE_TIME = 2592000;
+    public const DEFAULT_IS_ENABLED = 1;
+    public const DEFAULT_IS_DELETED = 0;
+    public const DEFAULT_IP_WHITELIST_ENABLED = 0;
+    public const DEFAULT_ALLOWED_IPS = '';
+    public const DEFAULT_USER_AGENT_RESTRICTION_ENABLED = 0;
+    public const DEFAULT_ALLOWED_USER_AGENTS = '';
+    public const DEFAULT_IS_SANDBOX = 0;
+
     public const fields_ID = 'user_id';
     public string $table = 'm_api_user';
     /** 主键列名，避免 Schema 解析时把父类 id 一并建表导致 PostgreSQL 报 multiple primary keys */
@@ -439,6 +449,12 @@ class ApiUser extends Model
      */
     public function save_before()
     {
+        foreach ($this->defaultBootstrapValues() as $field => $default) {
+            if ($this->getData($field) === null) {
+                $this->setData($field, $default);
+            }
+        }
+
         // 如果是新用户且没有API Key，自动生成
         if (!$this->getId() && empty($this->getApiKey())) {
             $this->autoGenerateApiCredentials();
@@ -453,5 +469,20 @@ class ApiUser extends Model
         }
         
         parent::save_before();
+    }
+
+    private function defaultBootstrapValues(): array
+    {
+        return [
+            self::schema_fields_token_expire_time => self::DEFAULT_TOKEN_EXPIRE_TIME,
+            self::schema_fields_refresh_token_expire_time => self::DEFAULT_REFRESH_TOKEN_EXPIRE_TIME,
+            self::schema_fields_is_enabled => self::DEFAULT_IS_ENABLED,
+            self::schema_fields_is_deleted => self::DEFAULT_IS_DELETED,
+            self::schema_fields_ip_whitelist_enabled => self::DEFAULT_IP_WHITELIST_ENABLED,
+            self::schema_fields_allowed_ips => self::DEFAULT_ALLOWED_IPS,
+            self::schema_fields_user_agent_restriction_enabled => self::DEFAULT_USER_AGENT_RESTRICTION_ENABLED,
+            self::schema_fields_allowed_user_agents => self::DEFAULT_ALLOWED_USER_AGENTS,
+            self::schema_fields_is_sandbox => self::DEFAULT_IS_SANDBOX,
+        ];
     }
 }

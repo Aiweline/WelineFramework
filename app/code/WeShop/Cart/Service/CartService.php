@@ -10,6 +10,7 @@ use Weline\Eav\Model\EavAttribute\Option;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Cart\Model\Cart;
+use WeShop\Product\Helper\HanfuDemoOptionImageProvider;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\Product\OptionId as ProductOptionId;
 
@@ -413,16 +414,20 @@ class CartService implements CartTrashInterface
                 }
             }
 
-            $code = \trim((string) ($option['code'] ?? ''));
-            if ($code !== '') {
-                $normalized['code'] = $code;
+            foreach (['code', 'attribute_code', 'option_code', 'swatch_type', 'swatch_value', 'option_image'] as $stringKey) {
+                $stringValue = \trim((string) ($option[$stringKey] ?? ''));
+                if ($stringValue !== '') {
+                    $normalized[$stringKey] = $stringValue;
+                }
             }
 
-            $swatchType = \trim((string) ($option['swatch_type'] ?? ''));
-            $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
-            if ($swatchType !== '' && $swatchValue !== '') {
-                $normalized['swatch_type'] = $swatchType;
-                $normalized['swatch_value'] = $swatchValue;
+            if (($normalized['swatch_type'] ?? '') === 'image') {
+                if (($normalized['swatch_value'] ?? '') === '' && ($normalized['option_image'] ?? '') !== '') {
+                    $normalized['swatch_value'] = $normalized['option_image'];
+                }
+                if (($normalized['option_image'] ?? '') === '' && ($normalized['swatch_value'] ?? '') !== '') {
+                    $normalized['option_image'] = $normalized['swatch_value'];
+                }
             }
 
             $options[] = $normalized;
@@ -628,10 +633,14 @@ class CartService implements CartTrashInterface
                 continue;
             }
 
+            $optionImage = \trim((string) ($data['option_image'] ?? ''));
             $swatch = [
                 'swatch_type' => $swatchType,
                 'swatch_value' => $swatchValue,
             ];
+            if ($optionImage !== '') {
+                $swatch['option_image'] = $optionImage;
+            }
             $swatchByOptionId[(int) $optionId] = $swatch;
 
             $code = \strtolower(\trim((string) ($data['code'] ?? '')));
@@ -663,6 +672,9 @@ class CartService implements CartTrashInterface
 
             $option['swatch_type'] = $swatch['swatch_type'];
             $option['swatch_value'] = $swatch['swatch_value'];
+            if (isset($swatch['option_image'])) {
+                $option['option_image'] = $swatch['option_image'];
+            }
         }
         unset($option);
 
@@ -670,7 +682,7 @@ class CartService implements CartTrashInterface
     }
 
     /**
-     * @return array{by_option_id: array<int, array{swatch_type: string, swatch_value: string}>, by_code: array<string, array{swatch_type: string, swatch_value: string}>}
+     * @return array{by_option_id: array<int, array<string, string>>, by_code: array<string, array<string, string>>}
      */
     private function buildDemoOptionSwatchMap(int $productId): array
     {
@@ -694,14 +706,7 @@ class CartService implements CartTrashInterface
             return $empty;
         }
 
-        $swatches = [
-            900101 => ['code' => 'black', 'swatch_type' => 'color', 'swatch_value' => '#111827'],
-            900102 => ['code' => 'navy', 'swatch_type' => 'color', 'swatch_value' => '#1e3a8a'],
-            900103 => ['code' => 'beige', 'swatch_type' => 'color', 'swatch_value' => '#d6b98c'],
-            900201 => ['code' => 'm', 'swatch_type' => 'text', 'swatch_value' => 'M'],
-            900202 => ['code' => 'l', 'swatch_type' => 'text', 'swatch_value' => 'L'],
-            900203 => ['code' => 'xl', 'swatch_type' => 'text', 'swatch_value' => 'XL'],
-        ];
+        $swatches = HanfuDemoOptionImageProvider::swatchRows();
 
         $result = $empty;
         foreach ($swatches as $optionId => $swatch) {
@@ -709,6 +714,9 @@ class CartService implements CartTrashInterface
                 'swatch_type' => $swatch['swatch_type'],
                 'swatch_value' => $swatch['swatch_value'],
             ];
+            if (isset($swatch['option_image'])) {
+                $snapshot['option_image'] = $swatch['option_image'];
+            }
             $result['by_option_id'][(int) $optionId] = $snapshot;
             $result['by_code'][(string) $swatch['code']] = $snapshot;
         }
@@ -788,6 +796,8 @@ class CartService implements CartTrashInterface
                 'attribute_id' => $attributeId,
                 'option_id' => $optionId,
                 'code' => (string) ($options[$optionId]['code'] ?? ''),
+                'attribute_code' => (string) ($attributes[$attributeId]['code'] ?? ''),
+                'option_code' => (string) ($options[$optionId]['code'] ?? ''),
             ];
 
             $swatchType = (string) ($options[$optionId]['swatch_type'] ?? '');
@@ -795,6 +805,9 @@ class CartService implements CartTrashInterface
             if ($swatchType !== '' && $swatchValue !== '') {
                 $snapshot['swatch_type'] = $swatchType;
                 $snapshot['swatch_value'] = $swatchValue;
+                if ($swatchType === 'image') {
+                    $snapshot['option_image'] = $swatchValue;
+                }
             }
 
             $snapshots[$productId][] = $snapshot;
@@ -851,7 +864,7 @@ class CartService implements CartTrashInterface
 
     /**
      * @param array<int, int> $optionIds
-     * @return array<int, array{value: string, code: string, swatch_type?: string, swatch_value?: string}>
+     * @return array<int, array<string, string>>
      */
     private function loadOptionValueLabels(array $optionIds): array
     {
@@ -889,6 +902,7 @@ class CartService implements CartTrashInterface
             if ($swatchImage !== '') {
                 $optionData['swatch_type'] = 'image';
                 $optionData['swatch_value'] = $swatchImage;
+                $optionData['option_image'] = $swatchImage;
             } elseif ($swatchColor !== '') {
                 $optionData['swatch_type'] = 'color';
                 $optionData['swatch_value'] = $swatchColor;

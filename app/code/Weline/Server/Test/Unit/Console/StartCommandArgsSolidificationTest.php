@@ -27,6 +27,116 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertTrue((bool)($config['no_ssl'] ?? false));
     }
 
+    public function testDefaultPortPromotionOnlyAppliesWhenSslEnabled(): void
+    {
+        $start = $this->createProbe();
+
+        self::assertSame(443, $start->normalizePortForSslState(80, true));
+        self::assertSame(80, $start->normalizePortForSslState(80, true, true));
+        self::assertSame(80, $start->normalizePortForSslState(80, false));
+        self::assertSame(9981, $start->normalizePortForSslState(9981, true));
+    }
+
+    public function testStartupCertificateFilesReenableHttpsForReusablePublicHostCertificate(): void
+    {
+        $certDir = \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'wls-start-cert-' . \str_replace('.', '', \uniqid('', true)) . DIRECTORY_SEPARATOR;
+        \mkdir($certDir, 0777, true);
+        $certPath = $certDir . 'fullchain.pem';
+        $keyPath = $certDir . 'privkey.pem';
+        \file_put_contents($certPath, 'unit-cert');
+        \file_put_contents($keyPath, 'unit-key');
+
+        try {
+            $sslService = $this->createMock(SslCertificateService::class);
+            $sslService->expects($this->once())
+                ->method('getCertificateDir')
+                ->with('pre.example.com')
+                ->willReturn($certDir);
+            $sslService->expects($this->once())
+                ->method('canReuseConfiguredCertificate')
+                ->with($certPath, $keyPath)
+                ->willReturn(true);
+            $sslService->expects($this->once())
+                ->method('certificateMatchesHost')
+                ->with($certPath, 'pre.example.com')
+                ->willReturn(true);
+            $sslService->expects($this->once())
+                ->method('syncCertificateRecordFromFiles')
+                ->with('pre.example.com', $certPath, $keyPath, 0, true, '', false);
+            $sslService->expects($this->once())
+                ->method('regenerateCertificateMap')
+                ->with(false);
+            $sslService->expects($this->once())
+                ->method('parseCertificate')
+                ->with($certPath)
+                ->willReturn(['issuer' => 'Unit CA', 'expires_at' => '2026-12-31 00:00:00']);
+
+            $result = $this->createProbe()->useStartupCertificateFiles($sslService, 'pre.example.com', 'pre.example.com');
+
+            self::assertIsArray($result);
+            self::assertTrue((bool)($result['success'] ?? false));
+            self::assertTrue((bool)($result['ssl_enabled'] ?? false));
+            self::assertSame($certPath, $result['cert_path'] ?? null);
+            self::assertSame($keyPath, $result['key_path'] ?? null);
+        } finally {
+            @\unlink($certPath);
+            @\unlink($keyPath);
+            @\rmdir($certDir);
+        }
+    }
+
+    public function testPublicHostResolutionGuardAcceptsMatchingServerIp(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('isLocalDomain')->with('pre.example.com')->willReturn(false);
+        $start = $this->createProbe(
+            null,
+            [],
+            ['pre.example.com' => ['203.0.113.10']],
+            ['203.0.113.10']
+        );
+
+        $result = $start->validatePublicHost($sslService, 'pre.example.com');
+
+        self::assertTrue((bool)($result['success'] ?? false));
+        self::assertSame(['203.0.113.10'], $result['resolved_ips'] ?? null);
+        self::assertSame(['203.0.113.10'], $result['server_ips'] ?? null);
+    }
+
+    public function testPublicHostResolutionGuardRejectsOffServerDns(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('isLocalDomain')->with('pre.example.com')->willReturn(false);
+        $start = $this->createProbe(
+            null,
+            [],
+            ['pre.example.com' => ['203.0.113.10']],
+            ['198.51.100.20']
+        );
+
+        $result = $start->validatePublicHost($sslService, 'pre.example.com');
+
+        self::assertFalse((bool)($result['success'] ?? true));
+        self::assertStringContainsString('未解析到当前服务器 IP', (string)($result['message'] ?? ''));
+    }
+
+    public function testPublicHostResolutionGuardSkipsLocalDomains(): void
+    {
+        $sslService = $this->createMock(SslCertificateService::class);
+        $sslService->method('isLocalDomain')->with('unit-test.weline.test')->willReturn(true);
+        $start = $this->createProbe(
+            null,
+            [],
+            ['unit-test.weline.test' => ['203.0.113.10']],
+            []
+        );
+
+        $result = $start->validatePublicHost($sslService, 'unit-test.weline.test');
+
+        self::assertTrue((bool)($result['success'] ?? false));
+        self::assertTrue((bool)($result['skipped'] ?? false));
+    }
+
     public function testNoDaemonRunsForegroundUnlessRestartRequested(): void
     {
         $start = $this->createProbe();
@@ -180,12 +290,17 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertInstanceOf(ServerInstanceManager::class, $start->readInstanceManager());
     }
 
-    private function createProbe(?array $savedConfig = null, array $envConfig = []): StartConfigProbe
+    private function createProbe(
+        ?array $savedConfig = null,
+        array $envConfig = [],
+        array $publicHostIps = [],
+        array $currentServerIps = []
+    ): StartConfigProbe
     {
         $sslServiceMock = $this->createMock(SslCertificateService::class);
         ObjectManager::setInstance(SslCertificateService::class, $sslServiceMock);
 
-        return new StartConfigProbe($savedConfig, $envConfig);
+        return new StartConfigProbe($savedConfig, $envConfig, $publicHostIps, $currentServerIps);
     }
 }
 
@@ -193,7 +308,9 @@ final class StartConfigProbe extends Start
 {
     public function __construct(
         private readonly ?array $savedConfig = null,
-        private readonly array $envConfig = []
+        private readonly array $envConfig = [],
+        private readonly array $publicHostIps = [],
+        private readonly array $currentServerIps = []
     ) {
     }
 
@@ -205,6 +322,36 @@ final class StartConfigProbe extends Start
     public function resolveListenHost(string $host): string
     {
         return $this->resolveServerListenHost($host);
+    }
+
+    public function normalizePortForSslState(int $port, bool $sslEnabled, bool $portExplicit = false): int
+    {
+        return $this->normalizeDefaultPortForSslState($port, $sslEnabled, $portExplicit);
+    }
+
+    public function useStartupCertificateFiles(
+        SslCertificateService $sslService,
+        string $domain,
+        string $syncDomain
+    ): ?array {
+        return $this->tryUseStartupCertificateFiles($sslService, $domain, $syncDomain);
+    }
+
+    public function validatePublicHost(SslCertificateService $sslService, string $host): array
+    {
+        return $this->validatePublicHostResolvesToCurrentServer($host, $sslService);
+    }
+
+    protected function resolvePublicHostIps(string $host): array
+    {
+        $host = \strtolower(\trim($host));
+
+        return $this->publicHostIps[$host] ?? [];
+    }
+
+    protected function detectCurrentServerIps(): array
+    {
+        return $this->currentServerIps;
     }
 
     protected function getDefaultHost(): string

@@ -1,7 +1,7 @@
 <?php
 /**
- * AI 管理顶部 Tab 栏（模型 | 适配器 | 供应商账户）
- * @var string $activeTab 当前 Tab：model | adapter | account
+ * AI 管理顶部 Tab 栏（模型 | 适配器 | 技能 | 风格 | 供应商账户）
+ * @var string $activeTab 当前 Tab：model | adapter | skill | style | account
  * @var \Weline\Framework\View\Template $this
  */
 $activeTab = $activeTab ?? 'model';
@@ -13,8 +13,8 @@ $providerUrl = $this->getBackendUrl('ai/backend/provider');
 ?>
 <style>
 .weline-ai-manager-tabs-wrap { margin-bottom: 1rem; }
-.weline-ai-manager-tabs-wrap .nav-tabs { border-bottom: 1px solid var(--backend-color-border-default); background: var(--backend-color-card-bg); padding: 0 1rem; border-radius: 8px 8px 0 0; }
-.weline-ai-manager-tabs-wrap .nav-tabs .nav-link { border: none; color: var(--backend-color-text-secondary); padding: 1rem 1.25rem; font-weight: 500; border-bottom: 3px solid transparent; text-decoration: none; }
+.weline-ai-manager-tabs-wrap .nav-tabs { border-bottom: 1px solid var(--backend-color-border-default); background: var(--backend-color-card-bg); padding: 0 1rem; border-radius: 8px 8px 0 0; gap: 0.25rem; flex-wrap: nowrap; overflow-x: auto; }
+.weline-ai-manager-tabs-wrap .nav-tabs .nav-link { border: none; color: var(--backend-color-text-secondary); padding: 0.875rem 1rem; font-weight: 500; border-bottom: 3px solid transparent; text-decoration: none; white-space: nowrap; }
 .weline-ai-manager-tabs-wrap .nav-tabs .nav-link:hover { color: var(--backend-color-primary); }
 .weline-ai-manager-tabs-wrap .nav-tabs .nav-link.active { color: var(--backend-color-primary); border-bottom-color: var(--backend-color-primary); background: transparent; }
 </style>
@@ -32,7 +32,7 @@ $providerUrl = $this->getBackendUrl('ai/backend/provider');
         </li>
         <li class="nav-item">
             <a class="nav-link <?= $activeTab === 'skill' ? 'active' : '' ?>" href="<?= htmlspecialchars($skillUrl) ?>">
-                <i class="mdi mdi-shape-outline me-1"></i><lang>Skills</lang>
+                <i class="mdi mdi-shape-outline me-1"></i><lang>技能</lang>
             </a>
         </li>
         <li class="nav-item">

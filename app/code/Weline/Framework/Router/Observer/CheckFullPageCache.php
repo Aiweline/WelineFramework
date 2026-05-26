@@ -21,6 +21,10 @@ class CheckFullPageCache implements ObserverInterface
             return;
         }
 
+        if ((\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER) || Env::system('maintenance')) {
+            return;
+        }
+
         $routerCacheEnabled = Env::get('cache.status.router_cache', 1);
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
         if (!$routerCacheEnabled || !$frontendCacheEnabled) {

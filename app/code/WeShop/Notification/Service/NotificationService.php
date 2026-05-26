@@ -70,6 +70,7 @@ class NotificationService
             'membership' => (string) __('Membership'),
             'promotion' => (string) __('Promotion'),
             'qa_mention' => (string) __('商品问答提及'),
+            'review_reply' => (string) __('商品评价回复'),
         ];
 
         $rows = $this->createNotificationModel()
