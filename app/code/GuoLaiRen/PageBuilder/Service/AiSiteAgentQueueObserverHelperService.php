@@ -137,11 +137,12 @@ class AiSiteAgentQueueObserverHelperService
             $result = (string)__('…（以下仅显示末尾约 %{n} 字符）', ['n' => (string)$max]) . "\n" . \substr($result, -$max);
         }
 
+        // panel payload 只输出权威 4 字段（queue_id / snapshot / process / result_log）。
+        // queue 状态/状态别名（status / queue_status / job_status）由 AiSiteSsePayloadNormalizer
+        // 在 SSE 顶层 payload 中统一镜像；前端通过 queue_info.snapshot.status 或顶层 queue_status 读取。
+        // 顺序稳定：前端依赖键顺序做 JSON 输出确定性比对。
         return [
             'queue_id' => (int)($snapshot['queue_id'] ?? 0),
-            'status' => (string)($snapshot['status'] ?? ''),
-            'queue_status' => (string)($snapshot['status'] ?? ''),
-            'job_status' => (string)($snapshot['job_status'] ?? ''),
             'snapshot' => $snapshot,
             'process' => $process,
             'result_log' => $result,
@@ -170,6 +171,9 @@ class AiSiteAgentQueueObserverHelperService
             'shared_component_generated' => 'shared_component_generated',
             'page_generated' => 'page_generated',
             'task_completed' => 'task_completed',
+            // build_task_failed 是构建阶段单任务硬失败的 workspace event_type。映射到 SSE task_failed 让前端
+            // 与直接 sse->sendEvent('task_failed', ...) 同走一个监听器，消除"信号双路径但前端只收一路"的隐患。
+            'task_failed', 'build_task_failed' => 'task_failed',
             'operation_failed' => 'error',
             default => '',
         };
@@ -202,6 +206,10 @@ class AiSiteAgentQueueObserverHelperService
             'shared_component_generated',
             'page_generated',
             'task_completed',
+            // build_task_failed / task_failed 必须能被 forwardObservedOperationEvents 转发，
+            // 否则 mapOperationEventName 即便有映射也会被 isOperationEventRelevant 的白名单挡掉。
+            'task_failed',
+            'build_task_failed',
             'operation_failed',
         ], true)) {
             return false;
