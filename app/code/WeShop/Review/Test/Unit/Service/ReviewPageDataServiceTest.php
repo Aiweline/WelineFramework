@@ -24,12 +24,17 @@ class ReviewPageDataServiceTest extends TestCase
         $reviewReplyService = $this->createMock(ReviewReplyService::class);
 
         $reviewService->expects($this->once())
+            ->method('resolveReviewPage')
+            ->with(123, 101, 10, 2)
+            ->willReturn(2);
+        $reviewService->expects($this->once())
             ->method('getProductReviews')
             ->with(123, 2, 10)
             ->willReturn([
                 'items' => [
                     [
                         'review_id' => 101,
+                        'customer_id' => 22,
                         'customer_name' => 'Jane Doe',
                         'rating' => '4.5',
                         'title' => 'Loved it',
@@ -97,7 +102,7 @@ class ReviewPageDataServiceTest extends TestCase
             ]);
 
         $service = new ReviewPageDataService($reviewService, $productService, $ratingOptionService, $reviewConfigService, $reviewReplyService);
-        $result = $service->build(123, 2, 10);
+        $result = $service->build(123, 2, 10, 101, 301);
 
         $this->assertSame(3, $result['page_count']);
         $this->assertTrue($result['has_previous']);
@@ -108,9 +113,14 @@ class ReviewPageDataServiceTest extends TestCase
         $this->assertCount(1, $result['reviews']);
         $this->assertSame('Sample Product', $result['product']['name']);
         $this->assertSame('Jane Doe', $result['reviews'][0]['customer_name']);
+        $this->assertSame(22, $result['reviews'][0]['customer_id']);
         $this->assertSame('2026-03-24 00:00:00', $result['reviews'][0]['created_at']);
         $this->assertTrue($result['reviews'][0]['verified_purchase']);
+        $this->assertFalse($result['reviews'][0]['is_target']);
+        $this->assertSame(101, $result['target_review_id']);
+        $this->assertSame(301, $result['target_reply_id']);
         $this->assertSame('Thanks for the detail.', $result['reviews'][0]['replies'][0]['content']);
+        $this->assertTrue($result['reviews'][0]['replies'][0]['is_target']);
         $this->assertSame([['code' => 'quality', 'label' => '商品质量']], $result['rating_options']);
         $this->assertSame(ReviewConfigService::MODE_ORDER, $result['review_mode']);
         $this->assertSame('下单后评论', $result['review_mode_label']);
@@ -124,6 +134,8 @@ class ReviewPageDataServiceTest extends TestCase
         $reviewConfigService = $this->createMock(ReviewConfigService::class);
         $reviewReplyService = $this->createMock(ReviewReplyService::class);
 
+        $reviewService->expects($this->never())
+            ->method('resolveReviewPage');
         $reviewService->expects($this->once())
             ->method('getProductReviews')
             ->willReturn([

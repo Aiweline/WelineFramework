@@ -83,6 +83,7 @@ class HookScanner
             if (!empty($hooksConfig)) {
                 $result[$moduleName] = $hooksConfig;
             }
+            unset($hooksConfig);
         }
 
         return $result;
@@ -178,6 +179,7 @@ class HookScanner
             ];
         }
 
+        unset($config);
         return !empty($result) ? $result : null;
     }
 
@@ -220,6 +222,7 @@ class HookScanner
             if (!empty($hooksConfig)) {
                 $result[$moduleName] = $hooksConfig;
             }
+            unset($hooksConfig);
         }
 
         return $result;

@@ -16,9 +16,9 @@ class PaymentManagementServiceTest extends TestCase
         $paymentService->expects($this->once())
             ->method('getManagementPaymentMethods')
             ->willReturn([
-                ['code' => 'manual_transfer', 'title' => 'Manual Transfer', 'enabled' => true, 'is_default' => true],
-                ['code' => 'paypal', 'title' => 'PayPal', 'enabled' => true, 'is_default' => false],
-                ['code' => 'alipay', 'title' => 'Alipay', 'enabled' => false, 'is_default' => false],
+                ['code' => 'manual_transfer', 'title' => 'Manual Transfer', 'enabled' => true, 'is_default' => true, 'is_configured' => true, 'has_documentation' => true, 'config_test_status' => 'passed'],
+                ['code' => 'paypal', 'title' => 'PayPal', 'enabled' => true, 'is_default' => false, 'is_configured' => true, 'has_documentation' => true, 'config_test_status' => 'passed'],
+                ['code' => 'alipay', 'title' => 'Alipay', 'enabled' => false, 'is_default' => false, 'is_configured' => true, 'has_documentation' => true, 'config_test_status' => 'untested'],
             ]);
 
         $service = new PaymentManagementService($paymentService);
@@ -42,6 +42,9 @@ class PaymentManagementServiceTest extends TestCase
                     'enabled' => true,
                     'is_default' => true,
                     'sort_order' => 10,
+                    'flow' => 'offline',
+                    'has_documentation' => true,
+                    'config_test_status' => 'passed',
                     'config' => ['instructions' => 'Old note'],
                     'config_fields' => [
                         ['key' => 'instructions', 'type' => 'textarea'],
@@ -52,6 +55,9 @@ class PaymentManagementServiceTest extends TestCase
                     'enabled' => true,
                     'is_default' => false,
                     'sort_order' => 30,
+                    'flow' => 'offline',
+                    'has_documentation' => true,
+                    'config_test_status' => 'passed',
                     'config' => ['sandbox' => true, 'client_id' => ''],
                     'config_fields' => [
                         ['key' => 'sandbox', 'type' => 'checkbox'],
@@ -70,7 +76,7 @@ class PaymentManagementServiceTest extends TestCase
                 parent::__construct($paymentService);
             }
 
-            protected function persistMethodConfig(array $config): void
+            protected function persistMethodConfig(array $config, array $scope): void
             {
                 $this->stored = $config;
             }
@@ -78,6 +84,7 @@ class PaymentManagementServiceTest extends TestCase
 
         $result = $service->save([
             'default_method' => 'paypal',
+            'test_method' => 'paypal',
             'methods' => [
                 'manual_transfer' => [
                     'enabled' => '0',

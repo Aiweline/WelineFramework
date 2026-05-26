@@ -10,6 +10,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
+use Weline\Server\Exception\StartupException;
+use Weline\Server\Exception\WlsException;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Observer\SchedulerWaitObserver;
 use Weline\Server\Scheduler\FiberScheduler;
@@ -58,6 +60,10 @@ class ServiceOrchestrator
     private const STARTUP_PORT_PREFLIGHT_ROLES = [
         ControlMessage::ROLE_DISPATCHER => true,
         ControlMessage::ROLE_REDIRECT => true,
+        ControlMessage::ROLE_MAINTENANCE => true,
+    ];
+    private const BULK_LAUNCH_PORT_REPROBE_ROLES = [
+        ControlMessage::ROLE_WORKER => true,
     ];
 
     private ServiceRegistry $registry;
@@ -558,14 +564,17 @@ class ServiceOrchestrator
 
     private function handleStartupFailure(\Throwable $throwable, string $label): void
     {
-        $reason = $label !== '' ? "{$label}: " . $throwable->getMessage() : $throwable->getMessage();
+        $reason = $throwable instanceof WlsException
+            ? $throwable->getMessage()
+            : ($label !== '' ? "{$label}: " . $throwable->getMessage() : $throwable->getMessage());
         $this->startupFailureReason = $reason;
         WlsLogger::error_("[Orchestrator] {$label}: " . $throwable->getMessage(), ['exception' => $throwable]);
         if ($this->context !== null) {
             $this->persistStartupFailureToInstance(
                 $this->context,
                 $reason,
-                $this->collectStartupFailurePendingRoleLabels()
+                $this->collectStartupFailurePendingRoleLabels(),
+                $throwable
             );
         }
 
@@ -2351,26 +2360,24 @@ class ServiceOrchestrator
     ): void {
         $pending = $this->collectStartupAcceptancePendingLabels($startupAcceptance);
         $pendingLabel = $pending !== [] ? \implode(', ', $pending) : '(none)';
-        $message = 'Startup failed fast: ' . $reason . ', pending=' . $pendingLabel;
-        $this->startupFailureReason = $message;
-        $this->persistStartupFailureToInstance($context, $message, $pending);
-        WlsLogger::error_('[Orchestrator] ' . $message);
-
-        foreach ($startupAcceptance as $role => $rule) {
-            $readyCount = $this->countRoleReadyInstances((string)$role);
-            if ($readyCount >= $rule['minReady']) {
-                continue;
-            }
-            foreach ($this->buildStartupAcceptanceTimeoutDiagnostics((string)$role) as $detail) {
-                WlsLogger::error_('[Orchestrator] startup pending diagnostic: ' . $detail);
-            }
+        $diagnostics = $this->collectStartupAcceptanceFailureDiagnostics($startupAcceptance);
+        $exception = StartupException::failFast(
+            $reason,
+            $pending,
+            $this->buildStartupAcceptanceFailureContext($startupAcceptance, $context, $pending, null),
+            $diagnostics
+        );
+        $this->startupFailureReason = $exception->getMessage();
+        $this->persistStartupFailureToInstance($context, $exception->getMessage(), $pending, $exception);
+        WlsLogger::error_(
+            '[Orchestrator] ' . $exception->getMessage() . ', pending=' . $pendingLabel,
+            ['exception' => $exception]
+        );
+        foreach ($diagnostics as $detail) {
+            WlsLogger::error_('[Orchestrator] startup pending diagnostic: ' . $detail);
         }
 
-        if ($context->windowMode) {
-            echo "\033[31m  {$message}\033[0m\n";
-        }
-
-        $this->forceTerminateMasterAndChildren('startup_fail_fast:' . $pendingLabel);
+        throw $exception;
     }
 
     /**
@@ -2380,28 +2387,25 @@ class ServiceOrchestrator
     {
         $pending = $this->collectStartupAcceptancePendingLabels($startupAcceptance);
         $pendingLabel = $pending !== [] ? \implode(', ', $pending) : '(none)';
-        $timeout = \number_format($this->startupTimeout, 2, '.', '');
-        $elapsedLabel = \number_format($elapsed, 2, '.', '');
-        $message = "启动异常：计划进程 {$timeout}s 内未全部 READY，pending={$pendingLabel}, elapsed={$elapsedLabel}s";
-        $this->startupFailureReason = $message;
-        $this->persistStartupFailureToInstance($context, $message, $pending);
-        WlsLogger::error_('[Orchestrator] ' . $message . '，关闭服务器并清理已提交进程');
-        foreach ($startupAcceptance as $role => $rule) {
-            $readyCount = $this->countRoleReadyInstances((string)$role);
-            if ($readyCount < $rule['minReady']) {
-                foreach ($this->buildStartupAcceptanceTimeoutDiagnostics((string)$role) as $detail) {
-                    WlsLogger::error_('[Orchestrator] startup pending diagnostic: ' . $detail);
-                }
-                WlsLogger::error_(
-                    "[Orchestrator] 启动异常明细: {$rule['displayName']}({$role}) READY {$readyCount}/{$rule['minReady']} (expected={$rule['expected']}, timeout={$timeout}s)"
-                );
-            }
-        }
-        if ($context->windowMode) {
-            echo "\033[31m  {$message}，已关闭服务器并清理已提交进程。\033[0m\n";
+        $diagnostics = $this->collectStartupAcceptanceFailureDiagnostics($startupAcceptance);
+        $exception = StartupException::readyTimeout(
+            $this->startupTimeout,
+            $elapsed,
+            $pending,
+            $this->buildStartupAcceptanceFailureContext($startupAcceptance, $context, $pending, $elapsed),
+            $diagnostics
+        );
+        $this->startupFailureReason = $exception->getMessage();
+        $this->persistStartupFailureToInstance($context, $exception->getMessage(), $pending, $exception);
+        WlsLogger::error_(
+            '[Orchestrator] ' . $exception->getMessage() . ', pending=' . $pendingLabel,
+            ['exception' => $exception]
+        );
+        foreach ($diagnostics as $detail) {
+            WlsLogger::error_('[Orchestrator] startup pending diagnostic: ' . $detail);
         }
 
-        $this->forceTerminateMasterAndChildren('startup_ready_timeout:' . $pendingLabel);
+        throw $exception;
     }
 
     /**
@@ -2412,7 +2416,8 @@ class ServiceOrchestrator
     private function persistStartupFailureToInstance(
         ServiceContext $context,
         string $reason,
-        array $pendingLabels = []
+        array $pendingLabels = [],
+        ?\Throwable $throwable = null
     ): void {
         $reason = \trim($reason);
         if ($reason === '' || $context->instanceName === '') {
@@ -2425,17 +2430,134 @@ class ServiceOrchestrator
 
         ServerInstanceManager::updateJsonFileAtomically(
             $instanceFile,
-            static function (array $data) use ($reason, $pendingLabels, $now, $at): array {
+            function (array $data) use ($reason, $pendingLabels, $throwable, $now, $at): array {
                 $data['startup_failure_reason'] = $reason;
                 $data['startup_failure_at'] = $at;
                 $data['startup_failure_timestamp'] = $now;
                 if ($pendingLabels !== []) {
                     $data['startup_failure_pending'] = $pendingLabels;
                 }
+                if ($throwable !== null) {
+                    $data['startup_failure_class'] = $throwable::class;
+                    $code = $throwable instanceof WlsException
+                        ? $throwable->getWlsErrorCode()
+                        : (string)$throwable->getCode();
+                    if ($code !== '' && $code !== '0') {
+                        $data['startup_failure_code'] = $code;
+                    }
+                    if ($throwable instanceof WlsException) {
+                        $data['startup_failure_context'] = $this->sanitizeStartupFailureContext($throwable->getContext());
+                        $data['startup_failure_diagnostics'] = $this->sanitizeStartupFailureDiagnostics($throwable->getDiagnostics());
+                    }
+                }
                 $data['updated_at'] = $now;
                 return self::filterEndpointRuntimeMetadata($data);
             }
         );
+    }
+
+    private function sanitizeStartupFailureContext(mixed $value): mixed
+    {
+        if (\is_array($value)) {
+            $result = [];
+            foreach ($value as $key => $item) {
+                if (\is_int($key) || \is_string($key)) {
+                    $result[$key] = $this->sanitizeStartupFailureContext($item);
+                }
+            }
+            return $result;
+        }
+
+        if (\is_bool($value) || \is_int($value) || \is_float($value) || $value === null) {
+            return $value;
+        }
+
+        return $this->compactDiagnosticValue((string)$value);
+    }
+
+    /**
+     * @param list<string> $diagnostics
+     * @return list<string>
+     */
+    private function sanitizeStartupFailureDiagnostics(array $diagnostics): array
+    {
+        $result = [];
+        foreach ($diagnostics as $diagnostic) {
+            $diagnostic = \trim(\preg_replace('/\s+/', ' ', (string)$diagnostic) ?? (string)$diagnostic);
+            if ($diagnostic === '') {
+                continue;
+            }
+            if (\strlen($diagnostic) > 500) {
+                $diagnostic = \substr($diagnostic, 0, 497) . '...';
+            }
+            $result[] = $diagnostic;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string,array{displayName:string,expected:int,minReady:int}> $startupAcceptance
+     * @return list<string>
+     */
+    private function collectStartupAcceptanceFailureDiagnostics(array $startupAcceptance): array
+    {
+        $diagnostics = [];
+        foreach ($startupAcceptance as $role => $rule) {
+            $role = (string)$role;
+            $readyCount = $this->countRoleReadyInstances($role);
+            if ($readyCount >= $rule['minReady']) {
+                continue;
+            }
+            foreach ($this->buildStartupAcceptanceTimeoutDiagnostics($role) as $detail) {
+                $diagnostics[] = $detail;
+            }
+            $diagnostics[] = "role={$role} READY {$readyCount}/{$rule['minReady']} expected={$rule['expected']}";
+        }
+
+        return $diagnostics;
+    }
+
+    /**
+     * @param array<string,array{displayName:string,expected:int,minReady:int}> $startupAcceptance
+     * @param list<string> $pending
+     * @return array<string, mixed>
+     */
+    private function buildStartupAcceptanceFailureContext(
+        array $startupAcceptance,
+        ServiceContext $context,
+        array $pending,
+        ?float $elapsed
+    ): array {
+        $roles = [];
+        foreach ($startupAcceptance as $role => $rule) {
+            $role = (string)$role;
+            $roles[$role] = [
+                'display_name' => $rule['displayName'],
+                'expected' => $rule['expected'],
+                'min_ready' => $rule['minReady'],
+                'ready' => $this->countRoleReadyInstances($role),
+            ];
+        }
+
+        $payload = [
+            'instance' => $context->instanceName,
+            'main_port' => $context->mainPort,
+            'control_port' => $context->controlPort,
+            'worker_count' => $context->getWorkerCount(),
+            'dispatcher_enabled' => $context->isDispatcherEnabled(),
+            'ssl_enabled' => $context->sslEnabled,
+            'startup_timeout_sec' => \number_format($this->startupTimeout, 2, '.', ''),
+            'startup_max_duration_sec' => \number_format($this->startupMaxDuration, 2, '.', ''),
+            'pending' => $pending,
+            'roles' => $roles,
+        ];
+
+        if ($elapsed !== null) {
+            $payload['elapsed_sec'] = \number_format($elapsed, 2, '.', '');
+        }
+
+        return $payload;
     }
 
     /**
@@ -3522,6 +3644,11 @@ class ServiceOrchestrator
         return isset(self::STARTUP_PORT_PREFLIGHT_ROLES[$role]);
     }
 
+    private function requiresBulkLaunchPortReprobe(string $role): bool
+    {
+        return isset(self::BULK_LAUNCH_PORT_REPROBE_ROLES[$role]);
+    }
+
     private function prepareCriticalPortForStart(string $role, int $port): bool
     {
         Processer::clearPortCache($port);
@@ -3741,6 +3868,7 @@ class ServiceOrchestrator
         if ($this->bulkLaunchPortCheckActive
             && (bool)($context->getConfig('wls.orchestrator.skip_bulk_launch_port_reprobe', true) ?? true)
             && !$this->requiresStartupPortPreflight($role)
+            && !$this->requiresBulkLaunchPortReprobe($role)
         ) {
             return $configuredPort;
         }
@@ -9167,6 +9295,14 @@ class ServiceOrchestrator
             }
 
             $this->pendingMaintenanceModeAck['acked'][$ackKey] = true;
+            if (!$skipBusinessDrainAck) {
+                $maintPorts = $this->collectReadyMaintenancePortsSorted();
+                if ($maintPorts !== [] && \count($this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER)) > 0) {
+                    $this->routeTableVersion++;
+                    $this->publishDispatcherRouteTableFromPorts($maintPorts, ControlMessage::ROLE_MAINTENANCE, true);
+                    $this->controlServer?->poll(0, 150000);
+                }
+            }
             $this->logMaintenanceOperation(
                 'Dispatcher 维护池确认: client=' . $clientId . ', port=' . $port
                 . '，' . $this->formatMaintenanceOperationContext(),
@@ -9289,6 +9425,7 @@ class ServiceOrchestrator
 
         if ($dispatcher !== null) {
             $dispatcher->setMeta('last_route_table_ack_version', $routeVersion);
+            $dispatcher->setMeta('last_route_table_ack_role', $role);
             $dispatcher->setMeta('last_route_table_ack_checksum', $checksum);
             $dispatcher->setMeta('last_route_table_ack_status', $status);
             $dispatcher->setMeta('last_route_table_ack_at', \microtime(true));
@@ -9732,6 +9869,10 @@ class ServiceOrchestrator
             'startup_failure_at',
             'startup_failure_timestamp',
             'startup_failure_pending',
+            'startup_failure_class',
+            'startup_failure_code',
+            'startup_failure_context',
+            'startup_failure_diagnostics',
             'slot_generations',
             'slot_generations_updated_at',
             'updated_at',
@@ -10091,6 +10232,7 @@ class ServiceOrchestrator
             "publish_maintenance_pool:{$portsStr}:" . $this->formatMaintenanceOperationContext(),
             0.0
         );
+        $this->routeTableVersion++;
         $this->publishDispatcherRouteTableFromPorts($ports, ControlMessage::ROLE_MAINTENANCE);
     }
 
@@ -10236,6 +10378,11 @@ class ServiceOrchestrator
      */
     private function syncDispatcherFullWorkerPoolFromRegistry(bool $force = false): void
     {
+        if ($this->maintenanceMode) {
+            $this->pushMaintenanceWorkerPoolToDispatchersFromRegistry();
+            return;
+        }
+
         if ($this->registry->getInstancesByRole('dispatcher') === [] || $this->controlServer === null) {
             $this->lastDispatcherRouteTableSignature = '';
             return;
@@ -11427,9 +11574,9 @@ class ServiceOrchestrator
                     $this->persistServicesInfo($this->context);
                 }
             }
+            $maintPorts = $this->collectReadyMaintenancePortsSorted();
+            $dispatchers = $this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER);
             if ($skipBusinessDrainAck && $this->context !== null) {
-                $maintPorts = $this->collectReadyMaintenancePortsSorted();
-                $dispatchers = $this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER);
                 if ($maintPorts === []) {
                     return [
                         'success' => false,
@@ -11461,6 +11608,7 @@ class ServiceOrchestrator
                         'acked' => [],
                     ];
                 }
+                $this->routeTableVersion++;
                 $this->publishDispatcherRouteTableFromPorts($maintPorts, ControlMessage::ROLE_MAINTENANCE, true);
                 if ($expectedDispatcherAcks !== []) {
                     $ackTimeout = (float) ($this->context->getConfig(
@@ -11488,6 +11636,10 @@ class ServiceOrchestrator
                         ];
                     }
                 }
+            } elseif ($maintPorts !== [] && $dispatchers !== []) {
+                $this->routeTableVersion++;
+                $this->publishDispatcherRouteTableFromPorts($maintPorts, ControlMessage::ROLE_MAINTENANCE, true);
+                $this->controlServer?->poll(0, 150000);
             }
             $this->logMaintenanceOperation(
                 '收到启用维护请求，但维护模式已处于激活状态，'
@@ -11667,6 +11819,7 @@ class ServiceOrchestrator
                     'acked' => [],
                 ];
             }
+            $this->routeTableVersion++;
             $this->publishDispatcherRouteTableFromPorts($maintPorts, ControlMessage::ROLE_MAINTENANCE, true);
             if ($expectedDispatcherAcks !== []) {
                 $ackTimeout = (float) ($this->context->getConfig(
@@ -11770,6 +11923,7 @@ class ServiceOrchestrator
         }
 
         if (\count($this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER)) > 0) {
+            $this->routeTableVersion++;
             $this->publishDispatcherRouteTableFromPorts($ports, $role);
             $this->controlServer?->poll(0, 150000);
         }
@@ -11853,6 +12007,7 @@ class ServiceOrchestrator
             0.0
         );
         if ($restorePorts !== [] && \count($this->registry->getInstancesByRole('dispatcher')) > 0) {
+            $this->routeTableVersion++;
             $this->publishDispatcherRouteTableFromPorts($restorePorts);
             $this->controlServer?->poll(0, 150000);
         }

@@ -119,8 +119,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         // JSON 模式（业界标准）：强制模型只输出合法 JSON，降低解析失败率
-        if (!empty($params['response_format']) && is_array($params['response_format'])) {
-            $requestData['response_format'] = $params['response_format'];
+        $responseFormat = $this->resolveChatResponseFormat($model, $params, $config);
+        if ($responseFormat !== null) {
+            $requestData['response_format'] = $responseFormat;
         }
 
         // 优先使用base_url，如果没有则使用api_url，最后使用默认值
@@ -216,7 +217,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         $requestData = $this->buildImageGenerationRequest($model, $prompt, $params, $config);
-        $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
+        $timeout = ProviderTimeoutPolicy::resolveImageGenerationTimeout($params, $config);
         $this->applyExecutionTimeLimit($timeout);
         $requestUrl = $this->resolveImageGenerationUrl($config);
         $response = $this->callApiWithRetry(
@@ -309,8 +310,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         // JSON 模式（业界标准）：强制模型只输出合法 JSON
-        if (!empty($params['response_format']) && is_array($params['response_format'])) {
-            $requestData['response_format'] = $params['response_format'];
+        $responseFormat = $this->resolveChatResponseFormat($model, $params, $config);
+        if ($responseFormat !== null) {
+            $requestData['response_format'] = $responseFormat;
         }
 
         $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.openai.com/v1';
@@ -343,6 +345,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
         $rawResponseBuffer = '';
         $hasValidChunk = false;
+        $sseLineBuffer = '';
         $startTime = microtime(true);
         $lastProgressNotify = $startTime;
         $progressInterval = 5; // 每 5 秒发送一次等待状态
@@ -379,7 +382,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) use (
             &$fullContent, &$fullReasoning, &$toolCallsAccum, &$finishReason, &$modelName,
-            &$rawResponseBuffer, &$hasValidChunk, $startTime, $timeout,
+            &$rawResponseBuffer, &$hasValidChunk, &$sseLineBuffer, $startTime, $timeout,
             $onReasoning, $onContent, $onHeartbeat
         ) {
             if (strlen($rawResponseBuffer) < 4096) {
@@ -391,7 +394,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 $onHeartbeat();
             }
 
-            $lines = explode("\n", $data);
+            $sseLineBuffer .= $data;
+            $lines = \preg_split('/\r\n|\n|\r/', $sseLineBuffer) ?: [];
+            $sseLineBuffer = (string)\array_pop($lines);
             foreach ($lines as $line) {
                 $line = trim($line);
                 if (empty($line) || !str_starts_with($line, 'data: ')) {
@@ -579,6 +584,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             $requestData['tool_choice'] = $params['tool_choice'] ?? 'auto';
         }
 
+        $responseFormat = $this->resolveChatResponseFormat($model, $params, $config);
+        if ($responseFormat !== null) {
+            $requestData['response_format'] = $responseFormat;
+        }
+
         $totalTokens = [
             'prompt_tokens' => 0,
             'completion_tokens' => 0,
@@ -711,6 +721,89 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
      * @param array $params
      * @return array
      */
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>|null
+     */
+    private function resolveChatResponseFormat(AiModel $model, array $params, array $config): ?array
+    {
+        $responseFormat = $params['response_format'] ?? $config['response_format'] ?? null;
+        if (!\is_array($responseFormat) || $responseFormat === []) {
+            return null;
+        }
+
+        if (\strtolower(\trim((string)($responseFormat['type'] ?? ''))) !== 'json_schema') {
+            return $responseFormat;
+        }
+
+        return $this->supportsJsonSchemaResponseFormat($model, $config)
+            ? $responseFormat
+            : ['type' => 'json_object'];
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function supportsJsonSchemaResponseFormat(AiModel $model, array $config): bool
+    {
+        foreach ([
+            'response_format_json_schema',
+            'supports_response_format_json_schema',
+            'json_schema_response_format',
+            'structured_outputs',
+        ] as $key) {
+            if (\array_key_exists($key, $config)) {
+                $resolved = $this->resolveConfigBoolean($config[$key]);
+                if ($resolved !== null) {
+                    return $resolved;
+                }
+            }
+        }
+
+        foreach ($model->getCapabilities() as $key => $value) {
+            if (\is_string($key)) {
+                if ($value === false || $value === 0 || $value === '0' || $value === null || $value === '') {
+                    continue;
+                }
+                $capability = $key;
+            } else {
+                $capability = (string)$value;
+            }
+            if (\in_array(\strtolower(\trim($capability)), [
+                'structured_outputs',
+                'json_schema',
+                'json_schema_response_format',
+                'response_format_json_schema',
+            ], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolveConfigBoolean(mixed $value): ?bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (bool)$value;
+        }
+        if (\is_string($value)) {
+            $normalized = \strtolower(\trim($value));
+            if (\in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+            if (\in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+                return false;
+            }
+        }
+
+        return null;
+    }
+
     private function buildMessages(string $prompt, array $params): array
     {
         // 智能体模式：直接使用完整消息历史
@@ -947,7 +1040,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $hasValidChunk = false;
         
         // 设置流式处理回调
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk) {
+        $sseLineBuffer = '';
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk, &$sseLineBuffer) {
             // 检查是否超时
             if ($timeLimit !== null) {
                 $elapsedTime = microtime(true) - $startTime;
@@ -961,7 +1055,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 $rawResponseBuffer .= $data;
             }
             
-            $lines = explode("\n", $data);
+            $sseLineBuffer .= $data;
+            $lines = \preg_split('/\r\n|\n|\r/', $sseLineBuffer) ?: [];
+            $sseLineBuffer = (string)\array_pop($lines);
             
             foreach ($lines as $line) {
                 $line = trim($line);
@@ -1115,13 +1211,13 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         if ($timeout > 0) {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
             curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, min(30, max(10, (int)ceil($timeout / 4))));
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, ProviderTimeoutPolicy::resolveLowSpeedTime($timeout));
         } else {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
             // 当 timeout=0 时设置低速保护：如果 120 秒内传输速率低于 1 字节/秒，则中止
             // 防止 AI API 完全停止响应导致连接永久挂起
             curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 120);
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, ProviderTimeoutPolicy::resolveLowSpeedTime($timeout));
         }
         
         // SSL配置：在Windows本地开发环境中，可能需要跳过SSL验证
@@ -1165,12 +1261,10 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
     private function applyExecutionTimeLimit(int $timeout): void
     {
-        $timeout = \max(0, $timeout);
-        @set_time_limit(
-            $timeout > 0
-                ? $timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER
-                : 0
-        );
+        $limit = ProviderTimeoutPolicy::resolveExecutionTimeLimit($timeout);
+        if ($limit !== null) {
+            @set_time_limit($limit);
+        }
     }
 
     /**

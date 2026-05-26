@@ -6,6 +6,7 @@ namespace WeShop\Product\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use WeShop\Price\Service\PriceService;
+use WeShop\Product\Helper\HanfuDemoOptionImageProvider;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Service\ProductEavService;
 use WeShop\Product\Service\ProductRecommendationService;
@@ -196,6 +197,87 @@ class ProductViewPageDataServiceTest extends TestCase
         $this->assertCount(1, $result['related_products']);
         $this->assertSame([['code' => 'quality', 'label' => '商品质量']], $result['rating_options']);
         $this->assertCount(1, $result['qa']);
+    }
+
+    public function testDemoCategoryFallbackOptionsIncludeImageStyleChoices(): void
+    {
+        $product = $this->createProductMock([
+            Product::schema_fields_name => 'Demo Category Jacket',
+            Product::schema_fields_short_description => 'Demo storefront product',
+            Product::schema_fields_description => '<p>Demo details</p>',
+            Product::schema_fields_price => 59.9,
+            Product::schema_fields_sku => 'DEMO-CAT-0081',
+            Product::schema_fields_stock => 121,
+            Product::schema_fields_image => '/media/demo-main.jpg',
+            Product::schema_fields_images => json_encode(['/media/demo-side.jpg', '/media/demo-detail.jpg'], JSON_THROW_ON_ERROR),
+            Product::schema_fields_status => 1,
+        ]);
+
+        $this->productService->expects($this->once())
+            ->method('getProduct')
+            ->with(81)
+            ->willReturn($product);
+        $this->priceService->expects($this->once())
+            ->method('resolveProduct')
+            ->with($product)
+            ->willReturn([
+                'price' => 59.9,
+                'original_price' => 59.9,
+                'special_price' => null,
+                'has_discount' => false,
+                'discount_amount' => 0,
+                'discount_percent' => 0,
+            ]);
+        $this->productEavService->expects($this->once())
+            ->method('getProductAttributesViewModel')
+            ->with(81)
+            ->willReturn([]);
+        $this->reviewService->expects($this->once())
+            ->method('getProductReviews')
+            ->with(81, 1, 5)
+            ->willReturn(['items' => [], 'total' => 0]);
+        $this->reviewService->expects($this->once())
+            ->method('getAverageRating')
+            ->with(81)
+            ->willReturn(0.0);
+        $this->qaService->expects($this->once())
+            ->method('getProductQuestions')
+            ->with(81)
+            ->willReturn([]);
+        $this->productRecommendationService->expects($this->once())
+            ->method('getRecommendations')
+            ->with([81], 4)
+            ->willReturn([]);
+        $this->ratingOptionService->expects($this->once())
+            ->method('getEnabledOptions')
+            ->willReturn([]);
+
+        $result = $this->service->build(81);
+
+        $this->assertIsArray($result);
+        $attributes = $result['configurable_options']['attributes'] ?? [];
+        $this->assertSame(['color', 'size', 'style'], array_column($attributes, 'code'));
+
+        $color = array_values(array_filter(
+            $attributes,
+            static fn(array $attribute): bool => ($attribute['code'] ?? '') === 'color'
+        ))[0] ?? null;
+        $this->assertIsArray($color);
+        $this->assertSame(['red', 'pink', 'green'], array_column($color['options'], 'code'));
+        $this->assertSame('color', $color['options'][0]['swatch_type']);
+        $this->assertSame(HanfuDemoOptionImageProvider::imageFor('red', 'classic'), $color['options'][0]['option_image']);
+
+        $style = array_values(array_filter(
+            $attributes,
+            static fn(array $attribute): bool => ($attribute['code'] ?? '') === 'style'
+        ))[0] ?? null;
+        $this->assertIsArray($style);
+        $this->assertCount(3, $style['options']);
+        $this->assertSame('image', $style['options'][0]['swatch_type']);
+        $this->assertSame(HanfuDemoOptionImageProvider::imageFor('red', 'classic'), $style['options'][0]['swatch_value']);
+        $this->assertSame(HanfuDemoOptionImageProvider::imageFor('red', 'lifestyle'), $style['options'][1]['option_image']);
+        $this->assertSame(HanfuDemoOptionImageProvider::imageMatrix(), $result['configurable_options']['image_matrix']);
+        $this->assertSame(HanfuDemoOptionImageProvider::defaultImage(), $result['product']['main_image']);
     }
 
     /**

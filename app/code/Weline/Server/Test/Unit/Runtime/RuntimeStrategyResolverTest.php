@@ -9,7 +9,7 @@ use Weline\Server\Service\Runtime\WlsRuntimeProfile;
 
 final class RuntimeStrategyResolverTest extends TestCase
 {
-    public function testAutoSelectsDirectOnUnixWhenReusePortAndEventAreAvailable(): void
+    public function testAutoUsesDispatcherOnUnixWhenReusePortAndEventAreAvailable(): void
     {
         $result = (new RuntimeStrategyResolver())->resolve(
             ['worker_count' => 'auto', 'mode' => 'io'],
@@ -25,12 +25,80 @@ final class RuntimeStrategyResolverTest extends TestCase
             ])
         );
 
-        self::assertSame('optimal', $result['status']);
-        self::assertSame('direct', $result['topology']);
-        self::assertTrue($result['direct_reuse_port']);
+        self::assertSame('stable', $result['status']);
+        self::assertSame('dispatcher', $result['topology']);
+        self::assertTrue($result['dispatcher_enabled']);
+        self::assertFalse($result['direct_reuse_port']);
         self::assertSame('event', $result['event_loop_driver']);
         self::assertTrue($result['supervisor_enabled']);
         self::assertSame(16, $result['worker_count']);
+    }
+
+    public function testExplicitDirectUsesReusePortWhenAvailable(): void
+    {
+        $result = (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 'auto', 'mode' => 'io'],
+            ['direct' => true],
+            $this->profile([
+                'os_family' => 'Linux',
+                'cpu_cores' => 8,
+                'memory_mb' => 8192,
+                'supports_reuse_port' => true,
+                'event_classes_available' => true,
+                'extensions' => ['event' => true],
+                'functions' => ['proc_open' => true],
+            ])
+        );
+
+        self::assertSame('optimal', $result['status']);
+        self::assertSame('direct', $result['topology']);
+        self::assertFalse($result['dispatcher_enabled']);
+        self::assertTrue($result['direct_reuse_port']);
+    }
+
+    public function testAutoUsesDispatcherEvenWithSingleWorker(): void
+    {
+        $result = (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 1, 'mode' => 'io'],
+            [],
+            $this->profile([
+                'os_family' => 'Linux',
+                'cpu_cores' => 2,
+                'memory_mb' => 1024,
+                'supports_reuse_port' => true,
+                'event_classes_available' => true,
+                'extensions' => ['event' => true],
+                'functions' => ['proc_open' => true],
+            ])
+        );
+
+        self::assertSame('stable', $result['status']);
+        self::assertSame('dispatcher', $result['topology']);
+        self::assertTrue($result['dispatcher_enabled']);
+        self::assertFalse($result['direct_reuse_port']);
+        self::assertSame(1, $result['worker_count']);
+    }
+
+    public function testExplicitNoDispatcherUsesSingleTopologyWithSingleWorker(): void
+    {
+        $result = (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 1, 'mode' => 'io'],
+            ['no-dispatcher' => true],
+            $this->profile([
+                'os_family' => 'Linux',
+                'cpu_cores' => 2,
+                'memory_mb' => 1024,
+                'supports_reuse_port' => true,
+                'event_classes_available' => true,
+                'extensions' => ['event' => true],
+                'functions' => ['proc_open' => true],
+            ])
+        );
+
+        self::assertSame('degraded', $result['status']);
+        self::assertSame('single', $result['topology']);
+        self::assertFalse($result['dispatcher_enabled']);
+        self::assertFalse($result['direct_reuse_port']);
     }
 
     public function testWindowsAutoUsesDispatcherAndStableWorkerCount(): void
@@ -49,11 +117,11 @@ final class RuntimeStrategyResolverTest extends TestCase
             ])
         );
 
-        self::assertSame('compatibility', $result['status']);
+        self::assertSame('stable', $result['status']);
         self::assertSame('dispatcher', $result['topology']);
         self::assertSame(8, $result['worker_count']);
         self::assertTrue($result['supervisor_enabled']);
-        self::assertNotEmpty($result['warnings']);
+        self::assertSame([], $result['warnings']);
     }
 
     public function testExplicitDirectFailsWhenReusePortIsUnavailable(): void

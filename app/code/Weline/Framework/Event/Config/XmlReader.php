@@ -94,7 +94,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             $fileIndex++;
             RegistryProgress::module('Event XML parse module', $fileIndex, $totalFiles, (string)$moduleName, 'start');
             try {
-                $config = $parser->load($filePath)->xmlToArray();
+                $config = $parser->parseFile($filePath);
             } catch (\Throwable $e) {
                 w_log_error('事件配置读取失败: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
                 throw $e;
@@ -104,6 +104,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             if ($module_event_observers !== null) {
                 $event_observers_list[$module_and_file] = $module_event_observers;
             }
+            unset($config);
             RegistryProgress::module(
                 'Event XML parse module',
                 $fileIndex,
@@ -111,6 +112,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
                 (string)$moduleName,
                 'done events=' . count($module_event_observers ?? [])
             );
+            unset($module_event_observers);
         }
         $this->eventCache->set('event', $event_observers_list);
         return $event_observers_list;

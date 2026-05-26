@@ -21,6 +21,7 @@ $configurableOptions = is_array($product['configurable_options'] ?? null)
     : (is_array($pageConfigurableOptions) ? $pageConfigurableOptions : []);
 $configurableAttributes = is_array($configurableOptions['attributes'] ?? null) ? $configurableOptions['attributes'] : [];
 $configurableVariants = is_array($configurableOptions['variants'] ?? null) ? $configurableOptions['variants'] : [];
+$productDetailOptionImageMatrix = is_array($configurableOptions['image_matrix'] ?? null) ? $configurableOptions['image_matrix'] : [];
 
 // 如果没有产品数据，不渲染任何内容（让fallback显示）
 if (empty($product) || empty($product['product_id'])) {
@@ -86,7 +87,6 @@ $baseCurrencyCode = $currencyRateService->getBaseCurrency();
 $currentCurrencyCode = \Weline\Framework\App\State::getCurrency();
 $displayCurrencyDefinition = $currencyRateService->getCurrencyDefinition($currentCurrencyCode);
 $currencyDisplayFactor = \Weline\Currency\Helper\CurrencyFormatter::convert(1.0, $baseCurrencyCode, $currentCurrencyCode);
-
 $renderStars = static function (float $value): string {
     $safeValue = max(0.0, min(5.0, $value));
     $filled = (int)floor($safeValue);
@@ -179,6 +179,99 @@ if (empty($images) && !empty($mainImage)) {
     $images = [$mainImage];
 }
 
+$optionMetaByOptionId = [];
+foreach ($configurableAttributes as $attribute) {
+    if (!is_array($attribute)) {
+        continue;
+    }
+    $attributeId = (int)($attribute['attribute_id'] ?? 0);
+    $attributeCode = (string)($attribute['code'] ?? ($attributeId > 0 ? 'attribute_' . $attributeId : ''));
+    $options = is_array($attribute['options'] ?? null) ? $attribute['options'] : [];
+    foreach ($options as $option) {
+        if (!is_array($option)) {
+            continue;
+        }
+        $optionId = (int)($option['option_id'] ?? 0);
+        if ($optionId <= 0 || $attributeCode === '') {
+            continue;
+        }
+        $optionMetaByOptionId[$optionId] = [
+            'attribute_code' => $attributeCode,
+            'option_code' => (string)($option['code'] ?? $option['value'] ?? $optionId),
+        ];
+    }
+}
+
+$optionVariantByOptionId = [];
+$galleryVariantImages = [];
+$gallerySelectionCandidates = [];
+$galleryImageSelections = [];
+$addGallerySelectionCandidate = static function (string $image, string $attributeCode, string $optionCode) use (&$gallerySelectionCandidates): void {
+    $image = trim($image);
+    $attributeCode = trim($attributeCode);
+    $optionCode = trim($optionCode);
+    if ($image === '' || $attributeCode === '' || $optionCode === '') {
+        return;
+    }
+    $gallerySelectionCandidates[$image][$attributeCode][$optionCode] = true;
+};
+
+foreach ($configurableVariants as $variant) {
+    if (!is_array($variant)) {
+        continue;
+    }
+    $variantImage = trim((string)($variant['image'] ?? ''));
+    if ($variantImage !== '') {
+        $galleryVariantImages[] = $variantImage;
+    }
+    $variantOptionIds = is_array($variant['option_ids'] ?? null) ? $variant['option_ids'] : [];
+    foreach ($variantOptionIds as $variantOptionId) {
+        $variantOptionId = (int)$variantOptionId;
+        if ($variantOptionId > 0 && !isset($optionVariantByOptionId[$variantOptionId])) {
+            $optionVariantByOptionId[$variantOptionId] = $variant;
+        }
+        if ($variantImage === '' || empty($optionMetaByOptionId[$variantOptionId])) {
+            continue;
+        }
+        $optionMeta = $optionMetaByOptionId[$variantOptionId];
+        $addGallerySelectionCandidate(
+            $variantImage,
+            (string)$optionMeta['attribute_code'],
+            (string)$optionMeta['option_code']
+        );
+    }
+}
+
+foreach ($productDetailOptionImageMatrix as $colorCode => $styleImages) {
+    if (!is_array($styleImages)) {
+        continue;
+    }
+    foreach ($styleImages as $styleCode => $styleImage) {
+        $styleImage = (string)$styleImage;
+        $addGallerySelectionCandidate($styleImage, 'color', (string)$colorCode);
+        $addGallerySelectionCandidate($styleImage, 'style', (string)$styleCode);
+    }
+}
+
+foreach ($gallerySelectionCandidates as $image => $attributeSelections) {
+    $selection = $galleryImageSelections[$image] ?? [];
+    foreach ($attributeSelections as $attributeCode => $optionCodes) {
+        $optionCodes = array_keys($optionCodes);
+        if (count($optionCodes) === 1 && !isset($selection[$attributeCode])) {
+            $selection[$attributeCode] = (string)$optionCodes[0];
+        }
+    }
+    if ($selection !== []) {
+        $galleryImageSelections[$image] = $selection;
+    }
+}
+
+$images = array_values(array_unique(array_filter(array_merge(
+    array_map(static fn($image): string => is_scalar($image) ? trim((string)$image) : '', $images),
+    $galleryVariantImages,
+    array_keys($galleryImageSelections)
+), static fn(string $image): bool => $image !== '')));
+
 $productImageVariant = static function (string $url, int $width): string {
     $url = trim($url);
     if ($url === '' || $width <= 0) {
@@ -233,11 +326,19 @@ $productImageVariant = static function (string $url, int $width): string {
             <?php if (count($images) > 1): ?>
             <div class="product-thumbnails">
                 <?php foreach ($images as $index => $img): ?>
-                <?php $thumbnailImage = $productImageVariant((string)$img, 180); ?>
+                <?php
+                $img = (string)$img;
+                $thumbnailImage = $productImageVariant($img, 180);
+                $thumbnailSelection = $galleryImageSelections[trim($img)] ?? [];
+                $thumbnailSelectionJson = $thumbnailSelection !== []
+                    ? (json_encode($thumbnailSelection, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}')
+                    : '{}';
+                ?>
                 <button type="button"
                         class="thumbnail-item <?= $index === 0 ? 'active' : '' ?>"
                         data-index="<?= $index ?>"
-                        data-src="<?= htmlspecialchars($img, ENT_QUOTES, 'UTF-8') ?>">
+                        data-src="<?= htmlspecialchars($img, ENT_QUOTES, 'UTF-8') ?>"
+                        data-option-selection="<?= htmlspecialchars($thumbnailSelectionJson, ENT_QUOTES, 'UTF-8') ?>">
                     <img src="<?= htmlspecialchars($thumbnailImage, ENT_QUOTES, 'UTF-8') ?>"
                          alt="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?> - <?= $index + 1 ?>"
                          loading="lazy"
@@ -317,14 +418,39 @@ $productImageVariant = static function (string $url, int $width): string {
                     $attributeName = (string)($attribute['name'] ?? $attributeCode);
                     $options = is_array($attribute['options'] ?? null) ? $attribute['options'] : [];
                     $isColorAttribute = stripos($attributeCode, 'color') !== false || str_contains($attributeName, '色');
+                    $hasImageOptions = false;
+                    foreach ($options as $optionCandidate) {
+                        if ((string)($optionCandidate['option_image'] ?? '') !== ''
+                            || ((string)($optionCandidate['swatch_type'] ?? '') === 'image' && (string)($optionCandidate['swatch_value'] ?? '') !== '')
+                        ) {
+                            $hasImageOptions = true;
+                            break;
+                        }
+                    }
+                    $optionCount = count($options);
+                    $optionPageSize = $hasImageOptions ? 12 : 16;
+                    $isPagedOptionList = $optionCount > $optionPageSize;
+                    $usesOptionCardGrid = $isPagedOptionList || ($hasImageOptions && $optionCount > 6);
+                    $optionListClass = ($isColorAttribute && !$usesOptionCardGrid)
+                        ? 'product-option-swatches'
+                        : ($hasImageOptions ? 'product-option-image-swatches' : 'product-option-pills');
+                    $optionListClass .= $usesOptionCardGrid ? ' product-option-card-grid' : '';
+                    $optionChoiceClass = ($isColorAttribute && !$usesOptionCardGrid)
+                        ? 'product-option-choice--swatch'
+                        : ($hasImageOptions ? 'product-option-choice--image' : 'product-option-choice--pill');
+                    $optionChoiceClass .= $usesOptionCardGrid ? ' product-option-choice--card' : '';
                     ?>
                     <?php if ($attributeId > 0 && $options !== []): ?>
-                    <fieldset class="product-option-group" data-attribute-id="<?= $attributeId ?>" data-attribute-code="<?= htmlspecialchars($attributeCode, ENT_QUOTES, 'UTF-8') ?>">
+                    <fieldset class="product-option-group"
+                              data-attribute-id="<?= $attributeId ?>"
+                              data-attribute-code="<?= htmlspecialchars($attributeCode, ENT_QUOTES, 'UTF-8') ?>"
+                              data-option-paged="<?= $isPagedOptionList ? '1' : '0' ?>"
+                              data-option-page-size="<?= $isPagedOptionList ? $optionPageSize : 0 ?>">
                         <legend class="product-option-title">
                             <?= htmlspecialchars($attributeName, ENT_QUOTES, 'UTF-8') ?>
                             <span class="product-option-selected" data-selected-label-for="<?= $attributeId ?>"></span>
                         </legend>
-                        <div class="<?= $isColorAttribute ? 'product-option-swatches' : 'product-option-pills' ?>">
+                        <div class="<?= $optionListClass ?>"<?= $isPagedOptionList ? ' data-option-page-list' : '' ?>>
                             <?php foreach ($options as $option): ?>
                                 <?php
                                 $optionId = (int)($option['option_id'] ?? 0);
@@ -333,19 +459,36 @@ $productImageVariant = static function (string $url, int $width): string {
                                 $swatchType = (string)($option['swatch_type'] ?? '');
                                 $swatchValue = (string)($option['swatch_value'] ?? '');
                                 $optionImage = (string)($option['option_image'] ?? '');
+                                $choiceImage = $optionImage !== '' ? $optionImage : ($swatchType === 'image' ? $swatchValue : '');
+                                $optionVariant = $optionVariantByOptionId[$optionId] ?? null;
+                                $optionPrice = is_array($optionVariant) ? (float)($optionVariant['price'] ?? 0) : $price;
+                                $optionOriginalPrice = is_array($optionVariant)
+                                    ? (float)($optionVariant['original_price'] ?? 0)
+                                    : $originalPrice;
+                                $optionFormattedPrice = $usesOptionCardGrid && $optionPrice > 0
+                                    ? \Weline\Currency\Helper\CurrencyFormatter::formatConverted($optionPrice)
+                                    : '';
+                                $optionFormattedOriginalPrice = $usesOptionCardGrid
+                                    && $optionOriginalPrice > $optionPrice
+                                    && $optionFormattedPrice !== ''
+                                    ? \Weline\Currency\Helper\CurrencyFormatter::formatConverted($optionOriginalPrice)
+                                    : '';
                                 ?>
                                 <?php if ($optionId > 0): ?>
                                 <button type="button"
-                                        class="product-option-choice <?= $isColorAttribute ? 'product-option-choice--swatch' : 'product-option-choice--pill' ?>"
+                                        class="product-option-choice <?= $optionChoiceClass ?>"
                                         data-option-id="<?= $optionId ?>"
                                         data-option-code="<?= htmlspecialchars($optionCode, ENT_QUOTES, 'UTF-8') ?>"
                                         data-option-label="<?= htmlspecialchars($optionLabel, ENT_QUOTES, 'UTF-8') ?>"
                                         data-option-image="<?= htmlspecialchars($optionImage, ENT_QUOTES, 'UTF-8') ?>"
                                         data-swatch-type="<?= htmlspecialchars($swatchType, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-swatch-value="<?= htmlspecialchars($swatchValue, ENT_QUOTES, 'UTF-8') ?>"
                                         data-attribute-id="<?= $attributeId ?>"
                                         data-attribute-code="<?= htmlspecialchars($attributeCode, ENT_QUOTES, 'UTF-8') ?>"
                                         aria-pressed="false">
-                                    <?php if ($isColorAttribute): ?>
+                                    <?php if ($isColorAttribute && $swatchType === 'color'): ?>
+                                        <span class="product-option-color" style="background: <?= htmlspecialchars($swatchValue !== '' ? $swatchValue : '#d1d5db', ENT_QUOTES, 'UTF-8') ?>"></span>
+                                    <?php elseif ($isColorAttribute): ?>
                                         <?php if ($optionImage !== ''): ?>
                                             <span class="product-option-image" style="background-image: url('<?= htmlspecialchars($optionImage, ENT_QUOTES, 'UTF-8') ?>')"></span>
                                         <?php elseif ($swatchType === 'image' && $swatchValue !== ''): ?>
@@ -353,14 +496,31 @@ $productImageVariant = static function (string $url, int $width): string {
                                         <?php else: ?>
                                             <span class="product-option-color" style="background: <?= htmlspecialchars($swatchValue !== '' ? $swatchValue : '#d1d5db', ENT_QUOTES, 'UTF-8') ?>"></span>
                                         <?php endif; ?>
-                                    <?php elseif ($optionImage !== ''): ?>
-                                        <span class="product-option-image" style="background-image: url('<?= htmlspecialchars($optionImage, ENT_QUOTES, 'UTF-8') ?>')"></span>
+                                    <?php elseif ($choiceImage !== ''): ?>
+                                        <span class="product-option-image" style="background-image: url('<?= htmlspecialchars($choiceImage, ENT_QUOTES, 'UTF-8') ?>')"></span>
                                     <?php endif; ?>
                                     <span class="product-option-text"><?= htmlspecialchars($optionLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php if ($usesOptionCardGrid && ($optionFormattedPrice !== '' || $optionFormattedOriginalPrice !== '')): ?>
+                                    <span class="product-option-card-meta">
+                                        <?php if ($optionFormattedPrice !== ''): ?>
+                                        <span class="product-option-card-price"><?= htmlspecialchars($optionFormattedPrice, ENT_QUOTES, 'UTF-8') ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($optionFormattedOriginalPrice !== ''): ?>
+                                        <span class="product-option-card-original"><?= htmlspecialchars($optionFormattedOriginalPrice, ENT_QUOTES, 'UTF-8') ?></span>
+                                        <?php endif; ?>
+                                    </span>
+                                    <?php endif; ?>
                                 </button>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div>
+                        <?php if ($isPagedOptionList): ?>
+                        <div class="product-option-pagination" data-option-pagination aria-label="<?= htmlspecialchars((string)__('选项分页'), ENT_QUOTES, 'UTF-8') ?>">
+                            <button type="button" class="product-option-page-control" data-option-page-prev aria-label="<?= htmlspecialchars((string)__('上一页'), ENT_QUOTES, 'UTF-8') ?>">‹</button>
+                            <div class="product-option-page-numbers" data-option-page-numbers></div>
+                            <button type="button" class="product-option-page-control" data-option-page-next aria-label="<?= htmlspecialchars((string)__('下一页'), ENT_QUOTES, 'UTF-8') ?>">›</button>
+                        </div>
+                        <?php endif; ?>
                     </fieldset>
                     <?php endif; ?>
                 <?php endforeach; ?>
@@ -443,6 +603,7 @@ $productImageVariant = static function (string $url, int $width): string {
                     </button>
                 </div>
             </div>
+            <?= $this->getHook('WeShop_Product::frontend::product::detail::after-add-to-cart') ?>
         </aside>
     </div>
 
@@ -878,10 +1039,18 @@ $productImageVariant = static function (string $url, int $width): string {
 }
 
 .product-option-swatches,
+.product-option-image-swatches,
 .product-option-pills {
     display: flex;
     flex-wrap: wrap;
     gap: .55rem;
+}
+
+.product-option-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: .55rem;
+    max-width: 100%;
 }
 
 .product-option-choice {
@@ -914,6 +1083,153 @@ $productImageVariant = static function (string $url, int $width): string {
     align-items: center;
     gap: .5rem;
     padding: .35rem .8rem .35rem .4rem;
+}
+
+.product-option-choice--image {
+    display: inline-flex;
+    align-items: center;
+    gap: .55rem;
+    min-width: 6.5rem;
+    padding: .35rem .8rem .35rem .35rem;
+}
+
+.product-option-choice--image .product-option-image {
+    width: 3rem;
+    height: 3rem;
+    flex: 0 0 3rem;
+    border-radius: 6px;
+}
+
+.product-option-choice--image .product-option-text {
+    max-width: 7rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+
+.product-option-choice--card {
+    width: 100%;
+    min-height: 7.8rem;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: .35rem;
+    padding: .35rem;
+    overflow: hidden;
+}
+
+.product-option-choice--card.product-option-choice--pill,
+.product-option-choice--card.product-option-choice--swatch {
+    display: inline-flex;
+    flex-direction: column;
+}
+
+.product-option-choice--card.product-option-choice--image {
+    flex-direction: column;
+    min-width: 0;
+}
+
+.product-option-choice--card .product-option-image,
+.product-option-choice--card .product-option-color {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    flex: 0 0 auto;
+    border-radius: 5px;
+}
+
+.product-option-choice--card .product-option-image {
+    background-size: cover;
+}
+
+.product-option-choice--card .product-option-color {
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,.75);
+}
+
+.product-option-choice--card .product-option-text {
+    width: 100%;
+    max-width: none;
+    color: #0f1111;
+    font-size: .78rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+
+.product-option-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .25rem;
+    width: 100%;
+    line-height: 1.1;
+}
+
+.product-option-card-price {
+    color: #0f1111;
+    font-size: .82rem;
+    font-weight: 700;
+}
+
+.product-option-card-original {
+    color: #565959;
+    font-size: .72rem;
+    font-weight: 500;
+    text-decoration: line-through;
+}
+
+.product-option-choice.is-option-page-hidden {
+    display: none;
+}
+
+.product-option-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    margin-top: .6rem;
+}
+
+.product-option-page-numbers {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+}
+
+.product-option-page-control,
+.product-option-page-number {
+    min-width: 34px;
+    height: 32px;
+    border: 1px solid #d5d9d9;
+    border-radius: 8px;
+    background: #fff;
+    color: #0f1111;
+    font-size: .92rem;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.product-option-page-control:hover:not(:disabled),
+.product-option-page-number:hover:not(.is-active) {
+    border-color: #007185;
+    box-shadow: 0 0 0 2px rgba(0, 113, 133, .16);
+}
+
+.product-option-page-control:disabled {
+    color: #a6a6a6;
+    cursor: not-allowed;
+    background: #f7fafa;
+}
+
+.product-option-page-number.is-active {
+    border-color: #007185;
+    background: #f0f8ff;
+    color: #007185;
+}
+
+.product-option-page-ellipsis {
+    min-width: 18px;
+    color: #565959;
+    text-align: center;
 }
 
 .product-option-color {
@@ -1387,6 +1703,20 @@ $productImageVariant = static function (string $url, int $width): string {
         font-size: 1.5rem;
     }
 
+    .product-option-card-grid {
+        grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+    }
+
+    .product-option-choice--card {
+        min-height: 7.2rem;
+    }
+
+    .product-option-pagination {
+        justify-content: flex-start;
+        overflow-x: auto;
+        padding-bottom: .1rem;
+    }
+
     .product-price-value {
         font-size: 1.8rem;
     }
@@ -1410,6 +1740,7 @@ var productDetailCurrencyConfig = {
     locale: <?= json_encode(str_replace('_', '-', \Weline\Framework\App\State::getLangLocal()), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
 };
 var productDetailConfigurableVariants = <?= json_encode($configurableVariants, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>;
+var productDetailOptionImageMatrix = <?= json_encode($productDetailOptionImageMatrix, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
 var productDetailCheckoutUrl = <?= json_encode($this->getUrl('checkout'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 var productDetailI18n = <?= json_encode([
     'checkoutUrlMissing' => (string) __('结算页地址未配置'),
@@ -1421,6 +1752,7 @@ var productDetailI18n = <?= json_encode([
     'choosePrefix' => (string) __('请选择'),
     'listSeparator' => (string) __('、'),
     'selectedPrefix' => (string) __('已选'),
+    'pageLabelTemplate' => (string) __('第 %{1} 页'),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 var productDetailApiMessageI18n = <?= json_encode([
     '已成功加入购物车。' => (string) __('已成功加入购物车。'),
@@ -1693,18 +2025,68 @@ var productDetailApiMessageI18n = <?= json_encode([
         });
     }
 
+    function parseProductGalleryOptionSelection(thumb) {
+        var raw = thumb && thumb.dataset ? String(thumb.dataset.optionSelection || '').trim() : '';
+        if (!raw) {
+            return {};
+        }
+
+        try {
+            var parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function findProductGallerySelectionChoice(attributeCode, optionCode) {
+        var normalizedAttributeCode = normalizeProductOptionMatrixCode(attributeCode);
+        if (!productDetailRoot || !normalizedAttributeCode || !String(optionCode || '').trim()) {
+            return null;
+        }
+
+        var groups = productDetailRoot.querySelectorAll('.product-option-group');
+        for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+            var group = groups[groupIndex];
+            var groupCode = normalizeProductOptionMatrixCode(group.dataset.attributeCode || getProductOptionUrlKey(group));
+            var groupAttributeKey = normalizeProductOptionMatrixCode('attribute_' + String(group.dataset.attributeId || '').trim());
+            if (groupCode !== normalizedAttributeCode && groupAttributeKey !== normalizedAttributeCode) {
+                continue;
+            }
+
+            var choices = group.querySelectorAll('.product-option-choice:not(:disabled)');
+            for (var choiceIndex = 0; choiceIndex < choices.length; choiceIndex++) {
+                if (optionChoiceMatchesUrlValue(choices[choiceIndex], optionCode)) {
+                    return choices[choiceIndex];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    function applyProductGalleryOptionSelection(thumb) {
+        var selection = parseProductGalleryOptionSelection(thumb);
+        var changed = false;
+        Object.keys(selection).forEach(function(attributeCode) {
+            var choice = findProductGallerySelectionChoice(attributeCode, selection[attributeCode]);
+            if (choice && !choice.classList.contains('is-selected') && selectProductOptionChoice(choice)) {
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            updateVariantState();
+        }
+
+        return changed;
+    }
+
     document.querySelectorAll('.thumbnail-item').forEach(function(thumb) {
         thumb.addEventListener('click', function() {
             var src = this.dataset.src;
-            var mainImg = document.getElementById('main-product-image');
-            if (mainImg && src) {
-                mainImg.src = src;
-                syncZoomPreviewImage();
-                disableImageZoom();
-                document.querySelectorAll('.thumbnail-item').forEach(function(t) {
-                    t.classList.remove('active');
-                });
-                this.classList.add('active');
+            if (setProductDetailMainImage(src)) {
+                applyProductGalleryOptionSelection(this);
             }
         });
     });
@@ -1726,13 +2108,83 @@ var productDetailApiMessageI18n = <?= json_encode([
             input.value = val;
         });
     });
+
+    function normalizeProductOptionMatrixCode(value) {
+        return String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+    }
+
+    function getProductOptionMatrixImage(colorCode, styleCode) {
+        if (!productDetailOptionImageMatrix || typeof productDetailOptionImageMatrix !== 'object') {
+            return '';
+        }
+        var colorKey = normalizeProductOptionMatrixCode(colorCode);
+        var styleKey = normalizeProductOptionMatrixCode(styleCode || 'classic');
+        var colorImages = colorKey ? productDetailOptionImageMatrix[colorKey] : null;
+        if (!colorImages || typeof colorImages !== 'object') {
+            return '';
+        }
+
+        return String(colorImages[styleKey] || colorImages.classic || '').trim();
+    }
+
+    function getProductOptionCodesFromDetails(details) {
+        var codes = {};
+        details.forEach(function(detail) {
+            var attributeCode = normalizeProductOptionMatrixCode(detail.attribute_code);
+            if (attributeCode) {
+                codes[attributeCode] = normalizeProductOptionMatrixCode(detail.option_code || detail.value);
+            }
+        });
+
+        return codes;
+    }
+
+    function getProductOptionMatrixImageForDetails(details) {
+        var codes = getProductOptionCodesFromDetails(details);
+        return getProductOptionMatrixImage(codes.color, codes.style || 'classic');
+    }
+
+    function updateProductStyleImagesForColor(colorCode) {
+        if (!productDetailRoot) {
+            return;
+        }
+        var colorKey = normalizeProductOptionMatrixCode(colorCode);
+        if (!colorKey) {
+            return;
+        }
+
+        productDetailRoot.querySelectorAll('.product-option-group').forEach(function(group) {
+            if (normalizeProductOptionMatrixCode(group.dataset.attributeCode) !== 'style') {
+                return;
+            }
+            group.querySelectorAll('.product-option-choice').forEach(function(choice) {
+                var styleCode = normalizeProductOptionMatrixCode(choice.dataset.optionCode || choice.dataset.optionLabel);
+                var image = getProductOptionMatrixImage(colorKey, styleCode);
+                if (!image) {
+                    return;
+                }
+                choice.dataset.swatchType = 'image';
+                choice.dataset.swatchValue = image;
+                choice.dataset.optionImage = image;
+
+                var imageNode = choice.querySelector('.product-option-image');
+                if (!imageNode) {
+                    imageNode = document.createElement('span');
+                    imageNode.className = 'product-option-image';
+                    choice.insertBefore(imageNode, choice.firstChild);
+                }
+                imageNode.style.backgroundImage = 'url("' + image.replace(/"/g, '\\"') + '")';
+            });
+        });
+    }
     
     function getProductOptionState() {
         var selected = [];
         var labels = [];
+        var details = [];
         var missing = [];
         if (!productDetailRoot) {
-            return { selectedOptions: selected, labels: labels, missing: missing };
+            return { selectedOptions: selected, labels: labels, details: details, missing: missing };
         }
         productDetailRoot.querySelectorAll('.product-option-group').forEach(function(group) {
             var title = group.querySelector('.product-option-title');
@@ -1744,8 +2196,42 @@ var productDetailApiMessageI18n = <?= json_encode([
             }
             selected.push(Number(selectedButton.dataset.optionId));
             labels.push(titleText + ': ' + selectedButton.dataset.optionLabel);
+            details.push({
+                label: titleText,
+                value: selectedButton.dataset.optionLabel || '',
+                attribute_id: Number(group.dataset.attributeId || selectedButton.dataset.attributeId || 0),
+                attribute_code: group.dataset.attributeCode || selectedButton.dataset.attributeCode || '',
+                option_id: Number(selectedButton.dataset.optionId || 0),
+                option_code: selectedButton.dataset.optionCode || '',
+                swatch_type: selectedButton.dataset.swatchType || '',
+                swatch_value: selectedButton.dataset.swatchValue || '',
+                option_image: selectedButton.dataset.optionImage || ''
+            });
         });
-        return { selectedOptions: selected.filter(Boolean), labels: labels, missing: missing };
+        var codes = getProductOptionCodesFromDetails(details);
+        if (codes.color) {
+            updateProductStyleImagesForColor(codes.color);
+        }
+        details = details.map(function(detail) {
+            var attributeCode = normalizeProductOptionMatrixCode(detail.attribute_code);
+            if (attributeCode === 'style') {
+                var styleImage = getProductOptionMatrixImage(codes.color, detail.option_code || codes.style || 'classic');
+                if (styleImage) {
+                    detail.swatch_type = 'image';
+                    detail.swatch_value = styleImage;
+                    detail.option_image = styleImage;
+                }
+            }
+            if (attributeCode === 'color') {
+                var colorImage = getProductOptionMatrixImage(detail.option_code || codes.color, codes.style || 'classic');
+                if (colorImage) {
+                    detail.option_image = colorImage;
+                }
+            }
+
+            return detail;
+        });
+        return { selectedOptions: selected.filter(Boolean), labels: labels, details: details, missing: missing };
     }
 
     function syncProductOptionUrl(state) {
@@ -1795,6 +2281,7 @@ var productDetailApiMessageI18n = <?= json_encode([
         productDetailRoot.querySelectorAll('.product-actions .btn-add-to-cart, .product-actions .btn-buy-now').forEach(function(button) {
             button.dataset.selectedOptions = JSON.stringify(state.selectedOptions);
             button.dataset.selectedOptionLabels = state.labels.join(' / ');
+            button.dataset.selectedOptionDetails = JSON.stringify(state.details);
             button.disabled = !complete || button.hasAttribute('data-stock-disabled');
         });
         if (statusNode) {
@@ -1802,27 +2289,76 @@ var productDetailApiMessageI18n = <?= json_encode([
             statusNode.textContent = complete ? state.labels.join(' / ') : productDetailText('choosePrefix') + ': ' + state.missing.join(productDetailText('listSeparator'));
         }
         if (complete) {
-            updateSelectedVariantImage(state.selectedOptions);
+            if (!updateSelectedVariantImage(state.selectedOptions)) {
+                if (!setProductDetailMainImage(getProductOptionMatrixImageForDetails(state.details))) {
+                    updateSelectedOptionImage();
+                }
+            }
         }
         if (options.syncUrl !== false) {
             syncProductOptionUrl(state);
         }
     }
 
+    function getProductOptionChoiceImage(choice) {
+        if (!choice || !choice.dataset) {
+            return '';
+        }
+        var optionImage = String(choice.dataset.optionImage || '').trim();
+        if (optionImage !== '') {
+            return optionImage;
+        }
+        if (String(choice.dataset.swatchType || '') === 'image') {
+            return String(choice.dataset.swatchValue || '').trim();
+        }
+
+        return '';
+    }
+
+    function setProductDetailMainImage(imageUrl) {
+        var nextImage = String(imageUrl || '').trim();
+        if (!nextImage || !productDetailMainImage) {
+            return false;
+        }
+        if (productDetailMainImage.getAttribute('src') !== nextImage) {
+            productDetailMainImage.src = nextImage;
+        }
+        syncZoomPreviewImage();
+        disableImageZoom();
+        if (productDetailRoot) productDetailRoot.querySelectorAll('.thumbnail-item').forEach(function(item) {
+            item.classList.toggle('active', item.dataset.src === nextImage);
+        });
+
+        return true;
+    }
+
+    function updateSelectedOptionImage(choice) {
+        if (choice && setProductDetailMainImage(getProductOptionChoiceImage(choice))) {
+            return true;
+        }
+        if (!productDetailRoot) {
+            return false;
+        }
+
+        var imageChoices = productDetailRoot.querySelectorAll(
+            '.product-option-choice.is-selected.product-option-choice--image, .product-option-choice.is-selected[data-swatch-type="image"]'
+        );
+        for (var imageIndex = 0; imageIndex < imageChoices.length; imageIndex++) {
+            if (setProductDetailMainImage(getProductOptionChoiceImage(imageChoices[imageIndex]))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     function updateSelectedVariantImage(selectedOptions) {
         var variant = findProductDetailVariantByOptions(selectedOptions);
         if (!variant || !variant.image) {
-            return;
+            return false;
         }
-        var mainImg = document.getElementById('main-product-image');
-        if (mainImg) {
-            mainImg.src = variant.image;
-            syncZoomPreviewImage();
-            disableImageZoom();
-        }
-        productDetailRoot.querySelectorAll('.thumbnail-item').forEach(function(item) {
-            item.classList.toggle('active', item.dataset.src === variant.image);
-        });
+
+        return setProductDetailMainImage(variant.image);
     }
 
     function selectProductOptionChoice(choice) {
@@ -1840,7 +2376,150 @@ var productDetailApiMessageI18n = <?= json_encode([
         if (label) {
             label.textContent = choice.dataset.optionLabel ? productDetailText('selectedPrefix') + ' ' + choice.dataset.optionLabel : '';
         }
+        ensureProductOptionChoiceVisible(choice);
         return true;
+    }
+
+    function getProductOptionPageSize(group) {
+        var parsed = parseInt(group && group.dataset ? group.dataset.optionPageSize : '0', 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 12;
+    }
+
+    function getProductOptionPagedChoices(group) {
+        var list = group ? group.querySelector('[data-option-page-list]') : null;
+        return Array.from((list || group || document).querySelectorAll('.product-option-choice'));
+    }
+
+    function getProductOptionPageForChoice(group, choice) {
+        var choices = getProductOptionPagedChoices(group);
+        var index = choices.indexOf(choice);
+        if (index < 0) {
+            return 1;
+        }
+
+        return Math.floor(index / getProductOptionPageSize(group)) + 1;
+    }
+
+    function appendProductOptionPageNumber(group, numbers, page, currentPage) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'product-option-page-number' + (page === currentPage ? ' is-active' : '');
+        button.textContent = String(page);
+        button.setAttribute('aria-label', productDetailText('pageLabelTemplate').replace('%{1}', String(page)));
+        if (page === currentPage) {
+            button.setAttribute('aria-current', 'page');
+        }
+        button.addEventListener('click', function() {
+            setProductOptionGroupPage(group, page);
+        });
+        numbers.appendChild(button);
+    }
+
+    function appendProductOptionPageEllipsis(numbers) {
+        var ellipsis = document.createElement('span');
+        ellipsis.className = 'product-option-page-ellipsis';
+        ellipsis.textContent = '...';
+        numbers.appendChild(ellipsis);
+    }
+
+    function renderProductOptionPagination(group, currentPage, pageCount) {
+        var pager = group ? group.querySelector('[data-option-pagination]') : null;
+        if (!pager) {
+            return;
+        }
+
+        var prev = pager.querySelector('[data-option-page-prev]');
+        var next = pager.querySelector('[data-option-page-next]');
+        var numbers = pager.querySelector('[data-option-page-numbers]');
+        if (prev) {
+            prev.disabled = currentPage <= 1;
+        }
+        if (next) {
+            next.disabled = currentPage >= pageCount;
+        }
+        if (!numbers) {
+            return;
+        }
+
+        numbers.textContent = '';
+        var lastRenderedPage = 0;
+        for (var page = 1; page <= pageCount; page++) {
+            var shouldRender = page === 1
+                || page === pageCount
+                || Math.abs(page - currentPage) <= 1
+                || (currentPage <= 3 && page <= 4)
+                || (currentPage >= pageCount - 2 && page >= pageCount - 3);
+            if (!shouldRender) {
+                if (lastRenderedPage !== -1) {
+                    appendProductOptionPageEllipsis(numbers);
+                    lastRenderedPage = -1;
+                }
+                continue;
+            }
+
+            appendProductOptionPageNumber(group, numbers, page, currentPage);
+            lastRenderedPage = page;
+        }
+    }
+
+    function setProductOptionGroupPage(group, page) {
+        if (!group || group.dataset.optionPaged !== '1') {
+            return;
+        }
+
+        var choices = getProductOptionPagedChoices(group);
+        var pageSize = getProductOptionPageSize(group);
+        var pageCount = Math.max(1, Math.ceil(choices.length / pageSize));
+        var currentPage = Math.max(1, Math.min(pageCount, parseInt(page, 10) || 1));
+        var start = (currentPage - 1) * pageSize;
+        var end = start + pageSize;
+        group.dataset.optionPage = String(currentPage);
+
+        choices.forEach(function(choice, index) {
+            var isVisible = index >= start && index < end;
+            choice.classList.toggle('is-option-page-hidden', !isVisible);
+            if (isVisible) {
+                choice.removeAttribute('aria-hidden');
+            } else {
+                choice.setAttribute('aria-hidden', 'true');
+            }
+        });
+
+        renderProductOptionPagination(group, currentPage, pageCount);
+    }
+
+    function ensureProductOptionChoiceVisible(choice) {
+        var group = choice ? choice.closest('.product-option-group') : null;
+        if (!group || group.dataset.optionPaged !== '1') {
+            return;
+        }
+
+        setProductOptionGroupPage(group, getProductOptionPageForChoice(group, choice));
+    }
+
+    function initProductOptionPagination(group) {
+        if (!group || group.dataset.optionPaged !== '1') {
+            return;
+        }
+
+        if (group.dataset.optionPaginationReady !== '1') {
+            var prev = group.querySelector('[data-option-page-prev]');
+            var next = group.querySelector('[data-option-page-next]');
+            if (prev) {
+                prev.addEventListener('click', function() {
+                    setProductOptionGroupPage(group, (parseInt(group.dataset.optionPage || '1', 10) || 1) - 1);
+                });
+            }
+            if (next) {
+                next.addEventListener('click', function() {
+                    setProductOptionGroupPage(group, (parseInt(group.dataset.optionPage || '1', 10) || 1) + 1);
+                });
+            }
+            group.dataset.optionPaginationReady = '1';
+        }
+
+        var selected = group.querySelector('.product-option-choice.is-selected');
+        setProductOptionGroupPage(group, selected ? getProductOptionPageForChoice(group, selected) : 1);
     }
 
     function findProductOptionChoiceFromUrl(group, params, optionIds) {
@@ -2007,7 +2686,7 @@ var productDetailApiMessageI18n = <?= json_encode([
         window.location.href = checkoutUrl;
     }
 
-    function addProductDetailToCart(button, productId, qty, selectedOptions, selectedOptionLabels) {
+    function addProductDetailToCart(button, productId, qty, selectedOptions, selectedOptionLabels, selectedOptionDetails) {
         setProductDetailCartButtonLoading(button, true);
         return getProductDetailCartApi()
             .then(function(CartApi) {
@@ -2018,7 +2697,8 @@ var productDetailApiMessageI18n = <?= json_encode([
                     product_id: Number(productId),
                     qty: qty,
                     selected_options: selectedOptions,
-                    selected_option_labels: selectedOptionLabels || []
+                    selected_option_labels: selectedOptionLabels || [],
+                    selected_option_details: selectedOptionDetails || []
                 });
             })
             .then(normalizeCartPayload)
@@ -2036,6 +2716,8 @@ var productDetailApiMessageI18n = <?= json_encode([
                         selected_options: selectedOptions,
                         selectedOptions: selectedOptions,
                         selected_option_labels: selectedOptionLabels || [],
+                        selected_option_details: selectedOptionDetails || [],
+                        selectedOptionDetails: selectedOptionDetails || [],
                         cart_item_id: result.cart_item_id,
                         cartItemId: result.cart_item_id,
                         cart_count: result.cart_count,
@@ -2078,6 +2760,7 @@ var productDetailApiMessageI18n = <?= json_encode([
     if (productDetailRoot) productDetailRoot.querySelectorAll('.product-option-choice').forEach(function(choice) {
         choice.addEventListener('click', function() {
             selectProductOptionChoice(this);
+            updateSelectedOptionImage(this);
             updateVariantState();
         });
     });
@@ -2091,6 +2774,9 @@ var productDetailApiMessageI18n = <?= json_encode([
         if (firstAvailable) {
             selectProductOptionChoice(firstAvailable);
         }
+    });
+    if (productDetailRoot) productDetailRoot.querySelectorAll('.product-option-group[data-option-paged="1"]').forEach(function(group) {
+        initProductOptionPagination(group);
     });
     updateVariantState();
 
@@ -2117,7 +2803,7 @@ var productDetailApiMessageI18n = <?= json_encode([
             if (textNode) {
                 textNode.textContent = '<?= __('添加中') ?>...';
             }
-            addProductDetailToCart(button, productId, qty, optionState.selectedOptions, optionState.labels)
+            addProductDetailToCart(button, productId, qty, optionState.selectedOptions, optionState.labels, optionState.details)
                 .then(function() {
                     if (textNode) {
                         textNode.textContent = '<?= __('已添加') ?>';
@@ -2153,7 +2839,7 @@ var productDetailApiMessageI18n = <?= json_encode([
                 textNode.textContent = '<?= __('跳转结算中') ?>...';
             }
 
-            addProductDetailToCart(button, productId, qty, optionState.selectedOptions, optionState.labels)
+            addProductDetailToCart(button, productId, qty, optionState.selectedOptions, optionState.labels, optionState.details)
                 .then(function() {
                     document.dispatchEvent(new CustomEvent('weshop:buyNow', {
                         detail: {
@@ -2161,6 +2847,7 @@ var productDetailApiMessageI18n = <?= json_encode([
                             qty: qty,
                             selectedOptions: optionState.selectedOptions,
                             selectedOptionLabels: optionState.labels,
+                            selectedOptionDetails: optionState.details,
                             checkoutUrl: productDetailCheckoutUrl
                         }
                     }));

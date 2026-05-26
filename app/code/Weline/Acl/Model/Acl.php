@@ -20,6 +20,9 @@ use Weline\Framework\Manager\ObjectManager;
 
 #[Table(comment: 'ACL权限表')]
 #[Index(name: 'idx_source_id', columns: ['source_id'], type: 'UNIQUE', comment: 'ACL资源ID唯一')]
+#[Index(name: 'idx_acl_access_mode', columns: ['access_mode'], comment: 'ACL访问模式')]
+#[Index(name: 'idx_acl_scope_group', columns: ['scope_group'], comment: 'API scope分组')]
+#[Index(name: 'idx_acl_api_exposable', columns: ['api_exposable'], comment: 'API授权暴露')]
 class Acl extends \Weline\Framework\Database\Model
 {
 
@@ -61,15 +64,38 @@ class Acl extends \Weline\Framework\Database\Model
     public const schema_fields_IS_BACKEND = 'is_backend';
     #[Col(type: 'varchar', length: 32, nullable: false, default: 'menu_xml', comment: 'ACL来源')]
     public const schema_fields_ACL_ORIGIN = 'acl_origin';
+    #[Col(type: 'varchar', length: 16, nullable: false, default: 'edit', comment: '访问模式 read/edit')]
+    public const schema_fields_ACCESS_MODE = 'access_mode';
+    #[Col(type: 'varchar', length: 127, nullable: false, default: '', comment: 'API scope分组')]
+    public const schema_fields_SCOPE_GROUP = 'scope_group';
+    #[Col(type: 'smallint', nullable: false, default: 0, comment: '是否允许外部API应用授权')]
+    public const schema_fields_API_EXPOSABLE = 'api_exposable';
 
     public const type_MENUS = 'menus';
     public const acl_origin_menu_xml = 'menu_xml';
     public const acl_origin_user = 'user';
+    public const ACCESS_MODE_READ = 'read';
+    public const ACCESS_MODE_EDIT = 'edit';
 
     public array $_unit_primary_keys = [self::schema_fields_SOURCE_ID];
 
 
     private ?Url $url = null;
+
+    public static function normalizeAccessMode(?string $accessMode = null, ?string $httpMethod = null): string
+    {
+        $accessMode = strtolower(trim((string)$accessMode));
+        if ($accessMode === self::ACCESS_MODE_READ || $accessMode === self::ACCESS_MODE_EDIT) {
+            return $accessMode;
+        }
+
+        $httpMethod = strtoupper(trim((string)$httpMethod));
+        if ($httpMethod === 'GET' || $httpMethod === 'HEAD') {
+            return self::ACCESS_MODE_READ;
+        }
+
+        return self::ACCESS_MODE_EDIT;
+    }
 
     public function __init()
     {
@@ -175,6 +201,21 @@ class Acl extends \Weline\Framework\Database\Model
         return $this->setData(self::schema_fields_ACL_ORIGIN, $aclOrigin);
     }
 
+    public function setAccessMode(?string $accessMode, ?string $httpMethod = null): static
+    {
+        return $this->setData(self::schema_fields_ACCESS_MODE, self::normalizeAccessMode($accessMode, $httpMethod));
+    }
+
+    public function setScopeGroup(string $scopeGroup): static
+    {
+        return $this->setData(self::schema_fields_SCOPE_GROUP, trim($scopeGroup));
+    }
+
+    public function setApiExposable(bool|int|string $apiExposable): static
+    {
+        return $this->setData(self::schema_fields_API_EXPOSABLE, (int)filter_var($apiExposable, FILTER_VALIDATE_BOOLEAN));
+    }
+
     public function getAclId(): int
     {
         return intval($this->getData(self::schema_fields_ACL_ID));
@@ -266,6 +307,20 @@ class Acl extends \Weline\Framework\Database\Model
         return (string)($this->getData(self::schema_fields_ACL_ORIGIN) ?? '');
     }
 
+    public function getAccessMode(): string
+    {
+        return self::normalizeAccessMode((string)($this->getData(self::schema_fields_ACCESS_MODE) ?? ''), $this->getMethod());
+    }
+
+    public function getScopeGroup(): string
+    {
+        return (string)($this->getData(self::schema_fields_SCOPE_GROUP) ?? '');
+    }
+
+    public function isApiExposable(): bool
+    {
+        return (bool)$this->getData(self::schema_fields_API_EXPOSABLE);
+    }
 
 }
 

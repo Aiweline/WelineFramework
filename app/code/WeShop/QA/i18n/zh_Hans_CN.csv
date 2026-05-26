@@ -39,6 +39,26 @@
 已下单用户,已下单用户
 您在商品问答中被提及,您在商品问答中被提及
 "客户 %{1} 在商品问答中提到了您。","客户 %{1} 在商品问答中提到了您。"
+加载当前商品问答失败：%{1},加载当前商品问答失败：%{1}
+Pending,Pending
+Approved,Approved
+Rejected,Rejected
+当前商品问答,当前商品问答
+"在商品编辑页查看系统 FAQ、客户问答和已下单用户问答。","在商品编辑页查看系统 FAQ、客户问答和已下单用户问答。"
+查看全部问答,查看全部问答
+保存商品后即可查看问答。,保存商品后即可查看问答。
+"Total Questions",问题总数
+推荐,推荐
+暂无商品问答。,暂无商品问答。
+来源,来源
+问题,问题
+回复,回复
+Status,Status
+"Created At","Created At"
+Actions,Actions
+View,View
+问答/FAQ,问答/FAQ
+当前商品,当前商品
 "Questions & Answers",问答
 "Community Q&A",社区问答
 "Open Full Q&A",查看完整问答
@@ -52,18 +72,10 @@ List,List
 ID,ID
 "Product ID","Product ID"
 "Customer ID","Customer ID"
-来源,来源
 Question,Question
 Answer,Answer
-Status,Status
 Created,Created
-Actions,Actions
-推荐,推荐
 "Not answered yet","Not answered yet"
-Pending,Pending
-Approved,Approved
-Rejected,Rejected
-View,View
 "Are you sure you want to approve this question?","Are you sure you want to approve this question?"
 Approve,Approve
 "Are you sure you want to reject this question?","Are you sure you want to reject this question?"
@@ -85,7 +97,6 @@ Detail,Detail
 展示名称,展示名称
 是,是
 否,否
-"Created At","Created At"
 "Updated At","Updated At"
 来源设置,来源设置
 推荐/热门,推荐/热门

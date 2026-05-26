@@ -6,22 +6,28 @@ namespace WeShop\Payment\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Payment\Model\PaymentMethodConfig;
+use Weline\Payment\Service\PaymentScopeConfigService;
 use WeShop\Order\Model\Order;
 use WeShop\Payment\Interface\PaymentProviderInterface;
-use WeShop\Payment\Provider\Alipay;
-use WeShop\Payment\Provider\CashOnDelivery;
-use WeShop\B2B\Payment\Provider\CreditAccount;
-use WeShop\Payment\Provider\ManualTransfer;
-use WeShop\Payment\Provider\PayPal;
-use WeShop\Payment\Provider\WeChatPay;
 
 class PaymentService
 {
     private ?PaymentMethodLocalDescriptionService $localDescriptionService = null;
+    private ?PaymentCatalogueService $catalogueService = null;
+    private ?PaymentDocumentationService $documentationService = null;
+    private ?PaymentScopeConfigService $scopeConfigService = null;
 
-    public function __construct(?PaymentMethodLocalDescriptionService $localDescriptionService = null)
-    {
+    public function __construct(
+        ?PaymentMethodLocalDescriptionService $localDescriptionService = null,
+        ?PaymentCatalogueService $catalogueService = null,
+        ?PaymentDocumentationService $documentationService = null,
+        ?PaymentScopeConfigService $scopeConfigService = null
+    ) {
         $this->localDescriptionService = $localDescriptionService;
+        $this->catalogueService = $catalogueService;
+        $this->documentationService = $documentationService;
+        $this->scopeConfigService = $scopeConfigService;
     }
 
     /**
@@ -29,183 +35,13 @@ class PaymentService
      */
     protected function getMethodRegistry(): array
     {
-        return [
-            'b2b_credit_account' => [
-                'code' => 'b2b_credit_account',
-                'title' => (string) __('企业信用账户'),
-                'description' => (string) __('订单计入企业信用额度，并在到期日前按发票付款。'),
-                'provider' => CreditAccount::class,
-                'enabled' => true,
-                'is_default' => false,
-                'sort_order' => 15,
-                'icon' => '',
-                'areas' => ['frontend', 'backend', 'api'],
-                'currencies' => [],
-                'countries' => [],
-                'config' => [
-                    'instructions' => (string) __('仅适用于已开通有效信用额度的企业客户。'),
-                ],
-                'config_fields' => [
-                    ['key' => 'instructions', 'label' => (string) __('说明'), 'type' => 'textarea'],
-                ],
-            ],
-            'manual_transfer' => [
-                'code' => 'manual_transfer',
-                'title' => (string) __('银行转账'),
-                'description' => (string) __('下单后通过银行转账付款。'),
-                'provider' => ManualTransfer::class,
-                'enabled' => true,
-                'is_default' => true,
-                'sort_order' => 10,
-                'icon' => '',
-                'areas' => ['frontend', 'backend', 'api'],
-                'currencies' => [],
-                'countries' => [],
-                'config' => [
-                    'instructions' => (string) __('请将订单金额转入配置的银行账户，并使用订单号作为付款备注。'),
-                    'account_name' => '',
-                    'bank_name' => '',
-                    'account_number' => '',
-                    'reference_note' => (string) __('请使用订单号作为付款备注。'),
-                ],
-                'config_fields' => [
-                    ['key' => 'instructions', 'label' => (string) __('说明'), 'type' => 'textarea', 'help' => (string) __('订单创建后展示给客户。')],
-                    ['key' => 'account_name', 'label' => (string) __('账户名称'), 'type' => 'text'],
-                    ['key' => 'bank_name', 'label' => (string) __('开户银行'), 'type' => 'text'],
-                    ['key' => 'account_number', 'label' => (string) __('银行账号'), 'type' => 'text'],
-                    ['key' => 'reference_note', 'label' => (string) __('付款备注'), 'type' => 'text'],
-                ],
-            ],
-            'cash_on_delivery' => [
-                'code' => 'cash_on_delivery',
-                'title' => (string) __('货到付款'),
-                'description' => (string) __('配送送达时现金付款。'),
-                'provider' => CashOnDelivery::class,
-                'enabled' => true,
-                'is_default' => false,
-                'sort_order' => 20,
-                'icon' => '',
-                'areas' => ['frontend', 'backend', 'api'],
-                'currencies' => [],
-                'countries' => [],
-                'config' => [
-                    'instructions' => (string) __('配送送达时向客户收款。'),
-                    'fee' => '0',
-                ],
-                'config_fields' => [
-                    ['key' => 'instructions', 'label' => (string) __('说明'), 'type' => 'textarea'],
-                    ['key' => 'fee', 'label' => (string) __('货到付款手续费'), 'type' => 'number', 'step' => '0.01'],
-                ],
-            ],
-            'paypal' => [
-                'code' => 'paypal',
-                'title' => (string) __('PayPal'),
-                'description' => (string) __('使用 PayPal 账户在线支付。'),
-                'provider' => PayPal::class,
-                'enabled' => true,
-                'is_default' => false,
-                'sort_order' => 30,
-                'icon' => '',
-                'areas' => ['frontend', 'backend', 'api'],
-                'currencies' => ['USD', 'EUR', 'GBP'],
-                'countries' => [],
-                'config' => [
-                    'sandbox' => true,
-                    'client_id' => '',
-                    'client_secret' => '',
-                    'merchant_email' => '',
-                    'webhook_id' => '',
-                ],
-                'config_fields' => [
-                    ['key' => 'sandbox', 'label' => (string) __('沙箱模式'), 'type' => 'checkbox', 'help' => (string) __('生产 PayPal 凭据准备好之前保持开启。')],
-                    ['key' => 'client_id', 'label' => (string) __('客户端 ID'), 'type' => 'text'],
-                    ['key' => 'client_secret', 'label' => (string) __('客户端密钥'), 'type' => 'password'],
-                    ['key' => 'merchant_email', 'label' => (string) __('商户邮箱'), 'type' => 'text'],
-                    ['key' => 'webhook_id', 'label' => (string) __('Webhook ID'), 'type' => 'text'],
-                ],
-            ],
-            'alipay' => [
-                'code' => 'alipay',
-                'title' => (string) __('支付宝'),
-                'description' => (string) __('通过托管跳转结账使用支付宝付款。'),
-                'provider' => Alipay::class,
-                'enabled' => false,
-                'is_default' => false,
-                'sort_order' => 40,
-                'icon' => '',
-                'areas' => ['frontend', 'backend', 'api'],
-                'currencies' => ['CNY'],
-                'countries' => ['CN'],
-                'config' => [
-                    'sandbox' => true,
-                    'app_id' => '',
-                    'merchant_id' => '',
-                    'public_key' => '',
-                    'private_key' => '',
-                    'notify_url' => '',
-                    'return_url' => '',
-                    'product_code' => 'FAST_INSTANT_TRADE_PAY',
-                    'timeout_express' => '30m',
-                    'sign_type' => 'RSA2',
-                ],
-                'config_fields' => [
-                    ['key' => 'sandbox', 'label' => (string) __('沙箱模式'), 'type' => 'checkbox'],
-                    ['key' => 'app_id', 'label' => (string) __('App ID'), 'type' => 'text'],
-                    ['key' => 'merchant_id', 'label' => (string) __('商户 ID'), 'type' => 'text'],
-                    ['key' => 'public_key', 'label' => (string) __('公钥'), 'type' => 'textarea'],
-                    ['key' => 'private_key', 'label' => (string) __('私钥'), 'type' => 'textarea'],
-                    ['key' => 'notify_url', 'label' => (string) __('通知地址'), 'type' => 'text'],
-                    ['key' => 'return_url', 'label' => (string) __('返回地址'), 'type' => 'text'],
-                    ['key' => 'product_code', 'label' => (string) __('产品编码'), 'type' => 'text'],
-                    ['key' => 'timeout_express', 'label' => (string) __('支付超时时间'), 'type' => 'text'],
-                    ['key' => 'sign_type', 'label' => (string) __('签名类型'), 'type' => 'text'],
-                ],
-                'required_config' => ['app_id', 'merchant_id', 'public_key', 'private_key'],
-            ],
-            'wechatpay' => [
-                'code' => 'wechatpay',
-                'title' => (string) __('微信支付'),
-                'description' => (string) __('通过统一下单网关使用微信支付。'),
-                'provider' => WeChatPay::class,
-                'enabled' => false,
-                'is_default' => false,
-                'sort_order' => 50,
-                'icon' => '',
-                'areas' => ['frontend', 'backend', 'api'],
-                'currencies' => ['CNY'],
-                'countries' => ['CN'],
-                'config' => [
-                    'sandbox' => true,
-                    'app_id' => '',
-                    'mch_id' => '',
-                    'api_v3_key' => '',
-                    'merchant_cert_path' => '',
-                    'notify_url' => '',
-                    'trade_type' => 'MWEB',
-                    'sign_type' => 'MD5',
-                    'scene_info' => '{"h5_info":{"type":"Wap"}}',
-                    'spbill_create_ip' => '',
-                ],
-                'config_fields' => [
-                    ['key' => 'sandbox', 'label' => (string) __('沙箱模式'), 'type' => 'checkbox'],
-                    ['key' => 'app_id', 'label' => (string) __('App ID'), 'type' => 'text'],
-                    ['key' => 'mch_id', 'label' => (string) __('商户号'), 'type' => 'text'],
-                    ['key' => 'api_v3_key', 'label' => (string) __('API v3 密钥'), 'type' => 'password'],
-                    ['key' => 'merchant_cert_path', 'label' => (string) __('商户证书路径'), 'type' => 'text'],
-                    ['key' => 'notify_url', 'label' => (string) __('通知地址'), 'type' => 'text'],
-                    ['key' => 'trade_type', 'label' => (string) __('交易类型'), 'type' => 'text'],
-                    ['key' => 'sign_type', 'label' => (string) __('签名类型'), 'type' => 'text'],
-                    ['key' => 'scene_info', 'label' => (string) __('场景信息'), 'type' => 'textarea'],
-                    ['key' => 'spbill_create_ip', 'label' => (string) __('客户端 IP 覆盖'), 'type' => 'text'],
-                ],
-                'required_config' => ['app_id', 'mch_id', 'api_v3_key'],
-            ],
-        ];
+        return $this->getCatalogueService()->getMethodRegistry();
     }
 
     public function processPayment(Order $order, string $paymentMethod, array $paymentData = []): array
     {
-        $method = $this->requireMethod($paymentMethod);
+        $runtimeContext = $this->buildRuntimeContext($paymentData);
+        $method = $this->requireMethod($paymentMethod, $runtimeContext);
         if (!$this->isEnabled($method)) {
             throw new \InvalidArgumentException((string) __('Unsupported payment method: %{1}', [$paymentMethod]));
         }
@@ -215,11 +51,12 @@ class PaymentService
                 implode(', ', (array) ($method['missing_config'] ?? [])),
             ]));
         }
+        if (!$this->isConfigTestPassed($method)) {
+            throw new \InvalidArgumentException((string) __('Payment method %{1} has not passed configuration testing for this scope.', [$paymentMethod]));
+        }
 
         $provider = $this->resolveProvider($method);
-        $providerContext = $this->buildProviderContext($method, [
-            'payment_data' => $paymentData,
-        ]);
+        $providerContext = $this->buildProviderContext($method, $runtimeContext);
         $result = $provider->processPayment($order, $paymentData, $providerContext);
 
         return array_merge($method, $result, [
@@ -246,14 +83,14 @@ class PaymentService
         return $provider->queryPaymentStatus($orderNumber, $this->buildProviderContext($method, $context));
     }
 
-    public function getPaymentMethod(string $code): ?array
+    public function getPaymentMethod(string $code, array $context = []): ?array
     {
         $registry = $this->getMethodRegistry();
         if (!isset($registry[$code])) {
             return null;
         }
 
-        return $this->localizeMethod($this->applyRuntimeOverrides($this->normalizeMethod($registry[$code])));
+        return $this->localizeMethod($this->applyRuntimeOverrides($this->normalizeMethod($registry[$code]), $context));
     }
 
     public function getAvailablePaymentMethods(array $context = []): array
@@ -266,9 +103,28 @@ class PaymentService
         return $this->filterAndSortMethods($context, true);
     }
 
-    public function getManagementPaymentMethods(): array
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getManagementPaymentMethods(array $filters = []): array
     {
-        return $this->filterAndSortMethods(['area' => 'backend'], false);
+        return $this->filterAndSortMethods(array_merge(['area' => 'backend'], $filters), false);
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    public function getPaymentProviders(): array
+    {
+        return $this->getCatalogueService()->getProviders();
+    }
+
+    /**
+     * @return array<int, array{code: string, name: string}>
+     */
+    public function getCountryOptions(string $locale = 'zh_Hans_CN'): array
+    {
+        return $this->getCatalogueService()->getCountryOptions($locale);
     }
 
     /**
@@ -279,9 +135,9 @@ class PaymentService
         $methods = [];
         foreach ($this->getMethodRegistry() as $method) {
             $method = $this->normalizeMethod($method);
-            $method = $this->applyRuntimeOverrides($method);
+            $method = $this->applyRuntimeOverrides($method, $context);
             $method = $this->localizeMethod($method, (string) ($context['locale'] ?? ''));
-            if ($enabledOnly && (!$this->isEnabled($method) || !$this->isConfigured($method))) {
+            if ($enabledOnly && (!$this->isEnabled($method) || !$this->isConfigured($method) || empty($method['has_documentation']) || !$this->isConfigTestPassed($method))) {
                 continue;
             }
             if (!$this->matchesContext($method, $context)) {
@@ -290,7 +146,21 @@ class PaymentService
             $methods[] = $method;
         }
 
-        usort($methods, static fn(array $left, array $right): int => ((int) ($left['sort_order'] ?? 0)) <=> ((int) ($right['sort_order'] ?? 0)));
+        $country = strtoupper((string) ($context['country'] ?? $context['country_id'] ?? ''));
+        usort($methods, function (array $left, array $right) use ($country): int {
+            $leftScore = $this->resolveSortPopularity($left, $country);
+            $rightScore = $this->resolveSortPopularity($right, $country);
+            if ($leftScore !== $rightScore) {
+                return $rightScore <=> $leftScore;
+            }
+
+            $sortOrder = ((int) ($left['sort_order'] ?? 0)) <=> ((int) ($right['sort_order'] ?? 0));
+            if ($sortOrder !== 0) {
+                return $sortOrder;
+            }
+
+            return strcmp((string) ($left['code'] ?? ''), (string) ($right['code'] ?? ''));
+        });
 
         return $methods;
     }
@@ -316,9 +186,9 @@ class PaymentService
     /**
      * @return array<string, mixed>
      */
-    protected function requireMethod(string $paymentMethod): array
+    protected function requireMethod(string $paymentMethod, array $context = []): array
     {
-        $method = $this->getPaymentMethod($paymentMethod);
+        $method = $this->getPaymentMethod($paymentMethod, $context);
         if ($method === null) {
             throw new \InvalidArgumentException((string) __('Unsupported payment method: %{1}', [$paymentMethod]));
         }
@@ -359,25 +229,52 @@ class PaymentService
      */
     protected function normalizeMethod(array $method): array
     {
+        $countryPopularity = $this->normalizeCountryPopularity((array) ($method['country_popularity'] ?? []));
+        $countries = $this->normalizeCodes((array) ($method['countries'] ?? []), true);
+        $countryTags = $this->normalizeCodes((array) ($method['country_tags'] ?? array_merge($countries, array_keys($countryPopularity))), true);
+        $flow = (string) ($method['flow'] ?? '');
+        $methodType = (string) ($method['method_type'] ?? '');
+        $defaultTestStatus = $this->isStaticTestMethod($flow, $methodType)
+            ? PaymentMethodConfig::TEST_STATUS_PASSED
+            : PaymentMethodConfig::TEST_STATUS_UNTESTED;
+
         return [
             'code' => (string) ($method['code'] ?? ''),
+            'provider_code' => (string) ($method['provider_code'] ?? ''),
+            'provider_title' => (string) ($method['provider_title'] ?? ''),
             'title' => (string) ($method['title'] ?? ''),
             'description' => (string) ($method['description'] ?? ''),
             'provider' => (string) ($method['provider'] ?? ''),
             'enabled' => (bool) ($method['enabled'] ?? false),
             'is_default' => (bool) ($method['is_default'] ?? false),
             'sort_order' => (int) ($method['sort_order'] ?? 0),
+            'popularity_score' => (int) ($method['popularity_score'] ?? 0),
             'icon' => (string) ($method['icon'] ?? ''),
             'checkout_note' => (string) ($method['checkout_note'] ?? ''),
-            'areas' => array_values(array_map(static fn(mixed $value): string => (string) $value, (array) ($method['areas'] ?? []))),
-            'currencies' => array_values(array_map(static fn(mixed $value): string => strtoupper((string) $value), (array) ($method['currencies'] ?? []))),
-            'countries' => array_values(array_map(static fn(mixed $value): string => strtoupper((string) $value), (array) ($method['countries'] ?? []))),
+            'method_type' => $methodType,
+            'flow' => $flow,
+            'areas' => $this->normalizeCodes((array) ($method['areas'] ?? []), false),
+            'currencies' => $this->normalizeCodes((array) ($method['currencies'] ?? []), true),
+            'countries' => $countries,
+            'country_tags' => $countryTags,
+            'country_popularity' => $countryPopularity,
             'config' => \is_array($method['config'] ?? null) ? $method['config'] : [],
             'config_fields' => \is_array($method['config_fields'] ?? null) ? $method['config_fields'] : [],
             'required_config' => array_values(array_map(static fn(mixed $value): string => (string) $value, (array) ($method['required_config'] ?? []))),
+            'documentation_path' => (string) ($method['documentation_path'] ?? ''),
             'local_descriptions' => \is_array($method['local_descriptions'] ?? null) ? $method['local_descriptions'] : [],
             'missing_config' => [],
             'is_configured' => true,
+            'environment' => 'sandbox',
+            'has_documentation' => false,
+            'documentation_valid' => false,
+            'scope_type' => 'global',
+            'scope_code' => 'default',
+            'scope_key' => 'global:default',
+            'config_test_status' => (string) ($method['config_test_status'] ?? $defaultTestStatus),
+            'config_test_message' => (string) ($method['config_test_message'] ?? ''),
+            'config_tested_at' => (string) ($method['config_tested_at'] ?? ''),
+            'requires_remote_test' => (bool) ($method['requires_remote_test'] ?? !$this->isStaticTestMethod($flow, $methodType)),
         ];
     }
 
@@ -385,57 +282,70 @@ class PaymentService
      * @param array<string, mixed> $method
      * @return array<string, mixed>
      */
-    protected function applyRuntimeOverrides(array $method): array
+    protected function applyRuntimeOverrides(array $method, array $context = []): array
     {
         $code = (string) ($method['code'] ?? '');
-        if ($code === '') {
-            $method['missing_config'] = $this->getMissingRequiredConfig($method);
-            $method['is_configured'] = $method['missing_config'] === [];
+        $override = $code !== '' ? $this->resolveMethodOverride($code, $context) : null;
 
-            return $method;
-        }
-
-        $override = $this->getMethodOverrides()[$code] ?? null;
-        if (!\is_array($override)) {
-            $method['missing_config'] = $this->getMissingRequiredConfig($method);
-            $method['is_configured'] = $method['missing_config'] === [];
-
-            return $method;
-        }
-
-        foreach (['title', 'description', 'icon', 'checkout_note'] as $key) {
-            if (array_key_exists($key, $override)) {
-                $method[$key] = (string) $override[$key];
+        if (\is_array($override)) {
+            foreach (['title', 'description', 'icon', 'checkout_note', 'provider_code', 'method_type', 'flow', 'documentation_path', 'scope_type', 'scope_code', 'config_test_status', 'config_test_message', 'config_tested_at'] as $key) {
+                if (array_key_exists($key, $override)) {
+                    $method[$key] = (string) $override[$key];
+                }
+            }
+            foreach (['enabled', 'is_default', 'requires_remote_test'] as $key) {
+                if (array_key_exists($key, $override)) {
+                    $method[$key] = (bool) $override[$key];
+                }
+            }
+            foreach (['sort_order', 'popularity_score'] as $key) {
+                if (array_key_exists($key, $override)) {
+                    $method[$key] = (int) $override[$key];
+                }
+            }
+            foreach (['areas', 'currencies', 'countries', 'country_tags', 'required_config'] as $key) {
+                if (\is_array($override[$key] ?? null)) {
+                    $method[$key] = array_values($override[$key]);
+                }
+            }
+            if (\is_array($override['country_popularity'] ?? null)) {
+                $method['country_popularity'] = $this->normalizeCountryPopularity($override['country_popularity']);
+            }
+            if (\is_array($override['local_descriptions'] ?? null)) {
+                $method['local_descriptions'] = $override['local_descriptions'];
+            }
+            if (\is_array($override['local_description'] ?? null)) {
+                $method['local_descriptions'] = $override['local_description'];
+            }
+            if (\is_array($override['config'] ?? null)) {
+                $method['config'] = array_replace((array) ($method['config'] ?? []), $override['config']);
+                if (array_key_exists('sandbox', $override['config']) && !array_key_exists('environment', $override['config'])) {
+                    $method['config']['environment'] = $this->toBool($override['config']['sandbox']) ? 'sandbox' : 'live';
+                }
+            }
+            if (array_key_exists('environment', $override)) {
+                $method['config']['environment'] = (string) $override['environment'];
             }
         }
-        if (\is_array($override['local_descriptions'] ?? null)) {
-            $method['local_descriptions'] = $override['local_descriptions'];
+
+        $scope = $this->getScopeConfigService()->resolveScope($context);
+        if (empty($method['scope_type']) || empty($method['scope_code'])) {
+            $method['scope_type'] = $scope['scope_type'];
+            $method['scope_code'] = $scope['scope_code'];
         }
-        if (\is_array($override['local_description'] ?? null)) {
-            $method['local_descriptions'] = $override['local_description'];
-        }
-        foreach (['enabled', 'is_default'] as $key) {
-            if (array_key_exists($key, $override)) {
-                $method[$key] = (bool) $override[$key];
-            }
-        }
-        if (array_key_exists('sort_order', $override)) {
-            $method['sort_order'] = (int) $override['sort_order'];
-        }
-        foreach (['areas', 'currencies', 'countries'] as $key) {
-            if (\is_array($override[$key] ?? null)) {
-                $method[$key] = array_values($override[$key]);
-            }
-        }
-        if (\is_array($override['required_config'] ?? null)) {
-            $method['required_config'] = array_values($override['required_config']);
-        }
-        if (\is_array($override['config'] ?? null)) {
-            $method['config'] = array_replace((array) ($method['config'] ?? []), $override['config']);
+        $method['scope_key'] = $this->getScopeConfigService()->buildScopeKey((string) $method['scope_type'], (string) $method['scope_code']);
+
+        $providers = $this->getPaymentProviders();
+        $providerCode = (string) ($method['provider_code'] ?? '');
+        if ($providerCode !== '' && isset($providers[$providerCode])) {
+            $method['provider_title'] = (string) ($providers[$providerCode]['title'] ?? $providerCode);
         }
 
+        $method = $this->applyEnvironmentConfig($method);
         $method['missing_config'] = $this->getMissingRequiredConfig($method);
         $method['is_configured'] = $method['missing_config'] === [];
+        $method['has_documentation'] = $this->getDocumentationService()->hasDocumentation($method);
+        $method['documentation_valid'] = (bool) $method['has_documentation'];
 
         return $method;
     }
@@ -458,6 +368,33 @@ class PaymentService
         return $this->localDescriptionService;
     }
 
+    protected function getCatalogueService(): PaymentCatalogueService
+    {
+        if ($this->catalogueService === null) {
+            $this->catalogueService = new PaymentCatalogueService();
+        }
+
+        return $this->catalogueService;
+    }
+
+    protected function getDocumentationService(): PaymentDocumentationService
+    {
+        if ($this->documentationService === null) {
+            $this->documentationService = new PaymentDocumentationService();
+        }
+
+        return $this->documentationService;
+    }
+
+    protected function getScopeConfigService(): PaymentScopeConfigService
+    {
+        if ($this->scopeConfigService === null) {
+            $this->scopeConfigService = new PaymentScopeConfigService();
+        }
+
+        return $this->scopeConfigService;
+    }
+
     /**
      * @return array<string, array<string, mixed>>
      */
@@ -470,6 +407,58 @@ class PaymentService
         }
 
         return \is_array($config) ? $config : [];
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    protected function getScopedMethodOverrides(array $context): array
+    {
+        $scope = $this->getScopeConfigService()->resolveScope($context);
+
+        try {
+            $dbOverrides = $this->getScopeConfigService()->getRuntimeOverridesForScope(
+                $scope['scope_type'],
+                $scope['scope_code'],
+                $scope['environment']
+            );
+            if ($dbOverrides !== []) {
+                return $dbOverrides;
+            }
+        } catch (\Throwable) {
+            // The scoped DB table may not exist until setup:upgrade has run; Env fallback keeps admin readable.
+        }
+
+        try {
+            $config = Env::getInstance()->getConfig('payment.method_scopes', []);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!\is_array($config)) {
+            return [];
+        }
+
+        $scopeKey = $scope['scope_key'];
+        $environment = $scope['environment'];
+        $scoped = $config[$scopeKey][$environment] ?? $config[$scopeKey] ?? [];
+
+        return \is_array($scoped) ? $scoped : [];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function resolveMethodOverride(string $code, array $context): ?array
+    {
+        $legacy = $this->getMethodOverrides();
+        $override = \is_array($legacy[$code] ?? null) ? $legacy[$code] : [];
+        $scoped = $this->getScopedMethodOverrides($context);
+        if (\is_array($scoped[$code] ?? null)) {
+            $override = array_replace_recursive($override, $scoped[$code]);
+        }
+
+        return $override !== [] ? $override : null;
     }
 
     /**
@@ -507,18 +496,156 @@ class PaymentService
 
     /**
      * @param array<string, mixed> $method
+     */
+    protected function isConfigTestPassed(array $method): bool
+    {
+        return (string) ($method['config_test_status'] ?? PaymentMethodConfig::TEST_STATUS_UNTESTED) === PaymentMethodConfig::TEST_STATUS_PASSED;
+    }
+
+    /**
+     * @param array<string, mixed> $method
      * @param array<string, mixed> $context
      * @return array<string, mixed>
      */
     protected function buildProviderContext(array $method, array $context = []): array
     {
+        $config = \is_array($method['config'] ?? null) ? $method['config'] : [];
+
         return array_merge($context, [
             'payment_method' => $method,
-            'config' => \is_array($method['config'] ?? null) ? $method['config'] : [],
+            'config' => $config,
             'required_config' => array_values((array) ($method['required_config'] ?? [])),
             'missing_config' => array_values((array) ($method['missing_config'] ?? [])),
             'is_configured' => (bool) ($method['is_configured'] ?? true),
-            'sandbox' => (bool) (($method['config']['sandbox'] ?? false)),
+            'environment' => (string) ($method['environment'] ?? $config['environment'] ?? 'sandbox'),
+            'sandbox' => (bool) ($config['sandbox'] ?? true),
+            'scope_type' => (string) ($method['scope_type'] ?? 'global'),
+            'scope_code' => (string) ($method['scope_code'] ?? 'default'),
+            'scope_key' => (string) ($method['scope_key'] ?? 'global:default'),
+            'config_test_status' => (string) ($method['config_test_status'] ?? PaymentMethodConfig::TEST_STATUS_UNTESTED),
+            'config_tested_at' => (string) ($method['config_tested_at'] ?? ''),
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $method
+     * @return array<string, mixed>
+     */
+    protected function applyEnvironmentConfig(array $method): array
+    {
+        $config = \is_array($method['config'] ?? null) ? $method['config'] : [];
+        $environment = strtolower(trim((string) ($config['environment'] ?? $method['environment'] ?? '')));
+        if ($environment === '') {
+            $environment = isset($config['sandbox']) && !$this->toBool($config['sandbox']) ? 'live' : 'sandbox';
+        }
+        $environment = $environment === 'live' ? 'live' : 'sandbox';
+
+        foreach ($config as $key => $value) {
+            if (!\is_string($key) || !str_starts_with($key, $environment . '_')) {
+                continue;
+            }
+            $baseKey = substr($key, strlen($environment) + 1);
+            if ($baseKey === '') {
+                continue;
+            }
+            if (trim((string) $value) !== '' || !array_key_exists($baseKey, $config)) {
+                $config[$baseKey] = $value;
+            }
+        }
+
+        $config['environment'] = $environment;
+        $config['sandbox'] = $environment !== 'live';
+        $method['environment'] = $environment;
+        $method['config'] = $config;
+
+        return $method;
+    }
+
+    /**
+     * @param array<string, mixed> $method
+     */
+    private function resolveSortPopularity(array $method, string $country): int
+    {
+        $countryPopularity = \is_array($method['country_popularity'] ?? null) ? $method['country_popularity'] : [];
+        if ($country !== '' && isset($countryPopularity[$country])) {
+            return (int) $countryPopularity[$country];
+        }
+
+        return (int) ($method['popularity_score'] ?? 0);
+    }
+
+    /**
+     * @param array<string, mixed> $paymentData
+     * @return array<string, mixed>
+     */
+    private function buildRuntimeContext(array $paymentData): array
+    {
+        $context = [
+            'payment_data' => $paymentData,
+            'currency' => $paymentData['currency'] ?? null,
+            'country' => $paymentData['country'] ?? $paymentData['country_id'] ?? null,
+        ];
+
+        foreach (['scope_type', 'scope_code', 'environment', 'website_id', 'store_id'] as $key) {
+            if (array_key_exists($key, $paymentData)) {
+                $context[$key] = $paymentData[$key];
+            }
+        }
+
+        return $context;
+    }
+
+    private function isStaticTestMethod(string $flow, string $methodType): bool
+    {
+        $flow = strtolower($flow);
+        $methodType = strtolower($methodType);
+
+        return \in_array($flow, ['offline', 'event'], true)
+            || \in_array($methodType, ['manual', 'offline', 'bank_transfer', 'credit'], true);
+    }
+
+    /**
+     * @param array<int, mixed> $values
+     * @return array<int, string>
+     */
+    private function normalizeCodes(array $values, bool $upper): array
+    {
+        $normalized = [];
+        foreach ($values as $value) {
+            $code = trim((string) $value);
+            if ($code === '') {
+                continue;
+            }
+            $normalized[] = $upper ? strtoupper($code) : strtolower($code);
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
+    /**
+     * @param array<string, mixed> $values
+     * @return array<string, int>
+     */
+    private function normalizeCountryPopularity(array $values): array
+    {
+        $normalized = [];
+        foreach ($values as $country => $score) {
+            $country = strtoupper((string) $country);
+            if (strlen($country) !== 2) {
+                continue;
+            }
+            $normalized[$country] = (int) $score;
+        }
+
+        return $normalized;
+    }
+
+    private function toBool(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+
+        return \in_array(strtolower((string) $value), ['1', 'true', 'on', 'yes'], true);
     }
 }

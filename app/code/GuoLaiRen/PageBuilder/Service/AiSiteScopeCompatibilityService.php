@@ -96,6 +96,46 @@ class AiSiteScopeCompatibilityService
         if ($explicitContentLocale !== '') {
             $normalized['content_locale'] = $explicitContentLocale;
             $normalized['website_profile']['content_locale'] = $explicitContentLocale;
+            $normalized['website_profile'] = $this->sanitizeWebsiteProfileVisitorMetadataForLocale(
+                $normalized['website_profile'],
+                $explicitContentLocale
+            );
+            if (\is_array($normalized['execution_blueprint'] ?? null)) {
+                $normalized['execution_blueprint']['content_locale'] = $explicitContentLocale;
+                if (\is_array($normalized['execution_blueprint']['shared_prompt_context'] ?? null)) {
+                    $normalized['execution_blueprint']['shared_prompt_context']['content_locale'] = $explicitContentLocale;
+                }
+            }
+            if (\is_array($normalized['plan_json'] ?? null)) {
+                $normalized['plan_json']['content_locale'] = $explicitContentLocale;
+                if (\is_array($normalized['plan_json']['i18n'] ?? null)) {
+                    $normalized['plan_json']['i18n']['content_locale'] = $explicitContentLocale;
+                }
+            }
+            if (\is_array($normalized['stage1_contract'] ?? null)) {
+                $normalized['stage1_contract']['content_locale'] = $explicitContentLocale;
+                $normalized['stage1_contract']['plan_locale'] = $explicitContentLocale;
+                if (\is_array($normalized['stage1_contract']['i18n'] ?? null)) {
+                    $normalized['stage1_contract']['i18n']['content_locale'] = $explicitContentLocale;
+                    $normalized['stage1_contract']['i18n']['primary_locale'] = $explicitContentLocale;
+                }
+                if (\is_array($normalized['stage1_contract']['shared_prompt_context'] ?? null)) {
+                    $normalized['stage1_contract']['shared_prompt_context']['content_locale'] = $explicitContentLocale;
+                }
+                if (\is_array($normalized['stage1_contract']['shared_components'] ?? null)) {
+                    foreach ($normalized['stage1_contract']['shared_components'] as $componentKey => $componentPlan) {
+                        if (\is_array($componentPlan)) {
+                            $normalized['stage1_contract']['shared_components'][$componentKey]['content_locale'] = $explicitContentLocale;
+                        }
+                    }
+                }
+            }
+            $normalized['virtual_pages_by_type'] = $this->localizeVirtualPagesForVisitorLocale(
+                $normalized['virtual_pages_by_type'],
+                $explicitContentLocale,
+                $normalized['website_profile'],
+                $normalized
+            );
             $normalized['locales'] = $this->prependLocaleToList(
                 \is_array($normalized['locales'] ?? null) ? $normalized['locales'] : [],
                 $explicitContentLocale
@@ -659,6 +699,7 @@ class AiSiteScopeCompatibilityService
     ): array
     {
         $existing = $this->normalizeVirtualPagesByType($scope['virtual_pages_by_type'] ?? [], $pageTypes);
+        $inputVirtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         $layouts = $this->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
         $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         $siteTitle = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''));
@@ -676,11 +717,14 @@ class AiSiteScopeCompatibilityService
 
         foreach ($pageTypes as $pageType) {
             $record = $existing[$pageType] ?? $this->normalizeVirtualPageRecord([], $pageType);
+            $hasInputRecord = \is_array($inputVirtualPages[$pageType] ?? null);
             $defaultLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
             $localizedLabel = $this->localizePageTypeLabel($pageType, $contentLocale);
             $currentTitle = \trim((string)($record['title'] ?? ''));
             $localizedCurrentTitle = $this->localizeGenericPageTitle($currentTitle, $contentLocale);
-            if ($localizedCurrentTitle !== '' && $localizedCurrentTitle !== $currentTitle) {
+            if (!$hasInputRecord && $pageType === Page::TYPE_HOME && $siteTitle !== '') {
+                $record['title'] = $siteTitle;
+            } elseif ($localizedCurrentTitle !== '' && $localizedCurrentTitle !== $currentTitle) {
                 $record['title'] = $localizedCurrentTitle;
             } elseif ($currentTitle === '' || ($currentTitle === $defaultLabel && $localizedLabel !== '' && $localizedLabel !== $defaultLabel)) {
                 $label = $localizedLabel !== '' ? $localizedLabel : $defaultLabel;
@@ -704,6 +748,12 @@ class AiSiteScopeCompatibilityService
             if (!\is_array($record['style_settings'] ?? null)) {
                 $record['style_settings'] = [];
             }
+            $record = $this->localizeVirtualPageRecordForVisitorLocale(
+                $record,
+                $contentLocale,
+                $websiteProfile,
+                $scope
+            );
             $shouldHydrateLegacyBlocks = $this->shouldHydrateLegacyBlocks($record, $layouts[$pageType] ?? [], $pageType);
             $placeholderBlocks = [];
             if ($shouldHydrateLegacyBlocks && $allowAiPlaceholderGeneration) {
@@ -1112,6 +1162,124 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
+     * @param array<string, array<string, mixed>> $virtualPages
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array<string, array<string, mixed>>
+     */
+    private function localizeVirtualPagesForVisitorLocale(
+        array $virtualPages,
+        string $locale,
+        array $websiteProfile,
+        array $scope
+    ): array {
+        foreach ($virtualPages as $pageType => $record) {
+            if (!\is_array($record)) {
+                continue;
+            }
+            if (\trim((string)($record['page_type'] ?? '')) === '') {
+                $record['page_type'] = (string)$pageType;
+            }
+            $virtualPages[$pageType] = $this->localizeVirtualPageRecordForVisitorLocale(
+                $record,
+                $locale,
+                $websiteProfile,
+                $scope
+            );
+        }
+
+        return $virtualPages;
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function localizeVirtualPageRecordForVisitorLocale(
+        array $record,
+        string $locale,
+        array $websiteProfile,
+        array $scope
+    ): array {
+        $locale = \trim($locale);
+        if ($locale === '') {
+            return $record;
+        }
+
+        $pageType = \trim((string)($record['page_type'] ?? ''));
+        $siteTitle = $this->safeVisitorTextForLocale(
+            (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
+            $locale
+        );
+        $title = \trim((string)($record['title'] ?? ''));
+        $localizedTitle = $this->localizeGenericPageTitle($title, $locale);
+        if ($localizedTitle === '' && $this->isLocaleUnsafeVisitorText($title, $locale)) {
+            $localizedTitle = $this->localizePageTypeLabel($pageType, $locale);
+        }
+        if ($localizedTitle !== '') {
+            $record['title'] = $localizedTitle;
+            $title = $localizedTitle;
+        }
+
+        $metaTitle = \trim((string)($record['meta_title'] ?? ''));
+        if ($this->isLocaleUnsafeVisitorText($metaTitle, $locale)) {
+            $safeTitle = $this->safeVisitorTextForLocale($title, $locale);
+            if ($safeTitle === '') {
+                $safeTitle = $this->localizePageTypeLabel($pageType, $locale);
+            }
+            if ($safeTitle !== '' && $siteTitle !== '' && \stripos($safeTitle, $siteTitle) === false) {
+                $safeTitle .= ' | ' . $siteTitle;
+            }
+            $record['meta_title'] = $safeTitle;
+        }
+
+        foreach (['meta_description', 'ai_description'] as $key) {
+            if ($this->isLocaleUnsafeVisitorText((string)($record[$key] ?? ''), $locale)) {
+                $record[$key] = '';
+            }
+        }
+
+        if ($this->isLocaleUnsafeVisitorText((string)($record['meta_keywords'] ?? ''), $locale)) {
+            $record['meta_keywords'] = $this->filterLocaleSafeKeywords((string)$record['meta_keywords'], $locale);
+        }
+
+        return $record;
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     * @return array<string, mixed>
+     */
+    private function sanitizeWebsiteProfileVisitorMetadataForLocale(array $websiteProfile, string $locale): array
+    {
+        foreach (['site_tagline', 'tagline', 'meta_description'] as $key) {
+            if ($this->isLocaleUnsafeVisitorText((string)($websiteProfile[$key] ?? ''), $locale)) {
+                $websiteProfile[$key] = '';
+            }
+        }
+
+        if (\is_array($websiteProfile['seo'] ?? null)) {
+            if ($this->isLocaleUnsafeVisitorText((string)($websiteProfile['seo']['meta_title'] ?? ''), $locale)) {
+                $safeTitle = $this->safeVisitorTextForLocale((string)($websiteProfile['site_title'] ?? ''), $locale);
+                $websiteProfile['seo']['meta_title'] = $safeTitle;
+            }
+            if ($this->isLocaleUnsafeVisitorText((string)($websiteProfile['seo']['meta_description'] ?? ''), $locale)) {
+                $websiteProfile['seo']['meta_description'] = '';
+            }
+            if ($this->isLocaleUnsafeVisitorText((string)($websiteProfile['seo']['meta_keywords'] ?? ''), $locale)) {
+                $websiteProfile['seo']['meta_keywords'] = $this->filterLocaleSafeKeywords(
+                    (string)$websiteProfile['seo']['meta_keywords'],
+                    $locale
+                );
+            }
+        }
+
+        return $websiteProfile;
+    }
+
+    /**
      * @param array<string, mixed> $record
      * @param array<string, mixed> $layout
      */
@@ -1365,6 +1533,11 @@ class AiSiteScopeCompatibilityService
      */
     private function resolveContentLocale(array $scope, array $websiteProfile): string
     {
+        $selected = $this->resolveSelectedContentLocale($scope, $websiteProfile);
+        if ($selected !== '') {
+            return $selected;
+        }
+
         $explicit = \trim((string)(
             $scope['content_locale']
                 ?? $websiteProfile['content_locale']
@@ -1393,12 +1566,42 @@ class AiSiteScopeCompatibilityService
      */
     private function resolveExplicitContentLocale(array $scope, array $websiteProfile): string
     {
+        $selected = $this->resolveSelectedContentLocale($scope, $websiteProfile);
+        if ($selected !== '') {
+            return $selected;
+        }
+
         $explicit = \trim((string)($scope['content_locale'] ?? $websiteProfile['content_locale'] ?? ''));
         if ($explicit !== '') {
             return $explicit;
         }
 
         return $this->inferContentLocaleFromBrief($scope, $websiteProfile);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function resolveSelectedContentLocale(array $scope, array $websiteProfile): string
+    {
+        foreach ([
+            $scope['ai_content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $websiteProfile['default_language'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -1500,6 +1703,8 @@ class AiSiteScopeCompatibilityService
                 'about' => 'About',
                 'contact' => 'Contact',
                 'blog' => 'Blog',
+                'blog_category' => 'Blog Categories',
+                'custom_page' => 'Page',
                 'privacy_policy' => 'Privacy Policy',
                 'terms_of_service' => 'Terms of Service',
                 'refund_policy' => 'Refund Policy',
@@ -1517,6 +1722,8 @@ class AiSiteScopeCompatibilityService
                 'about' => 'Sobre',
                 'contact' => 'Contato',
                 'blog' => 'Blog',
+                'blog_category' => 'Categorias',
+                'custom_page' => 'Pagina',
                 'privacy_policy' => 'Política de Privacidade',
                 'terms_of_service' => 'Termos de Serviço',
                 'refund_policy' => 'Política de Reembolso',
@@ -1685,19 +1892,54 @@ class AiSiteScopeCompatibilityService
         $labelMap = [
             'home' => 'home',
             'homepage' => 'home',
+            '首页' => 'home',
+            '主页' => 'home',
+            'início' => 'home',
+            'inicio' => 'home',
             'about' => 'about',
             'about us' => 'about',
+            '关于我们' => 'about',
+            'sobre' => 'about',
             'contact' => 'contact',
             'contact us' => 'contact',
+            '联系我们' => 'contact',
+            'contato' => 'contact',
             'blog' => 'blog',
             'news' => 'blog',
+            'blog category' => 'blog_category',
+            'blog categories' => 'blog_category',
+            "\u{535A}\u{5BA2}\u{5206}\u{7C7B}" => 'blog_category',
+            'categorias' => 'blog_category',
+            'categorias do blog' => 'blog_category',
+            'custom page' => 'custom_page',
+            'page' => 'custom_page',
+            "\u{81EA}\u{5B9A}\u{4E49}\u{9875}\u{9762}" => 'custom_page',
+            'pagina' => 'custom_page',
+            'página' => 'custom_page',
             'privacy policy' => 'privacy_policy',
             'privacy' => 'privacy_policy',
+            '隐私政策' => 'privacy_policy',
+            'política de privacidade' => 'privacy_policy',
+            'politica de privacidade' => 'privacy_policy',
             'terms of service' => 'terms_of_service',
             'terms' => 'terms_of_service',
+            '服务条款' => 'terms_of_service',
+            'termos de serviço' => 'terms_of_service',
+            'termos de servico' => 'terms_of_service',
             'refund policy' => 'refund_policy',
+            '退款政策' => 'refund_policy',
+            'política de reembolso' => 'refund_policy',
+            'politica de reembolso' => 'refund_policy',
             'shipping policy' => 'shipping_policy',
+            '配送政策' => 'shipping_policy',
+            'política de envio' => 'shipping_policy',
+            'politica de envio' => 'shipping_policy',
             'cookie policy' => 'cookie_policy',
+            'cookie' => 'cookie_policy',
+            'cookies' => 'cookie_policy',
+            'cookie政策' => 'cookie_policy',
+            'política de cookies' => 'cookie_policy',
+            'politica de cookies' => 'cookie_policy',
             'policy info' => 'policy_info',
             'policies' => 'policy_info',
         ];
@@ -1727,6 +1969,9 @@ class AiSiteScopeCompatibilityService
 
     private function localizeGenericPageTitle(string $title, string $locale): string
     {
+        if ($this->localeFamily($locale) === 'en' && $this->hasAnyCjkContent($title)) {
+            return '';
+        }
         $canonical = $this->canonicalNavLabelKey($title);
         if ($canonical === '') {
             return '';
@@ -1788,6 +2033,8 @@ class AiSiteScopeCompatibilityService
             Page::TYPE_ABOUT => $this->localizeBuildText('about', $locale),
             Page::TYPE_CONTACT => $this->localizeBuildText('contact', $locale),
             Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => $this->localizeBuildText('blog', $locale),
+            Page::TYPE_BLOG_CATEGORY => $this->localizeBuildText('blog_category', $locale),
+            Page::TYPE_CUSTOM => $this->localizeBuildText('custom_page', $locale),
             Page::TYPE_PRIVACY_POLICY => $this->localizeBuildText('privacy_policy', $locale),
             Page::TYPE_TERMS_OF_SERVICE => $this->localizeBuildText('terms_of_service', $locale),
             Page::TYPE_REFUND_POLICY => $this->localizeBuildText('refund_policy', $locale),
@@ -1860,5 +2107,33 @@ class AiSiteScopeCompatibilityService
     private function hasAnyCjkContent(string $value): bool
     {
         return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $value) === 1;
+    }
+
+    private function isLocaleUnsafeVisitorText(string $value, string $locale): bool
+    {
+        return \trim($value) !== ''
+            && $this->isNonCjkLocale($locale)
+            && $this->hasAnyCjkContent($value);
+    }
+
+    private function safeVisitorTextForLocale(string $value, string $locale): string
+    {
+        $value = \trim($value);
+        return $this->isLocaleUnsafeVisitorText($value, $locale) ? '' : $value;
+    }
+
+    private function filterLocaleSafeKeywords(string $value, string $locale): string
+    {
+        $keywords = \preg_split('/[,;|]+/u', $value) ?: [];
+        $safe = [];
+        foreach ($keywords as $keyword) {
+            $keyword = \trim((string)$keyword);
+            if ($keyword === '' || $this->isLocaleUnsafeVisitorText($keyword, $locale)) {
+                continue;
+            }
+            $safe[] = $keyword;
+        }
+
+        return \implode(', ', \array_values(\array_unique($safe)));
     }
 }

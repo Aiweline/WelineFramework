@@ -757,12 +757,38 @@ class Page extends FrontendController
             $host = \explode('/', $host, 2)[0] ?? $host;
         }
 
-        $host = \trim($host);
+        $host = \trim($host, " \t\n\r\0\x0B/");
+        if ($host === '') {
+            return '';
+        }
+
+        if ($host[0] === '[') {
+            $end = \strpos($host, ']');
+            if ($end === false) {
+                return '';
+            }
+
+            $ip = \substr($host, 1, $end - 1);
+            return \filter_var($ip, \FILTER_VALIDATE_IP) ? '' : $host;
+        }
+
+        if (\filter_var($host, \FILTER_VALIDATE_IP)) {
+            return '';
+        }
+
+        $colonCount = \substr_count($host, ':');
+        if ($colonCount === 1) {
+            $host = \preg_replace('/:\d+$/', '', $host) ?? $host;
+        } elseif ($colonCount > 1) {
+            return '';
+        }
+
+        $host = \trim($host, " \t\n\r\0\x0B[]/");
         if ($host === '' || $host === 'localhost' || \filter_var($host, \FILTER_VALIDATE_IP)) {
             return '';
         }
 
-        return (string)(\preg_replace('/:\d+$/', '', $host) ?? $host);
+        return $host;
     }
 
     private function findWebsiteIdByHost(string $host): ?int

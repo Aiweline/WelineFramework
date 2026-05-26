@@ -84,6 +84,7 @@ $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 $controlPort = 0;
 $masterPid = 0;
+$workerCount = 1;
 
 $positionalArgs = [];
 foreach ($argv as $i => $arg) {
@@ -131,6 +132,8 @@ foreach ($argv as $arg) {
         $wlsLoopDriver = (string)\substr($arg, 18);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
         $wlsMemoryLimit = wlsEventNormalizeMemoryLimit(\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--worker-count=')) {
+        $workerCount = \max(1, (int)\substr($arg, 15));
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -170,6 +173,9 @@ $_ENV['WLS_INSTANCE'] = $instanceName;
 $_SERVER['WLS_WORKER_ID'] = (string)$workerId;
 $_ENV['WLS_WORKER_ID'] = (string)$workerId;
 @\putenv('WLS_WORKER_ID=' . (string)$workerId);
+$_SERVER['WLS_WORKER_COUNT'] = (string)$workerCount;
+$_ENV['WLS_WORKER_COUNT'] = (string)$workerCount;
+@\putenv('WLS_WORKER_COUNT=' . (string)$workerCount);
 $_SERVER['WLS_PORT'] = (string)$port;
 $_ENV['WLS_PORT'] = (string)$port;
 @\putenv('WLS_PORT=' . (string)$port);

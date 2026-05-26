@@ -6,8 +6,7 @@ namespace Weline\Seo\Service\Head;
 
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Seo\Interface\HeadContextProviderInterface;
-use Weline\Seo\Interface\StructuredDataProviderInterface;
+use Weline\Seo\Interface\SeoProfileProviderInterface;
 
 class HeadProviderRegistry
 {
@@ -22,19 +21,11 @@ class HeadProviderRegistry
     }
 
     /**
-     * @return HeadContextProviderInterface[]
+     * @return SeoProfileProviderInterface[]
      */
-    public function getHeadContextProviders(bool $forceReload = false): array
+    public function getSeoProfileProviders(bool $forceReload = false): array
     {
-        return $this->getProviders($forceReload)['head_context'] ?? [];
-    }
-
-    /**
-     * @return StructuredDataProviderInterface[]
-     */
-    public function getStructuredDataProviders(bool $forceReload = false): array
-    {
-        return $this->getProviders($forceReload)['structured_data'] ?? [];
+        return $this->getProviders($forceReload)['seo_profile'] ?? [];
     }
 
     /**
@@ -47,8 +38,7 @@ class HeadProviderRegistry
         }
 
         $providers = [
-            'head_context' => [],
-            'structured_data' => [],
+            'seo_profile' => [],
         ];
 
         try {
@@ -60,18 +50,14 @@ class HeadProviderRegistry
                         continue;
                     }
                     $instance = $this->objectManager->getInstance($class);
-                    if ($extendName === 'HeadContextProvider' && $instance instanceof HeadContextProviderInterface) {
-                        $providers['head_context'][] = $instance;
-                    }
-                    if ($extendName === 'StructuredDataProvider' && $instance instanceof StructuredDataProviderInterface) {
-                        $providers['structured_data'][] = $instance;
+                    if ($extendName === 'SeoProfileProvider' && $instance instanceof SeoProfileProviderInterface) {
+                        $providers['seo_profile'][] = $instance;
                     }
                 }
             }
         } catch (\Throwable) {
             $providers = [
-                'head_context' => [],
-                'structured_data' => [],
+                'seo_profile' => [],
             ];
         }
 

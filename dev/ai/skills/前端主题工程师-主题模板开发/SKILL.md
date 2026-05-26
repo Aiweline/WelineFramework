@@ -13,6 +13,7 @@ This skill owns theme-level template work, source-template editing, layout-aware
 - Use for theme directories, template overrides, layout files, source-template fixes, and theme CSS or JS organization.
 - Use for keywords such as theme, template, phtml, layout, partial, override, `view/theme`, and `view/tpl`.
 - Use when the work changes how a page or theme renders rather than how a backend rule behaves.
+- For browser-visible UI, layout, responsive, empty/loading/error states, usability, or visual polish work, automatically load `dev/ai/skills/ui-ux-pro-max/SKILL.md` and use it for design-system guidance before implementation, even when the user does not mention UI/UX or the skill by name.
 
 # Source Material
 
@@ -34,11 +35,12 @@ This skill owns theme-level template work, source-template editing, layout-aware
 
 1. Read `AI-ENTRY.md`, then theme-related docs, then inspect the owning source template path.
 2. If the symptom appears in `view/tpl`, trace it back to the real source template before editing.
-3. Implement the minimal source-template or theme-asset change in the owning theme area.
-4. Keep layout-specific CSS or JS with the owning template instead of moving everything into global theme assets.
-5. Use static template tags where possible and keep PHP in templates to the minimum necessary.
-6. Validate through the rendered page or the closest route-level check.
-7. Record affected template paths and any required theme documentation updates.
+3. For browser-visible UI work, always run or equivalently execute the `ui-ux-pro-max` design-system search and translate its output into Weline-safe visual constraints.
+4. Implement the minimal source-template or theme-asset change in the owning theme area.
+5. Keep layout-specific CSS or JS with the owning template instead of moving everything into global theme assets.
+6. Use static template tags where possible and keep PHP in templates to the minimum necessary.
+7. Validate through the rendered page or the closest route-level check.
+8. Record affected template paths and any required theme documentation updates.
 
 # Weline Rules
 

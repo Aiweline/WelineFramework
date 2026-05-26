@@ -64,6 +64,25 @@ class AiSiteProfileGenerationServiceTest extends TestCase
         self::assertSame(['zh_Hans_CN', 'en_US'], $profile['locales']);
     }
 
+    public function testGeneratePrefersSelectedLocaleOverStaleContentLocale(): void
+    {
+        $service = new AiSiteProfileGenerationService();
+
+        $profile = $service->generate([
+            'site_title' => 'Teenipiya',
+            'default_locale' => 'pt_BR',
+            'content_locale' => 'zh_Hans_CN',
+            'website_profile' => [
+                'default_locale' => 'pt_BR',
+                'content_locale' => 'zh_Hans_CN',
+            ],
+        ]);
+
+        self::assertSame('pt_BR', $profile['default_locale']);
+        self::assertSame('pt_BR', $profile['content_locale']);
+        self::assertSame('pt_BR', $profile['locales'][0] ?? null);
+    }
+
     public function testGenerateDerivesCustomerFacingTitleAndTaglineAndProducesSvgAssets(): void
     {
         $service = new AiSiteProfileGenerationService();

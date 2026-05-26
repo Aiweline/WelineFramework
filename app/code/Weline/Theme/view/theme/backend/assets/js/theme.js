@@ -958,6 +958,26 @@
                     throw err;
                 }
             },
+            call: async (provider, operation, params, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.call(provider, operation, params, options);
+            },
+            graph: async (graph, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.graph(graph, options);
+            },
+            stream: async (channel, params, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.stream(channel, params, options);
+            },
+            upload: async (provider, operation, formData, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.upload(provider, operation, formData, options);
+            },
+            resource: async (provider, optionalMap) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.resource(provider, optionalMap);
+            },
             markCartActive: async () => {
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.markCartActive();

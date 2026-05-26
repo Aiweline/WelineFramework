@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Review\Controller\Frontend\Review\Index;
 use WeShop\Review\Service\ReviewPageDataService;
+use WeShop\Review\Service\ReviewService;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -57,14 +58,19 @@ class IndexTest extends TestCase
         $pageDataService = $this->createMock(ReviewPageDataService::class);
         $pageDataService->expects($this->once())
             ->method('build')
-            ->with(88, 1, 20)
+            ->with(88, 1, 20, 0, 0)
             ->willReturn([
                 'reviews' => [['review_id' => 1]],
                 'total' => 1,
             ]);
 
         $url = $this->createMock(\Weline\Framework\Http\Url::class);
-        $url->expects($this->once())->method('getUrl')->with('review/create')->willReturn('/review/create');
+        $url->expects($this->exactly(2))
+            ->method('getUrl')
+            ->willReturnMap([
+                [ReviewService::FRONTEND_ROUTE, '/review/frontend/review'],
+                [ReviewService::FRONTEND_CREATE_ROUTE, '/review/create'],
+            ]);
 
         $customerContext = $this->createMock(CustomerContextInterface::class);
         $customerContext->expects($this->once())->method('getUserId')->willReturn(null);
@@ -82,7 +88,7 @@ class IndexTest extends TestCase
             ->getMock();
 
         $controller->expects($this->never())->method('redirect');
-        $controller->expects($this->exactly(6))->method('assign');
+        $controller->expects($this->exactly(7))->method('assign');
         $controller->expects($this->once())->method('fetch')->willReturn('page');
         $this->setProtectedProperty($controller, 'request', $request);
 

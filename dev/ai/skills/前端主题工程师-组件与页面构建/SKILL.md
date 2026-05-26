@@ -13,6 +13,7 @@ This skill builds frontend components and page assembly units such as blocks, ta
 - Use for blocks, taglibs, widgets, DataTable rendering, PageBuilder style templates, visitor-tracking markup, and website-to-template conversion.
 - Use for keywords such as component, widget, taglib, PageBuilder, block, `w:widget`, `w:d-table`, website clone, and page section.
 - Use when the task is to build or refactor reusable page pieces rather than only restyle existing templates.
+- For browser-visible UI, layout, responsive, empty/loading/error states, usability, or visual polish work, automatically load `dev/ai/skills/ui-ux-pro-max/SKILL.md` and use it for design-system guidance before implementation, even when the user does not mention UI/UX or the skill by name.
 
 # Source Material
 
@@ -37,12 +38,13 @@ This skill builds frontend components and page assembly units such as blocks, ta
 
 1. Identify whether the task is a block, taglib, widget, PageBuilder component, or page-conversion request.
 2. Read the matching source skill material and confirm the expected directory layout.
-3. Implement the component with the correct registration path, template path, and metadata.
-4. Scope CSS and JS to the component root and prefer local project assets or inline extraction-friendly assets.
-5. For taglibs or hook-driven UI, verify the final contract at the host level: where the hook is rendered, how the JS is triggered, and which attributes define grouping or scope.
-6. For PageBuilder, keep theme prefixes, component metadata, color schemes, and shared partials aligned.
-7. For tracking-related UI, use the approved pixel-marking pattern instead of custom duplicate tracking code.
-8. Validate on the rendered page, including interactions if the component is stateful.
+3. For browser-visible UI work, always run or equivalently execute the `ui-ux-pro-max` design-system search and translate its output into Weline-safe visual constraints.
+4. Implement the component with the correct registration path, template path, and metadata.
+5. Scope CSS and JS to the component root and prefer local project assets or inline extraction-friendly assets.
+6. For taglibs or hook-driven UI, verify the final contract at the host level: where the hook is rendered, how the JS is triggered, and which attributes define grouping or scope.
+7. For PageBuilder, keep theme prefixes, component metadata, color schemes, and shared partials aligned.
+8. For tracking-related UI, use the approved pixel-marking pattern instead of custom duplicate tracking code.
+9. Validate on the rendered page, including interactions if the component is stateful.
 
 # Weline Rules
 

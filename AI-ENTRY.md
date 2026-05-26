@@ -11,7 +11,7 @@ This file is an index only. The single source of AI rules is:
 1. **AI general rules** -> `dev/ai/global-constraints.md`（含第 5.1 节：**禁止批量替换与批量脚本改代码**；第 8 节：**layout 仅默认骨架/占位/挂载点，禁止交互与业务逻辑**）
 2. **Architecture diagrams** -> `dev/ai/diagrams/00-INDEX.txt`
 3. **Module docs** -> `dev/ai/diagrams/08-module-docs-index.txt`
-4. **Skills** -> `dev/ai/skills/_index.md` (on demand; frontend API tasks must read `dev/ai/skills/前端主题工程师-前端API交互/SKILL.md`)
+4. **Skills** -> `dev/ai/skills/_index.md` (on demand; frontend API tasks must read `dev/ai/skills/前端主题工程师-前端API交互/SKILL.md`; any browser-visible frontend UI work must automatically use `dev/ai/skills/ui-ux-pro-max/SKILL.md` even if the user does not mention it)
 5. **Source code** -> last resort after docs and diagrams
 
 ## Reading Order

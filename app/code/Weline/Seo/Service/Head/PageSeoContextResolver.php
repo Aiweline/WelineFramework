@@ -101,13 +101,19 @@ class PageSeoContextResolver
             $this->read($meta, ['breadcrumbs']),
         ]), $template);
 
+        $explicitRobots = (string) $this->firstNonEmpty([
+            $this->read($seo, ['robots']),
+            $this->read($meta, ['robots']),
+        ]);
+
         $context = [
             'page_type' => $pageType,
             'site_name' => (string) $siteName,
             'title' => (string) $title,
             'description' => (string) $description,
             'keywords' => $keywords,
-            'robots' => (string) $this->firstNonEmpty([$this->read($seo, ['robots']), $this->read($meta, ['robots']), 'index,follow']),
+            'robots' => $explicitRobots,
+            '_robots_explicit' => $explicitRobots !== '',
             'url' => $url,
             'canonical_url' => (string) $canonical,
             'image' => $image,
@@ -117,11 +123,43 @@ class PageSeoContextResolver
             'product' => $product,
             'category' => $category,
             'page' => $page,
+            'current_post' => $currentPost,
+            'article' => $this->toArray($this->firstNonEmpty([
+                $this->readTemplate($template, 'article'),
+                $this->read($seo, ['article']),
+                $this->read($page, ['article']),
+                $currentPost,
+            ])),
+            'item_list' => $this->normalizeItemList($this->firstNonEmpty([
+                $this->readTemplate($template, 'item_list'),
+                $this->read($seo, ['item_list', 'items']),
+                $this->read($page, ['item_list', 'items']),
+                $this->read($category, ['item_list', 'seo_directory']),
+            ]), $template),
+            'sitemap' => $this->toArray($this->firstNonEmpty([
+                $this->read($seo, ['sitemap']),
+                $this->read($meta, ['sitemap']),
+                $this->read($page, ['sitemap']),
+            ])),
+            'geo' => $this->toArray($this->firstNonEmpty([
+                $this->read($seo, ['geo']),
+                $this->read($meta, ['geo']),
+                $this->read($page, ['geo']),
+            ])),
             'faqs' => $this->normalizeFaqs($this->firstNonEmpty([$this->readTemplate($template, 'faqs'), $this->read($page, ['faqs'])])),
             'organization' => $this->normalizeOrganization($seo, $meta, $template, (string) $siteName),
         ];
 
-        return $this->applyHeadContextProviders($template, $context);
+        $context = $this->applySeoProfileProviders($template, $context);
+        if (trim((string) ($context['robots'] ?? '')) === '') {
+            $context['robots'] = $this->defaultRobots(
+                (string) ($context['page_type'] ?? $pageType),
+                (string) ($context['canonical_url'] ?? $canonical),
+                (string) ($context['url'] ?? $url)
+            );
+        }
+
+        return $context;
     }
 
     private function readTemplate($template, string $key): mixed
@@ -578,6 +616,59 @@ class PageSeoContextResolver
         return 'web_page';
     }
 
+    private function defaultRobots(string $pageType, string $canonical, string $url): string
+    {
+        if ($this->isNoIndexPage($pageType, $canonical !== '' ? $canonical : $url)) {
+            return 'noindex,follow';
+        }
+        return 'index,follow';
+    }
+
+    private function isNoIndexPage(string $pageType, string $url): bool
+    {
+        $normalizedType = strtolower(str_replace([' ', '-'], '_', trim($pageType)));
+        if (in_array($normalizedType, [
+            'search',
+            'search_results',
+            'cart',
+            'checkout',
+            'login',
+            'register',
+            'account',
+            'customer_account',
+            'backend',
+            'admin',
+            'preview',
+            'api',
+        ], true)) {
+            return true;
+        }
+
+        $path = strtolower((string) (parse_url($url, PHP_URL_PATH) ?: ''));
+        $segments = array_values(array_filter(explode('/', trim($path, '/')), static fn (string $segment): bool => $segment !== ''));
+        foreach ($segments as $segment) {
+            if (in_array($segment, [
+                'backend',
+                'admin',
+                'rest',
+                'api',
+                'cart',
+                'checkout',
+                'login',
+                'register',
+                'account',
+                'search',
+                'preview',
+                'theme-preview',
+                'workspace-preview',
+            ], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * @return array<int, array{name:string,url:string}>
      */
@@ -632,6 +723,60 @@ class PageSeoContextResolver
     }
 
     /**
+     * @return array<int, array{name:string,url:string,image?:string,description?:string}>
+     */
+    private function normalizeItemList(mixed $items, $template): array
+    {
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $flat = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $this->appendItemListEntry($flat, $item, $template);
+        }
+
+        return $flat;
+    }
+
+    /**
+     * @param array<int, array<string, string>> $flat
+     * @param array<string, mixed> $item
+     */
+    private function appendItemListEntry(array &$flat, array $item, $template): void
+    {
+        $name = trim((string) ($item['name'] ?? $item['title'] ?? $item['label'] ?? ''));
+        $url = trim((string) ($item['url'] ?? $item['href'] ?? $item['loc'] ?? ''));
+        if ($name !== '' && $url !== '') {
+            $entry = [
+                'name' => $name,
+                'url' => $this->absoluteUrl($template, $url),
+            ];
+            $image = trim((string) ($item['image'] ?? $item['thumbnail'] ?? ''));
+            if ($image !== '') {
+                $entry['image'] = $this->absoluteUrl($template, $image);
+            }
+            $description = $this->normalizeDescription($item['description'] ?? $item['summary'] ?? '');
+            if ($description !== '') {
+                $entry['description'] = $description;
+            }
+            $flat[] = $entry;
+        }
+
+        $children = $item['children'] ?? [];
+        if (is_array($children)) {
+            foreach ($children as $child) {
+                if (is_array($child)) {
+                    $this->appendItemListEntry($flat, $child, $template);
+                }
+            }
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function normalizeOrganization(array $seo, array $meta, $template, string $siteName): array
@@ -655,20 +800,48 @@ class PageSeoContextResolver
      * @param array<string, mixed> $context
      * @return array<string, mixed>
      */
-    private function applyHeadContextProviders($template, array $context): array
+    private function applySeoProfileProviders($template, array $context): array
     {
-        if (!$this->providerRegistry) {
+        if (!$this->providerRegistry || !method_exists($this->providerRegistry, 'getSeoProfileProviders')) {
             return $context;
         }
-        foreach ($this->providerRegistry->getHeadContextProviders() as $provider) {
+        foreach ($this->providerRegistry->getSeoProfileProviders() as $provider) {
             try {
-                $provided = $provider->provide($template, $context);
+                $provided = $provider->provideSeoProfile($template, $context);
                 if ($provided !== []) {
-                    $context = array_replace_recursive($context, $provided);
+                    $context = $this->mergeProviderContext($context, $provided);
                 }
             } catch (\Throwable) {
             }
         }
         return $context;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @param array<string, mixed> $provided
+     * @return array<string, mixed>
+     */
+    private function mergeProviderContext(array $context, array $provided): array
+    {
+        foreach (['schema_nodes', 'item_list', 'faqs'] as $listKey) {
+            if (isset($provided[$listKey]) && is_array($provided[$listKey]) && $this->isList($provided[$listKey])) {
+                $existing = isset($context[$listKey]) && is_array($context[$listKey]) && $this->isList($context[$listKey])
+                    ? $context[$listKey]
+                    : [];
+                $context[$listKey] = array_values(array_merge($existing, $provided[$listKey]));
+                unset($provided[$listKey]);
+            }
+        }
+
+        return array_replace_recursive($context, $provided);
+    }
+
+    /**
+     * @param array<int|string, mixed> $value
+     */
+    private function isList(array $value): bool
+    {
+        return $value === [] || array_keys($value) === range(0, count($value) - 1);
     }
 }

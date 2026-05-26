@@ -64,10 +64,13 @@ ACL违规,"ACL violation"
 "【ACL 重复检测】模块: %{1} (方法级别权限)","[ACL Duplication Detection] Module: %{1} (method level permissions)"
 请先登录,"Please log in first"
 用户已被禁用,"User has been disabled"
+"应用没有任何授权 scope","应用没有任何授权 scope"
+应用无权进行该操作,应用无权进行该操作
 用户不存在或已被删除,"User does not exist or has been deleted"
 用户没有分配角色,"User has no role assigned"
 你没有任何权限！请联系管理员！,"You have no permissions! Please contact the administrator!"
 "你无权进行该操作！你不具备：%{1} 操作权限！","You do not have permission to perform this operation! You lack the: %{1} operation permission!"
+你无权进行该操作,你无权进行该操作
 "你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！","You do not have permission to perform this operation! You lack the: %{1} route: %{2} operation permission! You have been redirected to a page you can access!"
 你无权进行该操作！已将你带到你可访问的后台页面：%{1},"You do not have permission to perform this operation! You have been redirected to an accessible backend page: %{1}"
 "超级管理员已拥有全部 ACL 权限，无需追加。","The super admin already has all ACL permissions, no need to add more."

@@ -45,6 +45,8 @@ class SitemapUrl extends Model
     public const schema_fields_CHANGEFREQ = 'changefreq';
     #[Col('varchar', 10, nullable: false, default: '0.5', comment: '优先级')]
     public const schema_fields_PRIORITY = 'priority';
+    #[Col('text', null, true, comment: 'Sitemap extension metadata JSON')]
+    public const schema_fields_METADATA = 'metadata';
     #[Col('datetime', comment: '最后修改时间')]
     public const schema_fields_LASTMOD = 'lastmod';
     #[Col('smallint', 1, nullable: false, default: 1, comment: '状态')]
@@ -165,6 +167,7 @@ class SitemapUrl extends Model
                     $this->setData(self::schema_fields_URL, $url['url'] ?? '');
                     $this->setData(self::schema_fields_CHANGEFREQ, $url['changefreq'] ?? 'weekly');
                     $this->setData(self::schema_fields_PRIORITY, $url['priority'] ?? '0.5');
+                    $this->setData(self::schema_fields_METADATA, $url['metadata'] ?? '');
                     $this->setData(self::schema_fields_LASTMOD, $url['lastmod'] ?? date('Y-m-d H:i:s'));
                     $this->setData(self::schema_fields_STATUS, $url['status'] ?? 1);
                     $this->save();
@@ -179,6 +182,7 @@ class SitemapUrl extends Model
                         self::schema_fields_URL => $url['url'] ?? '',
                         self::schema_fields_CHANGEFREQ => $url['changefreq'] ?? 'weekly',
                         self::schema_fields_PRIORITY => $url['priority'] ?? '0.5',
+                        self::schema_fields_METADATA => $url['metadata'] ?? '',
                         self::schema_fields_LASTMOD => $url['lastmod'] ?? date('Y-m-d H:i:s'),
                         self::schema_fields_STATUS => $url['status'] ?? 1,
                     ])->save();

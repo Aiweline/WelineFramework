@@ -63,12 +63,13 @@ class MenuXmlReader extends XmlReader
         $module_menus = [];
         $fileList = $this->getFileList();
         foreach ($fileList as $module => $filePath) {
-            $config = $this->parser->load($filePath)->xmlToArray();
+            $config = $this->parser->parseFile($filePath);
             $module_and_file = $module . '::' . $filePath;
             $one = $this->processOneMenuConfig($config, $filePath, $module_and_file);
             if ($one !== null) {
                 $module_menus[$module] = $one;
             }
+            unset($config, $one);
         }
         foreach ($module_menus as &$module_menu) {
             $data = $module_menu['data'];

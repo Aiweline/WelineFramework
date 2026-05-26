@@ -9,6 +9,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\System\File\Data\File;
 use Weline\I18n\Config\Reader;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
@@ -422,7 +423,11 @@ class I18n
     private function collectModuleTranslationsSerial(array $directories, TranslationCollector $collector): array
     {
         $translations = [];
+        $total = count($directories);
+        $index = 0;
         foreach ($directories as $module => $directory) {
+            $index++;
+            RegistryProgress::module('I18n source module scan', $index, $total, (string)$module);
             foreach ($this->collectSingleModuleTranslations($module, $directory, $collector) as $word => $translation) {
                 $translations[$word] = $translation;
             }
@@ -442,8 +447,12 @@ class I18n
         $results = [];
         $errors = [];
         $settled = [];
+        $total = count($directories);
+        $index = 0;
 
         foreach ($directories as $module => $directory) {
+            $index++;
+            RegistryProgress::module('I18n source module scan', $index, $total, (string)$module);
             $fibers[$module] = new \Fiber(function () use ($module, $directory, $collector): array {
                 return $this->collectSingleModuleTranslations($module, $directory, $collector);
             });
@@ -907,11 +916,18 @@ class I18n
         $error_count = 0;
         $first_error = true;
         
-        $word_modules = [];
-        $word_translate_modules = [];
-        $word_module_translations = [];
+        $collector = ObjectManager::getInstance(TranslationCollector::class);
+        $words_by_module = [
+            'all_words' => [],
+        ];
         $all_i18ns = $this->reader->getAllI18ns();
+        RegistryProgress::count('I18n CSV source files', array_sum(array_map('count', $all_i18ns)), 'files');
+        $csv_module_count = count($all_i18ns);
+        $csv_module_index = 0;
+        $csv_word_count = 0;
         foreach ($all_i18ns as $module_name => $i18n_files) {
+            $csv_module_index++;
+            RegistryProgress::module('I18n CSV read', $csv_module_index, $csv_module_count, (string)$module_name, count($i18n_files) . ' files');
             $full_module_name = $this->getFullModuleName($module_name);
             foreach ($i18n_files as $local => $i18n_file) {
                 if (isset($locals_names[$local])) {
@@ -1000,38 +1016,20 @@ class I18n
                             }
                         }
                         
-                        if (!isset($word_modules[$local])) {
-                            $word_modules[$local] = [];
+                        if (!isset($locals_words[$local])) {
+                            $locals_words[$local] = [];
                         }
-                        if (!isset($word_modules[$local][$data[0]])) {
-                            $word_modules[$local][$data[0]] = [];
-                        }
-                        if (!in_array($word_module, $word_modules[$local][$data[0]])) {
-                            $word_modules[$local][$data[0]][] = $word_module;
-                        }
-                        
-                        if (!isset($word_module_translations[$local])) {
-                            $word_module_translations[$local] = [];
-                        }
-                        if (!isset($word_module_translations[$local][$data[0]])) {
-                            $word_module_translations[$local][$data[0]] = [];
-                        }
-                        $word_module_translations[$local][$data[0]][$word_module] = $data[1];
-                        
-                        if (!isset($locals_words[$local][$data[0]])) {
-                            $locals_words[$local][$data[0]] = $data[1];
-                            if (!isset($word_translate_modules[$local])) {
-                                $word_translate_modules[$local] = [];
+                        $locals_words[$local][$data[0]] = $data[1];
+                        $csv_word_count++;
+
+                        if ($collector->isValidTranslationString($data[0])) {
+                            if (!isset($words_by_module[$local])) {
+                                $words_by_module[$local] = [];
                             }
-                            $word_translate_modules[$local][$data[0]] = $word_module;
-                        } else {
-                            if (in_array($word_module, $word_modules[$local][$data[0]])) {
-                                $locals_words[$local][$data[0]] = $data[1];
-                                if (!isset($word_translate_modules[$local])) {
-                                    $word_translate_modules[$local] = [];
-                                }
-                                $word_translate_modules[$local][$data[0]] = $word_module;
+                            if (!isset($words_by_module[$local][$word_module])) {
+                                $words_by_module[$local][$word_module] = [];
                             }
+                            $words_by_module[$local][$word_module][$data[0]] = $data[1];
                         }
                         $line += 1;
                     }
@@ -1054,6 +1052,8 @@ class I18n
                 }
             }
         }
+        unset($all_i18ns);
+        RegistryProgress::count('I18n CSV loaded', $csv_word_count, 'entries');
         
         if ($error_count > 0 && php_sapi_name() === 'cli') {
             echo str_repeat("=", 80) . "\n";
@@ -1062,62 +1062,10 @@ class I18n
         }
 
         $directories = $this->getActiveModuleDirectories($moduleName);
-        $collector = ObjectManager::getInstance(TranslationCollector::class);
+        RegistryProgress::count('I18n source scan', count($directories), 'modules');
         $translations = $this->collectModuleTranslations($directories, $collector);
-        
-        if (false) { foreach ($directories as $module => $directory) {
-            $full_module_name = $this->getFullModuleName($module);
-            
-            // 使用 collectLazy() 惰性生成器，逐条消费翻译字符串，避免内存中累积完整数组
-            $module_words = [];
-            foreach ($collector->collectLazy($directory, $module) as $original => $info) {
-                $translations[$original] = $original;
-                $module_words[$original] = $original;
-            }
-            
-            $i18n_dir = $directory . '/i18n';
-            if (is_dir($i18n_dir)) {
-                $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($i18n_dir));
-                foreach ($iterator as $file) {
-                    if ($file->isFile() && $file->getExtension() === 'csv') {
-                        $file_words = [];
-                        $handle = @fopen($file->getPathname(), 'r');
-                        if ($handle !== false) {
-                            while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-                                if(isset($data[0]) && isset($data[1])){
-                                    $file_words[$data[0]] = $data[1];
-                                }
-                            }
-                            fclose($handle);
-                        }
-
-                        // 只保留从代码收集的键，避免乱码/损坏的 CSV 键被写回；翻译值优先用现有 CSV，疑似乱码则用原文
-                        $file_translations = [];
-                        foreach ($module_words as $key => $defaultVal) {
-                            $val = $file_words[$key] ?? $defaultVal;
-                            if (self::isLikelyCorruptedTranslation($val)) {
-                                $val = $defaultVal;
-                            }
-                            $file_translations[$key] = $val;
-                        }
-                        unset($file_words);
-                        $csv_file = @fopen($file->getPathname(), 'w+');
-                        if ($csv_file !== false) {
-                            // 写入 UTF-8 BOM，避免在 Windows 下被误存为非 UTF-8 导致乱码
-                            fwrite($csv_file, "\xEF\xBB\xBF");
-                            foreach ($file_translations as $key => $value) {
-                                fputcsv($csv_file, [$key, $value], ',', '"', '\\');
-                            }
-                            fclose($csv_file);
-                        }
-                        unset($file_translations);
-                    }
-                }
-            }
-            unset($module_words); // 每个模块处理完后释放
-        }
-        
-        }
+        RegistryProgress::count('I18n source scan', count($translations), 'source words');
+        unset($directories);
 
         if ($translations or isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE] ?? []);
@@ -1142,6 +1090,15 @@ class I18n
         if ($translations and isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $locals_words[Env::default_LANGUAGE_CODE] = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
         }
+        foreach ($translations as $word => $translate) {
+            if (
+                $collector->isValidTranslationString((string)$word)
+                && !$this->hasModuleTranslation($words_by_module, Env::default_LANGUAGE_CODE, (string)$word)
+                && !isset($words_by_module['all_words'][$word])
+            ) {
+                $words_by_module['all_words'][(string)$word] = (string)$translate;
+            }
+        }
         unset($translations); // 释放 $translations，后面不再需要
         
         $translate_mode = Env::get('translation.mode', 'default');
@@ -1161,8 +1118,16 @@ class I18n
                         $translate = $db_trans[LocaleDictionary::schema_fields_TRANSLATE] ?? '';
                         if ($word && $translate) {
                             $locals_words[$local_code][$word] = $translate;
+                            if (
+                                $collector->isValidTranslationString((string)$word)
+                                && !$this->hasModuleTranslation($words_by_module, (string)$local_code, (string)$word)
+                                && !isset($words_by_module['all_words'][$word])
+                            ) {
+                                $words_by_module['all_words'][(string)$word] = (string)$translate;
+                            }
                         }
                     }
+                    unset($db_translations);
                 }
             } catch (\Exception $e) {
                 w_log_error("在线翻译模式：从数据库读取翻译失败：" . $e->getMessage(), [], 'i18n');
@@ -1176,46 +1141,28 @@ class I18n
                 mkdir($dir, 0755, true);
             }
             
-            $words_by_module = [
-                'all_words' => []
-            ];
-            $all_words_global = [];
-            
-            // 在循环外创建一次 collector 实例，避免每个 word 都重新创建
-            $collector = ObjectManager::getInstance(TranslationCollector::class);
+            foreach (array_keys($locals_words) as $locale) {
+                if (!isset($words_by_module[$locale])) {
+                    $words_by_module[$locale] = [];
+                }
+            }
             
             foreach ($locals_words as $locale => $words) {
-                $words_by_module[$locale] = [];
+                $words_by_module[$locale] ??= [];
                 foreach ($words as $word => $translate) {
-                    if (!$collector->isValidTranslationString($word)) {
+                    if (!$collector->isValidTranslationString((string)$word)) {
                         continue;
                     }
                     
-                    $modules = $word_modules[$locale][$word] ?? [];
-                    if (count($modules) > 1) {
-                        foreach ($modules as $module_name) {
-                            if (!isset($words_by_module[$locale][$module_name])) {
-                                $words_by_module[$locale][$module_name] = [];
-                            }
-                            $module_translate = $word_module_translations[$locale][$word][$module_name] ?? $translate;
-                            $words_by_module[$locale][$module_name][$word] = $module_translate;
-                        }
-                    } elseif (count($modules) === 1) {
-                        $module_name = $modules[0];
-                        if (!isset($words_by_module[$locale][$module_name])) {
-                            $words_by_module[$locale][$module_name] = [];
-                        }
-                        $words_by_module[$locale][$module_name][$word] = $translate;
-                    } else {
-                        if (!isset($all_words_global[$word])) {
-                            $all_words_global[$word] = $translate;
-                        }
+                    if (
+                        !$this->hasModuleTranslation($words_by_module, (string)$locale, (string)$word)
+                        && !isset($words_by_module['all_words'][$word])
+                    ) {
+                        $words_by_module['all_words'][(string)$word] = (string)$translate;
                     }
                 }
             }
             
-            $words_by_module['all_words'] = $all_words_global;
-            unset($all_words_global); // 释放中间变量
             
             // 使用 var_export 替代 w_var_export，避免正则处理导致的额外内存开销
             $text = '<?php return ' . var_export($words_by_module, true) . ';';
@@ -1269,8 +1216,9 @@ class I18n
                     fclose($csv_handle);
                 }
             }
+            unset($words_by_module);
         }
-        self::$local_words = $locals_words;
+        self::$local_words = $cache ? $locals_words : [];
         // 恢复原始内存限制（确保不低于当前内存使用量）
         $restoreLimit = $_prevMemLimit ?: '128M';
         $currentUsage = memory_get_usage(true);
@@ -1286,13 +1234,14 @@ class I18n
 
     public function getLocalWords(string $local_code = 'zh_Hans_CN'): array
     {
-        $words = [];
-        if (isset($this->getLocalsWords()[$local_code])) {
-            $words = (array)($this->getLocalsWords()[$local_code]);
-        } elseif (isset($this->getLocalsWords()['zh_Hans_CN'])) {
-            $words = (array)($this->getLocalsWords()['zh_Hans_CN']);
+        $locals_words = $this->getLocalsWords();
+        if (isset($locals_words[$local_code])) {
+            return (array)$locals_words[$local_code];
         }
-        return $words;
+        if (isset($locals_words['zh_Hans_CN'])) {
+            return (array)$locals_words['zh_Hans_CN'];
+        }
+        return [];
     }
 
     public function convertToLanguageFile(bool $cache = true, ?string $moduleName = null): void
@@ -1332,6 +1281,17 @@ class I18n
         }
         $qCount = substr_count($value, '?');
         return $qCount >= 5;
+    }
+
+    private function hasModuleTranslation(array $wordsByModule, string $locale, string $word): bool
+    {
+        foreach (($wordsByModule[$locale] ?? []) as $moduleWords) {
+            if (is_array($moduleWords) && array_key_exists($word, $moduleWords)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function parseMemoryLimit(string $limit): int

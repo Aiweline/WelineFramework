@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Product\Service;
 
 use WeShop\Price\Service\PriceService;
+use WeShop\Product\Helper\HanfuDemoOptionImageProvider;
 use WeShop\Product\Model\Product;
 use WeShop\QA\Service\QAService;
 use WeShop\Review\Service\ReviewRatingOptionService;
@@ -71,6 +72,7 @@ class ProductViewPageDataService
             $productData['configurable_options'] = $configurableOptions;
             $productData['is_configurable'] = true;
         }
+        $productData = $this->applyConfigurableOptionImages($productData, $configurableOptions);
 
         return [
             'product' => $productData,
@@ -271,7 +273,7 @@ class ProductViewPageDataService
     }
 
     /**
-     * @return array{attributes: array<int, array<string, mixed>>, variants: array<int, array<string, mixed>>}
+     * @return array{attributes: array<int, array<string, mixed>>, variants: array<int, array<string, mixed>>, image_matrix?: array<string, array<string, string>>}
      */
     protected function getConfigurableOptions(int $productId): array
     {
@@ -392,36 +394,84 @@ class ProductViewPageDataService
     {
         $sku = (string) ($product->getData(Product::schema_fields_sku) ?? '');
         if (!str_starts_with($sku, 'DEMO-CAT-')) {
-            return ['attributes' => [], 'variants' => []];
+            return ['attributes' => [], 'variants' => [], 'image_matrix' => []];
         }
 
-        return [
-            'attributes' => [
-                [
-                    'attribute_id' => 900001,
-                    'code' => 'color',
-                    'name' => (string) __('颜色'),
-                    'origin_name' => 'Color',
-                    'options' => [
-                        ['option_id' => 900101, 'code' => 'black', 'value' => (string) __('黑色'), 'origin_value' => 'Black', 'swatch_type' => 'color', 'swatch_value' => '#111827', 'available_product_ids' => [(int) $product->getId()]],
-                        ['option_id' => 900102, 'code' => 'navy', 'value' => (string) __('藏青'), 'origin_value' => 'Navy', 'swatch_type' => 'color', 'swatch_value' => '#1e3a8a', 'available_product_ids' => [(int) $product->getId()]],
-                        ['option_id' => 900103, 'code' => 'beige', 'value' => (string) __('米色'), 'origin_value' => 'Beige', 'swatch_type' => 'color', 'swatch_value' => '#d6b98c', 'available_product_ids' => [(int) $product->getId()]],
-                    ],
-                ],
-                [
-                    'attribute_id' => 900002,
-                    'code' => 'size',
-                    'name' => (string) __('尺码'),
-                    'origin_name' => 'Size',
-                    'options' => [
-                        ['option_id' => 900201, 'code' => 'm', 'value' => 'M', 'origin_value' => 'M', 'swatch_type' => 'text', 'swatch_value' => 'M', 'available_product_ids' => [(int) $product->getId()]],
-                        ['option_id' => 900202, 'code' => 'l', 'value' => 'L', 'origin_value' => 'L', 'swatch_type' => 'text', 'swatch_value' => 'L', 'available_product_ids' => [(int) $product->getId()]],
-                        ['option_id' => 900203, 'code' => 'xl', 'value' => 'XL', 'origin_value' => 'XL', 'swatch_type' => 'text', 'swatch_value' => 'XL', 'available_product_ids' => [(int) $product->getId()]],
-                    ],
-                ],
+        $productId = (int) $product->getId();
+        $attributes = [
+            [
+                'attribute_id' => 900001,
+                'code' => 'color',
+                'name' => (string) __('颜色'),
+                'origin_name' => 'Color',
+                'options' => HanfuDemoOptionImageProvider::colorOptions($productId),
             ],
-            'variants' => [],
+            [
+                'attribute_id' => 900002,
+                'code' => 'size',
+                'name' => (string) __('尺码'),
+                'origin_name' => 'Size',
+                'options' => HanfuDemoOptionImageProvider::sizeOptions($productId),
+            ],
+            [
+                'attribute_id' => 900003,
+                'code' => 'style',
+                'name' => (string) __('款式'),
+                'origin_name' => 'Style',
+                'options' => $this->buildFallbackStyleImageOptions($product),
+            ],
         ];
+
+        return [
+            'attributes' => $attributes,
+            'variants' => [],
+            'image_matrix' => HanfuDemoOptionImageProvider::imageMatrix(),
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildFallbackStyleImageOptions(Product $product): array
+    {
+        return HanfuDemoOptionImageProvider::styleOptions((int) $product->getId());
+    }
+
+    /**
+     * @param array<string, mixed> $productData
+     * @param array<string, mixed> $configurableOptions
+     * @return array<string, mixed>
+     */
+    private function applyConfigurableOptionImages(array $productData, array $configurableOptions): array
+    {
+        $imageMatrix = is_array($configurableOptions['image_matrix'] ?? null) ? $configurableOptions['image_matrix'] : [];
+        if ($imageMatrix === []) {
+            return $productData;
+        }
+
+        $matrixImages = [];
+        foreach ($imageMatrix as $styleImages) {
+            if (!is_array($styleImages)) {
+                continue;
+            }
+            foreach ($styleImages as $image) {
+                $image = trim((string) $image);
+                if ($image !== '') {
+                    $matrixImages[] = $image;
+                }
+            }
+        }
+        $matrixImages = array_values(array_unique($matrixImages));
+        if ($matrixImages === []) {
+            return $productData;
+        }
+
+        $existingImages = is_array($productData['images'] ?? null) ? $productData['images'] : [];
+        $productData['images'] = array_values(array_unique(array_merge($matrixImages, $existingImages)));
+        $productData['image'] = $matrixImages[0];
+        $productData['main_image'] = $matrixImages[0];
+
+        return $productData;
     }
 
     /**

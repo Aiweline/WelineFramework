@@ -334,7 +334,7 @@ final class QATest extends TestCase
         $messageManager = $this->createMock(MessageManager::class);
         $messageManager->expects($this->once())
             ->method('addSuccess')
-            ->with('问答元数据已保存。');
+            ->with((string) __('问答元数据已保存。'));
 
         $controller = $this->getMockBuilder(QA::class)
             ->setConstructorArgs([$this->qaService])

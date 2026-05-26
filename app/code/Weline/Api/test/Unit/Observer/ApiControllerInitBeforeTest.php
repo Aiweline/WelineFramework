@@ -8,7 +8,12 @@ use PHPUnit\Framework\TestCase;
 use WeShop\Auth\Data\ActorContext;
 use WeShop\Auth\Service\WeShopAuthTokenService;
 use Weline\Customer\Model\Customer as AuthCustomer;
+use Weline\Api\Data\ApiAppActor;
+use Weline\Api\Data\ApiAppTokenContext;
+use Weline\Api\Model\ApiApp;
+use Weline\Api\Model\ApiAppInstallation;
 use Weline\Api\Observer\ApiControllerInitBefore;
+use Weline\Api\Service\ApiAppTokenService;
 use Weline\Api\Service\ApiSecurityService;
 use Weline\Api\Service\IpWhitelistService;
 use Weline\Api\Service\TokenService;
@@ -25,6 +30,7 @@ class ApiControllerInitBeforeTest extends TestCase
         ObjectManager::removeInstance(Request::class);
         ObjectManager::removeInstance(WeShopAuthTokenService::class);
         ObjectManager::removeInstance(AuthCustomer::class);
+        ObjectManager::removeInstance(ApiAppTokenService::class);
         parent::tearDown();
     }
 
@@ -286,6 +292,71 @@ class ApiControllerInitBeforeTest extends TestCase
         $observer->execute($event);
 
         $this->assertTrue(true);
+    }
+
+    public function testExecuteBindsApiAppBearerTokenToEventAccessSources(): void
+    {
+        $request = $this->createRequestMock(
+            'api/rest/v1/products',
+            'Products',
+            'getList',
+            'Weline\\Catalog\\Api\\Rest\\V1\\Products',
+            authToken: 'app-access-token',
+            apiFrontend: true
+        );
+        ObjectManager::setInstance(Request::class, $request);
+
+        $apiSecurityService = $this->createMock(ApiSecurityService::class);
+        $apiSecurityService->expects($this->once())->method('isPublicApi')->with($request)->willReturn(false);
+
+        $legacyTokenService = $this->createMock(TokenService::class);
+        $legacyTokenService->expects($this->once())
+            ->method('validateAccessToken')
+            ->with('app-access-token')
+            ->willReturn(null);
+
+        $app = new ApiApp();
+        $app->setData(ApiApp::schema_fields_ID, 11)
+            ->setClientId('app_123')
+            ->setName('Demo app')
+            ->setStatus(ApiApp::STATUS_ACTIVE);
+
+        $installation = new ApiAppInstallation();
+        $installation->setData(ApiAppInstallation::schema_fields_ID, 22)
+            ->setAppId(11)
+            ->setSubjectType('global')
+            ->setSubjectId('0')
+            ->setStatus(ApiAppInstallation::STATUS_ACTIVE);
+
+        $accessSources = [[
+            'source_id' => 'Vendor_Module::product_read',
+            'route' => 'api/rest/v1/products',
+            'method' => 'GET',
+            'access_mode' => 'read',
+        ]];
+
+        $appTokenService = $this->createMock(ApiAppTokenService::class);
+        $appTokenService->expects($this->once())
+            ->method('resolveAccessToken')
+            ->with('app-access-token')
+            ->willReturn(new ApiAppTokenContext(new ApiAppActor($app, $installation), $accessSources));
+
+        $observer = new ApiControllerInitBefore(
+            $request,
+            $apiSecurityService,
+            $this->createMock(IpWhitelistService::class),
+            $this->createMock(UserAgentRestrictionService::class),
+            $legacyTokenService,
+            new PublicApiAuthRouteMatcher(),
+            $appTokenService
+        );
+
+        $event = new Event(['data' => []]);
+        $observer->execute($event);
+
+        self::assertInstanceOf(ApiAppActor::class, $event->getData('user'));
+        self::assertSame($accessSources, $event->getData('access_sources'));
+        self::assertInstanceOf(ApiAppActor::class, $request->getData('api_app_actor'));
     }
 
     private function createRequestMock(

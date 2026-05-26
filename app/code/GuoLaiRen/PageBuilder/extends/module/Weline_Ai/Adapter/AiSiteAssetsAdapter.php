@@ -4,12 +4,21 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Ai\Adapter;
 
+use Weline\Ai\Interface\AdapterModelBindingInterface;
 use Weline\Ai\Interface\AdapterSkillBindingInterface;
 use Weline\Ai\Interface\AdapterStyleBindingInterface;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
-class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindingInterface, AdapterStyleBindingInterface
+class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindingInterface, AdapterStyleBindingInterface, AdapterModelBindingInterface
 {
+    public function getDefaultModelBindings(): array
+    {
+        return [
+            'text2text' => 'deepseek-v4-flash',
+            'text2image' => 'gemini-3.1-flash-image-preview',
+        ];
+    }
+
     public function getDefaultSkillCodes(): array
     {
         return ['claude-design'];

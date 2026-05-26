@@ -50,20 +50,35 @@ class GeoProtocolRenderer
 
         $items = $config->isFeedEnabled() ? $this->collectItems($full ? 500 : 80, $config->getFeedId()) : [];
         if ($items !== []) {
-            $lines[] = '';
-            $lines[] = '## Content';
-            foreach ($items as $item) {
-                $title = trim((string)($item[FeedItem::schema_fields_TITLE] ?? ''));
-                $url = trim((string)($item[FeedItem::schema_fields_URL] ?? ''));
-                if ($title === '' || $url === '') {
-                    continue;
+            $productItems = array_values(array_filter($items, fn (array $item): bool => $this->isProductItem($item)));
+            $contentItems = array_values(array_filter($items, fn (array $item): bool => !$this->isProductItem($item)));
+            if ($productItems !== []) {
+                $lines[] = '';
+                $lines[] = '## Products';
+                foreach ($productItems as $item) {
+                    $line = $this->productLine($item, $full);
+                    if ($line !== '') {
+                        $lines[] = $line;
+                    }
                 }
-                $line = '- [' . $this->plain($title) . '](' . $url . ')';
-                $summary = $this->plain((string)($item[FeedItem::schema_fields_CONTENT] ?? ''));
-                if ($summary !== '') {
-                    $line .= ' - ' . mb_substr($summary, 0, $full ? 600 : 180);
+            }
+
+            if ($contentItems !== []) {
+                $lines[] = '';
+                $lines[] = '## Content';
+                foreach ($contentItems as $item) {
+                    $title = trim((string)($item[FeedItem::schema_fields_TITLE] ?? ''));
+                    $url = trim((string)($item[FeedItem::schema_fields_URL] ?? ''));
+                    if ($title === '' || $url === '') {
+                        continue;
+                    }
+                    $line = '- [' . $this->plain($title) . '](' . $url . ')';
+                    $summary = $this->plain((string)($item[FeedItem::schema_fields_CONTENT] ?? ''));
+                    if ($summary !== '') {
+                        $line .= ' - ' . mb_substr($summary, 0, $full ? 600 : 180);
+                    }
+                    $lines[] = $line;
                 }
-                $lines[] = $line;
             }
         }
 
@@ -155,6 +170,130 @@ class GeoProtocolRenderer
         $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $value = preg_replace('/\s+/u', ' ', $value) ?: $value;
         return trim(str_replace(["\r", "\n"], ' ', $value));
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function isProductItem(array $item): bool
+    {
+        $metadata = $this->metadata($item);
+        $type = strtolower(trim((string)($metadata['type'] ?? $metadata['item_type'] ?? $item[FeedItem::schema_fields_ITEM_TYPE] ?? '')));
+        return $type === 'product';
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function productLine(array $item, bool $full): string
+    {
+        $title = trim((string)($item[FeedItem::schema_fields_TITLE] ?? ''));
+        $url = trim((string)($item[FeedItem::schema_fields_URL] ?? ''));
+        if ($title === '' || $url === '') {
+            return '';
+        }
+
+        $metadata = $this->metadata($item);
+        $details = [];
+        foreach ([
+            'Brand' => ['brand', 'brand_name'],
+            'SKU' => ['sku'],
+            'SPU' => ['spu', 'product_group_id'],
+            'Category' => ['category_path', 'category'],
+        ] as $label => $keys) {
+            $value = $this->firstMetadataValue($metadata, $keys);
+            if ($value !== '') {
+                $details[] = $label . ': ' . $this->plain($value);
+            }
+        }
+
+        $price = $this->firstMetadataValue($metadata, ['price', 'final_price']);
+        if ($price !== '') {
+            $currency = $this->firstMetadataValue($metadata, ['currency', 'price_currency']) ?: 'USD';
+            $details[] = 'Price: ' . $this->plain($price . ' ' . strtoupper($currency));
+        }
+
+        $availability = $this->firstMetadataValue($metadata, ['availability', 'stock_status']);
+        if ($availability !== '') {
+            $details[] = 'Availability: ' . $this->plain($this->availabilityLabel($availability));
+        }
+
+        $rating = $this->firstMetadataValue($metadata, ['rating', 'rating_value']);
+        $reviewCount = $this->firstMetadataValue($metadata, ['review_count', 'reviewCount']);
+        if ($rating !== '') {
+            $ratingText = 'Rating: ' . $this->plain($rating);
+            if ($reviewCount !== '') {
+                $ratingText .= ' (' . $this->plain($reviewCount) . ' reviews)';
+            }
+            $details[] = $ratingText;
+        }
+
+        $line = '- [' . $this->plain($title) . '](' . $url . ')';
+        if ($details !== []) {
+            $line .= ' - ' . implode('; ', $details);
+        }
+        $summary = $this->plain((string)($item[FeedItem::schema_fields_CONTENT] ?? ''));
+        if ($summary !== '') {
+            $line .= ' - ' . mb_substr($summary, 0, $full ? 600 : 180);
+        }
+        return $line;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return array<string, mixed>
+     */
+    private function metadata(array $item): array
+    {
+        $metadata = $item[FeedItem::schema_fields_METADATA] ?? [];
+        if (is_array($metadata)) {
+            return $metadata;
+        }
+        if (!is_string($metadata) || trim($metadata) === '') {
+            return [];
+        }
+        $decoded = json_decode($metadata, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     * @param string[] $keys
+     */
+    private function firstMetadataValue(array $metadata, array $keys): string
+    {
+        foreach ($keys as $key) {
+            $value = $metadata[$key] ?? null;
+            if ($value === null && isset($metadata['product']) && is_array($metadata['product'])) {
+                $value = $metadata['product'][$key] ?? null;
+            }
+            if (is_array($value)) {
+                $value = implode(' > ', array_filter(array_map('strval', $value)));
+            }
+            $value = trim((string)$value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+        return '';
+    }
+
+    private function availabilityLabel(string $availability): string
+    {
+        $value = strtolower(trim($availability));
+        if (str_contains($value, 'instock') || str_contains($value, 'in_stock')) {
+            return 'InStock';
+        }
+        if (str_contains($value, 'outofstock') || str_contains($value, 'out_of_stock') || str_contains($value, 'sold')) {
+            return 'OutOfStock';
+        }
+        if (str_contains($value, 'preorder')) {
+            return 'PreOrder';
+        }
+        if (str_contains($value, 'backorder')) {
+            return 'BackOrder';
+        }
+        return $availability;
     }
 
     private function loadWebsiteConfig(int $websiteId): WebsiteProtocolConfig

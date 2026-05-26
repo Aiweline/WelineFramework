@@ -120,7 +120,9 @@ class EventRegistry implements EventRegistryInterface
 
         // 扫描所有观察者并合并到事件信息中
         RegistryProgress::log('Event merge observers into registry');
-        $this->mergeObserversIntoRegistry($registry);
+        $this->mergeObserversIntoRegistry($registry, $observersData);
+        unset($scannedData, $observersData);
+        RegistryProgress::log('Event raw scan data released');
 
         // 保存注册表
         return $this->saveRegistry($registry);
@@ -169,6 +171,8 @@ class EventRegistry implements EventRegistryInterface
         // 4. 合并新数据到注册表
         RegistryProgress::log('Event incremental: merging scanned data');
         $this->mergeScannedDataIntoRegistry($registry, $newScannedData, $newObserversData);
+        unset($newScannedData, $newObserversData);
+        RegistryProgress::log('Event incremental raw scan data released');
         
         // 5. 重新排序所有观察者
         foreach ($registry['events'] as &$eventInfo) {
@@ -672,10 +676,10 @@ class EventRegistry implements EventRegistryInterface
      * @param array $registry 注册表数据（引用传递，会修改原数组）
      * @return void
      */
-    private function mergeObserversIntoRegistry(array &$registry): void
+    private function mergeObserversIntoRegistry(array &$registry, ?array $observersData = null): void
     {
         // 扫描所有观察者
-        $observersData = $this->xmlReader->read();
+        $observersData ??= $this->xmlReader->read();
         
         $env = \Weline\Framework\App\Env::getInstance();
         
@@ -920,6 +924,12 @@ class EventRegistry implements EventRegistryInterface
      *
      * @return array
      */
+    public function clearMemoryCache(): void
+    {
+        $this->cachedRegistry = null;
+        $this->cachedFileMtime = null;
+    }
+
     public function getEvents(): array
     {
         $registry = $this->getRegistry();
