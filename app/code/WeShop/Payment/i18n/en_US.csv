@@ -1,7 +1,9 @@
 ﻿"Invalid request method.","Invalid request method."
+"Payment configuration test passed: %{1}","Payment configuration test passed: %{1}"
+"Payment configuration test failed: %{1}","Payment configuration test failed: %{1}"
 "Payment settings saved successfully.","Payment settings saved successfully."
 "Payment settings save failed: %{1}","Payment settings save failed: %{1}"
-"Payment Methods","Payment Methods"
+支付方式,"Payment Methods"
 "Payment method is required.","Payment method is required."
 "Payment callback handled.","Payment callback handled."
 "Order ID is required.","Order ID is required."
@@ -13,78 +15,82 @@
 "Get enabled payment methods for checkout.","Get enabled payment methods for checkout."
 "Get all configured payment methods.","Get all configured payment methods."
 "Get a single payment method definition.","Get a single payment method definition."
+"Get payment provider catalogue.","Get payment provider catalogue."
+"Get ISO country options for payment filtering.","Get ISO country options for payment filtering."
 "Process a payment for an order.","Process a payment for an order."
 "Query payment status by order number.","Query payment status by order number."
 "An order instance is required for payment processing.","An order instance is required for payment processing."
 "Unable to sign the Alipay request with the configured private key.","Unable to sign the Alipay request with the configured private key."
 配送送达时向客户收款。,"Collect the payment from the customer when the shipment is delivered."
+"Cash on delivery configuration passed static validation.","Cash on delivery configuration passed static validation."
+"Credit line payment uses event dispatch only; listener-side credit policy is validated outside payment configuration.","Credit line payment uses event dispatch only; listener-side credit policy is validated outside payment configuration."
 请在订单创建后完成手动银行转账。,"Please complete a manual bank transfer after the order is placed."
+"Manual bank transfer configuration passed static validation.","Manual bank transfer configuration passed static validation."
 "%{1} is missing required configuration: %{2}","%{1} is missing required configuration: %{2}"
 "Order %{1}","Order %{1}"
 "Unable to initialize the WeChat Pay order.","Unable to initialize the WeChat Pay order."
-企业信用账户,"B2B Credit Account"
-订单计入企业信用额度，并在到期日前按发票付款。,"Charge the order to your enterprise credit line and pay by invoice before the due date."
-仅适用于已开通有效信用额度的企业客户。,"Available only for approved B2B customers with an active credit line."
-说明,Instructions
-银行转账,"Manual Transfer"
-下单后通过银行转账付款。,"Pay by bank transfer after the order is created."
-请将订单金额转入配置的银行账户，并使用订单号作为付款备注。,"Please transfer the order amount to the configured bank account and use the order number as the payment reference."
-请使用订单号作为付款备注。,"Use the order number as the payment reference."
-订单创建后展示给客户。,"Shown to the customer after the order is created."
-账户名称,"Account Name"
-开户银行,"Bank Name"
-银行账号,"Account Number"
-付款备注,"Reference Note"
-货到付款,"Cash on Delivery"
-配送送达时现金付款。,"Pay in cash when the shipment is delivered."
-货到付款手续费,"COD Fee"
-PayPal,PayPal
-"使用 PayPal 账户在线支付。","Pay online with your PayPal account."
-沙箱模式,"Sandbox Mode"
-"生产 PayPal 凭据准备好之前保持开启。","Keep enabled until the production PayPal credentials are ready."
-"客户端 ID","Client ID"
-客户端密钥,"Client Secret"
-商户邮箱,"Merchant Email"
-"Webhook ID","Webhook ID"
-支付宝,Alipay
-通过托管跳转结账使用支付宝付款。,"Pay with Alipay through a hosted redirect checkout."
-"App ID","App ID"
-"商户 ID","Merchant ID"
-公钥,"Public Key"
-私钥,"Private Key"
-通知地址,"Notify URL"
-返回地址,"Return URL"
-产品编码,"Product Code"
-支付超时时间,"Payment Timeout"
-签名类型,"Signature Type"
-微信支付,"WeChat Pay"
-通过统一下单网关使用微信支付。,"Pay with WeChat Pay through the unified order gateway."
-商户号,"Merchant ID"
-"API v3 密钥","API v3 Key"
-商户证书路径,"Merchant Certificate Path"
-交易类型,"Trade Type"
-场景信息,"Scene Info"
-"客户端 IP 覆盖","Client IP Override"
+"Configuration changed after the last test.","Configuration changed after the last test."
+以下支付方式缺少完整配置文档，不能启用：%{1},以下支付方式缺少完整配置文档，不能启用：%{1}
+"以下支付方式还没有通过当前 scope 的配置测试，不能启用：%{1}","以下支付方式还没有通过当前 scope 的配置测试，不能启用：%{1}"
 "Unsupported payment method: %{1}","Unsupported payment method: %{1}"
 "Payment method %{1} is missing required configuration: %{2}","Payment method %{1} is missing required configuration: %{2}"
+"Payment method %{1} has not passed configuration testing for this scope.","Payment method %{1} has not passed configuration testing for this scope."
 "Payment provider is not configured for %{1}.","Payment provider is not configured for %{1}."
 "Payment provider is invalid for %{1}.","Payment provider is invalid for %{1}."
 "2. 支付方式","2. Payment method"
 当前结账上下文没有可用支付方式。,"No payment methods are available for the current checkout context."
 支付流程：%{1},"Payment flow: %{1}"
 确认订单后完成该支付流程。,"Complete this payment flow after confirming the order."
+该支付方式缺少完整配置文档，不能启用。,该支付方式缺少完整配置文档，不能启用。
+留空表示不修改,留空表示不修改
+配置已测试,配置已测试
+测试失败,测试失败
+未测试,未测试
+已启用,已启用
+未启用,未启用
+默认,默认
+缺文档,缺文档
+缺配置,缺配置
+代码,代码
+类型,类型
+热度,热度
+币种,币种
+缺少必填字段,缺少必填字段
+查看配置指南,查看配置指南
+"测试当前 scope 配置","测试当前 scope 配置"
+启用,启用
+排序,排序
 支付管理,"Payment Management"
-支付方式,"Payment Methods"
-"Total Methods","Total Methods"
-"Enabled At Checkout","Enabled At Checkout"
-"Reserved / Disabled","Reserved / Disabled"
-"Default Method","Default Method"
-Enabled,Enabled
-Disabled,Disabled
-Default,Default
-Code,Code
-Areas,Areas
-Currencies,Currencies
-Countries,Countries
-"Sort Order","Sort Order"
-"Save Payment Settings","Save Payment Settings"
+全部方式,全部方式
+"可进 Checkout","可进 Checkout"
+默认方式,默认方式
+搜索,搜索
+支付商、方式、国家码、字段,支付商、方式、国家码、字段
+国家,国家
+全部国家,全部国家
+支付商,支付商
+全部支付商,全部支付商
+状态,状态
+全部状态,全部状态
+已配置,已配置
+筛选,筛选
+"配置 scope","配置 scope"
+"Scope code","Scope code"
+环境,环境
+当前配置隔离在,当前配置隔离在
+已启用支付方式,已启用支付方式
+全部支付商/方式,全部支付商/方式
+国家与币种覆盖,国家与币种覆盖
+凭据与环境,凭据与环境
+配置文档,配置文档
+"交易/Webhook 日志","交易/Webhook 日志"
+当前筛选条件下没有已启用支付方式。,当前筛选条件下没有已启用支付方式。
+热门支付方式,热门支付方式
+全部支付方式热度倒序,全部支付方式热度倒序
+完整,完整
+待补全,待补全
+缺少章节,缺少章节
+"交易流水和 Webhook 日志模型已建立；实际列表需要接入交易写入后按模型数据渲染。","交易流水和 Webhook 日志模型已建立；实际列表需要接入交易写入后按模型数据渲染。"
+保存支付设置,保存支付设置
+配置指南,配置指南
+关闭,关闭

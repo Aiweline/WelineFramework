@@ -12,6 +12,56 @@ $importUrl = $this->getBackendUrl('ai/backend/skill/post-import-url');
 $bindUrl = $this->getBackendUrl('ai/backend/skill/post-bind-adapter-skill');
 $unbindUrl = $this->getBackendUrl('ai/backend/skill/post-unbind-adapter-skill');
 $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
+$skillI18n = [
+    'apiUnavailable' => (string)__('前端 API 不可用，请刷新页面后重试。'),
+    'adapterUnavailable' => (string)__('适配器上下文不可用。'),
+    'lockedLabel' => (string)__('锁定'),
+    'manualLabel' => (string)__('手动'),
+    'temporaryLabel' => (string)__('临时'),
+    'noneLabel' => (string)__('无'),
+    'skillsSuffix' => (string)__(' 个技能'),
+    'loading' => (string)__('加载中...'),
+    'catalogLoadFailed' => (string)__('技能目录加载失败'),
+    'noMatch' => (string)__('没有技能符合当前筛选。'),
+    'newCustomSkill' => (string)__('新建自定义技能'),
+    'skillDetail' => (string)__('技能详情'),
+    'noSelection' => (string)__('未选择'),
+    'readOnly' => (string)__('只读'),
+    'editable' => (string)__('可编辑'),
+    'newLabel' => (string)__('新建'),
+    'managePrefix' => (string)__('管理 '),
+    'manageAction' => (string)__('管理'),
+    'exportAction' => (string)__('导出'),
+    'untitledSkill' => (string)__('未命名技能'),
+    'lockedBinding' => (string)__('锁定绑定'),
+    'manualBinding' => (string)__('手动绑定'),
+    'readonlyBadge' => (string)__('只读'),
+    'bindingLockedHelp' => (string)__('此技能由适配器代码锁定，不能在这里解绑。'),
+    'bindingManualHelp' => (string)__('此技能已手动绑定到当前适配器，可以移除此手动绑定。'),
+    'bindingInactiveHelp' => (string)__('只有启用状态的技能才能绑定到适配器。'),
+    'bindingReadyHelp' => (string)__('将此技能作为当前适配器的长期手动技能。'),
+    'saving' => (string)__('正在保存...'),
+    'saved' => (string)__('已保存。'),
+    'saveFailed' => (string)__('保存失败'),
+    'updatingStatus' => (string)__('正在更新状态...'),
+    'statusUpdated' => (string)__('状态已更新。'),
+    'statusUpdateFailed' => (string)__('状态更新失败'),
+    'binding' => (string)__('正在绑定技能...'),
+    'unbinding' => (string)__('正在移除绑定...'),
+    'bound' => (string)__('技能已绑定到适配器。'),
+    'unbound' => (string)__('手动绑定已移除。'),
+    'bindFailed' => (string)__('绑定失败'),
+    'unbindFailed' => (string)__('解绑失败'),
+    'importing' => (string)__('正在导入...'),
+    'imported' => (string)__('已导入为待审核技能，请检查后再启用和绑定。'),
+    'importFailed' => (string)__('导入失败'),
+    'codeLabel' => (string)__('代码'),
+    'skillLabel' => (string)__('技能'),
+    'sourceLabel' => (string)__('来源'),
+    'statusLabel' => (string)__('状态'),
+    'bindingLabel' => (string)__('绑定'),
+    'actionsLabel' => (string)__('操作'),
+];
 ?>
 <?php if (empty($embed)): ?>
     <?= $this->fetch('Weline_Ai::templates/Backend/Manager/tabs.phtml', ['activeTab' => 'skill']) ?>
@@ -24,6 +74,12 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
     .weline-ai-skill-page .skill-table-wrap {
         max-height: 650px;
         overflow: auto;
+    }
+    .weline-ai-skill-page .skill-catalog-table {
+        table-layout: fixed;
+    }
+    .weline-ai-skill-page .skill-catalog-table td {
+        min-width: 0;
     }
     .weline-ai-skill-page .skill-row {
         cursor: pointer;
@@ -48,6 +104,27 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
         font-size: 11px;
         color: #495057;
         background: #f8f9fa;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .weline-ai-skill-page .skill-code-token {
+        display: block;
+        max-width: 100%;
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        word-break: normal;
+        overflow-wrap: normal;
+    }
+    .weline-ai-skill-page .skill-muted-line {
+        max-width: 520px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .weline-ai-skill-page .skill-empty {
         border: 1px dashed rgba(108, 117, 125, 0.35);
@@ -61,20 +138,98 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
         position: sticky;
         top: 12px;
     }
+    @media (max-width: 1199.98px) {
+        .weline-ai-skill-page .skill-shell {
+            min-height: 0;
+        }
+        .weline-ai-skill-page .skill-table-wrap {
+            max-height: none;
+            overflow: visible;
+            padding: 0 12px 12px;
+        }
+        .weline-ai-skill-page .skill-catalog-table,
+        .weline-ai-skill-page .skill-catalog-table tbody {
+            display: block;
+        }
+        .weline-ai-skill-page .skill-catalog-table thead {
+            display: none;
+        }
+        .weline-ai-skill-page .skill-catalog-table tbody {
+            padding-top: 12px;
+        }
+        .weline-ai-skill-page .skill-catalog-table .skill-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px 16px;
+            margin-bottom: 10px;
+            padding: 14px;
+            border: 1px solid var(--backend-color-border-default, #dee2e6);
+            border-radius: 8px;
+            background: var(--backend-color-card-bg, #ffffff);
+        }
+        .weline-ai-skill-page .skill-catalog-table .skill-row.is-selected {
+            border-color: var(--backend-color-primary, #0d6efd);
+            box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
+        }
+        .weline-ai-skill-page .skill-catalog-table .skill-row td {
+            display: block;
+            border: 0;
+            padding: 0;
+        }
+        .weline-ai-skill-page .skill-catalog-table .skill-row td::before {
+            content: attr(data-label);
+            display: block;
+            margin-bottom: 3px;
+            color: var(--backend-color-text-muted, #6c757d);
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .weline-ai-skill-page .skill-catalog-table .skill-row td:nth-child(1),
+        .weline-ai-skill-page .skill-catalog-table .skill-row td:nth-child(2) {
+            grid-column: 1 / -1;
+        }
+        .weline-ai-skill-page .skill-catalog-table .skill-row td:nth-child(6) {
+            grid-column: 2;
+            grid-row: 3 / span 2;
+            text-align: right;
+        }
+        .weline-ai-skill-page .skill-catalog-table .skill-row td:nth-child(6)::before {
+            text-align: right;
+        }
+        .weline-ai-skill-page .skill-catalog-table tr:not(.skill-row) {
+            display: block;
+        }
+        .weline-ai-skill-page .skill-catalog-table tr:not(.skill-row) td {
+            display: block;
+        }
+    }
+    @media (max-width: 575.98px) {
+        .weline-ai-skill-page .skill-catalog-table .skill-row {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .weline-ai-skill-page .skill-catalog-table .skill-row td:nth-child(6) {
+            grid-column: 1;
+            grid-row: auto;
+            text-align: left;
+        }
+        .weline-ai-skill-page .skill-catalog-table .skill-row td:nth-child(6)::before {
+            text-align: left;
+        }
+    }
 </style>
 
 <div class="container-fluid py-3 weline-ai-skill-page">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
         <div>
-            <h4 class="mb-1"><i class="mdi mdi-shape-outline me-1"></i>AI Skills</h4>
-            <div class="text-muted small">Govern module, custom, imported, and adapter-bound prompt skills.</div>
+            <h4 class="mb-1"><i class="mdi mdi-shape-outline me-1"></i><?= __('AI 技能') ?></h4>
+            <div class="text-muted small"><?= __('管理模块、自定义、导入和适配器绑定的提示词技能。') ?></div>
         </div>
         <div class="d-flex flex-wrap gap-2">
             <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-skill-new">
-                <i class="mdi mdi-plus me-1"></i>New custom skill
+                <i class="mdi mdi-plus me-1"></i><?= __('新建自定义技能') ?>
             </button>
             <button class="btn btn-outline-primary btn-sm" type="button" id="ai-skill-refresh">
-                <i class="mdi mdi-refresh me-1"></i>Refresh catalog
+                <i class="mdi mdi-refresh me-1"></i><?= __('刷新目录') ?>
             </button>
         </div>
     </div>
@@ -85,30 +240,30 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
                 <div class="card-body">
                     <div class="row g-2 align-items-end">
                         <div class="col-md-4">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-adapter">Adapter binding context</label>
+                            <label class="form-label small text-muted mb-1" for="ai-skill-adapter"><?= __('适配器绑定上下文') ?></label>
                             <select class="form-select form-select-sm" id="ai-skill-adapter"></select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-search">Search</label>
-                            <input class="form-control form-control-sm" id="ai-skill-search" type="search" placeholder="code / name / tag">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-search"><?= __('搜索') ?></label>
+                            <input class="form-control form-control-sm" id="ai-skill-search" type="search" placeholder="<?= __('代码 / 名称 / 标签') ?>">
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-status-filter">Status</label>
+                            <label class="form-label small text-muted mb-1" for="ai-skill-status-filter"><?= __('状态') ?></label>
                             <select class="form-select form-select-sm" id="ai-skill-status-filter">
-                                <option value="">All</option>
-                                <option value="active">Active</option>
-                                <option value="pending">Pending</option>
-                                <option value="disabled">Disabled</option>
-                                <option value="missing">Missing</option>
+                                <option value=""><?= __('全部') ?></option>
+                                <option value="active"><?= __('启用') ?></option>
+                                <option value="pending"><?= __('待审核') ?></option>
+                                <option value="disabled"><?= __('禁用') ?></option>
+                                <option value="missing"><?= __('缺失') ?></option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-source-filter">Source</label>
+                            <label class="form-label small text-muted mb-1" for="ai-skill-source-filter"><?= __('来源') ?></label>
                             <select class="form-select form-select-sm" id="ai-skill-source-filter">
-                                <option value="">All</option>
-                                <option value="module">Module/system</option>
-                                <option value="custom">Custom</option>
-                                <option value="import">Imported/platform</option>
+                                <option value=""><?= __('全部') ?></option>
+                                <option value="module"><?= __('模块 / 系统') ?></option>
+                                <option value="custom"><?= __('自定义') ?></option>
+                                <option value="import"><?= __('导入 / 平台') ?></option>
                             </select>
                         </div>
                     </div>
@@ -118,25 +273,25 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
 
             <div class="card">
                 <div class="card-header d-flex align-items-center justify-content-between">
-                    <strong>Skill catalog</strong>
-                    <span class="small text-muted" id="ai-skill-status"><?= count($skills) ?> skills</span>
+                    <strong><?= __('技能目录') ?></strong>
+                    <span class="small text-muted" id="ai-skill-status"><?= count($skills) ?><?= __(' 个技能') ?></span>
                 </div>
                 <div class="card-body p-0">
                     <div class="skill-table-wrap">
-                        <table class="table table-sm align-middle mb-0">
+                        <table class="table table-sm align-middle mb-0 skill-catalog-table">
                             <thead class="table-light position-sticky top-0">
                             <tr>
-                                <th style="width: 180px;">Code</th>
-                                <th>Skill</th>
-                                <th style="width: 130px;">Source</th>
-                                <th style="width: 100px;">Status</th>
-                                <th style="width: 130px;">Binding</th>
-                                <th style="width: 150px;">Actions</th>
+                                <th style="width: 180px;"><?= __('代码') ?></th>
+                                <th><?= __('技能') ?></th>
+                                <th style="width: 130px;"><?= __('来源') ?></th>
+                                <th style="width: 100px;"><?= __('状态') ?></th>
+                                <th style="width: 130px;"><?= __('绑定') ?></th>
+                                <th style="width: 150px;"><?= __('操作') ?></th>
                             </tr>
                             </thead>
                             <tbody id="ai-skill-table-body">
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">Loading skill catalog...</td>
+                                <td colspan="6" class="text-center text-muted py-4"><?= __('正在加载技能目录...') ?></td>
                             </tr>
                             </tbody>
                         </table>
@@ -148,61 +303,61 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
         <div class="col-xl-4">
             <div class="card skill-detail-card mb-3">
                 <div class="card-header d-flex align-items-center justify-content-between">
-                    <strong id="ai-skill-detail-title">Skill detail</strong>
-                    <span class="small text-muted" id="ai-skill-detail-mode">No selection</span>
+                    <strong id="ai-skill-detail-title"><?= __('技能详情') ?></strong>
+                    <span class="small text-muted" id="ai-skill-detail-mode"><?= __('未选择') ?></span>
                 </div>
                 <div class="card-body">
                     <div id="ai-skill-empty" class="skill-empty">
-                        Select a skill from the catalog, or create a new custom skill.
+                        <?= __('从目录选择一个技能，或新建自定义技能。') ?>
                     </div>
 
                     <form id="ai-skill-form" class="d-none">
                         <div class="d-flex flex-wrap gap-1 mb-2" id="ai-skill-badges"></div>
 
                         <div class="mb-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-code">Code</label>
-                            <input type="text" class="form-control form-control-sm" id="ai-skill-code" placeholder="skill-code">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-code"><?= __('代码') ?></label>
+                            <input type="text" class="form-control form-control-sm" id="ai-skill-code" placeholder="<?= __('技能代码') ?>">
                         </div>
                         <div class="mb-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-name">Name</label>
-                            <input type="text" class="form-control form-control-sm" id="ai-skill-name" placeholder="Readable skill name">
+                            <label class="form-label small text-muted mb-1" for="ai-skill-name"><?= __('名称') ?></label>
+                            <input type="text" class="form-control form-control-sm" id="ai-skill-name" placeholder="<?= __('可读的技能名称') ?>">
                         </div>
                         <div class="row g-2">
                             <div class="col-6">
-                                <label class="form-label small text-muted mb-1" for="ai-skill-edit-status">Status</label>
+                                <label class="form-label small text-muted mb-1" for="ai-skill-edit-status"><?= __('状态') ?></label>
                                 <select class="form-select form-select-sm" id="ai-skill-edit-status">
-                                    <option value="active">active</option>
-                                    <option value="pending">pending</option>
-                                    <option value="disabled">disabled</option>
+                                    <option value="active"><?= __('启用') ?></option>
+                                    <option value="pending"><?= __('待审核') ?></option>
+                                    <option value="disabled"><?= __('禁用') ?></option>
                                 </select>
                             </div>
                             <div class="col-6">
-                                <label class="form-label small text-muted mb-1" for="ai-skill-version">Version</label>
+                                <label class="form-label small text-muted mb-1" for="ai-skill-version"><?= __('版本') ?></label>
                                 <input type="text" class="form-control form-control-sm" id="ai-skill-version" placeholder="1.0.0">
                             </div>
                         </div>
                         <div class="mb-2 mt-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-description">Description</label>
-                            <textarea class="form-control form-control-sm" id="ai-skill-description" rows="2" placeholder="What this skill does"></textarea>
+                            <label class="form-label small text-muted mb-1" for="ai-skill-description"><?= __('描述') ?></label>
+                            <textarea class="form-control form-control-sm" id="ai-skill-description" rows="2" placeholder="<?= __('这个技能负责什么') ?>"></textarea>
                         </div>
                         <div class="mb-2">
-                            <label class="form-label small text-muted mb-1" for="ai-skill-body">Skill body</label>
-                            <textarea class="form-control form-control-sm skill-body-editor" id="ai-skill-body" placeholder="Markdown instructions"></textarea>
+                            <label class="form-label small text-muted mb-1" for="ai-skill-body"><?= __('技能正文') ?></label>
+                            <textarea class="form-control form-control-sm skill-body-editor" id="ai-skill-body" placeholder="<?= __('Markdown 指令') ?>"></textarea>
                         </div>
 
                         <div class="d-flex flex-wrap gap-2 mb-2">
-                            <button class="btn btn-success btn-sm" type="button" id="ai-skill-save-btn">Save</button>
-                            <button class="btn btn-outline-success btn-sm" type="button" data-skill-status-action="active">Enable</button>
-                            <button class="btn btn-outline-warning btn-sm" type="button" data-skill-status-action="pending">Set pending</button>
-                            <button class="btn btn-outline-danger btn-sm" type="button" data-skill-status-action="disabled">Disable</button>
-                            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-skill-export-btn">Export</button>
+                            <button class="btn btn-success btn-sm" type="button" id="ai-skill-save-btn"><?= __('保存') ?></button>
+                            <button class="btn btn-outline-success btn-sm" type="button" data-skill-status-action="active"><?= __('启用') ?></button>
+                            <button class="btn btn-outline-warning btn-sm" type="button" data-skill-status-action="pending"><?= __('设为待审核') ?></button>
+                            <button class="btn btn-outline-danger btn-sm" type="button" data-skill-status-action="disabled"><?= __('禁用') ?></button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-skill-export-btn"><?= __('导出') ?></button>
                         </div>
 
                         <div class="border-top pt-2 mt-2">
-                            <div class="small text-muted mb-2">Adapter binding for selected context</div>
+                            <div class="small text-muted mb-2"><?= __('当前上下文的适配器绑定') ?></div>
                             <div class="d-flex flex-wrap gap-2">
-                                <button class="btn btn-primary btn-sm" type="button" id="ai-skill-bind-btn">Bind to adapter</button>
-                                <button class="btn btn-outline-danger btn-sm" type="button" id="ai-skill-unbind-btn">Unbind manual binding</button>
+                                <button class="btn btn-primary btn-sm" type="button" id="ai-skill-bind-btn"><?= __('绑定到适配器') ?></button>
+                                <button class="btn btn-outline-danger btn-sm" type="button" id="ai-skill-unbind-btn"><?= __('移除手动绑定') ?></button>
                             </div>
                             <div class="small text-muted mt-2" id="ai-skill-binding-help"></div>
                         </div>
@@ -213,11 +368,11 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
             </div>
 
             <div class="card">
-                <div class="card-header"><strong>Import skill from URL</strong></div>
+                <div class="card-header"><strong><?= __('从 URL 导入技能') ?></strong></div>
                 <div class="card-body">
                     <input type="url" class="form-control form-control-sm mb-2" id="ai-skill-import-url" placeholder="https://example.com/SKILL.md">
-                    <button class="btn btn-primary btn-sm" type="button" id="ai-skill-import-btn">Import as pending</button>
-                    <div class="small text-muted mt-2">Only public http/https URLs are allowed. Limit: 256KB, 8s timeout, Markdown/text/JSON.</div>
+                    <button class="btn btn-primary btn-sm" type="button" id="ai-skill-import-btn"><?= __('导入为待审核') ?></button>
+                    <div class="small text-muted mt-2"><?= __('仅允许公开 http/https URL。限制：256KB、8 秒超时、Markdown/text/JSON。') ?></div>
                     <div class="small mt-2" id="ai-skill-import-status"></div>
                 </div>
             </div>
@@ -236,6 +391,7 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
     var unbindUrl = <?= \json_encode($unbindUrl, JSON_UNESCAPED_SLASHES) ?>;
     var exportUrl = <?= \json_encode($exportUrl, JSON_UNESCAPED_SLASHES) ?>;
     var initialAdapters = <?= \json_encode($adapters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    var i18n = <?= \json_encode($skillI18n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}' ?>;
 
     var state = {
         items: [],
@@ -280,14 +436,38 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
             var value = data[key];
             body.append(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
         });
-        return fetch(url, {
+        return apiRequest(url, {
             method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-            body: body.toString()
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body.toString(),
+            silent: true
         }).then(function (res) {
-            return res.json();
+            return res && Object.prototype.hasOwnProperty.call(res, 'data') ? res.data : res;
         });
+    }
+
+    function apiRequest(url, options) {
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
+            return window.Weline.Api.request(url, options);
+        }
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return window.Weline.load('api').then(function () {
+                if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
+                    return window.Weline.Api.request(url, options);
+                }
+                throw new Error(i18n.apiUnavailable);
+            });
+        }
+        return Promise.reject(new Error(i18n.apiUnavailable));
+    }
+
+    function responseErrorMessage(err, fallback) {
+        var data = err && err.response && err.response.data ? err.response.data : null;
+        return (data && (data.message || data.msg)) || (err && err.message) || fallback;
     }
 
     function setStatus(el, text, isError) {
@@ -386,13 +566,13 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
     function renderAdapterSummary() {
         var adapter = currentAdapter();
         if (!adapter) {
-            els.adapterSummary.textContent = 'Adapter context unavailable.';
+            els.adapterSummary.textContent = i18n.adapterUnavailable;
             return;
         }
         var locked = Array.isArray(adapter.locked_skill_codes) ? adapter.locked_skill_codes : [];
         var manual = Array.isArray(adapter.manual_skill_codes) ? adapter.manual_skill_codes : [];
-        els.adapterSummary.textContent = 'Locked: ' + (locked.length ? locked.join(', ') : 'none')
-            + ' | Manual: ' + (manual.length ? manual.join(', ') : 'none');
+        els.adapterSummary.textContent = i18n.lockedLabel + ': ' + (locked.length ? locked.join(', ') : i18n.noneLabel)
+            + ' | ' + i18n.manualLabel + ': ' + (manual.length ? manual.join(', ') : i18n.noneLabel);
     }
 
     function filteredItems() {
@@ -430,10 +610,10 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
             var td = document.createElement('td');
             td.colSpan = 6;
             td.className = 'text-center text-muted py-4';
-            td.textContent = 'No skills match the current filters.';
+            td.textContent = i18n.noMatch;
             emptyRow.appendChild(td);
             els.tableBody.appendChild(emptyRow);
-            els.listStatus.textContent = '0 / ' + state.items.length + ' skills';
+            els.listStatus.textContent = '0 / ' + state.items.length + i18n.skillsSuffix;
             return;
         }
 
@@ -443,7 +623,9 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
             tr.dataset.code = skill.code || '';
 
             var codeTd = document.createElement('td');
-            codeTd.appendChild(text('code', skill.code || ''));
+            codeTd.setAttribute('data-label', i18n.codeLabel);
+            codeTd.title = String(skill.code || '');
+            codeTd.appendChild(text('code', skill.code || '', 'skill-code-token'));
             var tagWrap = document.createElement('div');
             (Array.isArray(skill.tags) ? skill.tags.slice(0, 3) : []).forEach(function (tag) {
                 tagWrap.appendChild(chip(tag));
@@ -452,49 +634,54 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
             tr.appendChild(codeTd);
 
             var nameTd = document.createElement('td');
-            nameTd.appendChild(text('div', skill.name || skill.code || '', 'fw-semibold'));
-            nameTd.appendChild(text('div', skill.description || '', 'small text-muted'));
+            nameTd.setAttribute('data-label', i18n.skillLabel);
+            nameTd.appendChild(text('div', skill.name || skill.code || i18n.untitledSkill, 'fw-semibold'));
+            nameTd.appendChild(text('div', skill.description || '', 'small text-muted skill-muted-line'));
             tr.appendChild(nameTd);
 
             var sourceTd = document.createElement('td');
+            sourceTd.setAttribute('data-label', i18n.sourceLabel);
             sourceTd.appendChild(text('div', skill.source_module || skill.source_platform || skill.source || skill.source_type || '', 'small'));
             sourceTd.appendChild(text('div', skill.source_type || '', 'small text-muted'));
             tr.appendChild(sourceTd);
 
             var statusTd = document.createElement('td');
+            statusTd.setAttribute('data-label', i18n.statusLabel);
             var statusClass = skill.status === 'active' ? 'text-bg-success' : (skill.status === 'pending' ? 'text-bg-warning' : 'text-bg-secondary');
             statusTd.appendChild(badge(skill.status || 'unknown', statusClass));
             tr.appendChild(statusTd);
 
             var bindingTd = document.createElement('td');
+            bindingTd.setAttribute('data-label', i18n.bindingLabel);
             if (skill.locked) {
-                bindingTd.appendChild(badge('locked', 'text-bg-primary'));
+                bindingTd.appendChild(badge(i18n.lockedLabel, 'text-bg-primary'));
             } else if (skill.manual) {
-                bindingTd.appendChild(badge('manual', 'text-bg-info'));
+                bindingTd.appendChild(badge(i18n.manualLabel, 'text-bg-info'));
             } else if (skill.temporary) {
-                bindingTd.appendChild(badge('temporary', 'text-bg-light text-dark'));
+                bindingTd.appendChild(badge(i18n.temporaryLabel, 'text-bg-light text-dark'));
             } else {
                 bindingTd.appendChild(text('span', '-', 'small text-muted'));
             }
             tr.appendChild(bindingTd);
 
             var actionTd = document.createElement('td');
+            actionTd.setAttribute('data-label', i18n.actionsLabel);
             var manageBtn = document.createElement('button');
             manageBtn.type = 'button';
             manageBtn.className = 'btn btn-outline-primary btn-sm';
-            manageBtn.textContent = 'Manage';
+            manageBtn.textContent = i18n.manageAction;
             manageBtn.dataset.action = 'select';
             actionTd.appendChild(manageBtn);
             var exportLink = document.createElement('a');
             exportLink.className = 'btn btn-outline-secondary btn-sm ms-1';
-            exportLink.textContent = 'Export';
+            exportLink.textContent = i18n.exportAction;
             exportLink.href = exportUrl + '?code=' + encodeURIComponent(skill.code || '');
             actionTd.appendChild(exportLink);
             tr.appendChild(actionTd);
 
             els.tableBody.appendChild(tr);
         });
-        els.listStatus.textContent = String(items.length) + ' / ' + state.items.length + ' skills';
+        els.listStatus.textContent = String(items.length) + ' / ' + state.items.length + i18n.skillsSuffix;
     }
 
     function renderDetail() {
@@ -502,28 +689,28 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
         if (!skill) {
             els.empty.classList.remove('d-none');
             els.form.classList.add('d-none');
-            els.detailTitle.textContent = 'Skill detail';
-            els.detailMode.textContent = 'No selection';
+            els.detailTitle.textContent = i18n.skillDetail;
+            els.detailMode.textContent = i18n.noSelection;
             return;
         }
 
         var readonly = !!skill.readonly || !!skill.locked;
         els.empty.classList.add('d-none');
         els.form.classList.remove('d-none');
-        els.detailTitle.textContent = skill.code ? 'Manage ' + skill.code : 'New custom skill';
-        els.detailMode.textContent = readonly ? 'Readonly' : (skill.id ? 'Editable' : 'New');
+        els.detailTitle.textContent = skill.code ? i18n.managePrefix + skill.code : i18n.newCustomSkill;
+        els.detailMode.textContent = readonly ? i18n.readOnly : (skill.id ? i18n.editable : i18n.newLabel);
 
         clearNode(els.badges);
         els.badges.appendChild(badge(skill.status || 'new', skill.status === 'active' ? 'text-bg-success' : 'text-bg-secondary'));
         els.badges.appendChild(badge(skill.source_type || 'custom', 'text-bg-light text-dark'));
         if (skill.locked) {
-            els.badges.appendChild(badge('locked binding', 'text-bg-primary'));
+            els.badges.appendChild(badge(i18n.lockedBinding, 'text-bg-primary'));
         }
         if (skill.manual) {
-            els.badges.appendChild(badge('manual binding', 'text-bg-info'));
+            els.badges.appendChild(badge(i18n.manualBinding, 'text-bg-info'));
         }
         if (readonly) {
-            els.badges.appendChild(badge('readonly', 'text-bg-dark'));
+            els.badges.appendChild(badge(i18n.readonlyBadge, 'text-bg-dark'));
         }
 
         els.code.value = skill.code || '';
@@ -549,13 +736,13 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
         els.bind.disabled = !(canBind || canBindReadonlySkill);
         els.unbind.disabled = !skill.manual || skill.locked;
         if (skill.locked) {
-            els.bindingHelp.textContent = 'This skill is locked by adapter code and cannot be unbound here.';
+            els.bindingHelp.textContent = i18n.bindingLockedHelp;
         } else if (skill.manual) {
-            els.bindingHelp.textContent = 'This skill is manually bound to the selected adapter. You can remove that manual binding.';
+            els.bindingHelp.textContent = i18n.bindingManualHelp;
         } else if (skill.status !== 'active') {
-            els.bindingHelp.textContent = 'Only active skills can be bound to adapters.';
+            els.bindingHelp.textContent = i18n.bindingInactiveHelp;
         } else {
-            els.bindingHelp.textContent = 'Bind this skill as a long-term manual adapter skill for the selected context.';
+            els.bindingHelp.textContent = i18n.bindingReadyHelp;
         }
     }
 
@@ -592,31 +779,31 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
 
     function refreshCatalog() {
         var adapterCode = selectedAdapterCode();
-        els.listStatus.textContent = 'Loading...';
+        els.listStatus.textContent = i18n.loading;
         return post(catalogUrl, {
             adapter_code: adapterCode,
             include_inactive: 1
         }).then(function (payload) {
             if (!payload || payload.success === false) {
-                throw new Error((payload && payload.message) || 'Catalog load failed');
+                throw new Error((payload && payload.message) || i18n.catalogLoadFailed);
             }
             state.items = Array.isArray(payload.items) ? payload.items : [];
             var stillExists = state.items.some(function (item) {
                 return item.code === state.selectedCode;
             });
-            if (!stillExists && state.items.length) {
-                state.selectedCode = state.items[0].code || '';
+            if (!stillExists) {
+                state.selectedCode = state.items.length ? (state.items[0].code || '') : '';
             }
             renderAdapterSummary();
             renderTable();
             renderDetail();
         }).catch(function (err) {
-            els.listStatus.textContent = err && err.message ? err.message : 'Catalog load failed';
+            els.listStatus.textContent = responseErrorMessage(err, i18n.catalogLoadFailed);
         });
     }
 
     function saveCurrentSkill() {
-        setStatus(els.formStatus, 'Saving...', false);
+        setStatus(els.formStatus, i18n.saving, false);
         return post(saveUrl, {
             code: els.code.value || '',
             name: els.name.value || '',
@@ -626,13 +813,13 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
             version: els.version.value || ''
         }).then(function (payload) {
             if (!payload || payload.success === false) {
-                throw new Error((payload && payload.message) || 'Save failed');
+                throw new Error((payload && payload.message) || i18n.saveFailed);
             }
             state.selectedCode = payload.item && payload.item.code ? payload.item.code : (els.code.value || '');
-            setStatus(els.formStatus, 'Saved.', false);
+            setStatus(els.formStatus, i18n.saved, false);
             return refreshCatalog();
         }).catch(function (err) {
-            setStatus(els.formStatus, err && err.message ? err.message : 'Save failed', true);
+            setStatus(els.formStatus, responseErrorMessage(err, i18n.saveFailed), true);
         });
     }
 
@@ -641,7 +828,7 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
         if (!skill || !skill.code) {
             return;
         }
-        setStatus(els.formStatus, 'Updating status...', false);
+        setStatus(els.formStatus, i18n.updatingStatus, false);
         return post(saveUrl, {
             code: skill.code,
             name: els.name.value || skill.name || '',
@@ -651,12 +838,12 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
             version: els.version.value || skill.version || ''
         }).then(function (payload) {
             if (!payload || payload.success === false) {
-                throw new Error((payload && payload.message) || 'Status update failed');
+                throw new Error((payload && payload.message) || i18n.statusUpdateFailed);
             }
-            setStatus(els.formStatus, 'Status updated.', false);
+            setStatus(els.formStatus, i18n.statusUpdated, false);
             return refreshCatalog();
         }).catch(function (err) {
-            setStatus(els.formStatus, err && err.message ? err.message : 'Status update failed', true);
+            setStatus(els.formStatus, responseErrorMessage(err, i18n.statusUpdateFailed), true);
         });
     }
 
@@ -665,34 +852,34 @@ $exportUrl = $this->getBackendUrl('ai/backend/skill/get-export');
         if (!skill || !skill.code) {
             return;
         }
-        setStatus(els.formStatus, bind ? 'Binding skill...' : 'Removing binding...', false);
+        setStatus(els.formStatus, bind ? i18n.binding : i18n.unbinding, false);
         return post(bind ? bindUrl : unbindUrl, {
             adapter_code: selectedAdapterCode(),
             skill_code: skill.code
         }).then(function (payload) {
             if (!payload || payload.success === false) {
-                throw new Error((payload && payload.message) || (bind ? 'Bind failed' : 'Unbind failed'));
+                throw new Error((payload && payload.message) || (bind ? i18n.bindFailed : i18n.unbindFailed));
             }
-            setStatus(els.formStatus, bind ? 'Skill bound to adapter.' : 'Manual binding removed.', false);
+            setStatus(els.formStatus, bind ? i18n.bound : i18n.unbound, false);
             return refreshCatalog();
         }).catch(function (err) {
-            setStatus(els.formStatus, err && err.message ? err.message : (bind ? 'Bind failed' : 'Unbind failed'), true);
+            setStatus(els.formStatus, responseErrorMessage(err, bind ? i18n.bindFailed : i18n.unbindFailed), true);
         });
     }
 
     function importSkill() {
-        setStatus(els.importStatus, 'Importing...', false);
+        setStatus(els.importStatus, i18n.importing, false);
         return post(importUrl, {
             url: els.importUrl.value || ''
         }).then(function (payload) {
             if (!payload || payload.success === false) {
-                throw new Error((payload && payload.message) || 'Import failed');
+                throw new Error((payload && payload.message) || i18n.importFailed);
             }
             state.selectedCode = payload.item && payload.item.code ? payload.item.code : '';
-            setStatus(els.importStatus, 'Imported as pending. Review and enable it before binding.', false);
+            setStatus(els.importStatus, i18n.imported, false);
             return refreshCatalog();
         }).catch(function (err) {
-            setStatus(els.importStatus, err && err.message ? err.message : 'Import failed', true);
+            setStatus(els.importStatus, responseErrorMessage(err, i18n.importFailed), true);
         });
     }
 

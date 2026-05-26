@@ -7,17 +7,25 @@ namespace WeShop\Wishlist\Service;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Service\ProductService;
 use WeShop\Wishlist\Model\Wishlist;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
 class WishlistService
 {
     public function __construct(
-        private readonly ?ProductService $productService = null
+        private readonly ?ProductService $productService = null,
+        private readonly ?EventsManager $eventsManager = null
     ) {
     }
 
     public function addToWishlist(int $customerId, int $productId): Wishlist
     {
+        $eventData = [
+            'customer_id' => $customerId,
+            'product_id' => $productId,
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Wishlist::add_to_wishlist_before', $eventData);
+
         /** @var Wishlist $wishlist */
         $wishlist = ObjectManager::getInstance(Wishlist::class);
 
@@ -28,6 +36,12 @@ class WishlistService
             ->fetch();
 
         if ($existing && $existing->getId()) {
+            $afterEventData = $eventData + [
+                'wishlist' => $existing,
+                'wishlist_id' => (int) $existing->getId(),
+                'created' => false,
+            ];
+            $this->getEventsManager()->dispatch('WeShop_Wishlist::add_to_wishlist_after', $afterEventData);
             return $existing;
         }
 
@@ -35,6 +49,13 @@ class WishlistService
             ->setData(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
             ->setData(Wishlist::schema_fields_PRODUCT_ID, $productId)
             ->save();
+
+        $afterEventData = $eventData + [
+            'wishlist' => $wishlist,
+            'wishlist_id' => (int) ($wishlist->getId() ?? 0),
+            'created' => true,
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Wishlist::add_to_wishlist_after', $afterEventData);
 
         return $wishlist;
     }
@@ -53,7 +74,21 @@ class WishlistService
             throw new \Exception((string) __('您无权移除此心愿单条目。'));
         }
 
-        return (bool) $wishlist->delete()->fetch();
+        $eventData = [
+            'wishlist' => $wishlist,
+            'wishlist_id' => $wishlistId,
+            'customer_id' => $customerId,
+            'product_id' => (int) ($wishlist->getData(Wishlist::schema_fields_PRODUCT_ID) ?? 0),
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Wishlist::remove_from_wishlist_before', $eventData);
+
+        $removed = (bool) $wishlist->delete()->fetch();
+        $afterEventData = $eventData + [
+            'removed' => $removed,
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Wishlist::remove_from_wishlist_after', $afterEventData);
+
+        return $removed;
     }
 
     /**
@@ -129,5 +164,10 @@ class WishlistService
     private function getProductService(): ProductService
     {
         return $this->productService ?? ObjectManager::getInstance(ProductService::class);
+    }
+
+    private function getEventsManager(): EventsManager
+    {
+        return $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
     }
 }

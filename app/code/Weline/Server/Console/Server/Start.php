@@ -63,6 +63,17 @@ class Start extends CommandAbstract
      */
     private const WORKER_PORT_ALLOCATION_LOCK_TIMEOUT = 5;
 
+    private const PUBLIC_HOST_IP_PROBE_TIMEOUT_MS = 1200;
+
+    private const PUBLIC_IPV4_PROBE_URLS = [
+        'https://checkip.amazonaws.com',
+        'https://api.ipify.org',
+    ];
+
+    private const PUBLIC_IPV6_PROBE_URLS = [
+        'https://api64.ipify.org',
+    ];
+
     /**
      * 启动中实例的 worker 端口预留 TTL（秒）
      */
@@ -307,25 +318,32 @@ class Start extends CommandAbstract
             $config['ssl_cert'] = $sslCert;
             $config['ssl_key'] = $sslKey;
             $config['ssl_domain'] = (string)($config['public_host'] ?? $host);
-            // 默认 80 且启用 HTTPS 时使用 443
-            if ($port === self::DEFAULT_PORT) {
-                $port = self::DEFAULT_PORT_HTTPS;
-                $config['port'] = $port;
-                
-            }
-            if ($sslResult['is_new'] ?? false) {
-                $this->printer->success(__('已生成新证书：%{1}', [$sslResult['issuer']]));
+            if (!$sslEnabled) {
+                $disableReason = \trim((string)($sslResult['message'] ?? ''));
+                $this->printer->warning(__('HTTPS 未启用：%{1}', [
+                    $disableReason !== '' ? $disableReason : __('SSL 证书服务返回 HTTP 模式'),
+                ]));
+                $this->printer->note(__('本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。'));
+                $sslCert = '';
+                $sslKey = '';
             } else {
-                $this->printer->note(__('使用已有证书：%{1}', [$sslResult['issuer']]));
-            }
-            if (!empty($sslResult['expires_at'])) {
-                $this->printer->note(__('证书有效期至：%{1}', [$sslResult['expires_at']]));
-            }
+                $port = $this->normalizeDefaultPortForSslState($port, $sslEnabled, $portExplicit);
+                $config['port'] = $port;
 
-            // 证书就绪后再生成 SNI 映射；启动/重启路径马上会拉起新实例，不能在这里同步等待旧 Master 的 SSL reload ACK。
-            /** @var SslCertificateService $sslMapSync */
-            $sslMapSync = ObjectManager::getInstance(SslCertificateService::class);
-            $sslMapSync->regenerateCertificateMap(false);
+                if ($sslResult['is_new'] ?? false) {
+                    $this->printer->success(__('已生成新证书：%{1}', [$sslResult['issuer']]));
+                } else {
+                    $this->printer->note(__('使用已有证书：%{1}', [$sslResult['issuer']]));
+                }
+                if (!empty($sslResult['expires_at'])) {
+                    $this->printer->note(__('证书有效期至：%{1}', [$sslResult['expires_at']]));
+                }
+
+                // 证书就绪后再生成 SNI 映射；启动/重启路径马上会拉起新实例，不能在这里同步等待旧 Master 的 SSL reload ACK。
+                /** @var SslCertificateService $sslMapSync */
+                $sslMapSync = ObjectManager::getInstance(SslCertificateService::class);
+                $sslMapSync->regenerateCertificateMap(false);
+            }
         }
         
         // 检查是否强制重启（-r）及是否强制直接切换（-f：不等待 worker 空闲，直接停再启）
@@ -492,15 +510,15 @@ class Start extends CommandAbstract
             }
         }
 
-        // ========== 架构模式检测：直连模式 vs Dispatcher 模式 ==========
+        // ========== 架构模式检测：默认 Dispatcher，显式直连可选 ==========
         // 
         // 直连模式：多 Worker 直接监听同一端口，内核负载均衡（SO_REUSEPORT）
         //   - 要求：Linux 3.9+ 内核
-        //   - 优势：无单点瓶颈，性能最佳
+        //   - 定位：可选性能模式，需要显式 --direct 或 topology=direct
         //   - 架构：客户端 → Worker1/2/3/...(直接处理 SSL)
         //
-        // Dispatcher 模式（降级方案）：单进程 Dispatcher 分发给多 Worker
-        //   - 适用：Windows 或不支持 SO_REUSEPORT 的系统
+        // Dispatcher 模式（默认方案）：单进程 Dispatcher 分发给多 Worker
+        //   - 适用：默认生产拓扑，便于统一分流、观测、排障
         //   - 架构：客户端 → Dispatcher(单进程SSL) → Worker(多进程HTTP)
         //
         // --direct: 启用直连模式（SO_REUSEPORT，多 Worker 复用同一端口）
@@ -946,7 +964,7 @@ class Start extends CommandAbstract
         
         // 显示优化建议
         $this->traceStartupPhase($instanceName, 'optimization-tips:before');
-        $this->showOptimizationTips($count, $config['mode'] ?? 'io');
+        $this->showOptimizationTips($count, $config['mode'] ?? 'io', $dispatcherEnabled, $supportsReusePort, $useDirectMode);
         $this->traceStartupPhase($instanceName, 'optimization-tips:after');
         
         // 显示使用说明（按实际协议显示 http/https）
@@ -1291,7 +1309,7 @@ class Start extends CommandAbstract
         if ($this->isUsablePublicHost($defaultProjectHost)) {
             if (!$hasConfiguredPublicHost) {
                 $config['public_host'] = $defaultProjectHost;
-                $this->deferredStartupWarning = __('当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host。', [$instanceName]);
+                $this->deferredStartupWarning = __('当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。', [$instanceName]);
             }
             return true;
         }
@@ -1603,6 +1621,7 @@ class Start extends CommandAbstract
                     $this->printer->warning(__('Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。', [$lastMasterPid, $lastControlPort, $readyWaitSec, $phaseLabel]));
                 }
                 $failureReason = $this->readStartupFailureReason((array) ($readyResult['data'] ?? []));
+                $this->printStartupFailureDiagnostics((array) ($readyResult['data'] ?? []));
                 if ($failureReason !== '') {
                     $this->printer->warning(__('启动失败原因：%{1}', [$failureReason]));
                 }
@@ -2101,11 +2120,115 @@ class Start extends CommandAbstract
     protected function readStartupFailureReason(array $instanceData): string
     {
         $reason = \trim((string) ($instanceData['startup_failure_reason'] ?? ''));
+        $code = $this->readStartupFailureCode($instanceData);
         if ($reason !== '') {
+            if ($code !== '' && !\str_starts_with($reason, '[' . $code . ']')) {
+                return '[' . $code . '] ' . $reason;
+            }
             return $reason;
         }
 
+        if ($code !== '') {
+            return '[' . $code . ']';
+        }
+
         return '';
+    }
+
+    /**
+     * @param array<string, mixed> $instanceData
+     */
+    protected function readStartupFailureCode(array $instanceData): string
+    {
+        return \trim((string) ($instanceData['startup_failure_code'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $instanceData
+     */
+    protected function readStartupFailureClass(array $instanceData): string
+    {
+        return \trim((string) ($instanceData['startup_failure_class'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $instanceData
+     * @return list<string>
+     */
+    protected function readStartupFailureDiagnostics(array $instanceData): array
+    {
+        $diagnostics = $instanceData['startup_failure_diagnostics'] ?? [];
+        if (!\is_array($diagnostics)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($diagnostics as $diagnostic) {
+            $diagnostic = \trim((string)$diagnostic);
+            if ($diagnostic !== '') {
+                $result[] = $diagnostic;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $instanceData
+     */
+    protected function printStartupFailureDiagnostics(array $instanceData): void
+    {
+        $code = $this->readStartupFailureCode($instanceData);
+        $class = $this->readStartupFailureClass($instanceData);
+        if ($code !== '') {
+            $this->printer->warning('WLS failure code: ' . $code);
+        }
+        if ($class !== '') {
+            $this->printer->note('WLS failure class: ' . $class);
+        }
+
+        $contextSummary = $this->formatStartupFailureContextSummary(
+            $instanceData['startup_failure_context'] ?? []
+        );
+        if ($contextSummary !== '') {
+            $this->printer->note('WLS failure context: ' . $contextSummary);
+        }
+
+        foreach ($this->readStartupFailureDiagnostics($instanceData) as $diagnostic) {
+            $this->printer->note('WLS failure diagnostic: ' . $diagnostic);
+        }
+    }
+
+    protected function formatStartupFailureContextSummary(mixed $context): string
+    {
+        if (!\is_array($context)) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ([
+            'instance',
+            'main_port',
+            'control_port',
+            'worker_count',
+            'dispatcher_enabled',
+            'ssl_enabled',
+            'startup_timeout_sec',
+            'elapsed_sec',
+        ] as $key) {
+            if (!\array_key_exists($key, $context)) {
+                continue;
+            }
+            $value = $context[$key];
+            if (\is_bool($value)) {
+                $value = $value ? 'true' : 'false';
+            } elseif (\is_array($value)) {
+                continue;
+            }
+            $parts[] = $key . '=' . (string)$value;
+        }
+
+        return \implode(', ', $parts);
     }
 
     protected function formatBackgroundStartupProgress(array $instanceData, int $waitedMs): string
@@ -3187,6 +3310,14 @@ class Start extends CommandAbstract
         $host = $config['host'] ?? '127.0.0.1';
         $certificateHost = $this->resolveCertificateHost($config, (string)$host);
         $syncDomain = $this->resolveSslDomainForSync($certificateHost, (string)($config['ssl_domain'] ?? ''));
+        $hostResolution = $this->validatePublicHostResolvesToCurrentServer($certificateHost, $sslService);
+        if (($hostResolution['success'] ?? false) !== true) {
+            return [
+                'success' => false,
+                'message' => (string)($hostResolution['message'] ?? __('真实 Host 解析校验失败')),
+                'ssl_enabled' => false,
+            ];
+        }
         
         // 智能判断是否为本地/内网环境（127.x, 10.x, 172.16-31.x, 192.168.x, localhost, *.local 等）
         $needsLocalCert = $sslService->needsSelfSignedCertificate($certificateHost);
@@ -3254,6 +3385,13 @@ class Start extends CommandAbstract
         // 2. 确定域名
         // 优先使用 host（项目唯一域名），忽略可能来自旧配置的 ssl_domain
         $domain = $certificateHost;
+        if (!$needsLocalCert) {
+            $startupCertResult = $this->tryUseStartupCertificateFiles($sslService, $domain, $syncDomain);
+            if ($startupCertResult !== null) {
+                $this->ensureAdditionalSslCertificates($instanceName, $config, $domain, $sslService);
+                return $startupCertResult;
+            }
+        }
 
         $webroot = $this->resolveAcmeWebrootForStartup($instanceName, $config);
         $email = Env::get('admin_email', 'admin@' . $domain);
@@ -3346,6 +3484,323 @@ class Start extends CommandAbstract
             ]));
         }
         return $result;
+    }
+
+    /**
+     * 真实公网 Host 启动前门闸：DNS A/AAAA 必须已经指向当前服务器。
+     *
+     * 本地开发域名、IP、localhost 等由 SSL 服务现有本地策略处理，不做公网 DNS 校验。
+     *
+     * @return array{success: bool, skipped?: bool, message?: string, resolved_ips?: list<string>, server_ips?: list<string>}
+     */
+    protected function validatePublicHostResolvesToCurrentServer(
+        string $host,
+        SslCertificateService $sslService
+    ): array {
+        $host = $this->normalizeCertificateDomainCandidate($host);
+        if ($host === '' || $this->isWildcardBindHost($host) || $sslService->isLocalDomain($host)) {
+            return ['success' => true, 'skipped' => true];
+        }
+
+        $resolvedIps = $this->resolvePublicHostIps($host);
+        if ($resolvedIps === []) {
+            return [
+                'success' => false,
+                'resolved_ips' => [],
+                'server_ips' => [],
+                'message' => __('启动已阻止：真实 Host %{1} 尚未解析到 A/AAAA 记录。请先把域名解析到当前服务器 IP 后再启动 WLS。', [$host]),
+            ];
+        }
+
+        $serverIps = $this->detectCurrentServerIps();
+        if ($serverIps === []) {
+            return [
+                'success' => false,
+                'resolved_ips' => $resolvedIps,
+                'server_ips' => [],
+                'message' => __('启动已阻止：无法确认当前服务器 IP，不能校验真实 Host %{1} 是否指向本机。请配置 app/etc/env.php -> wls.public_ip 后重试。', [$host]),
+            ];
+        }
+
+        $serverIpSet = [];
+        foreach ($serverIps as $serverIp) {
+            $serverIpSet[$this->normalizeIpForComparison($serverIp)] = true;
+        }
+        foreach ($resolvedIps as $resolvedIp) {
+            if (isset($serverIpSet[$this->normalizeIpForComparison($resolvedIp)])) {
+                return [
+                    'success' => true,
+                    'resolved_ips' => $resolvedIps,
+                    'server_ips' => $serverIps,
+                ];
+            }
+        }
+
+        return [
+            'success' => false,
+            'resolved_ips' => $resolvedIps,
+            'server_ips' => $serverIps,
+            'message' => __('启动已阻止：真实 Host %{1} 未解析到当前服务器 IP。当前解析：%{2}；本机 IP：%{3}。请先修正 DNS A/AAAA 后再启动 WLS。', [
+                $host,
+                \implode(', ', $resolvedIps),
+                \implode(', ', $serverIps),
+            ]),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function resolvePublicHostIps(string $host): array
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return [];
+        }
+
+        $ips = [];
+        try {
+            $records = @\dns_get_record($host, \DNS_A | \DNS_AAAA);
+            if (\is_array($records)) {
+                foreach ($records as $record) {
+                    $ip = \trim((string)($record['ip'] ?? $record['ipv6'] ?? ''));
+                    if ($this->isValidComparisonIp($ip)) {
+                        $ips[] = $ip;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        if ($ips === []) {
+            $v4 = @\gethostbynamel($host);
+            if (\is_array($v4)) {
+                foreach ($v4 as $ip) {
+                    if ($this->isValidComparisonIp((string)$ip)) {
+                        $ips[] = (string)$ip;
+                    }
+                }
+            }
+        }
+
+        return $this->uniqueIps($ips);
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function detectCurrentServerIps(): array
+    {
+        $ips = [];
+        foreach ([
+            Env::get('wls.public_ip'),
+            Env::get('wls.public_ipv6'),
+            Env::get('server.public_ip'),
+            Env::get('server.public_ipv6'),
+        ] as $configuredIp) {
+            if (\is_scalar($configuredIp) && $this->isValidComparisonIp((string)$configuredIp)) {
+                $ips[] = (string)$configuredIp;
+            }
+        }
+
+        if (\function_exists('swoole_get_local_ip')) {
+            try {
+                $localIps = \swoole_get_local_ip();
+                if (\is_array($localIps)) {
+                    foreach ($localIps as $ip) {
+                        if ($this->isValidComparisonIp((string)$ip)) {
+                            $ips[] = (string)$ip;
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $hostname = @\gethostname();
+        if (\is_string($hostname) && $hostname !== '') {
+            $hostIps = @\gethostbynamel($hostname);
+            if (\is_array($hostIps)) {
+                foreach ($hostIps as $ip) {
+                    if ($this->isValidComparisonIp((string)$ip)) {
+                        $ips[] = (string)$ip;
+                    }
+                }
+            }
+        }
+
+        if (!$this->hasPublicIp($ips)) {
+            foreach ($this->fetchPublicProbeIps(self::PUBLIC_IPV4_PROBE_URLS) as $ip) {
+                $ips[] = $ip;
+            }
+            foreach ($this->fetchPublicProbeIps(self::PUBLIC_IPV6_PROBE_URLS) as $ip) {
+                $ips[] = $ip;
+            }
+        }
+
+        return $this->uniqueIps($ips);
+    }
+
+    /**
+     * @param list<string> $urls
+     * @return list<string>
+     */
+    protected function fetchPublicProbeIps(array $urls): array
+    {
+        if (!\function_exists('curl_init')) {
+            return [];
+        }
+
+        $ips = [];
+        foreach ($urls as $url) {
+            $ch = \curl_init($url);
+            if ($ch === false) {
+                continue;
+            }
+            \curl_setopt_array($ch, [
+                \CURLOPT_RETURNTRANSFER => true,
+                \CURLOPT_TIMEOUT_MS => self::PUBLIC_HOST_IP_PROBE_TIMEOUT_MS,
+                \CURLOPT_CONNECTTIMEOUT_MS => self::PUBLIC_HOST_IP_PROBE_TIMEOUT_MS,
+                \CURLOPT_FOLLOWLOCATION => true,
+                \CURLOPT_SSL_VERIFYPEER => true,
+                \CURLOPT_USERAGENT => 'Weline-WLS-HostGuard/1.0',
+            ]);
+            $raw = \curl_exec($ch);
+            \curl_close($ch);
+            $ip = \trim((string)$raw);
+            if ($this->isValidComparisonIp($ip)) {
+                $ips[] = $ip;
+                break;
+            }
+        }
+
+        return $this->uniqueIps($ips);
+    }
+
+    /**
+     * @param list<string> $ips
+     */
+    private function hasPublicIp(array $ips): bool
+    {
+        foreach ($ips as $ip) {
+            if ($this->isValidComparisonIp($ip)
+                && \filter_var($ip, \FILTER_VALIDATE_IP, \FILTER_FLAG_NO_PRIV_RANGE | \FILTER_FLAG_NO_RES_RANGE) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isValidComparisonIp(string $ip): bool
+    {
+        return \filter_var(\trim($ip), \FILTER_VALIDATE_IP) !== false;
+    }
+
+    private function normalizeIpForComparison(string $ip): string
+    {
+        $ip = \trim($ip);
+        $packed = @\inet_pton($ip);
+        if ($packed !== false) {
+            $normalized = @\inet_ntop($packed);
+            if (\is_string($normalized) && $normalized !== '') {
+                return \strtolower($normalized);
+            }
+        }
+
+        return \strtolower($ip);
+    }
+
+    /**
+     * @param list<string> $ips
+     * @return list<string>
+     */
+    private function uniqueIps(array $ips): array
+    {
+        $out = [];
+        foreach ($ips as $ip) {
+            $ip = \trim($ip);
+            if (!$this->isValidComparisonIp($ip)) {
+                continue;
+            }
+            $out[$this->normalizeIpForComparison($ip)] = $ip;
+        }
+
+        return \array_values($out);
+    }
+
+    protected function normalizeDefaultPortForSslState(int $port, bool $sslEnabled, bool $portExplicit = false): int
+    {
+        if (!$portExplicit && $sslEnabled && $port === self::DEFAULT_PORT) {
+            return self::DEFAULT_PORT_HTTPS;
+        }
+
+        return $port;
+    }
+
+    protected function tryUseStartupCertificateFiles(
+        SslCertificateService $sslService,
+        string $domain,
+        string $syncDomain
+    ): ?array {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return null;
+        }
+        if ($domain === '0.0.0.0') {
+            $domain = 'localhost';
+        }
+
+        $certDir = $sslService->getCertificateDir($domain);
+        $certPath = $certDir . 'fullchain.pem';
+        $keyPath = $certDir . 'privkey.pem';
+        if (!\is_file($certPath) || !\is_file($keyPath)) {
+            return null;
+        }
+        if (!$sslService->canReuseConfiguredCertificate($certPath, $keyPath)) {
+            return null;
+        }
+        if (!$sslService->certificateMatchesHost($certPath, $domain)) {
+            return null;
+        }
+
+        $recordDomain = \strtolower(\trim($syncDomain));
+        if ($recordDomain === '') {
+            $recordDomain = $domain;
+        }
+        $sslService->syncCertificateRecordFromFiles(
+            $recordDomain,
+            $certPath,
+            $keyPath,
+            0,
+            true,
+            '',
+            false
+        );
+        if ($recordDomain !== $domain) {
+            $sslService->syncCertificateRecordFromFiles(
+                $domain,
+                $certPath,
+                $keyPath,
+                0,
+                true,
+                '',
+                false
+            );
+        }
+        $sslService->regenerateCertificateMap(false);
+
+        $certInfo = $sslService->parseCertificate($certPath);
+        return [
+            'success' => true,
+            'message' => __('使用已有证书'),
+            'cert_path' => $certPath,
+            'key_path' => $keyPath,
+            'issuer' => $certInfo['issuer'] ?? __('已有证书'),
+            'expires_at' => $certInfo['expires_at'] ?? '',
+            'is_new' => false,
+            'ssl_enabled' => true,
+        ];
     }
 
     /**
@@ -5220,6 +5675,10 @@ class Start extends CommandAbstract
             'startup_failure_at' => '',
             'startup_failure_timestamp' => 0,
             'startup_failure_pending' => [],
+            'startup_failure_class' => '',
+            'startup_failure_code' => '',
+            'startup_failure_context' => [],
+            'startup_failure_diagnostics' => [],
             'stopped_reason' => '',
             'stopped_at' => '',
             'stopped_timestamp' => 0,
@@ -5746,7 +6205,13 @@ PHP;
     /**
      * 检测性能问题并收集建议
      */
-    protected function detectPerformanceIssues(int $workerCount, string $mode): array
+    protected function detectPerformanceIssues(
+        int $workerCount,
+        string $mode,
+        bool $dispatcherEnabled = true,
+        bool $supportsReusePort = false,
+        bool $directReusePortEnabled = false
+    ): array
     {
         $issues = [];
         $recommended = $this->getRecommendedConfig();
@@ -5816,6 +6281,15 @@ PHP;
                 'message' => __('函数被禁用：pcntl_fork'),
                 'benefit' => $recommended['functions']['pcntl_fork'],
                 'action' => __('从 disable_functions 中移除 pcntl_fork'),
+            ];
+        }
+
+        if (!IS_WIN && $dispatcherEnabled && $supportsReusePort && !$directReusePortEnabled) {
+            $issues['direct_reuse_port'] = [
+                'level' => 'info',
+                'message' => __('当前使用默认 Dispatcher 模式；Linux/Mac 可按压测结果评估 SO_REUSEPORT 直连模式'),
+                'benefit' => __('可减少 Dispatcher 中转开销，但会改变流量分发与排障路径，建议仅在压测验证后启用'),
+                'action' => __('使用 --direct 或 wls.topology = direct 显式启用'),
             ];
         }
         
@@ -5924,10 +6398,22 @@ PHP;
     /**
      * 显示优化建议
      */
-    protected function showOptimizationTips(int $workerCount, string $mode = 'io'): void
+    protected function showOptimizationTips(
+        int $workerCount,
+        string $mode = 'io',
+        bool $dispatcherEnabled = true,
+        bool $supportsReusePort = false,
+        bool $directReusePortEnabled = false
+    ): void
     {
         // 检测性能问题
-        $issues = $this->detectPerformanceIssues($workerCount, $mode);
+        $issues = $this->detectPerformanceIssues(
+            $workerCount,
+            $mode,
+            $dispatcherEnabled,
+            $supportsReusePort,
+            $directReusePortEnabled
+        );
         
         if (empty($issues)) {
             echo "\n";
@@ -6208,7 +6694,7 @@ PHP;
                 __('配置记忆') => __('首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443'),
                 __('智能模式') => __('worker_count 设为 "auto" 时由运行时策略按 OS/CPU/内存自动计算'),
                 __('事件循环') => __('auto 会优先使用可用的 Event 扩展，否则降级 stream_select 并提示原因'),
-                __('默认拓扑') => __('Linux/Mac 支持 SO_REUSEPORT 时 auto 默认 direct；Windows 默认 Dispatcher 兼容路径'),
+                __('默认拓扑') => __('auto 默认 Dispatcher；Linux/Mac 支持 SO_REUSEPORT 时可用 --direct 显式启用直连模式'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
                 __('禁用 HTTPS') => __('wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),

@@ -6,6 +6,7 @@ namespace Weline\Server\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
@@ -495,6 +496,10 @@ class ServerInstanceManager
             'startup_failure_at',
             'startup_failure_timestamp',
             'startup_failure_pending',
+            'startup_failure_class',
+            'startup_failure_code',
+            'startup_failure_context',
+            'startup_failure_diagnostics',
             'master_exited_pid',
             'retained_pids',
             'retained_pid_count',
@@ -962,6 +967,8 @@ class ServerInstanceManager
         $runtimeData = $rawData;
         $ipcStatus = $ipcTimeout > 0.0 ? $this->getMasterIpcStatus($name, $ipcTimeout) : null;
         $httpRedirectPort = $this->resolveHttpRedirectPort($runtimeData);
+        $services = $ipcStatus === null ? [] : $this->buildServiceInfoListFromIpcStatus($ipcStatus);
+        $services = $this->mergeSharedStateServiceInfo($services, $runtimeData);
 
         return new ServerInstanceInfo(
             name: $name,
@@ -976,8 +983,103 @@ class ServerInstanceManager
             httpRedirectPort: $httpRedirectPort,
             startedAt: (string) ($runtimeData['started_at'] ?? ''),
             startedTimestamp: (int) ($runtimeData['started_timestamp'] ?? 0),
-            services: $ipcStatus === null ? [] : $this->buildServiceInfoListFromIpcStatus($ipcStatus),
+            services: ServerInstanceInfo::sortServicesByPriority($services),
             controlToken: (string) ($runtimeData['control_token'] ?? ''),
+            startupFailureReason: (string) ($runtimeData['startup_failure_reason'] ?? ''),
+            startupFailureCode: (string) ($runtimeData['startup_failure_code'] ?? ''),
+            startupFailureClass: (string) ($runtimeData['startup_failure_class'] ?? ''),
+            startupFailureContext: \is_array($runtimeData['startup_failure_context'] ?? null)
+                ? $runtimeData['startup_failure_context']
+                : [],
+            startupFailureDiagnostics: \is_array($runtimeData['startup_failure_diagnostics'] ?? null)
+                ? \array_values($runtimeData['startup_failure_diagnostics'])
+                : [],
+        );
+    }
+
+    /**
+     * @param list<ServiceInfo> $services
+     * @return list<ServiceInfo>
+     */
+    private function mergeSharedStateServiceInfo(array $services, array $runtimeData): array
+    {
+        $sharedState = \is_array($runtimeData['shared_state'] ?? null) ? $runtimeData['shared_state'] : [];
+        if ($sharedState === []) {
+            return $services;
+        }
+
+        $roleMap = [
+            'session' => ControlMessage::ROLE_SESSION_SERVER,
+            'memory' => ControlMessage::ROLE_MEMORY_SERVER,
+        ];
+
+        foreach ($roleMap as $runtimeKey => $role) {
+            if ($this->hasServiceRole($services, $role)) {
+                continue;
+            }
+
+            $runtime = \is_array($sharedState[$runtimeKey] ?? null) ? $sharedState[$runtimeKey] : [];
+            if ($runtime === []) {
+                continue;
+            }
+
+            $service = $this->buildSharedStateServiceInfo($role, $runtime);
+            if ($service !== null) {
+                $services[] = $service;
+            }
+        }
+
+        return $services;
+    }
+
+    /**
+     * @param list<ServiceInfo> $services
+     */
+    private function hasServiceRole(array $services, string $role): bool
+    {
+        foreach ($services as $service) {
+            if ($service->role === $role) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function buildSharedStateServiceInfo(string $role, array $runtime): ?ServiceInfo
+    {
+        $port = (int) ($runtime['port'] ?? 0);
+        $pid = (int) ($runtime['pid'] ?? 0);
+        $healthy = $runtime['healthy'] ?? null;
+
+        if ($port <= 0 && $pid <= 0) {
+            return null;
+        }
+
+        $state = $healthy === false
+            ? ServiceInstance::STATE_STOPPED
+            : (($pid > 0 || $healthy === true) ? ServiceInstance::STATE_READY : ServiceInstance::STATE_STOPPED);
+
+        $displayName = self::ROLE_DISPLAY_NAMES[$role] ?? \ucwords(\str_replace('_', ' ', $role));
+
+        return new ServiceInfo(
+            role: $role,
+            displayName: $displayName,
+            instanceId: 1,
+            pid: $pid,
+            port: $port > 0 ? $port : null,
+            state: $state,
+            priority: $role === ControlMessage::ROLE_SESSION_SERVER ? 10 : 12,
+            metadata: [
+                'shared_service' => true,
+                'process_name' => (string) ($runtime['process_name'] ?? ''),
+                'instance_name' => (string) ($runtime['instance_name'] ?? $runtime['service_instance_name'] ?? ''),
+                'token_file_name' => (string) ($runtime['token_file_name'] ?? ''),
+                'reuse_existing' => (bool) ($runtime['reuse_existing'] ?? false),
+                'created_now' => (bool) ($runtime['created_now'] ?? false),
+            ],
+            rootPid: $pid,
+            launcherPid: $pid,
         );
     }
 

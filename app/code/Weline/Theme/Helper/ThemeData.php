@@ -20,6 +20,7 @@ use Weline\Framework\Runtime\Runtime;
 use Weline\I18n\Model\Locale\Dictionary;
 use Weline\Meta\Helper\MetaData;
 use Weline\Meta\Model\MetaConfig;
+use Weline\Meta\Service\ParamDefinitionNormalizer;
 use Weline\Server\Service\MemoryStateFacade;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewThemeScopeService;
@@ -544,17 +545,29 @@ class ThemeData
             return [];
         }
 
+        /** @var ParamDefinitionNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        $params = $normalizer->normalizeDefinitions($params);
+
         $definitions = [];
         foreach ($params as $name => $definition) {
             if (!is_array($definition)) {
                 $definition = ['default' => $definition];
             }
+            $uiType = $definition['ui_type'] ?? $definition['input'] ?? $definition['type'] ?? 'text';
+            $isTranslatable = !empty($definition['i18n']) || !empty($definition['translate']) || !empty($definition['translatable']);
             $definitions[$name] = [
-                'name' => $definition['name'] ?? $name,
+                'name' => $definition['name'] ?? $definition['label'] ?? $name,
+                'label' => $definition['label'] ?? $definition['name'] ?? $name,
                 'description' => $definition['description'] ?? '',
                 'default' => $definition['default'] ?? null,
-                'translate' => !empty($definition['translate']) || !empty($definition['translatable']),
-                'input' => $definition['input'] ?? $definition['type'] ?? 'text',
+                'type' => $definition['type'] ?? 'string',
+                'ui_type' => $uiType,
+                'input' => $definition['input'] ?? $uiType,
+                'translate' => $isTranslatable,
+                'i18n' => $isTranslatable,
+                'translatable' => $isTranslatable,
+                'required' => !empty($definition['required']),
                 'options' => $definition['options'] ?? $definition['option'] ?? [],
                 'meta' => $definition,
             ];
@@ -1327,7 +1340,9 @@ class ThemeData
         
         // 从 setting 中提取参数
         if (isset($setting['param']) && is_array($setting['param'])) {
-            $meta['params'] = $setting['param'];
+            /** @var ParamDefinitionNormalizer $normalizer */
+            $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+            $meta['params'] = $normalizer->normalizeDefinitions($setting['param']);
         }
         
         // 如果 meta_data 和 setting 都没有参数，尝试从文件解析
@@ -1373,22 +1388,9 @@ class ThemeData
      */
     private static function formatParsedParams(array $parsedParams): array
     {
-        $params = [];
-        foreach ($parsedParams as $param) {
-            $key = $param['name'] ?? null;
-            if (!$key) {
-                continue;
-            }
-            $params[$key] = [
-                'name' => $param['name_label'] ?? $key,
-                'description' => $param['description'] ?? '',
-                'default' => $param['default'] ?? '',
-                'type' => $param['type'] ?? 'text',
-                'required' => (bool)($param['required'] ?? false),
-                'options' => $param['options'] ?? null,
-            ];
-        }
-        return $params;
+        /** @var ParamDefinitionNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        return $normalizer->normalizeParsedParamList($parsedParams);
     }
     
     /**

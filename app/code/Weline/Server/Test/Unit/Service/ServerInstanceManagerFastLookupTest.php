@@ -98,11 +98,66 @@ final class ServerInstanceManagerFastLookupTest extends TestCase
             'started_timestamp' => 1774195200,
         ]);
 
-        $info = $manager->getInstanceInfo('default', false);
+        $info = $manager->getPersistedInstanceInfo('default');
 
         self::assertNotNull($info);
         self::assertSame(80, $info->httpRedirectPort);
         self::assertNull($info->getRedirect());
+    }
+
+    public function testPersistedInstanceInfoIncludesSharedStateSidecarProcesses(): void
+    {
+        $manager = $this->createManager([
+            'master_pid' => \getmypid(),
+            'control_port' => 19999,
+            'host' => '127.0.0.1',
+            'port' => 9982,
+            'ssl_enabled' => false,
+            'dispatcher_enabled' => true,
+            'count' => 4,
+            'worker_port' => 19982,
+            'http_redirect_port' => 0,
+            'started_at' => '2026-03-23 00:00:00',
+            'started_timestamp' => 1774195200,
+            'shared_state' => [
+                'session' => [
+                    'host' => '127.0.0.1',
+                    'port' => 19970,
+                    'token_file_name' => 'session_server.shared.token',
+                    'pid' => 4321,
+                    'process_name' => 'weline-wls-session-shared-19970',
+                    'instance_name' => 'shared-session-19970',
+                    'shared_service' => true,
+                    'reuse_existing' => true,
+                ],
+                'memory' => [
+                    'host' => '127.0.0.1',
+                    'port' => 19971,
+                    'token_file_name' => 'memory_server.shared.token',
+                    'pid' => 9876,
+                    'process_name' => 'weline-wls-memory-shared-19971',
+                    'instance_name' => 'shared-memory-19971',
+                    'shared_service' => true,
+                    'created_now' => true,
+                ],
+            ],
+        ]);
+
+        $info = $manager->getPersistedInstanceInfo('default');
+
+        self::assertNotNull($info);
+        $session = $info->getSessionServer();
+        self::assertNotNull($session);
+        self::assertSame(19970, $session->port);
+        self::assertSame(4321, $session->getTrackingPid());
+        self::assertSame('weline-wls-session-shared-19970', $session->metadata['process_name']);
+
+        $memoryServices = \array_values($info->getServicesByRole('memory_server'));
+        self::assertCount(1, $memoryServices);
+        self::assertSame(19971, $memoryServices[0]->port);
+        self::assertSame(9876, $memoryServices[0]->getTrackingPid());
+        self::assertStringContainsString('Session:19970', $info->getPortRangeDescription());
+        self::assertStringContainsString('Memory:19971', $info->getPortRangeDescription());
     }
 
     private function createManager(array $rawData): ServerInstanceManager

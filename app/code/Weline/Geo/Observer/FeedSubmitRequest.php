@@ -9,6 +9,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Geo\Model\Feed;
 use Weline\Geo\Service\FeedEventDispatcher;
+use Weline\Geo\Service\SeoProfileGeoMetadataNormalizer;
 
 class FeedSubmitRequest implements ObserverInterface
 {
@@ -55,6 +56,7 @@ class FeedSubmitRequest implements ObserverInterface
                 'is_published' => (int)($data['is_published'] ?? 1),
                 'published_at' => $this->timestamp($data['published_at'] ?? $data['updated_at'] ?? null),
             ];
+            $itemData = $this->normalizeFeedItemData($itemType, $url, $data, $itemData);
 
             foreach ($feeds as $feed) {
                 $feedId = (int)($feed[Feed::schema_fields_ID] ?? $feed['id'] ?? 0);
@@ -112,5 +114,31 @@ class FeedSubmitRequest implements ObserverInterface
             return strtotime($value) ?: time();
         }
         return time();
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $itemData
+     * @return array<string, mixed>
+     */
+    private function normalizeFeedItemData(string $itemType, string $url, array $data, array $itemData): array
+    {
+        try {
+            /** @var SeoProfileGeoMetadataNormalizer $normalizer */
+            $normalizer = ObjectManager::getInstance(SeoProfileGeoMetadataNormalizer::class);
+        } catch (\Throwable) {
+            $normalizer = new SeoProfileGeoMetadataNormalizer();
+        }
+
+        $normalized = $normalizer->toFeedItemData(array_replace($data, [
+            'page_type' => $data['page_type'] ?? $itemType,
+            'title' => $itemData['title'],
+            'description' => $itemData['content'],
+            'canonical_url' => $url,
+            'url' => $url,
+            'geo' => $itemData['metadata'],
+        ]));
+
+        return array_replace($itemData, array_filter($normalized, static fn (mixed $value): bool => $value !== '' && $value !== []));
     }
 }

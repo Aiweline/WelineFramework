@@ -194,10 +194,8 @@
 规格,Option
 "商品 #%{1}","Product #%{1}"
 颜色,Color
-黑色,Black
-藏青,Navy
-米色,Beige
 尺码,Size
+款式,Style
 商品不存在或不可用。,"Product does not exist or is unavailable."
 购物车项目已在垃圾箱中,"Cart item is already in the trash"
 购物车项目不存在,"Cart item does not exist"

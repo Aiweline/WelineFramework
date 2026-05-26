@@ -49,8 +49,9 @@ class XmlReader extends ModuleFileReader
     {
         $data = [];
         foreach ($this->getFileList() as $module => $module_file) {
-            $event_xml_data = $this->parser->load($module_file)->xmlToArray();
+            $event_xml_data = $this->parser->parseFile($module_file);
             $data[$module . '::' . $module_file] = $event_xml_data;
+            unset($event_xml_data);
         }
         return $data;
     }

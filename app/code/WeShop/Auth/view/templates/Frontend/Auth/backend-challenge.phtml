@@ -1,0 +1,109 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$postUrl = (string) ($this->getData('post_url') ?? '');
+$challengeToken = (string) ($this->getData('challenge_token') ?? '');
+$expiresAt = (int) ($this->getData('expires_at') ?? 0);
+$messages = (string) \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Manager\MessageManager::class);
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= __('后台双因素验证') ?></title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #eef2f7;
+            color: #172033;
+        }
+        .shell {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .card {
+            width: 100%;
+            max-width: 460px;
+            background: #fff;
+            border: 1px solid #dbe4f0;
+            border-radius: 18px;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+            padding: 32px;
+        }
+        .title {
+            margin: 0 0 10px;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        .subtitle {
+            margin: 0 0 24px;
+            color: #64748b;
+            line-height: 1.6;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            height: 48px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            padding: 0 14px;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            border: 0;
+            border-radius: 12px;
+            height: 48px;
+            background: #1d4ed8;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 18px;
+        }
+        .meta {
+            margin-top: 16px;
+            color: #64748b;
+            font-size: 13px;
+        }
+        .message-wrap {
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <div class="card">
+        <h1 class="title"><?= __('后台双因素验证') ?></h1>
+        <p class="subtitle"><?= __('输入验证器应用中的 6 位验证码，或使用一个备用码，完成后台登录。') ?></p>
+
+        <?php if ($messages): ?>
+            <div class="message-wrap"><?= $messages ?></div>
+        <?php endif; ?>
+
+        <form action="<?= htmlspecialchars($postUrl, ENT_QUOTES) ?>" method="post">
+            <?= $this->getFormKey($postUrl) ?>
+            <input type="hidden" name="challenge_token" value="<?= htmlspecialchars($challengeToken, ENT_QUOTES) ?>">
+
+            <label for="code"><?= __('验证码') ?></label>
+            <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required placeholder="123456">
+
+            <button type="submit"><?= __('验证并登录') ?></button>
+        </form>
+
+        <div class="meta">
+            <?= __('挑战过期时间：%{1}', [$expiresAt > 0 ? date('Y-m-d H:i:s', $expiresAt) : __('未知')]) ?>
+        </div>
+    </div>
+</div>
+</body>
+</html>

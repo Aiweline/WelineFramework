@@ -33,6 +33,10 @@ class ModuleInstallerService
      */
     private const MODULE_DIR = APP_CODE_PATH;
 
+    private const INSTALL_RECORD_DIR = BP . 'var' . DS . 'appstore' . DS . 'install-records';
+
+    private const MARKETPLACE_README = '商城应用.md';
+
     /**
      * 平台 API 基础 URL
      */
@@ -50,9 +54,9 @@ class ModuleInstallerService
 
     public function __construct()
     {
-        $platformUrl = Env::get('appstore.platform_url', self::DEFAULT_PLATFORM_URL);
+        $platformUrl = $this->resolvePlatformUrl();
         // Env::get 如果配置项存在但显式为 null，会直接返回 null（不会走 default），因此这里做非空兜底。
-        $this->platformApiUrl = (is_string($platformUrl) && $platformUrl !== '') ? $platformUrl : self::DEFAULT_PLATFORM_URL;
+        $this->platformApiUrl = $platformUrl;
         $this->httpClient = new Client([
             'timeout' => 300,
             'verify' => true,
@@ -73,11 +77,12 @@ class ModuleInstallerService
         // 创建下载日志
         /** @var AppStoreDownloadLog $log */
         $log = ObjectManager::getInstance(AppStoreDownloadLog::class);
+        $fallbackModuleName = $moduleId ? 'module-' . $moduleId : 'unknown';
         $log->setLicenseKey($licenseKey);
         $log->setVersion($version ?? 'latest');
+        $log->setModuleName($fallbackModuleName);
         $log->setDownloadIp($downloadIp ?? $this->getClientIp());
         $log->setDownloadAt(date('Y-m-d H:i:s'));
-        $log->save();
 
         try {
             // 调用平台 API 获取下载链接
@@ -106,6 +111,10 @@ class ModuleInstallerService
                 throw new Exception(__('下载响应数据不完整'));
             }
             $tempFile = $tempDir . DS . $moduleName . '-' . $moduleVersion . '.zip';
+
+            $log->setModuleName($moduleName);
+            $log->setVersion($moduleVersion);
+            $log->save();
 
             $this->downloadFile($downloadUrl, $tempFile);
 
@@ -152,6 +161,10 @@ class ModuleInstallerService
      */
     public function install(string $zipPath, array $options = []): array
     {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
         if (!file_exists($zipPath)) {
             throw new Exception(__('模块文件不存在'));
         }
@@ -161,6 +174,7 @@ class ModuleInstallerService
 
         try {
             // 验证模块结构
+            $this->normalizePhpFiles($tempDir);
             $moduleInfo = $this->validateStructure($tempDir);
 
             // 检查依赖
@@ -183,7 +197,11 @@ class ModuleInstallerService
             $this->moveModule($tempDir, $targetDir);
 
             // 执行安装命令
+            $wasMaintenanceMode = (bool)Env::get('system.maintenance', false);
             $installResult = $this->executeSetupUpgrade($moduleName);
+            if (!$wasMaintenanceMode) {
+                $this->restoreMaintenanceMode(false);
+            }
 
             if (!$installResult['success']) {
                 // 安装失败，恢复备份
@@ -198,6 +216,21 @@ class ModuleInstallerService
 
             // 更新已安装模块记录
             $this->updateInstalledModule($moduleName, $moduleInfo, $options);
+            $readmePath = $this->writeMarketplaceReadme($targetDir, $moduleName, $moduleInfo, $options);
+            $installRecordPath = $this->appendInstallRecord([
+                'module_name' => $moduleName,
+                'version' => $moduleInfo['version'],
+                'display_name' => (string)($options['display_name'] ?? ($moduleInfo['display_name'] ?? $moduleName)),
+                'platform_module_id' => (int)($options['platform_module_id'] ?? 0),
+                'license_key_masked' => $this->maskSecret((string)($options['license_key'] ?? '')),
+                'target_dir' => $targetDir,
+                'frontend_path' => $this->getInstalledFrontendPath($targetDir),
+                'readme_path' => $readmePath,
+                'download_log_id' => (int)($options['download_log_id'] ?? 0),
+                'download_file_hash' => (string)($options['download_file_hash'] ?? ''),
+                'download_file_size' => (int)($options['download_file_size'] ?? 0),
+                'platform_url' => $this->platformApiUrl,
+            ]);
 
             // 触发 WLS 热重载
             if ($this->enableWlsReload && $this->isWlsRunning()) {
@@ -215,6 +248,9 @@ class ModuleInstallerService
                 'module_name' => $moduleName,
                 'version' => $moduleInfo['version'],
                 'target_dir' => $targetDir,
+                'frontend_path' => $this->getInstalledFrontendPath($targetDir),
+                'marketplace_readme' => $readmePath,
+                'install_record_path' => $installRecordPath,
                 'install_output' => $installResult['output'] ?? '',
             ];
         } catch (\Throwable $e) {
@@ -264,6 +300,7 @@ class ModuleInstallerService
         }
 
         // 解析 register.php 获取模块信息
+        $this->normalizeRegisterFile($registerFile);
         $moduleInfo = $this->parseRegisterFile($registerFile);
         if (!$moduleInfo) {
             throw new Exception(__('模块结构无效：无法解析 register.php'));
@@ -384,6 +421,43 @@ class ModuleInstallerService
      * @param array $dependencies 依赖列表
      * @return array 检查结果
      */
+    private function normalizeRegisterFile(string $registerFile): void
+    {
+        $content = file_get_contents($registerFile);
+        if (!is_string($content) || $content === '') {
+            return;
+        }
+
+        $normalized = $content;
+        if (str_starts_with($normalized, "\xEF\xBB\xBF")) {
+            $normalized = substr($normalized, 3);
+        }
+
+        $openTagPosition = strpos($normalized, '<?php');
+        if ($openTagPosition !== false && $openTagPosition > 0 && trim(substr($normalized, 0, $openTagPosition)) === '') {
+            $normalized = substr($normalized, $openTagPosition);
+        }
+
+        if ($normalized !== $content) {
+            file_put_contents($registerFile, $normalized);
+        }
+    }
+
+    private function normalizePhpFiles(string $dir): void
+    {
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || !$file->isFile() || strtolower($file->getExtension()) !== 'php') {
+                continue;
+            }
+
+            $this->normalizeRegisterFile($file->getPathname());
+        }
+    }
+
     public function checkDependencies(array $dependencies): array
     {
         $missing = [];
@@ -484,18 +558,60 @@ class ModuleInstallerService
     }
 
     /**
-     * 执行 setup:upgrade 命令
+     * 执行模块注册和路由更新
      *
      * @param string $moduleName 模块名
      * @return array 执行结果
      */
     private function executeSetupUpgrade(string $moduleName): array
     {
-        $command = PHP_BINARY . ' ' . BP . 'bin' . DS . 'w setup:upgrade --module=' . escapeshellarg($moduleName);
+        $targetDir = $this->getModuleTargetDir($moduleName);
+        $registerFile = $targetDir . DS . 'register.php';
+        if (!is_file($registerFile)) {
+            return [
+                'success' => false,
+                'output' => '',
+                'return_code' => 1,
+                'message' => __('模块 register.php 不存在'),
+            ];
+        }
 
+        $this->normalizeRegisterFile($registerFile);
+
+        $bootstrapFile = BP . 'app' . DS . 'bootstrap.php';
+        $code = 'require ' . var_export($bootstrapFile, true) . ';'
+            . 'require ' . var_export($registerFile, true) . ';'
+            . '$moduleName = ' . var_export($moduleName, true) . ';'
+            . '$env = \Weline\Framework\App\Env::getInstance();'
+            . '$modules = $env->getModuleList(true);'
+            . 'if (isset($modules[$moduleName]) && is_array($modules[$moduleName])) {'
+            . 'unset($modules[$moduleName]["installing"], $modules[$moduleName]["upgrading"]);'
+            . '\Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class)->updateModules($modules);'
+            . '$env->getModuleList(true);'
+            . '}'
+            . '$routeUpdateService = \Weline\Framework\Manager\ObjectManager::make(\Weline\Framework\Router\Service\RouteUpdateService::class, ['
+            . '"moduleHandle" => \Weline\Framework\Manager\ObjectManager::make(\Weline\Framework\Module\Handle::class),'
+            . ']);'
+            . '$routeUpdateService->updateRoutes([$moduleName]);'
+            . 'exit(0);';
+
+        $scriptPath = $this->getTempDir() . DS . 'install_' . preg_replace('/[^A-Za-z0-9_]/', '_', $moduleName) . '_' . uniqid() . '.php';
+        if (file_put_contents($scriptPath, "<?php\n" . $code) === false) {
+            return [
+                'success' => false,
+                'output' => '',
+                'return_code' => 1,
+                'message' => __('无法创建模块安装脚本'),
+            ];
+        }
+
+        $command = PHP_BINARY . ' ' . escapeshellarg($scriptPath);
         $output = [];
         $returnCode = 0;
         exec($command . ' 2>&1', $output, $returnCode);
+        if (is_file($scriptPath)) {
+            unlink($scriptPath);
+        }
 
         return [
             'success' => $returnCode === 0,
@@ -503,6 +619,30 @@ class ModuleInstallerService
             'return_code' => $returnCode,
             'message' => $returnCode === 0 ? '' : implode("\n", $output),
         ];
+    }
+
+    private function restoreMaintenanceMode(bool $enabled): void
+    {
+        try {
+            Env::getInstance()->setConfig('system.maintenance', $enabled);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function getInstalledFrontendPath(string $targetDir): string
+    {
+        $envFile = $targetDir . DS . 'etc' . DS . 'env.php';
+        if (!is_file($envFile)) {
+            return '';
+        }
+
+        $env = require $envFile;
+        if (!is_array($env)) {
+            return '';
+        }
+
+        $router = trim((string)($env['router'] ?? ''), '/');
+        return $router !== '' ? '/' . $router : '';
     }
 
     /**
@@ -516,16 +656,91 @@ class ModuleInstallerService
     {
         /** @var AppStoreInstalledModule $installedModule */
         $installedModule = ObjectManager::getInstance(AppStoreInstalledModule::class);
-        $installedModule->load($moduleName, AppStoreInstalledModule::schema_fields_module_name);
+        $installedModule = $installedModule->clear()
+            ->where(AppStoreInstalledModule::schema_fields_module_name, $moduleName)
+            ->find()
+            ->fetch();
 
         $installedModule->setModuleName($moduleName);
         $installedModule->setVersion($moduleInfo['version']);
-        $installedModule->setDisplayName($moduleInfo['display_name'] ?? $moduleName);
-        $installedModule->setDescription($moduleInfo['description'] ?? null);
+        $installedModule->setDisplayName($options['display_name'] ?? ($moduleInfo['display_name'] ?? $moduleName));
+        $installedModule->setDescription($options['description'] ?? ($moduleInfo['description'] ?? null));
         $installedModule->setLicenseKey($options['license_key'] ?? null);
         $installedModule->setPlatformModuleId($options['platform_module_id'] ?? 0);
         $installedModule->setInstalledAt(date('Y-m-d H:i:s'));
         $installedModule->save();
+    }
+
+    private function writeMarketplaceReadme(string $targetDir, string $moduleName, array $moduleInfo, array $options): string
+    {
+        $readmePath = $targetDir . DS . self::MARKETPLACE_README;
+        $displayName = (string)($options['display_name'] ?? ($moduleInfo['display_name'] ?? $moduleName));
+        $frontendPath = $this->getInstalledFrontendPath($targetDir);
+        $lines = [
+            '# 商城应用',
+            '',
+            '- 模块名称：' . $moduleName,
+            '- 显示名称：' . $displayName,
+            '- 版本：' . (string)($moduleInfo['version'] ?? ''),
+            '- 安装来源：WelineFramework 官方应用商城',
+            '- 平台模块 ID：' . (string)($options['platform_module_id'] ?? 0),
+            '- 安装时间：' . date('Y-m-d H:i:s'),
+            '- 许可证：' . $this->maskSecret((string)($options['license_key'] ?? '')),
+            '- 终端域名：' . $this->getCurrentDomain(),
+            '- 功能入口：' . ($frontendPath !== '' ? $frontendPath : '未声明'),
+            '',
+            '## 卸载说明',
+            '',
+            '请使用系统模块卸载流程，例如：',
+            '',
+            '```bash',
+            'php bin/w module:remove ' . $moduleName,
+            '```',
+            '',
+            '系统卸载会触发框架的 UninstallService 与 ModuleManager 数据备份事件。App 商城只记录安装来源，不负责导出或下载 SQL。',
+            '',
+        ];
+
+        if (file_put_contents($readmePath, implode(PHP_EOL, $lines)) === false) {
+            throw new Exception(__('无法写入商城应用说明文件：') . $readmePath);
+        }
+
+        return $readmePath;
+    }
+
+    private function appendInstallRecord(array $record): string
+    {
+        if (!is_dir(self::INSTALL_RECORD_DIR)) {
+            mkdir(self::INSTALL_RECORD_DIR, 0755, true);
+        }
+
+        $path = self::INSTALL_RECORD_DIR . DS . date('Y-m') . '.jsonl';
+        $payload = array_merge([
+            'action' => 'install',
+            'recorded_at' => date('c'),
+        ], $record);
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+        if (!is_string($json) || file_put_contents($path, $json . PHP_EOL, FILE_APPEND | LOCK_EX) === false) {
+            throw new Exception(__('无法写入 AppStore 安装记录：') . $path);
+        }
+
+        return $path;
+    }
+
+    private function maskSecret(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $length = strlen($value);
+        if ($length <= 8) {
+            return str_repeat('*', $length);
+        }
+
+        return substr($value, 0, 4) . str_repeat('*', min(12, max(4, $length - 8))) . substr($value, -4);
     }
 
     /**
@@ -729,5 +944,17 @@ class ModuleInstallerService
     public function setEnableWlsReload(bool $enable): void
     {
         $this->enableWlsReload = $enable;
+    }
+
+    private function resolvePlatformUrl(): string
+    {
+        $envPlatformUrl = getenv('WELINE_APPSTORE_PLATFORM_URL');
+        if (is_string($envPlatformUrl) && trim($envPlatformUrl) !== '') {
+            return rtrim(trim($envPlatformUrl), '/');
+        }
+
+        $platformUrl = Env::get('appstore.platform_url');
+        // Env::get 对显式 null 不会走默认值，这里统一兜底到官方地址。
+        return (is_string($platformUrl) && $platformUrl !== '') ? rtrim($platformUrl, '/') : self::DEFAULT_PLATFORM_URL;
     }
 }

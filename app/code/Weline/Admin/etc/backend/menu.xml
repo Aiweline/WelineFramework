@@ -9,14 +9,11 @@
     
     <!-- ==================== 用户与权限分组 ==================== -->
     
-    <!-- 管理员菜单 - 挂载到 Backend 定义的用户管理菜单下 -->
-    <menu source="Weline_Admin::system_user" name="system_user" title="管理员"
-         parent="Weline_Backend::user_management" icon="mdi mdi-shield-account-outline" order="10">
-        <menu source="Weline_Admin::system_user_listing" name="system_user_listing" title="用户列表" action="admin/backend/user/listing"
-             icon="mdi mdi-account-multiple-outline" order="10"/>
-        <menu source="Weline_Admin::system_user_assign_role" name="system_user_assign_role" title="角色归配" action="admin/backend/user/assign-role"
-             icon="mdi mdi-account-key-outline" order="20"/>
-    </menu>
+    <!-- 用户管理入口 - 直接挂载到 Backend 定义的用户管理菜单下 -->
+    <menu source="Weline_Admin::system_user_listing" name="system_user_listing" title="用户列表" action="admin/backend/user/listing"
+         parent="Weline_Backend::user_management" icon="mdi mdi-account-multiple-outline" order="10"/>
+    <menu source="Weline_Admin::system_user_assign_role" name="system_user_assign_role" title="角色归配" action="admin/backend/user/assign-role"
+         parent="Weline_Backend::user_management" icon="mdi mdi-account-key-outline" order="20"/>
     
     <!-- ==================== 菜单与路由分组 ==================== -->
     

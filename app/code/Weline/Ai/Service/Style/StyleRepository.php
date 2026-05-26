@@ -89,21 +89,21 @@ final class StyleRepository
     public function saveFromArray(array $data, int $adminId, string $defaultSourceType = AiStyle::SOURCE_CUSTOM): AiStyle
     {
         if ($adminId <= 0) {
-            throw new \InvalidArgumentException('Admin user is required.');
+            throw new \InvalidArgumentException((string)__('请先登录后台管理员账号。'));
         }
         $code = $this->normalizer()->normalizeCode((string)($data['code'] ?? ''));
         $name = \trim((string)($data['name'] ?? $code));
         if ($name === '') {
-            throw new \InvalidArgumentException('Style name is required.');
+            throw new \InvalidArgumentException((string)__('风格名称不能为空。'));
         }
 
         $sourceType = \trim((string)($data['source_type'] ?? $defaultSourceType));
         if (!\in_array($sourceType, [AiStyle::SOURCE_CUSTOM], true)) {
-            throw new \InvalidArgumentException('Only custom styles can be saved from this repository.');
+            throw new \InvalidArgumentException((string)__('只有自定义风格可以保存到风格库。'));
         }
         $status = \trim((string)($data['status'] ?? AiStyle::STATUS_ACTIVE));
         if (!\in_array($status, [AiStyle::STATUS_ACTIVE, AiStyle::STATUS_DISABLED], true)) {
-            throw new \InvalidArgumentException('Style status must be active or disabled.');
+            throw new \InvalidArgumentException((string)__('风格状态必须是启用或禁用。'));
         }
 
         $normalized = $this->normalizer()->normalizeStylePayload($data);
@@ -149,7 +149,7 @@ final class StyleRepository
 
         $sourceType = (string)$style->getData(AiStyle::schema_fields_SOURCE_TYPE);
         if ($sourceType !== AiStyle::SOURCE_CUSTOM) {
-            throw new \InvalidArgumentException('Only custom styles can be disabled from the database.');
+            throw new \InvalidArgumentException((string)__('只有自定义风格可以从数据库禁用。'));
         }
 
         $style->setData(AiStyle::schema_fields_STATUS, AiStyle::STATUS_DISABLED);
@@ -168,7 +168,7 @@ final class StyleRepository
 
         $sourceType = (string)$style->getData(AiStyle::schema_fields_SOURCE_TYPE);
         if ($sourceType !== AiStyle::SOURCE_CUSTOM) {
-            throw new \InvalidArgumentException('Only custom styles can be deleted from the database.');
+            throw new \InvalidArgumentException((string)__('只有自定义风格可以从数据库删除。'));
         }
 
         $style->delete()->fetch();

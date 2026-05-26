@@ -88,7 +88,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->redirect($this->getBackendUrlSameOrigin($targetPath));
         }
         //$this->session->delete('backend_disable_login');
-        $this->assign('post_url', $this->_url->getBackendUrl('admin/login/post'));
+        $this->assign('post_url', $this->getBackendUrlSameOrigin('admin/login/post'));
         // 无权限重定向原因：仅当次请求通过 GET 传入，显示一次即不再保留，刷新后不显示
         $noAccessReason = $this->request->getParam('no_access_reason');
         if ($noAccessReason !== null && $noAccessReason !== '') {
@@ -105,7 +105,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->session->delete(self::SESSION_KEY_BACKEND_VERIFICATION_CODE);
             $this->assign('need_backend_verification_code', true);
             // 使用连字符小写路径以与白名单精确匹配，并兼容路由规则
-            $this->assign('backend_verification_code_url', $this->_url->getBackendUrl('admin/login/verification-code'));
+            $this->assign('backend_verification_code_url', $this->getBackendUrlSameOrigin('admin/login/verification-code'));
         }
         # 登录页：使用后台配置（Logo、站点名）
         $backendConfig = ObjectManager::getInstance(BackendConfig::class);
@@ -116,6 +116,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $this->assign('login_logo_light', $logoLight !== '' ? ImageHelper::pathToMediaUrl($logoLight, 125, 125) : '');
         $siteName = (string)($backendConfigs['site_name'] ?? 'Weline');
         $this->assign('login_site_name', $siteName);
+        $this->assign('login_site_description', trim((string)($backendConfigs['site_description'] ?? '')));
         $loginBg = trim((string)($backendConfigs['login_bg'] ?? ''));
         if ($loginBg !== '') {
             foreach (['/pub/media/', 'pub/media/', '/media/'] as $prefix) {
@@ -160,7 +161,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         // 登录页本身就是一个独立完整模板，不依赖通用布局包装。
         // 在 WLS 下直接返回 detached HTML Response，避免控制器 fetch 事件链
         // 或后续结果归一化把登录页 body 吞成空响应。
-        return Response::html($this->template('Weline_Admin::templates/Login/fast.phtml'));
+        return Response::html($this->template('Weline_Admin::templates/Login/index.phtml'));
     }
 
     /**
@@ -205,13 +206,13 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         if (!$adminUsernameUser->getId() or $adminUsernameUser->getIsDeleted()) {
             w_auth_log('login_post_user_not_found', '账户不存在或已删除', ['username' => $this->request->getParam('username'), 'session' => $this->getSessionDataForLog()]);
             MessageManager::error(__('账户不存在！'));
-            $this->redirect($this->_url->getBackendUrl('/admin/login'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin/login'));
             return;
         }
         if (!$adminUsernameUser->getIsEnabled()) {
             w_auth_log('login_post_disabled', '账户被禁用', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'session' => $this->getSessionDataForLog()]);
             MessageManager::error(__('账户被禁用！'));
-            $this->redirect($this->_url->getBackendUrl('/admin/login'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin/login'));
             return;
         }
         if ($adminUsernameUser->getAttemptTimes() > 6) {
@@ -224,7 +225,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 # FIXME 将IP封死，为了不占用服务器资源，将封锁过程提前到框架入口处，此处只作为拉入黑名单处理【设置为Security框架函数处理】
                 $this->noRouter();
             }
-            $this->redirect($this->_url->getBackendUrl('/admin/login'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin/login'));
             return;
         } else {
             $this->session->set('backend_disable_login', false);
@@ -237,7 +238,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 ->setAttemptIp($this->request->clientIP())
                 ->save();
             MessageManager::error(__('登录异常！'));
-            $this->redirect($this->_url->getBackendUrl('/admin/login'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin/login'));
             return;
         }
         # 如果大于2次的尝试登录 验证客户提供的验证码
@@ -258,7 +259,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $adminUsernameUser->setSessionId($this->session->getId())
                 ->setAttemptIp($this->request->clientIP())
                 ->save();
-            $this->redirect($this->_url->getBackendUrl('/admin/login'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin/login'));
             return;
         }
         # 尝试登录
@@ -286,7 +287,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                     w_auth_log('login_post_no_role', '账户未分配角色，拒绝登录', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'session' => $this->getSessionDataForLog()]);
                     $this->session->logout();
                     MessageManager::error(__('您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。'));
-                    $this->redirect($this->_url->getBackendUrl('/admin/login'));
+                    $this->redirect($this->getBackendUrlSameOrigin('admin/login'));
                     return;
                 }
                 // 写入 ACL 上下文到 Session，路由校验时直接读 Session 免去每次请求 2 次 DB
@@ -331,7 +332,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 ->save();
             MessageManager::error(__('登录凭据错误！'));
             // 用户未登录，无需 logout；logout 会 destroy session 导致 MessageManager 的错误信息丢失
-            $this->redirect($this->_url->getBackendUrl('/admin/login'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin/login'));
             return;
         }
         // 登录成功后、302 前必须落库：先持久化本请求内所有 Session，再发 Cookie 与重定向
@@ -506,11 +507,40 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     private function ensureSameOrigin(string $url): string
     {
         $parsed = \parse_url($url);
-        $path = $parsed['path'] ?? '/';
+        $path = $this->normalizeBackendPathForSameOrigin((string)($parsed['path'] ?? '/'));
         $query = isset($parsed['query']) && $parsed['query'] !== '' ? '?' . $parsed['query'] : '';
         $scheme = $this->request->isSecure() ? 'https' : 'http';
         $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
         return $scheme . '://' . $host . $path . $query;
+    }
+
+    private function normalizeBackendPathForSameOrigin(string $path): string
+    {
+        $path = '/' . \trim($path, '/');
+        $segments = \explode('/', \trim($path, '/'));
+        $firstSegment = (string)($segments[0] ?? '');
+
+        if (isset($segments[1], $segments[2], $segments[3])
+            && $firstSegment !== ''
+            && $this->isCurrencySegment($segments[1])
+            && $this->isLocaleSegment($segments[2])
+            && $segments[3] === $firstSegment
+        ) {
+            \array_splice($segments, 3, 1);
+            return '/' . \implode('/', $segments);
+        }
+
+        return $path;
+    }
+
+    private function isCurrencySegment(string $segment): bool
+    {
+        return \strlen($segment) === 3 && \ctype_upper($segment);
+    }
+
+    private function isLocaleSegment(string $segment): bool
+    {
+        return (bool)\preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
     }
 
     public function logout(): void
@@ -570,7 +600,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $this->session->delete('remember_expire_time');
         $this->clearBackendVerificationCodeState();
         $this->session->getSession()->destroy();
-        $this->redirect($this->_url->getBackendUrl('admin/login'));
+        $this->redirect($this->getBackendUrlSameOrigin('admin/login'));
     }
 
     private function syncSandboxCookie(bool $enabled): void
@@ -703,7 +733,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 'session' => $this->getSessionDataForLog(),
             ]);
             MessageManager::error($error->getMessage());
-            $this->redirect($this->_url->getBackendUrl('/admin/login'));
+            $this->redirect($this->getBackendUrlSameOrigin('admin/login'));
             return true;
         }
 
@@ -720,7 +750,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 'session' => $this->getSessionDataForLog(),
             ]);
             $this->getMessageManager()->addWarning(__('请完成两步验证以完成登录。'));
-            $this->redirect($this->_url->getFrontendUrl('weshop_googleauth/frontend/auth/backend-challenge', [
+            $this->redirect($this->_url->getFrontendUrl('weshop/frontend/auth/backend-challenge', [
                 'challenge_token' => $challengeToken,
             ]));
             return true;

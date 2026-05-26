@@ -38,9 +38,9 @@ class AccountBindService
 
     public function __construct()
     {
-        $platformUrl = Env::get('appstore.platform_url', self::DEFAULT_PLATFORM_URL);
+        $platformUrl = $this->resolvePlatformUrl();
         // Env::get 如果配置项存在但显式为 null，会直接返回 null（不会走 default），因此这里做非空兜底。
-        $this->platformUrl = (is_string($platformUrl) && $platformUrl !== '') ? $platformUrl : self::DEFAULT_PLATFORM_URL;
+        $this->platformUrl = $platformUrl;
         
         // 加密密钥必须稳定；未配置时使用确定性后备值，避免重启后无法解密历史 token。
         $encryptionKey = Env::get('appstore.encryption_key');
@@ -57,6 +57,35 @@ class AccountBindService
             'timeout' => 30,
             'verify' => true,
         ]);
+    }
+
+    public function getPlatformUrl(): string
+    {
+        return $this->platformUrl;
+    }
+
+    public function getAuthorizationUrl(string $redirectUri, ?string $state = null): string
+    {
+        $params = [
+            'client_id' => 'weline-terminal',
+            'redirect_uri' => $redirectUri,
+            'domain' => $this->getCurrentDomain(),
+        ];
+        if ($state !== null && $state !== '') {
+            $params['state'] = $state;
+        }
+
+        return rtrim($this->platformUrl, '/') . '/oauth/authorize?' . http_build_query($params);
+    }
+
+    private function deactivateActiveAccounts(): void
+    {
+        /** @var AppStoreAccount $account */
+        $account = ObjectManager::getInstance(AppStoreAccount::class);
+        $account->reset()
+            ->where(AppStoreAccount::schema_fields_status, AppStoreAccount::STATUS_ACTIVE)
+            ->update([AppStoreAccount::schema_fields_status => AppStoreAccount::STATUS_INACTIVE])
+            ->fetch();
     }
 
     /**
@@ -95,20 +124,26 @@ class AccountBindService
             $platformToken = $data['token'];
             $platformUsername = $data['username'] ?? '';
             $tokenExpiresAt = $data['expires_at'] ?? null;
+            $boundDomain = $this->getCurrentDomain();
 
             // 检查是否已绑定
             /** @var AppStoreAccount $existingAccount */
             $existingAccount = ObjectManager::getInstance(AppStoreAccount::class);
-            $existingAccount->load($platformUserId, AppStoreAccount::schema_fields_platform_user_id);
+            $existingAccount = $existingAccount->clear()
+                ->where(AppStoreAccount::schema_fields_platform_user_id, $platformUserId)
+                ->find()
+                ->fetch();
 
             // 加密存储 token
             $encryptedToken = $this->encryptToken($platformToken);
 
             if ($existingAccount->getAccountId()) {
+                $this->deactivateActiveAccounts();
                 // 更新已存在的绑定
                 $existingAccount->setPlatformToken($encryptedToken);
                 $existingAccount->setPlatformEmail($email);
                 $existingAccount->setPlatformUsername($platformUsername);
+                $existingAccount->setBoundDomain($boundDomain);
                 $existingAccount->setStatus(AppStoreAccount::STATUS_ACTIVE);
                 $existingAccount->setTokenExpiresAt($tokenExpiresAt);
                 $existingAccount->updateSyncTime();
@@ -124,10 +159,12 @@ class AccountBindService
             // 创建新绑定
             /** @var AppStoreAccount $account */
             $account = ObjectManager::getInstance(AppStoreAccount::class);
+            $this->deactivateActiveAccounts();
             $account->setPlatformUserId($platformUserId);
             $account->setPlatformToken($encryptedToken);
             $account->setPlatformEmail($email);
             $account->setPlatformUsername($platformUsername);
+            $account->setBoundDomain($boundDomain);
             $account->setStatus(AppStoreAccount::STATUS_ACTIVE);
             $account->setBoundAt(date('Y-m-d H:i:s'));
             $account->setTokenExpiresAt($tokenExpiresAt);
@@ -159,7 +196,7 @@ class AccountBindService
      * @return array 绑定结果
      * @throws Exception
      */
-    public function bindWithOAuth(string $code): array
+    public function bindWithOAuth(string $code, ?string $redirectUri = null): array
     {
         try {
             // 使用授权码换取令牌
@@ -167,7 +204,7 @@ class AccountBindService
                 'json' => [
                     'code' => $code,
                     'grant_type' => 'authorization_code',
-                    'redirect_uri' => $this->getOAuthRedirectUri(),
+                    'redirect_uri' => $this->getOAuthRedirectUri($redirectUri),
                 ],
             ]);
 
@@ -235,24 +272,16 @@ class AccountBindService
     {
         /** @var AppStoreAccount $account */
         $account = ObjectManager::getInstance(AppStoreAccount::class);
-        $accounts = $account->reset()
+        $account = $account->reset()
             ->where('status', AppStoreAccount::STATUS_ACTIVE)
             ->limit(1)
-            ->select()
+            ->find()
             ->fetch();
 
-        if (empty($accounts)) {
-            return null;
-        }
-
-        $accountData = is_array($accounts) ? ($accounts[0] ?? null) : $accounts;
-        if ($accountData instanceof AppStoreAccount) {
-            return $accountData;
-        }
-        if (is_array($accountData)) {
-            $account->setData($accountData);
+        if ($account instanceof AppStoreAccount && $account->getAccountId() > 0) {
             return $account;
         }
+
         return null;
     }
 
@@ -298,6 +327,9 @@ class AccountBindService
                 'headers' => [
                     'Authorization' => 'Bearer ' . $token,
                 ],
+                'json' => [
+                    'domain' => $this->getCurrentDomain(),
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
@@ -312,6 +344,7 @@ class AccountBindService
             // 更新令牌
             $account->setPlatformToken($this->encryptToken($data['token']));
             $account->setTokenExpiresAt($data['expires_at']);
+            $account->setBoundDomain($this->getCurrentDomain());
             $account->updateSyncTime();
             $account->save();
 
@@ -410,11 +443,19 @@ class AccountBindService
      *
      * @return string
      */
-    private function getOAuthRedirectUri(): string
+    private function getOAuthRedirectUri(?string $redirectUri = null): string
     {
-        $default = $this->platformUrl . '/appstore/oauth/callback';
-        $redirectUri = Env::get('appstore.oauth_redirect_uri', $default);
-        return (is_string($redirectUri) && $redirectUri !== '') ? $redirectUri : $default;
+        if (is_string($redirectUri) && $redirectUri !== '') {
+            return $redirectUri;
+        }
+
+        $configuredRedirectUri = Env::get('appstore.oauth_redirect_uri', '');
+        if (is_string($configuredRedirectUri) && $configuredRedirectUri !== '') {
+            return $configuredRedirectUri;
+        }
+
+        $scheme = (\w_env('server.https') === 'on' || \w_env('server.server_port') === '443') ? 'https' : 'http';
+        return $scheme . '://' . $this->getCurrentDomain() . '/appstore/backend/account/callback';
     }
 
     /**
@@ -462,22 +503,29 @@ class AccountBindService
 
         /** @var AppStoreAccount $account */
         $account = ObjectManager::getInstance(AppStoreAccount::class);
-        $account->load($platformUserId, AppStoreAccount::schema_fields_platform_user_id);
+        $account = $account->clear()
+            ->where(AppStoreAccount::schema_fields_platform_user_id, $platformUserId)
+            ->find()
+            ->fetch();
 
         $encryptedToken = $this->encryptToken($token);
 
         if ($account->getAccountId()) {
+            $this->deactivateActiveAccounts();
             $account->setPlatformToken($encryptedToken);
             $account->setPlatformEmail($platformEmail);
             $account->setPlatformUsername($platformUsername);
+            $account->setBoundDomain($this->getCurrentDomain());
             $account->setStatus(AppStoreAccount::STATUS_ACTIVE);
             $account->setTokenExpiresAt($expiresAt);
             $account->updateSyncTime();
         } else {
+            $this->deactivateActiveAccounts();
             $account->setPlatformUserId($platformUserId);
             $account->setPlatformToken($encryptedToken);
             $account->setPlatformEmail($platformEmail);
             $account->setPlatformUsername($platformUsername);
+            $account->setBoundDomain($this->getCurrentDomain());
             $account->setStatus(AppStoreAccount::STATUS_ACTIVE);
             $account->setBoundAt(date('Y-m-d H:i:s'));
             $account->setTokenExpiresAt($expiresAt);
@@ -505,6 +553,7 @@ class AccountBindService
             'platform_user_id' => $account->getPlatformUserId(),
             'platform_email' => $account->getPlatformEmail(),
             'platform_username' => $account->getPlatformUsername(),
+            'bound_domain' => $account->getBoundDomain(),
             'status' => $account->getStatus(),
             'bound_at' => $account->getBoundAt(),
             'token_expires_at' => $account->getTokenExpiresAt(),
@@ -558,8 +607,20 @@ class AccountBindService
      *
      * @return string
      */
-    private function getCurrentDomain(): string
+    public function getCurrentDomain(): string
     {
         return (string)\w_env('server.http_host', 'localhost');
+    }
+
+    private function resolvePlatformUrl(): string
+    {
+        $envPlatformUrl = getenv('WELINE_APPSTORE_PLATFORM_URL');
+        if (is_string($envPlatformUrl) && trim($envPlatformUrl) !== '') {
+            return rtrim(trim($envPlatformUrl), '/');
+        }
+
+        $platformUrl = Env::get('appstore.platform_url');
+        // Env::get 濡傛灉閰嶇疆椤瑰瓨鍦ㄤ絾鏄惧紡涓?null锛屼細鐩存帴杩斿洖 null锛堜笉浼氳蛋 default锛夛紝鍥犳杩欓噷鍋氶潪绌哄厹搴曘€?
+        return (is_string($platformUrl) && $platformUrl !== '') ? rtrim($platformUrl, '/') : self::DEFAULT_PLATFORM_URL;
     }
 }

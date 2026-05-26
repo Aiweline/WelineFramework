@@ -23,12 +23,13 @@ class PaymentServiceTest extends TestCase
 
         $codes = array_column($methods, 'code');
 
-        $this->assertSame(['manual_transfer', 'b2b_credit_account', 'cash_on_delivery', 'paypal'], $codes);
+        $this->assertSame(['manual_transfer', 'cash_on_delivery'], $codes);
         $this->assertSame('manual_transfer', $methods[0]['code']);
         $this->assertTrue((bool) ($methods[0]['is_default'] ?? false));
         $this->assertArrayHasKey('title', $methods[0]);
         $this->assertArrayHasKey('description', $methods[0]);
         $this->assertArrayHasKey('sort_order', $methods[0]);
+        $this->assertContains('US', $methods[0]['country_tags'] ?? []);
     }
 
     public function testGetPaymentMethodReturnsDisabledMethodsForAdminInspection(): void
@@ -40,6 +41,20 @@ class PaymentServiceTest extends TestCase
         $this->assertIsArray($method);
         $this->assertSame('alipay', $method['code']);
         $this->assertFalse((bool) ($method['enabled'] ?? true));
+    }
+
+    public function testCountrySpecificMethodsAreSortedByPopularityScore(): void
+    {
+        $service = new PaymentService();
+
+        $methods = $service->getAvailablePaymentMethods([
+            'area' => 'backend',
+            'country' => 'NL',
+        ]);
+
+        $this->assertNotEmpty($methods);
+        $this->assertSame('ideal', $methods[0]['code']);
+        $this->assertContains('NL', $methods[0]['country_tags'] ?? []);
     }
 
     public function testRuntimeOverridesAreMergedIntoMethodMetadata(): void
@@ -102,6 +117,37 @@ class PaymentServiceTest extends TestCase
         $this->assertSame([], $checkoutMethods);
     }
 
+    public function testGetCheckoutPaymentMethodsSkipsEnabledMethodsWithoutDocumentation(): void
+    {
+        $service = new class() extends PaymentService {
+            protected function getMethodRegistry(): array
+            {
+                return [
+                    'undocumented_gateway' => [
+                        'code' => 'undocumented_gateway',
+                        'title' => 'Undocumented Gateway',
+                        'description' => 'Missing embedded configuration docs.',
+                        'provider' => PayPal::class,
+                        'enabled' => true,
+                        'is_default' => false,
+                        'sort_order' => 10,
+                        'areas' => ['frontend'],
+                        'config' => [],
+                        'required_config' => [],
+                        'documentation_path' => 'missing/undocumented_gateway.md',
+                    ],
+                ];
+            }
+        };
+
+        $method = $service->getPaymentMethod('undocumented_gateway');
+        $checkoutMethods = $service->getCheckoutPaymentMethods(['area' => 'frontend']);
+
+        $this->assertIsArray($method);
+        $this->assertFalse((bool) ($method['has_documentation'] ?? true));
+        $this->assertSame([], $checkoutMethods);
+    }
+
     public function testProcessPaymentPassesProviderContextWithMethodConfiguration(): void
     {
         $provider = new class() implements PaymentProviderInterface {
@@ -154,6 +200,7 @@ class PaymentServiceTest extends TestCase
                             'sandbox' => true,
                         ],
                         'required_config' => ['merchant_id'],
+                        'config_test_status' => 'passed',
                     ],
                 ];
             }

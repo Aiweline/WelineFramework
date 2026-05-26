@@ -337,10 +337,39 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
         self::assertStringContainsString('activeOperations.plan', $body);
         self::assertStringContainsString('state.plan_queue_info', $body);
-        self::assertStringContainsString('isQueueUiBusyStatus', $body);
+        self::assertStringContainsString('isWorkspacePlanQueueTerminal(state)', $body);
+        self::assertStringContainsString('readQueueStatusForPrompt(item)', $body);
+        self::assertStringContainsString('isQueueStatusRunningForUi', $body);
         self::assertStringNotContainsString('state.task_plan_queue_info', $body);
         self::assertStringNotContainsString('state.build_queue_info', $body);
         self::assertStringNotContainsString('hasAnyRunningQueueForUi()', $body);
+    }
+
+    public function testConfirmPlanButtonIgnoresStalePlanFailureAfterSuccessfulPlan(): void
+    {
+        $script = $this->workspaceScript();
+        $blockingBody = $this->extractFunctionBody($script, 'getPhaseOnePlanBlockingErrorMessage');
+        $resolvedBody = $this->extractFunctionBody($script, 'shouldTreatPlanFailureAsResolvedBySuccess');
+        $ignoreTerminalBody = $this->extractFunctionBody($script, 'shouldIgnoreResolvedPlanTerminalFailure');
+        $queueUiBody = $this->extractFunctionBody($script, 'renderQueueUiState');
+        $retryBody = $this->extractFunctionBody($script, 'setPlanRetryButtonVisible');
+
+        self::assertStringContainsString('shouldTreatPlanFailureAsResolvedBySuccess(state, failedOperation)', $blockingBody);
+        self::assertStringContainsString('shouldTreatPlanFailureAsResolvedBySuccess(state, planError)', $blockingBody);
+        self::assertStringContainsString("hasRetryableAiFailures(state, 'plan')", $resolvedBody);
+        self::assertStringContainsString('phaseOnePlanPresentFromWorkspaceState(state)', $resolvedBody);
+        self::assertStringContainsString('isPlanCompletionMessageForWorkspaceUi(explicitMessage)', $resolvedBody);
+        self::assertStringContainsString('findPlanSuccessOperationFromWorkspaceState(state)', $resolvedBody);
+        self::assertStringContainsString('successTime >= failedTime', $resolvedBody);
+        self::assertStringContainsString('isGenericPlanTerminalErrorMessage(explicitMessage)', $resolvedBody);
+        self::assertStringContainsString('isGenericPlanTerminalErrorMessage(normalizedMessage)', $ignoreTerminalBody);
+        self::assertStringContainsString('isPlanCompletionMessageForWorkspaceUi(normalizedMessage)', $ignoreTerminalBody);
+        self::assertStringContainsString('shouldTreatPlanFailureAsResolvedBySuccess(state, failedOperation)', $ignoreTerminalBody);
+        self::assertStringContainsString('restoreResolvedPlanSuccessUiFromWorkspaceState();', $script);
+        self::assertStringContainsString('setPlanRetryButtonVisible(false);', $script);
+        self::assertStringContainsString("status = 'completed';", $queueUiBody);
+        self::assertStringContainsString('shouldIgnoreResolvedPlanTerminalFailure({}, message)', $queueUiBody);
+        self::assertStringContainsString('shouldTreatPlanFailureAsResolvedBySuccess(getLatestWorkspaceStateForQueuePrompt(), {})', $retryBody);
     }
 
     public function testFrontendDeletesLegacyTaskPlanEntrypoints(): void

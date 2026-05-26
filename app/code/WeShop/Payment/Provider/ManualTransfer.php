@@ -6,8 +6,9 @@ namespace WeShop\Payment\Provider;
 
 use WeShop\Order\Model\Order;
 use WeShop\Payment\Interface\PaymentProviderInterface;
+use Weline\Payment\Interface\PaymentConfigTesterInterface;
 
-class ManualTransfer implements PaymentProviderInterface
+class ManualTransfer implements PaymentProviderInterface, PaymentConfigTesterInterface
 {
     use ProviderContextHelperTrait;
 
@@ -51,6 +52,15 @@ class ManualTransfer implements PaymentProviderInterface
         }
 
         return 'pending';
+    }
+
+    public function testConfig(array $config, array $context = []): array
+    {
+        return [
+            'success' => true,
+            'message' => (string) __('Manual bank transfer configuration passed static validation.'),
+            'details' => ['test_type' => 'static'],
+        ];
     }
 
     protected function mapTradeStatus(string $tradeStatus): string

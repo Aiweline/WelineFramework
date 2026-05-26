@@ -11,6 +11,7 @@ Register::register(
     [
         'Weline_Framework',
         'Weline_Api',
+        'Weline_Admin',
         'Weline_Backend',
         'Weline_Customer',
         'Weline_TwoFactorAuth',

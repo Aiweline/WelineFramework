@@ -14,8 +14,9 @@
     <menu source="Weline_AppStore::appstore"
           name="appstore"
           title="应用商城"
+          parent="Weline_Backend::apps_tools"
           icon="mdi mdi-shopping"
-          order="60">
+          order="100">
 
         <!-- 商城首页 -->
         <menu source="Weline_AppStore::index"

@@ -222,8 +222,8 @@ class ReviewReplyService
         }
 
         $actorCustomerId = (int) $reply->getData(ReviewReply::schema_fields_CUSTOMER_ID);
-        $recipients = $this->collectNotificationRecipients($review, $parentReply, $mentionedCustomerIds, $actorCustomerId);
-        if ($recipients === []) {
+        $recipientReasons = $this->collectNotificationRecipientReasons($review, $parentReply, $mentionedCustomerIds, $actorCustomerId);
+        if ($recipientReasons === []) {
             return;
         }
 
@@ -235,13 +235,18 @@ class ReviewReplyService
             $replyId
         );
 
-        foreach ($recipients as $customerId) {
+        foreach ($recipientReasons as $customerId => $reason) {
+            $isMention = $reason === 'mention';
             try {
                 $notificationService->sendNotification([
                     'customer_id' => $customerId,
                     'type' => 'review_reply',
-                    'title' => (string) __('Your review has a new reply'),
-                    'content' => (string) __('Customer %{1} replied in a product review.', [$actorName]),
+                    'title' => $isMention
+                        ? (string) __('You were mentioned in a product review reply')
+                        : (string) __('Your review has a new reply'),
+                    'content' => $isMention
+                        ? (string) __('Customer %{1} mentioned you in a product review reply.', [$actorName])
+                        : (string) __('Customer %{1} replied in a product review.', [$actorName]),
                     'target_url' => $targetUrl,
                 ]);
             } catch (\Throwable $throwable) {
@@ -286,18 +291,61 @@ class ReviewReplyService
         return array_slice($recipients, 0, self::MAX_NOTIFICATION_RECIPIENTS);
     }
 
+    /**
+     * @param array<int, int> $mentionedCustomerIds
+     * @return array<int, string>
+     */
+    private function collectNotificationRecipientReasons(
+        Review $review,
+        ?ReviewReply $parentReply,
+        array $mentionedCustomerIds,
+        int $actorCustomerId
+    ): array {
+        $recipients = [];
+        $reviewCustomerId = (int) $review->getData(Review::schema_fields_CUSTOMER_ID);
+        if ($reviewCustomerId > 0 && $reviewCustomerId !== $actorCustomerId) {
+            $recipients[$reviewCustomerId] = 'reply';
+        }
+
+        if ($parentReply) {
+            $parentCustomerId = (int) $parentReply->getData(ReviewReply::schema_fields_CUSTOMER_ID);
+            if ($parentCustomerId > 0 && $parentCustomerId !== $actorCustomerId) {
+                $recipients[$parentCustomerId] = 'reply';
+            }
+        }
+
+        foreach ($mentionedCustomerIds as $mentionedCustomerId) {
+            $mentionedCustomerId = (int) $mentionedCustomerId;
+            if ($mentionedCustomerId > 0 && $mentionedCustomerId !== $actorCustomerId) {
+                $recipients[$mentionedCustomerId] = 'mention';
+            }
+        }
+
+        if (count($recipients) <= self::MAX_NOTIFICATION_RECIPIENTS) {
+            return $recipients;
+        }
+
+        return array_slice($recipients, 0, self::MAX_NOTIFICATION_RECIPIENTS, true);
+    }
+
     private function buildReplyTargetUrl(int $productId, int $reviewId, int $replyId): string
     {
-        $path = '/review?product_id=' . $productId . '&review_id=' . $reviewId . '&reply_id=' . $replyId;
+        $path = '/' . ReviewService::FRONTEND_ROUTE
+            . '?product_id=' . $productId
+            . '&review_id=' . $reviewId
+            . '&reply_id=' . $replyId;
         $url = $path;
         $urlBuilder = $this->getUrlBuilder();
         if ($urlBuilder) {
             try {
-                $url = (string) $urlBuilder->getUrl('review', [
+                $url = (string) $urlBuilder->getUrl(ReviewService::FRONTEND_ROUTE, [
                     'product_id' => $productId,
                     'review_id' => $reviewId,
                     'reply_id' => $replyId,
                 ]);
+                if (trim($url) === '') {
+                    $url = $path;
+                }
             } catch (\Throwable) {
                 $url = $path;
             }

@@ -442,6 +442,99 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         self::assertSame('command_result', $server->sent[0]['message']['type'] ?? '');
     }
 
+    public function testMaintenanceModePoolSyncPublishesMaintenancePoolInsteadOfBusinessPool(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 303,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            port: 19081,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            port: 19091,
+        ));
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+
+        $this->invokePrivate($orchestrator, 'syncDispatcherFullWorkerPoolFromRegistry', [true]);
+
+        self::assertCount(1, $server->sent);
+        self::assertSame(303, $server->sent[0]['clientId']);
+        self::assertSame(ControlMessage::TYPE_SET_ROUTE_TABLE, $server->sent[0]['message']['type'] ?? '');
+        self::assertSame(ControlMessage::ROLE_MAINTENANCE, $server->sent[0]['message']['role'] ?? '');
+        self::assertSame([19091], $server->sent[0]['message']['ports'] ?? []);
+    }
+
+    public function testAlreadyEnabledMaintenanceRepublishesMaintenancePool(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 304,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            port: 19092,
+        ));
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+
+        $result = $orchestrator->enableMaintenanceMode();
+
+        self::assertTrue($result['success']);
+        self::assertCount(1, $server->sent);
+        self::assertSame(304, $server->sent[0]['clientId']);
+        self::assertSame(ControlMessage::TYPE_SET_ROUTE_TABLE, $server->sent[0]['message']['type'] ?? '');
+        self::assertSame(ControlMessage::ROLE_MAINTENANCE, $server->sent[0]['message']['role'] ?? '');
+        self::assertSame([19092], $server->sent[0]['message']['ports'] ?? []);
+    }
+
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);

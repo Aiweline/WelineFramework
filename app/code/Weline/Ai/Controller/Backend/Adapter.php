@@ -103,6 +103,75 @@ class Adapter extends BackendController
         return null;
     }
 
+    private function getActiveModelOptionRows(): array
+    {
+        /** @var AiModel $aiModel */
+        $aiModel = ObjectManager::getInstance(AiModel::class);
+        return $aiModel->reset()
+            ->where(AiModel::schema_fields_IS_ACTIVE, 1)
+            ->fields(AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME . ',' . AiModel::schema_fields_PRIMARY_MODALITY)
+            ->order(AiModel::schema_fields_MODEL_CODE, 'ASC')
+            ->select()
+            ->fetchArray();
+    }
+
+    private function buildModelOptionItems(array $rows, string $requestedModality = ''): array
+    {
+        $items = [];
+        foreach ($rows as $row) {
+            $primaryModality = AiModel::normalizePrimaryModality((string)($row[AiModel::schema_fields_PRIMARY_MODALITY] ?? ''));
+            if ($requestedModality !== '' && $primaryModality !== $requestedModality) {
+                continue;
+            }
+            $modelCode = (string)($row[AiModel::schema_fields_MODEL_CODE] ?? '');
+            if ($modelCode === '') {
+                continue;
+            }
+            $items[] = [
+                'model_code' => $modelCode,
+                'name' => (string)($row[AiModel::schema_fields_NAME] ?? $modelCode),
+                'primary_modality' => $primaryModality,
+            ];
+        }
+        return $items;
+    }
+
+    private function getActiveModelOptionsByModality(): array
+    {
+        $rows = $this->getActiveModelOptionRows();
+        $options = [];
+        foreach (AiModel::getSupportedPrimaryModalities() as $modality) {
+            $options[$modality] = [];
+        }
+        foreach ($this->buildModelOptionItems($rows) as $item) {
+            $modality = (string)$item['primary_modality'];
+            if (!isset($options[$modality])) {
+                $options[$modality] = [];
+            }
+            $options[$modality][] = $item;
+        }
+        return $options;
+    }
+
+    private function respondModelBindingSave(array $payload, bool $success, string $message): string
+    {
+        $accept = $this->request->getHeader('Accept');
+        $accept = is_array($accept) ? implode(',', $accept) : (string)$accept;
+        if ($this->request->isAjax() || ($this->request->isPost() && str_contains($accept, 'application/json'))) {
+            return $this->jsonResponse(array_merge($payload, [
+                'success' => $success,
+                'message' => $message,
+            ]));
+        }
+
+        if ($success) {
+            Message::success($message);
+        } else {
+            Message::error($message);
+        }
+        return $this->redirect('*/backend/adapter/index');
+    }
+
     /**
      * 补充适配器列表中空版本和空状态，从实例读取并回写数据库
      *
@@ -173,6 +242,7 @@ class Adapter extends BackendController
 
         $this->assign('adapters', $items);
         $this->assign('pagination', $adapters->getPagination());
+        $this->assign('modelOptionsByModality', $this->getActiveModelOptionsByModality());
         $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
         $this->assign('activeTab', 'adapter');
 
@@ -342,29 +412,9 @@ class Adapter extends BackendController
     public function getModelOptions(): string
     {
         try {
-            /** @var AiModel $aiModel */
-            $aiModel = ObjectManager::getInstance(AiModel::class);
             $requestedModality = trim((string)($this->request->getGet('primary_modality', $this->request->getGet('modality', ''))));
-            $query = $aiModel->reset()
-                ->where(AiModel::schema_fields_IS_ACTIVE, 1);
             $normalizedRequestedModality = $requestedModality !== '' ? AiModel::normalizePrimaryModality($requestedModality) : '';
-            $rows = $query
-                ->fields(AiModel::schema_fields_MODEL_CODE . ',' . AiModel::schema_fields_NAME . ',' . AiModel::schema_fields_PRIMARY_MODALITY)
-                ->order(AiModel::schema_fields_MODEL_CODE, 'ASC')
-                ->select()
-                ->fetchArray();
-            $items = [];
-            foreach ($rows as $row) {
-                $primaryModality = AiModel::normalizePrimaryModality((string)($row['primary_modality'] ?? ''));
-                if ($normalizedRequestedModality !== '' && $primaryModality !== $normalizedRequestedModality) {
-                    continue;
-                }
-                $items[] = [
-                    'model_code' => (string)($row['model_code'] ?? ''),
-                    'name' => (string)($row['name'] ?? $row['model_code'] ?? ''),
-                    'primary_modality' => $primaryModality,
-                ];
-            }
+            $items = $this->buildModelOptionItems($this->getActiveModelOptionRows(), $normalizedRequestedModality);
             return $this->jsonResponse([
                 'success' => true,
                 'primary_modality' => $normalizedRequestedModality,
@@ -449,24 +499,15 @@ class Adapter extends BackendController
         $bindings = $this->parseModelBindings($this->request->getBodyParam('model_bindings', $this->request->getPost('model_bindings', [])));
 
         if (empty($ids)) {
-            return $this->jsonResponse([
-                'success' => false,
-                'message' => 'Please select adapters.',
-            ]);
+            return $this->respondModelBindingSave([], false, (string)__('请先选择要配置模型绑定的适配器'));
         }
         if (empty($bindings)) {
-            return $this->jsonResponse([
-                'success' => false,
-                'message' => 'Please select at least one modality model.',
-            ]);
+            return $this->respondModelBindingSave([], false, (string)__('请至少选择一个能力模型'));
         }
 
         $validationError = $this->validateModelBindings($bindings);
         if ($validationError !== null) {
-            return $this->jsonResponse([
-                'success' => false,
-                'message' => $validationError,
-            ]);
+            return $this->respondModelBindingSave([], false, $validationError);
         }
 
         try {
@@ -484,17 +525,12 @@ class Adapter extends BackendController
                 }
             }
 
-            return $this->jsonResponse([
-                'success' => true,
-                'message' => sprintf('Saved model bindings for %d adapter(s).', $updated),
+            return $this->respondModelBindingSave([
                 'updated' => $updated,
                 'model_bindings' => $bindings,
-            ]);
+            ], true, (string)__('模型绑定已保存'));
         } catch (\Exception $e) {
-            return $this->jsonResponse([
-                'success' => false,
-                'message' => sprintf('Failed to save model bindings: %s', $e->getMessage()),
-            ]);
+            return $this->respondModelBindingSave([], false, (string)__('模型绑定保存失败') . ': ' . $e->getMessage());
         }
     }
 

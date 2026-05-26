@@ -91,7 +91,7 @@ final class AdapterStyleRepository
         $adapterCode = \trim($adapterCode);
         $styleCode = $this->normalizer()->normalizeCode($styleCode, true);
         if ($adapterCode === '') {
-            throw new \InvalidArgumentException('Adapter code is required.');
+            throw new \InvalidArgumentException((string)__('适配器代码不能为空。'));
         }
 
         $binding = $this->find($adapterCode, $styleCode) ?? $this->create();
@@ -120,6 +120,42 @@ final class AdapterStyleRepository
 
         $binding->delete();
         return true;
+    }
+
+    public function unbindStyleCode(string $styleCode): int
+    {
+        $styleCode = $this->normalizer()->normalizeCode($styleCode, true);
+        $query = $this->create()->clearData()->clearQuery()
+            ->where(AiAdapterStyle::schema_fields_STYLE_CODE, $styleCode)
+            ->where(AiAdapterStyle::schema_fields_BIND_TYPE, AiAdapterStyle::BIND_TYPE_MANUAL);
+
+        $rows = $query->select()->fetchArray();
+        if (!\is_array($rows)) {
+            return 0;
+        }
+
+        $deleted = 0;
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $id = (int)($row[AiAdapterStyle::schema_fields_ID] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $binding = $this->create();
+            $binding->clearData()->clearQuery()
+                ->where(AiAdapterStyle::schema_fields_ID, $id)
+                ->find()
+                ->fetch();
+            if ($binding->getId() <= 0) {
+                continue;
+            }
+            $binding->delete();
+            $deleted++;
+        }
+
+        return $deleted;
     }
 
     private function find(string $adapterCode, string $styleCode): ?AiAdapterStyle

@@ -66,9 +66,12 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 产品状态变更时触发（启用/禁用）。,"Triggered when the product status changes (enabled/disabled)."
 产品价格变更,"Product Price Change"
 产品价格变更时触发。,"Triggered when the product price changes."
+商品详情已浏览,商品详情已浏览
+"商品详情页成功加载后触发，负载包含 product_id、product。","商品详情页成功加载后触发，负载包含 product_id、product。"
 "Default product attribute set is missing. Run setup:upgrade first.","Default product attribute set is missing. Run setup:upgrade first."
 "Failed to resolve product after save: %{1}","Failed to resolve product after save: %{1}"
 "Failed to save fake review for product %{1}","Failed to save fake review for product %{1}"
+"Failed to save fake review reply for review %{1}","Failed to save fake review reply for review %{1}"
 "Failed to resolve variant after save: %{1}","Failed to resolve variant after save: %{1}"
 "Product 查询器不支持的操作：%{1}","Operations not supported by Product query: %{1}"
 产品查询,"Product Query"
@@ -85,6 +88,7 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 "获取产品 EAV 属性信息","Product EAV attribute information retrieved"
 "从 EAV 值表读取产品属性值列表","Read product attribute value list from EAV value table"
 "按 EAV 属性值筛选产品 ID","Filter product IDs by EAV attribute value"
+"WeShop 商品 sitemap URL 与图片扩展提供器","WeShop 商品 sitemap URL 与图片扩展提供器"
 提供商品搜索文档（名称、SKU、分类、价格、库存等）,"Provides product search documents (name, SKU, category, price, inventory, etc.)"
 产品详情页加入购物车之后,"After Adding to Cart on Product Details Page"
 在产品详情页面加入购物车之后触发，允许其他模块在加入购物车后执行自定义逻辑。,"Triggered after adding a product to the cart on the product detail page, allowing other modules to execute custom logic after adding to cart."
@@ -108,10 +112,8 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 在后台产品编辑页内容区域末尾追加当前产品相关的模块管理面板。,"Add module management panels for the current product after the backend product edit content."
 "Product Description","Product Description"
 颜色,Color
-黑色,Black
-藏青,Navy
-米色,Beige
 尺码,Size
+款式,Style
 评分,Rating
 放大查看,"Zoom image"
 暂无图片,"No images"
@@ -121,6 +123,9 @@ SKU,SKU
 有货,"In stock"
 缺货,"Out of Stock"
 件,items
+选项分页,"Option pagination"
+上一页,"Previous page"
+下一页,"Next page"
 产品规格,"Product Specifications"
 优惠,Discount
 数量,Quantity
@@ -145,6 +150,7 @@ SKU,SKU
 请选择,"Please choose"
 、,","
 已选,Selected
+"第 %{1} 页","Page %{1}"
 添加购物车失败,"Failed to add to cart"
 添加中,Adding
 已添加,Added
@@ -158,8 +164,6 @@ Reviews,Reviews
 产品列表分页,"Product List Pagination"
 "显示 %d-%d，共 %d 件","Showing %d-%d of %d items"
 首页,Homepage
-上一页,"Previous page"
-下一页,"Next page"
 末页,"Last page"
 跳转到,"Jump to"
 页,Page

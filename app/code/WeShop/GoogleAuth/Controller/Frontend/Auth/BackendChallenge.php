@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace WeShop\GoogleAuth\Controller\Frontend\Auth;
 
 use WeShop\Auth\Model\PendingAuthChallenge;
-use WeShop\GoogleAuth\Service\BackendWebAuthService;
+use WeShop\Auth\Service\BackendWebAuthService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\Url;
 

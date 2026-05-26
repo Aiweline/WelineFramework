@@ -49,7 +49,7 @@ class Style extends BackendController
     {
         $adminId = $this->adminId();
         if ($adminId <= 0) {
-            return $this->jsonResponse(['success' => false, 'message' => 'Admin user is required.'], 401);
+            return $this->jsonResponse(['success' => false, 'message' => __('请先登录后台管理员账号。')], 401);
         }
 
         try {
@@ -85,7 +85,7 @@ class Style extends BackendController
             return $this->jsonResponse([
                 'success' => false,
                 'code' => 'STYLE_SAVE_FAILED',
-                'message' => $throwable->getMessage(),
+                'message' => __('风格保存失败：%{1}', $throwable->getMessage()),
             ], 400);
         }
     }
@@ -95,12 +95,12 @@ class Style extends BackendController
     {
         $adminId = $this->adminId();
         if ($adminId <= 0) {
-            return $this->jsonResponse(['success' => false, 'message' => 'Admin user is required.'], 401);
+            return $this->jsonResponse(['success' => false, 'message' => __('请先登录后台管理员账号。')], 401);
         }
 
         $code = \trim((string)$this->bodyValue('code', $this->request->getParam('code', '')));
         if ($code === '') {
-            return $this->jsonResponse(['success' => false, 'code' => 'INVALID_STYLE_CODE', 'message' => 'Style code is required.'], 400);
+            return $this->jsonResponse(['success' => false, 'code' => 'INVALID_STYLE_CODE', 'message' => __('风格代码不能为空。')], 400);
         }
 
         try {
@@ -109,7 +109,7 @@ class Style extends BackendController
                 'item' => $this->styleService()->disableCustom($code, $adminId),
             ]);
         } catch (\Throwable $throwable) {
-            return $this->jsonResponse(['success' => false, 'code' => 'STYLE_DISABLE_FAILED', 'message' => $throwable->getMessage()], 400);
+            return $this->jsonResponse(['success' => false, 'code' => 'STYLE_DISABLE_FAILED', 'message' => __('风格禁用失败：%{1}', $throwable->getMessage())], 400);
         }
     }
 
@@ -118,12 +118,12 @@ class Style extends BackendController
     {
         $adminId = $this->adminId();
         if ($adminId <= 0) {
-            return $this->jsonResponse(['success' => false, 'message' => 'Admin user is required.'], 401);
+            return $this->jsonResponse(['success' => false, 'message' => __('请先登录后台管理员账号。')], 401);
         }
 
         $code = \trim((string)$this->bodyValue('code', $this->request->getParam('code', '')));
         if ($code === '') {
-            return $this->jsonResponse(['success' => false, 'code' => 'INVALID_STYLE_CODE', 'message' => 'Style code is required.'], 400);
+            return $this->jsonResponse(['success' => false, 'code' => 'INVALID_STYLE_CODE', 'message' => __('风格代码不能为空。')], 400);
         }
 
         try {
@@ -133,7 +133,7 @@ class Style extends BackendController
                 'code' => $code,
             ]);
         } catch (\Throwable $throwable) {
-            return $this->jsonResponse(['success' => false, 'code' => 'STYLE_DELETE_FAILED', 'message' => $throwable->getMessage()], 400);
+            return $this->jsonResponse(['success' => false, 'code' => 'STYLE_DELETE_FAILED', 'message' => __('风格删除失败：%{1}', $throwable->getMessage())], 400);
         }
     }
 
@@ -142,12 +142,12 @@ class Style extends BackendController
     {
         $adminId = $this->adminId();
         if ($adminId <= 0) {
-            return $this->jsonResponse(['success' => false, 'message' => 'Admin user is required.'], 401);
+            return $this->jsonResponse(['success' => false, 'message' => __('请先登录后台管理员账号。')], 401);
         }
 
         $code = \trim((string)$this->bodyValue('code', $this->request->getParam('code', '')));
         if ($code === '') {
-            return $this->jsonResponse(['success' => false, 'message' => 'Style code is required.'], 400);
+            return $this->jsonResponse(['success' => false, 'message' => __('风格代码不能为空。')], 400);
         }
 
         try {
@@ -156,7 +156,7 @@ class Style extends BackendController
                 'item' => $this->styleService()->cloneBuiltin($code, $adminId),
             ]);
         } catch (\Throwable $throwable) {
-            return $this->jsonResponse(['success' => false, 'message' => $throwable->getMessage()], 400);
+            return $this->jsonResponse(['success' => false, 'message' => __('风格克隆失败：%{1}', $throwable->getMessage())], 400);
         }
     }
 
@@ -165,7 +165,7 @@ class Style extends BackendController
     {
         $adminId = $this->adminId();
         if ($adminId <= 0) {
-            return $this->jsonResponse(['success' => false, 'message' => 'Admin user is required.'], 401);
+            return $this->jsonResponse(['success' => false, 'message' => __('请先登录后台管理员账号。')], 401);
         }
 
         try {
@@ -186,7 +186,7 @@ class Style extends BackendController
                 'matched_keywords' => $match['matched_keywords'] ?? [],
             ]);
         } catch (\Throwable $throwable) {
-            return $this->jsonResponse(['success' => false, 'message' => $throwable->getMessage()], 500);
+            return $this->jsonResponse(['success' => false, 'message' => __('风格匹配失败：%{1}', $throwable->getMessage())], 500);
         }
     }
 
@@ -196,14 +196,14 @@ class Style extends BackendController
         $adapterCode = \trim((string)$this->bodyValue('adapter_code', ''));
         $styleCode = \trim((string)$this->bodyValue('style_code', ''));
         if ($adapterCode === '' || $styleCode === '') {
-            return $this->jsonResponse(['success' => false, 'code' => 'INVALID_BINDING', 'message' => 'Adapter code and style code are required.'], 400);
+            return $this->jsonResponse(['success' => false, 'code' => 'INVALID_BINDING', 'message' => __('适配器代码和风格代码不能为空。')], 400);
         }
 
         try {
             $adminId = $this->adminId();
             $style = $this->registry()->getStyle($styleCode, $adminId, false);
             if (empty($style['exists']) || (string)($style['status'] ?? '') !== AiStyle::STATUS_ACTIVE) {
-                return $this->jsonResponse(['success' => false, 'code' => 'STYLE_NOT_ACTIVE', 'message' => 'Only active styles can be bound to adapters.'], 400);
+                return $this->jsonResponse(['success' => false, 'code' => 'STYLE_NOT_ACTIVE', 'message' => __('只有启用状态的风格才能绑定到适配器。')], 400);
             }
             $binding = $this->adapterStyleRepository()->bind($adapterCode, $styleCode, $adminId);
             return $this->jsonResponse([
@@ -212,7 +212,7 @@ class Style extends BackendController
                 'catalog' => $this->resolver()->buildStyleCatalog($adapterCode, [], $adminId, true),
             ]);
         } catch (\Throwable $throwable) {
-            return $this->jsonResponse(['success' => false, 'code' => 'BIND_FAILED', 'message' => $throwable->getMessage()], 400);
+            return $this->jsonResponse(['success' => false, 'code' => 'BIND_FAILED', 'message' => __('适配器风格绑定失败：%{1}', $throwable->getMessage())], 400);
         }
     }
 
@@ -222,7 +222,7 @@ class Style extends BackendController
         $adapterCode = \trim((string)$this->bodyValue('adapter_code', ''));
         $styleCode = \trim((string)$this->bodyValue('style_code', ''));
         if ($adapterCode === '' || $styleCode === '') {
-            return $this->jsonResponse(['success' => false, 'code' => 'INVALID_BINDING', 'message' => 'Adapter code and style code are required.'], 400);
+            return $this->jsonResponse(['success' => false, 'code' => 'INVALID_BINDING', 'message' => __('适配器代码和风格代码不能为空。')], 400);
         }
 
         try {
@@ -233,7 +233,7 @@ class Style extends BackendController
                 'catalog' => $this->resolver()->buildStyleCatalog($adapterCode, [], $adminId, true),
             ]);
         } catch (\Throwable $throwable) {
-            return $this->jsonResponse(['success' => false, 'code' => 'UNBIND_FAILED', 'message' => $throwable->getMessage()], 400);
+            return $this->jsonResponse(['success' => false, 'code' => 'UNBIND_FAILED', 'message' => __('适配器风格解绑失败：%{1}', $throwable->getMessage())], 400);
         }
     }
 
@@ -262,7 +262,7 @@ class Style extends BackendController
                 'warnings' => [],
             ]);
         } catch (\Throwable $throwable) {
-            return $this->jsonResponse(['success' => false, 'message' => $throwable->getMessage(), 'items' => []], 500);
+            return $this->jsonResponse(['success' => false, 'message' => __('风格目录加载失败：%{1}', $throwable->getMessage()), 'items' => []], 500);
         }
     }
 

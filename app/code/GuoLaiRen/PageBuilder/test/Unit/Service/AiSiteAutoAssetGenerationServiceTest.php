@@ -123,6 +123,39 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         self::assertSame([], $resultScope['asset_image_generation_failures'] ?? []);
     }
 
+    public function testGenerateSlotAssetHonorsSlotImageAttemptLimit(): void
+    {
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, 'asset-attempt-limit');
+        $slotId = 'home:hero';
+        $calls = 0;
+
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static function () use (&$calls): array {
+                $calls++;
+                throw new \RuntimeException('VectorEngine API failed (HTTP: 0): Operation timed out after 180010 milliseconds with 0 bytes received');
+            }
+        );
+
+        $result = $service->generateSlotAsset($session, 2, [
+            'site_title' => 'Attempt Limit Test',
+        ], $slotId, [
+            'slot_id' => $slotId,
+            'slot_type' => 'hero_image',
+            'page_type' => 'home',
+            'label' => 'Hero visual',
+            'prompt_brief' => 'A premium homepage hero image.',
+            'image_generation_max_attempts' => 1,
+        ]);
+
+        self::assertSame(1, $calls);
+        self::assertFalse($result['generated']);
+        self::assertSame($slotId, (string)($result['failed_slot']['slot_id'] ?? ''));
+        self::assertStringContainsString('Operation timed out', (string)($result['failed_slot']['message'] ?? ''));
+    }
+
     public function testPrepareBuildAssetsGeneratesLogoAndTitleIconBeforeHeroWhenLimited(): void
     {
         $publicId = 'asset-identity-first-' . \bin2hex(\random_bytes(4));

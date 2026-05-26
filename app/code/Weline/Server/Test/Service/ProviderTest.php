@@ -73,6 +73,41 @@ class ProviderTest extends TestCase
         $this->assertStringStartsWith('weline-wls-worker-test-instance', $command->getProcessName());
         $this->assertContains('--wls-loop-driver=event', $command->arguments);
         $this->assertContains('--memory-limit=512M', $command->arguments);
+        $this->assertContains('--worker-count=4', $command->arguments);
+    }
+
+    public function testLinuxDirectSslWorkerBuildCommandUsesDeferredSsl(): void
+    {
+        $provider = new WorkerProvider();
+        $context = new ServiceContext(
+            instanceName: 'direct-instance',
+            epoch: 1,
+            controlPort: 19000,
+            masterPid: 12345,
+            host: '0.0.0.0',
+            mainPort: 9981,
+            sslEnabled: true,
+            sslCert: '/path/to/cert.pem',
+            sslKey: '/path/to/key.pem',
+            mode: 'linux-direct',
+            daemon: false,
+            debug: true,
+            windowMode: false,
+            envConfig: [
+                'wls' => [
+                    'worker_count' => 4,
+                    'worker_base_port' => 10443,
+                ],
+            ],
+        );
+
+        $command = $provider->buildCommand(1, $context);
+
+        $this->assertStringContainsString('worker_ssl.php', $command->script);
+        $this->assertContains('0.0.0.0', $command->arguments);
+        $this->assertContains('9981', $command->arguments);
+        $this->assertContains('--reuseport', $command->arguments);
+        $this->assertContains('--defer-ssl', $command->arguments);
     }
 
     public function testWorkerProviderPort(): void

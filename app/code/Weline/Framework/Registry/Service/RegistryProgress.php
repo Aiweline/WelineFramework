@@ -50,7 +50,14 @@ class RegistryProgress
         }
 
         $elapsed = microtime(true) - self::$startedAt;
-        echo sprintf('[registry] %s +%.2fs %s', date('H:i:s'), $elapsed, $message) . PHP_EOL;
+        echo sprintf(
+            '[registry] %s +%.2fs mem=%s peak=%s %s',
+            date('H:i:s'),
+            $elapsed,
+            self::formatBytes(memory_get_usage(true)),
+            self::formatBytes(memory_get_peak_usage(true)),
+            $message
+        ) . PHP_EOL;
 
         if (function_exists('ob_flush')) {
             @ob_flush();
@@ -72,5 +79,22 @@ class RegistryProgress
     public static function count(string $scope, int $count, string $label): void
     {
         self::log(sprintf('%s: %d %s', $scope, $count, $label));
+    }
+
+    private static function formatBytes(int $bytes): string
+    {
+        if ($bytes >= 1024 * 1024 * 1024) {
+            return sprintf('%.1fG', $bytes / 1024 / 1024 / 1024);
+        }
+
+        if ($bytes >= 1024 * 1024) {
+            return sprintf('%.1fM', $bytes / 1024 / 1024);
+        }
+
+        if ($bytes >= 1024) {
+            return sprintf('%.1fK', $bytes / 1024);
+        }
+
+        return $bytes . 'B';
     }
 }

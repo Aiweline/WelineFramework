@@ -95,20 +95,68 @@ class AclService implements AclServiceInterface
             return false;
         }
 
+        return $this->isRouteAllowedByEntries($entries, $routePath, $httpMethod);
+    }
+
+    public function isRouteAllowedByEntries(array $entries, string $routePath, string $httpMethod, bool $enforceAccessMode = false): bool
+    {
+        $routePath = trim($routePath, '/');
+        $httpMethod = strtoupper($httpMethod);
+        if ($routePath === '') {
+            return false;
+        }
+        if (!$this->isRouteProtected($routePath)) {
+            return true;
+        }
+        if (empty($entries)) {
+            return false;
+        }
+
         foreach ($entries as $row) {
-            $route = trim((string)($row[Acl::schema_fields_ROUTE] ?? ''), '/');
-            if ($route === '') {
+            $route = trim((string)$this->entryValue($row, Acl::schema_fields_ROUTE, ''), '/');
+            if ($route === '' || $route !== $routePath) {
                 continue;
             }
-            if ($route !== $routePath) {
+            $method = strtoupper((string)$this->entryValue($row, Acl::schema_fields_METHOD, ''));
+            if ($method !== '' && $method !== $httpMethod) {
                 continue;
             }
-            $method = strtoupper((string)($row[Acl::schema_fields_METHOD] ?? ''));
-            if ($method === '' || $method === $httpMethod) {
-                return true;
+            if ($enforceAccessMode && !$this->isAccessModeAllowedForMethod($row, $httpMethod)) {
+                continue;
             }
+            return true;
         }
         return false;
+    }
+
+    public function hasAnyAclEntries(array $entries): bool
+    {
+        return !empty($entries);
+    }
+
+    private function isAccessModeAllowedForMethod(mixed $entry, string $httpMethod): bool
+    {
+        $sourceMethod = (string)$this->entryValue($entry, Acl::schema_fields_METHOD, '');
+        $mode = Acl::normalizeAccessMode(
+            (string)$this->entryValue($entry, Acl::schema_fields_ACCESS_MODE, ''),
+            $sourceMethod
+        );
+        if ($mode === Acl::ACCESS_MODE_READ) {
+            return $httpMethod === 'GET' || $httpMethod === 'HEAD';
+        }
+        return true;
+    }
+
+    private function entryValue(mixed $entry, string $key, mixed $default = null): mixed
+    {
+        if (is_array($entry)) {
+            return $entry[$key] ?? $default;
+        }
+        if (is_object($entry) && method_exists($entry, 'getData')) {
+            $value = $entry->getData($key);
+            return $value ?? $default;
+        }
+        return $default;
     }
 
     /**

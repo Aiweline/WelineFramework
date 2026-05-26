@@ -131,6 +131,142 @@ final class AiSiteBuildPlanServiceTest extends TestCase
         }
     }
 
+    public function testBuildPlanPrefersSelectedDefaultLocaleOverPollutedProfileAndPlanLocale(): void
+    {
+        $service = new AiSiteBuildPlanService();
+
+        $contract = $service->buildFromScope([
+            'page_types' => ['home_page'],
+            'site_title' => 'Teenipiya',
+            'content_locale' => 'zh_Hans_CN',
+            'brief_description' => '葡萄牙语网站。所有访客文案必须是巴西葡萄牙语。',
+            'default_locale' => 'pt_BR',
+            'plan_locale' => 'zh_Hans_CN',
+            'plan_generated_locale' => 'zh_Hans_CN',
+            'website_profile' => [
+                'content_locale' => 'zh_Hans_CN',
+                'default_locale' => 'pt_BR',
+                'brief_description' => '葡萄牙语网站。所有访客文案必须是巴西葡萄牙语。',
+            ],
+            'plan_json' => [
+                'content_locale' => 'zh_Hans_CN',
+                'i18n' => ['locale' => 'pt_BR'],
+                'site_strategy' => [
+                    'core_goal' => 'Baixar o APK Teenipiya com segurança.',
+                ],
+            ],
+            'execution_blueprint_draft' => [
+                'signature' => 'stage1-signature',
+                'pages' => [
+                    'home_page' => [
+                        'title' => 'Início',
+                        'page_goal' => 'Baixar o APK Teenipiya com segurança.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'page_flow_role' => 'opening',
+                                'title' => 'Baixe Teenipiya com confiança',
+                                'execution_script' => [
+                                    'core_copy' => '这里是中文方案说明，不应该进入可见文案。',
+                                ],
+                                'visual_signature' => [
+                                    'composition_pattern' => 'split hero',
+                                    'spatial_rhythm' => 'copy left, media right',
+                                    'media_strategy' => 'Generated hero image in the media panel',
+                                    'surface_treatment' => 'dark premium surface',
+                                    'interaction_pattern' => 'CTA hover lift',
+                                ],
+                                'image_intent' => [
+                                    'needs_image' => true,
+                                    'image_role' => 'hero_image',
+                                    'image_subject' => 'players enjoying Teen Patti on a phone',
+                                    'placement' => 'media_panel',
+                                    'visual_atmosphere' => 'premium mobile gaming',
+                                    'image_treatment' => 'rounded editorial crop',
+                                    'reuse_policy' => 'reuse_when_intent_matches',
+                                    'css_motif' => '',
+                                ],
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'Baixe o APK Teenipiya e jogue Teen Patti em um ambiente seguro.'],
+                                    ['field' => 'cta', 'sample' => 'Baixar APK'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = $service->validate($contract);
+
+        self::assertTrue($result['valid'], \implode("\n", $result['errors']));
+        self::assertSame('pt_BR', $contract['i18n']['primary_locale'] ?? null);
+        self::assertSame('pt_BR', $contract['content_manifest']['primary_locale'] ?? null);
+        self::assertSame(
+            'Baixe o APK Teenipiya e jogue Teen Patti em um ambiente seguro.',
+            $contract['content_manifest']['items']['block.home_page.hero.copy'] ?? null
+        );
+    }
+
+    public function testBuildPlanRejectsShortCjkPageTitleForNonCjkLocale(): void
+    {
+        $service = new AiSiteBuildPlanService();
+
+        $contract = $service->buildFromScope([
+            'page_types' => ['about_page'],
+            'site_title' => 'Teenipiya',
+            'brief_description' => 'Build a Portuguese APK landing page.',
+            'default_locale' => 'pt_BR',
+            'plan_locale' => 'zh_Hans_CN',
+            'execution_blueprint_draft' => [
+                'signature' => 'stage1-signature',
+                'pages' => [
+                    'about_page' => [
+                        'title' => "\u{5173}\u{4E8E}\u{6211}\u{4EEC}",
+                        'page_goal' => 'Apresentar a marca Teenipiya com foco em confianca.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'origin_story',
+                                'page_flow_role' => 'opening',
+                                'title' => 'Uma marca feita para Teen Patti seguro',
+                                'goal' => 'Apresentar confianca e clareza para novos jogadores.',
+                                'visual_signature' => [
+                                    'composition_pattern' => 'editorial split',
+                                    'spatial_rhythm' => 'story copy beside proof cards',
+                                    'media_strategy' => 'Generated brand story image in the media panel',
+                                    'surface_treatment' => 'premium dark surface',
+                                    'interaction_pattern' => 'CTA hover lift',
+                                ],
+                                'image_intent' => [
+                                    'needs_image' => true,
+                                    'image_role' => 'story_image',
+                                    'image_subject' => 'Teen Patti players using a secure mobile app',
+                                    'placement' => 'media_panel',
+                                    'visual_atmosphere' => 'warm trustworthy gaming scene',
+                                    'image_treatment' => 'rounded editorial crop',
+                                    'reuse_policy' => 'reuse_when_intent_matches',
+                                    'css_motif' => '',
+                                ],
+                                'field_plan' => [
+                                    ['field' => 'headline', 'sample' => 'Teenipiya nasceu para jogos claros e seguros.'],
+                                    ['field' => 'supporting_copy', 'sample' => 'Cada detalhe orienta jogadores a baixar o APK correto.'],
+                                    ['field' => 'cta_label', 'sample' => 'Baixar APK'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertSame('pt_BR', $contract['content_manifest']['primary_locale'] ?? null);
+        self::assertNotSame("\u{5173}\u{4E8E}\u{6211}\u{4EEC}", $contract['content_manifest']['items']['page.about_page.title'] ?? null);
+        self::assertDoesNotMatchRegularExpression(
+            '/[\x{4e00}-\x{9fff}]/u',
+            (string)($contract['content_manifest']['items']['page.about_page.title'] ?? '')
+        );
+    }
+
     public function testConfirmMarksContractConfirmedAndProjectionIsReadOnly(): void
     {
         $service = new AiSiteBuildPlanService();

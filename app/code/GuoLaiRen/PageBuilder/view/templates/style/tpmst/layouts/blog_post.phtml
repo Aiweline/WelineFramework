@@ -35,24 +35,6 @@ $recentPosts = $recent_posts ?? [];
 <html lang="<?= $lang ?? 'en' ?>">
 <head>
     <?php $this->renderHead($page, $style_setting); ?>
-    
-    <!-- 文章结构化数据 -->
-    <?php if (!empty($currentPost)): ?>
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "BlogPosting",
-        "headline": "<?= htmlspecialchars($currentPost['title'] ?? '') ?>",
-        "description": "<?= htmlspecialchars($currentPost['summary'] ?? '') ?>",
-        "datePublished": "<?= $currentPost['created_at'] ?? '' ?>",
-        "dateModified": "<?= $currentPost['updated_at'] ?? $currentPost['created_at'] ?? '' ?>",
-        "author": {
-            "@type": "Person",
-            "name": "<?= htmlspecialchars($currentPost['author_name'] ?? 'Admin') ?>"
-        }
-    }
-    </script>
-    <?php endif; ?>
 </head>
 <body class="page-blog page-blog-post">
     <!-- Header Region (从首页继承) -->

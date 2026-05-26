@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Dispatcher;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Dispatcher\PassthroughCore;
+use Weline\Server\Dispatcher\RoutingCacheService;
 
 class PassthroughCoreSeedWorkerPoolTest extends TestCase
 {
@@ -182,6 +183,62 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         \socket_set_nonblock($accepted);
 
         return [$accepted, $client, $server];
+    }
+
+    /**
+     * @return array{0: mixed, 1: int}
+     */
+    private function createListeningSocket(): array
+    {
+        $server = \socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        self::assertNotFalse($server);
+        @\socket_set_option($server, SOL_SOCKET, SO_REUSEADDR, 1);
+        self::assertTrue(\socket_bind($server, '127.0.0.1', 0));
+        self::assertTrue(\socket_listen($server, 4));
+        self::assertTrue(\socket_getsockname($server, $host, $port));
+        \socket_set_nonblock($server);
+
+        return [$server, (int)$port];
+    }
+
+    public function testActiveMaintenanceRoutingBypassesCachedBusinessWorker(): void
+    {
+        RoutingCacheService::reset();
+
+        [$businessServer, $businessPort] = $this->createListeningSocket();
+        [$maintenanceServer, $maintenancePort] = $this->createListeningSocket();
+        [$clientSocket, $clientPeer, $clientServer] = $this->createConnectedSocketPair();
+        $core = new PassthroughCore('127.0.0.1', 19981, 0);
+
+        try {
+            $this->setPrivateProperty($core, 'workerPorts', [$businessPort]);
+            $this->setPrivateProperty($core, 'maintenanceWorkerPorts', [$maintenancePort]);
+
+            $cache = $this->getPrivateProperty($core, 'routingCache');
+            self::assertInstanceOf(RoutingCacheService::class, $cache);
+            $cache->cacheIpRoute('127.0.0.1', $businessPort);
+
+            $core->setMaintenanceRoutingActive(true);
+
+            self::assertTrue($core->handleNewConnection($clientSocket, '127.0.0.1'));
+
+            $connections = $this->getPrivateProperty($core, 'connections');
+            $connId = \spl_object_id($clientSocket);
+            self::assertSame($maintenancePort, $connections[$connId]['port'] ?? null);
+        } finally {
+            $connections = $this->getPrivateProperty($core, 'connections');
+            foreach ($connections as $connection) {
+                if (isset($connection['worker'])) {
+                    @\socket_close($connection['worker']);
+                }
+            }
+            @\socket_close($clientSocket);
+            @\socket_close($clientPeer);
+            @\socket_close($clientServer);
+            @\socket_close($businessServer);
+            @\socket_close($maintenanceServer);
+            RoutingCacheService::reset();
+        }
     }
 
     public function testWorkerPoolStartsEmptyUntilMasterSync(): void

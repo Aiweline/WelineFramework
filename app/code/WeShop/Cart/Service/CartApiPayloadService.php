@@ -8,6 +8,7 @@ use Weline\FileManager\Helper\Image as ImageHelper;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Cart\Model\Cart;
 use WeShop\Price\Service\PriceService;
+use WeShop\Product\Helper\HanfuDemoOptionImageProvider;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Service\ConfigurableProductService;
 use WeShop\Product\Service\ProductService;
@@ -37,6 +38,7 @@ class CartApiPayloadService
         $qty = \max(1, (int) ($payload['qty'] ?? 1));
         $selectedOptions = $this->normalizeSelectedOptions($payload['selected_options'] ?? []);
         $selectedOptionLabels = $this->normalizeSelectedOptionLabels($payload['selected_option_labels'] ?? []);
+        $selectedOptionDetails = $this->normalizeSelectedOptionDetails($payload['selected_option_details'] ?? []);
 
         if ($productId <= 0) {
             return $this->errorResponse(422, (string) __('无效的商品 ID。'));
@@ -75,12 +77,14 @@ class CartApiPayloadService
             $optionSnapshot = $this->buildSelectedOptionSnapshot($productId, $selectedOptions, $optionConfig);
         } elseif ($selectedOptions !== []) {
             $optionSnapshot = $this->buildSelectedOptionSnapshot($productId, $selectedOptions, $optionConfig);
+            $optionSnapshot = $this->applySubmittedOptionDetails($optionSnapshot, $selectedOptionDetails);
             $optionSnapshot = $this->applySubmittedOptionLabels($optionSnapshot, $selectedOptionLabels);
             $hasDeclaredOptions = \is_array($optionConfig['attributes'] ?? null) && $optionConfig['attributes'] !== [];
             if ($hasDeclaredOptions && $optionSnapshot === []) {
                 return $this->errorResponse(422, (string) __('所选商品规格组合不可用。'));
             }
         }
+        $optionSnapshot = $this->applySubmittedOptionDetails($optionSnapshot, $selectedOptionDetails);
         $optionSnapshot = $this->applySubmittedOptionLabels($optionSnapshot, $selectedOptionLabels);
 
         $stock = (int) $finalProduct->getStock();
@@ -348,6 +352,82 @@ class CartApiPayloadService
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeSelectedOptionDetails(mixed $rawDetails): array
+    {
+        if (\is_string($rawDetails)) {
+            $rawDetails = \trim($rawDetails);
+            if ($rawDetails === '') {
+                return [];
+            }
+
+            $decoded = \json_decode($rawDetails, true);
+            $rawDetails = \is_array($decoded) ? $decoded : [];
+        }
+
+        if (!\is_array($rawDetails) || $rawDetails === []) {
+            return [];
+        }
+
+        $details = [];
+        foreach ($rawDetails as $rawDetail) {
+            if (!\is_array($rawDetail)) {
+                continue;
+            }
+
+            $value = \trim((string) ($rawDetail['value'] ?? $rawDetail['text'] ?? $rawDetail['option_label'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $label = \trim((string) ($rawDetail['label'] ?? $rawDetail['name'] ?? $rawDetail['attribute_label'] ?? ''));
+            $detail = [
+                'label' => $label !== '' ? $label : (string) __('规格'),
+                'value' => $value,
+            ];
+
+            foreach (['attribute_id', 'option_id'] as $idKey) {
+                $id = (int) ($rawDetail[$idKey] ?? 0);
+                if ($id > 0) {
+                    $detail[$idKey] = $id;
+                }
+            }
+
+            $attributeCode = \trim((string) ($rawDetail['attribute_code'] ?? ''));
+            if ($attributeCode !== '') {
+                $detail['attribute_code'] = $attributeCode;
+            }
+
+            $optionCode = \trim((string) ($rawDetail['option_code'] ?? $rawDetail['code'] ?? ''));
+            if ($optionCode !== '') {
+                $detail['option_code'] = $optionCode;
+                $detail['code'] = $optionCode;
+            }
+
+            foreach (['swatch_type', 'swatch_value', 'option_image'] as $key) {
+                $stringValue = \trim((string) ($rawDetail[$key] ?? ''));
+                if ($stringValue !== '') {
+                    $detail[$key] = $stringValue;
+                }
+            }
+
+            if (($detail['swatch_type'] ?? '') === 'image') {
+                if (($detail['swatch_value'] ?? '') === '' && ($detail['option_image'] ?? '') !== '') {
+                    $detail['swatch_value'] = $detail['option_image'];
+                }
+                if (($detail['option_image'] ?? '') === '' && ($detail['swatch_value'] ?? '') !== '') {
+                    $detail['option_image'] = $detail['swatch_value'];
+                }
+            }
+
+            $details[] = $detail;
+        }
+
+        return $details;
+    }
+
+    /**
      * @param array<int, mixed> $items
      * @return array<int, array<string, mixed>>
      */
@@ -411,6 +491,7 @@ class CartApiPayloadService
             }
 
             $attributeId = (int) ($attribute['attribute_id'] ?? 0);
+            $attributeCode = \trim((string) ($attribute['code'] ?? ''));
             $label = \trim((string) ($attribute['name'] ?? $attribute['origin_name'] ?? $attribute['code'] ?? ''));
             $options = \is_array($attribute['options'] ?? null) ? $attribute['options'] : [];
             foreach ($options as $option) {
@@ -428,19 +509,125 @@ class CartApiPayloadService
                     continue;
                 }
 
+                $optionImage = \trim((string) ($option['option_image'] ?? ''));
                 $snapshot[] = [
                     'label' => $label !== '' ? $label : (string) __('规格'),
                     'value' => $value,
                     'attribute_id' => $attributeId,
                     'option_id' => $optionId,
                     'code' => (string) ($option['code'] ?? ''),
+                    'attribute_code' => $attributeCode,
+                    'option_code' => (string) ($option['code'] ?? ''),
                     'swatch_type' => (string) ($option['swatch_type'] ?? ''),
                     'swatch_value' => (string) ($option['swatch_value'] ?? ''),
+                    'option_image' => $optionImage,
                 ];
             }
         }
 
         return $snapshot;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $snapshot
+     * @param array<int, array<string, mixed>> $submittedDetails
+     * @return array<int, array<string, mixed>>
+     */
+    private function applySubmittedOptionDetails(array $snapshot, array $submittedDetails): array
+    {
+        if ($submittedDetails === []) {
+            return $snapshot;
+        }
+
+        if ($snapshot === []) {
+            return $submittedDetails;
+        }
+
+        $detailsByOptionId = [];
+        $detailsByOptionCode = [];
+        foreach ($submittedDetails as $detail) {
+            $optionId = (int) ($detail['option_id'] ?? 0);
+            if ($optionId > 0) {
+                $detailsByOptionId[$optionId] = $detail;
+            }
+
+            $optionCode = \strtolower(\trim((string) ($detail['option_code'] ?? $detail['code'] ?? '')));
+            if ($optionCode !== '') {
+                $detailsByOptionCode[$optionCode] = $detail;
+            }
+        }
+
+        foreach ($snapshot as $index => $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+
+            $optionId = (int) ($option['option_id'] ?? 0);
+            $optionCode = \strtolower(\trim((string) ($option['option_code'] ?? $option['code'] ?? '')));
+            $detail = $optionId > 0 && isset($detailsByOptionId[$optionId])
+                ? $detailsByOptionId[$optionId]
+                : ($optionCode !== '' && isset($detailsByOptionCode[$optionCode])
+                    ? $detailsByOptionCode[$optionCode]
+                    : ($submittedDetails[$index] ?? null));
+
+            if (\is_array($detail)) {
+                $snapshot[$index] = $this->mergeSubmittedOptionDetail($option, $detail);
+            }
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param array<string, mixed> $option
+     * @param array<string, mixed> $detail
+     * @return array<string, mixed>
+     */
+    private function mergeSubmittedOptionDetail(array $option, array $detail): array
+    {
+        foreach (['attribute_id', 'option_id'] as $idKey) {
+            $id = (int) ($detail[$idKey] ?? 0);
+            if ($id > 0 && !isset($option[$idKey])) {
+                $option[$idKey] = $id;
+            }
+        }
+
+        foreach (['label', 'value'] as $key) {
+            $value = \trim((string) ($detail[$key] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            if (!isset($option[$key]) || \trim((string) $option[$key]) === '') {
+                $option[$key] = $value;
+            }
+        }
+
+        foreach (['code', 'attribute_code', 'option_code', 'swatch_type', 'swatch_value', 'option_image'] as $key) {
+            $value = \trim((string) ($detail[$key] ?? ''));
+            if ($value !== '') {
+                $option[$key] = $value;
+            }
+        }
+
+        if (\trim((string) ($option['code'] ?? '')) === '' && \trim((string) ($option['option_code'] ?? '')) !== '') {
+            $option['code'] = \trim((string) $option['option_code']);
+        }
+
+        if (\trim((string) ($option['option_code'] ?? '')) === '' && \trim((string) ($option['code'] ?? '')) !== '') {
+            $option['option_code'] = \trim((string) $option['code']);
+        }
+
+        if (\trim((string) ($option['swatch_type'] ?? '')) === 'image') {
+            if (\trim((string) ($option['swatch_value'] ?? '')) === '' && \trim((string) ($option['option_image'] ?? '')) !== '') {
+                $option['swatch_value'] = \trim((string) $option['option_image']);
+            }
+            if (\trim((string) ($option['option_image'] ?? '')) === '' && \trim((string) ($option['swatch_value'] ?? '')) !== '') {
+                $option['option_image'] = \trim((string) $option['swatch_value']);
+            }
+        }
+
+        return $option;
     }
 
     /**
@@ -467,7 +654,7 @@ class CartApiPayloadService
                 'value' => $value,
             ];
 
-            foreach (['attribute_id', 'option_id', 'code', 'swatch_type', 'swatch_value'] as $key) {
+            foreach (['attribute_id', 'option_id', 'code', 'attribute_code', 'option_code', 'swatch_type', 'swatch_value', 'option_image'] as $key) {
                 if (isset($snapshot[$index][$key])) {
                     $option[$key] = $snapshot[$index][$key];
                 }
@@ -480,7 +667,7 @@ class CartApiPayloadService
     }
 
     /**
-     * @return array{attributes: array<int, array<string, mixed>>, variants: array<int, array<string, mixed>>}
+     * @return array{attributes: array<int, array<string, mixed>>, variants: array<int, array<string, mixed>>, image_matrix?: array<string, array<string, string>>}
      */
     private function getPurchasableOptionConfig(int $productId, Product $product): array
     {
@@ -550,10 +737,14 @@ class CartApiPayloadService
                     continue;
                 }
 
+                $optionImage = \trim((string) ($option['option_image'] ?? ''));
                 $swatch = [
                     'swatch_type' => $swatchType,
                     'swatch_value' => $swatchValue,
                 ];
+                if ($optionImage !== '') {
+                    $swatch['option_image'] = $optionImage;
+                }
                 $optionId = (int) ($option['option_id'] ?? 0);
                 if ($optionId > 0) {
                     $swatchByOptionId[$optionId] = $swatch;
@@ -582,6 +773,9 @@ class CartApiPayloadService
             if ($swatch !== null) {
                 $item['swatch_type'] = $swatch['swatch_type'];
                 $item['swatch_value'] = $swatch['swatch_value'];
+                if (isset($swatch['option_image'])) {
+                    $item['option_image'] = $swatch['option_image'];
+                }
             }
         }
         unset($item);
@@ -600,7 +794,7 @@ class CartApiPayloadService
     {
         $sku = (string) $product->getData(Product::schema_fields_sku);
         if (!\str_starts_with($sku, 'DEMO-CAT-')) {
-            return ['attributes' => [], 'variants' => []];
+            return ['attributes' => [], 'variants' => [], 'image_matrix' => []];
         }
 
         $productId = (int) $product->getId();
@@ -612,26 +806,62 @@ class CartApiPayloadService
                     'code' => 'color',
                     'name' => (string) __('颜色'),
                     'origin_name' => 'Color',
-                    'options' => [
-                        ['option_id' => 900101, 'code' => 'black', 'value' => (string) __('黑色'), 'origin_value' => 'Black', 'swatch_type' => 'color', 'swatch_value' => '#111827', 'available_product_ids' => [$productId]],
-                        ['option_id' => 900102, 'code' => 'navy', 'value' => (string) __('藏青'), 'origin_value' => 'Navy', 'swatch_type' => 'color', 'swatch_value' => '#1e3a8a', 'available_product_ids' => [$productId]],
-                        ['option_id' => 900103, 'code' => 'beige', 'value' => (string) __('米色'), 'origin_value' => 'Beige', 'swatch_type' => 'color', 'swatch_value' => '#d6b98c', 'available_product_ids' => [$productId]],
-                    ],
+                    'options' => HanfuDemoOptionImageProvider::colorOptions($productId),
                 ],
                 [
                     'attribute_id' => 900002,
                     'code' => 'size',
                     'name' => (string) __('尺码'),
                     'origin_name' => 'Size',
-                    'options' => [
-                        ['option_id' => 900201, 'code' => 'm', 'value' => 'M', 'origin_value' => 'M', 'swatch_type' => 'text', 'swatch_value' => 'M', 'available_product_ids' => [$productId]],
-                        ['option_id' => 900202, 'code' => 'l', 'value' => 'L', 'origin_value' => 'L', 'swatch_type' => 'text', 'swatch_value' => 'L', 'available_product_ids' => [$productId]],
-                        ['option_id' => 900203, 'code' => 'xl', 'value' => 'XL', 'origin_value' => 'XL', 'swatch_type' => 'text', 'swatch_value' => 'XL', 'available_product_ids' => [$productId]],
-                    ],
+                    'options' => HanfuDemoOptionImageProvider::sizeOptions($productId),
+                ],
+                [
+                    'attribute_id' => 900003,
+                    'code' => 'style',
+                    'name' => (string) __('款式'),
+                    'origin_name' => 'Style',
+                    'options' => $this->buildDemoCategoryStyleImageOptions($product),
                 ],
             ],
             'variants' => [],
+            'image_matrix' => HanfuDemoOptionImageProvider::imageMatrix(),
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildDemoCategoryStyleImageOptions(Product $product): array
+    {
+        return HanfuDemoOptionImageProvider::styleOptions((int) $product->getId());
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function extractProductImages(Product $product): array
+    {
+        $images = [];
+
+        $primaryImage = \trim((string) ($product->getData(Product::schema_fields_image) ?? ''));
+        if ($primaryImage !== '') {
+            $images[] = $primaryImage;
+        }
+
+        $additionalImages = $product->getData(Product::schema_fields_images);
+        if (\is_string($additionalImages) && \trim($additionalImages) !== '') {
+            $decoded = \json_decode($additionalImages, true);
+            $additionalImages = \is_array($decoded) ? $decoded : [];
+        }
+        if (\is_array($additionalImages)) {
+            foreach ($additionalImages as $image) {
+                if (\is_string($image) && \trim($image) !== '') {
+                    $images[] = \trim($image);
+                }
+            }
+        }
+
+        return \array_values(\array_unique($images));
     }
 
     /**

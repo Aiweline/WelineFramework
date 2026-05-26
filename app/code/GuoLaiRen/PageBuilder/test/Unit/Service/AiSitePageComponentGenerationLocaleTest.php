@@ -155,6 +155,44 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         self::assertStringNotContainsString("\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}", (string)\json_encode($config, \JSON_UNESCAPED_UNICODE));
     }
 
+    public function testSelectedLocaleOverridesStaleChinesePlanLocaleForComponentDefaults(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $planningCopy = "Teenipiya \u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}\u{3002}";
+
+        $config = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): array {
+            return $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
+        })->call(
+            $service,
+            'contact_page',
+            [
+                'code' => 'content/contact-page-support-form-guidance',
+                'key' => 'support_form_guidance',
+                'name' => 'Envie sua Mensagem',
+                'config' => ['description' => $planningCopy],
+            ],
+            ['ai_description' => $planningCopy],
+            [
+                'site_title' => 'Teenipiya',
+                'content_locale' => 'zh_Hans_CN',
+                'default_locale' => 'pt_BR',
+            ],
+            [
+                'content_locale' => 'zh_Hans_CN',
+                'plan_generated_locale' => 'zh_Hans_CN',
+                'default_locale' => 'pt_BR',
+                'page_types' => ['contact_page'],
+            ]
+        );
+
+        self::assertSame('pt_BR', $config['runtime.content_locale'] ?? null);
+        self::assertSame('', $config['content.description'] ?? null);
+        self::assertStringNotContainsString("\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}", (string)\json_encode($config, \JSON_UNESCAPED_UNICODE));
+    }
+
     public function testPortugueseRenderedHtmlLocaleGateAllowsPortugueseCopy(): void
     {
         $service = new AiSitePageComponentGenerationService(

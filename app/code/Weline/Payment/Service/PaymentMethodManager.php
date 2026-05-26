@@ -13,6 +13,7 @@ namespace Weline\Payment\Service;
 
 use Weline\Payment\Interface\PaymentProviderInterface;
 use Weline\Payment\Model\PaymentMethod;
+use Weline\Payment\Model\PaymentMethodConfig;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -24,13 +25,16 @@ class PaymentMethodManager
 {
     private PaymentProviderScanner $providerScanner;
     private ObjectManager $objectManager;
+    private ?PaymentScopeConfigService $scopeConfigService;
 
     public function __construct(
         PaymentProviderScanner $providerScanner,
-        ObjectManager $objectManager
+        ObjectManager $objectManager,
+        ?PaymentScopeConfigService $scopeConfigService = null
     ) {
         $this->providerScanner = $providerScanner;
         $this->objectManager = $objectManager;
+        $this->scopeConfigService = $scopeConfigService;
     }
 
     /**
@@ -99,14 +103,25 @@ class PaymentMethodManager
      * 
      * @return PaymentMethod[]
      */
-    public function getActiveMethods(): array
+    public function getActiveMethods(array $context = []): array
     {
         /** @var PaymentMethod $paymentMethod */
         $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class);
-        return $paymentMethod->where(PaymentMethod::schema_fields_IS_ACTIVE, 1)
+        $methods = $paymentMethod->where(PaymentMethod::schema_fields_IS_ACTIVE, 1)
             ->order(PaymentMethod::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetch();
+
+        if (\is_object($methods) && method_exists($methods, 'getItems')) {
+            $methods = $methods->getItems();
+        }
+        if (!\is_array($methods) || $context === []) {
+            return $methods;
+        }
+
+        return array_values(array_filter($methods, function (mixed $method) use ($context): bool {
+            return $method instanceof PaymentMethod && $this->isMethodActiveForScope($method, $context);
+        }));
     }
 
     /**
@@ -134,7 +149,7 @@ class PaymentMethodManager
      * @param PaymentMethod $paymentMethod
      * @return PaymentProviderInterface|null
      */
-    public function getProviderInstance(PaymentMethod $paymentMethod): ?PaymentProviderInterface
+    public function getProviderInstance(PaymentMethod $paymentMethod, array $context = []): ?PaymentProviderInterface
     {
         $className = $paymentMethod->getData(PaymentMethod::schema_fields_PROVIDER_CLASS);
         if (empty($className) || !class_exists($className)) {
@@ -145,7 +160,8 @@ class PaymentMethodManager
             $provider = $this->objectManager->getInstance($className);
             if ($provider instanceof PaymentProviderInterface) {
                 // 设置配置
-                $config = $paymentMethod->getConfigData();
+                $profile = $this->getScopeProfile($paymentMethod, $context);
+                $config = $profile ? $profile->getConfigData() : $paymentMethod->getConfigData();
                 $provider->setConfig($config);
                 return $provider;
             }
@@ -154,6 +170,50 @@ class PaymentMethodManager
         }
 
         return null;
+    }
+
+    public function isMethodActiveForScope(PaymentMethod $paymentMethod, array $context = []): bool
+    {
+        if ($context === []) {
+            return $paymentMethod->isActive();
+        }
+
+        $profile = $this->getScopeProfile($paymentMethod, $context);
+        if (!$profile) {
+            return $paymentMethod->isActive();
+        }
+
+        return $profile->isEnabled()
+            && (string) $profile->getData(PaymentMethodConfig::schema_fields_TEST_STATUS) === PaymentMethodConfig::TEST_STATUS_PASSED;
+    }
+
+    public function getScopeProfile(PaymentMethod $paymentMethod, array $context = []): ?PaymentMethodConfig
+    {
+        $methodCode = (string) $paymentMethod->getData(PaymentMethod::schema_fields_CODE);
+        if ($methodCode === '') {
+            return null;
+        }
+
+        $scope = $this->getScopeConfigService()->resolveScope($context);
+        try {
+            return $this->getScopeConfigService()->getProfile(
+                $methodCode,
+                $scope['scope_type'],
+                $scope['scope_code'],
+                $scope['environment']
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function getScopeConfigService(): PaymentScopeConfigService
+    {
+        if ($this->scopeConfigService === null) {
+            $this->scopeConfigService = new PaymentScopeConfigService();
+        }
+
+        return $this->scopeConfigService;
     }
 
     /**

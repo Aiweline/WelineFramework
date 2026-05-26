@@ -1383,6 +1383,9 @@ class Dispatcher
             "{$source}（maintenance）: 维护端口已同步，端口数: " . \count($normalizedPorts),
             'INFO'
         );
+        $this->passthroughCore->setMaintenanceRoutingActive(
+            $this->passthroughCore->getMaintenanceWorkerPorts() !== []
+        );
     }
 
     /**
@@ -1549,7 +1552,11 @@ class Dispatcher
             // Apply the authoritative table to the role-specific worker pool.
             if ($role === ControlMessage::ROLE_MAINTENANCE) {
                 $this->applyMaintenanceWorkerPoolSync($normalizedPorts, '收到 SET_ROUTE_TABLE');
+                $this->passthroughCore->setMaintenanceRoutingActive(
+                    $this->passthroughCore->getMaintenanceWorkerPorts() !== []
+                );
             } else {
+                $this->passthroughCore->setMaintenanceRoutingActive(false);
                 $this->applyBusinessWorkerPoolSwitch(
                     $normalizedPorts,
                     $normalizedWorkers,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Review\Service;
 
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Review\Model\Review;
 
@@ -12,6 +13,14 @@ use WeShop\Review\Model\Review;
  */
 class ReviewService
 {
+    public const FRONTEND_ROUTE = 'review/frontend/review';
+    public const FRONTEND_CREATE_ROUTE = 'review/create';
+
+    public function __construct(
+        private readonly ?EventsManager $eventsManager = null
+    ) {
+    }
+
     /**
      * 创建评价
      * 
@@ -33,6 +42,16 @@ class ReviewService
             ->setData(Review::schema_fields_RATING_SCORES, $this->encodeJson($this->normalizeRatingScores($reviewData['rating_scores'] ?? [])))
             ->setData(Review::schema_fields_STATUS, Review::STATUS_PENDING)
             ->save();
+
+        $eventData = [
+            'review' => $review,
+            'review_id' => (int) ($review->getId() ?? 0),
+            'product_id' => (int) ($review->getData(Review::schema_fields_PRODUCT_ID) ?? 0),
+            'customer_id' => (int) ($review->getData(Review::schema_fields_CUSTOMER_ID) ?? 0),
+            'rating' => (float) ($review->getData(Review::schema_fields_RATING) ?? 0),
+            'status' => (string) ($review->getData(Review::schema_fields_STATUS) ?? Review::STATUS_PENDING),
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Review::review_created', $eventData);
         
         return $review;
     }
@@ -85,6 +104,7 @@ class ReviewService
             ->where(Review::schema_fields_PRODUCT_ID, $productId)
             ->where(Review::schema_fields_STATUS, Review::STATUS_APPROVED)
             ->order(Review::schema_fields_CREATED_AT, 'DESC')
+            ->order(Review::schema_fields_ID, 'DESC')
             ->pagination($page, $pageSize, [], 1000, $total);
         
         $items = $review->select()->fetchArray();
@@ -95,6 +115,43 @@ class ReviewService
             'total' => $total,
             'pagination' => $pagination,
         ];
+    }
+
+    public function resolveReviewPage(int $productId, int $reviewId, int $pageSize = 20, int $defaultPage = 1): int
+    {
+        $pageSize = max(1, min(50, $pageSize));
+        $defaultPage = max(1, $defaultPage);
+        if ($productId <= 0 || $reviewId <= 0) {
+            return $defaultPage;
+        }
+
+        /** @var Review $target */
+        $target = ObjectManager::getInstance(Review::class);
+        $target->load($reviewId);
+        if (!$target->getId()
+            || (int) $target->getData(Review::schema_fields_PRODUCT_ID) !== $productId
+            || (string) $target->getData(Review::schema_fields_STATUS) !== Review::STATUS_APPROVED
+        ) {
+            return $defaultPage;
+        }
+
+        $createdAt = (string) $target->getData(Review::schema_fields_CREATED_AT);
+        $aheadCount = 0;
+        if ($createdAt !== '') {
+            $aheadCount += $this->baseApprovedProductReviewQuery($productId)
+                ->where(Review::schema_fields_CREATED_AT, $createdAt, '>')
+                ->count();
+            $aheadCount += $this->baseApprovedProductReviewQuery($productId)
+                ->where(Review::schema_fields_CREATED_AT, $createdAt)
+                ->where(Review::schema_fields_ID, $reviewId, '>')
+                ->count();
+        } else {
+            $aheadCount += $this->baseApprovedProductReviewQuery($productId)
+                ->where(Review::schema_fields_ID, $reviewId, '>')
+                ->count();
+        }
+
+        return (int) floor($aheadCount / $pageSize) + 1;
     }
     
     /**
@@ -114,7 +171,18 @@ class ReviewService
             throw new \Exception(__('评价不存在'));
         }
         
+        $oldStatus = (string) ($review->getData(Review::schema_fields_STATUS) ?? '');
         $review->setData(Review::schema_fields_STATUS, $status)->save();
+
+        $eventData = [
+            'review' => $review,
+            'review_id' => (int) ($review->getId() ?? 0),
+            'product_id' => (int) ($review->getData(Review::schema_fields_PRODUCT_ID) ?? 0),
+            'customer_id' => (int) ($review->getData(Review::schema_fields_CUSTOMER_ID) ?? 0),
+            'old_status' => $oldStatus,
+            'new_status' => $status,
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Review::review_status_changed', $eventData);
         
         return $review;
     }
@@ -329,5 +397,19 @@ class ReviewService
         }
 
         return '';
+    }
+
+    private function baseApprovedProductReviewQuery(int $productId): Review
+    {
+        /** @var Review $review */
+        $review = ObjectManager::getInstance(Review::class);
+        return $review->clear()
+            ->where(Review::schema_fields_PRODUCT_ID, $productId)
+            ->where(Review::schema_fields_STATUS, Review::STATUS_APPROVED);
+    }
+
+    private function getEventsManager(): EventsManager
+    {
+        return $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
     }
 }

@@ -169,4 +169,66 @@ class ModuleInstallerServiceTest extends TestCase
         $this->assertSame('2.0.0', $result['version']);
         $this->assertSame('https://example.test/v2.zip', $result['download_url']);
     }
+
+    public function testWriteMarketplaceReadmeDocumentsSystemUninstallBoundary(): void
+    {
+        $service = (new ReflectionClass(ModuleInstallerService::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(ModuleInstallerService::class, 'writeMarketplaceReadme');
+        $method->setAccessible(true);
+
+        $moduleDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline_appstore_readme_' . uniqid('', true);
+        mkdir($moduleDir . DIRECTORY_SEPARATOR . 'etc', 0777, true);
+        file_put_contents($moduleDir . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php', "<?php return ['router' => 'sample-module'];");
+
+        try {
+            $readmePath = $method->invoke($service, $moduleDir, 'Weline_SampleModule', [
+                'version' => '1.0.5',
+            ], [
+                'display_name' => 'Sample Module',
+                'platform_module_id' => 1001,
+                'license_key' => 'license-key-1234567890',
+            ]);
+
+            $this->assertSame($moduleDir . DIRECTORY_SEPARATOR . '商城应用.md', $readmePath);
+            $this->assertFileExists($readmePath);
+
+            $content = file_get_contents($readmePath);
+            $this->assertIsString($content);
+            $this->assertStringContainsString('php bin/w module:remove Weline_SampleModule', $content);
+            $this->assertStringContainsString('不负责导出或下载 SQL', $content);
+            $this->assertStringContainsString('/sample-module', $content);
+            $this->assertStringNotContainsString('license-key-1234567890', $content);
+        } finally {
+            $this->removeDirectory($moduleDir);
+        }
+    }
+
+    public function testMaskSecretKeepsOnlyEdges(): void
+    {
+        $service = (new ReflectionClass(ModuleInstallerService::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(ModuleInstallerService::class, 'maskSecret');
+        $method->setAccessible(true);
+
+        $this->assertSame('lice************7890', $method->invoke($service, 'license-key-1234567890'));
+        $this->assertSame('********', $method->invoke($service, '12345678'));
+        $this->assertSame('', $method->invoke($service, ''));
+    }
+
+    private function removeDirectory(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (scandir($dir) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+
+            $path = $dir . DIRECTORY_SEPARATOR . $item;
+            is_dir($path) ? $this->removeDirectory($path) : unlink($path);
+        }
+
+        rmdir($dir);
+    }
 }

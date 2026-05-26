@@ -125,21 +125,30 @@ class User extends \Weline\Framework\App\Controller\BackendController
             if (empty($id)) {
                 throw new \Exception(__('用户ID不能为空'));
             }
+
+            if ((int)$id === 1) {
+                throw new \Exception(__('超级管理员不能被删除'));
+            }
             
-            $this->backendUser->clearData()->load($id)
-                ->setIsDeleted()
+            $this->backendUser->clearData()->load($id);
+            if (!$this->backendUser->getId()) {
+                throw new \Exception(__('用户不存在'));
+            }
+
+            $this->backendUser->setIsDeleted()
+                ->setIsEnabled(false)
                 ->save();
             
             // 如果是AJAX请求，返回JSON
             if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
                 return $this->fetchJson([
                     'success' => true,
-                    'message' => __('删除成功！'),
-                    'msg' => __('删除成功！')
+                    'message' => __('用户已删除，可在列表中重新激活'),
+                    'msg' => __('用户已删除，可在列表中重新激活')
                 ]);
             }
             
-            MessageManager::success(__('删除成功！'));
+            MessageManager::success(__('用户已删除，可在列表中重新激活'));
             $this->redirect('*/backend/user/listing');
         } catch (\Exception $exception) {
             // 如果是AJAX请求，返回JSON
@@ -199,6 +208,8 @@ class User extends \Weline\Framework\App\Controller\BackendController
         try {
             $params = $this->request->getParams();
             $userId = $params['user_id'] ?? null;
+            $isEdit = $userId !== null && $userId !== '';
+            $userIdInt = $isEdit ? (int)$userId : null;
             $username = trim($params['username'] ?? '');
             $email = trim($params['email'] ?? '');
             $password = trim($params['password'] ?? '');
@@ -226,8 +237,8 @@ class User extends \Weline\Framework\App\Controller\BackendController
             
             $this->backendUser->clearData();
             
-            if (!empty($userId)) {
-                $this->backendUser->load((int)$userId);
+            if ($isEdit) {
+                $this->backendUser->load($userIdInt);
                 if (!$this->backendUser->getId()) {
                     return $this->fetchJson([
                         'success' => false,
@@ -242,6 +253,26 @@ class User extends \Weline\Framework\App\Controller\BackendController
                     ]);
                 }
             }
+
+            $existingUsername = $this->findBackendUserBy(BackendUser::schema_fields_username, $username, $userIdInt);
+            if ($existingUsername->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'msg' => $existingUsername->getIsDeleted()
+                        ? __('该用户名对应的管理员已删除，请先激活该用户')
+                        : __('用户名已存在')
+                ]);
+            }
+
+            $existingEmail = $this->findBackendUserBy(BackendUser::schema_fields_email, $email, $userIdInt);
+            if ($existingEmail->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'msg' => $existingEmail->getIsDeleted()
+                        ? __('该邮箱对应的管理员已删除，请先激活该用户')
+                        : __('邮箱已存在')
+                ]);
+            }
             
             $this->backendUser->setUsername($username)->setEmail($email);
             
@@ -251,7 +282,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
             
             $this->backendUser->save(true);
             
-            $actionText = empty($userId) ? __('新增') : __('修改');
+            $actionText = $isEdit ? __('修改') : __('新增');
             
             return $this->fetchJson([
                 'success' => true,
@@ -270,6 +301,20 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 'msg' => $errorMsg
             ]);
         }
+    }
+
+    private function findBackendUserBy(string $field, string $value, ?int $excludeUserId = null): BackendUser
+    {
+        /** @var BackendUser $backendUser */
+        $backendUser = ObjectManager::getInstance(BackendUser::class, [], false);
+        $backendUser->where($field, $value);
+
+        if (!empty($excludeUserId)) {
+            $backendUser->where(BackendUser::schema_fields_ID, $excludeUserId, '!=');
+        }
+
+        $backendUser->find()->fetch();
+        return $backendUser;
     }
 
     /**
@@ -305,11 +350,11 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ]);
             }
             
-            $this->backendUser->setIsDeleted()->save();
+            $this->backendUser->setIsDeleted()->setIsEnabled(false)->save();
             
             return $this->fetchJson([
                 'success' => true,
-                'msg' => __('删除成功')
+                'msg' => __('用户已删除，可在列表中重新激活')
             ]);
         } catch (\Exception $e) {
             $errorMsg = __('删除失败');
