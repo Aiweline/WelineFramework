@@ -60,6 +60,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     var initialWorkspaceState = <?php $this->writeJsonForScript($state); ?>;
     var latestWorkspaceState = initialWorkspaceState;
     var initialWorkspaceStateHydrated = false;
+    window.__pbInitialWorkspaceState = initialWorkspaceState;
+    window.__pbWorkspaceState = initialWorkspaceState;
+    window.__pbLastWorkspaceState = initialWorkspaceState;
     var hasGeneratedPages = <?= \json_encode($displayPagesByType !== [], \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var isOperationRunning = <?= \json_encode(\in_array($activeOperationStatus, ['pending', 'queued', 'running', 'processing'], true), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentActiveOperationState = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -1071,6 +1074,10 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }, Math.max(100, parseInt(String(delayMs || 900), 10) || 900));
     }
 
+    function scheduleWorkspaceTransportRecoveryReload(reason, delayMs) {
+        schedulePlanWorkspaceReload(reason, delayMs);
+    }
+
     function getPlanReloadReconcileStage(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         return String(currentStageCode || currentWorkspaceStage || state.stage || '').trim().toLowerCase();
@@ -1206,6 +1213,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             planReloadReconcileInFlight = false;
             setPlanGenerationActionLock(false);
             toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+            schedulePlanWorkspaceReload('confirm_transport_error', 900);
             syncConfirmPlanButtonEnabled();
         });
         return true;
@@ -1229,6 +1237,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     }
 
     window.__pbSchedulePlanWorkspaceReload = schedulePlanWorkspaceReload;
+    window.__pbScheduleWorkspaceTransportRecoveryReload = scheduleWorkspaceTransportRecoveryReload;
     window.__pbRunPlanReloadReconciliation = runPlanReloadReconciliation;
 
     function isPhaseOneQueueUnfinished() {
@@ -1843,7 +1852,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                     candidates.push(countRetryableAiFailureBucket(ledger));
                 }
             });
-            if (normalizedOperation === 'build') {
+            if (normalizedOperation === 'build' && !hasPublishBlockingAiOperationRunningFromWorkspaceState(state)) {
                 [
                     state.latest_build_failed,
                     state.publish_blocked_by_latest_ai_failure,
@@ -3919,17 +3928,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         try {
             var currentUrl = new URL(window.location.href);
             var parsed = new URL(raw, currentUrl.origin);
-            var redirectHost = String(parsed.hostname || '').toLowerCase();
-            var currentHost = String(currentUrl.hostname || '').toLowerCase();
-            var isLocalAliasHost = function (host) {
-                var normalized = String(host || '').toLowerCase();
-                return normalized === '127.0.0.1'
-                    || normalized === 'localhost'
-                    || normalized === '::1'
-                    || normalized === '[::1]'
-                    || normalized.endsWith('.weline.test')
-                    || normalized.endsWith('.local.test');
-            };
             var isSessionBoundBackendPath = function (pathname) {
                 var path = String(pathname || '');
                 return path.indexOf('/pagebuilder/backend/') >= 0
@@ -3939,8 +3937,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             if (
                 currentUrl.host
                 && parsed.host !== currentUrl.host
-                && isLocalAliasHost(redirectHost)
-                && isLocalAliasHost(currentHost)
                 && isSessionBoundBackendPath(parsed.pathname)
             ) {
                 parsed.protocol = currentUrl.protocol;
@@ -15543,6 +15539,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
 
     function hasPublishBlockingLatestBuildFailureFromWorkspaceState(workspaceState) {
         var state = getWorkspaceStateForPublishGate(workspaceState);
+        if (hasPublishBlockingAiOperationRunningFromWorkspaceState(state)) {
+            return false;
+        }
         var existingFailure = state.latest_build_failure && typeof state.latest_build_failure === 'object'
             ? state.latest_build_failure
             : {};
@@ -16310,6 +16309,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 continueToBuildAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
             }).catch(function (error) {
                 toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+                schedulePlanWorkspaceReload('confirm_transport_error', 900);
                 syncConfirmPlanButtonEnabled();
                 syncPlanRebuildButtonVisibility();
             });
@@ -16780,6 +16780,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             toast('warning', messages.operationStreamMissing || messages.networkError);
         }).catch(function (error) {
             toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+            scheduleWorkspaceTransportRecoveryReload('build_resume_transport_error', 900);
         });
     }
 
@@ -16943,12 +16944,13 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 setBuildNavigationGuard(false);
                 resetBuildStartUi();
                 toast('error', messages.operationStreamMissing);
-                }).catch(function () {
+                }).catch(function (error) {
                     buildStartupPending = false;
                     hideBuildGuard();
                     setBuildNavigationGuard(false);
                     resetBuildStartUi();
-                    toast('error', messages.networkError);
+                    toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+                    scheduleWorkspaceTransportRecoveryReload('build_start_transport_error', 900);
                 });
             } catch (syncError) {
                 buildStartupPending = false;
