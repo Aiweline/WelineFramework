@@ -1146,7 +1146,12 @@ class PageRenderService
 
         $defaultConfig = $component->getDefaultConfig();
         $componentConfig = $this->sanitizeSharedIdentityAssetConfig(
-            $this->expandDottedComponentConfigValues(\array_replace($defaultConfig, $config)),
+            $this->expandDottedComponentConfigValues($this->localizeVirtualThemeSharedComponentConfig(
+                $region,
+                \array_replace($defaultConfig, $config),
+                $page,
+                $code
+            )),
             $region
         );
         $vars = \array_replace($this->templateVars, $componentConfig, [
@@ -1162,6 +1167,7 @@ class PageRenderService
         try {
             $componentHtml = $this->renderPhtmlString($templateContent, $vars);
             $componentHtml = $this->applyVirtualThemeConfigOverridesToStaticHtml($componentHtml, $defaultConfig, $componentConfig);
+            $componentHtml = $this->applyVirtualThemeSharedStaticLocaleGuards($componentHtml, $region, $componentConfig);
             $componentHtml = $this->applyVirtualThemeGeneratedComponentRuntimeFramework($componentHtml);
         } catch (\Throwable $throwable) {
             return '<!-- Error rendering virtual theme component ' . \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
@@ -1191,6 +1197,96 @@ class PageRenderService
         }
 
         return $html;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>
+     */
+    private function localizeVirtualThemeSharedComponentConfig(
+        string $region,
+        array $config,
+        Page $page,
+        string $componentCode
+    ): array {
+        if (!\in_array($region, ['header', 'footer'], true)) {
+            return $config;
+        }
+
+        $locale = \trim((string)($this->templateVars['current_locale'] ?? $this->templateVars['lang'] ?? ''));
+        if ($locale === '') {
+            return $config;
+        }
+
+        try {
+            /** @var AiSiteScopeCompatibilityService $scopeCompatibility */
+            $scopeCompatibility = ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
+            $layout = [
+                'header' => [
+                    'component' => $region === 'header' ? $componentCode : '',
+                    'config' => $region === 'header' ? $config : [],
+                ],
+                'content' => [],
+                'footer' => [
+                    'component' => $region === 'footer' ? $componentCode : '',
+                    'config' => $region === 'footer' ? $config : [],
+                ],
+            ];
+            $scope = [
+                'content_locale' => $locale,
+                'default_locale' => $locale,
+                'website_profile' => [
+                    'content_locale' => $locale,
+                    'default_locale' => $locale,
+                ],
+            ];
+            $localizedLayout = $scopeCompatibility->localizeSharedLayoutConfigForScope(
+                $layout,
+                $scope,
+                (string)$page->getData(Page::schema_fields_TYPE)
+            );
+            $localizedConfig = $localizedLayout[$region]['config'] ?? null;
+
+            return \is_array($localizedConfig) ? $localizedConfig : $config;
+        } catch (\Throwable) {
+            return $config;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function applyVirtualThemeSharedStaticLocaleGuards(string $html, string $region, array $config): string
+    {
+        if ($html === '' || $region !== 'footer' || !$this->currentRenderLocaleIsNonCjk()) {
+            return $html;
+        }
+
+        $replacement = \trim((string)($config['visitor_experience'] ?? $config['brand.description'] ?? ''));
+        if ($replacement === '' || $this->hasCjkContent($replacement)) {
+            return $html;
+        }
+
+        $safeReplacement = \htmlspecialchars($replacement, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $localized = \preg_replace(
+            '#(<div\s+class="[^"]*?-bottom"\s*>\s*<div>\s*&copy;.*?</div>\s*)<div>[^<]*[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}][^<]*</div>#us',
+            '$1<div>' . $safeReplacement . '</div>',
+            $html
+        );
+
+        return \is_string($localized) ? $localized : $html;
+    }
+
+    private function currentRenderLocaleIsNonCjk(): bool
+    {
+        $locale = \trim((string)($this->templateVars['current_locale'] ?? $this->templateVars['lang'] ?? ''));
+
+        return $locale !== '' && \preg_match('/^(?:zh|ja|ko)(?:[_-]|$)/i', $locale) !== 1;
+    }
+
+    private function hasCjkContent(string $value): bool
+    {
+        return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $value) === 1;
     }
 
     private function flattenRenderedVirtualThemeNestedResponsiveMedia(string $html): string

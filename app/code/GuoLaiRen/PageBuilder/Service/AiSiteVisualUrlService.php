@@ -92,14 +92,18 @@ class AiSiteVisualUrlService
      */
     public function normalizeUrlsToLocalBase(array $urls, array $context): array
     {
-        $base = $this->resolveLocalPreviewOriginFromMixed($context);
+        $base = $this->resolveExplicitPreviewOriginFromContext($context);
+        if ($base === '') {
+            $base = $this->resolveLocalPreviewOriginFromMixed($context);
+        }
         if ($base === '') {
             return $urls;
         }
+        $baseIsLocalPreviewOrigin = $this->isLocalPreviewUrl($base);
 
         foreach (['preview_full_url', 'visual_preview_url', 'visual_edit_url', 'virtual_preview_url', 'virtual_edit_url'] as $key) {
             $url = \trim((string)($urls[$key] ?? ''));
-            if ($url === '' || $this->isLocalPreviewUrl($url)) {
+            if ($url === '' || ($baseIsLocalPreviewOrigin && $this->isLocalPreviewUrl($url))) {
                 continue;
             }
             $rewritten = $this->rewriteUrlToOrigin($url, $base);
@@ -109,6 +113,21 @@ class AiSiteVisualUrlService
         }
 
         return $urls;
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    private function resolveExplicitPreviewOriginFromContext(array $context): string
+    {
+        foreach (['preview_origin', 'request_origin', 'backend_origin', 'current_origin', 'current_request_origin'] as $key) {
+            $origin = $this->normalizeHttpOrigin((string)($context[$key] ?? ''));
+            if ($origin !== '') {
+                return $origin;
+            }
+        }
+
+        return '';
     }
 
     public function resolveLocalPreviewOriginFromMixed(mixed $value, int $depth = 0): string
@@ -199,6 +218,22 @@ class AiSiteVisualUrlService
             return '';
         }
         $port = \parse_url($url, \PHP_URL_PORT);
+
+        return \strtolower($scheme) . '://' . \strtolower($host) . (\is_int($port) && $port > 0 ? ':' . $port : '');
+    }
+
+    private function normalizeHttpOrigin(string $origin): string
+    {
+        $origin = \trim($origin);
+        if ($origin === '' || \preg_match('#^https?://#i', $origin) !== 1) {
+            return '';
+        }
+        $scheme = \parse_url($origin, \PHP_URL_SCHEME);
+        $host = \parse_url($origin, \PHP_URL_HOST);
+        if (!\is_string($scheme) || !\is_string($host) || \trim($host) === '') {
+            return '';
+        }
+        $port = \parse_url($origin, \PHP_URL_PORT);
 
         return \strtolower($scheme) . '://' . \strtolower($host) . (\is_int($port) && $port > 0 ? ':' . $port : '');
     }
