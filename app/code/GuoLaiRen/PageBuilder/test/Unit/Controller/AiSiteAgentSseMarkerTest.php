@@ -132,6 +132,20 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertFalse((bool)$isInProgress->invoke($controller, $queueRow));
     }
 
+    public function testObservedQueueRunningStatusIsTrustedWithoutRequestPidProbe(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $isInProgress = new ReflectionMethod(AiSiteAgent::class, 'isObservedQueueInProgress');
+        $isInProgress->setAccessible(true);
+
+        self::assertTrue((bool)$isInProgress->invoke($controller, [
+            'status' => 'running',
+            'pid' => 0,
+            'finished' => 0,
+            'process' => 'worker status is authoritative',
+        ]));
+    }
+
     public function testRuntimeUsesQueueFailureDetailForFailedSseDonePayload(): void
     {
         $source = \file_get_contents(

@@ -153,26 +153,13 @@ class AiSiteAgentQueueObserverStreamService
 
             return $activeOperation;
         }
-        if (\in_array($queueStatus, ['pending', 'queued', 'running'], true)) {
-            $activeOperation['status'] = $queueStatus === 'running' ? 'running' : 'queued';
+        if (\in_array($queueStatus, ['pending', 'queued', 'running', 'processing'], true)) {
+            $activeOperation['status'] = \in_array($queueStatus, ['running', 'processing'], true) ? 'running' : 'queued';
+            $activeOperation['semantic_status'] = $activeOperation['status'];
+            $activeOperation['retry_allowed'] = 0;
+            $activeOperation['queue_terminal_recovered'] = 0;
             $queueId = (int)($queueInfo['queue_id'] ?? $queueInfo['snapshot']['queue_id'] ?? 0);
             $queuePid = (int)($queueInfo['pid'] ?? $queueInfo['snapshot']['pid'] ?? 0);
-            if (
-                $queueStatus === 'running'
-                && ($queuePid <= 0 || !\Weline\Framework\System\Process\Processer::isRunningByPid($queuePid))
-            ) {
-                $activeOperation['status'] = 'cancelled';
-                $activeOperation['message'] = 'Linked queue process ended without a terminal queue status; retry is allowed.';
-                $activeOperation['retry_allowed'] = 1;
-                $activeOperation['queue_terminal_recovered'] = 1;
-                if ($queueId > 0) {
-                    $activeOperation['queue_id'] = $queueId;
-                }
-                $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
-                $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
-
-                return $activeOperation;
-            }
             if ($queueId > 0) {
                 $activeOperation['queue_id'] = $queueId;
             }
@@ -341,31 +328,10 @@ class AiSiteAgentQueueObserverStreamService
         $queuePanelInfo = $helperService->buildPanelPayload($queueRow, $queueSnapshot);
         $tokenUsage = \is_array($queueSnapshot['token_usage'] ?? null) ? $queueSnapshot['token_usage'] : [];
         $process = \trim((string)($queueRow['process'] ?? ''));
-        if (
-            \in_array($queueStatus, ['running', 'processing'], true)
-            && ($queuePid <= 0 || !\Weline\Framework\System\Process\Processer::isRunningByPid($queuePid))
-        ) {
-            $queueStatus = 'cancelled';
-            $process = $process !== ''
-                ? $process
-                : 'Linked queue process ended without a terminal queue status; retry is allowed.';
-            $queueSnapshot['status'] = 'cancelled';
-            $queueSnapshot['queue_status'] = 'cancelled';
-            $queueSnapshot['job_status'] = 'cancelled';
-            $queueSnapshot['semantic_status'] = 'cancelled';
-            $queueSnapshot['retry_allowed'] = 1;
-            $queueSnapshot['queue_terminal_recovered'] = 1;
-            $queueSnapshot['finished'] = 1;
-            $queuePanelInfo['status'] = 'cancelled';
-            $queuePanelInfo['queue_status'] = 'cancelled';
-            $queuePanelInfo['job_status'] = 'cancelled';
-            $queuePanelInfo['semantic_status'] = 'cancelled';
-            $queuePanelInfo['retry_allowed'] = 1;
-            $queuePanelInfo['queue_terminal_recovered'] = 1;
-            if (\is_array($queuePanelInfo['snapshot'] ?? null)) {
-                $queuePanelInfo['snapshot'] = \array_replace($queuePanelInfo['snapshot'], $queueSnapshot);
-            }
-        }
+        // 调度器 worker 是队列存活的唯一权威源：只要 weline_queue.status 处于 running/processing，
+        // 当前 HTTP/SSE worker 就以「队列活着」对待，不再对 PID 做跨进程探活。
+        // 历史 PID 兜底会在调度 worker 与请求 worker 隔离（容器/子进程/权限）时把活着的队列
+        // 误判为 cancelled，触发"前端显示失败 → 用户重试 → 与正在运行的队列抢锁"的级联问题。
 
         if ($queueStatus !== '' && $lastQueueStatus !== '' && $queueStatus !== $lastQueueStatus) {
             $sse->sendEvent('info', [

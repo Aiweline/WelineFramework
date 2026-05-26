@@ -184,6 +184,42 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertTrue((bool)$queued['continue_other_operations']);
     }
 
+    public function testReconcileTrustsRunningQueueStatusWithoutPidProbe(): void
+    {
+        $service = $this->service();
+
+        $running = $service->reconcileActiveOperationWithQueueInfo(
+            [
+                'operation' => 'build',
+                'status' => 'error',
+                'message' => 'stale frontend failure',
+                'retry_allowed' => 1,
+                'queue_terminal_recovered' => 1,
+            ],
+            [
+                'queue_id' => 889,
+                'pid' => 0,
+                'process' => 'queue is running in the scheduler',
+                'snapshot' => [
+                    'queue_id' => 889,
+                    'pid' => 0,
+                    'status' => 'running',
+                ],
+            ],
+            'build'
+        );
+
+        self::assertSame('running', $running['status']);
+        self::assertSame('running', $running['semantic_status']);
+        self::assertSame(889, $running['queue_id']);
+        self::assertSame('queue is running in the scheduler', $running['message']);
+        self::assertSame(0, $running['retry_allowed']);
+        self::assertSame(0, $running['queue_terminal_recovered']);
+        self::assertFalse((bool)$running['queue_waiting_for_scheduler']);
+        self::assertFalse((bool)$running['can_close_stream']);
+        self::assertFalse((bool)$running['continue_other_operations']);
+    }
+
     public function testReconcileMapsTerminalQueueStatusesWithoutFoldingCancelledIntoDone(): void
     {
         $service = $this->service();
