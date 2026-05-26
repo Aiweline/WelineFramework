@@ -1036,10 +1036,10 @@ class AiSiteAgent extends BaseController
     public function getPostPlanSse(): void { $this->handlePlanSse(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '显式继续未完成构建', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postResumeBuild(): string { return $this->handleResumeBuild(); }
+    public function postResumeBuild(): string { return $this->safeHandleStartBuild(true); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动主题构建', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postStartBuild(): string { return $this->handleStartBuild(); }
+    public function postStartBuild(): string { return $this->safeHandleStartBuild(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI site agent API', 'mdi-api', 'Start AI asset generation', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartAssetGeneration(): string { return $this->handleStartAssetGeneration(); }
@@ -1051,7 +1051,7 @@ class AiSiteAgent extends BaseController
     public function startAssetGeneration(): string { return $this->handleStartAssetGeneration(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '执行虚拟主题编排（兼容）', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postRunVirtualTheme(): string { return $this->handleStartBuild(); }
+    public function postRunVirtualTheme(): string { return $this->safeHandleStartBuild(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动单页重建', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartRegeneratePage(): string { return $this->handleStartRegeneratePage(); }
@@ -2679,6 +2679,22 @@ class AiSiteAgent extends BaseController
     private function handleResumeBuild(): string
     {
         return $this->handleStartBuild(true);
+    }
+
+    private function safeHandleStartBuild(bool $isResume = false): string
+    {
+        try {
+            return $this->handleStartBuild($isResume);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\Throwable $throwable) {
+            \error_log('[AiSiteStartBuild] failed: ' . $throwable->getMessage() . ' in ' . $throwable->getFile() . ':' . $throwable->getLine());
+            return $this->jsonError(
+                'START_BUILD_FAILED',
+                (string)__('启动构建失败，请刷新页面后重试。'),
+                self::PARAMS_PUBLIC_ID
+            );
+        }
     }
 
     private function handleStartBuild(bool $isResume = false): string
@@ -6007,6 +6023,28 @@ class AiSiteAgent extends BaseController
         } else {
             $buildQueueInfo = $this->buildOperationStageQueueInfoPayload($session, $operationState, $operation) ?? $buildQueueInfo;
         }
+        if (
+            $operation !== 'build'
+            && $this->shouldAttachBuildQueueInfoForPublishGate($stage, $scope, $activeOperation, $activeOperations, $buildQueueInfo)
+        ) {
+            $buildOperationState = $this->resolveWorkspaceQueueOperationState($activeOperation, $activeOperations, 'build');
+            $resolvedBuildQueueInfo = $this->buildOperationStageQueueInfoPayload($session, $buildOperationState, 'build');
+            if (\is_array($resolvedBuildQueueInfo)) {
+                $buildQueueInfo = $resolvedBuildQueueInfo;
+                $buildOperationState = $this->reconcileActiveOperationWithQueueInfo(
+                    $buildOperationState,
+                    $buildQueueInfo,
+                    'build'
+                );
+                if ($buildOperationState !== []) {
+                    $activeOperations['build'] = \array_replace(
+                        \is_array($activeOperations['build'] ?? null) ? $activeOperations['build'] : [],
+                        $buildOperationState,
+                        ['operation' => 'build']
+                    );
+                }
+            }
+        }
 
         $operationState = $this->reconcileActiveOperationWithQueueInfo(
             $operationState,
@@ -6055,17 +6093,32 @@ class AiSiteAgent extends BaseController
         $titleOk = \trim((string)($scope['website_profile']['site_title'] ?? $scope['site_title'] ?? '')) !== '';
         $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
             || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
+        $scopeForPublishGate = \array_replace($scope, [
+            'active_operation' => $activeOperation,
+            'active_operations' => $activeOperations,
+        ]);
+        if (\is_array($buildQueueInfo)) {
+            $scopeForPublishGate['build_queue_info'] = $buildQueueInfo;
+        }
+        $publishBlockingAiRunning = $this->hasPublishBlockingAiBuildRunningState($scopeForPublishGate, $activeOperation, $buildQueueInfo);
+        $publishBlockingBuildFailure = $this->resolveLatestPublishBlockingAiBuildFailure($scopeForPublishGate, $activeOperation, $buildQueueInfo);
+        $workspaceStatus = (string)($scope['workspace_status'] ?? '');
+        if ($publishBlockingAiRunning && $workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED) {
+            $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
+        }
         $state = [
             'public_id' => $session->getPublicId(),
             'stage' => $stage,
             'stage_label' => $this->getStageLabel($stage),
-            'workspace_status' => (string)($scope['workspace_status'] ?? ''),
+            'workspace_status' => $workspaceStatus,
             'publish_status' => $session->getPublishStatus(),
-            'can_publish' => $published || (!empty($scope['can_publish']) && $taskReady && $titleOk),
-            'latest_build_failed' => !empty($scope['latest_build_failed']),
-            'latest_build_failure' => \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [],
-            'publish_blocked_by_latest_ai_failure' => !empty($scope['publish_blocked_by_latest_ai_failure']),
-            'publish_blocked_reason' => (string)($scope['publish_blocked_reason'] ?? ''),
+            'can_publish' => !$publishBlockingAiRunning && empty($publishBlockingBuildFailure['blocked']) && ($published || (!empty($scope['can_publish']) && $taskReady && $titleOk)),
+            'latest_build_failed' => !empty($publishBlockingBuildFailure['blocked']),
+            'latest_build_failure' => !empty($publishBlockingBuildFailure['blocked']) ? $publishBlockingBuildFailure : [],
+            'publish_blocked_by_latest_ai_failure' => !empty($publishBlockingBuildFailure['blocked']),
+            'publish_blocked_reason' => !empty($publishBlockingBuildFailure['blocked'])
+                ? $this->formatPublishBlockedByAiFailureMessage($publishBlockingBuildFailure)
+                : '',
             'workspace_track' => (string)($scope['workspace_track'] ?? ''),
             'website_id' => $websiteId,
             'virtual_theme_id' => $virtualThemeId,
@@ -6092,10 +6145,16 @@ class AiSiteAgent extends BaseController
             'scope' => [
                 'plan_confirmed' => (int)($scope['plan_confirmed'] ?? 0),
                 'build_plan_confirmed' => (int)($scope['build_plan_confirmed'] ?? 0),
-                'workspace_status' => (string)($scope['workspace_status'] ?? ''),
+                'workspace_status' => $workspaceStatus,
                 'active_operation' => $activeOperation,
                 'active_operations' => $activeOperations,
                 'build_task_summary' => $buildTaskSummary,
+                'latest_build_failed' => !empty($publishBlockingBuildFailure['blocked']) ? 1 : 0,
+                'latest_build_failure' => !empty($publishBlockingBuildFailure['blocked']) ? $publishBlockingBuildFailure : [],
+                'publish_blocked_by_latest_ai_failure' => !empty($publishBlockingBuildFailure['blocked']) ? 1 : 0,
+                'publish_blocked_reason' => !empty($publishBlockingBuildFailure['blocked'])
+                    ? $this->formatPublishBlockedByAiFailureMessage($publishBlockingBuildFailure)
+                    : '',
             ],
             'events' => [],
             'response_mode' => 'queue_poll',
@@ -6182,6 +6241,38 @@ class AiSiteAgent extends BaseController
             'block_refine' => 'block_regenerate',
             default => $operation,
         };
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $activeOperation
+     * @param array<string, mixed> $activeOperations
+     * @param array<string, mixed>|null $buildQueueInfo
+     */
+    private function shouldAttachBuildQueueInfoForPublishGate(
+        string $stage,
+        array $scope,
+        array $activeOperation,
+        array $activeOperations,
+        ?array $buildQueueInfo
+    ): bool {
+        if (\is_array($buildQueueInfo) && $buildQueueInfo !== []) {
+            return false;
+        }
+        if (!empty($scope['latest_build_failed']) || !empty($scope['publish_blocked_by_latest_ai_failure'])) {
+            return true;
+        }
+        if (\is_array($activeOperations['build'] ?? null)) {
+            return true;
+        }
+        if ($this->isPublishBlockingAiBuildOperation((string)($activeOperation['operation'] ?? ''))) {
+            return true;
+        }
+
+        return \in_array($stage, [
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            AiSiteAgentSession::STAGE_PUBLISH,
+        ], true);
     }
 
     /**
@@ -6292,6 +6383,28 @@ class AiSiteAgent extends BaseController
             $workspaceStatus = $canPublish
                 ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
                 : (string)$stage;
+        }
+        $queuePatchActiveOperation = \is_array($queuePatch['active_operation'] ?? null) ? $queuePatch['active_operation'] : [];
+        $queuePatchBuildInfo = \is_array($queuePatch['build_queue_info'] ?? null) ? $queuePatch['build_queue_info'] : null;
+        $queuePatchScope = \array_replace($scope, \is_array($queuePatch['scope'] ?? null) ? $queuePatch['scope'] : []);
+        $queuePatchScope['active_operation'] = $queuePatchActiveOperation;
+        $queuePatchScope['active_operations'] = \is_array($queuePatch['active_operations'] ?? null) ? $queuePatch['active_operations'] : [];
+        if (\is_array($queuePatchBuildInfo)) {
+            $queuePatchScope['build_queue_info'] = $queuePatchBuildInfo;
+        }
+        $queuePatchBuildRunning = $this->hasPublishBlockingAiBuildRunningState(
+            $queuePatchScope,
+            $queuePatchActiveOperation,
+            $queuePatchBuildInfo
+        );
+        if ($queuePatchBuildRunning) {
+            $canPublish = false;
+            if ($workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED) {
+                $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
+            }
+        } elseif (!empty($queuePatch['latest_build_failed']) || !empty($queuePatch['publish_blocked_by_latest_ai_failure'])) {
+            $canPublish = false;
+            $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
         }
 
         $state = \array_replace($queuePatch, [
@@ -6581,7 +6694,26 @@ class AiSiteAgent extends BaseController
      */
     private function normalizeAiSiteVisualUrlsToLocalBase(array $urls, array $context): array
     {
+        $currentOrigin = $this->resolveAiSiteCurrentRequestOrigin();
+        if ($currentOrigin !== '') {
+            $context = ['current_request_origin' => $currentOrigin] + $context;
+        }
+
         return $this->visualUrlService->normalizeUrlsToLocalBase($urls, $context);
+    }
+
+    private function resolveAiSiteCurrentRequestOrigin(): string
+    {
+        $host = \trim((string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: ''));
+        if ($host === '') {
+            return '';
+        }
+        $host = \preg_replace('/[\x00-\x20\/\\\\?#]+/', '', $host) ?? '';
+        if ($host === '') {
+            return '';
+        }
+
+        return ($this->request->isSecure() ? 'https' : 'http') . '://' . $host;
     }
 
     private function resolveAiSiteLocalPreviewOriginFromMixed(mixed $value, int $depth = 0): string
@@ -9079,8 +9211,10 @@ class AiSiteAgent extends BaseController
         }
         $status = \trim((string)($queueRow['status'] ?? ''));
         if (\in_array($status, ['running', 'processing'], true)) {
-            $pid = (int)($queueRow['pid'] ?? 0);
-            return $pid > 0 && \Weline\Framework\System\Process\Processer::isRunningByPid($pid);
+            // 队列 status 是系统调度器写入的权威信号。HTTP/SSE 请求 worker 与调度 worker
+            // 可能跨进程/容器，跨进程 PID 探活会把活着的队列误判为「死了」，触发误自愈与重试抢锁。
+            // 历史 PID 兜底已删除，仅信任 queue.status。
+            return true;
         }
 
         return \in_array($status, ['pending', 'queued'], true);
@@ -10925,8 +11059,7 @@ class AiSiteAgent extends BaseController
         $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
         $publishBlockingBuildFailure = $this->resolveLatestPublishBlockingAiBuildFailure($normalized, $activeOperation, $buildQueueInfo);
-        $publishBlockingAiRunning = $this->isPublishBlockingAiBuildOperation($activeOperationName)
-            && $this->isPublishBlockingAiRunningStatus($activeOperationStatus);
+        $publishBlockingAiRunning = $this->hasPublishBlockingAiBuildRunningState($normalized, $activeOperation, $buildQueueInfo);
         if (!empty($publishBlockingBuildFailure['blocked']) || $publishBlockingAiRunning) {
             $canPublish = false;
         }
@@ -11760,6 +11893,9 @@ class AiSiteAgent extends BaseController
         if (!empty($completionGate['passed'])) {
             return ['blocked' => false, 'operation' => '', 'status' => '', 'message' => ''];
         }
+        if ($this->hasPublishBlockingAiBuildRunningState($scope, $activeOperation, $buildQueueInfo)) {
+            return ['blocked' => false, 'operation' => '', 'status' => '', 'message' => ''];
+        }
 
         $existing = \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [];
         if (!empty($scope['latest_build_failed']) && !empty($existing['blocked'])) {
@@ -11819,6 +11955,45 @@ class AiSiteAgent extends BaseController
         }
 
         return ['blocked' => false, 'operation' => '', 'status' => '', 'message' => ''];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $activeOperation
+     * @param array<string, mixed>|null $buildQueueInfo
+     */
+    private function hasPublishBlockingAiBuildRunningState(array $scope, array $activeOperation = [], ?array $buildQueueInfo = null): bool
+    {
+        $candidates = [];
+        $appendCandidate = static function (array $operationState, string $fallbackOperation = '') use (&$candidates): void {
+            if ($operationState === []) {
+                return;
+            }
+            if (\trim((string)($operationState['operation'] ?? '')) === '' && $fallbackOperation !== '') {
+                $operationState['operation'] = $fallbackOperation;
+            }
+            $candidates[] = $operationState;
+        };
+
+        $appendCandidate($activeOperation);
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        foreach (['build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_partial_patch'] as $operationKey) {
+            if (\is_array($activeOperations[$operationKey] ?? null)) {
+                $appendCandidate($activeOperations[$operationKey], $operationKey);
+            }
+        }
+        foreach ($candidates as $candidate) {
+            $operation = \trim((string)($candidate['operation'] ?? ''));
+            if (
+                $this->isPublishBlockingAiBuildOperation($operation)
+                && $this->isPublishBlockingAiRunningStatus((string)($candidate['status'] ?? ''))
+            ) {
+                return true;
+            }
+        }
+
+        return \is_array($buildQueueInfo)
+            && $this->isPublishBlockingAiRunningStatus($this->readAiQueueInfoStatus($buildQueueInfo));
     }
 
     /**
@@ -12558,11 +12733,13 @@ class AiSiteAgent extends BaseController
         if ($session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHING || ($operation === 'publish' && \in_array($activeStatus, ['queued', 'running'], true))) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHING;
         }
-        if ($activeStatus === 'error' || $workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED) {
-            return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
-        }
+        // 优先识别"正在构建中"：如果某 publish-blocking AI 操作还在 queued/running，
+        // 即便 scope.workspace_status 残留 FAILED 也应当显示 BUILDING，避免 UI 把活着的队列误标为已失败。
         if (\in_array($activeStatus, ['queued', 'running'], true) && $this->isPublishBlockingAiBuildOperation($operation)) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
+        }
+        if ($activeStatus === 'error' || $workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED) {
+            return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
         }
         if ($canPublish) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
@@ -13095,6 +13272,7 @@ class AiSiteAgent extends BaseController
                     'updated_at' => \date('Y-m-d H:i:s'),
                 ]));
                 $this->sessionService->replaceScope($freshForQueue->getId(), $adminId, $queueScope);
+                $scope = $queueScope;
                 $freshForQueue = $this->sessionService->loadById($session->getId(), $adminId) ?? $freshForQueue;
             }
         }
@@ -13103,16 +13281,35 @@ class AiSiteAgent extends BaseController
         }
         $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'operation_queued', (string)__('已加入操作队列'), ['operation' => $operation, 'page_type' => $pageType]);
 
-        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $state = $this->buildWorkspaceState($fresh, $adminId, 24, true);
+        // 把刚入队的真实 queue row 喂给 checkpoint state，前端首次拿到响应就能正确显示 queued/running，
+        // 不再依赖 SSE 第一帧；同时避免 PID/进程探活路径。
+        $queueRow = null;
+        if ($queueId > 0) {
+            try {
+                $queueRow = $this->findAiSiteQueueRowById($queueId);
+            } catch (\Throwable) {
+                $queueRow = null;
+            }
+            if (\is_object($queueRow) && \method_exists($queueRow, 'getData')) {
+                $queueRow = $queueRow->getData();
+            }
+        }
+        $activeOperationForResponse = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $state = $this->buildQueuedOperationCheckpointState(
+            $freshForQueue,
+            $stage,
+            $operation,
+            $activeOperationForResponse,
+            \is_array($queueRow) ? $queueRow : null
+        );
         return [
             'success' => true,
             'message' => __('操作已启动'),
             'execution_token' => $executionToken,
             'queue_id' => $queueId,
             'operation' => $operation,
-            'stream_url' => $this->buildOperationStreamUrl($fresh->getPublicId(), $executionToken),
-            'data' => $this->buildWorkspaceOperationPayload($state, $operation),
+            'stream_url' => $this->buildOperationStreamUrl($freshForQueue->getPublicId(), $executionToken),
+            'data' => $state,
             'queue_wait' => $queueWait,
         ];
     }
@@ -14294,6 +14491,11 @@ class AiSiteAgent extends BaseController
             'public_id' => (string)$session->getPublicId(),
             'stage' => $stageCode,
             'workspace_status' => $checkpointWorkspaceStatus,
+            'can_publish' => false,
+            'latest_build_failed' => false,
+            'latest_build_failure' => [],
+            'publish_blocked_by_latest_ai_failure' => false,
+            'publish_blocked_reason' => '',
             'active_operation' => $activeOperation,
         ];
         $queueInfoKey = match ($operation) {

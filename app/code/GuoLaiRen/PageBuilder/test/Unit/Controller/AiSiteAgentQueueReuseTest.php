@@ -392,7 +392,9 @@ final class AiSiteAgentQueueReuseTest extends TestCase
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
 
-        self::assertStringContainsString("['rebuild', 'resume_plan']", $source);
+        // resume_plan 必须与 rebuild / refine 共存于 plan prompt mode 白名单：refine 已被加入兼容老 UI 入口，
+        // 但 resume 模式仍要绕过 pure reuse shortcut，保留 checkpoint prompting。
+        self::assertStringContainsString("'rebuild', 'resume_plan'", $source);
         self::assertStringContainsString("\$effectivePlanPromptMode = 'resume_plan';", $source);
         self::assertStringContainsString("\$requestedPromptMode === 'resume_plan'", $source);
         self::assertStringContainsString("'resume_generation'", $source);
@@ -731,7 +733,9 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("getRetryableAiFailureCount(state, 'plan') > 0", $retryResolverSource);
         self::assertStringContainsString('plan_generation_last_error', $retryResolverSource);
         self::assertStringContainsString("operations.plan", $retryResolverSource);
-        self::assertStringContainsString("'error'", $retryResolverSource);
+        // 失败状态识别已封装为 isPlanFailureStatusForWorkspaceUi（覆盖 error/failed/fail/stop/cancelled），
+        // 比裸字符串 'error' 更鲁棒；测试同时确保它在 retry 解析中真的被调用。
+        self::assertStringContainsString('isPlanFailureStatusForWorkspaceUi(status)', $retryResolverSource);
     }
 
     public function testOperationStreamServerErrorClosesEventSourceBeforeRetryUi(): void
@@ -1044,6 +1048,17 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertLessThan($enqueueOffset, $tableGuardOffset);
     }
 
+    public function testStartOperationReturnsQueuedCheckpointWithoutFullWorkspaceHydration(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $body = $this->extractControllerMethodSource($source, 'startOperation');
+
+        self::assertStringContainsString('buildQueuedOperationCheckpointState(', $body);
+        self::assertStringContainsString("'data' => \$state", $body);
+        self::assertStringNotContainsString('buildWorkspaceState($fresh', $body);
+        self::assertStringNotContainsString('buildWorkspaceOperationPayload($state, $operation)', $body);
+    }
+
     public function testQueueTableStartGuardScansAllSessionSlotsAndRequiresLiveRunningPid(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
@@ -1072,6 +1087,13 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("\$scope['latest_build_failed'] = 0;", $body);
         self::assertStringContainsString("\$scope['publish_blocked_by_latest_ai_failure'] = 0;", $body);
         self::assertStringContainsString("unset(\$scope['latest_build_failure'], \$scope['publish_blocked_reason']);", $body);
+
+        $workspaceStateBody = $this->extractControllerMethodSource($source, 'buildWorkspaceState');
+        $failureResolverBody = $this->extractControllerMethodSource($source, 'resolveLatestPublishBlockingAiBuildFailure');
+        $runningStateBody = $this->extractControllerMethodSource($source, 'hasPublishBlockingAiBuildRunningState');
+        self::assertStringContainsString('$publishBlockingAiRunning = $this->hasPublishBlockingAiBuildRunningState($normalized, $activeOperation, $buildQueueInfo);', $workspaceStateBody);
+        self::assertStringContainsString('$this->hasPublishBlockingAiBuildRunningState($scope, $activeOperation, $buildQueueInfo)', $failureResolverBody);
+        self::assertStringContainsString('$this->readAiQueueInfoStatus($buildQueueInfo)', $runningStateBody);
     }
 
     /**
@@ -1142,7 +1164,28 @@ final class AiSiteAgentQueueReuseTest extends TestCase
     {
         $functionOffset = \strpos($source, 'function ' . $functionName);
         self::assertNotFalse($functionOffset, $functionName . ' missing');
-        $nextFunctionOffset = \strpos($source, "\n    function ", $functionOffset + 1);
+
+        // 找下一个方法声明作为右边界：支持 `private/protected/public function`、`static function`、
+        // 以及无修饰符 `function`（4 空格缩进，类成员层级）。
+        // 旧版本只匹配 `\n    function ` 会漏掉所有带可见性修饰符的下一个方法，导致 $functionSource
+        // 一路展开到文件末尾，把后续无关方法的内容当成本函数体，让 NotContains 类断言误报。
+        $boundaryPatterns = [
+            "\n    private function ",
+            "\n    protected function ",
+            "\n    public function ",
+            "\n    private static function ",
+            "\n    protected static function ",
+            "\n    public static function ",
+            "\n    static function ",
+            "\n    function ",
+        ];
+        $nextFunctionOffset = false;
+        foreach ($boundaryPatterns as $pattern) {
+            $candidate = \strpos($source, $pattern, $functionOffset + 1);
+            if ($candidate !== false && ($nextFunctionOffset === false || $candidate < $nextFunctionOffset)) {
+                $nextFunctionOffset = $candidate;
+            }
+        }
 
         $functionSource = $nextFunctionOffset === false
             ? \substr($source, $functionOffset)
