@@ -118,6 +118,69 @@ class AiSiteVisualUrlServiceTest extends TestCase
         ], $service->resolveVirtualUrls('pub_abc', '', 456));
     }
 
+    public function testNormalizeUrlsPrefersCurrentRequestOriginOverPendingBusinessDomain(): void
+    {
+        $service = new AiSiteVisualUrlService($this->createUrlMock());
+
+        $urls = $service->normalizeUrlsToLocalBase(
+            [
+                'preview_full_url' => 'https://teenpattipatti-com-c2ccbb.weline.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&preview=1',
+                'visual_preview_url' => 'https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&preview=1&visual_editor=1',
+                'visual_edit_url' => 'https://backend.test/pagebuilder/backend/page/virtual-edit?public_id=pub_abc&page_type=home',
+            ],
+            [
+                'current_request_origin' => 'https://pre.qipaisaas.com:9981',
+                'scope' => [
+                    'target_domain' => 'teenpattipatti-com-c2ccbb.weline.test',
+                ],
+            ]
+        );
+
+        self::assertSame(
+            'https://pre.qipaisaas.com:9981/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&preview=1',
+            $urls['preview_full_url']
+        );
+        self::assertSame(
+            'https://pre.qipaisaas.com:9981/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&preview=1&visual_editor=1',
+            $urls['visual_preview_url']
+        );
+        self::assertSame(
+            'https://pre.qipaisaas.com:9981/pagebuilder/backend/page/virtual-edit?public_id=pub_abc&page_type=home',
+            $urls['visual_edit_url']
+        );
+    }
+
+    public function testNormalizeUrlsStillUsesLocalPreviewDomainWhenNoRequestOriginExists(): void
+    {
+        $service = new AiSiteVisualUrlService($this->createUrlMock());
+
+        $urls = $service->normalizeUrlsToLocalBase(
+            [
+                'preview_full_url' => 'https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&preview=1',
+                'visual_preview_url' => 'https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&preview=1&visual_editor=1',
+                'visual_edit_url' => 'https://backend.test/pagebuilder/backend/page/virtual-edit?public_id=pub_abc&page_type=home',
+            ],
+            [
+                'scope' => [
+                    'target_domain' => 'demo.weline.test',
+                ],
+            ]
+        );
+
+        self::assertSame(
+            'https://demo.weline.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&preview=1',
+            $urls['preview_full_url']
+        );
+        self::assertSame(
+            'https://demo.weline.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&preview=1&visual_editor=1',
+            $urls['visual_preview_url']
+        );
+        self::assertSame(
+            'https://demo.weline.test/pagebuilder/backend/page/virtual-edit?public_id=pub_abc&page_type=home',
+            $urls['visual_edit_url']
+        );
+    }
+
     private function createUrlMock(): Url
     {
         $url = $this->createMock(Url::class);
