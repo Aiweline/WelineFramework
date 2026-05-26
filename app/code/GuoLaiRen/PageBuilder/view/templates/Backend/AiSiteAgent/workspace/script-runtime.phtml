@@ -105,6 +105,9 @@
     var operationSseBaseUrl = <?= \json_encode($operationSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceSnapshotUrl = <?= \json_encode((string)($workspaceSnapshotUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var activeOperation = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var initialWorkspaceState = window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
+        ? window.__pbWorkspaceState
+        : (window.__pbInitialWorkspaceState && typeof window.__pbInitialWorkspaceState === 'object' ? window.__pbInitialWorkspaceState : {});
     var pageTypeLabelMap = <?= \json_encode($pageTypeLabels, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
     var runningSource = null;
@@ -802,11 +805,27 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return false;
         }
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        var queueStatus = readQueueStatusForDeferredState(workspaceState, normalizedOperation);
+        if (normalizedOperation === 'build' && isQueueStatusInProgressForWatch(queueStatus)) {
+            workspaceState.latest_build_failed = false;
+            workspaceState.latest_build_failure = {};
+            workspaceState.publish_blocked_by_latest_ai_failure = false;
+            workspaceState.publish_blocked_reason = '';
+            workspaceState.can_publish = false;
+            workspaceState.workspace_status = 'building';
+            if (workspaceState.scope && typeof workspaceState.scope === 'object') {
+                workspaceState.scope.latest_build_failed = 0;
+                workspaceState.scope.latest_build_failure = {};
+                workspaceState.scope.publish_blocked_by_latest_ai_failure = 0;
+                workspaceState.scope.publish_blocked_reason = '';
+                workspaceState.scope.workspace_status = 'building';
+            }
+        }
         hydrateWorkspaceFromState(workspaceState);
         updateTaskSummaryFromState(workspaceState);
         updateStageStatusSummary(workspaceState);
 
-        var normalizedOperation = String(operation || '').trim().toLowerCase();
         if (normalizedOperation === 'plan' && workspaceStateHasBlockingPlanFailures(workspaceState)) {
             stopDeferredQueueStatePoll();
             var planFailureItems = collectRetryableFailureItemsFromPayload('plan', { state: workspaceState });
@@ -829,7 +848,6 @@
             return true;
         }
 
-        var queueStatus = readQueueStatusForDeferredState(workspaceState, normalizedOperation);
         if (isQueueStatusInProgressForWatch(queueStatus)) {
             var progressPayload = buildDeferredQueueProgressPayload(normalizedOperation, workspaceState, queueStatus);
             syncQueuedStageUi(normalizedOperation, 'progress', progressPayload, { level: 'progress' });
@@ -903,16 +921,26 @@
     }
 
     function startActiveQueueObservationOnLoad() {
+        var state = initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {};
         var active = activeOperation && typeof activeOperation === 'object' ? activeOperation : {};
+        if (!shouldObserveActiveQueueOperationOnLoad(active) && state.active_operation && typeof state.active_operation === 'object') {
+            active = state.active_operation;
+        }
+        if (!shouldObserveActiveQueueOperationOnLoad(active) && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'build'))) {
+            active = {
+                operation: 'build',
+                status: readQueueStatusForDeferredState(state, 'build') || 'queued'
+            };
+        }
         if (!shouldObserveActiveQueueOperationOnLoad(active)) {
             return;
         }
         var op = String(active.operation || '').trim().toLowerCase();
         var status = String(active.status || active.queue_status || 'queued').trim().toLowerCase();
-        syncQueuedStageUi(op, 'progress', buildDeferredQueueProgressPayload(op, {
+        syncQueuedStageUi(op, 'progress', buildDeferredQueueProgressPayload(op, Object.assign({}, state, {
             active_operation: active,
-            active_operations: Object.create(null)
-        }, status), { level: 'progress' });
+            active_operations: state.active_operations && typeof state.active_operations === 'object' ? state.active_operations : Object.create(null)
+        }), status), { level: 'progress' });
         startDeferredQueueStatePoll(op);
     }
 
