@@ -49,8 +49,8 @@ class QAQuestionPageDataServiceTest extends TestCase
         $productService->expects($this->once())->method('getProduct')->with(99)->willReturn($product);
 
         $url->method('getUrl')->willReturnMap([
-            ['qa/add', null, '/qa/add'],
-            ['qa/remove', null, '/qa/remove'],
+            [QAService::FRONTEND_ADD_ROUTE, null, '/qa/frontend/qa/add'],
+            [QAService::FRONTEND_REMOVE_ROUTE, null, '/qa/frontend/qa/remove'],
             ['customer/account/login', null, '/customer/account/login'],
         ]);
 
@@ -59,8 +59,8 @@ class QAQuestionPageDataServiceTest extends TestCase
 
         $this->assertSame(1, $result['question_count']);
         $this->assertTrue($result['can_ask']);
-        $this->assertSame('/qa/add', $result['ask_action']);
-        $this->assertSame('/qa/remove', $result['remove_action']);
+        $this->assertSame('/qa/frontend/qa/add', $result['ask_action']);
+        $this->assertSame('/qa/frontend/qa/remove', $result['remove_action']);
         $this->assertSame('/customer/account/login', $result['login_url']);
         $this->assertSame('Sample Product', $result['product']['name']);
         $this->assertTrue($result['qa_list'][0]['is_owner']);

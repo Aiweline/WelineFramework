@@ -111,11 +111,9 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
         $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
         // 设置执行时间限制
-        if ($timeout > 0) {
-            $timeLimit = $timeout + 10;
+        $timeLimit = ProviderTimeoutPolicy::resolveExecutionTimeLimit($timeout);
+        if ($timeLimit !== null) {
             @set_time_limit($timeLimit);
-        } else {
-            @set_time_limit(0);
         }
 
         $requestData = [
@@ -229,11 +227,9 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
         $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
         // 设置执行时间限制
-        if ($timeout > 0) {
-            $timeLimit = $timeout + 10;
+        $timeLimit = ProviderTimeoutPolicy::resolveExecutionTimeLimit($timeout);
+        if ($timeLimit !== null) {
             @set_time_limit($timeLimit);
-        } else {
-            @set_time_limit(0);
         }
 
         $requestData = [
@@ -781,11 +777,11 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
         if ($timeout > 0) {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
             curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, min(30, max(10, (int)ceil($timeout / 4))));
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, ProviderTimeoutPolicy::resolveLowSpeedTime($timeout));
         } else {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
             curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 120);
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, ProviderTimeoutPolicy::resolveLowSpeedTime($timeout));
         }
         
         // SSL配置

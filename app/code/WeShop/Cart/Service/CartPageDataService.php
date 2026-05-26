@@ -111,10 +111,22 @@ class CartPageDataService
     }
 
     /**
-     * @return array<int, array<string, string>>
+     * @return array<int, array<string, mixed>>
      */
     protected function normalizeOptions(mixed $rawOptions): array
     {
+        if (is_string($rawOptions) && trim($rawOptions) !== '') {
+            $decoded = json_decode(trim($rawOptions), true);
+            if (is_array($decoded)) {
+                return $this->normalizeOptions($decoded);
+            }
+
+            return [[
+                'label' => (string) __('规格'),
+                'value' => trim($rawOptions),
+            ]];
+        }
+
         if (is_array($rawOptions)) {
             $isAssoc = array_keys($rawOptions) !== range(0, count($rawOptions) - 1);
             if ($isAssoc) {
@@ -131,10 +143,35 @@ class CartPageDataService
 
             return array_values(array_filter(array_map(static function (mixed $option): ?array {
                 if (is_array($option) && isset($option['label'], $option['value'])) {
-                    return [
+                    $normalized = [
                         'label' => (string) $option['label'],
                         'value' => (string) $option['value'],
                     ];
+
+                    foreach (['attribute_id', 'option_id'] as $idKey) {
+                        $id = (int) ($option[$idKey] ?? 0);
+                        if ($id > 0) {
+                            $normalized[$idKey] = $id;
+                        }
+                    }
+
+                    foreach (['code', 'attribute_code', 'option_code', 'swatch_type', 'swatch_value', 'option_image'] as $stringKey) {
+                        $stringValue = trim((string) ($option[$stringKey] ?? ''));
+                        if ($stringValue !== '') {
+                            $normalized[$stringKey] = $stringValue;
+                        }
+                    }
+
+                    if (($normalized['swatch_type'] ?? '') === 'image') {
+                        if (($normalized['swatch_value'] ?? '') === '' && ($normalized['option_image'] ?? '') !== '') {
+                            $normalized['swatch_value'] = $normalized['option_image'];
+                        }
+                        if (($normalized['option_image'] ?? '') === '' && ($normalized['swatch_value'] ?? '') !== '') {
+                            $normalized['option_image'] = $normalized['swatch_value'];
+                        }
+                    }
+
+                    return $normalized;
                 }
 
                 return null;

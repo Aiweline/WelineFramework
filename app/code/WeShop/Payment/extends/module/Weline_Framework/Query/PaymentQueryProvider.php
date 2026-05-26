@@ -26,6 +26,8 @@ class PaymentQueryProvider implements QueryProviderInterface
             'getCheckoutPaymentMethods' => $this->paymentService->getCheckoutPaymentMethods($params),
             'getAvailablePaymentMethods' => $this->paymentService->getAvailablePaymentMethods($params),
             'getPaymentMethod' => $this->paymentService->getPaymentMethod((string) ($params['code'] ?? $params['payment_method'] ?? '')),
+            'getPaymentProviders' => $this->paymentService->getPaymentProviders(),
+            'getPaymentCountryOptions' => $this->paymentService->getCountryOptions((string) ($params['locale'] ?? 'zh_Hans_CN')),
             'processPayment' => $this->processPayment($params),
             'queryPaymentStatus' => $this->paymentService->queryPaymentStatus(
                 (string) ($params['payment_method'] ?? ''),
@@ -49,6 +51,8 @@ class PaymentQueryProvider implements QueryProviderInterface
                 ['name' => 'getCheckoutPaymentMethods', 'description' => __('Get enabled payment methods for checkout.')],
                 ['name' => 'getAvailablePaymentMethods', 'description' => __('Get all configured payment methods.')],
                 ['name' => 'getPaymentMethod', 'description' => __('Get a single payment method definition.')],
+                ['name' => 'getPaymentProviders', 'description' => __('Get payment provider catalogue.')],
+                ['name' => 'getPaymentCountryOptions', 'description' => __('Get ISO country options for payment filtering.')],
                 ['name' => 'processPayment', 'description' => __('Process a payment for an order.')],
                 ['name' => 'queryPaymentStatus', 'description' => __('Query payment status by order number.')],
             ],

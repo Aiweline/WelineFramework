@@ -2,6 +2,7 @@
 /** @var \Weline\Framework\View\Template $this */
 
 $loginSiteName = (string) ($this->getData('login_site_name') ?: 'Weline');
+$loginSiteDescription = trim((string) $this->getData('login_site_description'));
 $defaultLoginLogo = (string) (
     $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-weline-default.svg')
     ?: $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png')
@@ -1172,7 +1173,7 @@ $currentYear = date('Y');
 
                     <div class="weline-admin-login-stage-body">
                         <h1 class="weline-admin-login-stage-title"><?= __('把 %{name} 的配置、权限与发布流程收拢到一个后台工作台里', ['name' => $loginSiteName]) ?></h1>
-                        <p class="weline-admin-login-stage-description"><?= __('这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。') ?></p>
+                        <p class="weline-admin-login-stage-description"><?= $loginSiteDescription !== '' ? htmlspecialchars($loginSiteDescription, ENT_QUOTES, 'UTF-8') : __('这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。') ?></p>
                     </div>
 
                     <div class="weline-admin-login-stage-grid">

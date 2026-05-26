@@ -7,17 +7,53 @@
 "Affiliate save failed.",推荐账户保存失败。
 "Affiliate Details",推荐人详情
 "Please log in to continue.",请先登录。
+分享链接无效或已过期。,分享链接无效或已过期。
+分销分享链接已创建,分销分享链接已创建
+"分销模块生成新的商品分享码后触发，负载包含 share、affiliate_id、customer_id、product_id、share_code。","分销模块生成新的商品分享码后触发，负载包含 share、affiliate_id、customer_id、product_id、share_code。"
+分销分享已发出,分销分享已发出
+"用户复制链接、二维码或社交平台分享后触发，负载包含 share、touch、share_code、platform。","用户复制链接、二维码或社交平台分享后触发，负载包含 share、touch、share_code、platform。"
+分销分享被点击,分销分享被点击
+"分享跳转链接被点击后触发，负载包含 share、touch、attribution、share_code、product_id、target_url。","分享跳转链接被点击后触发，负载包含 share、touch、attribution、share_code、product_id、target_url。"
+分销归因已开始,分销归因已开始
+"有效点击写入 30 天末触归因后触发，负载包含 share、attribution、customer_id、visitor_key、expires_at。","有效点击写入 30 天末触归因后触发，负载包含 share、attribution、customer_id、visitor_key、expires_at。"
+分销互动已记录,分销互动已记录
+"有效归因下发生浏览、收藏、加购、评价等互动后触发，负载包含 event_type、touch、attribution。","有效归因下发生浏览、收藏、加购、评价等互动后触发，负载包含 event_type、touch、attribution。"
+分销转化待确认,分销转化待确认
+"订单创建后生成待结算佣金流水时触发，负载包含 order_id、customer_id、attribution、commissions。","订单创建后生成待结算佣金流水时触发，负载包含 order_id、customer_id、attribution、commissions。"
+分销佣金流水已创建,分销佣金流水已创建
+"订单项级佣金流水创建后触发，负载包含 commission、order_id、affiliate_id、status。","订单项级佣金流水创建后触发，负载包含 commission、order_id、affiliate_id、status。"
+分销佣金状态已变更,分销佣金状态已变更
+"支付、取消、退款导致佣金状态变化后触发，负载包含 commission、order_id、old_status、new_status、reason。","支付、取消、退款导致佣金状态变化后触发，负载包含 commission、order_id、old_status、new_status、reason。"
+分销奖励请求,分销奖励请求
+"预留给优惠券、积分、通知等模块监听的奖励扩展入口。Affiliate 第一版不内置默认奖励实现。","预留给优惠券、积分、通知等模块监听的奖励扩展入口。Affiliate 第一版不内置默认奖励实现。"
+分销查询器不支持该操作：%{1},分销查询器不支持该操作：%{1}
+"缺少商品 ID。","缺少商品 ID。"
+分享链接已生成。,分享链接已生成。
+缺少分享码或分享平台。,缺少分享码或分享平台。
+分享动作已记录。,分享动作已记录。
+分销数据已加载。,分销数据已加载。
+请先登录。,请先登录。
+分销查询,分销查询
+提供商品分享链接、分享动作记录和分销数据汇总。,提供商品分享链接、分享动作记录和分销数据汇总。
+为当前分销用户生成或复用商品分享链接。,为当前分销用户生成或复用商品分享链接。
+记录复制链接、二维码或社交平台发出分享动作。,记录复制链接、二维码或社交平台发出分享动作。
+返回当前分销用户的分享、转化和佣金汇总。,返回当前分销用户的分享、转化和佣金汇总。
 "Affiliate page hooks","推荐页面 Hook"
 "Inject storefront content above the affiliate dashboard page.",在前台推荐仪表盘页面上方注入内容。
 "Affiliate summary hooks","推荐摘要 Hook"
 "Inject storefront content below the affiliate summary card.",在推荐摘要卡片下方注入内容。
 "Customer ID is required.",必须提供客户ID
+请先登录后再生成分享链接。,请先登录后再生成分享链接。
+当前分销账户不可用。,当前分销账户不可用。
+缺少分享平台。,缺少分享平台。
 Active,启用
 Disabled,禁用
 "Unsupported affiliate status.",不支持的推荐账户状态。
 "Commission rate must be between 0 and 1.","佣金比例必须在 0 到 1 之间。"
 "Affiliate record not found.",未找到推荐记录。
 "Customer ID or affiliate ID is required.","必须提供客户 ID 或推荐 ID。"
+缺少分享码。,缺少分享码。
+复制链接,复制链接
 "Review, filter, and adjust affiliate accounts created by marketing partners.",查看、筛选并调整营销合作伙伴创建的推荐账户。
 "Page %d of %d, %d affiliates found","Page %d of %d, %d affiliates found"
 "Total Affiliates",推荐人总数
@@ -70,3 +106,14 @@ Growth,Growth
 "Open Center",打开中心
 "Share links and track commission",分享链接并跟踪佣金
 "Use your referral code to invite new customers and monitor earned, paid, and pending commissions.",使用您的推荐码邀请新客户并监控已赚取、已支付和待处理的佣金。
+分销分享,分销分享
+分销分享链接,分销分享链接
+复制,复制
+分享,分享
+"分销 API 未初始化","分销 API 未初始化"
+分销数据加载失败,分销数据加载失败
+已复制,已复制
+已分享,已分享
+加载中,加载中
+"分销 API 不支持分享链接操作","分销 API 不支持分享链接操作"
+暂不可用,暂不可用

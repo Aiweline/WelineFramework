@@ -22,16 +22,25 @@ class SaveTest extends TestCase
                 'methods' => [
                     'paypal' => ['enabled' => '1'],
                 ],
+                'test_method' => '',
+                'scope_type' => 'global',
+                'scope_code' => 'default',
+                'environment' => 'sandbox',
             ])
             ->willReturn(['default_method' => 'paypal']);
 
         $request = $this->createMock(Request::class);
         $request->expects($this->once())->method('isPost')->willReturn(true);
-        $request->expects($this->exactly(2))
+        $request->expects($this->exactly(10))
             ->method('getPost')
             ->willReturnMap([
                 ['default_method', '', 'paypal'],
                 ['methods', [], ['paypal' => ['enabled' => '1']]],
+                ['test_method', '', ''],
+                ['scope_type', 'global', 'global'],
+                ['scope_code', 'default', 'default'],
+                ['environment', 'sandbox', 'sandbox'],
+                ['tab', 'credentials', 'credentials'],
             ]);
 
         $messageManager = $this->createMock(MessageManager::class);
@@ -50,7 +59,7 @@ class SaveTest extends TestCase
             ->willReturn($messageManager);
         $controller->expects($this->once())
             ->method('redirect')
-            ->with('*/backend/payment');
+            ->with('*/backend/payment?tab=credentials&scope_type=global&scope_code=default&environment=sandbox');
 
         $this->setProtectedProperty($controller, 'request', $request);
 

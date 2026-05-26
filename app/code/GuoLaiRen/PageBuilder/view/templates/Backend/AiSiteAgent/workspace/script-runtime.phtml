@@ -77,7 +77,7 @@
     }
     function resolveRuntimeQueueInfoKey(operation) {
         var op = String(operation || '').trim().toLowerCase();
-        if (isRuntimePublishBlockingAiOperation(op)) {
+        if (isRuntimePublishBlockingAiOperation(op) || op === 'publish') {
             return 'build_queue_info';
         }
         return 'plan_queue_info';
@@ -322,7 +322,7 @@
             : {};
         var activeOperationName = String(active.operation || op || '').trim().toLowerCase();
         var activeStatus = normalizeTerminalOperationStatus(active.status || '');
-        if (activeStatus && (activeOperationName === 'plan' || isRuntimeVisualRefreshOperation(activeOperationName))) {
+        if (activeStatus && (activeOperationName === 'plan' || isRuntimeVisualRefreshOperation(activeOperationName) || activeOperationName === 'publish')) {
             return Object.assign({}, active, {
                 operation: activeOperationName,
                 status: activeStatus,
@@ -409,6 +409,18 @@
             refreshEmbeddedPreviewFrame(650);
             return;
         }
+        if (op === 'publish') {
+            if (status === 'done') {
+                finishOperation({ operation: 'publish', state: workspaceState });
+            }
+            if (typeof enableNavigationAfterOperation === 'function') {
+                enableNavigationAfterOperation();
+            }
+            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                previewBridge.resumeWorkspaceStream();
+            }
+            return;
+        }
         if (op === 'plan') {
             if (status === 'error' || status === 'stop') {
                 if (message && typeof setPlanModalProgress === 'function') {
@@ -431,7 +443,7 @@
                     setPlanGenerationActionLock(false);
                 }
                 if (typeof setPlanRetryButtonVisible === 'function') {
-                    setPlanRetryButtonVisible(true);
+                    setPlanRetryButtonVisible(false);
                 }
             }
         }
@@ -811,6 +823,9 @@
             if (planFailureMessage && typeof setPlanModeStatus === 'function') {
                 setPlanModeStatus(planFailureMessage);
             }
+            if (typeof window.__pbSchedulePlanWorkspaceReload === 'function') {
+                window.__pbSchedulePlanWorkspaceReload('plan_retryable_failure', 900);
+            }
             return true;
         }
 
@@ -877,7 +892,7 @@
             return false;
         }
         var op = String(active.operation || '').trim().toLowerCase();
-        if (!op || (op !== 'plan' && !isRuntimeVisualRefreshOperation(op))) {
+        if (!op || (op !== 'plan' && !isRuntimeVisualRefreshOperation(op) && op !== 'publish')) {
             return false;
         }
         var status = String(active.status || active.queue_status || '').trim().toLowerCase();

@@ -5,6 +5,14 @@
 /**@var \Weline\Framework\View\Template $this */
 $activeTab = $activeTab ?? 'adapter';
 $adapters = $adapters ?? [];
+$modelOptionsByModality = is_array($modelOptionsByModality ?? null) ? $modelOptionsByModality : [];
+$modelOptionsJson = json_encode(
+    $modelOptionsByModality,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
+);
+if ($modelOptionsJson === false) {
+    $modelOptionsJson = '{}';
+}
 ?>
 <template>Weline_Ai::Backend/Manager/tabs.phtml</template>
 <?php
@@ -503,6 +511,14 @@ foreach ($adapters as $a) {
     </div>
 </div>
 
+<form id="batchModelBindingForm"
+      method="post"
+      action="<?= $this->getBackendUrl('*/backend/adapter/batchSaveModelBindings') ?>"
+      class="d-none">
+    <input type="hidden" name="ids" id="batchModelBindingIds" value="">
+    <input type="hidden" name="model_bindings" id="batchModelBindingPayload" value="">
+</form>
+
 <script>
 (function() {
     'use strict';
@@ -519,6 +535,7 @@ foreach ($adapters as $a) {
             getModelOptions: '<?= $this->getBackendUrl('*/backend/adapter/getModelOptions') ?>',
             cleanup: '<?= $this->getBackendUrl('*/backend/adapter/cleanup') ?>'
         },
+        modelOptionsByModality: <?= $modelOptionsJson ?>,
 
         scan: function() {
             BackendConfirm.show('<?= __('确定要扫描场景适配器吗？这将发现所有模块中的适配器并更新数据库记录。') ?>', {
@@ -756,43 +773,34 @@ foreach ($adapters as $a) {
             if (!modal || !selects.length) return;
             var saveBtn = document.getElementById('batchModelBindingSaveBtn');
             if (saveBtn) saveBtn.disabled = true;
-            var api = window.Weline && window.Weline.Api ? window.Weline.Api : { request: function(u, o) { return fetch(u, o).then(function(r) { return r.json(); }); } };
-            var requests = selects.map(function(select) {
+            selects.forEach(function(select) {
                 var modality = select.getAttribute('data-modality') || '';
                 select.innerHTML = '';
                 var emptyOption = document.createElement('option');
                 emptyOption.value = '';
                 emptyOption.textContent = '<?= __('不启用') ?>';
                 select.appendChild(emptyOption);
-                select.disabled = true;
-                return api.request(WelineAdapterManager.urls.getModelOptions + '?primary_modality=' + encodeURIComponent(modality), { method: 'GET' }).then(function(res) {
-                    var data = (res && res.data) || res;
-                    if (data.success && data.items && data.items.length) {
-                        data.items.forEach(function(item) {
-                            var opt = document.createElement('option');
-                            opt.value = item.model_code || '';
-                            opt.textContent = ((item.name || item.model_code || '').trim() || item.model_code) + ' (' + modality + ')';
-                            select.appendChild(opt);
-                        });
-                    }
-                    if (presetBindings[modality]) {
-                        select.value = presetBindings[modality];
-                        if (select.value !== presetBindings[modality]) {
-                            var presetOption = document.createElement('option');
-                            presetOption.value = presetBindings[modality];
-                            presetOption.textContent = presetBindings[modality] + ' (' + modality + ')';
-                            presetOption.dataset.missingModel = '1';
-                            select.appendChild(presetOption);
-                            select.value = presetBindings[modality];
-                        }
-                    }
-                }).catch(function(e) {
-                    BackendToast.error('<?= __('加载模型列表失败：') ?>' + (e.message || e));
-                }).finally(function() {
-                    select.disabled = false;
+                var items = WelineAdapterManager.modelOptionsByModality[modality] || [];
+                items.forEach(function(item) {
+                    var opt = document.createElement('option');
+                    opt.value = item.model_code || '';
+                    opt.textContent = ((item.name || item.model_code || '').trim() || item.model_code) + ' (' + modality + ')';
+                    select.appendChild(opt);
                 });
+                if (presetBindings[modality]) {
+                    select.value = presetBindings[modality];
+                    if (select.value !== presetBindings[modality]) {
+                        var presetOption = document.createElement('option');
+                        presetOption.value = presetBindings[modality];
+                        presetOption.textContent = presetBindings[modality] + ' (' + modality + ')';
+                        presetOption.dataset.missingModel = '1';
+                        select.appendChild(presetOption);
+                        select.value = presetBindings[modality];
+                    }
+                }
+                select.disabled = false;
             });
-            Promise.all(requests).finally(function() { if (saveBtn) saveBtn.disabled = false; });
+            if (saveBtn) saveBtn.disabled = false;
             var bsModal = typeof bootstrap !== 'undefined' && bootstrap.Modal ? new bootstrap.Modal(modal) : null;
             if (bsModal) bsModal.show();
         },
@@ -834,27 +842,17 @@ foreach ($adapters as $a) {
                 BackendToast.warning('<?= __('请至少选择一个能力模型') ?>');
                 return;
             }
+            var form = document.getElementById('batchModelBindingForm');
+            var idsInput = document.getElementById('batchModelBindingIds');
+            var bindingsInput = document.getElementById('batchModelBindingPayload');
+            if (!form || !idsInput || !bindingsInput) {
+                BackendToast.error('<?= __('模型绑定保存失败') ?>');
+                return;
+            }
+            idsInput.value = ids.join(',');
+            bindingsInput.value = JSON.stringify(bindings);
             showLoading();
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ ids: ids, model_bindings: bindings }) };
-            var api = window.Weline && window.Weline.Api ? window.Weline.Api : { request: function(u, o) { return fetch(u, o).then(function(r) { return r.json(); }); } };
-            api.request(WelineAdapterManager.urls.batchSaveModelBindings, opts).then(function(res) {
-                var data = (res && res.data) || res;
-                hideLoading();
-                if (data.success) {
-                    BackendToast.success(data.message || '<?= __('模型绑定已保存') ?>');
-                    var modal = document.getElementById('batchModelBindingModal');
-                    if (modal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                        var m = bootstrap.Modal.getInstance(modal);
-                        if (m) m.hide();
-                    }
-                    setTimeout(function() { location.reload(); }, 500);
-                } else {
-                    BackendToast.error(data.message || '<?= __('模型绑定保存失败') ?>');
-                }
-            }).catch(function(e) {
-                hideLoading();
-                BackendToast.error('<?= __('请求失败：') ?>' + (e.message || e));
-            });
+            form.submit();
         },
 
         filterRows: function(keyword) {

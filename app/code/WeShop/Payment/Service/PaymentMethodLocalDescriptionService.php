@@ -14,14 +14,14 @@ class PaymentMethodLocalDescriptionService
     private const DEFAULT_LOCAL_DESCRIPTIONS = [
         'b2b_credit_account' => [
             'zh_Hans_CN' => [
-                'title' => '企业信用账户',
-                'description' => '订单计入企业信用额度，并在到期日前按发票付款。',
-                'checkout_note' => '仅适用于已开通有效信用额度的企业客户。',
+                'title' => '信用额度支付',
+                'description' => '仅派发信用额度支付请求事件，授信校验和额度处理由业务监听器完成。',
+                'checkout_note' => '仅限已通过授信审核的企业客户使用。',
             ],
             'en_US' => [
-                'title' => 'B2B Credit Account',
-                'description' => 'Charge the order to the business credit line and pay by invoice before the due date.',
-                'checkout_note' => 'Only available to business customers with an active credit line.',
+                'title' => 'Credit Line Payment',
+                'description' => 'Dispatches a credit payment request event; credit approval and balance handling are owned by business listeners.',
+                'checkout_note' => 'Only available to business customers approved for credit terms.',
             ],
         ],
         'manual_transfer' => [
@@ -31,7 +31,7 @@ class PaymentMethodLocalDescriptionService
                 'checkout_note' => '请将订单金额转入配置的银行账户，并使用订单号作为付款备注。',
             ],
             'en_US' => [
-                'title' => 'Manual Transfer',
+                'title' => 'Bank Transfer',
                 'description' => 'Pay by bank transfer after the order is created.',
                 'checkout_note' => 'Please transfer the order amount to the configured bank account and use the order number as the payment reference.',
             ],
@@ -39,7 +39,7 @@ class PaymentMethodLocalDescriptionService
         'cash_on_delivery' => [
             'zh_Hans_CN' => [
                 'title' => '货到付款',
-                'description' => '配送送达时现金付款。',
+                'description' => '配送送达时现场收款。',
                 'checkout_note' => '配送送达时向客户收款。',
             ],
             'en_US' => [

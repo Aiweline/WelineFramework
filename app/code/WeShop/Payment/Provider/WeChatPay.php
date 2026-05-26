@@ -6,8 +6,9 @@ namespace WeShop\Payment\Provider;
 
 use WeShop\Order\Model\Order;
 use WeShop\Payment\Interface\PaymentProviderInterface;
+use Weline\Payment\Interface\PaymentConfigTesterInterface;
 
-class WeChatPay implements PaymentProviderInterface
+class WeChatPay implements PaymentProviderInterface, PaymentConfigTesterInterface
 {
     use ProviderContextHelperTrait;
 
@@ -104,6 +105,28 @@ class WeChatPay implements PaymentProviderInterface
         $tradeState = strtoupper((string) ($response['trade_state'] ?? ''));
 
         return $this->mapTradeState($tradeState);
+    }
+
+    public function testConfig(array $config, array $context = []): array
+    {
+        $apiKey = trim((string) ($config['api_v3_key'] ?? ''));
+        if ($apiKey === '') {
+            return ['success' => false, 'message' => 'WeChat Pay api_v3_key is required.'];
+        }
+
+        $payload = [
+            'appid' => (string) ($config['app_id'] ?? 'test-app'),
+            'mch_id' => (string) ($config['mch_id'] ?? 'test-mch'),
+            'nonce_str' => 'configtest',
+            'sign_type' => strtoupper((string) ($config['sign_type'] ?? 'MD5')),
+        ];
+        $payload['sign'] = $this->signPayload($payload, $apiKey, (string) $payload['sign_type']);
+
+        return [
+            'success' => $this->verifyPayloadSignature($payload, $apiKey, (string) $payload['sign_type']),
+            'message' => 'WeChat Pay local signature validation passed.',
+            'details' => ['test_type' => 'local_signature'],
+        ];
     }
 
     /**

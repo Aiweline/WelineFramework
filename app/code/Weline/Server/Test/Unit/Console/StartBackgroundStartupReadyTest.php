@@ -340,6 +340,40 @@ final class StartBackgroundStartupReadyTest extends TestCase
         self::assertStringNotContainsString('Maintenance Worker 0/2', $progress);
     }
 
+    public function testReadStartupFailureReasonIncludesStructuredFailureCode(): void
+    {
+        $start = new Start();
+
+        $reason = $this->invokeProtected($start, 'readStartupFailureReason', [
+            'startup_failure_reason' => 'worker did not become ready',
+            'startup_failure_code' => 'WLS_STARTUP_READY_TIMEOUT',
+        ]);
+
+        self::assertSame('[WLS_STARTUP_READY_TIMEOUT] worker did not become ready', $reason);
+    }
+
+    public function testStructuredStartupFailureDiagnosticsAreNormalized(): void
+    {
+        $start = new Start();
+
+        $diagnostics = $this->invokeProtected($start, 'readStartupFailureDiagnostics', [
+            'startup_failure_diagnostics' => [
+                '',
+                'role=worker#1 state=starting',
+                123,
+            ],
+        ]);
+        $context = $this->invokeProtected($start, 'formatStartupFailureContextSummary', [
+            'instance' => 'test',
+            'main_port' => 443,
+            'dispatcher_enabled' => true,
+            'roles' => ['worker' => ['ready' => 0]],
+        ]);
+
+        self::assertSame(['role=worker#1 state=starting', '123'], $diagnostics);
+        self::assertSame('instance=test, main_port=443, dispatcher_enabled=true', $context);
+    }
+
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);

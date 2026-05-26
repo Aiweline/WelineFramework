@@ -1,7 +1,7 @@
 <?php
 /**
- * AI 管理聚合页：顶部 Tab（模型 | 适配器 | 供应商账户），iframe 内容区
- * @var string $activeTab 当前 Tab：model | adapter | account
+ * AI 管理聚合页：顶部 Tab（模型 | 适配器 | 技能 | 供应商账户），iframe 内容区
+ * @var string $activeTab 当前 Tab：model | adapter | skill | account
  * @var \Weline\Framework\View\Template $this
  */
 $activeTab = $activeTab ?? 'model';
@@ -18,8 +18,8 @@ $baseUrl = $this->getBackendUrl('ai/backend/manager');
 .weline-ai-manager .breadcrumb { background: transparent; }
 .weline-ai-manager .breadcrumb-item, .weline-ai-manager .breadcrumb-item a { color: var(--backend-color-text-secondary); }
 .weline-ai-manager .breadcrumb-item.active { color: var(--backend-color-text-primary); }
-.weline-ai-manager .nav-tabs { border-bottom: 1px solid var(--backend-color-border-default); background: var(--backend-color-card-bg); padding: 0 1rem; border-radius: 8px 8px 0 0; }
-.weline-ai-manager .nav-tabs .nav-link { border: none; color: var(--backend-color-text-secondary); padding: 1rem 1.25rem; font-weight: 500; border-bottom: 3px solid transparent; }
+.weline-ai-manager .nav-tabs { border-bottom: 1px solid var(--backend-color-border-default); background: var(--backend-color-card-bg); padding: 0 1rem; border-radius: 8px 8px 0 0; gap: 0.25rem; flex-wrap: nowrap; overflow-x: auto; }
+.weline-ai-manager .nav-tabs .nav-link { border: none; color: var(--backend-color-text-secondary); padding: 0.875rem 1rem; font-weight: 500; border-bottom: 3px solid transparent; white-space: nowrap; }
 .weline-ai-manager .nav-tabs .nav-link:hover { color: var(--backend-color-primary); }
 .weline-ai-manager .nav-tabs .nav-link.active { color: var(--backend-color-primary); border-bottom-color: var(--backend-color-primary); background: transparent; }
 .weline-ai-manager .tab-content { background: var(--backend-color-card-bg); border: 1px solid var(--backend-color-border-default); border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
@@ -59,7 +59,7 @@ $baseUrl = $this->getBackendUrl('ai/backend/manager');
         </li>
         <li class="nav-item">
             <a class="nav-link <?= $activeTab === 'skill' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=skill" data-tab="skill" data-url="<?= htmlspecialchars($skillUrl) ?>">
-                <i class="mdi mdi-shape-outline me-1"></i><lang>Skills</lang>
+                <i class="mdi mdi-shape-outline me-1"></i><lang>技能</lang>
             </a>
         </li>
         <li class="nav-item">
@@ -77,7 +77,7 @@ $baseUrl = $this->getBackendUrl('ai/backend/manager');
             <iframe src="<?= $activeTab === 'adapter' ? htmlspecialchars($adapterUrl) : '' ?>" title="<lang>适配器</lang>"></iframe>
         </div>
         <div class="tab-pane <?= $activeTab === 'skill' ? 'active' : '' ?>" id="tab-skill" data-tab="skill">
-            <iframe src="<?= $activeTab === 'skill' ? htmlspecialchars($skillUrl) : '' ?>" title="Skills"></iframe>
+            <iframe src="<?= $activeTab === 'skill' ? htmlspecialchars($skillUrl) : '' ?>" title="<?= __('技能') ?>"></iframe>
         </div>
         <div class="tab-pane <?= $activeTab === 'account' ? 'active' : '' ?>" id="tab-account" data-tab="account">
             <iframe src="<?= $activeTab === 'account' ? htmlspecialchars($accountUrl) : '' ?>" title="<lang>供应商账户</lang>"></iframe>

@@ -273,7 +273,10 @@ while ($server->isRunning()) {
     if ($kernel !== null && !$kernel->isConnected() && !$ipcReceivedShutdown) {
         $kernel->reconnect();
     }
-    if ($orphanGuard->shouldExit(
+    // Global shared sidecars have no single master process; their lifecycle is
+    // governed by the shared consumer registry and idle shutdown window.
+    $sharedServiceUsesTokenLifecycle = $sharedService && $masterPid <= 0 && $kernel === null;
+    if (!$sharedServiceUsesTokenLifecycle && $orphanGuard->shouldExit(
         $masterPid,
         $kernel !== null && $kernel->isConnected(),
         $ipcReceivedShutdown,

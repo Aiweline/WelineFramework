@@ -7,11 +7,15 @@ namespace WeShop\Product\Extends\Module\Weline_FakeData\Provider;
 use WeShop\Catalog\Model\Category;
 use WeShop\Catalog\Extends\Module\Weline_FakeData\Provider\CatalogProvider;
 use WeShop\Customer\Model\Customer;
+use WeShop\Notification\Model\Notification;
+use WeShop\Product\Helper\HanfuDemoOptionImageProvider;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
 use WeShop\Product\Model\Product\LocalDescription as ProductLocalDescription;
 use WeShop\Product\Model\Product\OptionId as ProductOptionId;
 use WeShop\Review\Model\Review;
+use WeShop\Review\Model\ReviewReply;
+use WeShop\Review\Service\ReviewService;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\LocalDescription as AttributeLocalDescription;
@@ -30,6 +34,8 @@ class ProductProvider implements FakeDataProviderInterface
     private const CODE = 'weshop_product';
     private const ENTITY_PRODUCT = 'product';
     private const ENTITY_REVIEW = 'review';
+    private const ENTITY_REVIEW_REPLY = 'review_reply';
+    private const ENTITY_NOTIFICATION = 'notification';
 
     public function __construct(
         private readonly Product $product,
@@ -47,6 +53,8 @@ class ProductProvider implements FakeDataProviderInterface
         private readonly ?Customer $customer = null,
         private readonly ?AttributeLocalDescription $attributeLocalDescription = null,
         private readonly ?OptionLocalDescription $optionLocalDescription = null,
+        private readonly ?ReviewReply $reviewReply = null,
+        private readonly ?Notification $notification = null,
     ) {
     }
 
@@ -78,7 +86,7 @@ class ProductProvider implements FakeDataProviderInterface
     public function describe(): array
     {
         return [
-            'entities' => [self::ENTITY_PRODUCT, 'product_category'],
+            'entities' => [self::ENTITY_PRODUCT, 'product_category', self::ENTITY_REVIEW, self::ENTITY_REVIEW_REPLY],
             'count' => count($this->getProducts()),
         ];
     }
@@ -153,6 +161,7 @@ class ProductProvider implements FakeDataProviderInterface
         $this->cleanupInvalidManagedAttributeOptions();
         $this->syncManagedAttributeLocalDescriptions();
         $result->merge($this->seedProductReviews($context));
+        $result->merge($this->seedReviewReplies($context));
 
         return $result;
     }
@@ -160,13 +169,36 @@ class ProductProvider implements FakeDataProviderInterface
     public function cleanup(FakeDataContext $context): FakeDataResult
     {
         $result = new FakeDataResult();
-        $records = $context->getRecordService()->getRecords(self::CODE, self::ENTITY_PRODUCT);
+        $records = $context->getRecordService()->getRecords(self::CODE);
+        $order = [
+            self::ENTITY_NOTIFICATION => 10,
+            self::ENTITY_REVIEW_REPLY => 20,
+            self::ENTITY_REVIEW => 30,
+            self::ENTITY_PRODUCT => 40,
+        ];
+        usort($records, static function (array $left, array $right) use ($order): int {
+            return ($order[(string)($left['entity_type'] ?? '')] ?? 100) <=> ($order[(string)($right['entity_type'] ?? '')] ?? 100);
+        });
 
         foreach ($records as $record) {
             $productId = (int)($record['entity_id'] ?? 0);
             $entityType = (string)($record['entity_type'] ?? '');
             $stableKey = (string)($record['stable_key'] ?? '');
-            if ($entityType === self::ENTITY_REVIEW && $productId > 0) {
+            if ($entityType === self::ENTITY_NOTIFICATION && $productId > 0) {
+                $this->getNotificationModel()->clear()
+                    ->getQuery()
+                    ->where(Notification::schema_fields_ID, $productId)
+                    ->delete()
+                    ->fetch();
+                $result->addDeleted();
+            } elseif ($entityType === self::ENTITY_REVIEW_REPLY && $productId > 0) {
+                $this->getReviewReplyModel()->clear()
+                    ->getQuery()
+                    ->where(ReviewReply::schema_fields_ID, $productId)
+                    ->delete()
+                    ->fetch();
+                $result->addDeleted();
+            } elseif ($entityType === self::ENTITY_REVIEW && $productId > 0) {
                 $this->getReviewModel()->clear()
                     ->getQuery()
                     ->where(Review::schema_fields_ID, $productId)
@@ -278,6 +310,248 @@ class ProductProvider implements FakeDataProviderInterface
         }
 
         return $result;
+    }
+
+    private function seedReviewReplies(FakeDataContext $context): FakeDataResult
+    {
+        $result = new FakeDataResult();
+        $reviewRecords = $context->getRecordService()->getRecords(self::CODE, self::ENTITY_REVIEW);
+        if ($reviewRecords === []) {
+            return $result;
+        }
+
+        $customerIds = $this->resolveReviewCustomerIds();
+        $existingReplyRecords = $context->getRecordService()->getRecords(self::CODE, self::ENTITY_REVIEW_REPLY);
+        $existingRepliesByKey = [];
+        foreach ($existingReplyRecords as $record) {
+            $stableKey = (string)($record['stable_key'] ?? '');
+            if ($stableKey !== '') {
+                $existingRepliesByKey[$stableKey] = (int)($record['entity_id'] ?? 0);
+            }
+        }
+
+        $existingNotificationRecords = $context->getRecordService()->getRecords(self::CODE, self::ENTITY_NOTIFICATION);
+        $existingNotificationsByKey = [];
+        foreach ($existingNotificationRecords as $record) {
+            $stableKey = (string)($record['stable_key'] ?? '');
+            if ($stableKey !== '') {
+                $existingNotificationsByKey[$stableKey] = (int)($record['entity_id'] ?? 0);
+            }
+        }
+
+        $replyContents = $this->getSampleReviewReplyContents();
+        $touchedReplyKeys = [];
+        $touchedNotificationKeys = [];
+        foreach ($reviewRecords as $record) {
+            $reviewId = (int)($record['entity_id'] ?? 0);
+            $reviewStableKey = (string)($record['stable_key'] ?? '');
+            if ($reviewId <= 0 || $reviewStableKey === '') {
+                continue;
+            }
+
+            $review = clone $this->getReviewModel();
+            $review->reset()->clearData()->load($reviewId);
+            if (!$review->getId()) {
+                continue;
+            }
+
+            $productId = (int)$review->getData(Review::schema_fields_PRODUCT_ID);
+            $reviewCustomerId = (int)$review->getData(Review::schema_fields_CUSTOMER_ID);
+            $parentReplyId = 0;
+            $parentCustomerId = 0;
+            $replyCount = 1 + ($reviewId % 2);
+
+            for ($index = 0; $index < $replyCount; $index++) {
+                $stableKey = 'review-reply:' . $reviewStableKey . ':' . $index;
+                $touchedReplyKeys[$stableKey] = true;
+                $existingId = (int)($existingRepliesByKey[$stableKey] ?? 0);
+                $actorCustomerId = $this->resolveAlternateCustomerId($customerIds, $reviewCustomerId, $reviewId + $index + 1);
+                $mentionedCustomerId = $index === 0 ? $reviewCustomerId : $parentCustomerId;
+                if ($mentionedCustomerId <= 0 || $mentionedCustomerId === $actorCustomerId) {
+                    $mentionedCustomerId = $this->resolveAlternateCustomerId($customerIds, $actorCustomerId, $reviewId + $index + 3);
+                }
+                $mentionedCustomerIds = $mentionedCustomerId > 0 ? [$mentionedCustomerId] : [];
+                $createdAt = $this->buildReviewReplyTimestamp(
+                    (string)$review->getData(Review::schema_fields_CREATED_AT),
+                    $index
+                );
+                $mentionToken = $mentionedCustomerId > 0 ? '@customer:' . $mentionedCustomerId : '';
+                $content = trim(sprintf($replyContents[($reviewId + $index) % count($replyContents)], $mentionToken));
+
+                $reply = clone $this->getReviewReplyModel();
+                $reply->reset()->clearData();
+                if ($existingId > 0) {
+                    $reply->load($existingId);
+                }
+
+                $reply->setData(ReviewReply::schema_fields_REVIEW_ID, $reviewId)
+                    ->setData(ReviewReply::schema_fields_PARENT_REPLY_ID, $parentReplyId)
+                    ->setData(ReviewReply::schema_fields_PRODUCT_ID, $productId)
+                    ->setData(ReviewReply::schema_fields_CUSTOMER_ID, $actorCustomerId)
+                    ->setData(ReviewReply::schema_fields_DISPLAY_NAME, 'Customer #' . $actorCustomerId)
+                    ->setData(ReviewReply::schema_fields_CONTENT, $content)
+                    ->setData(
+                        ReviewReply::schema_fields_MENTIONED_CUSTOMER_IDS,
+                        $mentionedCustomerIds === [] ? '' : (json_encode($mentionedCustomerIds, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '')
+                    )
+                    ->setData(ReviewReply::schema_fields_STATUS, ReviewReply::STATUS_APPROVED)
+                    ->setData(ReviewReply::schema_fields_CREATED_AT, $createdAt)
+                    ->setData(ReviewReply::schema_fields_UPDATED_AT, $createdAt)
+                    ->save();
+
+                $replyId = (int)($reply->getId() ?? 0);
+                if ($replyId <= 0) {
+                    $result->addError((string)__('Failed to save fake review reply for review %{1}', [$reviewId]));
+                    continue;
+                }
+
+                $context->record(
+                    self::CODE,
+                    self::ENTITY_REVIEW_REPLY,
+                    $replyId,
+                    $stableKey,
+                    ['review_id' => $reviewId, 'product_id' => $productId, 'index' => $index]
+                );
+                $existingId > 0 ? $result->addUpdated() : $result->addCreated();
+
+                $recipients = $this->collectFakeReviewReplyNotificationRecipients(
+                    $reviewCustomerId,
+                    $parentCustomerId,
+                    $mentionedCustomerIds,
+                    $actorCustomerId
+                );
+                foreach ($recipients as $recipientCustomerId => $reason) {
+                    $notificationUpdated = $this->saveFakeReviewReplyNotification(
+                        $context,
+                        $stableKey,
+                        $recipientCustomerId,
+                        $reason,
+                        $actorCustomerId,
+                        $productId,
+                        $reviewId,
+                        $replyId,
+                        $createdAt,
+                        $existingNotificationsByKey,
+                        $touchedNotificationKeys
+                    );
+                    $notificationUpdated ? $result->addUpdated() : $result->addCreated();
+                }
+
+                $parentReplyId = $replyId;
+                $parentCustomerId = $actorCustomerId;
+            }
+        }
+
+        foreach ($existingRepliesByKey as $stableKey => $replyId) {
+            if (isset($touchedReplyKeys[$stableKey])) {
+                continue;
+            }
+
+            if ($replyId > 0) {
+                $this->getReviewReplyModel()->clear()
+                    ->getQuery()
+                    ->where(ReviewReply::schema_fields_ID, $replyId)
+                    ->delete()
+                    ->fetch();
+                $result->addDeleted();
+            }
+            $context->getRecordService()->removeRecord(self::CODE, $stableKey);
+        }
+
+        foreach ($existingNotificationsByKey as $stableKey => $notificationId) {
+            if (isset($touchedNotificationKeys[$stableKey])) {
+                continue;
+            }
+
+            if ($notificationId > 0) {
+                $this->getNotificationModel()->clear()
+                    ->getQuery()
+                    ->where(Notification::schema_fields_ID, $notificationId)
+                    ->delete()
+                    ->fetch();
+                $result->addDeleted();
+            }
+            $context->getRecordService()->removeRecord(self::CODE, $stableKey);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int, int> $mentionedCustomerIds
+     * @return array<int, string>
+     */
+    private function collectFakeReviewReplyNotificationRecipients(
+        int $reviewCustomerId,
+        int $parentCustomerId,
+        array $mentionedCustomerIds,
+        int $actorCustomerId
+    ): array {
+        $recipients = [];
+        foreach ([$reviewCustomerId, $parentCustomerId] as $customerId) {
+            if ($customerId > 0 && $customerId !== $actorCustomerId) {
+                $recipients[$customerId] = 'reply';
+            }
+        }
+
+        foreach ($mentionedCustomerIds as $customerId) {
+            $customerId = (int)$customerId;
+            if ($customerId > 0 && $customerId !== $actorCustomerId) {
+                $recipients[$customerId] = 'mention';
+            }
+        }
+
+        return $recipients;
+    }
+
+    /**
+     * @param array<string, int> $existingNotificationsByKey
+     * @param array<string, bool> $touchedNotificationKeys
+     */
+    private function saveFakeReviewReplyNotification(
+        FakeDataContext $context,
+        string $replyStableKey,
+        int $recipientCustomerId,
+        string $reason,
+        int $actorCustomerId,
+        int $productId,
+        int $reviewId,
+        int $replyId,
+        string $createdAt,
+        array $existingNotificationsByKey,
+        array &$touchedNotificationKeys
+    ): bool {
+        $stableKey = 'notification:' . $replyStableKey . ':customer:' . $recipientCustomerId;
+        $touchedNotificationKeys[$stableKey] = true;
+        $existingId = (int)($existingNotificationsByKey[$stableKey] ?? 0);
+        $isMention = $reason === 'mention';
+
+        $notification = clone $this->getNotificationModel();
+        $notification->reset()->clearData();
+        if ($existingId > 0) {
+            $notification->load($existingId);
+        }
+        $notification->setData(Notification::schema_fields_CUSTOMER_ID, $recipientCustomerId)
+            ->setData(Notification::schema_fields_TYPE, 'review_reply')
+            ->setData(Notification::schema_fields_TITLE, $isMention ? 'You were mentioned in a product review reply' : 'Your review has a new reply')
+            ->setData(Notification::schema_fields_CONTENT, 'Customer #' . $actorCustomerId . ($isMention ? ' mentioned you in a product review reply.' : ' replied in a product review.'))
+            ->setData(Notification::schema_fields_TARGET_URL, '/' . ReviewService::FRONTEND_ROUTE . '?product_id=' . $productId . '&review_id=' . $reviewId . '&reply_id=' . $replyId . '#review-reply-' . $replyId)
+            ->setData(Notification::schema_fields_IS_READ, 0)
+            ->setData(Notification::schema_fields_CREATED_AT, $createdAt)
+            ->save();
+
+        $notificationId = (int)($notification->getId() ?? 0);
+        if ($notificationId > 0) {
+            $context->record(
+                self::CODE,
+                self::ENTITY_NOTIFICATION,
+                $notificationId,
+                $stableKey,
+                ['review_id' => $reviewId, 'reply_id' => $replyId, 'customer_id' => $recipientCustomerId]
+            );
+        }
+
+        return $existingId > 0;
     }
 
     private function syncCategories(int $productId, array $handles): void
@@ -1643,6 +1917,36 @@ class ProductProvider implements FakeDataProviderInterface
         return date('Y-m-d H:i:s', strtotime("-{$daysAgo} days -{$hoursAgo} hours"));
     }
 
+    private function buildReviewReplyTimestamp(string $reviewCreatedAt, int $index): string
+    {
+        $baseTime = strtotime($reviewCreatedAt);
+        if (!$baseTime) {
+            $baseTime = time();
+        }
+
+        return date('Y-m-d H:i:s', strtotime('+' . ($index + 2) . ' hours', $baseTime));
+    }
+
+    /**
+     * @param array<int, int> $customerIds
+     */
+    private function resolveAlternateCustomerId(array $customerIds, int $excludedCustomerId, int $offset): int
+    {
+        $customerIds = array_values(array_unique(array_filter(array_map('intval', $customerIds))));
+        if ($customerIds === []) {
+            return $excludedCustomerId > 0 ? $excludedCustomerId + 1 : 1;
+        }
+
+        for ($i = 0; $i < count($customerIds); $i++) {
+            $customerId = $customerIds[($offset + $i) % count($customerIds)];
+            if ($customerId > 0 && $customerId !== $excludedCustomerId) {
+                return $customerId;
+            }
+        }
+
+        return $customerIds[0];
+    }
+
     /**
      * @return array<int, string>
      */
@@ -1678,6 +1982,29 @@ class ProductProvider implements FakeDataProviderInterface
     private function getReviewModel(): Review
     {
         return $this->review ?? ObjectManager::getInstance(Review::class);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function getSampleReviewReplyContents(): array
+    {
+        return [
+            '%s thanks for the size note, it helped me choose the right option.',
+            '%s I had the same experience with the fabric and the shipping was steady.',
+            '%s the color looked close to the product photos on my screen too.',
+            '%s appreciate the detail about matching it with a skirt.',
+        ];
+    }
+
+    private function getReviewReplyModel(): ReviewReply
+    {
+        return $this->reviewReply ?? ObjectManager::getInstance(ReviewReply::class);
+    }
+
+    private function getNotificationModel(): Notification
+    {
+        return $this->notification ?? ObjectManager::getInstance(Notification::class);
     }
 
     private function getCustomerModel(): Customer
@@ -1783,6 +2110,7 @@ class ProductProvider implements FakeDataProviderInterface
                 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=900&q=80',
                 'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=900&q=80',
             ],
+            'hanfu' => HanfuDemoOptionImageProvider::allImages(),
             'apparel' => [
                 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
                 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
@@ -1820,7 +2148,7 @@ class ProductProvider implements FakeDataProviderInterface
             str_contains($needle, 'jiaoling'),
             str_contains($needle, 'ruao'),
             str_contains($needle, 'mamian'),
-            str_contains($needle, 'ruqun'),
+            str_contains($needle, 'ruqun') => $sets['hanfu'],
             str_contains($needle, 'gallery_family:apparel'),
             str_contains($needle, 'fake-apparel'),
             str_contains($needle, 'daily-wear') => $sets['apparel'],
@@ -1879,10 +2207,10 @@ class ProductProvider implements FakeDataProviderInterface
             'logitech' => 'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?auto=format&fit=crop&w=900&q=80',
             'canon' => 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=80',
             'apple-watch' => 'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?auto=format&fit=crop&w=900&q=80',
-            'hanfu' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
-            'jiaoling' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
-            'ruao' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=900',
-            'mamian' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=900',
+            'hanfu' => HanfuDemoOptionImageProvider::defaultImage(),
+            'jiaoling' => HanfuDemoOptionImageProvider::imageFor('green', 'classic'),
+            'ruao' => HanfuDemoOptionImageProvider::imageFor('green', 'classic'),
+            'mamian' => HanfuDemoOptionImageProvider::imageFor('red', 'detail'),
             'buxie' => 'https://images.pexels.com/photos/36311713/pexels-photo-36311713.jpeg?auto=compress&cs=tinysrgb&w=900',
             'nike' => 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=80',
             'adidas' => 'https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=900&q=80',
@@ -3192,12 +3520,12 @@ class ProductProvider implements FakeDataProviderInterface
                 'gray' => ['value' => 'Gray', 'swatch_color' => '#7c7c7c', 'swatch_image' => 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=240&q=70'],
                 'silver' => ['value' => 'Silver', 'swatch_color' => '#c0c0c0', 'swatch_image' => 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=240&q=70'],
                 'blue' => ['value' => 'Blue', 'swatch_color' => '#2563eb', 'swatch_image' => 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=240&q=70'],
-                'green' => ['value' => 'Green', 'swatch_color' => '#16a34a', 'swatch_image' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=240'],
-                'red' => ['value' => 'Red', 'swatch_color' => '#dc2626', 'swatch_image' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=240'],
+                'green' => ['value' => 'Green', 'swatch_color' => '#16a34a', 'swatch_image' => HanfuDemoOptionImageProvider::imageFor('green', 'classic')],
+                'red' => ['value' => 'Red', 'swatch_color' => '#dc2626', 'swatch_image' => HanfuDemoOptionImageProvider::imageFor('red', 'classic')],
                 'navy' => ['value' => 'Navy', 'swatch_color' => '#1e3a8a', 'swatch_image' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=240'],
                 'beige' => ['value' => 'Beige', 'swatch_color' => '#d6c6a8', 'swatch_image' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=240'],
                 'natural' => ['value' => 'Natural', 'swatch_color' => '#b08d57', 'swatch_image' => 'https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=240&q=70'],
-                'pink' => ['value' => 'Pink', 'swatch_color' => '#ec4899', 'swatch_image' => 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=240&q=70'],
+                'pink' => ['value' => 'Pink', 'swatch_color' => '#ec4899', 'swatch_image' => HanfuDemoOptionImageProvider::imageFor('pink', 'classic')],
                 'purple' => ['value' => 'Purple', 'swatch_color' => '#7c3aed', 'swatch_image' => 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=240&q=70'],
                 'gold' => ['value' => 'Gold', 'swatch_color' => '#d4af37', 'swatch_image' => 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&w=240&q=70'],
                 'brown' => ['value' => 'Brown', 'swatch_color' => '#8b5a2b', 'swatch_image' => 'https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=240&q=70'],
@@ -3280,12 +3608,12 @@ class ProductProvider implements FakeDataProviderInterface
                 'tesla' => ['value' => 'Tesla'],
             ]],
             'style' => ['name' => 'Style', 'options' => [
-                'modern' => ['value' => 'Modern'],
-                'minimalist' => ['value' => 'Minimalist'],
-                'traditional' => ['value' => 'Traditional'],
-                'professional' => ['value' => 'Professional'],
-                'sporty' => ['value' => 'Sporty'],
-                'gaming' => ['value' => 'Gaming'],
+                'modern' => ['value' => 'Modern', 'swatch_image' => 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=240&q=70'],
+                'minimalist' => ['value' => 'Minimalist', 'swatch_image' => 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=240&q=70'],
+                'traditional' => ['value' => 'Traditional', 'swatch_image' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=240'],
+                'professional' => ['value' => 'Professional', 'swatch_image' => 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=240&q=70'],
+                'sporty' => ['value' => 'Sporty', 'swatch_image' => 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=240&q=70'],
+                'gaming' => ['value' => 'Gaming', 'swatch_image' => 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=240&q=70'],
             ]],
             'usage_scene' => ['name' => 'Usage Scene', 'options' => [
                 'daily_use' => ['value' => 'Daily Use'],

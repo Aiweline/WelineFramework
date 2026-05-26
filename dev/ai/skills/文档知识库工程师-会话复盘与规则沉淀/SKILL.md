@@ -23,15 +23,21 @@ This skill owns post-session knowledge extraction for WelineFramework work. It t
 
 # Responsibilities
 
+- Scan two learning streams together:
+  - user-explicit mentions, complaints, corrections, and "remember this" instructions,
+  - handling-process mistakes that later converged on a confirmed framework-native practice.
 - Scan the conversation and isolate statements where the user explicitly raised the engineering bar, corrected a wrong direction, or clarified the real framework boundary.
 - Treat user-explicit framework practices and process mistakes that were later corrected into the framework-native way as first-class learning candidates, even when the correction happened inside the handling workflow rather than inside product code.
 - Treat explicit user complaints, frustration, or "don't do this again" wording as high-priority correction signals; extract the engineering rule underneath the emotion instead of dismissing it as tone.
 - Treat repo instructions surfaced inside the current session as valid correction signals when they explicitly tighten execution standards or reject a previously common shortcut.
+- Treat user follow-ups such as "you missed...", "the real point is...", "you should have checked...", or "there is also..." as omission signals; inspect the missing step, missing constraint, missing context, missing hidden goal, missing boundary condition, or missing verification that caused the gap.
+- Reopen or initialize the matching `dev/ai/codex/tasks/...` workspace before substantial session-review analysis or skill edits, and keep `progress.md` plus `result.md` current so the learning run itself is resumable.
 - Separate one-off project detail from reusable framework practice.
 - Classify each lesson by ownership before editing files:
   - cross-role stable rule -> `dev/ai/global-constraints.md`,
   - specialist execution rule -> the owning specialist skill,
   - already-documented rule restated in-session -> update memory and only tighten the owning skill if the session exposed an operational wording gap.
+- If the session corrects the handling workflow itself, update the owning workflow/self-learning skill first, and then update any specialist skill whose wording still allowed the mistake.
 - Rewrite the lesson as a stable rule that another agent can apply on a future task.
 - Preserve the evidence chain: what was assumed first, what later proved correct, and why the corrected rule is reusable.
 - Land the result in an AI-facing skill or knowledge file instead of leaving it only in a final report.
@@ -53,32 +59,67 @@ Do not promote:
 - Temporary environment accidents with no stable handling rule.
 - Raw symptoms when the real boundary or fix standard was never confirmed.
 
+When both a user-explicit correction and a wrong-first-then-fixed handling path appear in the same session, extract both; do not collapse the session down to only one stream.
+
 # Workflow
 
-1. Read the current session and mark candidate moments:
+1. Read the automation memory first, then reopen or create the matching task workspace so duplicate lessons and resume state are visible before new extraction work starts.
+2. Read the current session and mark candidate moments:
+   - user-explicit engineering requirements or "remember this" instructions,
    - user corrections,
    - user complaints or repeated dissatisfaction tied to a concrete engineering mistake,
+   - workflow mistakes that were later corrected into a stable framework or process rule,
    - injected repo rules or automation-context instructions,
    - rejected implementations,
    - failed verifications that changed the conclusion standard,
    - final framework-native patterns that replaced a brittle patch.
-2. For each candidate, write four fields in scratch form:
+3. For each candidate, write four fields in scratch form:
    - initial assumption,
    - correction trigger,
    - final rule,
    - reuse boundary.
-3. Drop anything that is only project-local or still unverified.
-4. Normalize each surviving lesson into imperative guidance:
+4. Run an omission check before promoting the lesson:
+   - Was a required step skipped?
+   - Was an explicit or implicit constraint skipped?
+   - Was prior context or memory skipped?
+   - Was the user's real goal or hidden acceptance boundary skipped?
+   - Was a boundary condition or verification step skipped?
+5. Add an ownership field for each surviving lesson:
+   - `global constraint`,
+   - `specialist skill`,
+   - `session-review/self-learning skill`,
+   - `memory only`.
+6. Drop anything that is only project-local or still unverified.
+7. Normalize each surviving lesson into imperative guidance:
    - `default to ...`
    - `do not assume ...`
    - `when X happens, verify Y before concluding Z`
-5. Group rules by theme such as auth boundary, generated artifacts, runtime verification, hook boundary, cron registration, or visible UX requirements.
-6. If multiple examples express the same rule, keep one concise canonical rule and attach the strongest evidence example.
-7. Decide the landing target:
+8. Serialize each surviving lesson in one of two reusable shapes:
+   - Skill shape:
+     - `Skill Name`
+     - `Trigger`
+     - `Wrong Pattern`
+     - `Correct Pattern`
+     - `Generalized Principle`
+     - `Confidence`
+   - Framework rule shape:
+     - `Rule Name`
+     - `Problem Pattern`
+     - `Detection Signal`
+     - `Root Cause`
+     - `Correct Framework`
+     - `Reusable Strategy`
+     - `Upgrade Priority`
+9. Group rules by theme such as auth boundary, generated artifacts, runtime verification, hook boundary, cron registration, visible UX requirements, or workflow learning.
+10. If multiple examples express the same rule, keep one concise canonical rule and attach the strongest evidence example.
+11. Prefer updating an existing skill or framework rule when the new lesson is the same underlying mistake with a tighter trigger, broader boundary, or clearer default action; only add a new rule when the old rule cannot absorb the new correction without becoming misleading.
+12. Decide the landing target:
    - update `global-constraints.md` only for repository-wide rules,
    - update one or more specialist skills for role-specific execution guidance,
+   - update the session-review/self-learning skill when the lesson is about how to extract, remember, or route corrections,
    - skip file edits when the rule already exists and the session only reconfirmed it with no newly exposed wording gap.
-8. Write or update the AI-facing skill or knowledge file so future agents can load the rule set directly.
+13. Write or update the AI-facing skill or knowledge file so future agents can load the rule set directly.
+14. Before finishing, update automation memory with what was learned, what file changed, and whether the run only reconfirmed existing rules or introduced a new wording requirement.
 
 # Session Interpretation Heuristics
 
@@ -86,10 +127,13 @@ Do not promote:
 - If the strongest correction comes from session-provided repo rules rather than back-and-forth chat, it still counts as explicit correction evidence.
 - If the current automation or user request itself tightens what must be remembered, treat that request text as a valid correction source and update the owning self-learning skill immediately.
 - If the user explicitly says a complaint, correction, or repeated mistake should be remembered, update the owning skill and automation memory even when no repository-wide rule changes.
+- If the user explicitly says to scan for "what the user clearly mentioned" plus "what the handling process first got wrong and later corrected," treat that as a two-stream extraction contract for future runs.
 - If the user explicitly asks to extract "what the user clearly mentioned" together with "what the handling process first got wrong and later corrected," record both streams and normalize them into one reusable rule set rather than keeping only user quotations.
+- If the user says something was missed, incomplete, too shallow, too mechanical, or not tied to the real goal, treat that as a framework-level omission signal rather than a local wording tweak.
 - Do not record the complaint wording itself as policy; record the corrected execution standard that would have prevented the complaint.
 - When the session only reaffirms an already-documented global rule, prefer updating automation memory over duplicating the rule in another file.
 - Only tighten specialist skills on reconfirmation runs when their current wording still leaves room for the old mistake.
+- When a new correction matches an existing skill or framework rule at the root-cause level, merge the lesson into that existing artifact by expanding trigger, wrong-pattern, or reusable-strategy coverage instead of creating a sibling duplicate.
 
 # Canonical Rule Shapes
 
@@ -131,9 +175,12 @@ Use one of these shapes when rewriting lessons:
 ## Complaint-driven self-learning ownership
 
 - When the user explicitly says complaints, corrections, or wrong-first-then-fixed behavior must be remembered, treat that instruction as a standing requirement of the self-learning workflow rather than a one-off reminder.
+- Treat "用户明确提到" and "处理过程先错后对" as separate mandatory extraction lanes; future runs should report both when both exist.
 - When the complaint or correction is about the handling workflow itself, promote the reusable process rule exactly the same way as a framework-code correction; do not limit learning extraction to product-code mistakes.
 - For these runs, the owning skill must preserve three things together: the initial mistake, the correction trigger, and the future default action that avoids repeating the mistake.
+- Route each extracted lesson to the narrowest owning skill that can prevent recurrence, and use automation memory to record duplicate confirmations instead of scattering the same rule across many files.
 - If the only new lesson in the session is "remember user corrections and complaints systematically," update the session-review skill and automation memory instead of manufacturing unrelated framework rules.
+- If the user upgrades the extraction contract itself, also preserve the missing-step taxonomy and the structured lesson fields so future runs can detect omissions and emit stable skill/framework-rule shapes instead of loose notes.
 
 ## Cron and command conclusion standard
 
@@ -153,6 +200,7 @@ Use one of these shapes when rewriting lessons:
 
 - For repository work, do not rely on chat history alone. Initialize or reopen the matching `dev/ai/codex/tasks/...` workspace before substantial analysis or edits, keep `progress.md` current during execution, and leave `result.md` with the resume point.
 - Only treat transient non-repo Q&A or one-shot system lookups as exceptions; code, docs, debugging, verification, and rule changes all require persistent task records.
+- Session-review and self-learning runs are not exempt: if the run updates skills, docs, rules, or automation memory for this repository, the learning workflow itself must leave task records before editing those artifacts.
 
 ## Hook-shell contract
 

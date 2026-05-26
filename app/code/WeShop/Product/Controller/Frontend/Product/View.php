@@ -9,6 +9,7 @@ use WeShop\Product\Service\ProductViewPageDataService;
 use WeShop\RecentlyViewed\Service\StorefrontRecentlyViewedRecorder;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\State;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
@@ -58,6 +59,7 @@ class View extends BaseController
         $cachedView = $this->getViewPayloadCache($cacheKey);
         if (is_array($cachedView) && isset($cachedView['html'])) {
             $this->recordRecentlyViewedIfNeeded($productId);
+            $this->dispatchProductViewedIfNeeded($productId, is_array($cachedView['assigns'] ?? null) ? $cachedView['assigns'] : []);
             $this->applyCachedViewPayload($cachedView);
             return (string)$cachedView['html'];
         }
@@ -76,6 +78,7 @@ class View extends BaseController
         }
 
         $this->recordRecentlyViewedIfNeeded($productId);
+        $this->dispatchProductViewedIfNeeded($productId, $pageData);
         $this->assignPageData($pageData);
         $this->cooperativeControllerYield();
         $html = $this->traceProductStep(
@@ -112,6 +115,29 @@ class View extends BaseController
         $this->traceProductStep(
             'product::record_recently_viewed',
             fn () => $this->recordRecentlyViewed($productId),
+            ['product_id' => $productId]
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $pageData
+     */
+    private function dispatchProductViewedIfNeeded(int $productId, array $pageData = []): void
+    {
+        if (!$this->shouldRecordRecentlyViewed()) {
+            return;
+        }
+
+        $this->traceProductStep(
+            'product::dispatch_product_viewed',
+            function () use ($productId, $pageData): void {
+                $eventData = [
+                    'product_id' => $productId,
+                    'product' => $pageData['product'] ?? null,
+                    'idempotency_key' => '',
+                ];
+                ObjectManager::getInstance(EventsManager::class)->dispatch('WeShop_Product::product_viewed', $eventData);
+            },
             ['product_id' => $productId]
         );
     }
@@ -305,7 +331,7 @@ class View extends BaseController
         $host = $this->normalizeViewPayloadCacheHost(\function_exists('w_env_http_host') ? (string)\w_env_http_host() : '');
 
         return \sha1((string)\json_encode([
-            'v' => 14,
+            'v' => 15,
             'scope' => 'product-view-payload',
             'product_id' => $productId,
             'website' => \function_exists('w_env') ? (string)(\w_env('website_code', '') ?: \w_env('website.id', '') ?: '') : '',

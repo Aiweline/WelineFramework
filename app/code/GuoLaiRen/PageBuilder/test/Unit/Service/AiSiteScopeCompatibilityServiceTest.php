@@ -455,6 +455,75 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         self::assertSame('Terms of Service', (string)($virtualPages[Page::TYPE_TERMS_OF_SERVICE]['title'] ?? ''));
     }
 
+    public function testNormalizeScopeRemovesPlanningLanguageFromVisitorPageMetadataForSelectedLocale(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+        $planningCopy = "\u{5E2E}\u{52A9}\u{5DF4}\u{897F}\u{8BBF}\u{5BA2}\u{7406}\u{89E3}\u{5E76}\u{4E0B}\u{8F7D} APK";
+
+        $scope = $service->normalizeScope([
+            'default_locale' => 'pt_BR',
+            'website_profile' => [
+                'site_title' => 'Teenipiya',
+                'site_tagline' => "\u{8461}\u{8404}\u{7259}\u{8BED}\u{7F51}\u{7AD9}",
+                'default_locale' => 'pt_BR',
+                'seo' => [
+                    'meta_title' => 'Teenipiya | ' . "\u{8461}\u{8404}\u{7259}\u{8BED}\u{7F51}\u{7AD9}",
+                    'meta_description' => $planningCopy,
+                    'meta_keywords' => 'Teenipiya, ' . $planningCopy . ', APK',
+                ],
+            ],
+            'stage1_contract' => [
+                'content_locale' => 'zh_Hans_CN',
+                'plan_locale' => 'zh_Hans_CN',
+                'shared_prompt_context' => ['content_locale' => 'zh_Hans_CN'],
+                'shared_components' => [
+                    'header' => ['content_locale' => 'zh_Hans_CN'],
+                ],
+            ],
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_BLOG_CATEGORY, Page::TYPE_CUSTOM],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'title' => "\u{9996}\u{9875}",
+                    'meta_title' => "\u{9996}\u{9875} | Teenipiya",
+                    'meta_description' => $planningCopy,
+                    'meta_keywords' => 'Teenipiya, ' . $planningCopy . ', APK',
+                    'ai_description' => $planningCopy,
+                ],
+                Page::TYPE_BLOG_CATEGORY => [
+                    'page_type' => Page::TYPE_BLOG_CATEGORY,
+                    'title' => "\u{535A}\u{5BA2}\u{5206}\u{7C7B}",
+                    'meta_title' => "\u{535A}\u{5BA2}\u{5206}\u{7C7B} | Teenipiya",
+                    'meta_description' => $planningCopy,
+                    'ai_description' => $planningCopy,
+                ],
+                Page::TYPE_CUSTOM => [
+                    'page_type' => Page::TYPE_CUSTOM,
+                    'title' => "\u{81EA}\u{5B9A}\u{4E49}\u{9875}\u{9762}",
+                    'meta_title' => "\u{81EA}\u{5B9A}\u{4E49}\u{9875}\u{9762} | Teenipiya",
+                    'meta_description' => $planningCopy,
+                    'ai_description' => $planningCopy,
+                ],
+            ],
+        ]);
+
+        foreach ([Page::TYPE_HOME, Page::TYPE_BLOG_CATEGORY, Page::TYPE_CUSTOM] as $pageType) {
+            $page = $scope['virtual_pages_by_type'][$pageType] ?? [];
+            self::assertDoesNotMatchRegularExpression('/[\x{4E00}-\x{9FFF}]/u', (string)($page['title'] ?? ''));
+            self::assertDoesNotMatchRegularExpression('/[\x{4E00}-\x{9FFF}]/u', (string)($page['meta_title'] ?? ''));
+            self::assertSame('', (string)($page['meta_description'] ?? ''));
+            self::assertSame('', (string)($page['ai_description'] ?? ''));
+        }
+        self::assertSame('Teenipiya, APK', (string)($scope['virtual_pages_by_type'][Page::TYPE_HOME]['meta_keywords'] ?? ''));
+        self::assertSame('pt_BR', (string)($scope['stage1_contract']['content_locale'] ?? ''));
+        self::assertSame('pt_BR', (string)($scope['stage1_contract']['shared_prompt_context']['content_locale'] ?? ''));
+        self::assertSame('pt_BR', (string)($scope['stage1_contract']['shared_components']['header']['content_locale'] ?? ''));
+        self::assertSame('', (string)($scope['website_profile']['site_tagline'] ?? ''));
+        self::assertSame('Teenipiya', (string)($scope['website_profile']['seo']['meta_title'] ?? ''));
+        self::assertSame('', (string)($scope['website_profile']['seo']['meta_description'] ?? ''));
+        self::assertSame('Teenipiya, APK', (string)($scope['website_profile']['seo']['meta_keywords'] ?? ''));
+    }
+
     /**
      * 锁定当前真相：AI 生成抛出异常时生产代码不再自动降级到 static placeholder，异常会原样冒泡到调用方。
      * 历史上该路径带 fallback，现已被移除；若未来再度引入降级能力，应新增专门测试而非修改这条。
@@ -666,7 +735,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         self::assertArrayHasKey(Page::TYPE_HOME, $virtualPages);
         self::assertSame([], $virtualPages[Page::TYPE_HOME]['blocks']);
-        self::assertSame('首页', $virtualPages[Page::TYPE_HOME]['title']);
+        self::assertSame('Home', $virtualPages[Page::TYPE_HOME]['title']);
     }
 
     public function testPortugueseVirtualPagesAndFooterLabelsDoNotFallBackToEnglish(): void
@@ -743,6 +812,60 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
     /**
      * 补充 htmlTrackHasCompleteBlocks 的正向/负向用例：所有 page type 必须同时具备非空 blocks 才算完整。
      */
+    public function testNormalizeScopePrefersSelectedLocaleOverStalePlanLocale(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->normalizeScope([
+            'content_locale' => 'zh_Hans_CN',
+            'plan_generated_locale' => 'zh_Hans_CN',
+            'default_locale' => 'pt_BR',
+            'website_profile' => [
+                'content_locale' => 'zh_Hans_CN',
+                'default_locale' => 'pt_BR',
+            ],
+            'execution_blueprint' => [
+                'content_locale' => 'zh_Hans_CN',
+                'shared_prompt_context' => ['content_locale' => 'zh_Hans_CN'],
+            ],
+            'plan_json' => [
+                'content_locale' => 'zh_Hans_CN',
+                'i18n' => ['content_locale' => 'zh_Hans_CN'],
+            ],
+        ]);
+
+        self::assertSame('pt_BR', $scope['content_locale'] ?? null);
+        self::assertSame('pt_BR', $scope['website_profile']['content_locale'] ?? null);
+        self::assertSame('pt_BR', $scope['execution_blueprint']['content_locale'] ?? null);
+        self::assertSame('pt_BR', $scope['execution_blueprint']['shared_prompt_context']['content_locale'] ?? null);
+        self::assertSame('pt_BR', $scope['plan_json']['content_locale'] ?? null);
+        self::assertSame('pt_BR', $scope['plan_json']['i18n']['content_locale'] ?? null);
+        self::assertSame(['pt_BR'], \array_slice($scope['locales'] ?? [], 0, 1));
+    }
+
+    public function testBuildVirtualPagesLocalizesStaleChinesePageTitlesToSelectedLocale(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $virtualPages = $service->buildVirtualPagesByType(
+            [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT],
+            [
+                'default_locale' => 'pt_BR',
+                'website_profile' => ['default_locale' => 'pt_BR'],
+                'virtual_pages_by_type' => [
+                    Page::TYPE_HOME => ['page_type' => Page::TYPE_HOME, 'title' => '首页'],
+                    Page::TYPE_ABOUT => ['page_type' => Page::TYPE_ABOUT, 'title' => '关于我们'],
+                    Page::TYPE_CONTACT => ['page_type' => Page::TYPE_CONTACT, 'title' => '联系我们'],
+                ],
+            ],
+            false
+        );
+
+        self::assertSame('Início', $virtualPages[Page::TYPE_HOME]['title'] ?? null);
+        self::assertSame('Sobre', $virtualPages[Page::TYPE_ABOUT]['title'] ?? null);
+        self::assertSame('Contato', $virtualPages[Page::TYPE_CONTACT]['title'] ?? null);
+    }
+
     public function testHtmlTrackHasCompleteBlocksRequiresEveryPageTypeToHaveBlocks(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());

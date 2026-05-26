@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Meta\Service\ParamDefinitionNormalizer;
 use Weline\Theme\Dto\ThemeSlotDefinition;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Model\WelineTheme;
@@ -410,23 +412,9 @@ class ThemeResourceCatalog
 
     private function formatParams(array $params): array
     {
-        $formatted = [];
-        foreach ($params as $param) {
-            if (!is_array($param) || empty($param['name'])) {
-                continue;
-            }
-            $formatted[$param['name']] = [
-                'name' => $param['name_label'] ?? $param['name'],
-                'label' => $param['name_label'] ?? $param['name'],
-                'description' => $param['description'] ?? '',
-                'default' => $param['default'] ?? null,
-                'type' => $param['type'] ?? 'text',
-                'required' => (bool)($param['required'] ?? false),
-                'options' => $param['options'] ?? [],
-            ];
-        }
-
-        return $formatted;
+        /** @var ParamDefinitionNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        return $normalizer->normalizeParsedParamList($params);
     }
 
     private function extractSlots(string $content, string $area, string $filePath): array

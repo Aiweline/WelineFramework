@@ -6,6 +6,10 @@
 "Share This Page","Share This Page"
 "A social platform is required.","A social platform is required."
 "Share recorded successfully.","Share recorded successfully."
+社交分享记录前,社交分享记录前
+"社交分享持久化前触发，负载包含可修改的 share_data；可携带 affiliate_share_code 串联分销分享链路。","社交分享持久化前触发，负载包含可修改的 share_data；可携带 affiliate_share_code 串联分销分享链路。"
+社交分享记录后,社交分享记录后
+"社交分享持久化后触发，负载包含 share、share_data；Affiliate 会监听 share_data.affiliate_share_code。","社交分享持久化后触发，负载包含 share、share_data；Affiliate 会监听 share_data.affiliate_share_code。"
 "Social query provider does not support operation: %{1}","Social query provider does not support operation: %{1}"
 "Social Query","Social Query"
 "Provides social-share tracking, footer links, and product share URLs.","Provides social-share tracking, footer links, and product share URLs."

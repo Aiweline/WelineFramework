@@ -5,8 +5,8 @@
 订单提交成功。,订单提交成功。
 "缺少订单 ID。","缺少订单 ID。"
 未找到请求的订单。,未找到请求的订单。
-"WeShop checkout order created","WeShop checkout order created"
-"Dispatched after WeShop checkout creates an order. Payload includes order, customer identity, guest email, checkout data, and selected notification channels.","Dispatched after WeShop checkout creates an order. Payload includes order, customer identity, guest email, checkout data, and selected notification channels."
+结账订单已创建,结账订单已创建
+"WeShop 结账创建订单后触发，负载包含 order、order_id、customer_id、order_items、order_summary、guest_email、notification_channels。","WeShop 结账创建订单后触发，负载包含 order、order_id、customer_id、order_items、order_summary、guest_email、notification_channels。"
 "Checkout success page before content","Checkout success page before content"
 "Render extension content before the checkout success page body.","Render extension content before the checkout success page body."
 "Checkout success recommendations before","Checkout success recommendations before"
@@ -35,35 +35,6 @@
 跳转支付,跳转支付
 "下单后将跳转到 PayPal 安全完成支付。","下单后将跳转到 PayPal 安全完成支付。"
 请在配送到达时准备好订单金额。,请在配送到达时准备好订单金额。
-固定运费,固定运费
-按固定运费配送。,按固定运费配送。
-免运费,免运费
-符合条件的订单免费配送。,符合条件的订单免费配送。
-到店自提,到店自提
-到选择的本地门店自提订单。,到选择的本地门店自提订单。
-预计送达：%{1}。,预计送达：%{1}。
-该服务支持免运费。,该服务支持免运费。
-配送服务,配送服务
-由 %{1} 提供配送服务。,由 %{1} 提供配送服务。
-%{1}-%{2} 天,%{1}-%{2} 天
-%{1} 天,%{1} 天
-企业信用账户,企业信用账户
-订单计入企业信用额度，并在到期日前按发票付款。,订单计入企业信用额度，并在到期日前按发票付款。
-仅适用于已开通有效信用额度的企业客户。,仅适用于已开通有效信用额度的企业客户。
-说明,说明
-银行转账,银行转账
-下单后通过银行转账付款。,下单后通过银行转账付款。
-请将订单金额转入配置的银行账户，并使用订单号作为付款备注。,请将订单金额转入配置的银行账户，并使用订单号作为付款备注。
-请使用订单号作为付款备注。,请使用订单号作为付款备注。
-订单创建后展示给客户。,订单创建后展示给客户。
-账户名称,账户名称
-开户银行,开户银行
-银行账号,银行账号
-付款备注,付款备注
-货到付款,货到付款
-配送送达时现金付款。,配送送达时现金付款。
-配送送达时向客户收款。,配送送达时向客户收款。
-货到付款手续费,货到付款手续费
 购物车为空，无法结账。,购物车为空，无法结账。
 订单创建失败。,订单创建失败。
 提交订单需要结账身份。,提交订单需要结账身份。

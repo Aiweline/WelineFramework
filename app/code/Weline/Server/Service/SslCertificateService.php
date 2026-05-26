@@ -742,9 +742,8 @@ class SslCertificateService
             return false;
         }
 
-        $publicFromPrivate = @\openssl_pkey_get_public($privateKey);
         $publicFromCert = @\openssl_pkey_get_public($certResource);
-        if ($publicFromPrivate === false || $publicFromCert === false) {
+        if ($publicFromCert === false) {
             return false;
         }
 

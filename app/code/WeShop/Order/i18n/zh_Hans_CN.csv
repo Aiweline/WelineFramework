@@ -21,6 +21,12 @@
 该订单无法继续支付。,该订单无法继续支付。
 请从结账页继续完成支付。,请从结账页继续完成支付。
 订单详情加载失败。,订单详情加载失败。
+订单支付状态已变更,订单支付状态已变更
+"订单支付状态变化后触发，负载包含 order、order_id、customer_id、old_payment_status、new_payment_status。","订单支付状态变化后触发，负载包含 order、order_id、customer_id、old_payment_status、new_payment_status。"
+订单状态已变更,订单状态已变更
+"订单业务状态变化后触发，负载包含 order、order_id、customer_id、old_status、new_status。","订单业务状态变化后触发，负载包含 order、order_id、customer_id、old_status、new_status。"
+订单已取消,订单已取消
+"订单取消后触发，负载包含 order、order_id、customer_id。","订单取消后触发，负载包含 order、order_id、customer_id。"
 "假订单信号需要前台客户 %{1} 已存在。","假订单信号需要前台客户 %{1} 已存在。"
 "保存假订单 %{1} 失败。","保存假订单 %{1} 失败。"
 "已跳过假订单信号商品行：缺少商品 %{1}","已跳过假订单信号商品行：缺少商品 %{1}"

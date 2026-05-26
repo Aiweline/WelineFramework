@@ -7,8 +7,7 @@ namespace Weline\Seo\Service\Head;
 class HeadRenderer
 {
     public function __construct(
-        private readonly PageSeoContextResolver $resolver,
-        private readonly ?HeadProviderRegistry $providerRegistry = null
+        private readonly PageSeoContextResolver $resolver
     ) {
     }
 
@@ -124,7 +123,7 @@ class HeadRenderer
         $title = (string) ($context['title'] ?? '');
         $description = (string) ($context['description'] ?? '');
         $url = (string) ($context['canonical_url'] ?? $context['url'] ?? '');
-        $type = ($context['page_type'] ?? '') === 'product' ? 'product' : 'website';
+        $type = $this->socialType((string) ($context['page_type'] ?? ''));
         $html = [
             '<meta property="og:type" content="' . $this->escape($type) . '">',
         ];
@@ -149,6 +148,11 @@ class HeadRenderer
             $html[] = '<meta name="twitter:card" content="summary_large_image">';
         } else {
             $html[] = '<meta name="twitter:card" content="summary">';
+        }
+        if (($context['page_type'] ?? '') === 'product') {
+            foreach ($this->productSocialTags($context) as $property => $value) {
+                $html[] = '<meta property="' . $this->escape($property) . '" content="' . $this->escape($value) . '">';
+            }
         }
         foreach ($this->alternateOgLocales($context, $ogLocale) as $alternateLocale) {
             $html[] = '<meta property="og:locale:alternate" content="' . $this->escape($alternateLocale) . '">';
@@ -212,33 +216,56 @@ class HeadRenderer
         if ($availableLanguages !== []) {
             $graph[1]['availableLanguage'] = $availableLanguages;
         }
+        $searchUrlTemplate = $this->searchUrlTemplate($context, $siteUrl);
+        if ($searchUrlTemplate !== '') {
+            $graph[1]['potentialAction'] = [
+                '@type' => 'SearchAction',
+                'target' => [
+                    '@type' => 'EntryPoint',
+                    'urlTemplate' => $searchUrlTemplate,
+                ],
+                'query-input' => 'required name=search_term_string',
+            ];
+        }
 
-        $graph[] = $this->webPageNode($context, $orgId);
+        $product = [];
+        if (($context['page_type'] ?? '') === 'product') {
+            $product = $this->productNode($context, $url, $orgId);
+        }
+        $article = [];
+        if ($this->isArticlePageType((string) ($context['page_type'] ?? ''))) {
+            $article = $this->articleNode($context, $url, $orgId);
+        }
+        $itemList = $this->itemListNode($context, $url);
+
+        $webPage = $this->webPageNode($context, $orgId);
+        if ($product !== []) {
+            $webPage['mainEntity'] = ['@id' => $url . '#product'];
+        } elseif ($article !== []) {
+            $webPage['mainEntity'] = ['@id' => $url . '#article'];
+        } elseif ($itemList !== []) {
+            $webPage['mainEntity'] = ['@id' => $url . '#itemlist'];
+        }
+        $graph[] = $webPage;
 
         if (!empty($context['breadcrumbs'])) {
             $graph[] = $this->breadcrumbNode((array) $context['breadcrumbs'], $url);
         }
-        if (($context['page_type'] ?? '') === 'product') {
-            $product = $this->productNode($context, $url, $orgId);
-            if ($product !== []) {
-                $graph[] = $product;
-            }
+        if ($product !== []) {
+            $graph[] = $product;
         }
-        if (in_array((string) ($context['page_type'] ?? ''), ['article', 'blog_post', 'post'], true)) {
-            $graph[] = $this->articleNode($context, $url, $orgId);
+        if ($article !== []) {
+            $graph[] = $article;
+        }
+        if ($itemList !== []) {
+            $graph[] = $itemList;
         }
         if (!empty($context['faqs'])) {
             $graph[] = $this->faqNode((array) $context['faqs'], $url);
         }
-
-        foreach ($this->providerRegistry?->getStructuredDataProviders() ?? [] as $provider) {
-            try {
-                foreach ($provider->provideStructuredData($context['_template'] ?? null, $context) as $node) {
-                    if (is_array($node) && $node !== []) {
-                        $graph[] = $node;
-                    }
-                }
-            } catch (\Throwable) {
+        foreach ((array) ($context['schema_nodes'] ?? []) as $node) {
+            if (is_array($node) && $node !== []) {
+                $graph[] = $node;
             }
         }
 
@@ -252,7 +279,7 @@ class HeadRenderer
     private function webPageNode(array $context, string $orgId): array
     {
         $node = [
-            '@type' => 'WebPage',
+            '@type' => $this->webPageType((string) ($context['page_type'] ?? '')),
             '@id' => (string) ($context['canonical_url'] ?? $context['url'] ?? '') . '#webpage',
             'url' => (string) ($context['canonical_url'] ?? $context['url'] ?? ''),
             'name' => (string) ($context['title'] ?? ''),
@@ -293,56 +320,538 @@ class HeadRenderer
      * @param array<string, mixed> $context
      * @return array<string, mixed>
      */
+    private function itemListNode(array $context, string $url): array
+    {
+        $items = [];
+        foreach ((array) ($context['item_list'] ?? []) as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $name = trim((string) ($item['name'] ?? $item['title'] ?? ''));
+            $itemUrl = trim((string) ($item['url'] ?? $item['href'] ?? ''));
+            if ($name === '' || $itemUrl === '') {
+                continue;
+            }
+            $thing = [
+                '@type' => 'Thing',
+                'name' => $name,
+                'url' => $itemUrl,
+            ];
+            if (!empty($item['image'])) {
+                $thing['image'] = (string) $item['image'];
+            }
+            if (!empty($item['description'])) {
+                $thing['description'] = (string) $item['description'];
+            }
+            $items[] = [
+                '@type' => 'ListItem',
+                'position' => count($items) + 1,
+                'item' => $thing,
+            ];
+        }
+
+        if ($items === []) {
+            return [];
+        }
+
+        return [
+            '@type' => 'ItemList',
+            '@id' => $url . '#itemlist',
+            'name' => (string) ($context['title'] ?? ''),
+            'url' => $url,
+            'itemListElement' => $items,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
     private function productNode(array $context, string $url, string $orgId): array
     {
         $product = $context['product'] ?? null;
-        $name = $this->read($product, ['name', 'title']);
+        $name = $this->readNonEmpty($product, ['name', 'title']);
         if (!$name) {
             return [];
         }
-        $price = $this->read($product, ['price', 'final_price']);
-        $stock = $this->read($product, ['stock', 'qty', 'stock_status']);
+
+        $variants = $this->readList($this->read($product, ['variants', 'has_variant']));
+        $schemaType = (string) ($this->readNonEmpty($product, ['schema_type', '@type']) ?: '');
+        $isProductGroup = $schemaType === 'ProductGroup'
+            || $variants !== []
+            || $this->readNonEmpty($product, ['product_group_id', 'productGroupID']) !== null;
+        $description = $this->cleanText((string) ($this->readNonEmpty($product, ['meta_description', 'short_description', 'description']) ?: ($context['description'] ?? '')));
         $node = [
-            '@type' => 'Product',
+            '@type' => $isProductGroup ? 'ProductGroup' : 'Product',
             '@id' => $url . '#product',
             'name' => (string) $name,
-            'description' => (string) ($context['description'] ?? ''),
+            'description' => $description,
             'url' => $url,
         ];
-        $brand = $this->read($product, ['brand']);
-        if ($brand) {
-            $node['brand'] = ['@type' => 'Brand', 'name' => (string) $brand];
+
+        $images = $this->productImages($context, $url);
+        if ($images !== []) {
+            $node['image'] = $images;
         }
-        if ($price !== null && trim((string) $price) !== '') {
-            $offer = [
-                '@type' => 'Offer',
-                'url' => $url,
-                'price' => (string) $price,
-                'priceCurrency' => (string) w_env('user.currency', 'USD'),
-                'seller' => ['@id' => $orgId],
-            ];
-            if ($stock !== null && trim((string) $stock) !== '') {
-                $offer['availability'] = $this->isInStock($stock) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+
+        $brand = $this->readNonEmpty($product, ['brand', 'brand_name', 'manufacturer']);
+        if ($brand !== null) {
+            $node['brand'] = is_array($brand)
+                ? array_replace(['@type' => 'Brand'], array_filter($brand, static fn ($value): bool => $value !== null && $value !== ''))
+                : ['@type' => 'Brand', 'name' => (string) $brand];
+        }
+
+        foreach ([
+            'sku' => ['sku'],
+            'mpn' => ['mpn', 'manufacturer_part_number'],
+            'productID' => ['product_id', 'entity_id', 'id', 'productID'],
+            'gtin' => ['gtin'],
+            'gtin8' => ['gtin8'],
+            'gtin12' => ['gtin12', 'upc'],
+            'gtin13' => ['gtin13', 'ean'],
+            'gtin14' => ['gtin14'],
+            'color' => ['color'],
+            'size' => ['size'],
+            'material' => ['material'],
+            'pattern' => ['pattern'],
+            'category' => ['category', 'category_path'],
+        ] as $field => $keys) {
+            $value = $this->readNonEmpty($product, $keys);
+            if ($value !== null && !is_array($value)) {
+                $node[$field] = (string) $value;
             }
-            $node['offers'] = $offer;
         }
-        if (!empty($context['image'])) {
-            $node['image'] = [(string) $context['image']];
+
+        $condition = $this->schemaCondition($this->readNonEmpty($product, ['item_condition', 'condition']));
+        if ($condition !== '') {
+            $node['itemCondition'] = $condition;
         }
-        $sku = $this->read($product, ['sku']);
-        if ($sku) {
-            $node['sku'] = (string) $sku;
+
+        $properties = $this->productAdditionalProperties($product);
+        if ($properties !== []) {
+            $node['additionalProperty'] = $properties;
         }
-        $rating = $this->read($product, ['rating']);
-        $reviewCount = (int) ($this->read($product, ['review_count']) ?: 0);
+
+        if ($isProductGroup) {
+            $groupId = $this->readNonEmpty($product, ['product_group_id', 'productGroupID', 'spu', 'product_id', 'sku']);
+            if ($groupId !== null && !is_array($groupId)) {
+                $node['productGroupID'] = (string) $groupId;
+            }
+            $variesBy = $this->productVariesBy($product);
+            if ($variesBy !== []) {
+                $node['variesBy'] = $variesBy;
+            }
+            $variantNodes = $this->productVariantNodes($variants, $url, $orgId, $context);
+            if ($variantNodes !== []) {
+                $node['hasVariant'] = $variantNodes;
+            }
+        }
+
+        $offers = $this->productOffers($product, $url, $orgId, $context);
+        if ($offers !== []) {
+            $node['offers'] = $offers;
+        }
+
+        $rating = $this->readNonEmpty($product, ['rating', 'rating_value']);
+        $reviewCount = (int) ($this->readNonEmpty($product, ['review_count', 'reviewCount']) ?: 0);
         if ($rating && $reviewCount > 0) {
             $node['aggregateRating'] = [
                 '@type' => 'AggregateRating',
                 'ratingValue' => (string) $rating,
                 'reviewCount' => $reviewCount,
             ];
+            $bestRating = $this->readNonEmpty($product, ['best_rating', 'bestRating']);
+            $worstRating = $this->readNonEmpty($product, ['worst_rating', 'worstRating']);
+            if ($bestRating !== null) {
+                $node['aggregateRating']['bestRating'] = (string) $bestRating;
+            }
+            if ($worstRating !== null) {
+                $node['aggregateRating']['worstRating'] = (string) $worstRating;
+            }
         }
         return $node;
+    }
+
+    private function webPageType(string $pageType): string
+    {
+        return match ($this->normalizePageType($pageType)) {
+            'about', 'about_page' => 'AboutPage',
+            'contact', 'contact_page' => 'ContactPage',
+            'category', 'collection', 'collection_page', 'blog_list', 'blog_category', 'searchable_landing' => 'CollectionPage',
+            default => 'WebPage',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, string>
+     */
+    private function productSocialTags(array $context): array
+    {
+        $product = $context['product'] ?? null;
+        $tags = [];
+        $price = $this->readNonEmpty($product, ['price', 'final_price']);
+        if ($price !== null && !is_array($price)) {
+            $tags['product:price:amount'] = (string) $price;
+            $tags['product:price:currency'] = $this->productCurrency($product, $context);
+        }
+        $availability = $this->productAvailability($product);
+        if ($availability !== '') {
+            $tags['product:availability'] = match ($availability) {
+                'https://schema.org/InStock' => 'in stock',
+                'https://schema.org/OutOfStock' => 'out of stock',
+                'https://schema.org/PreOrder' => 'preorder',
+                'https://schema.org/BackOrder' => 'backorder',
+                default => basename($availability),
+            };
+        }
+        $condition = $this->schemaCondition($this->readNonEmpty($product, ['item_condition', 'condition']));
+        if ($condition !== '') {
+            $tags['product:condition'] = strtolower((string) preg_replace('/Condition$/', '', basename($condition)));
+        }
+        $sku = $this->readNonEmpty($product, ['sku']);
+        if ($sku !== null && !is_array($sku)) {
+            $tags['product:retailer_item_id'] = (string) $sku;
+        }
+        return $tags;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return string[]
+     */
+    private function productImages(array $context, string $url): array
+    {
+        $product = $context['product'] ?? null;
+        $images = [];
+        foreach ([
+            $context['image'] ?? null,
+            $this->read($product, ['main_image']),
+            $this->read($product, ['image']),
+            $this->read($product, ['images']),
+            $this->read($product, ['product_images', 'media_gallery']),
+        ] as $value) {
+            foreach ($this->readList($value) as $image) {
+                if (is_array($image)) {
+                    $image = $image['url'] ?? $image['src'] ?? $image['image'] ?? '';
+                }
+                $image = $this->absoluteUrl((string) $image, $url);
+                if ($image !== '') {
+                    $images[$image] = true;
+                }
+            }
+        }
+        return array_keys($images);
+    }
+
+    private function productOffers(mixed $product, string $url, string $orgId, array $context): array
+    {
+        $providedOffers = $this->read($product, ['offers']);
+        if (is_array($providedOffers) && $providedOffers !== []) {
+            return $this->normalizeOffers($providedOffers, $url, $orgId, $product, $context);
+        }
+
+        $variants = $this->readList($this->read($product, ['variants', 'has_variant']));
+        if ($variants !== []) {
+            return [];
+        }
+
+        $offer = $this->buildOffer($product, $url, $orgId, $context);
+        return $offer !== [] ? $offer : [];
+    }
+
+    private function buildOffer(mixed $source, string $url, string $orgId, array $context, mixed $fallbackProduct = null): array
+    {
+        $price = $this->readNonEmpty($source, ['price', 'final_price', 'sale_price']);
+        if ($price === null || is_array($price)) {
+            return [];
+        }
+        $offer = [
+            '@type' => 'Offer',
+            'url' => $this->absoluteUrl($url, (string) ($context['canonical_url'] ?? $context['url'] ?? '')),
+            'price' => (string) $price,
+            'priceCurrency' => $this->productCurrency($source, $context, $fallbackProduct),
+            'seller' => ['@id' => $orgId],
+        ];
+
+        $availability = $this->productAvailability($source);
+        if ($availability === '' && $fallbackProduct !== null) {
+            $availability = $this->productAvailability($fallbackProduct);
+        }
+        if ($availability !== '') {
+            $offer['availability'] = $availability;
+        }
+
+        $condition = $this->schemaCondition($this->readNonEmpty($source, ['item_condition', 'condition']) ?: $this->readNonEmpty($fallbackProduct, ['item_condition', 'condition']));
+        if ($condition !== '') {
+            $offer['itemCondition'] = $condition;
+        }
+
+        foreach (['price_valid_until' => 'priceValidUntil', 'priceValidUntil' => 'priceValidUntil'] as $sourceKey => $targetKey) {
+            $value = $this->readNonEmpty($source, [$sourceKey]);
+            if ($value !== null && !is_array($value)) {
+                $offer[$targetKey] = (string) $value;
+                break;
+            }
+        }
+
+        $shippingDetails = $this->readNonEmpty($source, ['shipping_details', 'shippingDetails'])
+            ?: $this->readNonEmpty($fallbackProduct, ['shipping_details', 'shippingDetails']);
+        if (is_array($shippingDetails) && $shippingDetails !== []) {
+            $offer['shippingDetails'] = $shippingDetails;
+        }
+
+        $returnPolicy = $this->readNonEmpty($source, ['merchant_return_policy', 'hasMerchantReturnPolicy'])
+            ?: $this->readNonEmpty($fallbackProduct, ['merchant_return_policy', 'hasMerchantReturnPolicy']);
+        if (is_array($returnPolicy) && $returnPolicy !== []) {
+            $offer['hasMerchantReturnPolicy'] = $returnPolicy;
+        }
+
+        return $offer;
+    }
+
+    /**
+     * @param array<int|string, mixed> $offers
+     * @return array<string, mixed>
+     */
+    private function normalizeOffers(array $offers, string $url, string $orgId, mixed $product, array $context): array
+    {
+        if (!$this->isList($offers)) {
+            $offerType = (string) ($offers['@type'] ?? $offers['type'] ?? 'Offer');
+            if ($offerType === 'AggregateOffer') {
+                $offers['@type'] = 'AggregateOffer';
+                unset($offers['type']);
+                return $offers;
+            }
+            return $this->buildOffer($offers, (string) ($offers['url'] ?? $url), $orgId, $context, $product);
+        }
+
+        $normalized = [];
+        foreach ($offers as $offer) {
+            if (!is_array($offer)) {
+                continue;
+            }
+            $built = $this->buildOffer($offer, (string) ($offer['url'] ?? $url), $orgId, $context, $product);
+            if ($built !== []) {
+                $normalized[] = $built;
+            }
+        }
+
+        if (count($normalized) === 1) {
+            return $normalized[0];
+        }
+
+        return $normalized !== [] ? $this->aggregateOffer($normalized, $this->productCurrency($product, $context)) : [];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $offers
+     * @return array<string, mixed>
+     */
+    private function aggregateOffer(array $offers, string $currency): array
+    {
+        $prices = [];
+        foreach ($offers as $offer) {
+            if (isset($offer['price']) && is_numeric($offer['price'])) {
+                $prices[] = (float) $offer['price'];
+            }
+        }
+
+        $aggregate = [
+            '@type' => 'AggregateOffer',
+            'offerCount' => count($offers),
+            'priceCurrency' => $currency,
+            'offers' => $offers,
+        ];
+        if ($prices !== []) {
+            $aggregate['lowPrice'] = (string) min($prices);
+            $aggregate['highPrice'] = (string) max($prices);
+        }
+        return $aggregate;
+    }
+
+    /**
+     * @param array<int, mixed> $variants
+     * @return array<int, array<string, mixed>>
+     */
+    private function productVariantNodes(array $variants, string $url, string $orgId, array $context): array
+    {
+        $nodes = [];
+        foreach ($variants as $index => $variant) {
+            if (!is_array($variant)) {
+                continue;
+            }
+            $name = $this->readNonEmpty($variant, ['name', 'title']);
+            $variantId = $this->readNonEmpty($variant, ['product_id', 'id', 'sku']) ?: $index + 1;
+            $node = [
+                '@type' => 'Product',
+                '@id' => $url . '#variant-' . rawurlencode((string) $variantId),
+                'isVariantOf' => ['@id' => $url . '#product'],
+                'name' => (string) ($name ?: ($context['title'] ?? '')),
+            ];
+            foreach (['sku' => ['sku'], 'color' => ['color'], 'size' => ['size'], 'material' => ['material'], 'pattern' => ['pattern']] as $field => $keys) {
+                $value = $this->readNonEmpty($variant, $keys);
+                if ($value !== null && !is_array($value)) {
+                    $node[$field] = (string) $value;
+                }
+            }
+            $image = $this->absoluteUrl((string) ($this->readNonEmpty($variant, ['image', 'main_image']) ?? ''), $url);
+            if ($image !== '') {
+                $node['image'] = [$image];
+            }
+            $offer = $this->buildOffer($variant, (string) ($variant['url'] ?? $url), $orgId, $context, $context['product'] ?? null);
+            if ($offer !== []) {
+                $node['offers'] = $offer;
+            }
+            $nodes[] = $node;
+        }
+        return $nodes;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function productVariesBy(mixed $product): array
+    {
+        $values = [];
+        foreach ($this->readList($this->read($product, ['varies_by', 'variesBy'])) as $value) {
+            $value = trim((string) $value);
+            if ($value !== '') {
+                $values[$this->schemaPropertyUrl($value)] = true;
+            }
+        }
+        return array_keys($values);
+    }
+
+    private function schemaPropertyUrl(string $value): string
+    {
+        if (preg_match('/^https?:\/\//i', $value)) {
+            return $value;
+        }
+        $normalized = strtolower(trim($value));
+        return match ($normalized) {
+            'color', 'colour' => 'https://schema.org/color',
+            'size' => 'https://schema.org/size',
+            'material' => 'https://schema.org/material',
+            'pattern' => 'https://schema.org/pattern',
+            default => $value,
+        };
+    }
+
+    /**
+     * @return array<int, array<string, string>>
+     */
+    private function productAdditionalProperties(mixed $product): array
+    {
+        $properties = [];
+        foreach ([
+            $this->read($product, ['additionalProperty', 'additional_property']),
+            $this->read($product, ['specifications']),
+            $this->read($product, ['attributes']),
+        ] as $source) {
+            foreach ($this->readList($source) as $item) {
+                if (is_array($item) && isset($item['items']) && is_array($item['items'])) {
+                    foreach ($item['items'] as $nested) {
+                        $this->appendProperty($properties, $nested);
+                    }
+                    continue;
+                }
+                $this->appendProperty($properties, $item);
+            }
+        }
+        return array_values($properties);
+    }
+
+    /**
+     * @param array<string, array<string, string>> $properties
+     */
+    private function appendProperty(array &$properties, mixed $item): void
+    {
+        if (!is_array($item)) {
+            return;
+        }
+        $name = trim((string) ($item['name'] ?? $item['label'] ?? $item['attribute'] ?? ''));
+        $value = $item['value'] ?? $item['text'] ?? null;
+        if (is_array($value)) {
+            $value = implode(', ', array_filter(array_map('strval', $value)));
+        }
+        $value = trim((string) $value);
+        if ($name === '' || $value === '') {
+            return;
+        }
+        $property = [
+            '@type' => 'PropertyValue',
+            'name' => $name,
+            'value' => $value,
+        ];
+        $code = trim((string) ($item['propertyID'] ?? $item['property_id'] ?? $item['code'] ?? $item['attribute_code'] ?? ''));
+        if ($code !== '') {
+            $property['propertyID'] = $code;
+        }
+        $properties[strtolower($name)] = $property;
+    }
+
+    private function productCurrency(mixed $product, array $context, mixed $fallbackProduct = null): string
+    {
+        $currency = $this->readNonEmpty($product, ['price_currency', 'currency'])
+            ?: $this->readNonEmpty($fallbackProduct, ['price_currency', 'currency'])
+            ?: ($context['currency'] ?? '')
+            ?: w_env('user.currency', 'USD');
+        return strtoupper((string) $currency);
+    }
+
+    private function productAvailability(mixed $product): string
+    {
+        $explicit = $this->readNonEmpty($product, ['availability']);
+        if ($explicit !== null && !is_array($explicit)) {
+            $value = trim((string) $explicit);
+            if (preg_match('/^https?:\/\//i', $value)) {
+                return $value;
+            }
+            return match (strtolower(str_replace([' ', '-', '_'], '', $value))) {
+                'instock', 'available' => 'https://schema.org/InStock',
+                'outofstock', 'soldout', 'unavailable' => 'https://schema.org/OutOfStock',
+                'preorder' => 'https://schema.org/PreOrder',
+                'backorder' => 'https://schema.org/BackOrder',
+                default => '',
+            };
+        }
+
+        $inStock = $this->read($product, ['in_stock']);
+        if ($inStock !== null && $inStock !== '') {
+            $bool = filter_var($inStock, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($bool !== null) {
+                return $bool ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+            }
+            return $this->isInStock($inStock) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+        }
+
+        $stock = $this->read($product, ['stock', 'qty', 'stock_status']);
+        if ($stock === null || $stock === '') {
+            return '';
+        }
+        return $this->isInStock($stock) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+    }
+
+    private function schemaCondition(mixed $condition): string
+    {
+        if ($condition === null || is_array($condition)) {
+            return '';
+        }
+        $condition = trim((string) $condition);
+        if ($condition === '') {
+            return '';
+        }
+        if (preg_match('/^https?:\/\//i', $condition)) {
+            return $condition;
+        }
+        return match (strtolower(str_replace([' ', '-', '_'], '', $condition))) {
+            'new', 'newcondition' => 'https://schema.org/NewCondition',
+            'used', 'usedcondition' => 'https://schema.org/UsedCondition',
+            'refurbished', 'refurbishedcondition' => 'https://schema.org/RefurbishedCondition',
+            'damaged', 'damagedcondition' => 'https://schema.org/DamagedCondition',
+            default => '',
+        };
     }
 
     /**
@@ -352,25 +861,80 @@ class HeadRenderer
     private function articleNode(array $context, string $url, string $orgId): array
     {
         $page = $context['page'] ?? null;
-        $node = [
-            '@type' => 'BlogPosting',
-            '@id' => $url . '#article',
-            'headline' => (string) ($context['title'] ?? ''),
-            'description' => (string) ($context['description'] ?? ''),
-            'url' => $url,
-            'publisher' => ['@id' => $orgId],
-            'author' => ['@id' => $orgId],
-        ];
-        if (!empty($context['image'])) {
-            $node['image'] = [(string) $context['image']];
+        $article = $context['article'] ?? [];
+        $currentPost = $context['current_post'] ?? null;
+        $headline = (string) ($this->readNonEmpty($article, ['headline', 'title', 'name'])
+            ?: $this->readNonEmpty($currentPost, ['headline', 'title', 'name'])
+            ?: $this->readNonEmpty($page, ['headline', 'title', 'name'])
+            ?: ($context['title'] ?? ''));
+        if (trim($headline) === '') {
+            return [];
         }
-        $published = $this->read($page, ['published_at', 'created_at']);
-        $modified = $this->read($page, ['updated_at', 'modified_at']);
+
+        $node = [
+            '@type' => $this->isNewsArticle($context) ? 'NewsArticle' : 'BlogPosting',
+            '@id' => $url . '#article',
+            'headline' => $headline,
+            'description' => (string) ($this->readNonEmpty($article, ['description', 'summary', 'excerpt'])
+                ?: $this->readNonEmpty($currentPost, ['description', 'summary', 'excerpt'])
+                ?: $this->readNonEmpty($page, ['description', 'summary', 'excerpt', 'meta_description'])
+                ?: ($context['description'] ?? '')),
+            'url' => $url,
+            'mainEntityOfPage' => ['@id' => $url . '#webpage'],
+            'publisher' => ['@id' => $orgId],
+            'author' => $this->articleAuthors($article, $currentPost, $orgId),
+        ];
+
+        $images = [];
+        foreach ([$context['image'] ?? '', $this->readNonEmpty($article, ['image', 'cover_image', 'featured_image']), $this->readNonEmpty($currentPost, ['image', 'cover_image', 'featured_image'])] as $image) {
+            if (!is_array($image) && trim((string) $image) !== '') {
+                $images[(string) $image] = true;
+            }
+        }
+        if ($images !== []) {
+            $node['image'] = array_keys($images);
+        }
+
+        $published = $this->firstNonEmptyValue([
+            $this->read($article, ['datePublished', 'date_published', 'published_at', 'created_at', 'create_time']),
+            $this->read($currentPost, ['datePublished', 'date_published', 'published_at', 'created_at', 'create_time']),
+            $this->read($page, ['datePublished', 'date_published', 'published_at', 'created_at', 'create_time']),
+        ]);
+        $modified = $this->firstNonEmptyValue([
+            $this->read($article, ['dateModified', 'date_modified', 'updated_at', 'modified_at', 'update_time']),
+            $this->read($currentPost, ['dateModified', 'date_modified', 'updated_at', 'modified_at', 'update_time']),
+            $this->read($page, ['dateModified', 'date_modified', 'updated_at', 'modified_at', 'update_time']),
+        ]);
         if ($published) {
             $node['datePublished'] = $this->formatDate($published);
         }
         if ($modified) {
             $node['dateModified'] = $this->formatDate($modified);
+        }
+        $section = $this->firstNonEmptyValue([
+            $this->read($article, ['articleSection', 'article_section', 'section', 'category']),
+            $this->read($currentPost, ['articleSection', 'article_section', 'section', 'category', 'category_name']),
+        ]);
+        if ($section !== null && !is_array($section)) {
+            $node['articleSection'] = (string) $section;
+        }
+        $keywords = $this->articleKeywords($article, $currentPost, $context);
+        if ($keywords !== []) {
+            $node['keywords'] = implode(', ', $keywords);
+        }
+        $wordCount = $this->firstNonEmptyValue([
+            $this->read($article, ['wordCount', 'word_count']),
+            $this->read($currentPost, ['wordCount', 'word_count']),
+        ]);
+        if (is_numeric($wordCount)) {
+            $node['wordCount'] = (int) $wordCount;
+        }
+        $language = $this->htmlLanguage($context);
+        if ($language !== '') {
+            $node['inLanguage'] = $language;
+        }
+        if ($node['@type'] === 'NewsArticle' && !empty($context['speakable']) && is_array($context['speakable'])) {
+            $node['speakable'] = array_replace(['@type' => 'SpeakableSpecification'], $context['speakable']);
         }
         return $node;
     }
@@ -395,6 +959,142 @@ class HeadRenderer
         ];
     }
 
+    private function socialType(string $pageType): string
+    {
+        $normalized = $this->normalizePageType($pageType);
+        if ($normalized === 'product') {
+            return 'product';
+        }
+        if ($this->isArticlePageType($normalized)) {
+            return 'article';
+        }
+        return 'website';
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function searchUrlTemplate(array $context, string $siteUrl): string
+    {
+        $template = trim((string) ($context['search_url_template'] ?? $context['site_search_url_template'] ?? ''));
+        if ($template === '' && !empty($context['site_search_enabled'])) {
+            $template = rtrim($siteUrl, '/') . '/search?q={search_term_string}';
+        }
+        if ($template === '' || !str_contains($template, '{search_term_string}')) {
+            return '';
+        }
+        if (!preg_match('/^https?:\/\//i', $template)) {
+            $template = rtrim($siteUrl, '/') . '/' . ltrim($template, '/');
+        }
+        return $template;
+    }
+
+    private function isArticlePageType(string $pageType): bool
+    {
+        return in_array($this->normalizePageType($pageType), ['article', 'blog_post', 'post', 'news', 'news_article'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function isNewsArticle(array $context): bool
+    {
+        if (in_array($this->normalizePageType((string) ($context['page_type'] ?? '')), ['news', 'news_article'], true)) {
+            return true;
+        }
+        foreach ([$context['article'] ?? [], $context['current_post'] ?? null, $context['page'] ?? null] as $source) {
+            $isNews = $this->read($source, ['is_news']);
+            if ($isNews !== null && filter_var($isNews, FILTER_VALIDATE_BOOLEAN)) {
+                return true;
+            }
+            $type = strtolower(trim((string) ($this->readNonEmpty($source, ['article_type', 'content_type', 'type']) ?? '')));
+            if (in_array($type, ['news', 'news_article'], true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function normalizePageType(string $pageType): string
+    {
+        return strtolower(str_replace([' ', '-'], '_', trim($pageType)));
+    }
+
+    private function firstNonEmptyValue(array $values): mixed
+    {
+        foreach ($values as $value) {
+            if (is_array($value) && $value !== []) {
+                return $value;
+            }
+            if (!is_array($value) && $value !== null && trim((string) $value) !== '') {
+                return $value;
+            }
+        }
+        return null;
+    }
+
+    private function articleAuthors(mixed $article, mixed $currentPost, string $orgId): array
+    {
+        $authors = [];
+        foreach ([$this->read($article, ['authors']), $this->read($currentPost, ['authors'])] as $source) {
+            foreach ($this->readList($source) as $author) {
+                if (is_array($author)) {
+                    $name = trim((string) ($author['name'] ?? $author['author_name'] ?? ''));
+                    if ($name !== '') {
+                        $authors[] = array_replace(['@type' => 'Person'], $author, ['name' => $name]);
+                    }
+                    continue;
+                }
+                $name = trim((string) $author);
+                if ($name !== '') {
+                    $authors[] = ['@type' => 'Person', 'name' => $name];
+                }
+            }
+        }
+
+        if ($authors === []) {
+            $name = (string) ($this->readNonEmpty($article, ['author_name', 'author'])
+                ?: $this->readNonEmpty($currentPost, ['author_name', 'author'])
+                ?: '');
+            if (trim($name) !== '') {
+                $authors[] = ['@type' => 'Person', 'name' => trim($name)];
+            }
+        }
+
+        if ($authors === []) {
+            return ['@id' => $orgId];
+        }
+        return count($authors) === 1 ? $authors[0] : $authors;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return string[]
+     */
+    private function articleKeywords(mixed $article, mixed $currentPost, array $context): array
+    {
+        $keywords = [];
+        foreach ([
+            $this->read($article, ['keywords', 'tags']),
+            $this->read($currentPost, ['keywords', 'tags']),
+            $context['keywords'] ?? null,
+        ] as $source) {
+            if (is_string($source) && str_contains($source, ',')) {
+                $source = array_map('trim', explode(',', $source));
+            }
+            foreach ($this->readList($source) as $keyword) {
+                if (is_array($keyword)) {
+                    $keyword = $keyword['name'] ?? $keyword['label'] ?? '';
+                }
+                $keyword = trim((string) $keyword);
+                if ($keyword !== '') {
+                    $keywords[$keyword] = true;
+                }
+            }
+        }
+        return array_keys($keywords);
+    }
+
     private function read(mixed $source, array $keys): mixed
     {
         foreach ($keys as $key) {
@@ -411,13 +1111,87 @@ class HeadRenderer
         return null;
     }
 
+    private function readNonEmpty(mixed $source, array $keys): mixed
+    {
+        foreach ($keys as $key) {
+            $value = $this->read($source, [$key]);
+            if (is_array($value) && $value !== []) {
+                return $value;
+            }
+            if (!is_array($value) && $value !== null && trim((string) $value) !== '') {
+                return $value;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function readList(mixed $value): array
+    {
+        if ($value === null || $value === '' || $value === false) {
+            return [];
+        }
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                return $this->isList($decoded) ? $decoded : [$decoded];
+            }
+            return [$value];
+        }
+        if (!is_array($value)) {
+            return [$value];
+        }
+        return $this->isList($value) ? $value : [$value];
+    }
+
+    /**
+     * @param array<int|string, mixed> $value
+     */
+    private function isList(array $value): bool
+    {
+        return $value === [] || array_keys($value) === range(0, count($value) - 1);
+    }
+
     private function isInStock(mixed $stock): bool
     {
         if (is_numeric($stock)) {
             return (float) $stock > 0;
         }
         $stock = strtolower((string) $stock);
-        return $stock === '' || str_contains($stock, 'in');
+        if (in_array($stock, ['out_of_stock', 'out-of-stock', 'out of stock', 'soldout', 'sold out', 'unavailable'], true)) {
+            return false;
+        }
+        return $stock === '' || str_contains($stock, 'in') || str_contains($stock, 'available');
+    }
+
+    private function absoluteUrl(string $url, string $pageUrl): string
+    {
+        $url = trim($url);
+        if ($url === '' || str_starts_with($url, '//')) {
+            return '';
+        }
+        if (preg_match('/^https?:\/\//i', $url)) {
+            return $url;
+        }
+        if (!str_starts_with($url, '/')) {
+            return $url;
+        }
+
+        $parts = parse_url($pageUrl);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return $url;
+        }
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        return (string) ($parts['scheme'] ?? 'https') . '://' . $parts['host'] . $port . $url;
+    }
+
+    private function cleanText(string $value): string
+    {
+        $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = preg_replace('/\s+/u', ' ', $value) ?: $value;
+        return trim($value);
     }
 
     private function siteRoot(string $url): string

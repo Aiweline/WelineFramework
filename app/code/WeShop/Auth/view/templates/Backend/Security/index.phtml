@@ -1,0 +1,50 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('账号安全') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="@backend-url('admin')"><?= __('控制台') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('账号安全') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-4 col-lg-6">
+        <div class="card h-100">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex align-items-start justify-content-between gap-3">
+                    <div>
+                        <p class="text-muted mb-1"><?= __('基础登录') ?></p>
+                        <h5 class="card-title mb-0"><?= __('密码访问') ?></h5>
+                    </div>
+                    <div class="avatar-sm">
+                        <span class="avatar-title rounded-circle bg-primary-subtle text-primary">
+                            <i class="mdi mdi-lock-outline font-size-20"></i>
+                        </span>
+                    </div>
+                </div>
+                <p class="text-muted mt-3 mb-4">
+                    <?= __('后台账号仍以用户名和密码作为主登录凭据；需要更强保护时，可在此页面挂载额外安全模块。') ?>
+                </p>
+                <div class="mt-auto">
+                    <span class="badge bg-primary-subtle text-primary"><?= __('主凭据') ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <w:hook name="WeShop_Auth::backend::account::security::cards"/>
+</div>

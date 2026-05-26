@@ -359,8 +359,8 @@
         if (option.swatch_type === 'color' && option.swatch_value) {
             return `<span class="swatch-inner" style="background-color: ${option.swatch_value}"></span>`;
         }
-        if (option.swatch_type === 'image' && option.swatch_value) {
-            return `<img class="swatch-inner" src="${option.swatch_value}" alt="${option.value}">`;
+        if (option.swatch_type === 'image' && (option.swatch_value || option.option_image)) {
+            return `<img class="swatch-inner" src="${option.swatch_value || option.option_image}" alt="${option.value}">`;
         }
         return `<span class="text-value">${option.value}</span>`;
     }
@@ -479,6 +479,33 @@
         return selectedTexts;
     }
 
+    function getSelectedOptionDetails() {
+        if (!state.optionsData?.attributes) return [];
+
+        const selectedDetails = [];
+        state.optionsData.attributes.forEach(attr => {
+            const selectedOptionId = state.selectedOptions[attr.attribute_id];
+            if (selectedOptionId) {
+                const option = attr.options.find(o => o.option_id === selectedOptionId);
+                if (option) {
+                    selectedDetails.push({
+                        label: String(attr.name || attr.code || '').trim(),
+                        value: String(option.value || option.code || '').trim(),
+                        attribute_id: Number(attr.attribute_id || 0),
+                        attribute_code: String(attr.code || '').trim(),
+                        option_id: Number(option.option_id || 0),
+                        option_code: String(option.code || '').trim(),
+                        swatch_type: String(option.swatch_type || '').trim(),
+                        swatch_value: String(option.swatch_value || '').trim(),
+                        option_image: String(option.option_image || '').trim(),
+                    });
+                }
+            }
+        });
+
+        return selectedDetails;
+    }
+
     /**
      * 查找选中的变体
      */
@@ -519,7 +546,14 @@
         if (!state.currentProductId || !state.optionsData) return;
 
         const selectedOptionIds = Object.values(state.selectedOptions);
-        await addToCart(state.currentProductId, state.qty, selectedOptionIds, elements.addToCartBtn, getSelectedOptionLabels());
+        await addToCart(
+            state.currentProductId,
+            state.qty,
+            selectedOptionIds,
+            elements.addToCartBtn,
+            getSelectedOptionLabels(),
+            getSelectedOptionDetails()
+        );
         
         // 成功后关闭弹窗
         hideOptionsPopup();
@@ -528,7 +562,7 @@
     /**
      * 添加到购物车
      */
-    async function addToCart(productId, qty = 1, selectedOptions = [], triggerBtn = null, selectedOptionLabels = []) {
+    async function addToCart(productId, qty = 1, selectedOptions = [], triggerBtn = null, selectedOptionLabels = [], selectedOptionDetails = []) {
         if (state.isLoading) return;
         
         state.isLoading = true;
@@ -547,6 +581,7 @@
                 qty: qty,
                 selected_options: selectedOptions,
                 selected_option_labels: selectedOptionLabels,
+                selected_option_details: selectedOptionDetails,
             }));
 
             if (result.success) {
@@ -559,6 +594,8 @@
                     selected_options: selectedOptions,
                     selectedOptions: selectedOptions, // 兼容旧版
                     selected_option_labels: selectedOptionLabels,
+                    selected_option_details: selectedOptionDetails,
+                    selectedOptionDetails: selectedOptionDetails,
                     cart_item_id: result.cart_item_id,
                     cartItemId: result.cart_item_id, // 兼容旧版
                     cart_count: result.cart_count,

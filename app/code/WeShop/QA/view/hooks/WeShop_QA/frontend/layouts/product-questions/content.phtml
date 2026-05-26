@@ -17,7 +17,7 @@ $productId = (int) ($product['product_id'] ?? $this->getData('product_id') ?? 0)
             <h3 class="mt-2 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Community Q&A') ?></h3>
         </div>
         <?php if ($productId > 0): ?>
-            <a href="<?= $this->getUrl('qa', ['product_id' => $productId]) ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Open Full Q&A') ?></a>
+            <a href="<?= $this->getUrl('qa/frontend/qa', ['product_id' => $productId]) ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Open Full Q&A') ?></a>
         <?php endif; ?>
     </div>
 

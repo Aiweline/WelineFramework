@@ -24,6 +24,11 @@ class FeedGeneratorService
 {
     public const FEED_DIR = BP . '/pub/geo-feeds';
 
+    public function __construct(
+        private readonly ?SeoProfileGeoMetadataNormalizer $metadataNormalizer = null
+    ) {
+    }
+
     /**
      * 生成Feed内容
      * 
@@ -136,7 +141,8 @@ class FeedGeneratorService
         ];
 
         foreach ($items as $item) {
-            $jsonFeed['items'][] = [
+            $metadata = $this->getMetadata($item);
+            $feedItem = [
                 'id' => $item['url'] ?? '',
                 'url' => $item['url'] ?? '',
                 'title' => $item['title'] ?? '',
@@ -147,6 +153,13 @@ class FeedGeneratorService
                 'authors' => $this->getAuthors($item),
                 'tags' => $this->getTags($item),
             ];
+            if (!empty($metadata['image']) && is_string($metadata['image'])) {
+                $feedItem['image'] = $metadata['image'];
+            }
+            if ($metadata !== []) {
+                $feedItem['_weline_geo'] = $metadata;
+            }
+            $jsonFeed['items'][] = $feedItem;
         }
 
         return json_encode($jsonFeed, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
@@ -194,8 +207,44 @@ class FeedGeneratorService
      */
     protected function getContentHtml(array $item): string
     {
-        $metadata = json_decode($item['metadata'] ?? '{}', true);
+        $metadata = $this->getMetadata($item);
         return $metadata['content_html'] ?? $item['content'] ?? '';
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return array<string, mixed>
+     */
+    protected function getMetadata(array $item): array
+    {
+        $metadata = $item['metadata'] ?? [];
+        if (is_array($metadata)) {
+            return $this->normalizeMetadata($item, $metadata);
+        }
+        if (!is_string($metadata) || trim($metadata) === '') {
+            return [];
+        }
+        $decoded = json_decode($metadata, true);
+        return is_array($decoded) ? $this->normalizeMetadata($item, $decoded) : [];
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @param array<string, mixed> $metadata
+     * @return array<string, mixed>
+     */
+    private function normalizeMetadata(array $item, array $metadata): array
+    {
+        $normalizer = $this->metadataNormalizer ?? new SeoProfileGeoMetadataNormalizer();
+        return $normalizer->normalize([
+            'page_type' => $metadata['type'] ?? $metadata['item_type'] ?? $item['item_type'] ?? '',
+            'title' => $item['title'] ?? '',
+            'description' => $item['content'] ?? '',
+            'canonical_url' => $item['url'] ?? '',
+            'url' => $item['url'] ?? '',
+            'metadata' => $metadata,
+            'geo' => $metadata,
+        ]);
     }
 
     /**
@@ -206,7 +255,7 @@ class FeedGeneratorService
      */
     protected function getAuthors(array $item): array
     {
-        $metadata = json_decode($item['metadata'] ?? '{}', true);
+        $metadata = $this->getMetadata($item);
         $authors = $metadata['authors'] ?? [];
         
         if (empty($authors) && isset($metadata['author'])) {
@@ -224,7 +273,7 @@ class FeedGeneratorService
      */
     protected function getTags(array $item): array
     {
-        $metadata = json_decode($item['metadata'] ?? '{}', true);
+        $metadata = $this->getMetadata($item);
         return $metadata['tags'] ?? [];
     }
 

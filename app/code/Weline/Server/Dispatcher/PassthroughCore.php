@@ -130,9 +130,10 @@ class PassthroughCore
      * 以便向用户返回友好的维护页面而非冷断开连接
      * 
      * @var int[]
-     */
+    */
     private array $maintenanceWorkerPorts = [];
     private int $maintenancePort = 0;
+    private bool $maintenanceRoutingActive = false;
 
     /**
      * 最近一次 handleNewConnection 是否以「业务与维护均不可连」结束（all_workers_down 路径）。
@@ -677,6 +678,32 @@ class PassthroughCore
         }
 
         // 3. SNI 缓存优先（比 IP 缓存更精确）
+        if ($this->maintenanceRoutingActive) {
+            $this->routingCache->removeConnection($connId);
+            $this->routingCache->purgeRouteCache($clientIp, $sni);
+            $maintenanceSocket = $this->connectToMaintenanceWorkerCandidate();
+            if ($maintenanceSocket !== false) {
+                return $this->registerConnection(
+                    $connId,
+                    $clientSocket,
+                    $maintenanceSocket['socket'],
+                    $maintenanceSocket['port'],
+                    $clientIp,
+                    $sni
+                );
+            }
+
+            $this->stats['all_workers_down']++;
+            $this->lastNewConnectionEndedInAllWorkersDown = true;
+            $this->logMaintenanceDecision(
+                'active_maintenance_unavailable',
+                'Active maintenance routing has no reachable maintenance worker, ' . $this->formatMaintenanceLogContext(),
+                'WARN',
+                0.0
+            );
+            return false;
+        }
+
         if ($workerPort === null && $sni !== '') {
             $sniRoutePort = $this->routingCache->getRouteBySni($sni);
             if ($sniRoutePort !== null) {
@@ -3112,6 +3139,22 @@ class PassthroughCore
     public function getMaintenanceWorkerPorts(): array
     {
         return $this->maintenanceWorkerPorts;
+    }
+
+    public function setMaintenanceRoutingActive(bool $active): void
+    {
+        $this->maintenanceRoutingActive = $active;
+        $this->logMaintenanceDecision(
+            'maintenance_routing_active:' . ($active ? '1' : '0'),
+            'Maintenance routing active=' . ($active ? 'true' : 'false') . ', ' . $this->formatMaintenanceLogContext(),
+            $active ? 'WARN' : 'INFO',
+            0.0
+        );
+    }
+
+    public function isMaintenanceRoutingActive(): bool
+    {
+        return $this->maintenanceRoutingActive;
     }
     
     /**

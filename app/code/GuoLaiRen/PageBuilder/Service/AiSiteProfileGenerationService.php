@@ -295,6 +295,11 @@ class AiSiteProfileGenerationService
     private function resolveContentLocale(array $scope, array $existing, string $sourceBrief): string
     {
         $explicit = $this->pickString(
+            $scope['ai_content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $existing['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $existing['default_language'] ?? null,
             $scope['content_locale'] ?? null,
             $existing['content_locale'] ?? null
         );
@@ -602,8 +607,7 @@ class AiSiteProfileGenerationService
     private function hasManualOverride(array $scope, string $key, array $manualFlags): bool
     {
         return !empty($manualFlags[$key])
-            && \array_key_exists($key, $scope)
-            && (!\is_scalar($scope[$key]) || \trim((string)$scope[$key]) !== '');
+            && \array_key_exists($key, $scope);
     }
 
     /**

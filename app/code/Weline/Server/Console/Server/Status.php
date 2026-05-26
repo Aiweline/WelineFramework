@@ -258,6 +258,7 @@ class Status extends CommandAbstract
         $selfHealMode = $this->resolveSelfHealMode();
         $this->printer->note(\sprintf('║  ' . __('Master 自愈：') . '%-46s║', $selfHealMode));
         $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
+        $this->showStartupFailureSummary($info);
         echo "\n";
         
         // 进程架构展示
@@ -293,8 +294,86 @@ class Status extends CommandAbstract
         }
         
         echo "\n";
-        $this->printer->note(__('测试请求：curl %{1}/', [$info->getListenAddress()]));
+        $this->printer->note(__('测试请求：curl %{1}/', [$this->buildTestCurlTarget($info)]));
         $this->printer->note(__('停止服务：php bin/w server:stop %{1}', [$name]));
+    }
+
+    protected function showStartupFailureSummary(ServerInstanceInfo $info): void
+    {
+        if ($info->startupFailureReason === ''
+            && $info->startupFailureCode === ''
+            && $info->startupFailureDiagnostics === []) {
+            return;
+        }
+
+        echo "\n";
+        $this->printer->error(__('启动失败详情：'));
+        if ($info->startupFailureCode !== '') {
+            $this->printer->warning('  code: ' . $info->startupFailureCode);
+        }
+        if ($info->startupFailureClass !== '') {
+            $this->printer->note('  class: ' . $info->startupFailureClass);
+        }
+        if ($info->startupFailureReason !== '') {
+            $this->printer->warning('  reason: ' . $info->startupFailureReason);
+        }
+
+        $context = $this->formatStartupFailureContextSummary($info->startupFailureContext);
+        if ($context !== '') {
+            $this->printer->note('  context: ' . $context);
+        }
+
+        $diagnostics = \array_slice($info->startupFailureDiagnostics, 0, 8);
+        foreach ($diagnostics as $diagnostic) {
+            $diagnostic = \trim((string)$diagnostic);
+            if ($diagnostic !== '') {
+                $this->printer->note('  diagnostic: ' . $diagnostic);
+            }
+        }
+    }
+
+    protected function formatStartupFailureContextSummary(array $context): string
+    {
+        $parts = [];
+        foreach ([
+            'instance',
+            'main_port',
+            'control_port',
+            'worker_count',
+            'dispatcher_enabled',
+            'ssl_enabled',
+            'startup_timeout_sec',
+            'elapsed_sec',
+        ] as $key) {
+            if (!\array_key_exists($key, $context)) {
+                continue;
+            }
+            $value = $context[$key];
+            if (\is_bool($value)) {
+                $value = $value ? 'true' : 'false';
+            } elseif (\is_array($value)) {
+                continue;
+            }
+            $parts[] = $key . '=' . (string)$value;
+        }
+
+        return \implode(', ', $parts);
+    }
+
+    protected function buildTestCurlTarget(ServerInstanceInfo $info): string
+    {
+        $scheme = $info->sslEnabled ? 'https' : 'http';
+        $host = \strtolower(\trim($info->host));
+        if ($host === '' || $host === '0.0.0.0' || $host === '*') {
+            $host = '127.0.0.1';
+        } elseif ($host === '::') {
+            $host = '[::1]';
+        } elseif (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
+            $host = '[' . $host . ']';
+        }
+
+        $target = $scheme . '://' . $host . ':' . $info->port;
+        return $info->sslEnabled ? '-k ' . $target : $target;
     }
 
     /**
@@ -374,14 +453,24 @@ class Status extends CommandAbstract
         $color = $isRunning ? 'success' : 'error';
         $prefix = $isLast ? '└─' : '├─';
         
-        $portStr = $service->port !== null && $service->port > 0 ? (__('端口：') . $service->port) : '';
+        $details = [];
+        $trackingPid = $service->getTrackingPid();
+        if ($trackingPid > 0) {
+            $details[] = 'PID: ' . $trackingPid;
+        }
+        if ($service->pid > 0 && $trackingPid > 0 && $service->pid !== $trackingPid) {
+            $details[] = 'child: ' . $service->pid;
+        }
+        if ($service->port !== null && $service->port > 0) {
+            $details[] = __('端口：') . $service->port;
+        }
 
-        $label = $service->displayName . ' #' . $service->instanceId . ' (' . $portStr . ')';
+        $detailStr = $details === [] ? '' : ' (' . \implode(', ', $details) . ')';
+        $label = $service->displayName . ' #' . $service->instanceId . $detailStr;
         
         $this->printer->$color("  │");
         $this->printer->$color("  {$prefix} {$label} {$icon} {$statusStr}");
         
-        $trackingPid = $service->getTrackingPid();
         if ($isRunning && $trackingPid > 0) {
             $memPrefix = $isLast ? '   ' : '│  ';
             // 使用预取的内存信息（避免逐个查询）
@@ -415,7 +504,32 @@ class Status extends CommandAbstract
      */
     protected function buildProcessInfoMap(array $instances): array
     {
-        return [];
+        $pids = [];
+        foreach ($instances as $info) {
+            if (!$info instanceof ServerInstanceInfo) {
+                continue;
+            }
+            if ($info->masterPid > 0) {
+                $pids[$info->masterPid] = true;
+            }
+            foreach ($info->services as $service) {
+                foreach ($service->getManagedPids() as $pid) {
+                    if ($pid > 0) {
+                        $pids[$pid] = true;
+                    }
+                }
+                $trackingPid = $service->getTrackingPid();
+                if ($trackingPid > 0) {
+                    $pids[$trackingPid] = true;
+                }
+            }
+        }
+
+        if ($pids === []) {
+            return [];
+        }
+
+        return Processer::batchGetProcessInfo(\array_map('intval', \array_keys($pids)));
     }
 
     /**
@@ -423,6 +537,10 @@ class Status extends CommandAbstract
      */
     protected function isMasterRunning(ServerInstanceInfo $info, array $processInfoMap): bool
     {
+        if ($info->masterPid <= 0) {
+            return false;
+        }
+
         if ($info->controlPort <= 0) {
             return false;
         }

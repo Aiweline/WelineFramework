@@ -209,9 +209,6 @@
                 && !currencyPattern.test(part)
                 && String(part).toLowerCase() === backendKey.toLowerCase());
         }
-        if (prefixIndex < 0) {
-            prefixIndex = pathParts.findIndex(part => !langPattern.test(part) && !currencyPattern.test(part));
-        }
         const prefixSegment = prefixIndex >= 0 ? pathParts[prefixIndex] : '';
 
         pathParts.forEach((part, index) => {

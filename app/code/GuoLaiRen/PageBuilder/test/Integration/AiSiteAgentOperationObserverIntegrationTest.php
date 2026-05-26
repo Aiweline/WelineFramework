@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue;
+use GuoLaiRen\PageBuilder\Service\AiSiteBuildPlanService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use ReflectionMethod;
 use Weline\Framework\Manager\ObjectManager;
@@ -534,6 +535,56 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame($blockToken, (string)($freshScope['active_operations']['block_partial_patch']['execution_token'] ?? ''));
     }
 
+    public function testDoneActiveOperationClearsStaleFailureState(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+
+        $scope = $session->getScopeArray();
+        $scope['active_operation'] = [
+            'operation' => 'plan',
+            'execution_token' => 'plan-token',
+            'status' => 'error',
+            'failure_mode' => 'plan_failed',
+            'semantic_status' => 'cancelled',
+            'retry_allowed' => 1,
+            'retryable_ai_failure_count' => 12,
+            'retryable_ai_failures' => ['old'],
+            'progress_percent' => 0,
+        ];
+        $scope['active_operations'] = ['plan' => $scope['active_operation']];
+        $this->sessionService->replaceScope($session->getId(), 1, $scope);
+
+        /** @var AiSiteAgent $controller */
+        $controller = ObjectManager::getInstance(AiSiteAgent::class);
+        $method = new ReflectionMethod(AiSiteAgent::class, 'updateActiveOperation');
+        $method->setAccessible(true);
+        $method->invoke($controller, $session, 1, ['operation' => 'plan', 'status' => 'done', 'message' => 'plan done']);
+
+        $fresh = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($fresh);
+        $freshScope = $fresh->getScopeArray();
+        $operation = \is_array($freshScope['active_operation'] ?? null) ? $freshScope['active_operation'] : [];
+        self::assertSame('done', (string)($operation['status'] ?? ''));
+        self::assertSame('', (string)($operation['failure_mode'] ?? ''));
+        self::assertSame('done', (string)($operation['semantic_status'] ?? ''));
+        self::assertSame(0, (int)($operation['retry_allowed'] ?? 1));
+        self::assertSame(0, (int)($operation['retryable_ai_failure_count'] ?? -1));
+        self::assertSame([], $operation['retryable_ai_failures'] ?? null);
+        self::assertSame(100, (int)($operation['progress_percent'] ?? 0));
+        self::assertSame(0, (int)($freshScope['active_operations']['plan']['retryable_ai_failure_count'] ?? -1));
+    }
+
     public function testAiSiteQueueOperationsAreSchedulerOwned(): void
     {
         /** @var AiSiteAgent $controller */
@@ -645,46 +696,49 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             $session = $this->sessionService->loadByPublicId($publicId, 1);
             self::assertNotNull($session);
             $scope = $session->getScopeArray();
-            $buildPlanTask = [
-                'task_key' => 'page:home:hero',
-                'task_type' => 'page_section',
-                'scope_key' => 'page_sections.home.hero',
-                'group_key' => Page::TYPE_HOME,
-                'page_type' => Page::TYPE_HOME,
-                'region' => 'content',
-                'section_code' => 'hero',
-                'label' => 'Hero',
-                'sort_order' => 1000,
-            ];
-            $scope['build_plan_v2'] = [
-                'contract_meta' => [
-                    'version' => '2.2',
-                    'status' => 'confirmed',
-                    'confirmed_at' => \date('Y-m-d H:i:s'),
-                ],
-                'signature' => 'queue-reuse-confirmed-build-plan',
-                'tasks' => [$buildPlanTask],
-                'pages' => [
-                    Page::TYPE_HOME => [
-                        'page_type' => Page::TYPE_HOME,
-                        'title' => 'Home',
-                    ],
-                ],
-                'blocks' => [
-                    Page::TYPE_HOME => [
-                        [
-                            'block_id' => 'hero',
-                            'section_code' => 'hero',
+            $buildPlanService = new AiSiteBuildPlanService();
+            $buildPlan = $buildPlanService->confirm($buildPlanService->buildFromScope([
+                'page_types' => [Page::TYPE_HOME],
+                'site_title' => 'Session queue reuse',
+                'brief_description' => 'Verify reusable queue slots without duplicating build state.',
+                'default_locale' => 'en_US',
+                'execution_blueprint_draft' => [
+                    'signature' => 'queue-reuse-stage-one-signature',
+                    'pages' => [
+                        Page::TYPE_HOME => [
+                            'title' => 'Home',
+                            'page_goal' => 'Confirm that build queue rows stay small.',
+                            'blocks' => [
+                                [
+                                    'block_key' => 'hero',
+                                    'title' => 'Queue payload hygiene',
+                                    'goal' => 'Show the build queue stores references instead of full context.',
+                                    'page_flow_role' => 'opening_conversions',
+                                    'visual_signature' => [
+                                        'composition_pattern' => 'hero section with compact proof rail and direct queue hygiene message',
+                                        'spatial_rhythm' => 'headline, short support copy, proof detail, and focused action row',
+                                        'media_strategy' => 'CSS-only/no generated image; use queue status chips and dividers as the visual motif',
+                                        'surface_treatment' => 'clean panels with restrained contrast and readable proof surfaces',
+                                        'interaction_pattern' => 'CTA hover lift with focus-visible outline and no ambient motion',
+                                    ],
+                                    'field_plan' => [
+                                        ['field' => 'description', 'sample' => 'Build queues stay small by reloading session artifacts.'],
+                                        ['field' => 'cta', 'sample' => 'Review queue details'],
+                                    ],
+                                ],
+                            ],
                         ],
                     ],
                 ],
-            ];
+            ]));
+            $buildPlanValidation = $buildPlanService->validate($buildPlan);
+            self::assertTrue(
+                (bool)($buildPlanValidation['valid'] ?? false),
+                \json_encode($buildPlanValidation, \JSON_UNESCAPED_UNICODE)
+            );
+            $scope['build_plan_v2'] = $buildPlan;
             $scope['build_plan_confirmed'] = 1;
-            $scope['build_blueprint'] = [
-                'source' => 'build_plan_v2',
-                'signature' => 'queue-reuse-confirmed-build-plan',
-                'tasks' => [$buildPlanTask],
-            ];
+            unset($scope['build_blueprint'], $scope['build_tasks']);
             $this->sessionService->replaceScope($session->getId(), 1, $scope);
 
             $buildPayload = $this->invokeJsonAction(
@@ -756,6 +810,10 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             self::assertIsArray($buildQueueContent);
             self::assertSame('build', (string)($buildQueueContent['operation'] ?? ''));
             self::assertSame('virtual_theme.tree.build', (string)($buildQueueContent['job_type'] ?? ''));
+            self::assertIsArray($buildQueueContent['scope_patch'] ?? null);
+            self::assertArrayNotHasKey('build_blueprint', $buildQueueContent['scope_patch']);
+            self::assertArrayNotHasKey('build_tasks', $buildQueueContent['scope_patch']);
+            self::assertArrayNotHasKey('build_plan_v2', $buildQueueContent['scope_patch']);
         } finally {
             RequestContext::remove('pagebuilder.ai.queue.dispatcher');
         }

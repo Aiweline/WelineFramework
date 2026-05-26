@@ -99,7 +99,7 @@ class AiSiteAgentWorkspaceStateHelperService
             $selected[$pageType] = $virtualPages[$pageType];
         }
 
-        return $selected;
+        return $this->pruneVirtualPagesByTypeForView($selected);
     }
 
     /**
@@ -326,6 +326,30 @@ class AiSiteAgentWorkspaceStateHelperService
         );
 
         return $this->stripInlineImagePayloads($state);
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    public function pruneStateForEventPayload(array $state): array
+    {
+        $state = $this->pruneStateForView($state);
+
+        unset(
+            $state['asset_manifest'],
+            $state['verified_assets'],
+            $state['reference_images'],
+            $state['retryable_ai_failures'],
+            $state['retryable_ai_failure_summary'],
+            $state['stage1_contract'],
+            $state['plan'],
+            $state['page_type_layouts'],
+            $state['scope'],
+            $state['content_manifest']
+        );
+
+        return $state;
     }
 
     /**
@@ -833,7 +857,7 @@ class AiSiteAgentWorkspaceStateHelperService
     {
         $key = match (\trim($operation)) {
             'plan' => 'plan_queue_info',
-            'build', 'regenerate_page', 'block_regenerate', 'block_partial_patch' => 'build_queue_info',
+            'build', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'publish' => 'build_queue_info',
             default => '',
         };
         if ($key !== '' && \is_array($state[$key] ?? null)) {
@@ -894,7 +918,7 @@ class AiSiteAgentWorkspaceStateHelperService
     public function resolveEnvelopeCursor(array $state, array $activeOperation): string
     {
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
-        if (!\in_array($operation, ['plan', 'build', 'regenerate_page', 'block_regenerate', 'block_partial_patch'], true)) {
+        if (!\in_array($operation, ['plan', 'build', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'publish'], true)) {
             $operation = '';
         }
         $pageType = \trim((string)($activeOperation['page_type'] ?? $state['preview_page_type'] ?? ''));
@@ -971,6 +995,7 @@ class AiSiteAgentWorkspaceStateHelperService
             'block_partial_patch' => 'virtual_theme.block.partial_patch',
             'regenerate_page' => 'virtual_theme.page.regenerate',
             'image_asset' => 'image.asset.generate',
+            'publish' => 'virtual_theme.publish',
             default => '',
         };
     }

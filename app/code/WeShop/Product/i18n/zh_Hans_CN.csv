@@ -66,9 +66,12 @@ EAV属性保存失败：%{1},EAV属性保存失败：%{1}
 产品状态变更时触发（启用/禁用）。,产品状态变更时触发（启用/禁用）。
 产品价格变更,产品价格变更
 产品价格变更时触发。,产品价格变更时触发。
+商品详情已浏览,商品详情已浏览
+"商品详情页成功加载后触发，负载包含 product_id、product。","商品详情页成功加载后触发，负载包含 product_id、product。"
 "Default product attribute set is missing. Run setup:upgrade first.","Default product attribute set is missing. Run setup:upgrade first."
 "Failed to resolve product after save: %{1}","Failed to resolve product after save: %{1}"
 "Failed to save fake review for product %{1}","Failed to save fake review for product %{1}"
+"Failed to save fake review reply for review %{1}","Failed to save fake review reply for review %{1}"
 "Failed to resolve variant after save: %{1}","Failed to resolve variant after save: %{1}"
 "Product 查询器不支持的操作：%{1}","Product 查询器不支持的操作：%{1}"
 产品查询,产品查询
@@ -85,6 +88,7 @@ EAV属性保存失败：%{1},EAV属性保存失败：%{1}
 "获取产品 EAV 属性信息","获取产品 EAV 属性信息"
 "从 EAV 值表读取产品属性值列表","从 EAV 值表读取产品属性值列表"
 "按 EAV 属性值筛选产品 ID","按 EAV 属性值筛选产品 ID"
+"WeShop 商品 sitemap URL 与图片扩展提供器","WeShop 商品 sitemap URL 与图片扩展提供器"
 提供商品搜索文档（名称、SKU、分类、价格、库存等）,提供商品搜索文档（名称、SKU、分类、价格、库存等）
 产品详情页加入购物车之后,产品详情页加入购物车之后
 在产品详情页面加入购物车之后触发，允许其他模块在加入购物车后执行自定义逻辑。,在产品详情页面加入购物车之后触发，允许其他模块在加入购物车后执行自定义逻辑。
@@ -108,10 +112,8 @@ EAV属性保存失败：%{1},EAV属性保存失败：%{1}
 在后台产品编辑页内容区域末尾追加当前产品相关的模块管理面板。,在后台产品编辑页内容区域末尾追加当前产品相关的模块管理面板。
 "Product Description","Product Description"
 颜色,颜色
-黑色,黑色
-藏青,藏青
-米色,米色
 尺码,尺码
+款式,款式
 评分,评分
 放大查看,放大查看
 暂无图片,暂无图片
@@ -121,6 +123,9 @@ SKU,SKU
 有货,有货
 缺货,缺货
 件,件
+选项分页,选项分页
+上一页,上一页
+下一页,下一页
 产品规格,产品规格
 优惠,优惠
 数量,数量
@@ -145,6 +150,7 @@ SKU,SKU
 请选择,请选择
 、,、
 已选,已选
+"第 %{1} 页","第 %{1} 页"
 添加购物车失败,添加购物车失败
 添加中,添加中
 已添加,已添加
@@ -158,8 +164,6 @@ Reviews,Reviews
 产品列表分页,产品列表分页
 "显示 %d-%d，共 %d 件","显示 %d-%d，共 %d 件"
 首页,首页
-上一页,上一页
-下一页,下一页
 末页,末页
 跳转到,跳转到
 页,页

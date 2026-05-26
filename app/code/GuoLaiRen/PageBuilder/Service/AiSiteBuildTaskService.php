@@ -161,6 +161,30 @@ class AiSiteBuildTaskService
         'block_task' => true,
         'implementation_contract' => true,
     ];
+    private const BLUEPRINT_SHARED_TASK_CONTEXT_KEY = '_shared_task_context';
+    private const BLUEPRINT_SHARED_RUNTIME_CONTEXT_KEYS = [
+        'site_context' => true,
+        'theme_context_snapshot' => true,
+        'shared_prompt_context' => true,
+        'policy_context' => true,
+        'skill_context' => true,
+        'reference_context' => true,
+        'asset_context' => true,
+    ];
+    private const BLUEPRINT_SHARED_PLAN_CONTEXT_KEYS = [
+        'design_manifest' => true,
+        'policy_projection' => true,
+        'policy_ref' => true,
+    ];
+    private const BLUEPRINT_SHARED_STYLE_PLAN_EXCLUDED_KEYS = [
+        'visual_signature' => true,
+        'image_intent' => true,
+        'page_flow_role' => true,
+        'block_type' => true,
+        'block_key' => true,
+        'section_key' => true,
+        'design_tags' => true,
+    ];
 
     public function __construct(
         private readonly AiSitePageBlueprintService $pageBlueprintService,
@@ -194,7 +218,7 @@ class AiSiteBuildTaskService
 
         if ($signature === '' || (string)($existingBlueprint['signature'] ?? '') !== $signature) {
             $scope['build_blueprint'] = $blueprint;
-            $scope['build_tasks'] = $this->canPreserveExistingTaskLedgerForBlueprint($blueprint, $existingTasks)
+            $scope['build_tasks'] = $existingTasks !== []
                 ? $this->mergeTaskStateWithBlueprint($blueprint, $existingTasks)
                 : $this->buildDefaultTaskState($blueprint);
             return $scope;
@@ -560,28 +584,6 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * Preserve the mutable task ledger when only the generated blueprint signature
-     * drifted but the executable task key set did not. Workbench snapshots must not
-     * turn terminal done/failed state back into pending unless a real task set change
-     * happened or an explicit rebuild cleared the ledger first.
-     *
-     * @param array<string, mixed> $blueprint
-     * @param array<string, mixed> $existingTasks
-     */
-    private function canPreserveExistingTaskLedgerForBlueprint(array $blueprint, array $existingTasks): bool
-    {
-        if ($existingTasks === []) {
-            return false;
-        }
-        $newTaskKeys = \array_keys($this->buildDefaultTaskState($blueprint));
-        $existingTaskKeys = \array_keys($this->extractTaskState(['build_tasks' => $existingTasks]));
-        \sort($newTaskKeys);
-        \sort($existingTaskKeys);
-
-        return $newTaskKeys !== [] && $newTaskKeys === $existingTaskKeys;
-    }
-
-    /**
      * @return list<string>
      */
     public function buildPlanDerivedScopeKeys(): array
@@ -843,6 +845,7 @@ class AiSiteBuildTaskService
             if ($imageIntent !== []) {
                 $planContext['block_image_intent'] = $imageIntent;
             }
+            $planContext = $this->compactBuildPlanTaskPlanContext($planContext);
             $contentLocale = $this->firstNonEmptyBuildPlanText([
                 $taskRuntimeContext['content_locale'] ?? null,
                 $contract['i18n']['primary_locale'] ?? null,
@@ -951,14 +954,12 @@ class AiSiteBuildTaskService
             'build_plan_contract_id' => (string)($meta['id'] ?? ''),
             'build_plan_signature' => (string)($meta['signature'] ?? $meta['source_signature'] ?? ''),
             'tasks' => $tasks,
-            'signature' => \sha1((string)\json_encode([
-                'version' => self::BLUEPRINT_VERSION,
-                'source' => 'build_plan_v2',
-                'workspace_track' => $workspaceTrack,
-                'contract_id' => (string)($meta['id'] ?? ''),
-                'contract_signature' => (string)($meta['signature'] ?? $meta['source_signature'] ?? ''),
-                'tasks' => $tasks,
-            ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
+            'signature' => $this->buildBuildPlanV2BlueprintSignature(
+                $workspaceTrack,
+                (string)($meta['id'] ?? ''),
+                (string)($meta['signature'] ?? $meta['source_signature'] ?? ''),
+                $tasks
+            ),
         ];
         AiSiteWorkflowTrace::log('build_blueprint_from_plan_v2', [
             'contract_id' => (string)($meta['id'] ?? ''),
@@ -976,7 +977,341 @@ class AiSiteBuildTaskService
             ]);
         }
 
+        return $this->compactBuildBlueprintSharedTaskContext($blueprint);
+    }
+
+    /**
+     * Keep only task-level plan context that prompt assembly actually reads.
+     * The full BuildPlan task and its runtime_context are already represented by
+     * the executable task fields, and duplicating them across every blueprint
+     * task makes session artifacts large enough to destabilize queue workers.
+     *
+     * @param array<string, mixed> $planContext
+     * @return array<string, mixed>
+     */
+    private function compactBuildPlanTaskPlanContext(array $planContext): array
+    {
+        unset($planContext['runtime_context']);
+
+        if (\is_array($planContext['task'] ?? null)) {
+            $sourceTask = $planContext['task'];
+            $taskProjection = [];
+            foreach ([
+                'task_id',
+                'id',
+                'task_kind',
+                'executor',
+                'input_scope',
+                'policy_slices',
+                'acceptance_rule_ids',
+                'context_budget',
+            ] as $key) {
+                if (\array_key_exists($key, $sourceTask)) {
+                    $taskProjection[$key] = $sourceTask[$key];
+                }
+            }
+            if ($taskProjection === []) {
+                unset($planContext['task']);
+            } else {
+                $planContext['task'] = $taskProjection;
+            }
+        }
+
+        return $planContext;
+    }
+
+    /**
+     * The executable blueprint signature must be stable without serializing the
+     * full prompt/runtime context for every task. The rich context is stored on
+     * tasks and compacted below; only identity and execution-shape fields are
+     * needed to decide whether the task ledger still matches the blueprint.
+     *
+     * @param list<array<string, mixed>> $tasks
+     */
+    private function buildBuildPlanV2BlueprintSignature(
+        string $workspaceTrack,
+        string $contractId,
+        string $contractSignature,
+        array $tasks
+    ): string {
+        $taskProjection = [];
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
+            $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
+            $runtime = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
+            $taskProjection[] = [
+                'task_key' => (string)($task['task_key'] ?? ''),
+                'task_type' => (string)($task['task_type'] ?? ''),
+                'scope_key' => (string)($task['scope_key'] ?? ''),
+                'group_key' => (string)($task['group_key'] ?? ''),
+                'page_type' => (string)($task['page_type'] ?? ''),
+                'region' => (string)($task['region'] ?? ''),
+                'section_code' => (string)($task['section_code'] ?? ''),
+                'block_key' => (string)($task['block_key'] ?? ''),
+                'block_type' => (string)($task['block_type'] ?? ''),
+                'page_flow_role' => (string)($task['page_flow_role'] ?? ''),
+                'dependencies' => $this->normalizeBuildPlanStringList($task['dependencies'] ?? []),
+                'content_keys' => $this->normalizeBuildPlanStringList($taskScript['content_keys'] ?? []),
+                'content_locale' => (string)($runtime['content_locale'] ?? ''),
+                'materialize_policy' => (string)($task['materialize_policy'] ?? ''),
+                'prompt_template_key' => (string)($task['prompt_template_key'] ?? ''),
+                'image_role' => (string)($blockTask['image_intent']['image_role'] ?? $task['image_intent']['image_role'] ?? ''),
+                'needs_image' => (bool)($blockTask['image_intent']['needs_image'] ?? $task['image_intent']['needs_image'] ?? false),
+            ];
+        }
+
+        return $this->buildSignature([
+            'version' => self::BLUEPRINT_VERSION,
+            'source' => 'build_plan_v2',
+            'workspace_track' => $workspaceTrack,
+            'contract_id' => $contractId,
+            'contract_signature' => $contractSignature,
+            'tasks' => $taskProjection,
+        ]);
+    }
+
+    /**
+     * Keep stable task context once per blueprint. Individual tasks retain only
+     * task-specific overrides and are inflated when a prompt needs them.
+     *
+     * @param array<string, mixed> $blueprint
+     * @return array<string, mixed>
+     */
+    private function compactBuildBlueprintSharedTaskContext(array $blueprint): array
+    {
+        if ((string)($blueprint['source'] ?? '') !== 'build_plan_v2') {
+            return $blueprint;
+        }
+        $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
+        if (\count($tasks) < 2) {
+            return $blueprint;
+        }
+
+        $sharedContext = \is_array($blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY] ?? null)
+            ? $blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY]
+            : [];
+
+        $sharedRuntime = $this->extractSharedTaskContextAtPath(
+            $tasks,
+            ['runtime_context'],
+            self::BLUEPRINT_SHARED_RUNTIME_CONTEXT_KEYS
+        );
+        if ($sharedRuntime !== []) {
+            $tasks = $this->removeTaskContextAtPath($tasks, ['runtime_context'], \array_keys($sharedRuntime));
+            $sharedContext['runtime_context'] = \array_replace_recursive(
+                \is_array($sharedContext['runtime_context'] ?? null) ? $sharedContext['runtime_context'] : [],
+                $sharedRuntime
+            );
+        }
+
+        $sharedPlanContext = $this->extractSharedTaskContextAtPath(
+            $tasks,
+            ['plan_context'],
+            self::BLUEPRINT_SHARED_PLAN_CONTEXT_KEYS
+        );
+        if ($sharedPlanContext !== []) {
+            $tasks = $this->removeTaskContextAtPath($tasks, ['plan_context'], \array_keys($sharedPlanContext));
+            $sharedContext['plan_context'] = \array_replace_recursive(
+                \is_array($sharedContext['plan_context'] ?? null) ? $sharedContext['plan_context'] : [],
+                $sharedPlanContext
+            );
+        }
+
+        $sharedStylePlan = $this->extractSharedTaskContextAtPath(
+            $tasks,
+            ['block_task', 'style_plan'],
+            null,
+            self::BLUEPRINT_SHARED_STYLE_PLAN_EXCLUDED_KEYS
+        );
+        if ($sharedStylePlan !== []) {
+            $tasks = $this->removeTaskContextAtPath($tasks, ['block_task', 'style_plan'], \array_keys($sharedStylePlan));
+            $sharedContext['block_task_style_plan'] = \array_replace_recursive(
+                \is_array($sharedContext['block_task_style_plan'] ?? null) ? $sharedContext['block_task_style_plan'] : [],
+                $sharedStylePlan
+            );
+        }
+
+        if ($sharedContext === []) {
+            return $blueprint;
+        }
+
+        $blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY] = $sharedContext;
+        $blueprint['tasks'] = $tasks;
+
         return $blueprint;
+    }
+
+    /**
+     * @param list<mixed> $tasks
+     * @param list<string> $path
+     * @param array<string, true>|null $allowedKeys
+     * @param array<string, true> $excludedKeys
+     * @return array<string, mixed>
+     */
+    private function extractSharedTaskContextAtPath(array $tasks, array $path, ?array $allowedKeys = null, array $excludedKeys = []): array
+    {
+        $shared = null;
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                return [];
+            }
+            $context = $this->getNestedTaskContext($task, $path);
+            if ($context === []) {
+                return [];
+            }
+
+            $candidate = [];
+            foreach ($context as $key => $value) {
+                $key = (string)$key;
+                if (($allowedKeys !== null && !isset($allowedKeys[$key])) || isset($excludedKeys[$key])) {
+                    continue;
+                }
+                if (!$this->isWorthPoolingTaskContextValue($value)) {
+                    continue;
+                }
+                $candidate[$key] = $value;
+            }
+            if ($candidate === []) {
+                return [];
+            }
+
+            if ($shared === null) {
+                $shared = $candidate;
+                continue;
+            }
+
+            foreach (\array_keys($shared) as $key) {
+                if (!\array_key_exists($key, $candidate) || $candidate[$key] != $shared[$key]) {
+                    unset($shared[$key]);
+                }
+            }
+            if ($shared === []) {
+                return [];
+            }
+        }
+
+        return \is_array($shared) ? $shared : [];
+    }
+
+    private function isWorthPoolingTaskContextValue(mixed $value): bool
+    {
+        if (\is_array($value)) {
+            return $value !== [];
+        }
+        if (\is_string($value)) {
+            return \trim($value) !== '';
+        }
+
+        return $value !== null && $value !== false;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param list<string> $path
+     * @return array<string, mixed>
+     */
+    private function getNestedTaskContext(array $task, array $path): array
+    {
+        $cursor = $task;
+        foreach ($path as $part) {
+            if (!\is_array($cursor[$part] ?? null)) {
+                return [];
+            }
+            $cursor = $cursor[$part];
+        }
+
+        return \is_array($cursor) ? $cursor : [];
+    }
+
+    /**
+     * @param list<mixed> $tasks
+     * @param list<string> $path
+     * @param list<string> $keys
+     * @return list<mixed>
+     */
+    private function removeTaskContextAtPath(array $tasks, array $path, array $keys): array
+    {
+        $keyMap = \array_fill_keys($keys, true);
+        foreach ($tasks as $index => $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $tasks[$index] = $this->removeNestedTaskContextKeys($task, $path, $keyMap);
+        }
+
+        return $tasks;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param list<string> $path
+     * @param array<string, true> $keyMap
+     * @return array<string, mixed>
+     */
+    private function removeNestedTaskContextKeys(array $task, array $path, array $keyMap): array
+    {
+        if ($path === []) {
+            return \array_diff_key($task, $keyMap);
+        }
+
+        $part = \array_shift($path);
+        if (!\is_string($part) || !\is_array($task[$part] ?? null)) {
+            return $task;
+        }
+        $task[$part] = $this->removeNestedTaskContextKeys($task[$part], $path, $keyMap);
+        if ($task[$part] === []) {
+            unset($task[$part]);
+        }
+
+        return $task;
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param array<string, mixed> $blueprint
+     * @return array<string, mixed>
+     */
+    public function inflateBuildBlueprintTaskContext(array $task, array $blueprint): array
+    {
+        $sharedContext = \is_array($blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY] ?? null)
+            ? $blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY]
+            : [];
+        if ($sharedContext === []) {
+            return $task;
+        }
+
+        $sharedRuntime = \is_array($sharedContext['runtime_context'] ?? null) ? $sharedContext['runtime_context'] : [];
+        if ($sharedRuntime !== []) {
+            $task['runtime_context'] = \array_replace_recursive(
+                $sharedRuntime,
+                \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : []
+            );
+        }
+
+        $sharedPlanContext = \is_array($sharedContext['plan_context'] ?? null) ? $sharedContext['plan_context'] : [];
+        if ($sharedPlanContext !== []) {
+            $task['plan_context'] = \array_replace_recursive(
+                $sharedPlanContext,
+                \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : []
+            );
+        }
+
+        $sharedStylePlan = \is_array($sharedContext['block_task_style_plan'] ?? null)
+            ? $sharedContext['block_task_style_plan']
+            : [];
+        if ($sharedStylePlan !== []) {
+            $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
+            $blockTask['style_plan'] = \array_replace_recursive(
+                $sharedStylePlan,
+                \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : []
+            );
+            $task['block_task'] = $blockTask;
+        }
+
+        return $task;
     }
 
     /**
@@ -1652,9 +1987,9 @@ class AiSiteBuildTaskService
                 'page_type' => $pageType,
                 'page_label' => (string)(Page::getPageTypes()[$pageType] ?? $pageType),
                 'page_title' => (string)($page['title'] ?? $pageType),
-                'ai_description' => (string)($page['page_goal'] ?? $page['goal'] ?? ''),
+                'ai_description' => (string)($page['ai_description'] ?? $page['visitor_description'] ?? ''),
                 'meta_title' => (string)($page['meta_title'] ?? ''),
-                'meta_description' => (string)($page['meta_description'] ?? ''),
+                'meta_description' => (string)($page['meta_description'] ?? $page['seo_description'] ?? ''),
                 'meta_keywords' => \implode(',', \array_values(\array_filter(\array_map('strval', \is_array($page['primary_keywords'] ?? null) ? $page['primary_keywords'] : [])))),
                 'site_display_name' => (string)($scope['site_title'] ?? ''),
                 'section_refinements' => [],
@@ -2110,7 +2445,7 @@ class AiSiteBuildTaskService
      */
     public function getTaskDefinition(array $scope, string $taskKey): ?array
     {
-        foreach ($this->extractBlueprintTasks($scope) as $task) {
+        foreach ($this->extractBlueprintTasks($scope, true) as $task) {
             if ((string)($task['task_key'] ?? '') === $taskKey) {
                 return $task;
             }
@@ -3607,12 +3942,19 @@ class AiSiteBuildTaskService
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
      */
-    private function extractBlueprintTasks(array $scope): array
+    private function extractBlueprintTasks(array $scope, bool $inflate = false): array
     {
         $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
+        $result = [];
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $result[] = $inflate ? $this->inflateBuildBlueprintTaskContext($task, $blueprint) : $task;
+        }
 
-        return \array_values(\array_filter($tasks, static fn($task): bool => \is_array($task)));
+        return $result;
     }
 
     /**

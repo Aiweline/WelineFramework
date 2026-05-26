@@ -398,48 +398,6 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
     <?php if ($metaKeywords): ?>
     <meta name="keywords" content="<?= htmlspecialchars($metaKeywords ?? '') ?>">
     <?php endif; ?>
-    
-    <?php
-    // 生成符合 Google SEO 的 JSON-LD 结构化数据（WebPage）
-    try {
-        $baseHost = $this->request ? ($this->request->getBaseHost() ?? '') : '';
-        $handle = $page ? (string)$page->getData('handle') : '';
-        $pageUrl = '';
-        if ($baseHost !== '') {
-            $pageUrl = rtrim(rtrim($baseHost, '/'), ':') . '/' . ltrim($handle, '/');
-        }
-        $locale = \Weline\Framework\App\State::getLang();
-        $structuredTitle = $metaTitle;
-        $structuredDescription = $metaDescription ?: '';
-        $structuredData = [
-            '@context' => 'https://schema.org',
-            '@type' => 'WebPage',
-            'name' => $structuredTitle,
-            'url' => $pageUrl,
-            'inLanguage' => $locale,
-            'description' => $structuredDescription,
-        ];
-        if ($page) {
-            $createTime = (string)($page->getData('create_time') ?? '');
-            $updateTime = (string)($page->getData('update_time') ?? '');
-            if ($createTime !== '') {
-                $structuredData['datePublished'] = $createTime;
-            }
-            if ($updateTime !== '') {
-                $structuredData['dateModified'] = $updateTime;
-            }
-        }
-        $this->setData('seo_structured_data_json', json_encode($structuredData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-    } catch (\Throwable $e) {
-        $structuredData = [];
-    }
-    ?>
-    <?php if (!empty($structuredData)): ?>
-    <script type="application/ld+json">
-<?= json_encode($structuredData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>
-    </script>
-    <?php endif; ?>
-    
     <!-- 统计代码 -->
     <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
     

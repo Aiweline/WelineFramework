@@ -463,29 +463,64 @@ class Page extends BackendController
             $pageUrl = $baseHost . '/' . ltrim($handle, '/');
         }
         
-        $locale = Cookie::getLang();
         $title = (string)($page->getData(PageModel::schema_fields_META_TITLE) ?: $page->getData(PageModel::schema_fields_TITLE));
-        $description = (string)$page->getData(PageModel::schema_fields_META_DESCRIPTION);
-        
-        $data = [
-            '@context' => 'https://schema.org',
-            '@type' => 'WebPage',
-            'name' => $title,
-            'url' => $pageUrl,
-            'inLanguage' => $locale,
-            'description' => $description,
-        ];
-        
-        $createTime = (string)($page->getData(PageModel::schema_fields_CREATE_TIME) ?? '');
-        $updateTime = (string)($page->getData(PageModel::schema_fields_UPDATE_TIME) ?? '');
-        if ($createTime !== '') {
-            $data['datePublished'] = $createTime;
+        $description = (string)($page->getData(PageModel::schema_fields_META_DESCRIPTION) ?: $page->getData(PageModel::schema_fields_AI_DESCRIPTION));
+        $pageType = (string)($page->getData(PageModel::schema_fields_TYPE) ?: 'web_page');
+        $template = new class([
+            'page' => $page,
+            'current_page' => (string)(parse_url($pageUrl, PHP_URL_PATH) ?: ''),
+            'lang_local' => Cookie::getLang(),
+            'seo' => [
+                'page_type' => $pageType,
+                'title' => $title,
+                'description' => $description,
+                'keywords' => (string)($page->getData(PageModel::schema_fields_META_KEYWORDS) ?? ''),
+                'canonical_url' => $pageUrl,
+            ],
+        ], $this->request ?? null) {
+            /** @param array<string, mixed> $data */
+            public function __construct(
+                private array $data,
+                public mixed $request
+            ) {
+            }
+
+            public function getData(string $key): mixed
+            {
+                return $this->data[$key] ?? null;
+            }
+
+            public function setData(string $key, mixed $value): self
+            {
+                $this->data[$key] = $value;
+                return $this;
+            }
+        };
+
+        try {
+            /** @var \Weline\Seo\Service\Head\HeadProviderRegistry $providerRegistry */
+            $providerRegistry = ObjectManager::getInstance(\Weline\Seo\Service\Head\HeadProviderRegistry::class);
+            $renderer = new \Weline\Seo\Service\Head\HeadRenderer(
+                new \Weline\Seo\Service\Head\PageSeoContextResolver($providerRegistry)
+            );
+
+            return $this->jsonLdPayloadFromHtml((string)$renderer->render($template, ['slot' => 'schema']));
+        } catch (\Throwable) {
+            return [];
         }
-        if ($updateTime !== '') {
-            $data['dateModified'] = $updateTime;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function jsonLdPayloadFromHtml(string $html): array
+    {
+        if (!preg_match('/<script\b[^>]*type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is', $html, $matches)) {
+            return [];
         }
-        
-        return $data;
+
+        $payload = json_decode(trim((string)$matches[1]), true);
+        return is_array($payload) ? $payload : [];
     }
 
     /**

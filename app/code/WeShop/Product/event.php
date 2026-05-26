@@ -41,4 +41,9 @@ return [
         'description' => __('产品价格变更时触发。'),
         'doc' => 'product_price_change.md',
     ],
+    'WeShop_Product::product_viewed' => [
+        'name' => __('商品详情已浏览'),
+        'description' => __('商品详情页成功加载后触发，负载包含 product_id、product。'),
+        'doc' => 'product_viewed.md',
+    ],
 ];

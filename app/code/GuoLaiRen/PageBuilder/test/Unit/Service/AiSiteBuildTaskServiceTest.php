@@ -117,6 +117,79 @@ class AiSiteBuildTaskServiceTest extends TestCase
         );
     }
 
+    public function testBuildPlanV2BlueprintStoresSharedTaskContextOnceAndInflatesOnRead(): void
+    {
+        $buildPlanService = new AiSiteBuildPlanService();
+        $buildPlan = $buildPlanService->confirm($buildPlanService->buildFromScope([
+            'page_types' => ['home_page'],
+            'site_title' => 'Example Site',
+            'brief_description' => 'Explain the service clearly.',
+            'default_locale' => 'en_US',
+            'execution_blueprint_draft' => [
+                'signature' => 'stage-one-shared-context-signature',
+                'pages' => [
+                    'home_page' => [
+                        'title' => 'Home',
+                        'page_goal' => 'Convert qualified buyers with clear proof.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'title' => 'Launch reliable AI workflows',
+                                'goal' => 'Show the core value with a direct CTA.',
+                                'page_flow_role' => 'opening_conversions',
+                                'visual_signature' => $this->buildStageOneVisualSignature('hero'),
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'A concise proof-led section helps visitors understand the next step.'],
+                                ],
+                            ],
+                            [
+                                'block_key' => 'trust',
+                                'title' => 'Proof that operations stay reliable',
+                                'goal' => 'Show concrete evidence before conversion.',
+                                'page_flow_role' => 'proof_builder',
+                                'visual_signature' => $this->buildStageOneVisualSignature('trust'),
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'Reliable operations are supported by clear proof and next steps.'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]));
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope([
+            'page_types' => ['home_page'],
+            'build_plan_v2' => $buildPlan,
+            'build_plan_confirmed' => 1,
+        ], [], 'virtual_theme');
+
+        $blueprint = $scope['build_blueprint'] ?? [];
+        self::assertIsArray($blueprint);
+        self::assertIsArray($blueprint['_shared_task_context']['runtime_context'] ?? null);
+
+        $rawPageTask = [];
+        foreach ($blueprint['tasks'] ?? [] as $task) {
+            if (\is_array($task) && ($task['task_key'] ?? '') === 'page:home_page:content/home-page-hero') {
+                $rawPageTask = $task;
+                break;
+            }
+        }
+        self::assertNotSame([], $rawPageTask);
+        self::assertArrayNotHasKey('theme_context_snapshot', $rawPageTask['runtime_context'] ?? []);
+        self::assertArrayNotHasKey('shared_prompt_context', $rawPageTask['runtime_context'] ?? []);
+        self::assertArrayNotHasKey('runtime_context', $rawPageTask['plan_context'] ?? []);
+        self::assertArrayNotHasKey('runtime_context', $rawPageTask['plan_context']['task'] ?? []);
+        self::assertArrayHasKey('task_id', $rawPageTask['plan_context']['task'] ?? []);
+        self::assertArrayHasKey('input_scope', $rawPageTask['plan_context']['task'] ?? []);
+
+        $definition = $service->getTaskDefinition($scope, 'page:home_page:content/home-page-hero');
+        self::assertIsArray($definition);
+        self::assertIsArray($definition['runtime_context']['theme_context_snapshot'] ?? null);
+        self::assertIsArray($definition['runtime_context']['shared_prompt_context'] ?? null);
+    }
+
     public function testEnsureTaskScopeUsesConfirmedBuildPlanV2BeforeLegacyTaskPlan(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
@@ -555,6 +628,29 @@ class AiSiteBuildTaskServiceTest extends TestCase
         $this->assertArrayHasKey('shared', $summary['groups']);
         $this->assertIsArray($summary['groups']['shared']['tasks'] ?? null);
         $this->assertNotEmpty($summary['groups']['shared']['tasks'] ?? []);
+    }
+
+    public function testEnsureTaskScopeKeepsOverlappingTaskLedgerWhenBlueprintSignatureChanges(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
+        $homeTaskKey = 'page:home_page:content/home-page-hero';
+        $scope = $service->markTaskDone($scope, 'shared:header', ['region' => 'header']);
+        $scope = $service->markTaskDone($scope, $homeTaskKey, [
+            'page_type' => 'home_page',
+            'section_code' => 'content/home-page-hero',
+        ]);
+
+        $expandedScope = \array_replace($scope, $this->buildConfirmedScope(['home_page', 'about_page']));
+        $expandedScope = $service->ensureTaskScope($expandedScope, [], 'virtual_theme');
+
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $expandedScope['build_tasks']['shared:header']['status'] ?? null);
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $expandedScope['build_tasks'][$homeTaskKey]['status'] ?? null);
+        $this->assertSame(
+            AiSiteBuildTaskService::TASK_STATUS_PENDING,
+            $expandedScope['build_tasks']['page:about_page:content/about-page-hero']['status'] ?? null
+        );
     }
 
     public function testPickConcurrentTasksKeepsSharedTasksExclusiveUntilSharedGateIsSatisfied(): void

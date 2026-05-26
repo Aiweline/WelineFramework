@@ -109,7 +109,16 @@
                                                     <i class="mdi mdi-pencil"></i>
                                                 </button>
                                             </acl>
-                                            <if condition="user.is_enabled == 1">
+                                            <if condition="user.is_deleted == 1">
+                                                <acl source="Weline_Admin::system_user_active_post">
+                                                    <button type="button" class="btn btn-outline-success weline-user-toggle-btn"
+                                                            data-user-id="{{user.user_id}}"
+                                                            data-action="enable"
+                                                            title="@lang{激活}">
+                                                        <i class="mdi mdi-account-check"></i>
+                                                    </button>
+                                                </acl>
+                                            <elseif condition="user.is_enabled == 1"/>
                                                 <acl source="Weline_Admin::system_user_inactive_post">
                                                     <button type="button" class="btn btn-outline-warning weline-user-toggle-btn"
                                                             data-user-id="{{user.user_id}}"
@@ -420,6 +429,38 @@
         btn.querySelector('.weline-submit-loading').classList.toggle('d-none', !loading);
     }
 
+    function normalizeApiResult(res) {
+        if (!res || typeof res !== 'object') {
+            return res;
+        }
+        if (Object.prototype.hasOwnProperty.call(res, 'success') ||
+            Object.prototype.hasOwnProperty.call(res, 'code') ||
+            Object.prototype.hasOwnProperty.call(res, 'msg') ||
+            Object.prototype.hasOwnProperty.call(res, 'message')) {
+            return res;
+        }
+        if (Object.prototype.hasOwnProperty.call(res, 'data')) {
+            return res.data;
+        }
+        return res;
+    }
+
+    function apiErrorMessage(error, fallback) {
+        var response = error && error.response ? error.response : null;
+        var data = response && response.data !== undefined ? normalizeApiResult(response.data) : null;
+
+        if (data && typeof data === 'object') {
+            return data.msg || data.message || (data.error && data.error.message) || fallback;
+        }
+        if (typeof data === 'string' && data.trim()) {
+            return data;
+        }
+        if (response && response.status > 0 && error && error.message) {
+            return error.message;
+        }
+        return config.text.networkError + (error && error.message ? ': ' + error.message : '');
+    }
+
     function handleSave(e) {
         e.preventDefault();
         
@@ -441,7 +482,7 @@
         var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify(data) };
         window.Weline.Api.request(url, opts)
         .then(function(res) {
-            var result = (res && res.data) !== undefined ? res.data : res;
+            var result = normalizeApiResult(res);
             setLoading(false);
             if (result.success) {
                 BackendToast.success(result.msg || config.text.saveSuccess);
@@ -453,7 +494,7 @@
         })
         .catch(function(error) {
             setLoading(false);
-            BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+            BackendToast.error(apiErrorMessage(error, config.text.saveFail));
         });
     }
 
@@ -472,21 +513,16 @@
             var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ id: userId }) };
             window.Weline.Api.request(url, opts)
             .then(function(res) {
-                var result = (res && res.data) !== undefined ? res.data : res;
+                var result = normalizeApiResult(res);
                 if (result.success) {
                     BackendToast.success(result.msg || config.text.deleteSuccess);
-                    var row = document.querySelector('tr[data-user-id="' + userId + '"]');
-                    if (row) {
-                        row.style.transition = 'opacity 0.3s';
-                        row.style.opacity = '0';
-                        setTimeout(function() { row.remove(); }, 300);
-                    }
+                    setTimeout(function() { location.reload(); }, 800);
                 } else {
                     BackendToast.error(result.msg || config.text.deleteFail);
                 }
             })
             .catch(function(error) {
-                BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+                BackendToast.error(apiErrorMessage(error, config.text.deleteFail));
             });
         });
     }
@@ -507,7 +543,7 @@
             var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ id: userId, action: action }) };
             window.Weline.Api.request(url, opts)
             .then(function(res) {
-                var result = (res && res.data) !== undefined ? res.data : res;
+                var result = normalizeApiResult(res);
                 if (result.success) {
                     BackendToast.success(result.msg || config.text.toggleSuccess);
                     setTimeout(function() { location.reload(); }, 800);
@@ -516,7 +552,7 @@
                 }
             })
             .catch(function(error) {
-                BackendToast.error(config.text.networkError + (error.message ? ': ' + error.message : ''));
+                BackendToast.error(apiErrorMessage(error, config.text.toggleFail));
             });
         });
     }

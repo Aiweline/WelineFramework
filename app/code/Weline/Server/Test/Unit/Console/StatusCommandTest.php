@@ -366,6 +366,34 @@ final class StatusCommandTest extends TestCase
         self::assertFalse($status->running($stopped, []));
     }
 
+    public function testStatusTestCurlTargetUsesLoopbackForWildcardBindHost(): void
+    {
+        $status = new class extends Status {
+            public function target(ServerInstanceInfo $info): string
+            {
+                return $this->buildTestCurlTarget($info);
+            }
+        };
+
+        $info = new ServerInstanceInfo(
+            name: 'default',
+            masterPid: 0,
+            controlPort: 19999,
+            host: '0.0.0.0',
+            port: 9981,
+            sslEnabled: true,
+            dispatcherEnabled: false,
+            workerCount: 4,
+            workerBasePort: 9981,
+            httpRedirectPort: 0,
+            startedAt: '2026-05-25 00:00:00',
+            startedTimestamp: 1779667200,
+            services: [],
+        );
+
+        self::assertSame('-k https://127.0.0.1:9981', $status->target($info));
+    }
+
     /**
      * @param ServiceInfo[] $services
      */

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace WeShop\GoogleAuth\Test\Unit\Controller\Frontend\Auth;
 
 use PHPUnit\Framework\TestCase;
+use WeShop\Auth\Service\BackendWebAuthService;
 use WeShop\GoogleAuth\Controller\Frontend\Auth\BackendChallenge;
-use WeShop\GoogleAuth\Service\BackendWebAuthService;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;

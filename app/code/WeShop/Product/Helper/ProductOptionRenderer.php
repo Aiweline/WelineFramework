@@ -57,7 +57,11 @@ final class ProductOptionRenderer
     {
         $type = \strtolower(\trim((string) ($option['swatch_type'] ?? '')));
         $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
-        if ($type === '' || $swatchValue === '') {
+        $optionImage = \trim((string) ($option['option_image'] ?? ''));
+        if ($type === '' && $optionImage !== '') {
+            $type = 'image';
+        }
+        if ($type === '' || ($swatchValue === '' && $optionImage === '')) {
             return '';
         }
 
@@ -73,7 +77,7 @@ final class ProductOptionRenderer
         }
 
         if ($type === 'image') {
-            $imageUrl = self::sanitizeImageUrl($swatchValue);
+            $imageUrl = self::sanitizeImageUrl($swatchValue !== '' ? $swatchValue : $optionImage);
             if ($imageUrl === null) {
                 return '';
             }

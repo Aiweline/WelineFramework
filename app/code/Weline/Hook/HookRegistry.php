@@ -161,6 +161,8 @@ class HookRegistry
         RegistryProgress::log('Hook organize registry data');
         $registry = $this->organizeRegistryData($scannedData, $hookFiles, $allowSoloConflict);
         RegistryProgress::count('Hook registry', count($registry['hooks'] ?? []), 'hooks organized');
+        unset($scannedData, $hookFiles);
+        RegistryProgress::log('Hook raw scan data released');
 
         // 检查文档（无论是否允许solo冲突，都要检查文档）
         RegistryProgress::log('Hook documentation validation started');
@@ -216,10 +218,13 @@ class HookRegistry
         // 4. 组织新数据
         RegistryProgress::log('Hook incremental: organizing new data');
         $newRegistry = $this->organizeRegistryData($scannedData, $hookFiles, $allowSoloConflict);
+        unset($scannedData, $hookFiles);
+        RegistryProgress::log('Hook incremental raw scan data released');
         
         // 5. 合并到现有注册表
         RegistryProgress::log('Hook incremental: merging into current registry');
         $this->mergeHookRegistry($registry, $newRegistry);
+        unset($newRegistry);
         
         // 6. 验证文档（仅对新增的 Hooks）
         RegistryProgress::log('Hook incremental: documentation validation');
@@ -1013,6 +1018,7 @@ class HookRegistry
         if ($result !== false) {
             $this->cachedRegistry = $registry;
             $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            HookData::clearCache();
             RegistryProgress::log('Hook save registry finished');
             return true;
         }
@@ -1110,6 +1116,12 @@ class HookRegistry
      * @param string $hookName Hook 名称
      * @return bool
      */
+    public function clearMemoryCache(): void
+    {
+        $this->cachedRegistry = null;
+        $this->cachedFileMtime = null;
+    }
+
     public function isRegistered(string $hookName): bool
     {
         $this->initialize();

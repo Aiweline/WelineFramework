@@ -8,24 +8,6 @@
 保存配置,"Save Configuration"
 敏感内容检测,"Sensitive Content Detection"
 开始检测,"Start detecting"
-脱敏记录,"Desensitization Record"
-脱敏方法,"Desensitization Method"
-全部,All
-正则脱敏,"Regex masking"
-AI脱敏,"AI desensitization"
-自定义,Custom
-日期范围,"Date range"
-至,To
-筛选,Filter
-脱敏记录列表,"Desensitization Record List"
-原内容,"Original Content"
-脱敏后,"After Desensitization"
-方法,Method
-执行时间,"Execution time"
-创建时间,"Creation time"
-操作,Operation
-暂无记录,"No records"
-详情功能待实现,"Detail functionality not yet implemented"
 AI润色,"AI polish"
 输入内容,"Enter content"
 待润色内容,"Content to polish"
@@ -40,6 +22,8 @@ AI模型,"AI model"
 请输入内容,"Enter content"
 AI正在润色中，请稍候...,"AI is being polished, please wait..."
 润色完成,"Polishing completed"
+执行时间,"Execution time"
+原内容,"Original Content"
 润色后,Polished
 润色失败,"Polishing failed"
 脱敏规则管理,"Desensitization Rule Management"
@@ -53,6 +37,8 @@ AI正在润色中，请稍候...,"AI is being polished, please wait..."
 替换内容,"Replace content"
 优先级,Priority
 状态,Status
+创建时间,"Creation time"
+操作,Operation
 启用,Enable
 禁用,Disable
 暂无规则数据,"No rule data"
@@ -73,6 +59,7 @@ AI正在润色中，请稍候...,"AI is being polished, please wait..."
 银行卡号,"Bank Card Number"
 信用卡号,"Credit Card Number"
 姓名,"Full Name"
+自定义,Custom
 "例如: /(\d{3})\d{4}(\d{4})/","For example: /(\d{3})\d{4}(\d{4})/"
 使用正则表达式匹配敏感信息,"Use regular expressions to match sensitive information"
 "例如: $1****$2","For example: $1****$2"
@@ -92,10 +79,3 @@ AI正在润色中，请稍候...,"AI is being polished, please wait..."
 结果,Results
 测试失败,"Test Failed"
 未知错误,"Unknown error"
-脱敏测试,"Desensitization Test"
-测试输入,"Test Input"
-选择规则,"Select Rule"
-测试结果,"Test Results"
-请输入需要测试的内容，例如：我的邮箱是test@example.com，电话13812345678,"Please enter the content to test, e.g., My email is test@example.com, phone 13812345678"
-正在测试...,Testing...
-测试完成,"Test Completed"

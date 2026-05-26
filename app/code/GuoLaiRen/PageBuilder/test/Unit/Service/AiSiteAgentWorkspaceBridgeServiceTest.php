@@ -52,6 +52,18 @@ final class AiSiteAgentWorkspaceBridgeServiceTest extends TestCase
         ], $options);
     }
 
+    public function testBuildRegistrarAccountOptionsFromRowsUsesLocalOptionWhenNoAccountsExist(): void
+    {
+        $service = $this->createService();
+
+        $options = $service->buildRegistrarAccountOptionsFromRows([]);
+
+        self::assertCount(1, $options);
+        self::assertSame(900001, $options[0]['account_id']);
+        self::assertSame('local_demo', $options[0]['registrar_code']);
+        self::assertNotSame('', $options[0]['label']);
+    }
+
     public function testBuildWorkspaceRegistrarSelectionFallsBackToViewScopeAndResolvesLabel(): void
     {
         $service = $this->createService();
@@ -110,6 +122,25 @@ final class AiSiteAgentWorkspaceBridgeServiceTest extends TestCase
         );
         self::assertSame(0, $onlineSelection['preferred_registrar_account_id']);
         self::assertSame('', $onlineSelection['recommended_registrar_label']);
+    }
+
+    public function testBuildWorkspaceRegistrarSelectionUsesLocalRegistrarWhenNoRealAccountsExist(): void
+    {
+        $service = $this->createService();
+        $accounts = [
+            [
+                'account_id' => 900001,
+                'label' => 'Local provider - Local default account',
+                'registrar_name' => 'Local provider',
+                'registrar_code' => 'local_demo',
+                'account_name' => 'Local default account',
+            ],
+        ];
+
+        $selection = $service->buildWorkspaceRegistrarSelection([], [], $accounts, false);
+
+        self::assertSame(900001, $selection['preferred_registrar_account_id']);
+        self::assertSame('Local provider - Local default account', $selection['recommended_registrar_label']);
     }
 
     public function testIsLocalDomainEnvironmentUsesConfiguredWlsHostPolicy(): void

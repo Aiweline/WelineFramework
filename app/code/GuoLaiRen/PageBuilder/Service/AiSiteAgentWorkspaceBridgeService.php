@@ -68,7 +68,7 @@ final class AiSiteAgentWorkspaceBridgeService
             ];
         }
 
-        if (!$includeLocalDemo) {
+        if (!$includeLocalDemo && $options !== []) {
             return $options;
         }
 
@@ -163,15 +163,20 @@ final class AiSiteAgentWorkspaceBridgeService
         $recommendedRegistrarLabel = \trim((string)($linkedScope['recommended_registrar_label'] ?? $viewScope['recommended_registrar_label'] ?? ''));
         $preferredRegistrarAccountId = (int)($linkedScope['preferred_registrar_account_id'] ?? $linkedScope['registrar_account_id'] ?? $viewScope['preferred_registrar_account_id'] ?? $viewScope['registrar_account_id'] ?? 0);
 
-        if ($isLocalDomainEnvironment) {
+        $hasOnlyLocalRegistrarAccount = $this->hasOnlyLocalRegistrarAccount($registrarAccounts);
+
+        if ($isLocalDomainEnvironment || ($preferredRegistrarAccountId <= 0 && $hasOnlyLocalRegistrarAccount)) {
             foreach ($registrarAccounts as $account) {
-                if ((int)($account['account_id'] ?? 0) !== self::LOCAL_REGISTRAR_ACCOUNT_ID) {
+                if (
+                    (int)($account['account_id'] ?? 0) !== self::LOCAL_REGISTRAR_ACCOUNT_ID
+                    && (string)($account['registrar_code'] ?? '') !== 'local_demo'
+                ) {
                     continue;
                 }
-                $preferredRegistrarAccountId = self::LOCAL_REGISTRAR_ACCOUNT_ID;
+                $preferredRegistrarAccountId = (int)($account['account_id'] ?? self::LOCAL_REGISTRAR_ACCOUNT_ID);
                 break;
             }
-        } elseif ($this->isLocalRegistrarAccountId($preferredRegistrarAccountId)) {
+        } elseif ($this->isLocalRegistrarAccountId($preferredRegistrarAccountId) && !$hasOnlyLocalRegistrarAccount) {
             $preferredRegistrarAccountId = 0;
             $recommendedRegistrarLabel = '';
         } elseif ($preferredRegistrarAccountId <= 0) {
@@ -281,6 +286,33 @@ final class AiSiteAgentWorkspaceBridgeService
     private function isLocalRegistrarAccountId(int $accountId): bool
     {
         return $accountId === self::LOCAL_REGISTRAR_ACCOUNT_ID;
+    }
+
+    /**
+     * @param array<int, mixed> $registrarAccounts
+     */
+    private function hasOnlyLocalRegistrarAccount(array $registrarAccounts): bool
+    {
+        $hasLocalRegistrarAccount = false;
+        foreach ($registrarAccounts as $account) {
+            if (!\is_array($account)) {
+                continue;
+            }
+
+            $accountId = (int)($account['account_id'] ?? 0);
+            if ($accountId <= 0) {
+                continue;
+            }
+
+            if ($this->isLocalRegistrarAccountId($accountId) || (string)($account['registrar_code'] ?? '') === 'local_demo') {
+                $hasLocalRegistrarAccount = true;
+                continue;
+            }
+
+            return false;
+        }
+
+        return $hasLocalRegistrarAccount;
     }
 
     /**

@@ -236,6 +236,36 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertSame('done', $recovered['status']);
         self::assertSame('queue completed successfully', $recovered['message']);
 
+        $doneWithStaleRecoveryFlags = $service->reconcileActiveOperationWithQueueInfo(
+            [
+                'operation' => 'plan',
+                'status' => 'cancelled',
+                'message' => 'Linked queue process ended without a terminal queue status; retry is allowed.',
+                'retry_allowed' => 1,
+                'queue_terminal_recovered' => 1,
+                'queue_waiting_for_scheduler' => true,
+            ],
+            [
+                'queue_id' => 778,
+                'retry_allowed' => 1,
+                'queue_terminal_recovered' => 1,
+                'semantic_status' => 'stale',
+                'process' => 'site plan completed',
+                'snapshot' => [
+                    'queue_id' => 778,
+                    'status' => 'done',
+                    'retry_allowed' => 1,
+                    'queue_terminal_recovered' => 1,
+                ],
+            ],
+            'plan'
+        );
+        self::assertSame('done', $doneWithStaleRecoveryFlags['status']);
+        self::assertSame('done', $doneWithStaleRecoveryFlags['semantic_status']);
+        self::assertSame('site plan completed', $doneWithStaleRecoveryFlags['message']);
+        self::assertSame(0, $doneWithStaleRecoveryFlags['retry_allowed']);
+        self::assertSame(0, $doneWithStaleRecoveryFlags['queue_terminal_recovered']);
+
         // 已有非空 message 不应被兜底覆盖
         $preserved = $service->reconcileActiveOperationWithQueueInfo(
             ['operation' => 'plan', 'status' => 'running', 'message' => '已写入的定制文案'],

@@ -9,9 +9,12 @@ use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
 
+require_once __DIR__ . '/AiProviderAccountQueryProvider.php';
+
 class AiQueryProvider implements QueryProviderInterface
 {
     private const DEFAULT_CONCURRENCY_CAP = 8;
+    private ?AiProviderAccountQueryProvider $providerAccountQueryProvider = null;
 
     public function __construct(
         private readonly AiService $aiService,
@@ -35,6 +38,14 @@ class AiQueryProvider implements QueryProviderInterface
             'chat' => $this->chat($params),
             'generateStream' => $this->generateStream($params),
             'generateStreamBatch' => $this->generateStreamBatch($params),
+            'providerListAccounts' => $this->providerAccountQueryProvider()->execute('listAccounts', $params),
+            'providerGetAccount' => $this->providerAccountQueryProvider()->execute('getAccount', $params),
+            'providerSaveAccount' => $this->providerAccountQueryProvider()->execute('saveAccount', $params),
+            'providerTestConnection' => $this->providerAccountQueryProvider()->execute('testConnection', $params),
+            'providerRemoteModelsForSelect' => $this->providerAccountQueryProvider()->execute('remoteModelsForSelect', $params),
+            'providerGetUsageList' => $this->providerAccountQueryProvider()->execute('getUsageList', $params),
+            'providerToggleActive' => $this->providerAccountQueryProvider()->execute('toggleActive', $params),
+            'providerDeleteAccount' => $this->providerAccountQueryProvider()->execute('deleteAccount', $params),
             default => throw new \InvalidArgumentException(
                 (string)__('Ai 查询器不支持的操作：%{1}', $operation)
             ),
@@ -234,7 +245,7 @@ class AiQueryProvider implements QueryProviderInterface
             'name' => __('AI 模型查询'),
             'description' => __('对外暴露 AiService 的统一调用入口'),
             'module' => 'Weline_Ai',
-            'operations' => [
+            'operations' => array_merge([
                 [
                     'name' => 'chat',
                     'frontend' => true,
@@ -251,8 +262,45 @@ class AiQueryProvider implements QueryProviderInterface
                     'returns' => ['type' => 'array'],
                     'summary' => 'Send storefront AI chat message',
                 ],
-            ],
+            ], $this->getProviderAccountOperationDescriptors()),
         ];
+    }
+
+    private function getProviderAccountOperationDescriptors(): array
+    {
+        $descriptor = $this->providerAccountQueryProvider()->getDescriptor();
+        $operationMap = [
+            'listAccounts' => 'providerListAccounts',
+            'getAccount' => 'providerGetAccount',
+            'saveAccount' => 'providerSaveAccount',
+            'testConnection' => 'providerTestConnection',
+            'remoteModelsForSelect' => 'providerRemoteModelsForSelect',
+            'getUsageList' => 'providerGetUsageList',
+            'toggleActive' => 'providerToggleActive',
+            'deleteAccount' => 'providerDeleteAccount',
+        ];
+        $operations = [];
+        foreach (($descriptor['operations'] ?? []) as $operation) {
+            $name = (string)($operation['name'] ?? '');
+            if (!isset($operationMap[$name])) {
+                continue;
+            }
+            $operation['name'] = $operationMap[$name];
+            $operation['summary'] = 'Backend AI provider account operation: ' . $name;
+            $operations[] = $operation;
+        }
+        return $operations;
+    }
+
+    private function providerAccountQueryProvider(): AiProviderAccountQueryProvider
+    {
+        if ($this->providerAccountQueryProvider === null) {
+            $this->providerAccountQueryProvider = new AiProviderAccountQueryProvider(
+                \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Ai\Service\Provider\AccountService::class),
+                $this->sessionFactory
+            );
+        }
+        return $this->providerAccountQueryProvider;
     }
 
     private function requireNonEmptyString(array $params, string $key, ?string $alias = null): string

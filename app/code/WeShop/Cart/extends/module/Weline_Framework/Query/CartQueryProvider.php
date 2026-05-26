@@ -61,6 +61,7 @@ class CartQueryProvider implements QueryProviderInterface
             'qty' => (int)($params['qty'] ?? 1),
             'selected_options' => $params['selected_options'] ?? [],
             'selected_option_labels' => $params['selected_option_labels'] ?? [],
+            'selected_option_details' => $params['selected_option_details'] ?? [],
         ]);
     }
 
@@ -224,6 +225,7 @@ class CartQueryProvider implements QueryProviderInterface
                         'qty' => ['type' => 'int', 'required' => false, 'min' => 1, 'max' => 999],
                         'selected_options' => ['type' => 'list', 'required' => false, 'max_items' => 20],
                         'selected_option_labels' => ['type' => 'list', 'required' => false, 'max_items' => 20],
+                        'selected_option_details' => ['type' => 'list', 'required' => false, 'max_items' => 20],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Add product to cart',

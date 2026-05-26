@@ -6,8 +6,9 @@ namespace WeShop\Payment\Provider;
 
 use WeShop\Order\Model\Order;
 use WeShop\Payment\Interface\PaymentProviderInterface;
+use Weline\Payment\Interface\PaymentConfigTesterInterface;
 
-class Alipay implements PaymentProviderInterface
+class Alipay implements PaymentProviderInterface, PaymentConfigTesterInterface
 {
     use ProviderContextHelperTrait;
 
@@ -100,6 +101,26 @@ class Alipay implements PaymentProviderInterface
         $tradeStatus = strtoupper((string) ($response['alipay_trade_query_response']['trade_status'] ?? $response['trade_status'] ?? ''));
 
         return $this->mapTradeStatus($tradeStatus);
+    }
+
+    public function testConfig(array $config, array $context = []): array
+    {
+        $privateKey = trim((string) ($config['private_key'] ?? ''));
+        $publicKey = trim((string) ($config['public_key'] ?? ''));
+        if ($privateKey === '' || $publicKey === '') {
+            return ['success' => false, 'message' => 'Alipay private_key and public_key are required.'];
+        }
+
+        $privateResource = openssl_pkey_get_private($this->normalizePemKey($privateKey, 'PRIVATE'));
+        $publicResource = openssl_pkey_get_public($this->normalizePemKey($publicKey, 'PUBLIC'));
+
+        return [
+            'success' => $privateResource !== false && $publicResource !== false,
+            'message' => $privateResource !== false && $publicResource !== false
+                ? 'Alipay key material can be loaded by OpenSSL.'
+                : 'Alipay key material cannot be loaded by OpenSSL.',
+            'details' => ['test_type' => 'openssl_key_load'],
+        ];
     }
 
     /**

@@ -669,6 +669,113 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return null;
     }
 
+    function readPlanOperationTimestamp(operation) {
+        if (!operation || typeof operation !== 'object') {
+            return 0;
+        }
+        var snapshot = operation.snapshot && typeof operation.snapshot === 'object' ? operation.snapshot : {};
+        var candidates = [
+            operation.updated_at,
+            operation.finished_at,
+            operation.completed_at,
+            operation.end_at,
+            snapshot.updated_at,
+            snapshot.finished_at,
+            snapshot.completed_at,
+            snapshot.end_at
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var raw = String(candidates[i] || '').trim();
+            if (raw === '') {
+                continue;
+            }
+            var parsed = Date.parse(raw.replace(' ', 'T'));
+            if (!isNaN(parsed)) {
+                return parsed;
+            }
+        }
+        return 0;
+    }
+
+    function readExplicitPlanFailureMessage(operation, workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var op = operation && typeof operation === 'object' ? operation : {};
+        var snapshot = op.snapshot && typeof op.snapshot === 'object' ? op.snapshot : {};
+        var planError = state.plan_generation_last_error && typeof state.plan_generation_last_error === 'object'
+            ? state.plan_generation_last_error
+            : {};
+        var scopePlanError = scope.plan_generation_last_error && typeof scope.plan_generation_last_error === 'object'
+            ? scope.plan_generation_last_error
+            : {};
+        var candidates = [
+            op.error_message,
+            op.error,
+            op.message,
+            op.process,
+            snapshot.error_message,
+            snapshot.error,
+            snapshot.message,
+            snapshot.process,
+            planError.message,
+            planError.error_message,
+            scopePlanError.message,
+            scopePlanError.error_message
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var message = String(candidates[i] || '').trim();
+            if (message !== '') {
+                return message;
+            }
+        }
+        return '';
+    }
+
+    function isPlanCompletionMessageForWorkspaceUi(message) {
+        var text = String(message || '').trim().toLowerCase();
+        if (text === '') {
+            return false;
+        }
+        var compact = text.replace(/\s+/g, '');
+        return compact.indexOf('建站方案生成完成') !== -1
+            || compact.indexOf('第一阶段方案生成完成') !== -1
+            || compact.indexOf('建站方案已生成') !== -1
+            || compact.indexOf('方案局部调整已完成') !== -1
+            || text.indexOf('queue operation completed') !== -1
+            || text.indexOf('plan generated') !== -1
+            || text.indexOf('plan generation completed') !== -1
+            || text.indexOf('stage-1 plan completed') !== -1
+            || text.indexOf('phase 1 plan generation completed') !== -1;
+    }
+
+    function shouldTreatPlanFailureAsResolvedBySuccess(workspaceState, failedOperation) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        if (!phaseOnePlanPresentFromWorkspaceState(state)) {
+            return false;
+        }
+        var explicitMessage = readExplicitPlanFailureMessage(failedOperation, state);
+        if (isPlanCompletionMessageForWorkspaceUi(explicitMessage)) {
+            return true;
+        }
+        if (hasRetryableAiFailures(state, 'plan')) {
+            return false;
+        }
+        if (parseInt(String(state.partial_retry_required || scope.partial_retry_required || 0), 10) === 1) {
+            return false;
+        }
+        var successOperation = findPlanSuccessOperationFromWorkspaceState(state);
+        if (!successOperation) {
+            return false;
+        }
+        var successTime = readPlanOperationTimestamp(successOperation);
+        var failedTime = readPlanOperationTimestamp(failedOperation);
+        if (successTime > 0 && failedTime > 0) {
+            return successTime >= failedTime;
+        }
+        return explicitMessage === '' || isGenericPlanTerminalErrorMessage(explicitMessage);
+    }
+
     function resolvePlanFailureMessageFromWorkspaceState(workspaceState, operation) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
@@ -702,6 +809,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (!failedOperation) {
             return false;
         }
+        if (shouldTreatPlanFailureAsResolvedBySuccess(workspaceState, failedOperation)) {
+            return false;
+        }
         var message = resolvePlanFailureMessageFromWorkspaceState(workspaceState, failedOperation);
         planSseRunning = false;
         planStartRequestPending = false;
@@ -732,6 +842,43 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         syncConfirmPlanButtonEnabled();
         syncPlanRebuildButtonVisibility();
         return true;
+    }
+
+    function restoreResolvedPlanSuccessUiFromWorkspaceState() {
+        var state = getLatestWorkspaceStateForQueuePrompt();
+        if (!shouldTreatPlanFailureAsResolvedBySuccess(state, {})) {
+            return false;
+        }
+        planSseRunning = false;
+        planStartRequestPending = false;
+        isOperationRunning = false;
+        setPlanGenerationActionLock(false);
+        syncPlanTerminalSuccessUiFromWorkspaceState(state);
+        setPlanRetryButtonVisible(false);
+        syncPlanFailureListFromWorkspaceState(state);
+        return true;
+    }
+
+    function shouldIgnoreResolvedPlanTerminalFailure(payload, message) {
+        var parsed = payload && typeof payload === 'object' ? payload : {};
+        var normalizedMessage = String(message || '').trim();
+        if (
+            normalizedMessage !== ''
+            && !isGenericPlanTerminalErrorMessage(normalizedMessage)
+            && !isPlanCompletionMessageForWorkspaceUi(normalizedMessage)
+        ) {
+            return false;
+        }
+        var state = parsed.state && typeof parsed.state === 'object'
+            ? parsed.state
+            : getLatestWorkspaceStateForQueuePrompt();
+        var failedOperation = parsed.active_operation && typeof parsed.active_operation === 'object'
+            ? parsed.active_operation
+            : parsed;
+        if (normalizedMessage !== '' && (!failedOperation || Object.keys(failedOperation).length === 0)) {
+            failedOperation = { message: normalizedMessage };
+        }
+        return shouldTreatPlanFailureAsResolvedBySuccess(state, failedOperation);
     }
 
     function hydrateWorkspaceFromState(workspaceState) {
@@ -891,8 +1038,204 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }, 120);
     }
 
+    var planWorkspaceReloadTimer = 0;
+    var planReloadReconcileInFlight = false;
+
+    function shortHashText(value) {
+        var text = String(value || '');
+        var hash = 0;
+        for (var i = 0; i < text.length; i += 1) {
+            hash = ((hash << 5) - hash) + text.charCodeAt(i);
+            hash |= 0;
+        }
+        return String(hash >>> 0);
+    }
+
+    function rememberPlanReloadReason(reason) {
+        try {
+            window.sessionStorage.setItem(
+                'pb-ai-plan-reload-reason:' + String(publicId || ''),
+                JSON.stringify({ reason: String(reason || ''), at: Date.now() })
+            );
+        } catch (error) {
+        }
+    }
+
+    function schedulePlanWorkspaceReload(reason, delayMs) {
+        if (planWorkspaceReloadTimer) {
+            return;
+        }
+        rememberPlanReloadReason(reason);
+        planWorkspaceReloadTimer = window.setTimeout(function () {
+            window.location.reload();
+        }, Math.max(100, parseInt(String(delayMs || 900), 10) || 900));
+    }
+
+    function getPlanReloadReconcileStage(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        return String(currentStageCode || currentWorkspaceStage || state.stage || '').trim().toLowerCase();
+    }
+
+    function buildPlanAutoRetryFingerprint(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var items = collectRetryableAiFailureItems(state, 'plan').map(function (item) {
+            return [
+                String(item.operation || 'plan'),
+                String(item.page_type || ''),
+                String(item.item_key || ''),
+                String(item.retry_scope || ''),
+                String(item.message || item.error_message || item.error || '')
+            ].join(':');
+        }).sort().join('|');
+        if (items === '') {
+            var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+            var planError = state.plan_generation_last_error && typeof state.plan_generation_last_error === 'object'
+                ? state.plan_generation_last_error
+                : (scope.plan_generation_last_error && typeof scope.plan_generation_last_error === 'object' ? scope.plan_generation_last_error : {});
+            items = [
+                'count=' + String(getRetryableAiFailureCount(state, 'plan')),
+                'error=' + String(planError.message || planError.error_message || planError.error || '')
+            ].join('|');
+        }
+        return shortHashText(String(publicId || '') + '|plan_retry|' + items);
+    }
+
+    function reservePlanReloadAction(action, fingerprint) {
+        var key = 'pb-ai-plan-reload-action:' + String(publicId || '') + ':' + String(action || '') + ':' + String(fingerprint || '');
+        try {
+            var raw = String(window.sessionStorage.getItem(key) || '');
+            var previous = raw ? JSON.parse(raw) : {};
+            var previousAt = parseInt(String(previous.at || 0), 10) || 0;
+            var previousCount = parseInt(String(previous.count || 0), 10) || 0;
+            if (previousAt <= Date.now() - 30 * 60 * 1000) {
+                previousCount = 0;
+            }
+            var maxCount = String(action || '') === 'retry' ? 3 : 1;
+            if (previousCount >= maxCount) {
+                return false;
+            }
+            window.sessionStorage.setItem(key, JSON.stringify({ count: previousCount + 1, at: Date.now() }));
+        } catch (error) {
+        }
+        return true;
+    }
+
+    function shouldAutoRetryPlanAfterReload(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        if (!startPlanUrl || !publicId || planStartRequestPending || planSseRunning) {
+            return false;
+        }
+        if (getPlanReloadReconcileStage(state) !== 'plan') {
+            return false;
+        }
+        if (hasRunningQueueForUi(state, 'plan') || hasBuildOperationRunningForUi(state)) {
+            return false;
+        }
+        return hasRetryableAiFailures(state, 'plan');
+    }
+
+    function shouldAutoConfirmCompletedPlanAfterReload(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        if (!confirmPlanUrl || !publicId || planConfirmedState || !!state.plan_confirmed) {
+            return false;
+        }
+        if (getPlanReloadReconcileStage(state) !== 'plan') {
+            return false;
+        }
+        if (hasRunningQueueForUi(state, 'plan') || hasBuildOperationRunningForUi(state)) {
+            return false;
+        }
+        if (hasPhaseOnePlanBlockingErrors(state) || hasRetryableAiFailures(state, 'plan')) {
+            return false;
+        }
+        if (!phaseOnePlanPresentFromWorkspaceState(state) && !hasCurrentPhaseOnePlanDraft()) {
+            return false;
+        }
+        return !!findPlanSuccessOperationFromWorkspaceState(state) || isWorkspacePlanQueueTerminal(state);
+    }
+
+    function autoRetryPlanAfterReload(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var fingerprint = buildPlanAutoRetryFingerprint(state);
+        if (!reservePlanReloadAction('retry', fingerprint)) {
+            return false;
+        }
+        var selectedTypes = Array.isArray(currentPlanSelection) && currentPlanSelection.length > 0
+            ? currentPlanSelection.slice()
+            : selectedPageTypes();
+        selectedTypes = ensureRequiredPageTypeSelected(selectedTypes);
+        toast('info', <?= \json_encode((string)__('检测到阶段一有可重试失败项，刷新后正在自动重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        startPlanGenerationForSelection(currentPlanTriggerButton || null, selectedTypes, {
+            promptMode: PLAN_PROMPT_MODE_RESUME
+        });
+        return true;
+    }
+
+    function autoConfirmCompletedPlanAfterReload(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var operation = findPlanSuccessOperationFromWorkspaceState(state) || state.plan_queue_info || {};
+        var fingerprint = shortHashText([
+            String(publicId || ''),
+            String(operation.queue_id || (operation.snapshot && operation.snapshot.queue_id) || ''),
+            String(operation.updated_at || operation.finished_at || operation.completed_at || ''),
+            String((currentPlanPayload && currentPlanPayload.markdown) || '').length
+        ].join('|'));
+        if (!reservePlanReloadAction('confirm', fingerprint)) {
+            return false;
+        }
+        planReloadReconcileInFlight = true;
+        setPlanGenerationActionLock(true);
+        toast('info', <?= \json_encode((string)__('检测到建站方案已生成完成，刷新后正在自动确认并进入下一阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+        postForm(confirmPlanUrl, {
+            public_id: publicId,
+            stage: 'plan'
+        }).then(function (data) {
+            planReloadReconcileInFlight = false;
+            if (!data || !data.success) {
+                setPlanGenerationActionLock(false);
+                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                syncConfirmPlanButtonEnabled();
+                return;
+            }
+            if (data.data && typeof data.data === 'object') {
+                hydrateWorkspaceFromState(data.data);
+            }
+            toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
+            continueToBuildAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
+        }).catch(function (error) {
+            planReloadReconcileInFlight = false;
+            setPlanGenerationActionLock(false);
+            toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+            syncConfirmPlanButtonEnabled();
+        });
+        return true;
+    }
+
+    function runPlanReloadReconciliation() {
+        if (planReloadReconcileInFlight) {
+            return;
+        }
+        var state = getLatestWorkspaceStateForQueuePrompt();
+        if (!state || typeof state !== 'object') {
+            return;
+        }
+        if (shouldAutoRetryPlanAfterReload(state)) {
+            autoRetryPlanAfterReload(state);
+            return;
+        }
+        if (shouldAutoConfirmCompletedPlanAfterReload(state)) {
+            autoConfirmCompletedPlanAfterReload(state);
+        }
+    }
+
+    window.__pbSchedulePlanWorkspaceReload = schedulePlanWorkspaceReload;
+    window.__pbRunPlanReloadReconciliation = runPlanReloadReconciliation;
+
     function isPhaseOneQueueUnfinished() {
         var state = getLatestWorkspaceStateForQueuePrompt();
+        if (isWorkspacePlanQueueTerminal(state)) {
+            return false;
+        }
         var candidates = [];
         if (state.active_operation && typeof state.active_operation === 'object') {
             candidates.push(state.active_operation);
@@ -909,7 +1252,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return candidates.some(function (item) {
             var operation = String(item.operation || '').trim();
             return (operation === '' || operation === 'plan')
-                && isQueueUiBusyStatus(item.status || item.queue_status || item.state);
+                && isQueueStatusRunningForUi(readQueueStatusForPrompt(item));
         });
     }
 
@@ -932,17 +1275,23 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
-        if (hasRetryableAiFailures(state, 'plan')) {
-            return getRetryableAiFailureMessage(state, 'plan');
-        }
         var failedOperation = findPlanFailureOperationFromWorkspaceState(state);
         if (failedOperation) {
+            if (shouldTreatPlanFailureAsResolvedBySuccess(state, failedOperation)) {
+                return '';
+            }
             return resolvePlanFailureMessageFromWorkspaceState(state, failedOperation);
         }
         var planError = getPhaseOnePlanLastError(state);
         var planErrorMessage = String(planError.message || planError.error_message || planError.error || '').trim();
         if (planErrorMessage !== '') {
+            if (shouldTreatPlanFailureAsResolvedBySuccess(state, planError)) {
+                return '';
+            }
             return normalizePlanFailureMessage(planErrorMessage);
+        }
+        if (hasRetryableAiFailures(state, 'plan')) {
+            return getRetryableAiFailureMessage(state, 'plan');
         }
         if (parseInt(String(state.partial_retry_required || scope.partial_retry_required || 0), 10) === 1) {
             return getRetryableAiFailureMessage(state, 'plan');
@@ -1256,6 +1605,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var status = String(state.state || state.status || state.queue_status || 'idle').trim().toLowerCase();
         var percent = Math.max(0, Math.min(100, parseInt(state.percent || state.progress || 0, 10) || 0));
         var message = String(state.message || state.process || '').trim();
+        if (queueKind === 'plan' && isPlanFailureStatusForWorkspaceUi(status) && shouldIgnoreResolvedPlanTerminalFailure({}, message)) {
+            status = 'completed';
+            percent = 100;
+            message = String(messages.planModeDone || messages.planGenerated || '');
+        }
         var label = queueKind === 'build' ? 'Build' : 'Stage 1 plan';
         var detail = label + ': ' + (status || 'idle');
         if (message) {
@@ -1327,14 +1681,23 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             return normalizeQueueStatusForPrompt(info);
         }
         var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        var directStatus = normalizeQueueStatusForPrompt(info.status || info.queue_status || info.state || '');
+        var snapshotStatus = normalizeQueueStatusForPrompt(snapshot.status || snapshot.job_status || snapshot.queue_status || '');
         if (isQueueTerminalRecoveryForUi(info)) {
             var semanticStatus = normalizeQueueStatusForPrompt(info.semantic_status || snapshot.semantic_status || '');
+            if (isPlanSuccessStatusForWorkspaceUi(directStatus)) {
+                return directStatus;
+            }
+            if (isPlanSuccessStatusForWorkspaceUi(snapshotStatus)) {
+                return snapshotStatus;
+            }
+            if (isPlanSuccessStatusForWorkspaceUi(semanticStatus)) {
+                return semanticStatus;
+            }
             return semanticStatus && (semanticStatus === 'stale' || isQueueStatusTerminalForUi(semanticStatus))
                 ? semanticStatus
                 : 'cancelled';
         }
-        var directStatus = normalizeQueueStatusForPrompt(info.status || info.queue_status || info.state || '');
-        var snapshotStatus = normalizeQueueStatusForPrompt(snapshot.status || snapshot.job_status || snapshot.queue_status || '');
         if (isQueueStatusTerminalForUi(directStatus) || isQueueStatusRunningForUi(directStatus)) {
             return directStatus;
         }
@@ -2221,15 +2584,33 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         console[type === 'error' ? 'error' : 'log'](message);
     }
 
-    function postForm(url, fields) {
+    function postForm(url, fields, options) {
+        var opts = options && typeof options === 'object' ? options : {};
         var fd = new FormData();
         Object.keys(fields || {}).forEach(function (k) { fd.append(k, fields[k]); });
+        var timeoutMs = Math.max(0, parseInt(String(opts.timeoutMs || opts.timeout_ms || 0), 10) || 0);
+        var abortController = null;
+        var timeoutHandle = 0;
+        if (timeoutMs > 0 && typeof AbortController !== 'undefined') {
+            abortController = new AbortController();
+            timeoutHandle = window.setTimeout(function () {
+                abortController.abort();
+            }, timeoutMs);
+        }
+        function clearPostTimeout() {
+            if (timeoutHandle) {
+                window.clearTimeout(timeoutHandle);
+                timeoutHandle = 0;
+            }
+        }
         return fetch(url, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin',
-            body: fd
+            body: fd,
+            signal: abortController ? abortController.signal : undefined
         }).then(function (response) {
+            clearPostTimeout();
             if (!response.ok) {
                 return response.text().then(function (text) {
                     var errMsg = (<?= \json_encode((string)__('请求失败：%{status} %{text}'), \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT) ?>)
@@ -2263,6 +2644,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 }
             });
         }).catch(function (error) {
+            clearPostTimeout();
             throw error;
         });
     }
@@ -14101,6 +14483,13 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var progressBar = document.getElementById('pb-ai-plan-progress-bar');
         var boundedPercent = Math.max(0, Math.min(100, percent || 0));
         var tone = resolveStatusTone(message, level);
+        if (tone === 'error' && shouldIgnoreResolvedPlanTerminalFailure({}, message)) {
+            message = String(messages.planModeDone || messages.planGenerated || '');
+            enableConfirm = true;
+            level = 'done';
+            tone = 'done';
+            boundedPercent = 100;
+        }
         if (statusEl) {
             statusEl.textContent = String(message || '');
             applyStatusTone(statusEl, message, level);
@@ -14160,12 +14549,22 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             return;
         }
         var shouldShow = !!visible;
+        if (shouldShow && shouldTreatPlanFailureAsResolvedBySuccess(getLatestWorkspaceStateForQueuePrompt(), {})) {
+            shouldShow = false;
+        }
         retryBtn.classList.toggle('d-none', !shouldShow);
         retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan');
     }
 
     function shouldShowPlanRetryButtonFromWorkspaceState(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var resolvedFailure = findPlanFailureOperationFromWorkspaceState(state);
+        if (resolvedFailure && shouldTreatPlanFailureAsResolvedBySuccess(state, resolvedFailure)) {
+            return false;
+        }
+        if (shouldTreatPlanFailureAsResolvedBySuccess(state, {})) {
+            return false;
+        }
         if (getRetryableAiFailureCount(state, 'plan') > 0) {
             return true;
         }
@@ -14174,7 +14573,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             ? state.plan_generation_last_error
             : (scope.plan_generation_last_error && typeof scope.plan_generation_last_error === 'object' ? scope.plan_generation_last_error : {});
         if (String(planError.message || '').trim() !== '') {
-            return true;
+            return !shouldTreatPlanFailureAsResolvedBySuccess(state, planError);
         }
         var candidates = [];
         if (state.active_operation && typeof state.active_operation === 'object') {
@@ -14197,7 +14596,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return candidates.some(function (operation) {
             var op = String(operation.operation || '').trim();
             var status = readQueueStatusForPrompt(operation);
-            return (op === 'plan' || op === '') && isPlanFailureStatusForWorkspaceUi(status);
+            return (op === 'plan' || op === '')
+                && isPlanFailureStatusForWorkspaceUi(status)
+                && !shouldTreatPlanFailureAsResolvedBySuccess(state, operation);
         });
     }
 
@@ -14760,6 +15161,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 if (typeof terminal.stop === 'function') {
                     terminal.stop({ suppressTransportError: true });
                 }
+                schedulePlanWorkspaceReload('plan_retryable_failure', 900);
                 return;
             }
             setPlanGenerationActionLock(false);
@@ -14775,7 +15177,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 rerenderCurrentPlanPreview();
             }
             clearPlanPreviewActionContext({ restoreStatus: false });
-            setPlanRetryButtonVisible(true);
+            setPlanRetryButtonVisible(false);
             if (typeof terminal.log === 'function') {
                 markPlanTerminalConnected();
                 terminal.log((payload && payload.message) ? String(payload.message) : messages.planModeDone, 'done', payload || {});
@@ -14788,12 +15190,17 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             }
             // 方案 SSE 正常结束后触发一次作用域自动保存（防抖）。
             autoSaveScope();
+            schedulePlanWorkspaceReload('plan_queue_done', 900);
         });
         terminal.on('error', function (event) {
             planSseRunning = false;
             setPlanModeRunButtonLoading(false);
             var payload = parsePlanTerminalPayload(event);
             var message = resolvePlanTerminalErrorMessage(event, payload);
+            if (shouldIgnoreResolvedPlanTerminalFailure(payload, message)) {
+                restoreResolvedPlanSuccessUiFromWorkspaceState();
+                return;
+            }
             if (isBenignPlanInProgressConflict(payload, message)) {
                 setPlanModeStatus(message);
                 setPlanModalProgress(message, parseInt(String((payload && payload.progress_percent) || 45), 10) || 45, false);
@@ -14818,6 +15225,10 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             setPlanModeRunButtonLoading(false);
             var payload = parsePlanTerminalPayload(event);
             var message = resolvePlanTerminalErrorMessage(event, payload);
+            if (shouldIgnoreResolvedPlanTerminalFailure(payload, message)) {
+                restoreResolvedPlanSuccessUiFromWorkspaceState();
+                return;
+            }
             if (isBenignPlanInProgressConflict(payload, message)) {
                 setPlanModeStatus(message);
                 setPlanModalProgress(message, parseInt(String((payload && payload.progress_percent) || 45), 10) || 45, false);
@@ -15577,7 +15988,20 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 scope_patch: JSON.stringify(buildVirtualThemePatch()),
                 prompt_mode: resolveInitialPlanPromptMode(),
                 confirm_regenerate: confirmRegenerate ? '1' : '0'
+            }, {
+                timeoutMs: 20000
             });
+        }
+
+        function handlePlanStartTransportError() {
+            var reloadMessage = <?= \json_encode((string)__('方案生成请求连接中断，正在刷新工作台读取后台队列的最新结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            setPlanModalProgress(reloadMessage, 75, false);
+            renderQueueUiState('plan', { state: 'running', message: reloadMessage, percent: 75 }, { updateStatus: false });
+            setPlanRetryButtonVisible(false);
+            toast('warning', reloadMessage);
+            planStartRequestPending = false;
+            setPlanGenerationActionLock(false);
+            schedulePlanWorkspaceReload('plan_start_transport_error', 900);
         }
 
         planStartRequestPending = true;
@@ -15640,13 +16064,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                             if (!jsonTruthyFlag(confirmData && confirmData.start_sse)) {
                                 setPlanGenerationActionLock(false);
                             }
-                        }).catch(function (error) {
-                            var confirmErrMsg = normalizePlanFailureMessage((error && error.message) ? String(error.message) : messages.networkError);
-                            setPlanModalProgress(confirmErrMsg, 100, false);
-                            setPlanRetryButtonVisible(true);
-                            toast('error', confirmErrMsg);
-                            planStartRequestPending = false;
-                            setPlanGenerationActionLock(false);
+                        }).catch(function () {
+                            handlePlanStartTransportError();
                         });
                     });
                 } else {
@@ -15706,14 +16125,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             if (!jsonTruthyFlag(data && data.start_sse) && !reuseRunningPlan) {
                 setPlanGenerationActionLock(false);
             }
-        }).catch(function (error) {
-            var message = normalizePlanFailureMessage((error && error.message) ? String(error.message) : messages.networkError);
-            setPlanModalProgress(message, 100, false);
-            renderQueueUiState('plan', { state: 'failed', message: message, percent: 100 }, { updateStatus: false });
-            setPlanRetryButtonVisible(true);
-            toast('error', message);
-            planStartRequestPending = false;
-            setPlanGenerationActionLock(false);
+        }).catch(function () {
+            handlePlanStartTransportError();
         });
     }
 
@@ -17018,5 +17431,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     } else {
         safeWorkspaceBootStep('plan_stage', bindPlanStageLogic);
     }
+    safeWorkspaceBootStep('plan_reload_reconciliation', function () {
+        window.setTimeout(runPlanReloadReconciliation, 180);
+    });
 })();
 </script>

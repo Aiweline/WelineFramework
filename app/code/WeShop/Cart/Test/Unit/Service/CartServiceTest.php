@@ -223,9 +223,42 @@ class CartServiceTest extends TestCase
         $this->assertSame(6, $service->getCartItemCount(7));
     }
 
-    /**
-     * TDD: 登录用户加购测试
-     */
+    public function testNormalizeOptionsPreservesColorAndImageSwatchPayload(): void
+    {
+        $service = new CartService($this->createDispatchingEventsManager());
+
+        $options = $service->normalizeOptions([
+            [
+                'label' => 'Color',
+                'value' => 'Black',
+                'attribute_id' => 900001,
+                'attribute_code' => 'color',
+                'option_id' => 900101,
+                'option_code' => 'black',
+                'swatch_type' => 'color',
+                'swatch_value' => '#111827',
+            ],
+            [
+                'label' => 'Style',
+                'value' => 'Lifestyle',
+                'attribute_id' => 900003,
+                'attribute_code' => 'style',
+                'option_id' => 900302,
+                'option_code' => 'lifestyle',
+                'swatch_type' => 'image',
+                'option_image' => 'https://cdn.test/style.jpg',
+            ],
+        ]);
+
+        $this->assertSame('color', $options[0]['swatch_type'] ?? null);
+        $this->assertSame('#111827', $options[0]['swatch_value'] ?? null);
+        $this->assertSame('image', $options[1]['swatch_type'] ?? null);
+        $this->assertSame('https://cdn.test/style.jpg', $options[1]['swatch_value'] ?? null);
+        $this->assertSame('https://cdn.test/style.jpg', $options[1]['option_image'] ?? null);
+        $this->assertSame('style', $options[1]['attribute_code'] ?? null);
+        $this->assertSame('lifestyle', $options[1]['option_code'] ?? null);
+    }
+
     public function testAddToCartAuthenticated(): void
     {
         $eventsManager = $this->createDispatchingEventsManager();

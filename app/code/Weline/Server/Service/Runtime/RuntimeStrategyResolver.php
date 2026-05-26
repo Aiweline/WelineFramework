@@ -123,16 +123,6 @@ final class RuntimeStrategyResolver
             $requested = 'auto';
         }
 
-        if ($workerCount <= 1) {
-            return [
-                'topology' => 'single',
-                'dispatcher_enabled' => false,
-                'direct_reuse_port' => false,
-                'reason' => 'single worker does not need Dispatcher',
-                'warnings' => [],
-            ];
-        }
-
         if ($requested === 'direct') {
             if (!$profile->supportsReusePort()) {
                 throw new \RuntimeException('WLS direct topology requires SO_REUSEPORT on this OS/kernel.');
@@ -158,30 +148,14 @@ final class RuntimeStrategyResolver
 
         if ($requested === 'independent') {
             return [
-                'topology' => 'independent',
+                'topology' => $workerCount <= 1 ? 'single' : 'independent',
                 'dispatcher_enabled' => false,
                 'direct_reuse_port' => false,
-                'reason' => 'explicit no-dispatcher independent worker ports',
+                'reason' => $workerCount <= 1
+                    ? 'explicit no-dispatcher single worker topology'
+                    : 'explicit no-dispatcher independent worker ports',
                 'warnings' => [],
             ];
-        }
-
-        if (!$profile->isWindows()
-            && $profile->supportsReusePort()
-            && $strategy !== self::STRATEGY_COMPATIBILITY
-            && $strategy !== self::STRATEGY_STABILITY) {
-            return [
-                'topology' => 'direct',
-                'dispatcher_enabled' => false,
-                'direct_reuse_port' => true,
-                'reason' => 'auto selected direct SO_REUSEPORT topology for best throughput',
-                'warnings' => [],
-            ];
-        }
-
-        $warnings = [];
-        if (!$profile->supportsReusePort()) {
-            $warnings[] = 'SO_REUSEPORT is unavailable; WLS selected Dispatcher compatibility topology.';
         }
 
         return [
@@ -190,8 +164,8 @@ final class RuntimeStrategyResolver
             'direct_reuse_port' => false,
             'reason' => $profile->isWindows()
                 ? 'auto selected Dispatcher on Windows for stable multi-process networking'
-                : 'auto selected Dispatcher because direct topology is not available or not preferred by strategy',
-            'warnings' => $warnings,
+                : 'auto selected Dispatcher default topology; use --direct to enable SO_REUSEPORT direct mode',
+            'warnings' => [],
         ];
     }
 
@@ -283,7 +257,7 @@ final class RuntimeStrategyResolver
         }
 
         if (($topology['topology'] ?? '') === 'dispatcher') {
-            return 'compatibility';
+            return $warnings === [] ? 'stable' : 'compatibility';
         }
 
         return $warnings === [] ? 'degraded' : 'compatibility';

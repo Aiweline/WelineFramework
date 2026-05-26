@@ -18,7 +18,8 @@ final class StyleService
         private readonly ?StyleRegistry $registry = null,
         private readonly ?StyleRepository $repository = null,
         private readonly ?AdapterStyleResolver $adapterResolver = null,
-        private readonly ?StyleNormalizer $normalizer = null
+        private readonly ?StyleNormalizer $normalizer = null,
+        private readonly ?AdapterStyleRepository $adapterStyleRepository = null
     ) {
     }
 
@@ -47,7 +48,7 @@ final class StyleService
     {
         $code = $this->normalizer()->normalizeCode((string)($data['code'] ?? ''), true);
         if ($this->registry()->isReservedCode($code, $adminId)) {
-            throw new \InvalidArgumentException('Builtin/module styles are read-only. Clone it before editing.');
+            throw new \InvalidArgumentException((string)__('内置或模块风格为只读，请克隆后再编辑。'));
         }
 
         $saved = $this->repository()->saveFromArray($data, $adminId, AiStyle::SOURCE_CUSTOM);
@@ -60,11 +61,11 @@ final class StyleService
     public function disableCustom(string $code, int $adminId): array
     {
         if ($this->registry()->isReservedCode($code, $adminId)) {
-            throw new \InvalidArgumentException('Builtin/module styles are read-only and cannot be disabled.');
+            throw new \InvalidArgumentException((string)__('内置或模块风格为只读，不能禁用。'));
         }
         $style = $this->repository()->disable($code, $adminId);
         if (!$style) {
-            throw new \InvalidArgumentException('Style not found.');
+            throw new \InvalidArgumentException((string)__('风格不存在。'));
         }
 
         return $this->repository()->modelToArray($style);
@@ -73,11 +74,17 @@ final class StyleService
     public function deleteCustom(string $code, int $adminId): bool
     {
         if ($this->registry()->isReservedCode($code, $adminId)) {
-            throw new \InvalidArgumentException('Builtin/module styles are read-only and cannot be deleted.');
+            throw new \InvalidArgumentException((string)__('内置或模块风格为只读，不能删除。'));
         }
 
+        $style = $this->repository()->findArrayByCode($code, $adminId);
+        if (!$style) {
+            throw new \InvalidArgumentException((string)__('风格不存在。'));
+        }
+        $this->adapterStyleRepository()->unbindStyleCode($code);
+
         if (!$this->repository()->delete($code, $adminId)) {
-            throw new \InvalidArgumentException('Style not found.');
+            throw new \InvalidArgumentException((string)__('风格不存在。'));
         }
 
         return true;
@@ -90,7 +97,7 @@ final class StyleService
     {
         $source = $this->getStyle($code, $adminId);
         if (!$source || empty($source['readonly'])) {
-            throw new \InvalidArgumentException('Only builtin/module styles can be cloned by this endpoint.');
+            throw new \InvalidArgumentException((string)__('只有内置或模块风格可以通过此入口克隆。'));
         }
 
         $baseCode = $this->normalizer()->normalizeCode((string)$source['code'] . '-custom', true);
@@ -171,7 +178,7 @@ final class StyleService
         if ($mode === self::MODE_MANUAL) {
             $style = $this->getStyle($selectedCode, $adminId);
             if (!$style) {
-                throw new \InvalidArgumentException('Manual style does not exist: ' . $selectedCode);
+                throw new \InvalidArgumentException((string)__('手动选择的风格不存在：%{1}', $selectedCode));
             }
             $matchReason = '手动选择：' . (string)($style['name'] ?? $selectedCode);
         } else {
@@ -485,5 +492,10 @@ final class StyleService
     private function normalizer(): StyleNormalizer
     {
         return $this->normalizer ?? new StyleNormalizer();
+    }
+
+    private function adapterStyleRepository(): AdapterStyleRepository
+    {
+        return $this->adapterStyleRepository ?? ObjectManager::getInstance(AdapterStyleRepository::class);
     }
 }

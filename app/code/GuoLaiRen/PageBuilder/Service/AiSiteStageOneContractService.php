@@ -88,6 +88,7 @@ final class AiSiteStageOneContractService
                 'cookie_policy',
             ], true);
             $firstRequiredBlockKey = \trim((string)($budget['required'][0] ?? ''));
+            $preferredGeneratedImageBlockKey = $isPolicyPage ? '' : $this->resolvePreferredGeneratedImageBlockKey($pageType, $budget);
             $pageContracts[$pageType] = [
                 'page_type' => $pageType,
                 'min_blocks' => $budget['min'],
@@ -111,8 +112,10 @@ final class AiSiteStageOneContractService
                 'composition_overuse_severity' => 'medium',
                 'requires_image_intent' => true,
                 'image_intent_keys' => self::IMAGE_INTENT_KEYS,
-                'first_block_requires_generated_image' => false,
-                'first_generated_image_block_key' => '',
+                'first_block_requires_generated_image' => $preferredGeneratedImageBlockKey !== ''
+                    && $firstRequiredBlockKey !== ''
+                    && $preferredGeneratedImageBlockKey === $firstRequiredBlockKey,
+                'first_generated_image_block_key' => $preferredGeneratedImageBlockKey,
                 'block_count_handoff_required' => true,
             ];
         }
@@ -180,7 +183,7 @@ final class AiSiteStageOneContractService
                 'visible_copy_must_use_content_locale' => true,
                 'visitor_copy_only' => true,
                 'forbid_prompt_like_copy' => true,
-                'forbid_schema_placeholders' => true,
+                'forbid_schema_filler_values' => true,
                 'must_reuse_brief_nouns' => true,
                 'same_page_blocks_must_not_reuse_same_opening_message' => true,
                 'same_page_blocks_must_not_reuse_same_core_copy' => true,
@@ -227,8 +230,8 @@ final class AiSiteStageOneContractService
                 'opening_or_media_asset_blocks_default_to_needs_image' => true,
                 'non_policy_pages_require_at_least_one_generated_image_intent' => true,
                 'non_policy_first_block_requires_generated_image_intent' => false,
-                'planned_image_without_verified_asset_must_fail_not_placeholder' => true,
-                'placeholder_image_assets_forbidden' => true,
+                'planned_image_without_verified_asset_must_fail_no_filler_media' => true,
+                'filler_image_assets_forbidden' => true,
             ],
             'visual_quality_rules' => [
                 'non_generic_visual_direction' => true,
@@ -299,6 +302,10 @@ final class AiSiteStageOneContractService
         foreach ($targetPageTypes as $pageType) {
             $basePageContract = \is_array($base['page_contracts'][$pageType] ?? null) ? $base['page_contracts'][$pageType] : [];
             if (\is_array($sourcePageContracts[$pageType] ?? null)) {
+                $basePreferredImageKey = \trim((string)($basePageContract['first_generated_image_block_key'] ?? ''));
+                $sourcePreferredImageKey = \trim((string)($sourcePageContracts[$pageType]['first_generated_image_block_key'] ?? ''));
+                $preferredGeneratedImageBlockKey = $sourcePreferredImageKey !== '' ? $sourcePreferredImageKey : $basePreferredImageKey;
+                $firstRequiredBlockKey = \trim((string)($basePageContract['required_block_keys'][0] ?? ''));
                 $pageContracts[$pageType] = \array_replace($basePageContract, $sourcePageContracts[$pageType], [
                     'requires_visual_signature' => true,
                     'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
@@ -306,8 +313,10 @@ final class AiSiteStageOneContractService
                     'forbid_repeated_composition_patterns_within_page' => true,
                     'requires_image_intent' => true,
                     'image_intent_keys' => self::IMAGE_INTENT_KEYS,
-                    'first_block_requires_generated_image' => false,
-                    'first_generated_image_block_key' => '',
+                    'first_block_requires_generated_image' => $preferredGeneratedImageBlockKey !== ''
+                        && $firstRequiredBlockKey !== ''
+                        && $preferredGeneratedImageBlockKey === $firstRequiredBlockKey,
+                    'first_generated_image_block_key' => $preferredGeneratedImageBlockKey,
                     'block_count_handoff_required' => true,
                 ]);
             }
@@ -344,6 +353,34 @@ final class AiSiteStageOneContractService
         $normalized['contract_hash'] = $this->hashStablePayload($normalized);
 
         return $normalized;
+    }
+
+    /**
+     * @param array{min:int,max:int,target:int,required:list<string>,optional:list<string>} $budget
+     */
+    private function resolvePreferredGeneratedImageBlockKey(string $pageType, array $budget): string
+    {
+        $required = \array_values(\array_filter(\array_map('strval', $budget['required'] ?? []), static fn(string $value): bool => \trim($value) !== ''));
+        $optional = \array_values(\array_filter(\array_map('strval', $budget['optional'] ?? []), static fn(string $value): bool => \trim($value) !== ''));
+        $available = \array_fill_keys(\array_merge($required, $optional), true);
+        $preferredByPage = [
+            Page::TYPE_HOME => 'hero',
+            'home_page' => 'hero',
+            Page::TYPE_ABOUT => 'origin_story',
+            'about_page' => 'origin_story',
+            Page::TYPE_CONTACT => 'contact_methods',
+            'contact_page' => 'contact_methods',
+            Page::TYPE_BLOG => 'article_hero',
+            'blog_post' => 'article_hero',
+            Page::TYPE_BLOG_CATEGORY => 'category_hero',
+            'blog_category' => 'category_hero',
+        ];
+        $preferred = \trim((string)($preferredByPage[$pageType] ?? ''));
+        if ($preferred !== '' && isset($available[$preferred])) {
+            return $preferred;
+        }
+
+        return \trim((string)($required[0] ?? ''));
     }
 
     /**

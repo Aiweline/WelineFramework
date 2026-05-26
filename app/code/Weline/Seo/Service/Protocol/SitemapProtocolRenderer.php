@@ -6,6 +6,7 @@ namespace Weline\Seo\Service\Protocol;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SitemapUrl;
+use Weline\Seo\Service\Sitemap\SitemapXmlExtensionRenderer;
 use Weline\Seo\Service\WebSitemapData;
 
 class SitemapProtocolRenderer
@@ -29,7 +30,7 @@ class SitemapProtocolRenderer
 
     /**
      * @param array<string, mixed> $website
-     * @return array<int, array{loc:string,lastmod:string}>
+     * @return array<int, array<string, mixed>>
      */
     private function collectGeneratedSitemaps(array $website): array
     {
@@ -83,6 +84,7 @@ class SitemapProtocolRenderer
             $result[] = [
                 'loc' => $loc,
                 'lastmod' => $lastmod !== '' ? date('c', strtotime($lastmod) ?: time()) : date('c'),
+                SitemapUrl::schema_fields_METADATA => (string)($row[SitemapUrl::schema_fields_METADATA] ?? $row['metadata'] ?? ''),
             ];
         }
 
@@ -106,15 +108,22 @@ class SitemapProtocolRenderer
     }
 
     /**
-     * @param array<int, array{loc:string,lastmod:string}> $items
+     * @param array<int, array<string, mixed>> $items
      */
     private function renderUrlSet(array $items): string
     {
-        $xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
+        $extensionRenderer = new SitemapXmlExtensionRenderer();
+        $xml = ['<?xml version="1.0" encoding="UTF-8"?>', $extensionRenderer->urlsetOpenTag($items)];
         foreach ($items as $item) {
             $xml[] = '  <url>';
             $xml[] = '    <loc>' . $this->escape($item['loc']) . '</loc>';
             $xml[] = '    <lastmod>' . $this->escape($item['lastmod']) . '</lastmod>';
+            $extensionXml = rtrim($extensionRenderer->renderUrlExtensions($item));
+            if ($extensionXml !== '') {
+                foreach (explode("\n", $extensionXml) as $line) {
+                    $xml[] = $line;
+                }
+            }
             $xml[] = '  </url>';
         }
         $xml[] = '</urlset>';

@@ -6,6 +6,14 @@
 请先登录。,请先登录。
 "缺少商品 ID。","缺少商品 ID。"
 已加入心愿单。,已加入心愿单。
+收藏添加前,收藏添加前
+"商品加入收藏前触发，负载包含 customer_id、product_id。","商品加入收藏前触发，负载包含 customer_id、product_id。"
+收藏添加后,收藏添加后
+"商品加入收藏后触发，负载包含 wishlist、wishlist_id、customer_id、product_id、created。","商品加入收藏后触发，负载包含 wishlist、wishlist_id、customer_id、product_id、created。"
+收藏移除前,收藏移除前
+"收藏条目移除前触发，负载包含 wishlist、wishlist_id、customer_id、product_id。","收藏条目移除前触发，负载包含 wishlist、wishlist_id、customer_id、product_id。"
+收藏移除后,收藏移除后
+"收藏条目移除后触发，负载包含 wishlist_id、customer_id、product_id、removed。","收藏条目移除后触发，负载包含 wishlist_id、customer_id、product_id、removed。"
 心愿单查询器不支持的操作：%{1},心愿单查询器不支持的操作：%{1}
 "缺少购物车条目 ID。","缺少购物车条目 ID。"
 未找到对应购物车条目。,未找到对应购物车条目。

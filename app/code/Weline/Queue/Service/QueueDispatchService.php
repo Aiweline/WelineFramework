@@ -11,6 +11,8 @@ use Weline\Queue\Model\Queue;
 
 class QueueDispatchService
 {
+    private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
+
     public function __construct(
         private readonly Queue $queue,
     ) {
@@ -80,7 +82,6 @@ class QueueDispatchService
     public function reconcileRunningQueues(): void
     {
         $runningQueues = $this->queue->reset()
-            ->where($this->queue::schema_fields_finished, 0)
             ->where($this->queue::schema_fields_auto, 1)
             ->where($this->queue::schema_fields_status, $this->queue::status_running)
             ->select()
@@ -117,6 +118,14 @@ class QueueDispatchService
                 }
                 $queue->setStatus($queue::status_error)
                     ->setResult(PHP_EOL . $output . __('Queue process ended unexpectedly...') . $queue->getResult())
+                    ->save();
+                continue;
+            }
+
+            if ($queue->isFinished()) {
+                $queue->setStatus($queue::status_done)
+                    ->setPid(0)
+                    ->setEndAt(\date('Y-m-d H:i:s'))
                     ->save();
                 continue;
             }
@@ -202,12 +211,48 @@ class QueueDispatchService
     private function buildQueueRunProcessName(int $queueId, string $queueName): string
     {
         $bin = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+        $memoryLimit = $this->resolveWorkerMemoryLimit();
 
         return \escapeshellarg(PHP_BINARY)
+            . ' -d memory_limit=' . \escapeshellarg($memoryLimit)
             . ' '
             . \escapeshellarg($bin)
             . ' queue:run --id=' . $queueId
             . ' --name=' . $queueName;
+    }
+
+    private function resolveWorkerMemoryLimit(): string
+    {
+        $configured = Env::get(
+            'queue.worker.memory_limit',
+            Env::get('queue.cron.memory_limit', self::DEFAULT_WORKER_MEMORY_LIMIT)
+        );
+
+        return $this->normalizeMemoryLimit($configured, self::DEFAULT_WORKER_MEMORY_LIMIT);
+    }
+
+    private function normalizeMemoryLimit(mixed $value, string $default): string
+    {
+        if (\is_int($value) || \is_float($value)) {
+            $value = (string)(int)$value;
+        }
+
+        $value = \strtoupper(\trim((string)$value));
+        $default = \strtoupper(\trim($default)) ?: self::DEFAULT_WORKER_MEMORY_LIMIT;
+        if ($value === '') {
+            return $default;
+        }
+        if ($value === '-1') {
+            return '-1';
+        }
+        if (\preg_match('/^[1-9]\d*$/', $value)) {
+            return $value . 'M';
+        }
+        if (\preg_match('/^[1-9]\d*(?:K|M|G)$/', $value)) {
+            return $value;
+        }
+
+        return $default;
     }
 
     private function getManagedProcessOutput(string $processName, int $pid = 0): string

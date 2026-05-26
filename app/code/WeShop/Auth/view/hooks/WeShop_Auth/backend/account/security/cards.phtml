@@ -1,0 +1,61 @@
+<?php
+/**
+ * Backend account two-factor security card.
+ *
+ * @hook-priority 210
+ * @hook-sort-order 20
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
+
+$session = \Weline\Framework\Session\SessionFactory::getInstance()->createBackendSession();
+$userId = (int) ($session->getUserId() ?? 0);
+if ($userId <= 0) {
+    return;
+}
+
+$twoFactorAccountService = w_obj(\WeShop\Auth\Service\TwoFactorAccountService::class);
+$url = w_obj(\Weline\Framework\Http\Url::class);
+
+$isEnabled = $twoFactorAccountService->isEnabled(\WeShop\Auth\Data\ActorContext::ACTOR_BACKEND, $userId);
+$flowStatus = $twoFactorAccountService->getFlowStatus('backend');
+$manageUrl = $url->getBackendUrl('weshop/backend/security/two-factor');
+$passwordPolicyEnabled = (bool) ($flowStatus['password'] ?? false);
+$googlePolicyEnabled = (bool) ($flowStatus['google'] ?? false);
+?>
+<div class="col-xl-4 col-lg-6">
+    <div class="card h-100">
+        <div class="card-body d-flex flex-column">
+            <div class="d-flex align-items-start justify-content-between gap-3">
+                <div>
+                    <p class="text-muted mb-1"><?= __('双因素认证') ?></p>
+                    <h5 class="card-title mb-0"><?= __('验证器应用') ?></h5>
+                </div>
+                <div class="avatar-sm">
+                    <span class="avatar-title rounded-circle <?= $isEnabled ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
+                        <i class="mdi <?= $isEnabled ? 'mdi-shield-lock-outline' : 'mdi-shield-outline' ?> font-size-20"></i>
+                    </span>
+                </div>
+            </div>
+
+            <div class="alert <?= $isEnabled ? 'alert-success' : 'alert-secondary' ?> mt-3 mb-3">
+                <strong><?= $isEnabled ? __('当前已开启') : __('当前未开启') ?></strong><br>
+                <?= $isEnabled
+                    ? __('此后台账号已配置验证器应用，登录策略开启后会要求第二步验证。')
+                    : __('现在可先完成配置，待后台登录策略开启后即可要求第二步验证。') ?>
+            </div>
+
+            <div class="border rounded p-3 text-muted small mb-4">
+                <div class="fw-semibold text-body mb-2"><?= __('后台登录策略') ?></div>
+                <div><?= __('密码登录') ?>: <?= $passwordPolicyEnabled ? __('已启用') : __('默认关闭') ?></div>
+                <div><?= __('Google 登录') ?>: <?= $googlePolicyEnabled ? __('已启用') : __('默认关闭') ?></div>
+            </div>
+
+            <div class="mt-auto">
+                <a href="<?= htmlspecialchars($manageUrl, ENT_QUOTES) ?>" class="btn <?= $isEnabled ? 'btn-outline-primary' : 'btn-primary' ?> w-100">
+                    <?= $isEnabled ? __('管理双因素认证') : __('设置双因素认证') ?>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

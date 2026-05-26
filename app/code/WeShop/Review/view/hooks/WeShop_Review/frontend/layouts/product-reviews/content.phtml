@@ -9,6 +9,7 @@
 $product = (array) ($this->getData('product') ?? []);
 $productId = (int) ($product['product_id'] ?? 0);
 $reviews = (array) ($this->getData('reviews') ?? []);
+$createUrl = (string) ($this->getData('create_url') ?? $this->getUrl('review/create'));
 $ratingOptions = is_array($this->getData('rating_options') ?? null) ? $this->getData('rating_options') : [];
 $ratingOptions = array_values(array_map(static function (array $option): array {
     $label = trim((string) ($option['label'] ?? ''));
@@ -18,27 +19,150 @@ $ratingOptions = array_values(array_map(static function (array $option): array {
 
     return $option;
 }, array_filter($ratingOptions, 'is_array')));
+$reviewMode = (string) ($this->getData('review_mode') ?? '');
+if ($reviewMode === '') {
+    try {
+        $reviewMode = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Review\Service\ReviewConfigService::class)->getReviewMode();
+    } catch (\Throwable) {
+        $reviewMode = 'order';
+    }
+}
+$reviewMode = $reviewMode === 'anonymous' ? 'anonymous' : 'order';
+$isCustomerLoggedIn = (bool) ($this->getData('is_customer_logged_in') ?? false);
+if (!$isCustomerLoggedIn) {
+    try {
+        $customerContext = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Customer\Api\CustomerContextInterface::class);
+        $isCustomerLoggedIn = (int) ($customerContext->getUserId() ?? 0) > 0;
+    } catch (\Throwable) {
+        $isCustomerLoggedIn = false;
+    }
+}
+$ratingOptionsJson = json_encode($ratingOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$reviewUiTextJson = json_encode([
+    'anonymous' => (string) __('匿名用户'),
+    'anonymousMode' => (string) __('匿名评论'),
+    'orderMode' => (string) __('下单后评论'),
+    'modeChecking' => (string) __('正在确认是否可以按订单评价...'),
+    'modeAnonymousDescription' => (string) __('当前会按匿名评论提交；审核通过前，这条评价只会在当前浏览器中显示。'),
+    'modeOrderDescription' => (string) __('当前会按下单后评论提交，系统已确认你购买过该商品。'),
+    'modeFallbackDescription' => (string) __('未查询到该商品订单，已自动切换为匿名评论。'),
+    'pending' => (string) __('待审核'),
+    'visibleToYou' => (string) __('仅当前浏览器可见'),
+    'verifiedPurchase' => (string) __('已验证购买'),
+    'rating' => (string) __('评分'),
+    'thankYou' => (string) __('评价已提交，审核通过后会公开展示。'),
+    'unable' => (string) __('暂时无法提交评价。'),
+    'loginToReview' => (string) __('登录后评论'),
+    'loginFailed' => (string) __('登录失败，请检查用户名和密码。'),
+    'loginUsernameRequired' => (string) __('请输入用户名或邮箱。'),
+    'loginPasswordRequired' => (string) __('请输入密码。'),
+    'translate' => (string) __('Translate'),
+    'translating' => (string) __('Translating...'),
+    'showOriginal' => (string) __('Show original'),
+    'showTranslation' => (string) __('Show translation'),
+    'translateUnavailable' => (string) __('Browser translation is unavailable in this Chrome session.'),
+    'translateSameLanguage' => (string) __('This comment already matches the current language.'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
 ?>
-<section class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+<section class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark" data-review-write-widget="product-<?= $productId ?>">
     <div class="flex items-center justify-between gap-4">
         <div>
             <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Customer Voices') ?></p>
             <h3 class="mt-2 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Latest Reviews') ?></h3>
         </div>
-        <?php if ($productId > 0): ?>
-            <a href="<?= $this->getUrl('review', ['product_id' => $productId]) ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('View All Reviews') ?></a>
-        <?php endif; ?>
+        <div class="flex flex-wrap items-center justify-end gap-2">
+            <?php if ($productId > 0): ?>
+                <button type="button" class="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90" data-review-write-trigger>
+                    <span class="material-symbols-outlined text-base">rate_review</span>
+                    <?= __('我要评论') ?>
+                </button>
+                <a href="<?= $this->getUrl('review', ['product_id' => $productId]) ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('View All Reviews') ?></a>
+            <?php endif; ?>
+        </div>
     </div>
 
+    <?php if ($productId > 0): ?>
+        <div class="mt-5 hidden rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark" data-review-write-panel hidden>
+            <div class="rounded-xl border border-border-light bg-surface-light p-3 text-sm dark:border-border-dark dark:bg-surface-dark">
+                <div class="flex items-center gap-2 font-semibold text-text-primary-light dark:text-text-primary-dark">
+                    <span class="material-symbols-outlined text-base text-primary" data-review-mode-icon>touch_app</span>
+                    <span data-review-mode-label><?= __('点击我要评论后自动判断评价方式') ?></span>
+                </div>
+                <p class="mt-2 text-text-secondary-light dark:text-text-secondary-dark" data-review-mode-description>
+                    <?= __('未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。') ?>
+                </p>
+                <button type="button" class="mt-3 hidden text-xs font-semibold text-primary hover:underline" data-review-login-trigger hidden><?= __('登录后评论') ?></button>
+            </div>
+            <form class="mt-4 space-y-3" method="post" action="<?= htmlspecialchars($createUrl, ENT_QUOTES) ?>" data-review-write-form>
+                <input type="hidden" name="form_key" value="" data-review-form-token>
+                <input type="hidden" name="product_id" value="<?= htmlspecialchars((string) $productId, ENT_QUOTES) ?>">
+                <input type="hidden" name="review_mode" value="<?= htmlspecialchars($reviewMode, ENT_QUOTES) ?>" data-review-mode-input>
+                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Rating') ?>
+                    <select name="rating" class="form-select rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
+                        <?php for ($i = 5; $i >= 1; $i--): ?>
+                            <option value="<?= $i ?>"><?= $i ?> <?= __('star', $i) ?></option>
+                        <?php endfor; ?>
+                    </select>
+                </label>
+                <?php if ($ratingOptions): ?>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <?php foreach ($ratingOptions as $option): ?>
+                            <?php $optionCode = (string) ($option['code'] ?? ''); ?>
+                            <?php if ($optionCode === '') { continue; } ?>
+                            <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                                <?= htmlspecialchars((string) ($option['label'] ?? $optionCode), ENT_QUOTES) ?>
+                                <select name="rating_scores[<?= htmlspecialchars($optionCode, ENT_QUOTES) ?>]" class="form-select rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
+                                    <option value=""><?= __('不评分') ?></option>
+                                    <?php for ($i = 5; $i >= 1; $i--): ?>
+                                        <option value="<?= $i ?>"><?= $i ?> <?= __('star', $i) ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Title') ?>
+                    <input type="text" name="title" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= htmlspecialchars((string) __('Write a headline for your review'), ENT_QUOTES) ?>">
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Review') ?>
+                    <textarea name="content" rows="4" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= htmlspecialchars((string) __('Describe your experience with this product'), ENT_QUOTES) ?>"></textarea>
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('图片链接') ?>
+                    <textarea name="image_urls" rows="2" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= htmlspecialchars((string) __('每行一个图片链接'), ENT_QUOTES) ?>"></textarea>
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('视频链接') ?>
+                    <textarea name="video_urls" rows="2" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= htmlspecialchars((string) __('每行一个视频链接'), ENT_QUOTES) ?>"></textarea>
+                </label>
+                <button type="button" class="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90" data-review-submit>
+                    <?= __('Submit review') ?>
+                </button>
+                <div class="text-sm text-text-secondary-light dark:text-text-secondary-dark" data-review-feedback></div>
+            </form>
+        </div>
+    <?php endif; ?>
+
     <?php if ($reviews): ?>
-        <div class="mt-5 space-y-3">
+        <div class="mt-5 space-y-3" data-review-inline-list>
             <?php foreach (array_slice($reviews, 0, 3) as $review): ?>
+                <?php $reviewId = (int) ($review['review_id'] ?? $review['id'] ?? 0); ?>
                 <article class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
                     <div class="flex items-center justify-between gap-3">
                         <p class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($review['title'] ?? __('Rating')), ENT_QUOTES) ?></p>
                         <span class="text-sm font-semibold text-primary"><?= number_format((float) ($review['rating'] ?? 0), 1) ?></span>
                     </div>
-                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($review['content'] ?? ''), ENT_QUOTES) ?></p>
+                    <p id="product-review-body-<?= $productId ?>-<?= $reviewId ?>" class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-source><?= htmlspecialchars((string) ($review['content'] ?? ''), ENT_QUOTES) ?></p>
+                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <button type="button" class="inline-flex items-center gap-1 font-semibold text-primary hover:underline" data-review-translate data-review-translate-source="#product-review-body-<?= $productId ?>-<?= $reviewId ?>" data-review-translate-status="#product-review-translate-status-<?= $productId ?>-<?= $reviewId ?>">
+                            <span class="material-symbols-outlined text-sm">translate</span>
+                            <span data-review-translate-label><?= __('Translate') ?></span>
+                        </button>
+                        <span id="product-review-translate-status-<?= $productId ?>-<?= $reviewId ?>" class="text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-status></span>
+                    </div>
                     <?php $ratingScores = is_array($review['rating_scores'] ?? null) ? $review['rating_scores'] : []; ?>
                     <?php if ($ratingScores && $ratingOptions): ?>
                         <div class="mt-3 flex flex-wrap gap-2">
@@ -78,8 +202,870 @@ $ratingOptions = array_values(array_map(static function (array $option): array {
             <?php endforeach; ?>
         </div>
     <?php else: ?>
-        <div class="mt-5 rounded-2xl border border-dashed border-border-light bg-background-light px-5 py-8 text-sm leading-6 text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark">
+        <div class="mt-5 rounded-2xl border border-dashed border-border-light bg-background-light px-5 py-8 text-sm leading-6 text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark" data-review-empty-state>
             <?= __('No product reviews yet. Be the first to share your experience.') ?>
         </div>
+    <?php endif; ?>
+
+    <?php if ($productId > 0): ?>
+        <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4" data-review-auth-modal hidden aria-hidden="true">
+            <div class="w-full max-w-md rounded-3xl border border-border-light bg-surface-light p-6 shadow-xl dark:border-border-dark dark:bg-surface-dark">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('登录后评论') ?></h2>
+                        <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('登录成功后会自动刷新评价资格。') ?></p>
+                    </div>
+                    <button type="button" class="rounded-full p-1 text-text-secondary-light hover:text-primary dark:text-text-secondary-dark" data-review-auth-close aria-label="<?= htmlspecialchars((string) __('关闭'), ENT_QUOTES) ?>">
+                        <span class="material-symbols-outlined text-xl">close</span>
+                    </button>
+                </div>
+                <form class="mt-5 space-y-4" data-review-auth-form>
+                    <div class="text-sm text-red-500" data-review-auth-alert></div>
+                    <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= __('用户名或邮箱') ?>
+                        <input type="text" name="username" autocomplete="username" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
+                    </label>
+                    <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= __('密码') ?>
+                        <input type="password" name="password" autocomplete="current-password" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
+                    </label>
+                    <input type="hidden" name="remember_duration" value="604800">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        <button type="button" class="rounded-full border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light dark:border-border-dark dark:text-text-primary-dark" data-review-auth-close><?= __('取消') ?></button>
+                        <button type="submit" class="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary/90" data-review-auth-submit><?= __('登录并继续') ?></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script>
+            (function () {
+                var root = document.querySelector('[data-review-write-widget="product-<?= $productId ?>"]');
+                if (!root) {
+                    return;
+                }
+
+                var productId = <?= $productId ?>;
+                var reviewMode = <?= json_encode($reviewMode, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '"order"' ?>;
+                var isCustomerLoggedIn = <?= $isCustomerLoggedIn ? 'true' : 'false' ?>;
+                var ratingOptions = <?= $ratingOptionsJson ?>;
+                var texts = <?= $reviewUiTextJson ?>;
+                var writeTrigger = root.querySelector('[data-review-write-trigger]');
+                var writePanel = root.querySelector('[data-review-write-panel]');
+                var form = root.querySelector('[data-review-write-form]');
+                var submit = root.querySelector('[data-review-submit]');
+                var feedback = root.querySelector('[data-review-feedback]');
+                var modeInput = root.querySelector('[data-review-mode-input]');
+                var modeIcon = root.querySelector('[data-review-mode-icon]');
+                var modeLabel = root.querySelector('[data-review-mode-label]');
+                var modeDescription = root.querySelector('[data-review-mode-description]');
+                var loginTrigger = root.querySelector('[data-review-login-trigger]');
+                var formTokenInput = root.querySelector('[data-review-form-token]');
+                var reviewList = root.querySelector('[data-review-inline-list]');
+                var emptyState = root.querySelector('[data-review-empty-state]');
+                var authModal = root.querySelector('[data-review-auth-modal]');
+                var authForm = root.querySelector('[data-review-auth-form]');
+                var authAlert = root.querySelector('[data-review-auth-alert]');
+                var authSubmit = root.querySelector('[data-review-auth-submit]');
+                var apiPromise = null;
+                var accountApiPromise = null;
+                var tokenPromise = null;
+                var modePromise = null;
+                var storageKey = 'weshop.review.pending.' + productId;
+                var indexedDbName = 'weshop_review_pending';
+                var indexedDbStore = 'reviews';
+                var seenReviews = {};
+                var translationCache = {};
+                var translatorCache = {};
+                var languageDetectorPromise = null;
+                var browserTranslatorSupported = Boolean(self.Translator && typeof self.Translator.create === 'function');
+                var browserLanguageDetectorSupported = Boolean(self.LanguageDetector && typeof self.LanguageDetector.create === 'function');
+                var languageDetectorCreateTimeout = 3000;
+                var languageDetectorDetectTimeout = 3000;
+                var translatorAvailabilityTimeout = 3000;
+                var translatorCreateTimeout = 15000;
+                var translatorTranslateTimeout = 20000;
+                window.__weshopReviewTranslatorSupported = browserTranslatorSupported;
+
+                window.setTimeout(function () {
+                    browserTranslatorSupported = Boolean(self.Translator && typeof self.Translator.create === 'function');
+                    browserLanguageDetectorSupported = Boolean(self.LanguageDetector && typeof self.LanguageDetector.create === 'function');
+                    window.__weshopReviewTranslatorSupported = browserTranslatorSupported;
+                }, 0);
+
+                if (!form || !submit) {
+                    return;
+                }
+
+                function escapeHtml(value) {
+                    return String(value == null ? '' : value)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                }
+
+                function normalizeLanguageCode(value) {
+                    value = String(value || '').trim().replace(/_/g, '-');
+                    if (!value) {
+                        return 'zh';
+                    }
+                    var lower = value.toLowerCase();
+                    if (lower.indexOf('zh-hant') === 0 || lower.indexOf('zh-tw') === 0 || lower.indexOf('zh-hk') === 0) {
+                        return 'zh-Hant';
+                    }
+                    if (lower.indexOf('zh') === 0) {
+                        return 'zh';
+                    }
+                    return lower.split('-')[0] || 'zh';
+                }
+
+                function getCurrentLanguage() {
+                    var htmlLang = document.documentElement ? document.documentElement.getAttribute('lang') : '';
+                    var metaLang = document.querySelector('meta[name="language"], meta[name="locale"]');
+                    var cookieMatch = document.cookie.match(/(?:^|;\s*)(?:WELINE_USER_LANG|weline_locale|locale)=([^;]+)/i);
+                    return normalizeLanguageCode(
+                        htmlLang
+                        || (metaLang ? metaLang.getAttribute('content') : '')
+                        || (cookieMatch ? decodeURIComponent(cookieMatch[1]) : '')
+                    );
+                }
+
+                function setTranslateStatus(button, message) {
+                    var selector = button ? button.getAttribute('data-review-translate-status') : '';
+                    var statusNode = selector ? document.querySelector(selector) : null;
+                    if (statusNode) {
+                        statusNode.textContent = message || '';
+                    }
+                }
+
+                function setTranslateLabel(button, message) {
+                    var label = button ? button.querySelector('[data-review-translate-label]') : null;
+                    if (label) {
+                        label.textContent = message || texts.translate;
+                    }
+                }
+
+                function getLanguageDetector() {
+                    if (!browserLanguageDetectorSupported) {
+                        return Promise.resolve(null);
+                    }
+                    if (!languageDetectorPromise) {
+                        languageDetectorPromise = withTimeout(
+                            self.LanguageDetector.create(),
+                            languageDetectorCreateTimeout,
+                            'Language detector create timeout'
+                        ).catch(function () {
+                            languageDetectorPromise = null;
+                            return null;
+                        });
+                    }
+                    return languageDetectorPromise;
+                }
+
+                function withTimeout(promise, timeoutMs, message) {
+                    return new Promise(function (resolve, reject) {
+                        var settled = false;
+                        var timer = window.setTimeout(function () {
+                            if (!settled) {
+                                settled = true;
+                                reject(new Error(message || 'timeout'));
+                            }
+                        }, timeoutMs);
+                        Promise.resolve(promise).then(function (value) {
+                            if (settled) {
+                                return;
+                            }
+                            settled = true;
+                            window.clearTimeout(timer);
+                            resolve(value);
+                        }).catch(function (error) {
+                            if (settled) {
+                                return;
+                            }
+                            settled = true;
+                            window.clearTimeout(timer);
+                            reject(error);
+                        });
+                    });
+                }
+
+                function detectTextLanguage(text, targetLanguage) {
+                    return getLanguageDetector().then(function (detector) {
+                        if (!detector || typeof detector.detect !== 'function') {
+                            return targetLanguage === 'zh' || targetLanguage === 'zh-Hant' ? 'en' : 'zh';
+                        }
+                        return withTimeout(
+                            detector.detect(text),
+                            languageDetectorDetectTimeout,
+                            'Language detector detect timeout'
+                        ).then(function (results) {
+                            var result = Array.isArray(results) && results.length ? results[0] : null;
+                            return normalizeLanguageCode((result && result.detectedLanguage) || '');
+                        }).catch(function () {
+                            return targetLanguage === 'zh' || targetLanguage === 'zh-Hant' ? 'en' : 'zh';
+                        });
+                    });
+                }
+
+                function getTranslator(sourceLanguage, targetLanguage, button) {
+                    if (!browserTranslatorSupported || !window.__weshopReviewTranslatorSupported) {
+                        return Promise.reject(new Error('Translator API unavailable'));
+                    }
+                    var key = sourceLanguage + ':' + targetLanguage;
+                    if (translatorCache[key]) {
+                        return translatorCache[key];
+                    }
+                    translatorCache[key] = Promise.resolve()
+                        .then(function () {
+                            if (typeof self.Translator.availability !== 'function') {
+                                return 'available';
+                            }
+                            return withTimeout(self.Translator.availability({
+                                sourceLanguage: sourceLanguage,
+                                targetLanguage: targetLanguage
+                            }), translatorAvailabilityTimeout, 'Translator availability timeout');
+                        })
+                        .then(function (availability) {
+                            if (availability === 'unavailable') {
+                                throw new Error('Translation pair unavailable');
+                            }
+                            return withTimeout(self.Translator.create({
+                                sourceLanguage: sourceLanguage,
+                                targetLanguage: targetLanguage,
+                                monitor: function (monitor) {
+                                    if (monitor && typeof monitor.addEventListener === 'function') {
+                                        monitor.addEventListener('downloadprogress', function (event) {
+                                            var percent = Math.round(Number(event.loaded || 0) * 100);
+                                            setTranslateStatus(button, texts.translating + (percent > 0 ? ' ' + percent + '%' : ''));
+                                        });
+                                    }
+                                }
+                            }), translatorCreateTimeout, 'Translator create timeout');
+                        })
+                        .catch(function (error) {
+                            translatorCache[key] = null;
+                            throw error;
+                        });
+                    return translatorCache[key];
+                }
+
+                function translateReviewNode(button) {
+                    var selector = button.getAttribute('data-review-translate-source') || '';
+                    var sourceNode = selector ? document.querySelector(selector) : null;
+                    if (!sourceNode) {
+                        return;
+                    }
+                    var original = sourceNode.getAttribute('data-review-original-text') || sourceNode.textContent || '';
+                    var cacheKey = selector + ':' + getCurrentLanguage();
+                    if (button.getAttribute('data-review-translation-visible') === '1') {
+                        sourceNode.textContent = original;
+                        button.setAttribute('data-review-translation-visible', '0');
+                        setTranslateLabel(button, texts.showTranslation);
+                        setTranslateStatus(button, '');
+                        return;
+                    }
+                    if (!sourceNode.getAttribute('data-review-original-text')) {
+                        sourceNode.setAttribute('data-review-original-text', original);
+                    }
+                    if (translationCache[cacheKey]) {
+                        sourceNode.textContent = translationCache[cacheKey];
+                        button.setAttribute('data-review-translation-visible', '1');
+                        setTranslateLabel(button, texts.showOriginal);
+                        setTranslateStatus(button, '');
+                        return;
+                    }
+                    if (!browserTranslatorSupported || !window.__weshopReviewTranslatorSupported) {
+                        setTranslateLabel(button, texts.translate);
+                        setTranslateStatus(button, texts.translateUnavailable);
+                        return;
+                    }
+                    button.disabled = true;
+                    button.classList.add('opacity-60');
+                    setTranslateLabel(button, texts.translating);
+                    setTranslateStatus(button, '');
+                    var targetLanguage = getCurrentLanguage();
+                    detectTextLanguage(original, targetLanguage)
+                        .then(function (sourceLanguage) {
+                            if (sourceLanguage === targetLanguage) {
+                                throw new Error('same-language');
+                            }
+                            return getTranslator(sourceLanguage, targetLanguage, button);
+                        })
+                        .then(function (translator) {
+                            return withTimeout(
+                                translator.translate(original),
+                                translatorTranslateTimeout,
+                                'Translator translate timeout'
+                            );
+                        })
+                        .then(function (translated) {
+                            translationCache[cacheKey] = translated || original;
+                            sourceNode.textContent = translationCache[cacheKey];
+                            button.setAttribute('data-review-translation-visible', '1');
+                            setTranslateLabel(button, texts.showOriginal);
+                            setTranslateStatus(button, '');
+                        })
+                        .catch(function (error) {
+                            setTranslateLabel(button, texts.translate);
+                            setTranslateStatus(button, error && error.message === 'same-language' ? texts.translateSameLanguage : texts.translateUnavailable);
+                        })
+                        .finally(function () {
+                            button.disabled = false;
+                            button.classList.remove('opacity-60');
+                        });
+                }
+
+                function getReviewApi() {
+                    if (!apiPromise) {
+                        apiPromise = window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function'
+                            ? Promise.resolve(window.Weline.Api.resource('review'))
+                            : Promise.reject(new Error('Weline.Api is unavailable.'));
+                    }
+                    return apiPromise;
+                }
+
+                function getAccountApi() {
+                    if (!accountApiPromise) {
+                        accountApiPromise = window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function'
+                            ? Promise.resolve(window.Weline.Api.resource('account'))
+                            : Promise.reject(new Error('Weline.Api is unavailable.'));
+                    }
+                    return accountApiPromise;
+                }
+
+                function getAccountObject() {
+                    return window.account || window.Account || window.WelineAccountModule || null;
+                }
+
+                function isAccountLoggedInSync() {
+                    var account = getAccountObject();
+                    var value;
+                    if (account) {
+                        if (typeof account.isLoggedIn === 'function') {
+                            try {
+                                value = account.isLoggedIn();
+                                if (typeof value === 'boolean') {
+                                    return value;
+                                }
+                            } catch (error) {
+                            }
+                        }
+                        if (typeof account.isLogin === 'boolean') {
+                            return account.isLogin;
+                        }
+                        if (typeof account.logged_in === 'boolean') {
+                            return account.logged_in;
+                        }
+                        if (typeof account.getFrontendUser === 'function') {
+                            try {
+                                if (account.getFrontendUser()) {
+                                    return true;
+                                }
+                            } catch (error) {
+                            }
+                        }
+                        if (account.user || account.customer || account.frontendUser) {
+                            return true;
+                        }
+                    }
+                    return Boolean(isCustomerLoggedIn);
+                }
+
+                function markLoggedIn(user) {
+                    isCustomerLoggedIn = true;
+                    modePromise = null;
+                    var account = getAccountObject();
+                    if (account && typeof account === 'object') {
+                        account.isLogin = true;
+                        account.logged_in = true;
+                        if (user && !account.user) {
+                            account.user = user;
+                        }
+                    }
+                    window.dispatchEvent(new CustomEvent('weshop:review-login', {detail: {user: user || null}}));
+                }
+
+                function updateMode(mode, description, icon) {
+                    reviewMode = mode === 'order' ? 'order' : 'anonymous';
+                    if (modeInput) {
+                        modeInput.value = reviewMode;
+                    }
+                    if (modeLabel) {
+                        modeLabel.textContent = reviewMode === 'order' ? texts.orderMode : texts.anonymousMode;
+                    }
+                    if (modeDescription) {
+                        modeDescription.textContent = description || (reviewMode === 'order' ? texts.modeOrderDescription : texts.modeAnonymousDescription);
+                    }
+                    if (modeIcon) {
+                        modeIcon.textContent = icon || (reviewMode === 'order' ? 'verified_user' : 'edit_note');
+                    }
+                    if (loginTrigger) {
+                        var hideLoginTrigger = isAccountLoggedInSync();
+                        loginTrigger.hidden = hideLoginTrigger;
+                        loginTrigger.classList.toggle('hidden', hideLoginTrigger);
+                    }
+                }
+
+                function ensureFormToken() {
+                    if (formTokenInput && formTokenInput.value) {
+                        return Promise.resolve(formTokenInput.value);
+                    }
+                    if (!tokenPromise) {
+                        tokenPromise = getReviewApi().then(function (ReviewApi) {
+                            return ReviewApi.formToken({path: form.getAttribute('action') || 'review/create'}, {silent: true});
+                        }).then(function (result) {
+                            var token = result && result.data ? (result.data.value || '') : '';
+                            if (formTokenInput && token) {
+                                formTokenInput.value = token;
+                            }
+                            return token;
+                        }).catch(function () {
+                            tokenPromise = null;
+                            return '';
+                        });
+                    }
+                    return tokenPromise;
+                }
+
+                function resolveModeForIntent() {
+                    if (modePromise) {
+                        return modePromise;
+                    }
+                    isCustomerLoggedIn = isAccountLoggedInSync();
+                    if (!isCustomerLoggedIn) {
+                        updateMode('anonymous', texts.modeAnonymousDescription, 'edit_note');
+                        modePromise = Promise.resolve(reviewMode);
+                        return modePromise;
+                    }
+                    if (modeDescription) {
+                        modeDescription.textContent = texts.modeChecking;
+                    }
+                    if (modeIcon) {
+                        modeIcon.textContent = 'sync';
+                    }
+                    modePromise = getReviewApi().then(function (ReviewApi) {
+                        return ReviewApi.resolveMode({product_id: productId}, {silent: true});
+                    }).then(function (result) {
+                        var data = result && result.data ? result.data : {};
+                        if (result && result.success && data.selected_mode === 'order') {
+                            updateMode('order', texts.modeOrderDescription, 'verified_user');
+                            return reviewMode;
+                        }
+                        updateMode('anonymous', texts.modeFallbackDescription, 'edit_note');
+                        return reviewMode;
+                    }).catch(function () {
+                        updateMode('anonymous', texts.modeFallbackDescription, 'edit_note');
+                        return reviewMode;
+                    });
+                    return modePromise;
+                }
+
+                function showPanel() {
+                    if (writePanel) {
+                        writePanel.hidden = false;
+                        writePanel.classList.remove('hidden');
+                    }
+                    if (writeTrigger) {
+                        writeTrigger.hidden = true;
+                        writeTrigger.classList.add('hidden');
+                    }
+                    ensureFormToken();
+                    return resolveModeForIntent();
+                }
+
+                function setFeedback(message, success) {
+                    if (!feedback) {
+                        return;
+                    }
+                    feedback.textContent = message || '';
+                    feedback.classList.toggle('text-emerald-500', Boolean(success));
+                    feedback.classList.toggle('text-red-500', !success && Boolean(message));
+                }
+
+                function ensureReviewList() {
+                    if (reviewList) {
+                        return reviewList;
+                    }
+                    reviewList = document.createElement('div');
+                    reviewList.className = 'mt-5 space-y-3';
+                    reviewList.setAttribute('data-review-inline-list', '');
+                    if (emptyState && emptyState.parentNode) {
+                        emptyState.parentNode.insertBefore(reviewList, emptyState);
+                    } else {
+                        root.appendChild(reviewList);
+                    }
+                    return reviewList;
+                }
+
+                function updateEmptyState() {
+                    if (emptyState) {
+                        emptyState.classList.toggle('hidden', ensureReviewList().children.length > 0);
+                    }
+                }
+
+                function ensureLocalKey(review) {
+                    if (review.review_id && Number(review.review_id) > 0) {
+                        review.local_key = 'review-' + Number(review.review_id);
+                    }
+                    if (!review.local_key) {
+                        review.local_key = 'pending-' + productId + '-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+                    }
+                    return review.local_key;
+                }
+
+                function isSafeMediaUrl(url) {
+                    url = String(url || '').trim();
+                    if (!url || /^\s*javascript:/i.test(url)) {
+                        return false;
+                    }
+                    if (/^[a-z][a-z0-9+.-]*:/i.test(url)) {
+                        return /^https?:\/\//i.test(url);
+                    }
+                    return true;
+                }
+
+                function buildRatingScoreHtml(review) {
+                    var scores = review.rating_scores || {};
+                    var html = '';
+                    ratingOptions.forEach(function (option) {
+                        var code = option && option.code ? String(option.code) : '';
+                        if (!code || scores[code] == null || scores[code] === '') {
+                            return;
+                        }
+                        html += '<span class="rounded-full border border-border-light px-3 py-1 text-xs font-semibold text-text-secondary-light dark:border-border-dark dark:text-text-secondary-dark">'
+                            + escapeHtml(option.label || code) + ' ' + escapeHtml(scores[code]) + '/5</span>';
+                    });
+                    return html ? '<div class="mt-3 flex flex-wrap gap-2">' + html + '</div>' : '';
+                }
+
+                function buildMediaHtml(review) {
+                    var html = '';
+                    (Array.isArray(review.media_items) ? review.media_items : []).slice(0, 3).forEach(function (media) {
+                        var type = media && media.type ? String(media.type) : '';
+                        var url = media && media.url ? String(media.url).trim() : '';
+                        if (!isSafeMediaUrl(url)) {
+                            return;
+                        }
+                        if (type === 'video') {
+                            html += '<video class="aspect-square w-full rounded-xl border border-border-light object-cover dark:border-border-dark" controls preload="metadata" src="' + escapeHtml(url) + '"></video>';
+                            return;
+                        }
+                        html += '<img class="aspect-square w-full rounded-xl border border-border-light object-cover dark:border-border-dark" src="' + escapeHtml(url) + '" alt="">';
+                    });
+                    return html ? '<div class="mt-3 grid grid-cols-3 gap-2">' + html + '</div>' : '';
+                }
+
+                function renderReview(review) {
+                    var rating = Number(review.rating || 0);
+                    var key = ensureLocalKey(review);
+                    if (!Number.isFinite(rating)) {
+                        rating = 0;
+                    }
+                    return '<article id="' + escapeHtml(key) + '" class="rounded-2xl border border-border-light bg-background-light p-4 ring-1 ring-amber-200/60 dark:border-border-dark dark:bg-background-dark dark:ring-amber-500/20" data-review-id="' + escapeHtml(key) + '">'
+                        + '<div class="flex items-center justify-between gap-3">'
+                        + '<p class="font-semibold text-text-primary-light dark:text-text-primary-dark">' + escapeHtml(review.title || texts.rating) + '</p>'
+                        + '<span class="text-sm font-semibold text-primary">' + rating.toFixed(1) + '</span>'
+                        + '</div>'
+                        + '<p id="' + escapeHtml(key) + '-body" class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-source>' + escapeHtml(review.content || '') + '</p>'
+                        + '<div class="mt-2 flex flex-wrap items-center gap-2 text-xs">'
+                        + '<button type="button" class="inline-flex items-center gap-1 font-semibold text-primary hover:underline" data-review-translate data-review-translate-source="#' + escapeHtml(key) + '-body" data-review-translate-status="#' + escapeHtml(key) + '-translate-status">'
+                        + '<span class="material-symbols-outlined text-sm">translate</span><span data-review-translate-label>' + escapeHtml(texts.translate) + '</span></button>'
+                        + '<span id="' + escapeHtml(key) + '-translate-status" class="text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-status></span>'
+                        + '</div>'
+                        + buildRatingScoreHtml(review)
+                        + buildMediaHtml(review)
+                        + '<div class="mt-3 flex items-center justify-between text-xs text-text-secondary-light dark:text-text-secondary-dark">'
+                        + '<span>' + escapeHtml(review.customer_name || texts.anonymous) + '</span>'
+                        + '<span>' + escapeHtml(review.created_at || '') + '</span>'
+                        + '</div>'
+                        + '<div class="mt-2 text-xs font-semibold text-amber-600 dark:text-amber-400">' + escapeHtml(texts.pending) + ' · ' + escapeHtml(texts.visibleToYou) + '</div>'
+                        + '</article>';
+                }
+
+                function prependReview(review) {
+                    if (Number(review.product_id || 0) !== productId) {
+                        return;
+                    }
+                    var key = ensureLocalKey(review);
+                    if (seenReviews[key]) {
+                        return;
+                    }
+                    seenReviews[key] = true;
+                    ensureReviewList().insertAdjacentHTML('afterbegin', renderReview(review));
+                    updateEmptyState();
+                }
+
+                function readLocalReviews() {
+                    try {
+                        var decoded = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                        return Array.isArray(decoded) ? decoded : [];
+                    } catch (error) {
+                        return [];
+                    }
+                }
+
+                function writeLocalReview(review) {
+                    try {
+                        var key = ensureLocalKey(review);
+                        var reviews = readLocalReviews().filter(function (item) {
+                            return item && item.local_key !== key && 'review-' + Number(item.review_id || 0) !== key;
+                        });
+                        reviews.unshift(review);
+                        localStorage.setItem(storageKey, JSON.stringify(reviews.slice(0, 20)));
+                    } catch (error) {
+                    }
+                }
+
+                function openPendingReviewDb() {
+                    if (!window.indexedDB) {
+                        return Promise.resolve(null);
+                    }
+                    return new Promise(function (resolve) {
+                        var request = indexedDB.open(indexedDbName, 1);
+                        request.onupgradeneeded = function () {
+                            var db = request.result;
+                            if (!db.objectStoreNames.contains(indexedDbStore)) {
+                                var store = db.createObjectStore(indexedDbStore, {keyPath: 'local_key'});
+                                store.createIndex('product_id', 'product_id', {unique: false});
+                            }
+                        };
+                        request.onsuccess = function () {
+                            resolve(request.result);
+                        };
+                        request.onerror = function () {
+                            resolve(null);
+                        };
+                    });
+                }
+
+                function writeIndexedDbReview(review) {
+                    openPendingReviewDb().then(function (db) {
+                        if (!db) {
+                            return;
+                        }
+                        db.transaction(indexedDbStore, 'readwrite').objectStore(indexedDbStore).put(review);
+                    });
+                }
+
+                function persistReview(review) {
+                    writeLocalReview(review);
+                    writeIndexedDbReview(review);
+                }
+
+                function loadIndexedDbReviews() {
+                    openPendingReviewDb().then(function (db) {
+                        if (!db) {
+                            return;
+                        }
+                        var store = db.transaction(indexedDbStore, 'readonly').objectStore(indexedDbStore);
+                        var request;
+                        try {
+                            request = store.index('product_id').getAll(IDBKeyRange.only(productId));
+                        } catch (error) {
+                            request = store.getAll();
+                        }
+                        request.onsuccess = function () {
+                            (Array.isArray(request.result) ? request.result : []).forEach(prependReview);
+                        };
+                    });
+                }
+
+                function buildPayload() {
+                    var payload = {rating_scores: {}, media_items: []};
+                    new FormData(form).forEach(function (value, key) {
+                        var scoreMatch = key.match(/^rating_scores\[([^\]]+)\]$/);
+                        if (scoreMatch) {
+                            if (value !== '') {
+                                payload.rating_scores[scoreMatch[1]] = value;
+                            }
+                            return;
+                        }
+                        if (key === 'image_urls' || key === 'video_urls') {
+                            String(value).split(/[\r\n,]+/).forEach(function (url) {
+                                url = url.trim();
+                                if (url) {
+                                    payload.media_items.push({type: key === 'video_urls' ? 'video' : 'image', url: url, label: ''});
+                                }
+                            });
+                            return;
+                        }
+                        payload[key] = value;
+                    });
+                    return payload;
+                }
+
+                function normalizeReview(rawReview, payload, result) {
+                    var data = result && result.data ? result.data : {};
+                    var review = rawReview && typeof rawReview === 'object' ? rawReview : {};
+                    review.review_id = Number(review.review_id || data.review_id || 0);
+                    review.product_id = Number(review.product_id || payload.product_id || productId);
+                    review.customer_name = review.customer_name || texts.anonymous;
+                    review.rating = Number(review.rating || payload.rating || 5);
+                    review.title = review.title || payload.title || texts.rating;
+                    review.content = review.content || payload.content || '';
+                    review.media_items = Array.isArray(review.media_items) ? review.media_items : (payload.media_items || []);
+                    review.rating_scores = review.rating_scores && typeof review.rating_scores === 'object' ? review.rating_scores : (payload.rating_scores || {});
+                    review.created_at = review.created_at || new Date().toLocaleString();
+                    review.status = review.status || 'pending';
+                    review.pending = true;
+                    review.verified_purchase = Boolean(review.verified_purchase || reviewMode === 'order');
+                    ensureLocalKey(review);
+                    return review;
+                }
+
+                function showAuthAlert(message) {
+                    if (authAlert) {
+                        authAlert.textContent = message || '';
+                    }
+                }
+
+                function openAuthModal() {
+                    if (!authModal) {
+                        return;
+                    }
+                    authModal.hidden = false;
+                    authModal.classList.remove('hidden');
+                    authModal.classList.add('flex');
+                    authModal.setAttribute('aria-hidden', 'false');
+                    showAuthAlert('');
+                    var username = authForm ? authForm.querySelector('[name="username"]') : null;
+                    if (username) {
+                        window.setTimeout(function () {
+                            username.focus();
+                        }, 0);
+                    }
+                }
+
+                function closeAuthModal() {
+                    if (!authModal) {
+                        return;
+                    }
+                    authModal.hidden = true;
+                    authModal.classList.add('hidden');
+                    authModal.classList.remove('flex');
+                    authModal.setAttribute('aria-hidden', 'true');
+                }
+
+                function submitAuth(event) {
+                    event.preventDefault();
+                    var username = (authForm.querySelector('[name="username"]') || {}).value || '';
+                    var password = (authForm.querySelector('[name="password"]') || {}).value || '';
+                    username = username.trim();
+                    if (!username) {
+                        showAuthAlert(texts.loginUsernameRequired);
+                        return;
+                    }
+                    if (!password) {
+                        showAuthAlert(texts.loginPasswordRequired);
+                        return;
+                    }
+                    if (authSubmit) {
+                        authSubmit.disabled = true;
+                        authSubmit.classList.add('opacity-60');
+                    }
+                    var account = getAccountObject();
+                    var loginPromise;
+                    if (account && typeof account.frontendUserLogin === 'function') {
+                        loginPromise = account.frontendUserLogin(username, password, Number((authForm.querySelector('[name="remember_duration"]') || {}).value || 0));
+                    } else if (account && typeof account.frontendLogin === 'function') {
+                        loginPromise = account.frontendLogin(username, password, Number((authForm.querySelector('[name="remember_duration"]') || {}).value || 0));
+                    } else {
+                        loginPromise = getAccountApi().then(function (AccountApi) {
+                            return AccountApi.login({
+                                username: username,
+                                password: password,
+                                remember_duration: Number((authForm.querySelector('[name="remember_duration"]') || {}).value || 0),
+                                redirect_url: window.location.pathname + window.location.search
+                            }, {silent: true});
+                        });
+                    }
+                    Promise.resolve(loginPromise).then(function (result) {
+                        var data = result && result.data ? result.data : result;
+                        if (!data || data.success === false || data.status === 'challenge_required') {
+                            throw new Error((data && data.message) || texts.loginFailed);
+                        }
+                        markLoggedIn(data.user || null);
+                        closeAuthModal();
+                        showPanel();
+                    }).catch(function (error) {
+                        showAuthAlert((error && error.message) || texts.loginFailed);
+                    }).finally(function () {
+                        if (authSubmit) {
+                            authSubmit.disabled = false;
+                            authSubmit.classList.remove('opacity-60');
+                        }
+                    });
+                }
+
+                function submitReview() {
+                    submit.disabled = true;
+                    submit.classList.add('opacity-60');
+                    var payload;
+                    showPanel().then(ensureFormToken).then(function () {
+                        payload = buildPayload();
+                        return getReviewApi();
+                    }).then(function (ReviewApi) {
+                        return ReviewApi.create(payload, {silent: true});
+                    }).then(function (result) {
+                        if (result && result.success) {
+                            var review = normalizeReview(result.data && result.data.review, payload, result);
+                            persistReview(review);
+                            prependReview(review);
+                            setFeedback(result.message || texts.thankYou, true);
+                            form.reset();
+                            if (modeInput) {
+                                modeInput.value = reviewMode;
+                            }
+                            return;
+                        }
+                        setFeedback((result && result.message) || texts.unable, false);
+                    }).catch(function () {
+                        setFeedback(texts.unable, false);
+                    }).finally(function () {
+                        submit.disabled = false;
+                        submit.classList.remove('opacity-60');
+                    });
+                }
+
+                if (reviewList) {
+                    reviewList.querySelectorAll('[data-review-id]').forEach(function (item) {
+                        var key = item.getAttribute('data-review-id');
+                        if (key) {
+                            seenReviews[key] = true;
+                        }
+                    });
+                }
+                readLocalReviews().forEach(prependReview);
+                loadIndexedDbReviews();
+                updateEmptyState();
+
+                if (writeTrigger) {
+                    writeTrigger.addEventListener('click', showPanel);
+                }
+                if (loginTrigger) {
+                    loginTrigger.addEventListener('click', openAuthModal);
+                }
+                if (authForm) {
+                    authForm.addEventListener('submit', submitAuth);
+                }
+                if (authModal) {
+                    authModal.querySelectorAll('[data-review-auth-close]').forEach(function (button) {
+                        button.addEventListener('click', closeAuthModal);
+                    });
+                }
+                root.addEventListener('click', function (event) {
+                    if (!event.target || typeof event.target.closest !== 'function') {
+                        return;
+                    }
+                    var translateButton = event.target.closest('[data-review-translate]');
+                    if (translateButton && root.contains(translateButton)) {
+                        event.preventDefault();
+                        translateReviewNode(translateButton);
+                    }
+                });
+                submit.addEventListener('click', submitReview);
+            })();
+        </script>
     <?php endif; ?>
 </section>

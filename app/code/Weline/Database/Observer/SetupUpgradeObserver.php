@@ -15,6 +15,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Registry\Service\RegistryProgress;
 
 class SetupUpgradeObserver implements ObserverInterface
 {
@@ -68,16 +69,21 @@ class SetupUpgradeObserver implements ObserverInterface
             }
             
             $this->printing->info("发现 " . count($activeModules) . " 个激活的模块");
+            RegistryProgress::section('setup:upgrade database migration observer');
+            RegistryProgress::count('Database migration observer active modules', count($activeModules), 'modules');
             
             $totalMigrations = 0;
             $totalSuccess = 0;
             $totalFailed = 0;
-            
+            $moduleIndex = 0;
+
             // 遍历所有模块
             foreach ($activeModules as $moduleName) {
+                $moduleIndex++;
                 $this->printing->printing('');
                 $this->printing->info("检查模块: {$moduleName}");
-                
+                RegistryProgress::module('Database migration module check', $moduleIndex, count($activeModules), $moduleName);
+
                 try {
                     // 获取模块的待执行迁移
                     $pendingMigrations = $this->getMigrationService()->getPendingMigrations($moduleName);
@@ -96,10 +102,20 @@ class SetupUpgradeObserver implements ObserverInterface
                     $totalMigrations += $count;
                     $totalSuccess += $result['success'];
                     $totalFailed += $result['failed'];
-                    gc_collect_cycles();
                 } catch (\Exception $e) {
                     $this->printing->error("模块 {$moduleName} 迁移执行异常: " . $e->getMessage());
+                    RegistryProgress::log('Database migration module exception: ' . $moduleName . ' ' . $e->getMessage());
                     $totalFailed++;
+                } finally {
+                    $compaction = ObjectManager::relieveMemoryPressure(false);
+                    $cycles = function_exists('gc_collect_cycles') ? gc_collect_cycles() : 0;
+                    RegistryProgress::log(sprintf(
+                        'Database migration module finished: %s memory_stores=%d metadata_entries=%d gc_cycles=%d',
+                        $moduleName,
+                        (int)($compaction['memory_store_clears'] ?? 0),
+                        (int)($compaction['metadata_entries_cleared'] ?? 0),
+                        (int)$cycles
+                    ));
                 }
             }
             

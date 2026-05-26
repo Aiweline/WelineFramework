@@ -9,7 +9,9 @@ use WeShop\Review\Service\ReviewPurchaseEligibilityService;
 use WeShop\Review\Service\ReviewReplyService;
 use WeShop\Review\Service\ReviewService;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Ui\FormKey;
 
 class ReviewQueryProvider implements QueryProviderInterface
 {
@@ -21,7 +23,8 @@ class ReviewQueryProvider implements QueryProviderInterface
         private readonly Url $url,
         private readonly ?ReviewConfigService $reviewConfigService = null,
         private readonly ?ReviewPurchaseEligibilityService $purchaseEligibilityService = null,
-        private readonly ?ReviewReplyService $reviewReplyService = null
+        private readonly ?ReviewReplyService $reviewReplyService = null,
+        private readonly ?FormKey $formKey = null
     ) {
     }
 
@@ -36,10 +39,29 @@ class ReviewQueryProvider implements QueryProviderInterface
             'create' => $this->create($params),
             'reply' => $this->reply($params),
             'resolveMode' => $this->resolveMode($params),
+            'formToken' => $this->formToken($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Unsupported review provider operation: %{1}', $operation)
             ),
         };
+    }
+
+    private function formToken(array $params): array
+    {
+        $path = trim((string)($params['path'] ?? 'review/create'));
+        if ($path === '') {
+            $path = 'review/create';
+        }
+
+        return [
+            'success' => true,
+            'message' => (string)__('Review form token prepared.'),
+            'data' => [
+                'name' => FormKey::key_name,
+                'value' => $this->getFormKey()->getKey($path),
+                'path' => $path,
+            ],
+        ];
     }
 
     private function create(array $params): array
@@ -197,6 +219,19 @@ class ReviewQueryProvider implements QueryProviderInterface
             'module' => 'WeShop_Review',
             'operations' => [
                 [
+                    'name' => 'formToken',
+                    'description' => __('Prepare a review form token only when the customer starts writing a review.'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        'path' => ['type' => 'string', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Prepare review form token',
+                ],
+                [
                     'name' => 'resolveMode',
                     'description' => __('点击写评论时自动判断本次评价方式；未登录前端直接选择匿名，已登录才查询是否购买过该商品。'),
                     'frontend' => true,
@@ -286,5 +321,10 @@ class ReviewQueryProvider implements QueryProviderInterface
     private function getReviewReplyService(): ReviewReplyService
     {
         return $this->reviewReplyService ?? new ReviewReplyService();
+    }
+
+    private function getFormKey(): FormKey
+    {
+        return $this->formKey ?? ObjectManager::getInstance(FormKey::class);
     }
 }

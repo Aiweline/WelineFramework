@@ -85,17 +85,31 @@ class ParamTypeRenderer
 
     public function renderField(string $key, array $param, mixed $value, int|string $layoutId = '', array $attrs = []): string
     {
-        $type = $this->normalizeType($param['type'] ?? 'string');
-        $param = array_merge($param, ['type' => $type]);
+        $dataType = (string)($param['type'] ?? 'string');
+        $type = $this->normalizeType($this->resolveUiType($param));
+        $param = array_merge($param, [
+            'type' => $type,
+            'data_type' => $dataType,
+            'ui_type' => $type,
+            'input' => $type,
+        ]);
         $value = $this->normalizeValueForRender($param, $value);
         return $this->getRenderer($type)->getHtml($key, $param, $value, $layoutId, $attrs);
     }
 
-    public function renderForm(int|string $layoutId, array $params, array $config = []): string
+    public function renderForm(int|string $layoutId, array $params, array $config = [], array $options = []): string
     {
         if (empty($params)) {
-            return $this->renderEmptyState();
+            return $this->renderEmptyState((string)($options['empty_message'] ?? ''));
         }
+        if (!empty($options)) {
+            return $this->renderFormWithOptions($layoutId, $params, $config, $options);
+        }
+        $formClass = trim((string)($options['class'] ?? 'w-param-form')) ?: 'w-param-form';
+        $autoSave = array_key_exists('auto_save', $options) ? (bool)$options['auto_save'] : true;
+        $showDeleteButton = array_key_exists('delete_button', $options) ? (bool)$options['delete_button'] : true;
+        $actionsHtml = (string)($options['actions_html'] ?? '');
+
         $groups = $this->groupFields($params);
         $groupsHtml = '';
         foreach ($groups as $groupKey => $groupData) {
@@ -126,6 +140,48 @@ class ParamTypeRenderer
         ';
     }
 
+    private function renderFormWithOptions(int|string $layoutId, array $params, array $config, array $options): string
+    {
+        $formClass = trim((string)($options['class'] ?? 'w-param-form')) ?: 'w-param-form';
+        $autoSave = array_key_exists('auto_save', $options) ? (bool)$options['auto_save'] : true;
+        $showDeleteButton = array_key_exists('delete_button', $options) ? (bool)$options['delete_button'] : true;
+        $actionsHtml = (string)($options['actions_html'] ?? '');
+
+        $groups = $this->groupFields($params);
+        $groupsHtml = '';
+        foreach ($groups as $groupData) {
+            $fieldsHtml = '';
+            foreach ($groupData['fields'] as $key => $param) {
+                $fieldsHtml .= $this->renderField($key, $param, $config[$key] ?? null, $layoutId);
+            }
+
+            $collapsed = $groupData['collapsed'] ?? false;
+            $groupClass = 'w-param-group' . ($collapsed ? ' w-param-collapsed' : '');
+            $groupsHtml .= '
+                <div class="' . $groupClass . '">
+                    <h5 class="w-param-group-title">
+                        ' . htmlspecialchars($groupData['label']) . '
+                        <span class="w-param-toggle">&#9662;</span>
+                    </h5>
+                    <div class="w-param-fields">' . $fieldsHtml . '</div>
+                </div>
+            ';
+        }
+
+        if ($showDeleteButton) {
+            $actionsHtml = '<button type="button" class="w-param-btn w-param-btn-outline-danger w-param-btn-delete-widget" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('鍒犻櫎') . '</button>' . $actionsHtml;
+        }
+
+        $actionsBlock = $actionsHtml !== '' ? '<div class="w-param-actions">' . $actionsHtml . '</div>' : '';
+
+        return '
+            <form class="' . htmlspecialchars($formClass) . '" data-layout-id="' . htmlspecialchars((string)$layoutId) . '" data-auto-save="' . ($autoSave ? '1' : '0') . '">
+                ' . $groupsHtml . '
+                ' . $actionsBlock . '
+            </form>
+        ';
+    }
+
     private function groupFields(array $params): array
     {
         $groups = [
@@ -152,8 +208,11 @@ class ParamTypeRenderer
         return array_filter($groups, fn($group) => !empty($group['fields']));
     }
 
-    private function renderEmptyState(): string
+    private function renderEmptyState(string $message = ''): string
     {
+        if ($message !== '') {
+            return '<div class="w-param-empty-state"><p>' . htmlspecialchars($message, ENT_QUOTES) . '</p></div>';
+        }
         return '<div class="w-param-empty-state"><p>' . __('该部件无可配置项') . '</p></div>';
     }
 
@@ -162,8 +221,8 @@ class ParamTypeRenderer
         $errors = [];
         foreach ($params as $key => $param) {
             $value = $values[$key] ?? null;
-            $type = $this->normalizeType($param['type'] ?? 'string');
-            $param = array_merge($param, ['type' => $type]);
+            $type = $this->normalizeType($this->resolveUiType($param));
+            $param = array_merge($param, ['type' => $type, 'ui_type' => $type, 'input' => $type]);
             $renderer = $this->getRenderer($type);
             if (!$renderer->validate($value, $param)) {
                 $errors[$key] = sprintf(__('字段 "%s" 的值无效'), $param['label'] ?? $key);
@@ -177,8 +236,8 @@ class ParamTypeRenderer
         $processed = [];
         foreach ($params as $key => $param) {
             $value = $values[$key] ?? null;
-            $type = $this->normalizeType($param['type'] ?? 'string');
-            $param = array_merge($param, ['type' => $type]);
+            $type = $this->normalizeType($this->resolveUiType($param));
+            $param = array_merge($param, ['type' => $type, 'ui_type' => $type, 'input' => $type]);
             $renderer = $this->getRenderer($type);
             if ($value === null || $value === '') {
                 $processed[$key] = $renderer->getDefaultValue($param);
@@ -192,6 +251,18 @@ class ParamTypeRenderer
     public function getRegisteredTypes(): array
     {
         return array_keys(self::DEFAULT_TYPE_CLASSES);
+    }
+
+    private function resolveUiType(array $param): string
+    {
+        foreach (['ui_type', 'input', 'ui', 'type'] as $key) {
+            $value = trim((string)($param[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return 'string';
     }
 
     private function normalizeValueForRender(array $param, mixed $value): mixed

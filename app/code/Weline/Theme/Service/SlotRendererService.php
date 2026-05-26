@@ -92,6 +92,30 @@ class SlotRendererService
         );
     }
 
+    public function processSlotsWithLayout(string $html, array $layoutData, bool $filterToHtmlSlots = false): string
+    {
+        return $this->traceCall(
+            'slot_renderer::processSlotsWithLayout',
+            function () use ($html, $layoutData, $filterToHtmlSlots): string {
+                if (strpos($html, 'data-wslot') === false && strpos($html, 'widget-slot-area') === false) {
+                    return $html;
+                }
+
+                $slotWidgets = $this->organizeWidgetsBySlot($layoutData);
+                if ($filterToHtmlSlots) {
+                    $slotWidgets = $this->filterWidgetsForHtmlSlots($slotWidgets, $html);
+                }
+
+                if (empty($slotWidgets)) {
+                    return $html;
+                }
+
+                $this->filledSlotIdsThisRun = [];
+                return $this->processSlotsWithDom($html, $slotWidgets, $filterToHtmlSlots);
+            }
+        );
+    }
+
     private function doProcessSlots(string $html, int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): string
     {
         // 检查是否包含插槽标记（支持新旧两种方式）

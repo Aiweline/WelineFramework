@@ -180,6 +180,7 @@ class BackendLoginReturnUrlService
     {
         $parsed = parse_url($candidate);
         $path = (string)($parsed['path'] ?? '/');
+        $path = $this->normalizeBackendPathForSameOrigin($path);
         $backendPrefix = $this->resolveCurrentBackendPrefix();
         if ($backendPrefix !== '' && str_starts_with($path, '/pagebuilder/backend/')) {
             $path = '/' . $backendPrefix . $path;
@@ -204,5 +205,34 @@ class BackendLoginReturnUrlService
 
         $prefix = trim(substr($currentPath, 0, $adminPos), '/');
         return $prefix !== '' ? $prefix : trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
+    }
+
+    private function normalizeBackendPathForSameOrigin(string $path): string
+    {
+        $path = '/' . trim($path, '/');
+        $segments = explode('/', trim($path, '/'));
+        $firstSegment = (string)($segments[0] ?? '');
+
+        if (isset($segments[1], $segments[2], $segments[3])
+            && $firstSegment !== ''
+            && $this->isCurrencySegment($segments[1])
+            && $this->isLocaleSegment($segments[2])
+            && $segments[3] === $firstSegment
+        ) {
+            array_splice($segments, 3, 1);
+            return '/' . implode('/', $segments);
+        }
+
+        return $path;
+    }
+
+    private function isCurrencySegment(string $segment): bool
+    {
+        return strlen($segment) === 3 && ctype_upper($segment);
+    }
+
+    private function isLocaleSegment(string $segment): bool
+    {
+        return (bool)preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
     }
 }

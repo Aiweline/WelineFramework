@@ -178,6 +178,7 @@ final class AiSiteStageOneContractValidator
             $this->validateFieldPlan($block, $pageContract, $path, $pageType, $blockKey, $issues);
             $this->validateExecutionScript($block, $path, $pageType, $blockKey, $issues);
             $this->validateBuildPlanVisibleBodyCopy($block, $path, $pageType, $blockKey, $issues);
+            $this->validateBlockVisibleCopyLocale($block, $path, $pageType, $blockKey, $contract, $context, $issues);
             $this->validateBlockSourceTruthAndPolicyCopy($block, $path, $pageType, $blockKey, $context, $issues);
             $this->validateBlockContentDiversity($block, $path, $pageType, $blockKey, $contentFingerprints, $issues);
             $visualSignatures[] = [
@@ -459,11 +460,48 @@ final class AiSiteStageOneContractValidator
             return;
         }
 
-        $issues[] = $this->issue('missing_visible_body_copy', $path . '.field_plan', 'medium', [
+        $issues[] = $this->issue('missing_visible_body_copy', $path . '.field_plan', 'high', [
             'page_type' => $pageType,
             'block_key' => $blockKey,
             'expected' => 'Every Stage-1 block must provide visitor-visible body copy that BuildPlan can consume: execution_script.core_copy, a field_plan supporting_copy/body/copy row, realtime_content.supporting_copy, feature_points, or block.content. Layout/planning instructions do not count.',
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $contract
+     * @param array<string, mixed> $context
+     * @param list<array<string, mixed>> $issues
+     */
+    private function validateBlockVisibleCopyLocale(
+        array $block,
+        string $path,
+        string $pageType,
+        string $blockKey,
+        array $contract,
+        array $context,
+        array &$issues
+    ): void {
+        $contentLocale = $this->resolveValidationContentLocale($contract, $context);
+        if ($contentLocale === '') {
+            return;
+        }
+
+        foreach ($this->collectBlockVisibleTexts($block, $path) as $row) {
+            $text = \trim((string)($row['text'] ?? ''));
+            if ($text === '' || !$this->looksLikeVisibleLocaleLeak($text, $contentLocale)) {
+                continue;
+            }
+
+            $issues[] = $this->issue('visible_copy_locale_mismatch', (string)($row['path'] ?? $path), 'high', [
+                'page_type' => $pageType,
+                'block_key' => $blockKey,
+                'content_locale' => $contentLocale,
+                'field_name' => (string)($row['field_name'] ?? ''),
+                'snippet' => $this->clip($text),
+                'expected' => 'Visitor-visible Stage-1 copy must use content_locale. Plan language and customer brief language are context only.',
+            ]);
+        }
     }
 
     /**
@@ -656,6 +694,112 @@ final class AiSiteStageOneContractValidator
             'shipping_policy',
             'cookie_policy',
         ], true);
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @param array<string, mixed> $context
+     */
+    private function resolveValidationContentLocale(array $contract, array $context): string
+    {
+        foreach ([
+            $context['content_locale'] ?? null,
+            $contract['content_locale'] ?? null,
+            $context['default_locale'] ?? null,
+            $contract['default_locale'] ?? null,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $locale = \trim((string)$value);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
+    private function looksLikeVisibleLocaleLeak(string $value, string $locale): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        if ($locale === '' || $value === '') {
+            return false;
+        }
+        if ($this->isCjkLocale($locale)) {
+            return $this->hasDominantLatinCopy($value);
+        }
+
+        return $this->hasAnyCjkCopy($value);
+    }
+
+    private function isCjkLocale(string $locale): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        return $locale === 'zh'
+            || \str_starts_with($locale, 'zh_')
+            || \str_starts_with($locale, 'zh-')
+            || $locale === 'ja'
+            || \str_starts_with($locale, 'ja_')
+            || \str_starts_with($locale, 'ja-')
+            || $locale === 'ko'
+            || \str_starts_with($locale, 'ko_')
+            || \str_starts_with($locale, 'ko-');
+    }
+
+    private function hasDominantLatinCopy(string $value): bool
+    {
+        $allowed = \array_fill_keys(['apk', 'app', 'seo', 'ios', 'android', 'upi', 'ssl', 'vip', 'faq', 'url', 'www'], true);
+        \preg_match_all('/\b[A-Za-z][A-Za-z0-9\'-]{2,}\b/u', $value, $matches);
+        $words = [];
+        $properNounOnly = true;
+        foreach ($matches[0] ?? [] as $word) {
+            $rawWord = \trim((string)$word, " \t\n\r\0\x0B'\"-");
+            $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
+            if ($normalized === '' || isset($allowed[$normalized])) {
+                continue;
+            }
+            $words[] = $normalized;
+            if (\preg_match('/^[A-Z][A-Za-z0-9\'-]*$/', $rawWord) !== 1) {
+                $properNounOnly = false;
+            }
+        }
+        if ($words === []) {
+            return false;
+        }
+        if ($properNounOnly && $this->hasMeaningfulCjkCopy($value)) {
+            return false;
+        }
+
+        $letterCount = 0;
+        foreach ($words as $word) {
+            $letterCount += \strlen($word);
+        }
+
+        return \count($words) >= 5 && $letterCount >= 28;
+    }
+
+    private function hasMeaningfulCjkCopy(string $value): bool
+    {
+        if (\preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+/u', $value, $matches) <= 0) {
+            return false;
+        }
+
+        $total = 0;
+        foreach ($matches[0] ?? [] as $segment) {
+            $length = \function_exists('mb_strlen') ? \mb_strlen((string)$segment) : \strlen((string)$segment);
+            $total += $length;
+            if ($length >= 8) {
+                return true;
+            }
+        }
+
+        return $total >= 12;
+    }
+
+    private function hasAnyCjkCopy(string $value): bool
+    {
+        return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $value) === 1;
     }
 
     private function normalizeRoleToken(string $value): string
@@ -1217,10 +1361,13 @@ final class AiSiteStageOneContractValidator
         $recoveryCount = \max(0, (int)($context['recovery_count'] ?? 0));
         $retryableFailureCount = \max(0, (int)($context['retryable_failure_count'] ?? 0));
         $localRepairRounds = \max(0, (int)($context['local_repair_rounds'] ?? 0));
+        $strictRetryCount = \max(0, (int)($context['strict_retry_count'] ?? 0));
+        $strictRetrySignals = \is_array($context['strict_retry_signals'] ?? null) ? $context['strict_retry_signals'] : [];
         $firstPass = $blocking === []
             && $recoveryCount === 0
             && $retryableFailureCount === 0
             && $localRepairRounds === 0
+            && $strictRetryCount === 0
             && empty($context['retry_from_previous_failure']);
 
         return [
@@ -1238,6 +1385,8 @@ final class AiSiteStageOneContractValidator
             'recovery_count' => $recoveryCount,
             'retryable_failure_count' => $retryableFailureCount,
             'local_repair_rounds' => $localRepairRounds,
+            'strict_retry_count' => $strictRetryCount,
+            'strict_retry_signals' => \array_values($strictRetrySignals),
             'validated_at' => \date('Y-m-d H:i:s'),
         ];
     }

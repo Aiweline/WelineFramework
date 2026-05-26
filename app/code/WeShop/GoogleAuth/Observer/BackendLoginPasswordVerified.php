@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\GoogleAuth\Observer;
 
-use WeShop\GoogleAuth\Service\BackendWebAuthService;
+use WeShop\Auth\Service\BackendWebAuthService;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;

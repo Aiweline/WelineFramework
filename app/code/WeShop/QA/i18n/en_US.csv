@@ -39,6 +39,26 @@
 已下单用户,"Verified Buyer"
 您在商品问答中被提及,"You were mentioned in product Q&A"
 "客户 %{1} 在商品问答中提到了您。","Customer %{1} mentioned you in product Q&A."
+加载当前商品问答失败：%{1},"Failed to load current product Q&A: %{1}"
+Pending,Pending
+Approved,Approved
+Rejected,Rejected
+当前商品问答,"Current Product Q&A"
+"在商品编辑页查看系统 FAQ、客户问答和已下单用户问答。","Review system FAQ, customer Q&A, and verified buyer Q&A on the product edit page."
+查看全部问答,"View All Q&A"
+保存商品后即可查看问答。,"Save the product before viewing Q&A."
+"Total Questions","Total Questions"
+推荐,Recommended
+暂无商品问答。,"No product Q&A yet."
+来源,Source
+问题,Question
+回复,Answer
+Status,Status
+"Created At","Created At"
+Actions,Actions
+View,View
+问答/FAQ,"Q&A / FAQ"
+当前商品,"Current Product"
 "Questions & Answers","Questions & Answers"
 "Community Q&A","Community Q&A"
 "Open Full Q&A","Open Full Q&A"
@@ -52,18 +72,10 @@ List,List
 ID,ID
 "Product ID","Product ID"
 "Customer ID","Customer ID"
-来源,Source
 Question,Question
 Answer,Answer
-Status,Status
 Created,Created
-Actions,Actions
-推荐,Recommended
 "Not answered yet","Not answered yet"
-Pending,Pending
-Approved,Approved
-Rejected,Rejected
-View,View
 "Are you sure you want to approve this question?","Are you sure you want to approve this question?"
 Approve,Approve
 "Are you sure you want to reject this question?","Are you sure you want to reject this question?"
@@ -85,7 +97,6 @@ Detail,Detail
 展示名称,"Display Name"
 是,Yes
 否,No
-"Created At","Created At"
 "Updated At","Updated At"
 来源设置,"Source Settings"
 推荐/热门,"Recommended / Hot"

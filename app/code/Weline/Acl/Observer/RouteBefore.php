@@ -448,6 +448,21 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             }
 
             // 如果没有角色，或用户不存在（getAclContext 曾返回 null）
+            if ($roleId <= 0 && $request->getData('api_app_actor') !== null && ($request->isApiBackend() || $request->isApiFrontend())) {
+                if (!$this->aclService->hasAnyAclEntries($access_sources)) {
+                    $this->returnApiError(403, __('应用没有任何授权 scope'), $request);
+                    return;
+                }
+                $allowed = $this->aclService->isRouteAllowedByEntries($access_sources, $uri, $request->getMethod(), true);
+                if (!$allowed) {
+                    w_auth_log('acl_app_no_permission_for_route', '应用 token 无当前路由权限', ['uri' => $uri, 'method' => $request->getMethod()]);
+                    $this->returnApiError(403, __('应用无权进行该操作'), $request);
+                    return;
+                }
+                w_auth_log('acl_app_allowed', '应用 token 权限校验通过', ['uri' => $uri, 'method' => $request->getMethod()]);
+                return;
+            }
+
             if ($roleId <= 0) {
                 $userNotFound = (bool) ($sessionAclContext['_user_not_found'] ?? false);
                 $reason = $userNotFound ? 'user_not_found' : 'no_role';
@@ -612,6 +627,20 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         // 如果事件中没有传递权限列表，且用户有角色，从角色中获取
         if (empty($access_sources) && $role && $role->getId()) {
             $access_sources = $role->getAccess();
+        }
+
+        $isApiAppActor = $request->getData('api_app_actor') !== null;
+        if ($isApiAppActor) {
+            if (!$this->aclService->hasAnyAclEntries($access_sources)) {
+                $this->returnApiError(403, __('应用没有任何授权 scope'), $request);
+                return;
+            }
+            $allowed = $this->aclService->isRouteAllowedByEntries($access_sources, $uri, $request->getMethod(), true);
+            if (!$allowed) {
+                w_auth_log('acl_frontend_api_no_permission_for_route', '前端 API 无当前路由权限', ['uri' => $uri, 'method' => $request->getMethod()]);
+                $this->returnApiError(403, __('你无权进行该操作'), $request);
+                return;
+            }
         }
         
         // 前端API通常不需要Acl验证，只需要登录验证

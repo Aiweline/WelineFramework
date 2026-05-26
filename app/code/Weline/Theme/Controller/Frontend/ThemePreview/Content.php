@@ -65,7 +65,8 @@ class Content extends FrontendController
         $previewPayload = $previewContentRenderer->build(
             $themeId,
             $layoutType,
-            (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS)
+            (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
+            (int)($this->request->getParam('version_id', $context['version_id'] ?? 0)) ?: null
         );
         $this->assign('content', $previewPayload['content']);
         $this->assign('meta', array_merge([
