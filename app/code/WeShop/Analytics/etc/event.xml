@@ -9,4 +9,22 @@
                   shared="true"
                   sort="900"/>
     </event>
+    <event name="WeShop_Affiliate::share_outbound">
+        <observer name="WeShop_Analytics::affiliate_share_outbound" instance="WeShop\Analytics\Observer\AffiliateLifecyclePixel" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="WeShop_Affiliate::share_clicked">
+        <observer name="WeShop_Analytics::affiliate_share_clicked" instance="WeShop\Analytics\Observer\AffiliateLifecyclePixel" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="WeShop_Affiliate::engagement_recorded">
+        <observer name="WeShop_Analytics::affiliate_engagement_recorded" instance="WeShop\Analytics\Observer\AffiliateLifecyclePixel" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="WeShop_Affiliate::conversion_pending">
+        <observer name="WeShop_Analytics::affiliate_conversion_pending" instance="WeShop\Analytics\Observer\AffiliateLifecyclePixel" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="WeShop_Affiliate::commission_created">
+        <observer name="WeShop_Analytics::affiliate_commission_created" instance="WeShop\Analytics\Observer\AffiliateLifecyclePixel" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="WeShop_Affiliate::commission_status_changed">
+        <observer name="WeShop_Analytics::affiliate_commission_status_changed" instance="WeShop\Analytics\Observer\AffiliateLifecyclePixel" disabled="false" shared="true" sort="100"/>
+    </event>
 </config>

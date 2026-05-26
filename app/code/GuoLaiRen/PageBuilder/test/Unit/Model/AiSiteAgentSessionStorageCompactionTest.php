@@ -211,6 +211,54 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertArrayNotHasKey('runtime_context', $buildTaskState);
     }
 
+    public function testDraftStageOnePlanWorkbenchConfirmedPayloadsAreCompactedBeforeStorage(): void
+    {
+        $session = new AiSiteAgentSession();
+
+        $session->setScopeArray([
+            'workspace_track' => 'virtual_theme',
+            'plan_confirmed' => 0,
+            'plan_json' => ['pages' => ['home_page' => ['goal' => 'Draft plan']]],
+            'plan_structured' => ['pages' => ['home_page' => ['goal' => 'Draft plan']]],
+            'execution_blueprint_draft' => [
+                'signature' => 'draft-stage1-signature',
+                'page_types' => ['home_page'],
+            ],
+            'plan_workbench' => [
+                'contract_context' => ['selected_skill_codes' => ['virtual_theme']],
+                'stage1' => [
+                    'request_summary' => ['raw_requirement' => 'Need a marketing homepage'],
+                    'page_plans' => ['home_page' => ['blocks' => [['block_key' => 'hero']]]],
+                ],
+                'confirmed' => [
+                    'execution_blueprint' => ['signature' => 'duplicate-draft'],
+                    'structured_plan' => ['pages' => ['home_page' => ['goal' => 'Draft plan']]],
+                    'plan_json' => ['pages' => ['home_page' => ['goal' => 'Draft plan']]],
+                    'plan_book' => ['structured' => ['source' => 'stage1.block_tree', 'pages' => ['home_page' => ['blocks' => []]]]],
+                    'block_index' => ['pages' => ['home_page' => ['hero']]],
+                    'contract_context' => ['selected_skill_codes' => ['duplicate']],
+                ],
+            ],
+        ]);
+
+        $stored = $session->getScopeArray();
+        $confirmed = $stored['plan_workbench']['confirmed'] ?? [];
+
+        self::assertSame(0, $stored['plan_confirmed'] ?? null);
+        self::assertArrayNotHasKey('execution_blueprint', $confirmed);
+        self::assertArrayNotHasKey('structured_plan', $confirmed);
+        self::assertArrayNotHasKey('plan_json', $confirmed);
+        self::assertArrayNotHasKey('plan_book', $confirmed);
+        self::assertArrayNotHasKey('block_index', $confirmed);
+        self::assertSame(1, $confirmed['_storage_compacted'] ?? null);
+        self::assertSame(['field' => 'plan_json'], $confirmed['plan_book_ref'] ?? null);
+        self::assertSame(
+            ['selected_skill_codes' => ['virtual_theme']],
+            $stored['plan_workbench']['contract_context'] ?? null
+        );
+        self::assertArrayNotHasKey('page_plans', $stored['plan_workbench']['stage1'] ?? []);
+    }
+
     public function testBuildPlanArtifactBackedPayloadsAreNotStoredBackIntoScopeJson(): void
     {
         $session = new AiSiteAgentSession();

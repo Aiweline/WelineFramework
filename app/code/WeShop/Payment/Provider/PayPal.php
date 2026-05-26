@@ -4,50 +4,50 @@ declare(strict_types=1);
 
 namespace WeShop\Payment\Provider;
 
+use GuzzleHttp\Client;
 use WeShop\Order\Model\Order;
 use WeShop\Payment\Interface\PaymentProviderInterface;
-use Weline\Framework\App\Env;
+use Weline\Payment\Interface\PaymentConfigTesterInterface;
 
-class PayPal implements PaymentProviderInterface
+class PayPal implements PaymentProviderInterface, PaymentConfigTesterInterface
 {
-    private bool $sandbox;
+    use ProviderContextHelperTrait;
 
-    public function __construct()
+    private Client $client;
+
+    public function __construct(?Client $client = null)
     {
-        $this->sandbox = (bool) Env::getInstance()->getConfig('payment.paypal.sandbox', true);
+        $this->client = $client ?? new Client(['timeout' => 30, 'http_errors' => false]);
     }
 
     public function processPayment(Order $order, array $paymentData = [], array $context = []): array
     {
-        $orderReference = $this->getOrderReference($order);
-        $total = (float) ($order->getData(Order::schema_fields_total) ?? 0);
-        $currency = $context['currency'] ?? 'USD';
+        $this->requireConfigKeys($context, ['client_id', 'client_secret', 'return_url', 'cancel_url'], 'PayPal');
 
-        try {
-            $accessToken = $this->getAccessToken();
-            if (!$accessToken) {
-                return $this->fallbackRedirect($order, $orderReference);
-            }
+        $orderReference = $this->readOrderNumber($order);
+        $config = $this->readConfig($context);
+        $accessToken = $this->getAccessToken($context);
+        $baseUrl = $this->baseUrl($context);
+        $currency = strtoupper((string) ($paymentData['currency'] ?? $context['currency'] ?? 'USD'));
+        $amount = $this->readOrderAmount($order, $paymentData);
+        $idempotencyKey = substr(hash('sha256', 'paypal:' . $orderReference), 0, 32);
 
-            $baseUrl = $this->sandbox
-                ? 'https://api-m.sandbox.paypal.com'
-                : 'https://api-m.paypal.com';
-
-            $returnUrl = ($context['return_url'] ?? '')
-                ?: Env::getInstance()->getConfig('payment.paypal.return_url', '');
-            $cancelUrl = ($context['cancel_url'] ?? '')
-                ?: Env::getInstance()->getConfig('payment.paypal.cancel_url', '');
-
-            $requestData = [
+        $response = $this->client->post($baseUrl . '/v2/checkout/orders', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $accessToken,
+                'Content-Type' => 'application/json',
+                'PayPal-Request-Id' => $idempotencyKey,
+            ],
+            'json' => [
                 'intent' => 'CAPTURE',
                 'purchase_units' => [
                     [
                         'reference_id' => $orderReference,
                         'amount' => [
                             'currency_code' => $currency,
-                            'value' => number_format($total, 2, '.', ''),
+                            'value' => $amount,
                         ],
-                        'description' => sprintf('Order #%s', $orderReference),
+                        'description' => $this->readOrderSubject($order, $paymentData),
                     ],
                 ],
                 'payment_source' => [
@@ -56,276 +56,164 @@ class PayPal implements PaymentProviderInterface
                             'payment_method_preference' => 'IMMEDIATE_PAYMENT_REQUIRED',
                             'landing_page' => 'LOGIN',
                             'user_action' => 'PAY_NOW',
-                            'return_url' => $returnUrl,
-                            'cancel_url' => $cancelUrl,
+                            'return_url' => (string) $config['return_url'],
+                            'cancel_url' => (string) $config['cancel_url'],
                         ],
                     ],
                 ],
-            ];
+            ],
+        ]);
 
-            $response = $this->httpPost(
-                $baseUrl . '/v2/checkout/orders',
-                json_encode($requestData),
-                [
-                    'Authorization: Bearer ' . $accessToken,
-                    'Content-Type: application/json',
-                    'PayPal-Request-Id: ' . $orderReference . '-' . time(),
-                ]
-            );
-
-            $result = json_decode($response, true);
-
-            if (!empty($result['id']) && !empty($result['links'])) {
-                $approvalUrl = '';
-                foreach ($result['links'] as $link) {
-                    if (($link['rel'] ?? '') === 'payer-action') {
-                        $approvalUrl = $link['href'] ?? '';
-                        break;
-                    }
-                }
-                if ($approvalUrl === '') {
-                    foreach ($result['links'] as $link) {
-                        if (($link['rel'] ?? '') === 'approve') {
-                            $approvalUrl = $link['href'] ?? '';
-                            break;
-                        }
-                    }
-                }
-
-                return [
-                    'status' => 'pending',
-                    'requires_action' => true,
-                    'redirect_url' => $approvalUrl,
-                    'paypal_order_id' => $result['id'],
-                    'payment_params' => [
-                        'intent' => 'CAPTURE',
-                        'order_reference' => $orderReference,
-                        'paypal_order_id' => $result['id'],
-                    ],
-                ];
-            }
-
-            w_log_error('PayPal order creation returned unexpected response', [
-                'response' => $result,
-            ], 'weshop_payment');
-
-            return $this->fallbackRedirect($order, $orderReference);
-        } catch (\Exception $e) {
-            w_log_error('PayPal payment processing failed', [
-                'error' => $e->getMessage(),
-                'order' => $orderReference,
-            ], 'weshop_payment');
-
-            return $this->fallbackRedirect($order, $orderReference);
-        }
-    }
-
-    public function handleCallback(array $callbackData, array $context = []): bool
-    {
-        $paypalOrderId = $callbackData['token'] ?? $callbackData['paypal_order_id'] ?? '';
-
-        if ($paypalOrderId === '') {
-            return false;
+        $statusCode = $response->getStatusCode();
+        $body = (string) $response->getBody();
+        if ($statusCode < 200 || $statusCode >= 300) {
+            throw new \RuntimeException('PayPal order creation failed with HTTP ' . $statusCode . ': ' . substr($body, 0, 500));
         }
 
-        try {
-            $accessToken = $this->getAccessToken();
-            if (!$accessToken) {
-                return false;
-            }
-
-            $baseUrl = $this->sandbox
-                ? 'https://api-m.sandbox.paypal.com'
-                : 'https://api-m.paypal.com';
-
-            // Capture the payment
-            $response = $this->httpPost(
-                $baseUrl . '/v2/checkout/orders/' . urlencode($paypalOrderId) . '/capture',
-                '',
-                [
-                    'Authorization: Bearer ' . $accessToken,
-                    'Content-Type: application/json',
-                ]
-            );
-
-            $result = json_decode($response, true);
-            $status = $result['status'] ?? '';
-
-            return $status === 'COMPLETED';
-        } catch (\Exception $e) {
-            w_log_error('PayPal callback handling failed', [
-                'error' => $e->getMessage(),
-                'paypal_order_id' => $paypalOrderId,
-            ], 'weshop_payment');
-
-            return false;
+        $result = json_decode($body, true);
+        if (!\is_array($result) || trim((string) ($result['id'] ?? '')) === '') {
+            throw new \RuntimeException('PayPal order creation returned an invalid response.');
         }
-    }
-
-    public function queryPaymentStatus(string $orderReference, array $context = []): string
-    {
-        $paypalOrderId = $context['paypal_order_id'] ?? '';
-
-        if ($paypalOrderId === '') {
-            return 'unknown';
-        }
-
-        try {
-            $accessToken = $this->getAccessToken();
-            if (!$accessToken) {
-                return 'unknown';
-            }
-
-            $baseUrl = $this->sandbox
-                ? 'https://api-m.sandbox.paypal.com'
-                : 'https://api-m.paypal.com';
-
-            $response = $this->httpGet(
-                $baseUrl . '/v2/checkout/orders/' . urlencode($paypalOrderId),
-                ['Authorization: Bearer ' . $accessToken]
-            );
-
-            $result = json_decode($response, true);
-            $status = $result['status'] ?? '';
-
-            $statusMap = [
-                'COMPLETED' => 'paid',
-                'APPROVED' => 'pending',
-                'CREATED' => 'pending',
-                'VOIDED' => 'cancelled',
-            ];
-
-            return $statusMap[$status] ?? 'pending';
-        } catch (\Exception $e) {
-            w_log_error('PayPal payment status query failed', [
-                'error' => $e->getMessage(),
-                'paypal_order_id' => $paypalOrderId,
-            ], 'weshop_payment');
-
-            return 'unknown';
-        }
-    }
-
-    private function getAccessToken(): ?string
-    {
-        $clientId = Env::getInstance()->getConfig('payment.paypal.client_id', '');
-        $clientSecret = Env::getInstance()->getConfig('payment.paypal.client_secret', '');
-
-        if ($clientId === '' || $clientSecret === '') {
-            return null;
-        }
-
-        $baseUrl = $this->sandbox
-            ? 'https://api-m.sandbox.paypal.com'
-            : 'https://api-m.paypal.com';
-
-        try {
-            $response = $this->httpPost(
-                $baseUrl . '/v1/oauth2/token',
-                'grant_type=client_credentials',
-                [
-                    'Authorization: Basic ' . base64_encode($clientId . ':' . $clientSecret),
-                    'Content-Type: application/x-www-form-urlencoded',
-                ]
-            );
-
-            $result = json_decode($response, true);
-            return $result['access_token'] ?? null;
-        } catch (\Exception $e) {
-            w_log_error('PayPal OAuth token retrieval failed', [
-                'error' => $e->getMessage(),
-            ], 'weshop_payment');
-
-            return null;
-        }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function fallbackRedirect(Order $order, string $orderReference): array
-    {
-        $baseUrl = $this->sandbox
-            ? 'https://www.sandbox.paypal.com'
-            : 'https://www.paypal.com';
 
         return [
-            'status' => 'pending',
+            'status' => $this->mapStatus((string) ($result['status'] ?? 'CREATED')),
             'requires_action' => true,
-            'redirect_url' => $baseUrl . '/checkoutnow?token=' . rawurlencode($orderReference),
+            'redirect_url' => $this->extractApprovalUrl($result),
+            'provider_reference' => (string) $result['id'],
+            'paypal_order_id' => (string) $result['id'],
+            'idempotency_key' => $idempotencyKey,
             'payment_params' => [
                 'intent' => 'CAPTURE',
                 'order_reference' => $orderReference,
+                'paypal_order_id' => (string) $result['id'],
             ],
         ];
     }
 
-    private function getOrderReference(Order $order): string
+    public function handleCallback(array $callbackData, array $context = []): bool
     {
-        if (method_exists($order, 'getIncrementId')) {
-            $ref = (string) $order->getIncrementId();
-            if ($ref !== '') {
-                return $ref;
-            }
+        $paypalOrderId = (string) ($callbackData['token'] ?? $callbackData['paypal_order_id'] ?? '');
+        if ($paypalOrderId === '') {
+            return false;
         }
-        if (defined(Order::class . '::schema_fields_increment_id')) {
-            $ref = (string) ($order->getData(Order::schema_fields_increment_id) ?? '');
-            if ($ref !== '') {
-                return $ref;
-            }
+
+        $response = $this->client->post($this->baseUrl($context) . '/v2/checkout/orders/' . rawurlencode($paypalOrderId) . '/capture', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $this->getAccessToken($context),
+                'Content-Type' => 'application/json',
+            ],
+        ]);
+        if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+            return false;
         }
-        return (string) $order->getId();
+
+        $result = json_decode((string) $response->getBody(), true);
+
+        return \is_array($result) && strtoupper((string) ($result['status'] ?? '')) === 'COMPLETED';
     }
 
-    private function httpPost(string $url, string $data, array $headers = []): string
+    public function testConfig(array $config, array $context = []): array
     {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $token = $this->getAccessToken(array_merge($context, [
+            'config' => $config,
+            'environment' => (string) ($config['environment'] ?? $context['environment'] ?? 'sandbox'),
+        ]));
 
-        if (!empty($headers)) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        }
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        if ($response === false || $httpCode >= 400) {
-            $error = curl_error($ch) ?: "HTTP {$httpCode}";
-            curl_close($ch);
-            throw new \RuntimeException("PayPal API request failed: {$error}");
-        }
-
-        curl_close($ch);
-        return $response ?: '';
+        return [
+            'success' => $token !== '',
+            'message' => 'PayPal OAuth token request passed.',
+            'details' => ['environment' => (string) ($config['environment'] ?? $context['environment'] ?? 'sandbox')],
+        ];
     }
 
-    private function httpGet(string $url, array $headers = []): string
+    public function queryPaymentStatus(string $orderReference, array $context = []): string
     {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        if (!empty($headers)) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        $paypalOrderId = (string) ($context['paypal_order_id'] ?? $context['provider_reference'] ?? '');
+        if ($paypalOrderId === '') {
+            return 'unknown';
         }
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        if ($response === false || $httpCode >= 400) {
-            $error = curl_error($ch) ?: "HTTP {$httpCode}";
-            curl_close($ch);
-            throw new \RuntimeException("PayPal API request failed: {$error}");
+        $response = $this->client->get($this->baseUrl($context) . '/v2/checkout/orders/' . rawurlencode($paypalOrderId), [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $this->getAccessToken($context),
+                'Accept' => 'application/json',
+            ],
+        ]);
+        if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+            return 'unknown';
         }
 
-        curl_close($ch);
-        return $response ?: '';
+        $result = json_decode((string) $response->getBody(), true);
+        if (!\is_array($result)) {
+            return 'unknown';
+        }
+
+        return $this->mapStatus((string) ($result['status'] ?? ''));
+    }
+
+    private function getAccessToken(array $context): string
+    {
+        $this->requireConfigKeys($context, ['client_id', 'client_secret'], 'PayPal');
+        $config = $this->readConfig($context);
+        $response = $this->client->post($this->baseUrl($context) . '/v1/oauth2/token', [
+            'auth' => [(string) $config['client_id'], (string) $config['client_secret']],
+            'headers' => [
+                'Content-Type' => 'application/x-www-form-urlencoded',
+            ],
+            'form_params' => [
+                'grant_type' => 'client_credentials',
+            ],
+        ]);
+
+        $statusCode = $response->getStatusCode();
+        $body = (string) $response->getBody();
+        if ($statusCode < 200 || $statusCode >= 300) {
+            throw new \RuntimeException('PayPal OAuth token request failed with HTTP ' . $statusCode . ': ' . substr($body, 0, 500));
+        }
+
+        $result = json_decode($body, true);
+        $token = \is_array($result) ? trim((string) ($result['access_token'] ?? '')) : '';
+        if ($token === '') {
+            throw new \RuntimeException('PayPal OAuth token response did not contain access_token.');
+        }
+
+        return $token;
+    }
+
+    private function baseUrl(array $context): string
+    {
+        return ((string) ($context['environment'] ?? 'sandbox')) === 'live'
+            ? 'https://api-m.paypal.com'
+            : 'https://api-m.sandbox.paypal.com';
+    }
+
+    /**
+     * @param array<string, mixed> $result
+     */
+    private function extractApprovalUrl(array $result): string
+    {
+        $links = \is_array($result['links'] ?? null) ? $result['links'] : [];
+        foreach (['payer-action', 'approve'] as $targetRel) {
+            foreach ($links as $link) {
+                if (!\is_array($link)) {
+                    continue;
+                }
+                if ((string) ($link['rel'] ?? '') === $targetRel) {
+                    return (string) ($link['href'] ?? '');
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function mapStatus(string $status): string
+    {
+        return match (strtoupper($status)) {
+            'COMPLETED' => 'paid',
+            'APPROVED', 'CREATED', 'SAVED', 'PAYER_ACTION_REQUIRED' => 'pending',
+            'VOIDED', 'CANCELLED' => 'cancelled',
+            default => 'pending',
+        };
     }
 }

@@ -13,6 +13,11 @@
         apiWidgets: '',
         apiPublish: '',
         apiPreview: '',
+        apiCompileLayout: '',
+        apiLayoutConfig: '',
+        apiSaveLayoutConfig: '',
+        apiLayoutPreview: '',
+        apiParamRenderForm: '',
         autoSaveDelay: 1000,
         // 版本控制 API
         apiVersions: '',
@@ -39,6 +44,7 @@
         themeId: 0,
         pageType: 'default',
         selectedWidget: null,
+        configMode: 'layout',
         selectedArea: null, // 当前选中的区域代码
         isDragging: false,
         hasChanges: false,
@@ -106,6 +112,90 @@
 
     function getCurrentWindowParam(key) {
         return getCurrentWindowUrl().searchParams.get(key) || '';
+    }
+
+    function normalizeRequestHeaders(headers) {
+        const result = {};
+        if (!headers || typeof headers !== 'object') {
+            return result;
+        }
+        if (typeof headers.forEach === 'function') {
+            headers.forEach((value, name) => {
+                if (name) {
+                    result[String(name)] = String(value);
+                }
+            });
+            return result;
+        }
+        Object.keys(headers).forEach((name) => {
+            const value = headers[name];
+            if (value !== undefined && value !== null) {
+                result[String(name)] = String(value);
+            }
+        });
+        return result;
+    }
+
+    async function apiRequest(url, options = {}) {
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.call !== 'function') {
+            throw new Error('Weline.Api is not available');
+        }
+        const headers = normalizeRequestHeaders(options.headers);
+        let body = options.body ?? null;
+        if (body instanceof URLSearchParams) {
+            body = body.toString();
+        } else if (body !== null && typeof body !== 'string') {
+            body = JSON.stringify(body);
+        }
+        const params = {
+            url: String(url),
+            method: String(options.method || 'GET').toUpperCase(),
+        };
+        if (Object.keys(headers).length > 0) {
+            params.headers = headers;
+        }
+        if (body !== null) {
+            params.body = body;
+        }
+        return window.Weline.Api.call('theme', 'editorRequest', params, { silent: options.silent === true });
+    }
+
+    async function unwrapApiPayload(response) {
+        if (response && typeof response.json === 'function') {
+            return response.json();
+        }
+        if (response && typeof response.text === 'function') {
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return text;
+            }
+        }
+        if (response && Object.prototype.hasOwnProperty.call(response, 'data') && !Object.prototype.hasOwnProperty.call(response, 'success')) {
+            return response.data;
+        }
+        return response;
+    }
+
+    async function apiJson(url, options = {}) {
+        const result = await unwrapApiPayload(await apiRequest(url, options));
+        if (typeof result === 'string') {
+            try {
+                return JSON.parse(result);
+            } catch (e) {
+                throw new Error('API returned non JSON response');
+            }
+        }
+        return result || {};
+    }
+
+    async function apiText(url, options = {}) {
+        const result = await unwrapApiPayload(await apiRequest(url, options));
+        if (typeof result === 'string') {
+            return result;
+        }
+        return result && typeof result.html === 'string' ? result.html : JSON.stringify(result || {});
     }
 
     function buildEditorUrl(overrides = {}) {
@@ -234,6 +324,8 @@
         config.apiRenderWidget = container.dataset.apiRenderWidget || `${config.apiBase}/render-widget`;
         config.apiWidgetPreview = container.dataset.apiWidgetPreview || `${config.apiBase}/widget-preview`;
         config.apiCompileLayout = container.dataset.apiCompileLayout || `${config.apiBase}/compile-layout`;
+        config.apiLayoutConfig = container.dataset.apiLayoutConfig || `${config.apiBase}/layout-config`;
+        config.apiSaveLayoutConfig = container.dataset.apiSaveLayoutConfig || `${config.apiBase}/save-layout-config`;
         config.apiLayoutPreview = container.dataset.apiLayoutPreview || `${config.apiBase}/layout-preview`;
         config.apiFrontendLayoutPreview = container.dataset.apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
@@ -279,6 +371,9 @@
             editorAreaSelect: document.getElementById('editorAreaSelect'),
             configPanel: document.getElementById('configPanel'),
             configContent: document.getElementById('configContent'),
+            configPanelTitle: document.querySelector('#configPanel .panel-title'),
+            configModeLayout: document.getElementById('configModeLayout'),
+            configModeWidget: document.getElementById('configModeWidget'),
             widgetPanel: document.getElementById('widgetPanel'),
             widgetList: document.getElementById('widgetList'),
             widgetSearch: document.getElementById('widgetSearch'),
@@ -321,6 +416,10 @@
 
         // 若服务端未渲染部件列表（#widgetList 为空），则请求部件接口并渲染
         loadWidgetListIfEmpty();
+        if (state.themeId) {
+            setConfigMode('layout');
+            loadLayoutConfig({ silent: true });
+        }
 
         console.log('Theme Editor initialized', {
             apiBase: config.apiBase,
@@ -343,6 +442,18 @@
      * 绑定事件
      */
     function bindEvents() {
+        if (elements.configModeLayout) {
+            elements.configModeLayout.addEventListener('click', function() {
+                setConfigMode('layout');
+                loadLayoutConfig();
+            });
+        }
+        if (elements.configModeWidget) {
+            elements.configModeWidget.addEventListener('click', function() {
+                setConfigMode('widget');
+                showWidgetConfigState();
+            });
+        }
         // 主题选择（仅刷新预览，不整页跳转）
         if (elements.themeSelect) {
             elements.themeSelect.addEventListener('change', function() {
@@ -356,6 +467,7 @@
                         preview_area: state.editorArea || 'frontend',
                     });
                     loadLayoutPreview();
+                    loadLayoutConfig({ silent: true });
                     loadVersions();
                 }
             });
@@ -374,6 +486,7 @@
                         preview_area: area,
                     });
                     loadLayoutPreview();
+                    loadLayoutConfig({ silent: true });
                 }
             });
         }
@@ -392,6 +505,7 @@
                         version_id: null,
                     });
                     loadLayoutPreview();
+                    loadLayoutConfig({ silent: true });
                     showToast(__('已切换到: ') + this.options[this.selectedIndex].text, 'info');
                 }
             });
@@ -1134,6 +1248,113 @@
     /**
      * 加载部件配置到手风琴面板
      */
+    function setConfigMode(mode) {
+        state.configMode = mode === 'widget' ? 'widget' : 'layout';
+        elements.configModeLayout?.classList.toggle('active', state.configMode === 'layout');
+        elements.configModeWidget?.classList.toggle('active', state.configMode === 'widget');
+        if (elements.configPanelTitle) {
+            elements.configPanelTitle.textContent = state.configMode === 'layout' ? '布局配置' : '部件配置';
+        }
+        if (elements.configPanel) {
+            elements.configPanel.classList.add('active');
+        }
+    }
+
+    function showWidgetConfigState() {
+        if (!elements.configContent) {
+            return;
+        }
+        if (state.selectedWidget) {
+            loadWidgetConfig(state.selectedWidget);
+            return;
+        }
+        elements.configContent.innerHTML = `
+            <div class="no-widget-selected">
+                <i class="ri-cursor-line"></i>
+                <p>点击预览区域中的部件进行配置</p>
+            </div>
+        `;
+    }
+
+    function buildLayoutConfigUrl(locale) {
+        const url = new URL(config.apiLayoutConfig, window.location.origin);
+        url.searchParams.set('theme_id', String(state.themeId || 0));
+        url.searchParams.set('layout_type', state.layoutType || getCurrentPageType() || 'homepage');
+        url.searchParams.set('layout_option', state.layoutOption || 'default');
+        url.searchParams.set('editor_area', state.editorArea || 'frontend');
+        url.searchParams.set('preview_area', state.editorArea || 'frontend');
+        url.searchParams.set('scope', getCurrentWindowParam('scope') || 'default');
+        if (locale) {
+            url.searchParams.set('locale', locale);
+        }
+        url.searchParams.set('_t', String(Date.now()));
+        return url.toString();
+    }
+
+    async function loadLayoutConfig(options = {}) {
+        if (!elements.configContent || !state.themeId) {
+            return;
+        }
+        setConfigMode('layout');
+        if (!options.silent) {
+            elements.configContent.innerHTML = '<div class="widget-config-loading">加载布局配置...</div>';
+        }
+        try {
+            const payload = await apiJson(buildLayoutConfigUrl(options.locale || ''));
+            if (!payload.success) {
+                throw new Error(payload.message || 'Load layout config failed');
+            }
+            const data = payload.data || {};
+            elements.configContent.innerHTML = `
+                <div class="layout-config-panel" data-config-target="layout">
+                    ${data.form_html || '<div class="w-param-empty-state"><p>当前布局没有配置字段</p></div>'}
+                </div>
+            `;
+            bindLayoutConfigEvents(elements.configContent);
+        } catch (error) {
+            console.error('[ThemeEditor] loadLayoutConfig error:', error);
+            if (!options.silent) {
+                elements.configContent.innerHTML = `<div class="w-param-empty-state"><p>${escapeHtml(error.message || '布局配置加载失败')}</p></div>`;
+            }
+        }
+    }
+
+    function bindLayoutConfigEvents(container) {
+        const form = container.querySelector('.layout-config-form');
+        if (!form) {
+            return;
+        }
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveLayoutConfig(form);
+        });
+    }
+
+    async function saveLayoutConfig(form, locale) {
+        const configData = collectWidgetConfigData(form);
+        const payload = {
+            theme_id: state.themeId || 0,
+            layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+            layout_option: state.layoutOption || 'default',
+            editor_area: state.editorArea || 'frontend',
+            preview_area: state.editorArea || 'frontend',
+            scope: getCurrentWindowParam('scope') || 'default',
+            locale: locale || '',
+            config: configData
+        };
+        const result = await apiJson(config.apiSaveLayoutConfig, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!result.success) {
+            throw new Error(result.message || 'Save layout config failed');
+        }
+        showToast(result.message || '布局配置已保存', 'success');
+        fetchLayoutSlots();
+        loadLayoutPreview();
+    }
+
     async function loadWidgetConfigForAccordion(layoutId) {
         const configBody = document.querySelector(`.slot-widget-body[data-layout-id="${layoutId}"]`);
         if (!configBody) return;
@@ -1143,8 +1364,7 @@
         
         try {
             const apiUrl = `${config.apiBase}/widget-config?layout_id=${layoutId}`;
-            const response = await fetch(apiUrl);
-            const result = await response.json();
+            const result = await apiJson(apiUrl);
             
             if (result.success && result.data) {
                 const widgetData = result.data;
@@ -1188,7 +1408,7 @@
         
         // 尝试使用后端 API 渲染
         try {
-            const response = await fetch(config.apiParamRenderForm || '/theme/backend/widget/paramrender/form', {
+            const html = await apiText(config.apiParamRenderForm || '/theme/backend/widget/paramrender/form', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -1199,12 +1419,9 @@
                     config: JSON.stringify(formConfig || {}),
                 }),
             });
-            
-            if (response.ok) {
-                const html = await response.text();
-                if (html && !html.includes('alert-danger')) {
-                    return html;
-                }
+
+            if (html && !html.includes('alert-danger')) {
+                return html;
             }
         } catch (err) {
             console.warn('[ThemeEditor] Backend form render failed, using fallback:', err);
@@ -1857,12 +2074,11 @@
                 const configData = collectWidgetConfigData(this);
                 
                 try {
-                    const response = await fetch(config.apiUpdateConfig, {
+                    const result = await apiJson(config.apiUpdateConfig, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ layout_id: layoutId, config: configData })
                     });
-                    const result = await response.json();
                     
                     if (result.success) {
                         showToast('配置已保存', 'success');
@@ -1907,7 +2123,7 @@
                 } catch (e) {}
                 
                 try {
-                    const response = await fetch(config.apiDeleteWidget, {
+                    const result = await apiJson(config.apiDeleteWidget, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1919,7 +2135,6 @@
                             layout_option: state.layoutOption || 'default'
                         })
                     });
-                    const result = await response.json();
                     
                     if (result.success) {
                         showToast('部件已删除', 'success');
@@ -2466,14 +2681,13 @@
     }
 
     /**
-     * 统一获取部件信息：优先直接 fetch(apiWidgets)，失败时用 w_query('widget','getAvailableList') 兜底
+     * 统一获取部件信息：优先使用编辑器 API，失败时用 w_query('widget','getAvailableList') 兜底
      * @returns {Promise<{success:boolean, data:Object}>}
      */
     async function fetchWidgetsData() {
         // 1) 优先使用主题编辑器自带接口（保证无 w_query 或 Query 路由异常时仍能加载）
         try {
-            const response = await fetch(getWidgetsApiUrl());
-            const result = await response.json();
+            const result = await apiJson(getWidgetsApiUrl());
             if (result && result.success && result.data && typeof result.data === 'object') {
                 const hasWidgets = Object.keys(result.data).some(function (type) {
                     const group = result.data[type];
@@ -2743,8 +2957,8 @@
                 (function() {
                     const select = document.getElementById('config_${key}');
                     if (!select) return;
-                    fetch('/weline/eav/api/options/attributes?entity_code=${escapeHtml(entityCode)}')
-                        .then(r => r.json())
+                    window.Weline.Api.call('theme', 'editorRequest', { url: '/weline/eav/api/options/attributes?entity_code=${escapeHtml(entityCode)}', method: 'GET' }, { silent: true })
+                        .then(r => (r && typeof r.json === 'function') ? r.json() : ((r && r.data) || r))
                         .then(data => {
                             if (data.success && data.data.attributes) {
                                 select.innerHTML = '<option value="">-- 请选择属性 --</option>';
@@ -2777,8 +2991,8 @@
                     (function() {
                         const select = document.getElementById('config_${key}');
                         if (!select) return;
-                        fetch('/weline/eav/api/options?entity_code=${escapeHtml(entityCode)}&attribute_code=${escapeHtml(attributeCode)}')
-                            .then(r => r.json())
+                        window.Weline.Api.call('theme', 'editorRequest', { url: '/weline/eav/api/options?entity_code=${escapeHtml(entityCode)}&attribute_code=${escapeHtml(attributeCode)}', method: 'GET' }, { silent: true })
+                            .then(r => (r && typeof r.json === 'function') ? r.json() : ((r && r.data) || r))
                             .then(data => {
                                 if (data.success && data.data.options) {
                                     select.innerHTML = '<option value="">-- 请选择 --</option>';
@@ -2943,7 +3157,7 @@
         const configData = collectWidgetConfigData(form);
 
         try {
-            const response = await fetch(config.apiUpdateConfig, {
+            const result = await apiJson(config.apiUpdateConfig, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2951,8 +3165,6 @@
                     config: configData
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 showToast('配置已保存', 'success');
@@ -3442,13 +3654,11 @@
         };
 
         try {
-            const response = await fetch(config.apiSaveWidget, {
+            const result = await apiJson(config.apiSaveWidget, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-
-            const result = await response.json();
 
 
             if (result.success) {
@@ -4983,7 +5193,7 @@
         
         try {
             // 调用删除 API - 传递 slot_id 和 area 作为后端 fallback
-            const response = await fetch(config.apiDeleteWidget, {
+            const result = await apiJson(config.apiDeleteWidget, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4998,8 +5208,6 @@
                     layout_option: state.layoutOption || 'default'
                 })
             });
-            
-            const result = await response.json();
             
             if (result.success) {
                 // 从 iframe 中移除部件并恢复原始内容
@@ -5122,7 +5330,7 @@
      */
     async function swapWidgetOrder(layoutId1, layoutId2) {
         try {
-            const response = await fetch(config.apiBase + '/swap-widget-order', {
+            const result = await apiJson(config.apiBase + '/swap-widget-order', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5134,8 +5342,6 @@
                     layout_id_2: layoutId2
                 })
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 const iframe = elements.previewFrame;
@@ -5391,7 +5597,7 @@
         });
 
         try {
-            const response = await fetch(config.apiBase + '/update-sort', {
+            const result = await apiJson(config.apiBase + '/update-sort', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5402,8 +5608,6 @@
                     sort_data: sortData
                 })
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 showToast('排序已保存', 'success');
@@ -5474,6 +5678,7 @@
         state.selectedWidget = widgetElement;
 
         // 加载配置面板
+        setConfigMode('widget');
         loadWidgetConfig(widgetElement);
     }
 
@@ -5561,8 +5766,7 @@
             const url = new URL(config.apiWidgetPreview, window.location.origin);
             url.searchParams.set('widget_module', widgetModule);
             url.searchParams.set('widget_code', widgetCode);
-            const res = await fetch(url.toString());
-            const data = await res.json();
+            const data = await apiJson(url.toString());
             const html = (data && data.html) ? data.html : (data.success === false ? '<div class="widget-preview-error">' + (data.message || '') + '</div>' : '');
             inners.forEach(el => { el.innerHTML = html; });
         } catch (err) {
@@ -6089,8 +6293,7 @@
     async function fetchInstalledLocales() {
         if (_installedLocalesCache) return _installedLocalesCache;
         try {
-            const resp = await fetch(`${config.apiBase}/installed-locales`);
-            const result = await resp.json();
+            const result = await apiJson(`${config.apiBase}/installed-locales`);
             if (result.success && result.locales) {
                 _installedLocalesCache = result.locales;
                 return _installedLocalesCache;
@@ -6144,6 +6347,10 @@
         return cur ?? '';
     }
 
+    function isLayoutConfigPanel(panel) {
+        return !!panel.closest('.layout-config-panel, .layout-config-form');
+    }
+
     /**
      * 加载面板内所有语言的值
      */
@@ -6154,11 +6361,15 @@
 
         for (const locale of locales) {
             try {
-                const apiUrl = `${config.apiBase}/widget-config?layout_id=${layoutId}&locale=${locale}`;
-                const resp = await fetch(apiUrl);
-                const result = await resp.json();
-                if (result.success && result.data && result.data.config) {
-                    const value = getConfigValueByPath(result.data.config, fieldKey);
+                let result;
+                if (isLayoutConfigPanel(panel)) {
+                    result = await apiJson(buildLayoutConfigUrl(locale));
+                } else {
+                    result = await apiJson(`${config.apiBase}/widget-config?layout_id=${layoutId}&locale=${locale}`);
+                }
+                const data = result.data || {};
+                if (result.success && data.config) {
+                    const value = getConfigValueByPath(data.config, fieldKey);
                     const input = panel.querySelector(`.i18n-input[data-locale="${locale}"]`);
                     if (input) input.value = value;
                 }
@@ -6179,16 +6390,32 @@
             const locale = input.dataset.locale;
             const value = input.value;
             try {
-                const resp = await fetch(`${config.apiBase}/save-widget-config`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        layout_id: layoutId,
-                        config: { [fieldKey]: value },
-                        locale: locale
-                    })
-                });
-                const result = await resp.json();
+                let result;
+                if (isLayoutConfigPanel(panel)) {
+                    result = await apiJson(config.apiSaveLayoutConfig, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            theme_id: state.themeId || 0,
+                            layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                            layout_option: state.layoutOption || 'default',
+                            editor_area: state.editorArea || 'frontend',
+                            scope: getCurrentWindowParam('scope') || 'default',
+                            config: { [fieldKey]: value },
+                            locale: locale
+                        })
+                    });
+                } else {
+                    result = await apiJson(`${config.apiBase}/save-widget-config`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            layout_id: layoutId,
+                            config: { [fieldKey]: value },
+                            locale: locale
+                        })
+                    });
+                }
                 if (result.success) successCount++;
             } catch (err) {
                 console.error(`Save i18n ${locale} error:`, err);
@@ -6212,8 +6439,7 @@
         
         try {
             const apiUrl = `${config.apiBase}/widget-config?layout_id=${layoutId}${locale ? '&locale=' + locale : ''}`;
-            const response = await fetch(apiUrl);
-            const result = await response.json();
+            const result = await apiJson(apiUrl);
             
             if (result.success && result.data) {
                 const widgetData = result.data;
@@ -6254,7 +6480,7 @@
     async function saveWidgetConfigWithLocale(layoutId, configData, locale) {
         try {
             const apiUrl = `${config.apiBase}/save-widget-config`;
-            const response = await fetch(apiUrl, {
+            const result = await apiJson(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6265,8 +6491,6 @@
                     locale: locale
                 })
             });
-            
-            const result = await response.json();
             
             if (result.success) {
                 showToast(result.message || '配置已保存', 'success');
@@ -6339,7 +6563,7 @@
         const configData = collectWidgetConfigData(form);
 
         try {
-            const response = await fetch(config.apiUpdateConfig, {
+            const result = await apiJson(config.apiUpdateConfig, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6349,8 +6573,6 @@
                     config: configData,
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 if (!autoSave) showToast('配置已保存', 'success');
@@ -6387,7 +6609,7 @@
         const configData = collectWidgetConfigData(form);
 
         try {
-            const response = await fetch(config.apiUpdateConfig, {
+            const result = await apiJson(config.apiUpdateConfig, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6397,8 +6619,6 @@
                     config: configData,
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 if (!silent) showToast('配置已保存', 'success');
@@ -6453,7 +6673,7 @@
         } catch (e) { /* iframe access error */ }
 
         try {
-            const response = await fetch(config.apiDeleteWidget, {
+            const result = await apiJson(config.apiDeleteWidget, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6467,8 +6687,6 @@
                     layout_option: state.layoutOption || 'default'
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 // 从 iframe 中移除部件并恢复原始内容
@@ -6562,7 +6780,7 @@
 
             showToast('正在保存版本...', 'info');
 
-            const response = await fetch(config.apiSaveVersion, {
+            const result = await apiJson(config.apiSaveVersion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6573,8 +6791,6 @@
                     version_name: versionName || undefined,
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 showToast(result.message || '版本已保存', 'success');
@@ -6611,7 +6827,7 @@
         try {
             showToast('正在发布...', 'info');
 
-            const response = await fetch(config.apiPublishVersion, {
+            const result = await apiJson(config.apiPublishVersion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6625,8 +6841,6 @@
                     status: state.previewStatus || 'draft',
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 showToast(result.message || '发布成功', 'success');
@@ -6673,7 +6887,7 @@
         try {
             showToast('正在启动预览...', 'info');
 
-            const response = await fetch(config.apiStartPreview, {
+            const result = await apiJson(config.apiStartPreview, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6687,8 +6901,6 @@
                     status: state.previewStatus || 'draft',
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success && result.data && result.data.preview_url) {
                 // 打开新窗口预览
@@ -7355,7 +7567,7 @@
         try {
             showToast('正在恢复原始布局...', 'info');
 
-            const response = await fetch(config.apiRestoreOriginal, {
+            const result = await apiJson(config.apiRestoreOriginal, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -7365,8 +7577,6 @@
                     page_type: state.pageType,
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 showToast(result.message || '已恢复到原始布局', 'success');
@@ -7634,29 +7844,24 @@
     /**
      * 获取布局的插槽信息
      */
-    async function fetchLayoutSlots() {
+    async function fetchLayoutSlots(overrides = {}) {
         if (!state.themeId) return;
 
         try {
             const url = new URL(config.apiCompileLayout, window.location.origin);
             url.searchParams.set('theme_id', state.themeId);
-            url.searchParams.set('page_type', getCurrentPageType());
-            url.searchParams.set('layout_type', state.layoutType);
-            url.searchParams.set('layout_option', state.layoutOption);
-            url.searchParams.set('editor_area', state.editorArea || 'frontend');
-            url.searchParams.set('status', state.previewStatus || 'draft');
-
-            const response = await fetch(url);
-            const contentType = response.headers.get('Content-Type') || '';
-            if (!response.ok || contentType.indexOf('application/json') === -1) {
-                const text = await response.text();
-                if (text && text.trim().startsWith('<')) {
-                    console.warn('获取插槽信息: 接口返回非 JSON（可能为错误页或登录页），已跳过');
-                }
-                return;
+            url.searchParams.set('page_type', overrides.page_type || getCurrentPageType());
+            url.searchParams.set('layout_type', overrides.layout_type || state.layoutType);
+            url.searchParams.set('layout_option', overrides.layout_option || state.layoutOption);
+            url.searchParams.set('editor_area', overrides.editor_area || state.editorArea || 'frontend');
+            url.searchParams.set('preview_mode', overrides.preview_mode || 'live');
+            url.searchParams.set('status', overrides.status || state.previewStatus || 'draft');
+            url.searchParams.set('include_html', '0');
+            if (overrides.version_id) {
+                url.searchParams.set('version_id', String(overrides.version_id));
             }
-            const result = await response.json();
 
+            const result = await apiJson(url.toString(), { silent: true });
             if (result.success && result.slots) {
                 state.slots = result.slots;
                 state.missingSlotWarnings = Array.isArray(result.missing_slot_warnings) ? result.missing_slot_warnings : [];
@@ -7751,6 +7956,7 @@
      * 全局暴露：打开草稿预览（新窗口）
      */
     window.openPreview = openPreview;
+    window.previewVersion = previewVersion;
     
     /**
      * 全局暴露：打开已发布版本预览（新窗口）
@@ -7786,8 +7992,7 @@
             url.searchParams.set('page_type', state.pageType);
             url.searchParams.set('limit', '20');
 
-            const response = await fetch(url.toString());
-            const result = await response.json();
+            const result = await apiJson(url.toString());
 
             if (result.success && result.data) {
                 state.versions = result.data.versions || [];
@@ -7850,8 +8055,11 @@
                         ${version.description ? `<span class="version-desc">${escapeHtml(version.description)}</span>` : ''}
                     </div>
                     <div class="version-actions">
-                        ${!isCurrent ? `<button class="btn btn-sm btn-outline-primary" onclick="switchToVersion(${version.version_id})">
-                            <i class="fa fa-undo"></i> 切换
+                        <button class="btn btn-sm btn-outline-secondary" onclick="previewVersion(${version.version_id})" title="Preview this version">
+                            <i class="fa fa-eye"></i> 预览
+                        </button>
+                        ${!isCurrent ? `<button class="btn btn-sm btn-outline-primary" onclick="switchToVersion(${version.version_id})" title="Restore draft to this version">回撤
+                            <i class="fa fa-undo"></i>
                         </button>` : ''}
                         ${!isCurrent && !isPublished ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteVersion(${version.version_id})">
                             <i class="fa fa-trash"></i>
@@ -7864,8 +8072,31 @@
         versionList.innerHTML = html;
     }
 
+    async function previewVersion(versionId) {
+        if (!state.themeId || !versionId || !elements.previewFrame) {
+            return;
+        }
+
+        const version = state.versions.find(item => Number(item.version_id) === Number(versionId));
+        const previewOverrides = {
+            preview_mode: 'version',
+            version_id: versionId,
+            status: 'draft',
+            editor_mode: '1',
+            _t: Date.now(),
+        };
+
+        switchPreviewView('preview');
+        clearSlotSelection();
+        deselectArea();
+        deselectWidget();
+        elements.previewFrame.src = buildLayoutPreviewUrl(previewOverrides);
+        await fetchLayoutSlots(previewOverrides);
+        showToast(version ? `正在预览版本：${version.display_name}` : '正在预览版本', 'info');
+    }
+
     /**
-     * 切换到指定版本
+     * 回撤到指定版本
      */
     async function switchToVersion(versionId) {
         if (!state.themeId || !versionId) {
@@ -7873,9 +8104,9 @@
         }
 
         const confirmed = await showCustomConfirm(
-            '切换版本',
-            '确定要切换到此版本吗？当前工作区的未保存修改将被替换。',
-            '确认切换',
+            '回撤版本',
+            '确定要回撤到此版本吗？当前工作区的未保存修改将被替换。',
+            '确认回撤',
             '取消'
         );
 
@@ -7884,9 +8115,9 @@
         }
 
         try {
-            showToast('正在切换版本...', 'info');
+            showToast('正在回撤版本...', 'info');
 
-            const response = await fetch(config.apiSwitchVersion, {
+            const result = await apiJson(config.apiSwitchVersion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -7898,15 +8129,13 @@
                 }),
             });
 
-            const result = await response.json();
-
             if (result.success) {
                 navigateEditorShell({
                     page_type: state.pageType,
                     version_id: null,
                 });
                 return;
-                showToast(result.message || '已切换版本', 'success');
+                showToast(result.message || '已回撤版本', 'success');
 
                 // 刷新版本列表
                 await loadVersions();
@@ -7914,11 +8143,11 @@
                 // 刷新预览
                 refreshPreview();
             } else {
-                showToast(result.message || '切换失败', 'error');
+                showToast(result.message || '回撤失败', 'error');
             }
         } catch (error) {
             console.error('[ThemeEditor] Switch version error:', error);
-            showToast('切换版本失败：' + error.message, 'error');
+            showToast('回撤版本失败：' + error.message, 'error');
         }
     }
 
@@ -7942,7 +8171,7 @@
         }
 
         try {
-            const response = await fetch(config.apiDeleteVersion, {
+            const result = await apiJson(config.apiDeleteVersion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -7951,8 +8180,6 @@
                     version_id: versionId,
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 showToast(result.message || '版本已删除', 'success');
@@ -8176,7 +8403,7 @@
         }
 
         try {
-            const response = await fetch(config.apiUpdateActivity, {
+            const result = await apiJson(config.apiUpdateActivity, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -8187,8 +8414,6 @@
                     page_type: getCurrentPageType(),
                 }),
             });
-
-            const result = await response.json();
             if (!(result && result.success)) {
                 state.lockHeld = false;
                 stopLockHeartbeat();
@@ -8238,7 +8463,7 @@
 
         try {
             if (keepalive) {
-                fetch(config.apiReleaseLock, {
+                apiJson(config.apiReleaseLock, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -8250,7 +8475,7 @@
                 return true;
             }
 
-            const response = await fetch(config.apiReleaseLock, {
+            const result = await apiJson(config.apiReleaseLock, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -8258,8 +8483,7 @@
                 },
                 body: payload,
             });
-
-            return response.ok;
+            return !(result && result.success === false);
         } catch (error) {
             console.warn('[ThemeEditor] Release lock failed:', error);
             return false;
@@ -8276,12 +8500,11 @@
             url.searchParams.set('theme_id', String(state.themeId));
             url.searchParams.set('page_type', getCurrentPageType());
 
-            const response = await fetch(url.toString(), {
+            const result = await apiJson(url.toString(), {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                 },
             });
-            const result = await response.json();
 
             if (result && result.success) {
                 state.lockHeld = true;

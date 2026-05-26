@@ -1326,6 +1326,18 @@ class Core
                 \error_log('[RouterPerf] route ' . \json_encode($routeProfile, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
             }
         };
+        $routeProfileLogThrowable = static function (string $stage, \Throwable $e) use (&$routeProfile): void {
+            $payload = $routeProfile;
+            $payload['stage'] = $stage;
+            $payload['exception_class'] = \get_class($e);
+            $payload['exception_message'] = $e->getMessage();
+            $payload['exception_file'] = $e->getFile();
+            $payload['exception_line'] = $e->getLine();
+            \error_log('[RouterError] route ' . \json_encode(
+                $payload,
+                \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR
+            ));
+        };
         // 安全检查：确保 router 存在且格式正确
         if (empty($this->router) || !\is_array($this->router)) {
             $this->request->getResponse()->noRouter();
@@ -1539,11 +1551,15 @@ class Core
         } catch (\Exception $e) {
             // 异常情况下清理输出缓冲区
             FiberOutputBuffer::discardCapture();
+            DebugLogger::logException($e);
+            $routeProfileLogThrowable('exception', $e);
             $routeProfilePublish('exception');
             throw $e;
         } catch (\Throwable $e) {
             // 异常情况下清理输出缓冲区
             FiberOutputBuffer::discardCapture();
+            DebugLogger::logThrowable($e);
+            $routeProfileLogThrowable('throwable', $e);
             $routeProfilePublish('throwable');
             throw $e;
         } finally {

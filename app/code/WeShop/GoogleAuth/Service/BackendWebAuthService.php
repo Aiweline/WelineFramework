@@ -215,7 +215,7 @@ class BackendWebAuthService
             return $target;
         }
 
-        return $this->url->getBackendUrl($this->returnUrlService->resolveDefaultRedirectTarget($user));
+        return $this->getBackendUrlSameOrigin($this->returnUrlService->resolveDefaultRedirectTarget($user));
     }
 
     private function assertUserCanLogin(BackendUser $user): void
@@ -235,6 +235,30 @@ class BackendWebAuthService
     private function resolveDefaultRedirectTarget(BackendUser $user): string
     {
         return $this->returnUrlService->resolveDefaultRedirectTarget($user);
+    }
+
+    private function getBackendUrlSameOrigin(string $path): string
+    {
+        $pathPart = $this->getBackendPathWithPrefix($path);
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
+        return $scheme . '://' . $host . $pathPart;
+    }
+
+    private function getBackendPathWithPrefix(string $path): string
+    {
+        $backendPrefix = \Weline\Framework\App\Env::getAreaRoutePrefix('backend');
+        $areaRoute = $this->request->getServer('WELINE_AREA_ROUTE') ?? '';
+        if ($areaRoute !== '' && $backendPrefix !== null && $backendPrefix !== ''
+            && (str_starts_with($areaRoute, $backendPrefix . '/') || $areaRoute === $backendPrefix)) {
+            return '/' . trim((string)$areaRoute, '/') . '/' . ltrim($path, '/');
+        }
+        if ($backendPrefix !== null && $backendPrefix !== '') {
+            $currency = (string)(\w_env('user.currency', 'CNY') ?? 'CNY');
+            $language = (string)(\w_env('user.lang', 'zh_Hans_CN') ?? 'zh_Hans_CN');
+            return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . ltrim($path, '/');
+        }
+        return $this->url->getBackendUrlPath($path);
     }
 
     private function getBackendSession(): \Weline\Framework\Session\Auth\AuthenticatedSessionInterface

@@ -134,12 +134,21 @@ class CheckoutServiceTest extends TestCase
             ->willReturn($order);
 
         $queries = [];
-        $service = new class($orderService, $queries) extends CheckoutService {
+        $eventsManager = $this->createMock(\Weline\Framework\Event\EventsManager::class);
+        $eventsManager->method('dispatch')->willReturnSelf();
+
+        $service = new class($orderService, $eventsManager, $queries) extends CheckoutService {
             public function __construct(
                 OrderService $orderService,
+                private readonly \Weline\Framework\Event\EventsManager $eventsManager,
                 private array &$queries
             ) {
                 parent::__construct($orderService);
+            }
+
+            protected function getEventsManager(): \Weline\Framework\Event\EventsManager
+            {
+                return $this->eventsManager;
             }
 
             protected function query(string $provider, string $operation, array $params = []): mixed
@@ -153,6 +162,20 @@ class CheckoutServiceTest extends TestCase
                             'quantity' => 2,
                             'price' => 25.0,
                             'product' => ['sku' => 'SKU-10', 'name' => 'Travel Bag', 'weight' => 1.2],
+                            'product_options' => json_encode([
+                                [
+                                    'label' => 'Color',
+                                    'value' => 'Black',
+                                    'swatch_type' => 'color',
+                                    'swatch_value' => '#111827',
+                                ],
+                                [
+                                    'label' => 'Style',
+                                    'value' => 'Lifestyle',
+                                    'swatch_type' => 'image',
+                                    'option_image' => 'https://cdn.test/style.jpg',
+                                ],
+                            ], JSON_UNESCAPED_SLASHES),
                         ],
                     ],
                     'cart:calculateTotals' => [
@@ -213,6 +236,13 @@ class CheckoutServiceTest extends TestCase
         $this->assertSame(5.0, $orderCreateCall[2]['order_data']['discount_amount']);
         $this->assertSame(5.63, $orderCreateCall[2]['order_data']['tax_amount']);
         $this->assertSame(63.13, $orderCreateCall[2]['order_data']['total']);
+
+        $orderItemsCall = $queries[5];
+        $this->assertSame('order', $orderItemsCall[0]);
+        $this->assertSame('addOrderItems', $orderItemsCall[1]);
+        $this->assertSame('#111827', $orderItemsCall[2]['items'][0]['options'][0]['swatch_value']);
+        $this->assertSame('https://cdn.test/style.jpg', $orderItemsCall[2]['items'][0]['options'][1]['swatch_value']);
+        $this->assertSame('https://cdn.test/style.jpg', $orderItemsCall[2]['items'][0]['options'][1]['option_image']);
     }
 
     public function testPlaceOrderCreatesOrderAndProcessesPaymentViaQueryProvider(): void

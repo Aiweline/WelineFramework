@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Extends\Module\Weline_Framework\Query;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
@@ -32,6 +33,7 @@ class ThemeQueryProvider implements QueryProviderInterface
             'getConfigValue' => $this->getConfigValue($params),
             'getTemplatePath' => $this->getTemplatePath($params),
             'scanThemeLayoutsByType' => $this->scanThemeLayoutsByType($params),
+            'editorRequest' => $this->editorRequest($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Theme 查询器不支持的操作：%{1}', $operation)
             ),
@@ -124,6 +126,328 @@ class ThemeQueryProvider implements QueryProviderInterface
         return $this->doScanThemeLayouts($layoutType, $area, $theme);
     }
 
+    private function editorRequest(array $params): mixed
+    {
+        $url = trim((string)($params['url'] ?? ''));
+        $method = strtoupper(trim((string)($params['method'] ?? 'GET'))) ?: 'GET';
+        $headers = is_array($params['headers'] ?? null) ? $params['headers'] : [];
+        $body = array_key_exists('body', $params) && $params['body'] !== null ? (string)$params['body'] : '';
+
+        if ($url === '') {
+            return ['success' => false, 'message' => 'Missing editor request URL.'];
+        }
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            return ['success' => false, 'message' => 'Unsupported editor request method.'];
+        }
+
+        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+        $url = $this->resolveEditorRequestUrl($url, $request);
+        $this->assertAllowedEditorRequestUrl($url);
+
+        $directResponse = $this->dispatchEditorRequestDirect($url, $method, $headers, $body);
+        if ($directResponse !== null) {
+            return $directResponse;
+        }
+
+        $curlHeaders = ['X-Requested-With: XMLHttpRequest'];
+        $hasContentType = false;
+        foreach ($headers as $name => $value) {
+            $name = trim((string)$name);
+            if ($name === '') {
+                continue;
+            }
+            $lowerName = strtolower($name);
+            if (!in_array($lowerName, ['content-type', 'accept', 'x-requested-with'], true)) {
+                continue;
+            }
+            if ($lowerName === 'content-type') {
+                $hasContentType = true;
+            }
+            $curlHeaders[] = $name . ': ' . (string)$value;
+        }
+        if ($method === 'POST' && !$hasContentType) {
+            $curlHeaders[] = 'Content-Type: application/json';
+        }
+
+        $curl = curl_init($url);
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER => true,
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_HTTPHEADER => $curlHeaders,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
+        ]);
+
+        $cookie = (string)$request->getServer('HTTP_COOKIE');
+        if ($cookie !== '') {
+            curl_setopt($curl, CURLOPT_COOKIE, $cookie);
+        }
+        if ($method === 'POST') {
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $body);
+        }
+
+        $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+        if (in_array($host, ['127.0.0.1', 'localhost', '::1'], true)) {
+            curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+        }
+
+        $raw = curl_exec($curl);
+        $errno = curl_errno($curl);
+        $error = curl_error($curl);
+        $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $headerSize = (int)curl_getinfo($curl, CURLINFO_HEADER_SIZE);
+        $contentType = (string)curl_getinfo($curl, CURLINFO_CONTENT_TYPE);
+        curl_close($curl);
+
+        if ($errno !== 0 || !is_string($raw)) {
+            return ['success' => false, 'message' => $error !== '' ? $error : 'Editor request failed.'];
+        }
+
+        $responseBody = substr($raw, $headerSize);
+        $decoded = json_decode($responseBody, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $decoded;
+        }
+
+        if ($status < 200 || $status >= 300) {
+            return [
+                'success' => false,
+                'message' => 'Editor request returned HTTP ' . $status,
+                'content_type' => $contentType,
+                'body' => mb_substr(trim($responseBody), 0, 500),
+            ];
+        }
+
+        return $responseBody;
+    }
+
+    private function dispatchEditorRequestDirect(string $url, string $method, array $headers, string $body): mixed
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['path'])) {
+            return null;
+        }
+
+        $path = strtolower($this->normalizeEditorRequestPath((string)$parts['path']));
+        if (!str_starts_with($path, '/theme/backend/theme-editor/')
+            && !str_starts_with($path, '/theme/backend/widget/paramrender/')
+        ) {
+            return null;
+        }
+
+        $queryParams = [];
+        if (!empty($parts['query'])) {
+            parse_str((string)$parts['query'], $queryParams);
+        }
+        $bodyParams = $this->parseEditorRequestBody($body, $headers);
+        $this->injectEditorRequestParams($queryParams, $bodyParams, $body);
+        $themeEditor = null;
+
+        try {
+            $response = match ($path) {
+                '/theme/backend/theme-editor/layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutConfigPayload(),
+                '/theme/backend/theme-editor/save-layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->saveLayoutConfigPayload(),
+                '/theme/backend/theme-editor/compile-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->getCompileLayoutPayload(),
+                '/theme/backend/theme-editor/versions' => ($themeEditor ??= $this->createDirectThemeEditor())->getVersionsPayload(),
+                '/theme/backend/theme-editor/save-version' => ($themeEditor ??= $this->createDirectThemeEditor())->saveVersionPayload(),
+                '/theme/backend/theme-editor/switch-version' => ($themeEditor ??= $this->createDirectThemeEditor())->switchVersionPayload(),
+                '/theme/backend/theme-editor/restore-original' => ($themeEditor ??= $this->createDirectThemeEditor())->restoreOriginalPayload(),
+                '/theme/backend/theme-editor/publish-version' => ($themeEditor ??= $this->createDirectThemeEditor())->publishVersionPayload(),
+                '/theme/backend/theme-editor/delete-version' => ($themeEditor ??= $this->createDirectThemeEditor())->deleteVersionPayload(),
+                '/theme/backend/theme-editor/rename-version' => ($themeEditor ??= $this->createDirectThemeEditor())->renameVersionPayload(),
+                '/theme/backend/widget/paramrender/form' => $this->createDirectParamRender()->postForm(),
+                default => null,
+            };
+        } catch (\Throwable $e) {
+            if (method_exists($e, 'getBody')) {
+                $response = (string)$e->getBody();
+            } else {
+                throw $e;
+            }
+        }
+
+        if ($response === null) {
+            return null;
+        }
+
+        if (is_string($response)) {
+            $decoded = json_decode($response, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return $decoded;
+            }
+        }
+
+        return $response;
+    }
+
+    private function createDirectThemeEditor(): \Weline\Theme\Controller\Backend\ThemeEditor
+    {
+        $controller = new \Weline\Theme\Controller\Backend\ThemeEditor(
+            ObjectManager::getInstance(WelineTheme::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutVersionService::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeCacheGenerator::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\WidgetPositionResolver::class),
+            ObjectManager::getInstance(\Weline\Widget\Service\WidgetRegistry::class),
+            ObjectManager::getInstance(\Weline\Theme\Model\ThemeLayout::class),
+            ObjectManager::getInstance(\Weline\Meta\Model\Meta::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\PreviewTokenService::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\EditorLockService::class)
+        );
+        $this->injectRequestIntoController($controller);
+        return $controller;
+    }
+
+    private function createDirectParamRender(): \Weline\Theme\Controller\Backend\Widget\ParamRender
+    {
+        $controller = new \Weline\Theme\Controller\Backend\Widget\ParamRender();
+        $this->injectRequestIntoController($controller);
+        return $controller;
+    }
+
+    private function injectRequestIntoController(object $controller): void
+    {
+        $this->setControllerProperty($controller, 'request', ObjectManager::getInstance(\Weline\Framework\Http\Request::class));
+        $this->setControllerProperty($controller, '_objectManager', ObjectManager::getInstance());
+    }
+
+    private function setControllerProperty(object $controller, string $propertyName, mixed $value): void
+    {
+        $reflection = new \ReflectionObject($controller);
+        while ($reflection !== false) {
+            if ($reflection->hasProperty($propertyName)) {
+                $property = $reflection->getProperty($propertyName);
+                $property->setAccessible(true);
+                $property->setValue($controller, $value);
+                return;
+            }
+            $reflection = $reflection->getParentClass();
+        }
+    }
+
+    private function parseEditorRequestBody(string $body, array $headers): array
+    {
+        if ($body === '') {
+            return [];
+        }
+
+        $contentType = '';
+        foreach ($headers as $name => $value) {
+            if (strtolower((string)$name) === 'content-type') {
+                $contentType = strtolower((string)$value);
+                break;
+            }
+        }
+
+        if (str_contains($contentType, 'application/json') || str_starts_with(ltrim($body), '{')) {
+            $decoded = json_decode($body, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        $parsed = [];
+        parse_str($body, $parsed);
+        return is_array($parsed) ? $parsed : [];
+    }
+
+    private function injectEditorRequestParams(array $queryParams, array $bodyParams, string $rawBody): void
+    {
+        /** @var \Weline\Framework\Http\Request $request */
+        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+        foreach ($queryParams as $key => $value) {
+            $request->setGet((string)$key, $value);
+        }
+        foreach ($bodyParams as $key => $value) {
+            $request->setPost((string)$key, $value);
+        }
+
+        $merged = array_merge($queryParams, $bodyParams);
+        $request->setData('params', $merged);
+        $request->setData('body_params', $bodyParams !== [] ? $bodyParams : $rawBody);
+        $request->setData('array_body_params', $bodyParams);
+        $request->getParameterBag()->setBody($bodyParams);
+        $request->getParameterBag()->setRawBody($rawBody);
+    }
+
+    private function resolveEditorRequestUrl(string $url, \Weline\Framework\Http\Request $request): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            throw new \InvalidArgumentException('Invalid editor request URL.');
+        }
+
+        $https = strtolower((string)$request->getServer('HTTPS'));
+        $forwardedProto = strtolower((string)$request->getServer('HTTP_X_FORWARDED_PROTO'));
+        $scheme = $forwardedProto !== ''
+            ? $forwardedProto
+            : (($https !== '' && $https !== 'off') ? 'https' : 'http');
+
+        if (($parts['scheme'] ?? '') === '' && ($parts['host'] ?? '') !== '') {
+            return $scheme . ':' . $url;
+        }
+
+        if (($parts['scheme'] ?? '') !== '') {
+            return $url;
+        }
+
+        $host = (string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: '');
+        if ($host === '') {
+            throw new \InvalidArgumentException('Unable to resolve editor request host.');
+        }
+
+        return $scheme . '://' . $host . (str_starts_with($url, '/') ? $url : '/' . $url);
+    }
+
+    private function assertAllowedEditorRequestUrl(string $url): void
+    {
+        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['path'])) {
+            throw new \InvalidArgumentException('Invalid editor request URL.');
+        }
+
+        $scheme = strtolower((string)($parts['scheme'] ?? ''));
+        if ($scheme !== '' && !in_array($scheme, ['http', 'https'], true)) {
+            throw new \InvalidArgumentException('Unsupported editor request scheme.');
+        }
+
+        $targetHost = strtolower((string)($parts['host'] ?? ''));
+        if ($targetHost !== '') {
+            $requestHost = strtolower((string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: ''));
+            $requestHostName = strtolower((string)(parse_url('//' . $requestHost, PHP_URL_HOST) ?: $requestHost));
+            if ($requestHostName !== '' && $targetHost !== $requestHostName) {
+                throw new \InvalidArgumentException('Editor request host is not allowed.');
+            }
+        }
+
+        $normalizedPath = $this->normalizeEditorRequestPath((string)$parts['path']);
+        foreach ([
+            '/theme/backend/theme-editor/',
+            '/theme/backend/widget/paramrender/form',
+            '/weline/eav/api/options',
+        ] as $allowedPrefix) {
+            if ($normalizedPath === $allowedPrefix || str_starts_with($normalizedPath, $allowedPrefix)) {
+                return;
+            }
+        }
+
+        throw new \InvalidArgumentException('Editor request path is not allowed.');
+    }
+
+    private function normalizeEditorRequestPath(string $path): string
+    {
+        $lowerPath = strtolower($path);
+        foreach (['/theme/backend/', '/weline/eav/'] as $marker) {
+            $pos = strpos($lowerPath, $marker);
+            if ($pos !== false) {
+                return substr($path, $pos);
+            }
+        }
+
+        return $path;
+    }
+
     private function doScanThemeLayouts(string $layoutType, string $area, WelineTheme $theme): array
     {
         $layouts = [];
@@ -211,10 +535,25 @@ class ThemeQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'scanThemeLayoutsByType',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
                     'description' => __('扫描当前主题中指定类型的布局选项'),
                     'params' => [
                         ['name' => 'layout_type', 'type' => 'string', 'required' => true],
                         ['name' => 'area', 'type' => 'string', 'required' => false, 'description' => __('默认 frontend')],
+                    ],
+                ],
+                [
+                    'name' => 'editorRequest',
+                    'description' => __('Theme editor signed backend request bridge'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'url', 'type' => 'string', 'required' => true, 'max_length' => 2048],
+                        ['name' => 'method', 'type' => 'string', 'required' => false, 'max_length' => 8],
+                        ['name' => 'headers', 'type' => 'array', 'required' => false],
+                        ['name' => 'body', 'type' => 'string', 'required' => false, 'nullable' => true, 'max_length' => 1048576],
                     ],
                 ],
             ],

@@ -184,6 +184,125 @@ class CartApiPayloadServiceTest extends TestCase
         $this->assertSame('$257.60', $payload['data']['cart_total_formatted'] ?? null);
     }
 
+    public function testBuildAddResponsePreservesSubmittedColorAndImageOptionDetails(): void
+    {
+        $product = $this->createMock(\WeShop\Product\Model\Product::class);
+        $product->method('getId')->willReturn(15);
+        $product->method('getStatus')->willReturn(1);
+        $product->method('getStock')->willReturn(8);
+        $product->method('getName')->willReturn('Demo Dress');
+        $product->method('getImage')->willReturn('');
+        $product->method('getData')->willReturnCallback(static fn(string $field): mixed => match ($field) {
+            \WeShop\Product\Model\Product::schema_fields_sku => 'DEMO-CAT-0015',
+            \WeShop\Product\Model\Product::schema_fields_image => 'main.jpg',
+            \WeShop\Product\Model\Product::schema_fields_images => json_encode(['style.jpg'], JSON_UNESCAPED_SLASHES),
+            default => null,
+        });
+
+        $productService = $this->createMock(ProductService::class);
+        $productService->expects($this->once())
+            ->method('getProduct')
+            ->with(15)
+            ->willReturn($product);
+
+        $configurableProductService = $this->createMock(ConfigurableProductService::class);
+        $configurableProductService->expects($this->once())
+            ->method('isConfigurable')
+            ->with(15)
+            ->willReturn(false);
+        $configurableProductService->expects($this->once())
+            ->method('getConfigurableOptions')
+            ->with(15)
+            ->willReturn(['attributes' => [], 'variants' => []]);
+
+        $cartModel = $this->createMock(CartModel::class);
+        $cartModel->method('getId')->willReturn(66);
+
+        $cartService = $this->createMock(CartService::class);
+        $cartService->expects($this->once())
+            ->method('addToCart')
+            ->with(
+                9,
+                15,
+                1,
+                99.0,
+                $this->callback(static function (array $options): bool {
+                    return ($options[0]['swatch_type'] ?? null) === 'color'
+                        && ($options[0]['swatch_value'] ?? null) === '#111827'
+                        && ($options[2]['swatch_type'] ?? null) === 'image'
+                        && ($options[2]['swatch_value'] ?? null) === 'https://cdn.test/style.jpg'
+                        && ($options[2]['option_image'] ?? null) === 'https://cdn.test/style.jpg';
+                })
+            )
+            ->willReturn($cartModel);
+        $cartService->expects($this->once())
+            ->method('getCartItemCount')
+            ->with(9)
+            ->willReturn(1);
+        $cartService->expects($this->once())
+            ->method('calculateTotals')
+            ->with(9)
+            ->willReturn(['total' => 99.0]);
+
+        $priceService = $this->createMock(PriceService::class);
+        $priceService->expects($this->once())
+            ->method('calculatePrice')
+            ->with(15, 9, 1)
+            ->willReturn(99.0);
+        $priceService->method('formatPrice')->willReturnCallback(
+            static fn(float $price): string => '$' . number_format($price, 2)
+        );
+
+        $service = $this->createService(
+            cartService: $cartService,
+            productService: $productService,
+            configurableProductService: $configurableProductService,
+            priceService: $priceService
+        );
+
+        $payload = $service->buildAddResponse(9, [
+            'product_id' => 15,
+            'qty' => 1,
+            'selected_options' => [900101, 900201, 900302],
+            'selected_option_labels' => ['Color: Black', 'Size: M', 'Style: Lifestyle'],
+            'selected_option_details' => [
+                [
+                    'label' => 'Color',
+                    'value' => 'Black',
+                    'attribute_id' => 900001,
+                    'attribute_code' => 'color',
+                    'option_id' => 900101,
+                    'option_code' => 'black',
+                    'swatch_type' => 'color',
+                    'swatch_value' => '#111827',
+                ],
+                [
+                    'label' => 'Size',
+                    'value' => 'M',
+                    'attribute_id' => 900002,
+                    'attribute_code' => 'size',
+                    'option_id' => 900201,
+                    'option_code' => 'm',
+                    'swatch_type' => 'text',
+                    'swatch_value' => 'M',
+                ],
+                [
+                    'label' => 'Style',
+                    'value' => 'Lifestyle',
+                    'attribute_id' => 900003,
+                    'attribute_code' => 'style',
+                    'option_id' => 900302,
+                    'option_code' => 'lifestyle',
+                    'swatch_type' => 'image',
+                    'option_image' => 'https://cdn.test/style.jpg',
+                ],
+            ],
+        ]);
+
+        $this->assertSame(200, $payload['code'] ?? null);
+        $this->assertSame('https://cdn.test/style.jpg', $payload['data']['product']['options'][2]['option_image'] ?? null);
+    }
+
     private function createService(
         ?CartService $cartService = null,
         ?ProductService $productService = null,

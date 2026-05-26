@@ -16,7 +16,12 @@
 评价已提交，审核通过后会公开展示。,"Review submitted. It will be public after approval."
 "Product ID cannot be empty.","Product ID cannot be empty."
 "Product Reviews","Product Reviews"
+评价已创建,评价已创建
+"商品评价创建后触发，负载包含 review、review_id、product_id、customer_id、rating、status。","商品评价创建后触发，负载包含 review、review_id、product_id、customer_id、rating、status。"
+评价状态已变更,评价状态已变更
+"评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。","评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。"
 "Unsupported review provider operation: %{1}","Unsupported review provider operation: %{1}"
+"Review form token prepared.","Review form token prepared."
 "Please sign in before replying.","Please sign in before replying."
 "Review and reply content are required.","Review and reply content are required."
 "Unable to submit reply right now.","Unable to submit reply right now."
@@ -27,9 +32,12 @@
 未查询到该商品订单，已选择匿名评论。,"No order was found for this product, so anonymous review was selected."
 "Review Query","Review Query"
 "Provides frontend review operations through the worker API.","Provides frontend review operations through the worker API."
+"Prepare a review form token only when the customer starts writing a review.","Prepare a review form token only when the customer starts writing a review."
 点击写评论时自动判断本次评价方式；未登录前端直接选择匿名，已登录才查询是否购买过该商品。,"Automatically resolve the review mode when the customer clicks to write a review. The storefront selects anonymous directly for guests and checks purchase eligibility only for logged-in customers."
 "Reply to a product review. Mentions such as @customer:123 notify the mentioned customer.","Reply to a product review. Mentions such as @customer:123 notify the mentioned customer."
 提交商品评价，匿名模式允许游客提交，下单后评论模式要求登录并购买过该商品。,"Submit product reviews. Anonymous mode allows guest submissions; order-required mode requires login and a purchase of this product."
+Anonymous,Anonymous
+"Review video","Review video"
 "Product review tab content","Product review tab content"
 "Render the customer review block inside product detail tabs.","Render the customer review block inside product detail tabs."
 "Review Page Hooks","Review Page Hooks"
@@ -47,7 +55,6 @@ Rejected,Rejected
 "5 Stars","5 Stars"
 下单后评论,"Order-required reviews"
 匿名评论,"Anonymous reviews"
-Anonymous,Anonymous
 评价项名称不能为空,"Rating option label cannot be empty"
 新增评价项需要同时填写编码和名称,"New rating options require both code and label"
 评价项编码已存在,"Rating option code already exists"
@@ -55,7 +62,9 @@ Anonymous,Anonymous
 "Review does not exist or is not visible.","Review does not exist or is not visible."
 "Reply target does not exist.","Reply target does not exist."
 "Customer #%{1}","Customer #%{1}"
+"You were mentioned in a product review reply","You were mentioned in a product review reply"
 "Your review has a new reply","Your review has a new reply"
+"Customer %{1} mentioned you in a product review reply.","Customer %{1} mentioned you in a product review reply."
 "Customer %{1} replied in a product review.","Customer %{1} replied in a product review."
 Customer,Customer
 匿名用户,Anonymous
@@ -93,10 +102,48 @@ Actions,Actions
 View,View
 评价,Reviews
 当前产品,"Current product"
+正在确认是否可以按订单评价...,正在确认是否可以按订单评价...
+当前会按匿名评论提交；审核通过前，这条评价只会在当前浏览器中显示。,当前会按匿名评论提交；审核通过前，这条评价只会在当前浏览器中显示。
+当前会按下单后评论提交，系统已确认你购买过该商品。,当前会按下单后评论提交，系统已确认你购买过该商品。
+未查询到该商品订单，已自动切换为匿名评论。,未查询到该商品订单，已自动切换为匿名评论。
+待审核,待审核
+仅当前浏览器可见,仅当前浏览器可见
+已验证购买,已验证购买
+评分,评分
+登录后评论,登录后评论
+登录失败，请检查用户名和密码。,登录失败，请检查用户名和密码。
+请输入用户名或邮箱。,请输入用户名或邮箱。
+请输入密码。,请输入密码。
+Translate,Translate
+Translating...,Translating...
+"Show original","Show original"
+"Show translation","Show translation"
+"Browser translation is unavailable in this Chrome session.","Browser translation is unavailable in this Chrome session."
+"This comment already matches the current language.","This comment already matches the current language."
 "Customer Voices","Customer Voices"
 "Latest Reviews","Latest Reviews"
+我要评论,我要评论
 "View All Reviews","View All Reviews"
+点击我要评论后自动判断评价方式,点击我要评论后自动判断评价方式
+未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。,未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。
+star,star
+不评分,不评分
+Title,Title
+"Write a headline for your review","Write a headline for your review"
+Review,Review
+"Describe your experience with this product","Describe your experience with this product"
+图片链接,图片链接
+每行一个图片链接,每行一个图片链接
+视频链接,视频链接
+每行一个视频链接,每行一个视频链接
+"Submit review","Submit review"
 "No product reviews yet. Be the first to share your experience.","No product reviews yet. Be the first to share your experience."
+登录成功后会自动刷新评价资格。,登录成功后会自动刷新评价资格。
+关闭,关闭
+用户名或邮箱,用户名或邮箱
+密码,密码
+取消,Cancel
+登录并继续,登录并继续
 评论管理,"Review Management"
 已配置评价项,"Configured rating options"
 返回评论列表,"Back to review list"
@@ -116,10 +163,8 @@ View,View
 包装体验,"Packaging experience"
 保存后立即启用,"Enable after saving"
 启用的评价项会展示在前台评价表单中，买家提交后会随评价一起保存并展示在后台详情和产品评价区。,"Enabled rating options appear in the storefront review form and are saved with each review for backend details and product review areas."
-取消,Cancel
 保存配置,"Save settings"
 WeShop,WeShop
-Review,Review
 "Review List","Review List"
 "Filter Reviews","Filter Reviews"
 "Product ID","Product ID"
@@ -132,7 +177,6 @@ Star(s),Star(s)
 "Apply Filters","Apply Filters"
 Reset,Reset
 "No reviews found","No reviews found"
-Title,Title
 图片,Images
 Previous,Previous
 Next,Next
@@ -156,4 +200,3 @@ Detail,Detail
 "Customer Name","Customer Name"
 Email,Email
 Metadata,Metadata
-评论视频,"Review video"

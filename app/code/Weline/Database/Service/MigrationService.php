@@ -14,6 +14,7 @@ use Weline\Database\Service\BackupService;
 use Weline\Database\Service\VersionService;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Registry\Service\RegistryProgress;
 
 class MigrationService
 {
@@ -255,16 +256,20 @@ class MigrationService
      */
     public function getPendingMigrations(string $moduleName): array
     {
+        RegistryProgress::log('Migration pending lookup started: ' . $moduleName);
         $allMigrations = $this->getModuleMigrations($moduleName);
-        $installedFiles = $this->migrationModel->getInstalledMigrationFiles($moduleName);
+        RegistryProgress::count('Migration script files for ' . $moduleName, count($allMigrations), 'files');
+        $installedFiles = array_fill_keys($this->migrationModel->getInstalledMigrationFiles($moduleName), true);
+        RegistryProgress::count('Installed migration script records for ' . $moduleName, count($installedFiles), 'files');
 
         $pending = [];
         foreach ($allMigrations as $migration) {
-            if (!in_array($migration['filename'], $installedFiles, true)) {
+            if (!isset($installedFiles[$migration['filename']])) {
                 $pending[] = $migration;
             }
         }
 
+        RegistryProgress::count('Pending migration script files for ' . $moduleName, count($pending), 'files');
         return $pending;
     }
     
@@ -309,11 +314,10 @@ class MigrationService
             return true;
         }
         
-        $installedMigrations = $this->migrationModel->getInstalledMigrations($moduleName);
-        $installedFiles = array_column($installedMigrations, 'migration_file');
+        $installedFiles = array_fill_keys($this->migrationModel->getInstalledMigrationFiles($moduleName), true);
         
         foreach ($dependencies as $dependency) {
-            if (!in_array($dependency, $installedFiles)) {
+            if (!isset($installedFiles[$dependency])) {
                 $this->printing->error(__("依赖迁移未安装: %{1}", $dependency));
                 return false;
             }

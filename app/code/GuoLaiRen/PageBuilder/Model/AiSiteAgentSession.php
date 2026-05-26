@@ -59,6 +59,8 @@ class AiSiteAgentSession extends Model
             'build_plan_v2' => [['build_plan_v2'], []],
             'plan_projection' => [['plan_projection'], []],
             'content_manifest' => [['content_manifest'], []],
+            'execution_blueprint' => [['execution_blueprint'], []],
+            'plan_workbench' => [['plan_workbench'], []],
         ],
         self::STAGE_VISUAL_EDIT => [
             'plan_json' => [['plan_json'], []],
@@ -66,6 +68,8 @@ class AiSiteAgentSession extends Model
             'build_plan_v2' => [['build_plan_v2'], []],
             'plan_projection' => [['plan_projection'], []],
             'content_manifest' => [['content_manifest'], []],
+            'execution_blueprint' => [['execution_blueprint'], []],
+            'plan_workbench' => [['plan_workbench'], []],
             'build_blueprint' => [['build_blueprint'], []],
             'build_workbench' => [['build_workbench'], []],
             'build_contracts' => [['build_contracts'], []],
@@ -426,15 +430,30 @@ class AiSiteAgentSession extends Model
             $planWorkbench['stage1'] = $slimStageOne;
         }
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        if ($executionBlueprint !== [] && \is_array($planWorkbench['confirmed']['execution_blueprint'] ?? null)) {
+        $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
+        if (($executionBlueprint !== [] || $executionBlueprintDraft !== []) && \is_array($planWorkbench['confirmed']['execution_blueprint'] ?? null)) {
             unset($planWorkbench['confirmed']['execution_blueprint']);
         }
-        if ((int)($scope['plan_confirmed'] ?? 0) === 1) {
+        if ((int)($scope['plan_confirmed'] ?? 0) === 1 || $this->hasMaterializedStageOnePlanArtifacts($scope)) {
             $planWorkbench['confirmed'] = $this->compactPlanWorkbenchConfirmedForStorage($planWorkbench['confirmed']);
         }
         $scope['plan_workbench'] = $planWorkbench;
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function hasMaterializedStageOnePlanArtifacts(array $scope): bool
+    {
+        foreach (['plan_structured', 'plan_json', 'execution_blueprint', 'execution_blueprint_draft'] as $key) {
+            if (\is_array($scope[$key] ?? null) && $scope[$key] !== []) {
+                return true;
+            }
+        }
+
+        return \trim((string)($scope['plan_markdown'] ?? '')) !== '';
     }
 
     /**

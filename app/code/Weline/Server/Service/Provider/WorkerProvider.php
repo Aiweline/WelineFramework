@@ -95,6 +95,7 @@ class WorkerProvider extends AbstractServiceProvider
         $arguments[] = '--control-port=' . $context->controlPort;
         $arguments[] = '--master-pid=' . $context->masterPid;
         $arguments[] = '--memory-limit=' . $context->getWorkerMemoryLimit();
+        $arguments[] = '--worker-count=' . $this->getInstanceCount($context);
 
         if ($context->windowMode) {
             $arguments[] = '--win';
@@ -113,10 +114,9 @@ class WorkerProvider extends AbstractServiceProvider
         }
         $arguments[] = '--wls-loop-driver=' . $loopDriver;
 
-        // Dispatcher 模式（TCP 透传）下启用延迟 SSL
-        // Worker 先 tcp:// 接入，accept 后根据首包判断协议并手动启用 SSL
-        // 解决 ssl:// 非阻塞模式下 stream_socket_accept 无法完成 TLS 握手的问题。
-        if ($context->sslEnabled && $mode !== 'linux-direct') {
+        // 延迟 SSL 统一用 tcp:// 接入，accept 后按首包做 HTTP->HTTPS 跳转或 SNI 证书选择。
+        // 这同时覆盖 Dispatcher 透传和 linux-direct SO_REUSEPORT 模式。
+        if ($context->sslEnabled) {
             $arguments[] = '--defer-ssl';
         }
 

@@ -47,12 +47,12 @@ class PaymentService
     {
         // 获取支付方式
         $paymentMethod = $this->methodManager->getMethodByCode($methodCode);
-        if (!$paymentMethod || !$paymentMethod->isActive()) {
+        if (!$paymentMethod || !$this->methodManager->isMethodActiveForScope($paymentMethod, $orderData)) {
             throw new \Exception(__('支付方式 %{code} 不存在或未启用', ['code' => $methodCode]));
         }
 
         // 获取支付提供商
-        $provider = $this->methodManager->getProviderInstance($paymentMethod);
+        $provider = $this->methodManager->getProviderInstance($paymentMethod, $orderData);
         if (!$provider) {
             throw new \Exception(__('支付提供商实例化失败'));
         }

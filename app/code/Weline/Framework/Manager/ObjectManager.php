@@ -811,6 +811,29 @@ class ObjectManager implements ManagerInterface
     }
 
     /**
+     * Clear only the current WLS request Fiber's ObjectManager buckets.
+     *
+     * This is intentionally narrower than clearInstances(): it releases
+     * request-local shared instances after a Fiber finishes without touching
+     * process-level instances or rebuildable metadata caches.
+     */
+    public static function clearCurrentFiberInstances(bool $includeOrigin = true): void
+    {
+        $fiber = self::currentRequestFiber();
+        if ($fiber === null) {
+            return;
+        }
+
+        if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
+            unset(self::$fiberInstances[$fiber]);
+        }
+
+        if ($includeOrigin && self::$fiberOriginInstances !== null && isset(self::$fiberOriginInstances[$fiber])) {
+            unset(self::$fiberOriginInstances[$fiber]);
+        }
+    }
+
+    /**
      * 在长生命周期 Worker 内存压力升高时，释放可重建的进程内缓存。
      *
      * 仅清理：
@@ -1392,7 +1415,9 @@ class ObjectManager implements ManagerInterface
     protected static function getMethodParams($instance_or_class, string $methodsName = '__construct'): array
     {
         // 获取类名
-        $className = is_object($instance_or_class) ? $instance_or_class::class : $instance_or_class;
+        $className = $instance_or_class instanceof ReflectionClass
+            ? $instance_or_class->getName()
+            : (is_object($instance_or_class) ? $instance_or_class::class : $instance_or_class);
         $cacheKey = $className . '::' . $methodsName;
         
         // 检查元数据缓存
@@ -1433,7 +1458,9 @@ class ObjectManager implements ManagerInterface
     private static function parseMethodParamsMetadata($instance_or_class, string $methodsName): array
     {
         // 获取类名
-        $className = is_object($instance_or_class) ? $instance_or_class::class : $instance_or_class;
+        $className = $instance_or_class instanceof ReflectionClass
+            ? $instance_or_class->getName()
+            : (is_object($instance_or_class) ? $instance_or_class::class : $instance_or_class);
         
         // 先检查是否是接口（接口不能解析方法参数）
         if (interface_exists($className, true)) {

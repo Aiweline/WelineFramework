@@ -7,6 +7,7 @@ namespace WeShop\Review\Controller\Frontend\Review;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Review\Service\ReviewPageDataService;
+use WeShop\Review\Service\ReviewService;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -32,13 +33,16 @@ class Index extends BaseController
 
         $page = (int) max(1, ($this->request->getParam('page') ?? 1));
         $pageSize = (int) max(5, min(50, ($this->request->getParam('page_size') ?? 20)));
+        $targetReviewId = (int) ($this->request->getParam('review_id') ?? 0);
+        $targetReplyId = (int) ($this->request->getParam('reply_id') ?? 0);
 
-        foreach ($this->reviewPageDataService->build($productId, $page, $pageSize) as $key => $value) {
+        foreach ($this->reviewPageDataService->build($productId, $page, $pageSize, $targetReviewId, $targetReplyId) as $key => $value) {
             $this->assign($key, $value);
         }
 
         $this->assign('product_id', $productId);
-        $this->assign('create_url', $this->url->getUrl('review/create'));
+        $this->assign('review_url', $this->url->getUrl(ReviewService::FRONTEND_ROUTE));
+        $this->assign('create_url', $this->url->getUrl(ReviewService::FRONTEND_CREATE_ROUTE));
         $this->assign('is_customer_logged_in', $this->isCustomerLoggedIn());
         $this->assign('title', __('Product Reviews'));
 

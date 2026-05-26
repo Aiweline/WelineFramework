@@ -18,11 +18,13 @@
     <!-- 产品保存后事件 - 同步 URL 重写规则 -->
     <event name="WeShop_Product::product_save_after">
         <observer name="WeShop_Product::product_url_rewrite_sync" instance="WeShop\Product\Observer\ProductUrlRewriteObserver" disabled="false" shared="true" sort="100"/>
+        <observer name="WeShop_Product::product_geo_feed_sync" instance="WeShop\Product\Observer\ProductGeoFeedObserver" disabled="false" shared="true" sort="110"/>
     </event>
     
     <!-- 产品删除前事件 - 清理 URL 重写规则 -->
     <event name="WeShop_Product::product_delete_before">
         <observer name="WeShop_Product::product_url_rewrite_cleanup" instance="WeShop\Product\Observer\ProductUrlRewriteObserver" disabled="false" shared="true" sort="100"/>
+        <observer name="WeShop_Product::product_geo_feed_cleanup" instance="WeShop\Product\Observer\ProductGeoFeedObserver" disabled="false" shared="true" sort="110"/>
     </event>
 
     <event name="Weline_Server::dispatcher::warmup_paths">

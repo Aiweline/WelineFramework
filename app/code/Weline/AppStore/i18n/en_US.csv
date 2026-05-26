@@ -1,4 +1,6 @@
 ﻿账户绑定,"Account Binding"
+缺少授权码,缺少授权码
+授权绑定失败：,授权绑定失败：
 无效的请求方法,"Invalid request method"
 请输入邮箱和密码,"Please enter email and password"
 绑定失败：,"Binding failed:"
@@ -11,19 +13,24 @@
 历史记录已清空,"History has been cleared"
 清空失败：,"Clear failed:"
 应用商城,"App Store"
+"缺少许可证或模块 ID","缺少许可证或模块 ID"
+模块已下载到临时目录,模块已下载到临时目录
+模块下载失败：,"Module download failed:"
 请先绑定官网账户,"Please bind the official site account first"
 获取授权令牌失败,"Failed to get authorization token"
 获取模块列表失败：,"Failed to fetch module list:"
 缺少许可证密钥,"Missing license key"
-缺少模块ID,"Missing module ID"
-模块安装成功,"Module installed successfully"
+"缺少模块 ID","缺少模块 ID"
+模块已下载安装，功能页面已生成,模块已下载安装，功能页面已生成
 模块安装失败：,"Module installation failed:"
 安装失败：,"Installation failed:"
+授权令牌无效，请重新授权官网账户,授权令牌无效，请重新授权官网账户
+获取模块列表失败,获取模块列表失败
 我的模块,"My Modules"
 模块不存在,"Module does not exist"
 缺少模块标识,"Missing module identifier"
-卸载失败：,"Uninstall failed:"
-模块已卸载,"Module uninstalled"
+"App 商城不执行卸载。请使用系统模块卸载流程，系统会自动执行卸载数据备份。","App 商城不执行卸载。请使用系统模块卸载流程，系统会自动执行卸载数据备份。"
+获取系统卸载提示失败：,获取系统卸载提示失败：
 检查更新失败：,"Failed to check for updates:"
 许可证管理,"License Management"
 获取授权令牌失败，请重新绑定账户,"Failed to get authorization token. Please rebind the account."
@@ -58,23 +65,78 @@
 下载失败,"Download failed"
 下载响应数据不完整,"Download response data is incomplete"
 文件校验失败,"File verification failed"
-模块下载失败：,"Module download failed:"
 模块文件不存在,"Module file does not exist"
 模块依赖不满足：,"Module dependencies are not satisfied:"
 "模块结构无效：找不到 register.php","Invalid module structure: register.php not found"
 "模块结构无效：无法解析 register.php","Invalid module structure: failed to parse register.php"
 模块结构无效：缺少模块名,"Invalid module structure: missing module name"
 "模块名格式无效，必须是 Vendor_Module 格式","Invalid module name format. Expected Vendor_Module."
+"模块 register.php 不存在","模块 register.php 不存在"
+无法创建模块安装脚本,无法创建模块安装脚本
+无法写入商城应用说明文件：,无法写入商城应用说明文件：
+"无法写入 AppStore 安装记录：","无法写入 AppStore 安装记录："
 "下载文件失败，HTTP 状态码：","Failed to download file. HTTP status code:"
 可安装模块,"Installable Modules"
 否,No
 是,Yes
-当前已绑定官网账户：,"Currently bound official site account:"
+官方账户授权,官方账户授权
+"授权后，终端 App 商城可以使用官方 token 下载模块。","授权后，终端 App 商城可以使用官方 token 下载模块。"
+去官网授权,去官网授权
+当前终端已绑定官方账户,当前终端已绑定官方账户
+邮箱：,邮箱：
 未知邮箱,"Unknown email"
-当前未绑定官网账户，请先完成绑定。,"No official site account is currently bound. Complete the binding first."
+名称：,名称：
+未设置,未设置
+店铺域名：,"Store domain:"
+当前终端尚未绑定官方账户。请点击“去官网授权”，在官网注册或登录后自动回到当前终端。,当前终端尚未绑定官方账户。请点击“去官网授权”，在官网注册或登录后自动回到当前终端。
+授权配置,授权配置
+官网地址,官网地址
+回调地址,回调地址
 下载历史数据已加载，可继续扩展为列表展示。,"Download history has loaded and is ready for list rendering."
-官网账户已绑定，可开始浏览并安装模块。,"The official site account is bound. You can now browse and install modules."
-尚未绑定官网账户，请先前往“账户绑定”完成绑定。,"No official site account is bound yet. Complete Account Binding first."
-已安装模块数据已就绪，可继续扩展为表格展示。,"Installed module data is ready for table rendering."
+"从 WelineFramework 官网账户授权后下载模块。","从 WelineFramework 官网账户授权后下载模块。"
+账户授权,账户授权
+文件：,文件：
+目录：,目录：
+商城说明：,商城说明：
+安装记录：,安装记录：
+功能页面：,功能页面：
+尚未绑定官方账户。请先到账户授权页面完成官网授权。,尚未绑定官方账户。请先到账户授权页面完成官网授权。
+官方账户已绑定：,官方账户已绑定：
+未知账户,未知账户
+搜索应用、开发者或能力,"Search apps, developers, or capabilities"
+输入关键词后直接在结果里安装,"Type keywords and install directly from the results"
+价格,价格
+全部价格,"All prices"
+免费,免费
+付费,付费
+搜索,Search
+免费应用直接安装,"Free apps install directly"
+付费应用购买后安装,"Paid apps install after purchase"
+同一官网账号可多端登录,"One official account can sign in on multiple terminals"
+版本：,版本：
+下载：,下载：
+大小：,大小：
+下载,下载
+直接安装,"Install directly"
+安装,Install
+购买,Buy
+购买后刷新,"Refresh after purchase"
+免费授权尚未下发，请刷新列表后再安装。,"The free license has not been issued yet. Refresh the list and install again."
+没有找到匹配的应用。,"No matching apps found."
+官网暂未发布可下载模块。,官网暂未发布可下载模块。
+"这里仅记录 App 商城安装来源；卸载走系统模块管理，数据备份由系统卸载流程自动处理。","这里仅记录 App 商城安装来源；卸载走系统模块管理，数据备份由系统卸载流程自动处理。"
+系统模块管理,系统模块管理
+模块,模块
+版本,版本
+来源,来源
+系统状态,系统状态
+安装时间,安装时间
+系统卸载,系统卸载
+说明：,说明：
+官方商城,官方商城
+已启用,已启用
+已注册未启用,已注册未启用
+系统中已不存在,系统中已不存在
+"暂无 App 商城安装记录。","暂无 App 商城安装记录。"
 请先绑定官网账户后再管理许可证。,"Bind the official site account before managing licenses."
 已加载许可证列表，可通过接口执行激活、校验和续订。,"The license list has loaded. Activation, validation, and renewal are available via API."

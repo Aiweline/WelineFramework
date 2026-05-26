@@ -1,7 +1,9 @@
 ﻿"Invalid request method.","Invalid request method."
+"Payment configuration test passed: %{1}","Payment configuration test passed: %{1}"
+"Payment configuration test failed: %{1}","Payment configuration test failed: %{1}"
 "Payment settings saved successfully.",支付设置已保存。
 "Payment settings save failed: %{1}",支付设置保存失败：%{1}
-"Payment Methods",支付方式
+支付方式,支付方式
 "Payment method is required.",支付方式为必填项。
 "Payment callback handled.",支付回调已处理。
 "Order ID is required.","订单 ID 为必填项。"
@@ -13,78 +15,82 @@
 "Get enabled payment methods for checkout.",获取结账页已启用的支付方式。
 "Get all configured payment methods.",获取所有已配置的支付方式。
 "Get a single payment method definition.",获取单个支付方式定义。
+"Get payment provider catalogue.","Get payment provider catalogue."
+"Get ISO country options for payment filtering.","Get ISO country options for payment filtering."
 "Process a payment for an order.",为订单执行支付处理。
 "Query payment status by order number.",按订单号查询支付状态。
 "An order instance is required for payment processing.",支付处理需要订单实例。
 "Unable to sign the Alipay request with the configured private key.","Unable to sign the Alipay request with the configured private key."
 配送送达时向客户收款。,配送送达时向客户收款。
+"Cash on delivery configuration passed static validation.","Cash on delivery configuration passed static validation."
+"Credit line payment uses event dispatch only; listener-side credit policy is validated outside payment configuration.","Credit line payment uses event dispatch only; listener-side credit policy is validated outside payment configuration."
 请在订单创建后完成手动银行转账。,请在订单创建后完成手动银行转账。
+"Manual bank transfer configuration passed static validation.","Manual bank transfer configuration passed static validation."
 "%{1} is missing required configuration: %{2}","%{1} is missing required configuration: %{2}"
 "Order %{1}","Order %{1}"
 "Unable to initialize the WeChat Pay order.","Unable to initialize the WeChat Pay order."
-企业信用账户,企业信用账户
-订单计入企业信用额度，并在到期日前按发票付款。,订单计入企业信用额度，并在到期日前按发票付款。
-仅适用于已开通有效信用额度的企业客户。,仅适用于已开通有效信用额度的企业客户。
-说明,说明
-银行转账,银行转账
-下单后通过银行转账付款。,下单后通过银行转账付款。
-请将订单金额转入配置的银行账户，并使用订单号作为付款备注。,请将订单金额转入配置的银行账户，并使用订单号作为付款备注。
-请使用订单号作为付款备注。,请使用订单号作为付款备注。
-订单创建后展示给客户。,订单创建后展示给客户。
-账户名称,账户名称
-开户银行,开户银行
-银行账号,银行账号
-付款备注,付款备注
-货到付款,货到付款
-配送送达时现金付款。,配送送达时现金付款。
-货到付款手续费,货到付款手续费
-PayPal,PayPal
-"使用 PayPal 账户在线支付。","使用 PayPal 账户在线支付。"
-沙箱模式,沙箱模式
-"生产 PayPal 凭据准备好之前保持开启。","生产 PayPal 凭据准备好之前保持开启。"
-"客户端 ID","客户端 ID"
-客户端密钥,客户端密钥
-商户邮箱,商户邮箱
-"Webhook ID","Webhook ID"
-支付宝,支付宝
-通过托管跳转结账使用支付宝付款。,通过托管跳转结账使用支付宝付款。
-"App ID","应用 ID"
-"商户 ID","商户 ID"
-公钥,公钥
-私钥,私钥
-通知地址,通知地址
-返回地址,返回地址
-产品编码,产品编码
-支付超时时间,支付超时时间
-签名类型,签名类型
-微信支付,微信支付
-通过统一下单网关使用微信支付。,通过统一下单网关使用微信支付。
-商户号,商户号
-"API v3 密钥","API v3 密钥"
-商户证书路径,商户证书路径
-交易类型,交易类型
-场景信息,场景信息
-"客户端 IP 覆盖","客户端 IP 覆盖"
+"Configuration changed after the last test.","Configuration changed after the last test."
+以下支付方式缺少完整配置文档，不能启用：%{1},以下支付方式缺少完整配置文档，不能启用：%{1}
+"以下支付方式还没有通过当前 scope 的配置测试，不能启用：%{1}","以下支付方式还没有通过当前 scope 的配置测试，不能启用：%{1}"
 "Unsupported payment method: %{1}",不支持的支付方式：%{1}
 "Payment method %{1} is missing required configuration: %{2}","Payment method %{1} is missing required configuration: %{2}"
+"Payment method %{1} has not passed configuration testing for this scope.","Payment method %{1} has not passed configuration testing for this scope."
 "Payment provider is not configured for %{1}.","支付提供方未为 %{1} 配置。"
 "Payment provider is invalid for %{1}.","支付提供方 %{1} 配置无效。"
 "2. 支付方式","2. 支付方式"
 当前结账上下文没有可用支付方式。,当前结账上下文没有可用支付方式。
 支付流程：%{1},支付流程：%{1}
 确认订单后完成该支付流程。,确认订单后完成该支付流程。
+该支付方式缺少完整配置文档，不能启用。,该支付方式缺少完整配置文档，不能启用。
+留空表示不修改,留空表示不修改
+配置已测试,配置已测试
+测试失败,测试失败
+未测试,未测试
+已启用,已启用
+未启用,未启用
+默认,默认
+缺文档,缺文档
+缺配置,缺配置
+代码,代码
+类型,类型
+热度,热度
+币种,币种
+缺少必填字段,缺少必填字段
+查看配置指南,查看配置指南
+"测试当前 scope 配置","测试当前 scope 配置"
+启用,启用
+排序,排序
 支付管理,支付管理
-支付方式,支付方式
-"Total Methods",支付方式总数
-"Enabled At Checkout",结账页已启用
-"Reserved / Disabled","预留 / 已禁用"
-"Default Method",默认方式
-Enabled,启用
-Disabled,禁用
-Default,默认
-Code,编码
-Areas,适用区域
-Currencies,支持币种
-Countries,适用国家
-"Sort Order",排序
-"Save Payment Settings",保存支付设置
+全部方式,全部方式
+"可进 Checkout","可进 Checkout"
+默认方式,默认方式
+搜索,搜索
+支付商、方式、国家码、字段,支付商、方式、国家码、字段
+国家,国家
+全部国家,全部国家
+支付商,支付商
+全部支付商,全部支付商
+状态,状态
+全部状态,全部状态
+已配置,已配置
+筛选,筛选
+"配置 scope","配置 scope"
+"Scope code","Scope code"
+环境,环境
+当前配置隔离在,当前配置隔离在
+已启用支付方式,已启用支付方式
+全部支付商/方式,全部支付商/方式
+国家与币种覆盖,国家与币种覆盖
+凭据与环境,凭据与环境
+配置文档,配置文档
+"交易/Webhook 日志","交易/Webhook 日志"
+当前筛选条件下没有已启用支付方式。,当前筛选条件下没有已启用支付方式。
+热门支付方式,热门支付方式
+全部支付方式热度倒序,全部支付方式热度倒序
+完整,完整
+待补全,待补全
+缺少章节,缺少章节
+"交易流水和 Webhook 日志模型已建立；实际列表需要接入交易写入后按模型数据渲染。","交易流水和 Webhook 日志模型已建立；实际列表需要接入交易写入后按模型数据渲染。"
+保存支付设置,保存支付设置
+配置指南,配置指南
+关闭,关闭

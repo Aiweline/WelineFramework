@@ -95,6 +95,7 @@ class ExtendsScanner
                     $extendInfo
                 );
             }
+            unset($extendsConfig, $extendedBy);
         }
 
         return $result;

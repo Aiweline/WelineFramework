@@ -25,6 +25,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Maintenance\Helper\IpMatcher;
@@ -80,6 +81,11 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
      */
     public function execute(Event &$event): void
     {
+        if (\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER) {
+            $this->applyParsedRequestUri();
+            $this->sendMaintenanceResponse();
+        }
+
         if ((string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1'
             || (string)($_SERVER['WLS_INTERNAL_BACKEND_WARMUP'] ?? '') === '1'
             || (string)($_SERVER['WLS_INTERNAL_WARMUP'] ?? '') === '1'
@@ -90,13 +96,6 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         // CLI 模式不检查维护模式
         if (Runtime::isCli() && !(\defined('WLS_MODE') && WLS_MODE)) {
             return;
-        }
-
-        // maintenance worker 专职承接维护流量。
-        // 一旦请求已经进入 maintenance worker，就应直接按维护模式处理，
-        // 不再反向依赖 Orchestrator / Env IPC 查询结果，避免启动窗口或状态不同步时漏拦截。
-        if (\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER) {
-            $this->sendMaintenanceResponse();
         }
 
         // 检查维护模式配置
@@ -114,9 +113,8 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             'action' => 'index',
         ]);
         // 直接使用 $_SERVER 获取请求 URI
-        $uri = \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
-        $parse = UrlParser::parse($uri);
-        \Weline\Framework\Env\WelineEnv::replaceServer($parse['server']);
+        $parse = $this->applyParsedRequestUri();
+        $uri = (string)($parse['server']['ORIGIN_REQUEST_URI'] ?? \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', ''));
         $pure_uri = $parse['uri'];
         // 检查是否在白名单中
         if ($this->isWhitelisted($pure_uri)) {
@@ -172,6 +170,17 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
 
         // 返回维护页面响应
         $this->sendMaintenanceResponse();
+    }
+
+    private function applyParsedRequestUri(): array
+    {
+        $uri = (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
+        $parse = UrlParser::parse($uri);
+        if (isset($parse['server']) && \is_array($parse['server'])) {
+            \Weline\Framework\Env\WelineEnv::replaceServer($parse['server']);
+        }
+
+        return $parse;
     }
 
     /**
@@ -332,7 +341,18 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         // 优先级1：从 URL 路径中获取语言（UrlParser 已解析并设置到 $_SERVER['WELINE_USER_LANG']）
         // 如果路径中明确指定了语言，优先使用路径中的语言
         $lang = \w_env('user.lang');
-        
+
+        if (empty($lang)) {
+            $queryString = (string)\Weline\Framework\Env\WelineEnv::server('QUERY_STRING', '');
+            if ($queryString !== '') {
+                parse_str($queryString, $queryParams);
+                $queryLang = (string)($queryParams['lang'] ?? '');
+                if (\preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $queryLang) === 1) {
+                    $lang = $queryLang;
+                }
+            }
+        }
+
         // 优先级2：从 Cookie 获取语言（如果路径中没有指定）
         if (empty($lang)) {
             $lang = \w_env_cookie('WELINE_USER_LANG');
@@ -417,6 +437,52 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             . \DIRECTORY_SEPARATOR . $lang . $suffix;
     }
 
+    private function isStaticFileFresh(string $staticFile, string $lang, bool $isApi = false): bool
+    {
+        if (!\is_file($staticFile)) {
+            return false;
+        }
+
+        $staticMtime = (int)@\filemtime($staticFile);
+        if ($staticMtime <= 0) {
+            return false;
+        }
+
+        foreach ($this->getStaticDependencies($lang, $isApi) as $dependency) {
+            if (\is_file($dependency) && (int)@\filemtime($dependency) > $staticMtime) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function getStaticDependencies(string $lang, bool $isApi = false): array
+    {
+        $dependencies = [
+            __FILE__,
+            BP . 'generated/language/' . $lang . '.php',
+            __DIR__ . '/../i18n/' . $lang . '.csv',
+            __DIR__ . '/../i18n/' . self::DEFAULT_LANG . '.csv',
+            BP . 'app/code/Weline/I18n/i18n/' . $lang . '.csv',
+            BP . 'app/code/Weline/I18n/i18n/' . self::DEFAULT_LANG . '.csv',
+        ];
+
+        if ($isApi) {
+            $dependencies[] = __DIR__ . '/../view/templates/maintenance_api.json';
+        } else {
+            $dependencies[] = __DIR__ . '/../view/templates/maintenance.phtml';
+            $dependencies[] = BP . 'app/code/Weline/I18n/view/hooks/header-language-switcher.phtml';
+            $dependencies[] = BP . 'app/code/Weline/I18n/view/templates/Frontend/header-choice-selector-assets.phtml';
+            $dependencies[] = BP . 'app/code/Weline/I18n/Taglib/LanguageSwitcher.php';
+        }
+
+        return $dependencies;
+    }
+
     /**
      * 加载翻译
      * 优先级：
@@ -425,6 +491,8 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
      */
     private function loadTranslations(string $lang): array
     {
+        $moduleFallbackTranslations = $this->loadModuleTranslations($lang);
+
         // 1. 尝试从 generated/language 读取
         $generatedFile = BP . 'generated/language/' . $lang . '.php';
         if (is_file($generatedFile)) {
@@ -432,23 +500,23 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             if (is_array($allTranslations)) {
                 // 查找 Weline_Maintenance 模块的翻译
                 if (isset($allTranslations['Weline_Maintenance'])) {
-                    return $allTranslations['Weline_Maintenance'];
+                    return \array_merge($allTranslations['Weline_Maintenance'], $moduleFallbackTranslations);
                 }
                 // 如果没有按模块分，尝试合并所有翻译
                 $merged = [];
-                foreach ($allTranslations as $moduleTranslations) {
-                    if (is_array($moduleTranslations)) {
-                        $merged = array_merge($merged, $moduleTranslations);
+                foreach ($allTranslations as $generatedModuleTranslations) {
+                    if (is_array($generatedModuleTranslations)) {
+                        $merged = array_merge($merged, $generatedModuleTranslations);
                     }
                 }
                 if (!empty($merged)) {
-                    return $merged;
+                    return \array_merge($merged, $moduleFallbackTranslations);
                 }
             }
         }
 
         // 2. 回退到模块 i18n 目录
-        return $this->loadModuleTranslations($lang);
+        return $moduleFallbackTranslations;
     }
 
     /**
@@ -522,30 +590,32 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             }
         }
 
-        http_response_code(503);
-        header('Retry-After: ' . $retryAfter);
+        $contentType = $isApiRequest
+            ? 'application/json; charset=utf-8'
+            : 'text/html; charset=utf-8';
+        $body = $isApiRequest
+            ? $this->renderApiResponse($lang, $retryAfter)
+            : $this->renderHtmlResponse($lang);
 
-        if ($isApiRequest) {
-            $this->sendApiResponse($lang, $retryAfter);
-        } else {
-            $this->sendHtmlResponse($lang);
-        }
-        
-        exit;
+        throw new ResponseTerminateException(
+            503,
+            $body,
+            [
+                'Content-Type' => $contentType,
+                'Retry-After' => (string)$retryAfter,
+            ]
+        );
     }
 
     /**
      * 发送 API JSON 响应
      */
-    private function sendApiResponse(string $lang, int $retryAfter): void
+    private function renderApiResponse(string $lang, int $retryAfter): string
     {
-        header('Content-Type: application/json; charset=utf-8');
-        
         // 尝试读取静态 JSON 文件
         $staticFile = $this->getStaticFilePath($lang, true);
-        if (is_file($staticFile)) {
-            readfile($staticFile);
-            return;
+        if ($this->isStaticFileFresh($staticFile, $lang, true)) {
+            return (string)file_get_contents($staticFile);
         }
         
         // 加载翻译
@@ -566,21 +636,18 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         // 保存静态文件
         $this->saveStaticFile($staticFile, $jsonContent);
         
-        echo $jsonContent;
+        return (string)$jsonContent;
     }
 
     /**
      * 发送 HTML 响应
      */
-    private function sendHtmlResponse(string $lang): void
+    private function renderHtmlResponse(string $lang): string
     {
-        header('Content-Type: text/html; charset=utf-8');
-        
         // 尝试读取静态 HTML 文件
         $staticFile = $this->getStaticFilePath($lang, false);
-        if (is_file($staticFile)) {
-            readfile($staticFile);
-            return;
+        if ($this->isStaticFileFresh($staticFile, $lang, false)) {
+            return (string)file_get_contents($staticFile);
         }
         
         // 加载翻译并生成 HTML
@@ -590,7 +657,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         // 保存静态文件
         $this->saveStaticFile($staticFile, $htmlContent);
         
-        echo $htmlContent;
+        return $htmlContent;
     }
 
     /**
@@ -623,6 +690,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         $howLongContent = $this->translate('大部分的网站升级活动都只有几分钟甚至几秒钟的时间。', $translations);
         $helpTitle = $this->translate('需要帮助吗？', $translations);
         $helpContent = $this->translate('如果你长期看到这个页面，对网站存在疑惑，请联系：', $translations);
+        $recoveryNotice = $this->translate('系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。', $translations);
         $backHome = $this->translate('返回首页', $translations);
 
         // 获取联系邮箱配置
@@ -678,7 +746,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         }
 
         // 备用简单 HTML
-        return $this->getFallbackHtml($htmlLang, $title, $heading, $message1, $message2, $backHome);
+        return $this->getFallbackHtml($htmlLang, $title, $heading, $message1, $message2, $recoveryNotice, $backHome);
     }
 
     /**
@@ -690,6 +758,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         string $heading,
         string $message1,
         string $message2,
+        string $recoveryNotice,
         string $backHome
     ): string {
         return <<<HTML
@@ -733,6 +802,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         <div class="icon">🔧</div>
         <h1>{$heading}</h1>
         <p>{$message1}<br>{$message2}</p>
+        <p>{$recoveryNotice}</p>
         <a href="/" class="back-btn">← {$backHome}</a>
     </div>
 </body>

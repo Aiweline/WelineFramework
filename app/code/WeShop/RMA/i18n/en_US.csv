@@ -28,8 +28,6 @@ RMA已批准,"RMA approved"
 订单已取消或已退款,"Order has been cancelled or refunded"
 订单尚未完成支付,"Order payment is not complete"
 请填写退换货原因。,"Return reason is required."
-售后管理,"RMA Management"
-售后详情,"RMA Detail"
 提交后会停留在当前个人中心，并自动刷新售后记录。,"After submission, you will stay in your account center and the RMA records will refresh automatically."
 "售后单 #%{1}","RMA #%{1}"
 订单号：%{1},"Order ID: %{1}"
@@ -66,6 +64,7 @@ x%{1},x%{1}
 已提交申请,"Requests Submitted"
 跟踪退换货审批进度，并可在账户中心直接提交新申请。,"Track return and exchange approvals, and submit new requests directly from your account center."
 管理退换货申请,"Manage Return Requests"
+售后管理,"RMA Management"
 WeShop,WeShop
 售后申请总数,"Total RMA Requests"
 暂无售后申请,"No RMA Requests"
@@ -84,6 +83,7 @@ ID,ID
 批准,Approve
 确认拒绝此售后申请？,"Are you sure you want to reject this RMA request?"
 拒绝,Reject
+售后详情,"RMA Detail"
 详情,Detail
 "售后单 ID","RMA ID"
 返回列表,"Back to List"

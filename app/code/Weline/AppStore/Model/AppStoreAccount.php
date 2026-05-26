@@ -35,6 +35,8 @@ class AppStoreAccount extends Model
     #[Col(type: 'varchar', length: 100, nullable: true, comment: '平台用户名')]
     public const schema_fields_platform_username = 'platform_username';
 
+    public const schema_fields_bound_domain = 'bound_domain';
+
     #[Col(type: 'varchar', length: 20, nullable: false, default: self::STATUS_ACTIVE, comment: '绑定状态')]
     public const schema_fields_status = 'status';
 
@@ -105,6 +107,17 @@ class AppStoreAccount extends Model
     public function setPlatformUsername(?string $username): static
     {
         $this->setData(self::schema_fields_platform_username, $username);
+        return $this;
+    }
+
+    public function getBoundDomain(): ?string
+    {
+        $domain = $this->getData(self::schema_fields_bound_domain);
+        return $domain === null ? null : (string)$domain;
+    }
+
+    public function setBoundDomain(?string $domain): static
+    {
         return $this;
     }
 

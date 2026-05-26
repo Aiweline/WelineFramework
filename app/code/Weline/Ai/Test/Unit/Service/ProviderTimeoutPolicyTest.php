@@ -25,4 +25,22 @@ class ProviderTimeoutPolicyTest extends TestCase
     {
         $this->assertSame(0, ProviderTimeoutPolicy::resolveImageGenerationTimeout(['disable_ai_timeout' => true], []));
     }
+
+    public function testExecutionLimitKeepsExistingUnlimitedRuntime(): void
+    {
+        $this->assertNull(ProviderTimeoutPolicy::resolveExecutionTimeLimit(60, '0'));
+    }
+
+    public function testExecutionLimitAddsBufferWhenRuntimeIsLimited(): void
+    {
+        $this->assertSame(70, ProviderTimeoutPolicy::resolveExecutionTimeLimit(60, '30'));
+    }
+
+    public function testLowSpeedTimeScalesWithLongRequestTimeout(): void
+    {
+        $this->assertSame(30, ProviderTimeoutPolicy::resolveLowSpeedTime(60));
+        $this->assertSame(45, ProviderTimeoutPolicy::resolveLowSpeedTime(180));
+        $this->assertSame(120, ProviderTimeoutPolicy::resolveLowSpeedTime(900));
+        $this->assertSame(ProviderTimeoutPolicy::DEFAULT_LOW_SPEED_TIME, ProviderTimeoutPolicy::resolveLowSpeedTime(0));
+    }
 }

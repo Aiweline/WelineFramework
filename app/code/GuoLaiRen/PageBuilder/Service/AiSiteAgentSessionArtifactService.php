@@ -15,7 +15,7 @@ class AiSiteAgentSessionArtifactService
     private const REF_KEY = '_artifact_refs';
     private const STORAGE_INLINE = 'session_artifact_v1';
     private const STORAGE_EXTERNAL_FILE = 'session_artifact_file_v1';
-    private const EXTERNAL_PAYLOAD_THRESHOLD_BYTES = 2097152;
+    private const EXTERNAL_PAYLOAD_THRESHOLD_BYTES = 524288;
 
     private bool $artifactTableEnsured = false;
 
@@ -51,6 +51,16 @@ class AiSiteAgentSessionArtifactService
         'content_manifest' => [
             'stage' => AiSiteAgentSession::STAGE_PLAN,
             'path' => ['content_manifest'],
+            'empty' => [],
+        ],
+        'execution_blueprint' => [
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+            'path' => ['execution_blueprint'],
+            'empty' => [],
+        ],
+        'plan_workbench' => [
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+            'path' => ['plan_workbench'],
             'empty' => [],
         ],
         'build_blueprint' => [
@@ -101,6 +111,8 @@ class AiSiteAgentSessionArtifactService
             'build_plan_v2',
             'plan_projection',
             'content_manifest',
+            'execution_blueprint',
+            'plan_workbench',
         ],
         AiSiteAgentSession::STAGE_VISUAL_EDIT => [
             'plan_json',
@@ -109,6 +121,8 @@ class AiSiteAgentSessionArtifactService
             'build_plan_v2',
             'plan_projection',
             'content_manifest',
+            'execution_blueprint',
+            'plan_workbench',
             'build_blueprint',
             'build_workbench',
             'build_contracts',
@@ -124,6 +138,8 @@ class AiSiteAgentSessionArtifactService
             'build_plan_v2',
             'plan_projection',
             'content_manifest',
+            'execution_blueprint',
+            'plan_workbench',
             'build_blueprint',
             'build_workbench',
             'build_contracts',
@@ -175,10 +191,12 @@ class AiSiteAgentSessionArtifactService
                 $json = $this->encodeValueDocument($value);
                 $hash = \sha1($json);
                 $bytes = \strlen($json);
+                $storage = $bytes > self::EXTERNAL_PAYLOAD_THRESHOLD_BYTES ? self::STORAGE_EXTERNAL_FILE : self::STORAGE_INLINE;
                 $previousHash = \trim((string)($existingRef['hash'] ?? ''));
-                if ($previousHash !== '' && \hash_equals($previousHash, $hash)) {
+                $previousStorage = \trim((string)($existingRef['storage'] ?? ''));
+                if ($previousHash !== '' && \hash_equals($previousHash, $hash) && $previousStorage === $storage) {
                     $refs[$stageCode][$artifactKey] = \array_replace($existingRef, [
-                        'storage' => $bytes > self::EXTERNAL_PAYLOAD_THRESHOLD_BYTES ? self::STORAGE_EXTERNAL_FILE : self::STORAGE_INLINE,
+                        'storage' => $storage,
                         'stage_code' => $stageCode,
                         'artifact_key' => $artifactKey,
                         'hash' => $hash,
@@ -188,7 +206,6 @@ class AiSiteAgentSessionArtifactService
                     unset($json, $value);
                     continue;
                 }
-                $storage = $bytes > self::EXTERNAL_PAYLOAD_THRESHOLD_BYTES ? self::STORAGE_EXTERNAL_FILE : self::STORAGE_INLINE;
                 $refs[$stageCode][$artifactKey] = [
                     'storage' => $storage,
                     'stage_code' => $stageCode,

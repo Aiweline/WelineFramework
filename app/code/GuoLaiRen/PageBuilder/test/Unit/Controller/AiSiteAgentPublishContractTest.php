@@ -62,6 +62,25 @@ final class AiSiteAgentPublishContractTest extends TestCase
         self::assertStringContainsString("\$scope['stage2_publish_readiness'] = \$stageTwoReadiness;", $methodSource);
     }
 
+    public function testPublishOperationIsQueueBacked(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+
+        self::assertStringContainsString("'publish' => \\GuoLaiRen\\PageBuilder\\Queue\\AiSitePublishQueue::class", $source);
+        self::assertStringContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'shouldEnqueueOperation'));
+        self::assertStringContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'isAiSiteQueueBackedOperation'));
+        self::assertStringContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'supportsBackgroundOperation'));
+    }
+
+    public function testOperationSseRecreatesMissingQueueRecordInsteadOfDeadEnding(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractMethodSource($source, 'handleOperationSse');
+
+        self::assertStringContainsString('$newQueueId = $this->enqueueOperationQueueTask($session, $adminId, $operation, $executionToken);', $methodSource);
+        self::assertStringNotContainsString('Queue record not found. Start the operation again so the controller can create one queue row.', $methodSource);
+    }
+
     public function testWorkspaceSnapshotHandlerRemainsReadOnlyForWorkbenchStepStatus(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');

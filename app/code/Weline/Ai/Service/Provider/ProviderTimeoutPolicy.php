@@ -10,6 +10,7 @@ final class ProviderTimeoutPolicy
     public const MIN_CONFIGURED_IMAGE_GENERATION_TIMEOUT = 120;
     public const EXECUTION_TIME_BUFFER = 10;
     public const DEFAULT_CONNECT_TIMEOUT = 60;
+    public const DEFAULT_LOW_SPEED_TIME = 120;
 
     public static function resolveRequestTimeout(array $params, array $config): int
     {
@@ -63,6 +64,29 @@ final class ProviderTimeoutPolicy
         }
 
         return self::DEFAULT_IMAGE_GENERATION_TIMEOUT;
+    }
+
+    public static function resolveExecutionTimeLimit(int $timeout, ?string $currentLimit = null): ?int
+    {
+        if (\trim((string)($currentLimit ?? @\ini_get('max_execution_time'))) === '0') {
+            return null;
+        }
+
+        $timeout = \max(0, $timeout);
+
+        return $timeout > 0
+            ? $timeout + self::EXECUTION_TIME_BUFFER
+            : 0;
+    }
+
+    public static function resolveLowSpeedTime(int $timeout): int
+    {
+        $timeout = \max(0, $timeout);
+        if ($timeout <= 0) {
+            return self::DEFAULT_LOW_SPEED_TIME;
+        }
+
+        return \min(self::DEFAULT_LOW_SPEED_TIME, \max(30, (int)\ceil($timeout / 4)));
     }
 
     private function __construct()

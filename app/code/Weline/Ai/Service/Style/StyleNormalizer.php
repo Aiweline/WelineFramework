@@ -27,12 +27,12 @@ final class StyleNormalizer
         $code = \trim($code, '-_');
         if ($code === '') {
             if ($throwOnEmpty) {
-                throw new \InvalidArgumentException('Style code is required.');
+                throw new \InvalidArgumentException((string)__('风格代码不能为空。'));
             }
             return '';
         }
         if (\strlen($code) > 96) {
-            throw new \InvalidArgumentException('Style code cannot exceed 96 characters.');
+            throw new \InvalidArgumentException((string)__('风格代码不能超过 96 个字符。'));
         }
 
         return $code;
@@ -181,7 +181,7 @@ final class StyleNormalizer
             }
         }
         if ($structuredNonEmpty < 2) {
-            throw new \InvalidArgumentException('Custom style must use structured fields; supplemental notes alone are not enough.');
+            throw new \InvalidArgumentException((string)__('自定义风格必须填写至少两个结构化字段，不能只填写补充说明。'));
         }
     }
 

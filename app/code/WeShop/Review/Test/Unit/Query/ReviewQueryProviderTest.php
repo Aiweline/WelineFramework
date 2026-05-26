@@ -13,9 +13,35 @@ use WeShop\Review\Service\ReviewPurchaseEligibilityService;
 use WeShop\Review\Service\ReviewReplyService;
 use WeShop\Review\Service\ReviewService;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Ui\FormKey;
 
 class ReviewQueryProviderTest extends TestCase
 {
+    public function testFormTokenIsPreparedLazilyThroughApi(): void
+    {
+        $formKey = $this->createMock(FormKey::class);
+        $formKey->expects($this->once())
+            ->method('getKey')
+            ->with('/review/create')
+            ->willReturn('token-123');
+
+        $provider = new ReviewQueryProvider(
+            $this->createMock(CustomerContextInterface::class),
+            $this->createMock(ReviewService::class),
+            $this->createMock(Url::class),
+            null,
+            null,
+            null,
+            $formKey
+        );
+
+        $result = $provider->execute('formToken', ['path' => '/review/create']);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('form_key', $result['data']['name']);
+        $this->assertSame('token-123', $result['data']['value']);
+    }
+
     public function testResolveModeSelectsAnonymousForGuestWithoutPurchaseLookup(): void
     {
         $customerContext = $this->createMock(CustomerContextInterface::class);

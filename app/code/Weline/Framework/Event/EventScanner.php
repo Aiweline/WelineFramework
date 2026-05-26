@@ -81,6 +81,7 @@ class EventScanner
             if (!empty($eventsConfig)) {
                 $result[$moduleName] = $eventsConfig;
             }
+            unset($eventsConfig);
         }
 
         return $result;
@@ -142,6 +143,7 @@ class EventScanner
             ];
         }
 
+        unset($config);
         return !empty($result) ? $result : null;
     }
 
@@ -184,6 +186,7 @@ class EventScanner
             if (!empty($eventsConfig)) {
                 $result[$moduleName] = $eventsConfig;
             }
+            unset($eventsConfig);
         }
 
         return $result;

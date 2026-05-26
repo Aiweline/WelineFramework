@@ -27,17 +27,10 @@ return [
             'required' => false,
             'multiple' => true,
         ],
-        'HeadContextProvider' => [
-            'path' => 'extends/module/Weline_Seo/HeadContextProvider',
-            'interface' => 'Weline\Seo\Interface\HeadContextProviderInterface',
-            'description' => 'SEO head context provider for title, description, canonical, breadcrumbs, subject data, and alternates.',
-            'required' => false,
-            'multiple' => true,
-        ],
-        'StructuredDataProvider' => [
-            'path' => 'extends/module/Weline_Seo/StructuredDataProvider',
-            'interface' => 'Weline\Seo\Interface\StructuredDataProviderInterface',
-            'description' => 'JSON-LD graph provider for schema.org nodes.',
+        'SeoProfileProvider' => [
+            'path' => 'extends/module/Weline_Seo/SeoProfileProvider',
+            'interface' => 'Weline\Seo\Interface\SeoProfileProviderInterface',
+            'description' => 'SEO/GEO profile provider for page-type facts, robots policy, sitemap metadata, and schema graph data.',
             'required' => false,
             'multiple' => true,
         ],

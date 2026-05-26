@@ -3,6 +3,9 @@
  * 支付方式编辑页面（内容模板）
  * 由布局系统自动包裹 HTML 框架
  */
+$scope = $this->getData('scope') ?? ['scope_type' => 'global', 'scope_code' => 'default', 'environment' => 'sandbox'];
+$scopeProfile = $this->getData('scopeProfile') ?? null;
+$profileConfig = is_object($scopeProfile) && method_exists($scopeProfile, 'getConfigData') ? $scopeProfile->getConfigData() : null;
 ?>
 <!-- 页面标题 -->
 <div class="row">
@@ -32,6 +35,33 @@
             <div class="card-body">
                 <form id="weline-payment-method-form" method="post" action="<?= $this->getUrl('*/backend/method/save') ?>">
                     <input type="hidden" name="code" value="<?= htmlspecialchars($method->getData('code')) ?>">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label"><?= __('配置 scope') ?></label>
+                                <select name="scope_type" class="form-select">
+                                    <?php foreach (['global' => 'Global', 'website' => 'Website', 'store' => 'Store', 'channel' => 'Channel', 'custom' => 'Custom'] as $value => $label): ?>
+                                        <option value="<?= htmlspecialchars($value) ?>" <?= (string)($scope['scope_type'] ?? 'global') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label"><?= __('Scope code') ?></label>
+                                <input type="text" name="scope_code" class="form-control" value="<?= htmlspecialchars((string)($scope['scope_code'] ?? 'default')) ?>">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label"><?= __('环境') ?></label>
+                                <select name="environment" class="form-select">
+                                    <option value="sandbox" <?= (string)($scope['environment'] ?? 'sandbox') === 'sandbox' ? 'selected' : '' ?>>Sandbox</option>
+                                    <option value="live" <?= (string)($scope['environment'] ?? '') === 'live' ? 'selected' : '' ?>>Live</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                     
                     <div class="row">
                         <div class="col-md-6">
@@ -78,7 +108,7 @@
                             <div class="card">
                                 <div class="card-body">
                                     <?php
-                                    $config = $method->getConfigData();
+                                    $config = is_array($profileConfig) ? $profileConfig : $method->getConfigData();
                                     foreach ($configFields as $fieldName => $fieldConfig):
                                     ?>
                                         <div class="mb-3">
@@ -166,6 +196,9 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="mdi mdi-content-save me-2"></i><?= __('保存') ?>
                         </button>
+                        <button type="submit" name="test_config" value="1" class="btn btn-outline-primary">
+                            <i class="mdi mdi-shield-check-outline me-2"></i><?= __('测试配置') ?>
+                        </button>
                         <a href="<?= $this->getUrl('*/backend/method/index') ?>" class="btn btn-secondary">
                             <i class="mdi mdi-arrow-left me-2"></i><?= __('返回') ?>
                         </a>
@@ -186,6 +219,9 @@
             e.preventDefault();
             
             var formData = new FormData(form);
+            if (e.submitter && e.submitter.name) {
+                formData.append(e.submitter.name, e.submitter.value);
+            }
             var Toast = window.BackendToast || window.BackendToast;
             window.Weline.Api.request(form.action, { method: 'POST', body: formData })
             .then(function(response) {

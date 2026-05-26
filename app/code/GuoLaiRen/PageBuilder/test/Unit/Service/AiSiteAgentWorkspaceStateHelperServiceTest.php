@@ -48,13 +48,21 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         $service = new AiSiteAgentWorkspaceStateHelperService();
         $state = [
             'virtual_pages_by_type' => [
-                'home' => ['title' => 'Home'],
+                'home' => [
+                    'title' => 'Home',
+                    'blocks' => [
+                        ['block_id' => 'hero', 'html' => '<section>' . \str_repeat('x', 20000) . '</section>'],
+                    ],
+                ],
                 'about' => ['title' => 'About'],
             ],
         ];
 
         $selected = $service->selectVirtualPagesForSse($state, ['home', 'missing', 'about', '']);
         self::assertSame(['home', 'about'], \array_keys($selected));
+        self::assertSame(1, $selected['home']['block_count'] ?? null);
+        self::assertTrue($selected['home']['blocks'][0]['html_available'] ?? false);
+        self::assertArrayNotHasKey('html', $selected['home']['blocks'][0] ?? []);
         self::assertSame([], $service->selectVirtualPagesForSse(['virtual_pages_by_type' => []], ['home']));
     }
 
@@ -178,8 +186,6 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
                 'public_id' => 'pub_keep',
                 'plan_confirmed' => 1,
                 'build_plan_confirmed' => 1,
-                'plan_json' => ['raw' => 1],
-                'plan_structured' => [1],
             ],
             $service->pruneScopeForView($scope)
         );
@@ -213,11 +219,11 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
 
         $pruned = $service->pruneStateForView($state);
         self::assertSame('plan-md', $pruned['plan']['markdown']);
-        self::assertSame(['id' => 'bp_1'], $pruned['plan']['build_plan_v2']);
+        self::assertSame([], $pruned['plan']['build_plan_v2']);
         self::assertSame(['pages' => ['home_page']], $pruned['plan']['projection']);
         self::assertTrue($pruned['plan']['build_plan_v2_available']);
-        self::assertSame([1], $pruned['plan_json']);
-        self::assertSame([1], $pruned['plan_structured']);
+        self::assertArrayNotHasKey('plan_json', $pruned);
+        self::assertArrayNotHasKey('plan_structured', $pruned);
         self::assertArrayNotHasKey('task_plan', $pruned);
         self::assertArrayNotHasKey('task_plan_structured', $pruned);
         self::assertArrayNotHasKey('virtual_theme_plan', $pruned);
@@ -283,6 +289,41 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertArrayNotHasKey('phtml', $layout['content'][0]);
         self::assertArrayNotHasKey('blocks', $layout);
         self::assertArrayNotHasKey('sections', $layout);
+    }
+
+    public function testPruneStateForEventPayloadDropsViewOnlyHeavySummaries(): void
+    {
+        $service = new AiSiteAgentWorkspaceStateHelperService();
+        $state = [
+            'public_id' => 'pub_event',
+            'active_operation' => ['operation' => 'build', 'status' => 'running'],
+            'build_task_summary' => ['total' => 2, 'done' => 1],
+            'virtual_pages_by_type' => [
+                'home_page' => [
+                    'title' => 'Home',
+                    'blocks' => [
+                        ['block_id' => 'hero', 'html' => '<section>' . \str_repeat('x', 50000) . '</section>'],
+                    ],
+                ],
+            ],
+            'asset_manifest' => ['slots' => ['hero' => ['final_url' => 'https://example.test/hero.png']]],
+            'content_manifest' => ['items' => [['copy' => \str_repeat('m', 20000)]]],
+            'page_type_layouts' => ['home_page' => ['content' => [['component' => 'hero']]]],
+            'plan' => ['markdown' => \str_repeat('p', 50000)],
+            'scope' => ['asset_manifest' => ['slots' => ['hero' => ['final_url' => 'https://example.test/hero.png']]]],
+        ];
+
+        $pruned = $service->pruneStateForEventPayload($state);
+
+        self::assertSame('pub_event', $pruned['public_id'] ?? '');
+        self::assertSame('build', $pruned['active_operation']['operation'] ?? '');
+        self::assertSame(1, $pruned['virtual_pages_by_type']['home_page']['block_count'] ?? null);
+        self::assertArrayNotHasKey('html', $pruned['virtual_pages_by_type']['home_page']['blocks'][0] ?? []);
+        self::assertArrayNotHasKey('asset_manifest', $pruned);
+        self::assertArrayNotHasKey('content_manifest', $pruned);
+        self::assertArrayNotHasKey('page_type_layouts', $pruned);
+        self::assertArrayNotHasKey('plan', $pruned);
+        self::assertArrayNotHasKey('scope', $pruned);
     }
 
     public function testSelectStatusQueueInfoUsesPlanAndBuildBucketsOnly(): void

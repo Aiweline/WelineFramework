@@ -119,6 +119,10 @@ class App
 
     private function shouldDispatchRunBefore(): bool
     {
+        if (\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER) {
+            return true;
+        }
+
         if ((string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1') {
             return false;
         }

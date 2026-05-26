@@ -146,6 +146,14 @@
             border-radius: 3px;
             animation: progress 2s ease-in-out infinite;
         }
+
+        .recovery-notice {
+            color: #c7d2fe;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin: -20px auto 36px;
+            max-width: 560px;
+        }
         
         @keyframes progress {
             0% { transform: translateX(-100%); }
@@ -358,7 +366,13 @@
                 <?php
                 // 尝试渲染hook
                 if (isset($template) && $template instanceof \Weline\Framework\View\Template) {
-                    $hookContent = $template->getHook('header-language-switcher');
+                    ob_start();
+                    $returnedHookContent = $template->getHook('header-language-switcher');
+                    $printedHookContent = ob_get_clean();
+                    $hookContent = (string)$printedHookContent . (string)$returnedHookContent;
+                    if (!str_contains($hookContent, 'WelineHeaderChoiceSelector')) {
+                        $hookContent .= (string)$template->fetch('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml');
+                    }
                     if (!empty(trim($hookContent))) {
                         echo $hookContent;
                     } else {
@@ -443,6 +457,7 @@
                     <div class="progress-bar"></div>
                 </div>
             </div>
+            <p class="recovery-notice" aria-live="polite"><?= $recoveryNotice ?? '系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。' ?></p>
             
             <div class="info-cards">
                 <div class="card">
@@ -470,5 +485,78 @@
             </a>
         </div>
     </div>
+    <script>
+        (function () {
+            var initialDelay = 5000;
+            var maxDelay = 30000;
+            var jitter = 1500;
+            var timer = 0;
+
+            if (!window.fetch || !window.URL) {
+                return;
+            }
+
+            function getProbeUrl() {
+                var url = new URL(window.location.href);
+                if (/^\/pub\/errors\/maintenance\//.test(url.pathname)) {
+                    url = new URL('/', window.location.origin);
+                }
+                url.hash = '';
+                url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
+                return url.toString();
+            }
+
+            function schedule(delay) {
+                if (timer) {
+                    window.clearTimeout(timer);
+                }
+                timer = window.setTimeout(check, delay + Math.floor(Math.random() * jitter));
+            }
+
+            function probe(method) {
+                return window.fetch(getProbeUrl(), {
+                    method: method,
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                    redirect: 'follow',
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+                        'X-Maintenance-Recovery-Check': '1'
+                    }
+                });
+            }
+
+            function handleResponse(response) {
+                if (response.status === 200) {
+                    window.location.reload();
+                    return;
+                }
+                schedule(response.status === 503 ? initialDelay : maxDelay);
+            }
+
+            function check() {
+                if (document.hidden) {
+                    schedule(initialDelay);
+                    return;
+                }
+
+                probe('HEAD').then(function (response) {
+                    if (response.status === 405 || response.status === 501) {
+                        return probe('GET').then(handleResponse);
+                    }
+                    handleResponse(response);
+                }).catch(function () {
+                    schedule(maxDelay);
+                });
+            }
+
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) {
+                    schedule(0);
+                }
+            });
+            schedule(initialDelay);
+        })();
+    </script>
 </body>
 </html>

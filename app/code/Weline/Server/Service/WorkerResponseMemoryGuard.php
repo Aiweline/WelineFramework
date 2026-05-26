@@ -144,6 +144,16 @@ final class WorkerResponseMemoryGuard
         ];
     }
 
+    public static function compactIfPressure(float $threshold = self::RUNTIME_CACHE_PRESSURE_THRESHOLD): ?array
+    {
+        $threshold = self::normalizeThreshold($threshold, self::RUNTIME_CACHE_PRESSURE_THRESHOLD);
+        if (self::getMemoryPressure() < $threshold) {
+            return null;
+        }
+
+        return self::compact();
+    }
+
     /**
      * 清理长生命周期 Worker 中可安全重建的热点缓存。
      *

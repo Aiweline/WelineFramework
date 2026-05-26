@@ -6,6 +6,7 @@ namespace WeShop\Order\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use WeShop\Order\Model\Order;
+use WeShop\Order\Model\OrderItem;
 use WeShop\Order\Service\OrderService;
 
 class OrderServiceTest extends TestCase
@@ -307,6 +308,72 @@ class OrderServiceTest extends TestCase
 
         $this->assertSame(OrderService::STATUS_COMPLETED, $delivered->getData(Order::schema_fields_status));
         $this->assertSame(OrderService::FULFILLMENT_STATUS_DELIVERED, $delivered->getData(Order::schema_fields_fulfillment_status));
+    }
+
+    public function testAddOrderItemsPersistsColorAndImageOptionPayload(): void
+    {
+        $orderItem = new class extends OrderItem {
+            public function __construct()
+            {
+            }
+
+            public function clearData(bool $with_query = true): static
+            {
+                return $this;
+            }
+
+            public function save(\Weline\Framework\Database\AbstractModel|array|string|bool $data = [], array|string $sequence = ''): int|bool
+            {
+                $this->setData(self::schema_fields_ID, 501);
+
+                return true;
+            }
+
+            public function getId(mixed $default = 0): mixed
+            {
+                return $this->getData(self::schema_fields_ID) ?? $default;
+            }
+        };
+
+        $service = new class($orderItem) extends OrderService {
+            public function __construct(OrderItem $orderItem)
+            {
+                parent::__construct(null, $orderItem);
+            }
+
+            protected function loadProductSnapshot(int $productId, string $sku = ''): array
+            {
+                return [];
+            }
+        };
+        $saved = $service->addOrderItems(77, [
+            [
+                'product_id' => 10,
+                'product_name' => 'Demo Dress',
+                'product_sku' => 'DEMO-10',
+                'options' => [
+                    [
+                        'label' => 'Color',
+                        'value' => 'Black',
+                        'swatch_type' => 'color',
+                        'swatch_value' => '#111827',
+                    ],
+                    [
+                        'label' => 'Style',
+                        'value' => 'Lifestyle',
+                        'swatch_type' => 'image',
+                        'option_image' => 'https://cdn.test/style.jpg',
+                    ],
+                ],
+                'quantity' => 1,
+                'price' => 19.5,
+            ],
+        ]);
+
+        $this->assertSame('#111827', $saved[0]['options'][0]['swatch_value'] ?? null);
+        $this->assertSame('https://cdn.test/style.jpg', $saved[0]['options'][1]['swatch_value'] ?? null);
+        $this->assertSame('https://cdn.test/style.jpg', $saved[0]['options'][1]['option_image'] ?? null);
+        $this->assertStringContainsString('option_image', (string) ($saved[0]['product_options'] ?? ''));
     }
 
     /**

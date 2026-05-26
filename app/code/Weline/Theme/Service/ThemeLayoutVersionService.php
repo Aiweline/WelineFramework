@@ -322,6 +322,35 @@ readonly class ThemeLayoutVersionService
         return $versions;
     }
 
+    public function getVersion(int $themeId, string $pageType, int $versionId): ?ThemeLayoutVersion
+    {
+        if ($themeId <= 0 || $pageType === '' || $versionId <= 0) {
+            return null;
+        }
+
+        $version = $this->versionModel->reset()->load($versionId);
+        if (!$version->getVersionId()) {
+            return null;
+        }
+
+        if ((int)$version->getThemeId() !== $themeId || (string)$version->getPageType() !== $pageType) {
+            return null;
+        }
+
+        return $version;
+    }
+
+    public function getVersionSnapshot(int $themeId, string $pageType, int $versionId): ?array
+    {
+        $version = $this->getVersion($themeId, $pageType, $versionId);
+        if (!$version) {
+            return null;
+        }
+
+        $snapshot = $version->getSnapshotData();
+        return is_array($snapshot) ? $snapshot : [];
+    }
+
     /**
      * 获取当前版本
      */

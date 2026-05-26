@@ -10,6 +10,7 @@ use Weline\Database\Service\Admin\DatabaseAdminService;
 use Weline\Database\Service\Admin\SchemaAdminService;
 use Weline\Database\Service\Admin\SqlConsoleService;
 use Weline\Database\Service\Admin\SqlGuardService;
+use Weline\Database\Service\Admin\SqlImportService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Response;
 
@@ -26,6 +27,7 @@ class Admin extends BaseController
         private readonly DatabaseAdminService $databaseAdminService,
         private readonly SqlConsoleService $sqlConsoleService,
         private readonly SqlGuardService $sqlGuardService,
+        private readonly SqlImportService $sqlImportService,
         private readonly SchemaAdminService $schemaAdminService,
         private readonly AuditLogService $auditLogService
     ) {
@@ -40,14 +42,32 @@ class Admin extends BaseController
     )]
     public function index(): string
     {
+        $defaultDatabase = (string) $this->request->getParam('database', '');
+        $databases = [];
+        $tables = [];
+        try {
+            $databases = $this->databaseAdminService->listDatabases();
+            if ($defaultDatabase === '' && $databases !== []) {
+                $defaultDatabase = (string) $databases[0];
+            }
+            if ($defaultDatabase !== '') {
+                $tables = $this->databaseAdminService->listTables($defaultDatabase);
+            }
+        } catch (\Throwable) {
+            $databases = [];
+            $tables = [];
+        }
+
         $this->assign([
             'title' => (string) __('数据库管理'),
-            'default_database' => (string) $this->request->getParam('database', ''),
+            'default_database' => $defaultDatabase,
+            'databases' => $databases,
+            'tables' => $tables,
             'active_tab' => (string) $this->request->getParam('tab', 'browse'),
             'audit_logs' => $this->auditLogService->latest(50),
         ]);
 
-        return (string) $this->fetchBase('Weline_Database::backend/templates/admin/index.phtml');
+        return (string) $this->fetch('Weline_Database::backend/templates/admin/index.phtml');
     }
 
     #[Acl(
@@ -291,6 +311,205 @@ class Admin extends BaseController
                     (string) $this->request->clientIP()
                 );
             }
+            return $this->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    #[Acl(
+        'Weline_Database::database_admin_sql_import_prepare',
+        '准备 SQL 文件导入',
+        'mdi mdi-database-arrow-up-outline',
+        '上传 SQL、生成备份并暂存导入任务',
+        'Weline_Database::database_admin_sql_console'
+    )]
+    public function prepareSqlImport(): string
+    {
+        $file = $this->uploadedSqlFile();
+        $filePath = is_array($file) ? (string)($file['tmp_name'] ?? '') : '';
+        $originalName = is_array($file) ? (string)($file['name'] ?? 'import.sql') : 'import.sql';
+
+        try {
+            if ($filePath === '' || !is_file($filePath)) {
+                throw new \InvalidArgumentException((string)__('请上传 SQL 文件'));
+            }
+            $extension = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
+            if ($extension !== 'sql') {
+                throw new \InvalidArgumentException((string)__('只能上传 .sql 文件'));
+            }
+
+            $result = $this->sqlImportService->prepare(
+                (string)file_get_contents($filePath),
+                $originalName,
+                $this->getLoginUserId(),
+                $this->getLoginUsername(),
+                (string)$this->request->clientIP()
+            );
+
+            $this->auditLogService->log(
+                'prepare_sql_import',
+                '',
+                '',
+                'sha256:' . (string)$result['sql_sha256'],
+                [
+                    'original_name' => $originalName,
+                    'target_tables' => $result['target_tables'],
+                    'backup_filename' => $result['backup_filename'],
+                    'sql_bytes' => $result['sql_bytes'],
+                    'backup_bytes' => $result['backup_bytes'],
+                ],
+                0,
+                'success',
+                (string)__('SQL 导入备份已生成'),
+                $this->getLoginUserId(),
+                $this->getLoginUsername(),
+                (string)$this->request->clientIP()
+            );
+
+            return $this->json(['success' => true, 'data' => $result]);
+        } catch (\Throwable $e) {
+            $this->auditLogService->log(
+                'prepare_sql_import',
+                '',
+                '',
+                '',
+                ['original_name' => $originalName],
+                0,
+                'failed',
+                $e->getMessage(),
+                $this->getLoginUserId(),
+                $this->getLoginUsername(),
+                (string)$this->request->clientIP()
+            );
+            return $this->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function uploadedSqlFile(): ?array
+    {
+        $file = $this->request->getFile('sql_file') ?: $this->request->getFile('file');
+        if (is_array($file)) {
+            return $file;
+        }
+
+        foreach (['sql_file', 'file'] as $key) {
+            if (isset($_FILES[$key]) && is_array($_FILES[$key])) {
+                return $_FILES[$key];
+            }
+        }
+
+        $rawBody = $this->request->getParameterBag()->getRawBody();
+        $contentType = $this->request->getContentType();
+        if ($rawBody === '' || !str_contains(strtolower($contentType), 'multipart/form-data')) {
+            return null;
+        }
+
+        $parsed = \Weline\Framework\Http\WlsRequest::parseMultipartFormData($rawBody, $contentType);
+        $files = is_array($parsed['files'] ?? null) ? $parsed['files'] : [];
+        foreach (['sql_file', 'file'] as $key) {
+            if (isset($files[$key]) && is_array($files[$key])) {
+                return $files[$key];
+            }
+        }
+
+        return null;
+    }
+
+    #[Acl(
+        'Weline_Database::database_admin_sql_import_backup_download',
+        '下载 SQL 导入前备份',
+        'mdi mdi-download-lock-outline',
+        '下载 SQL 导入前生成的备份文件',
+        'Weline_Database::database_admin_sql_console'
+    )]
+    public function downloadSqlBackup(): string
+    {
+        $token = (string)$this->request->getParam('token', '');
+        try {
+            $backup = $this->sqlImportService->markBackupDownloaded($token);
+            $manifest = $backup['manifest'];
+            $this->auditLogService->log(
+                'download_sql_import_backup',
+                '',
+                '',
+                'sha256:' . (string)($manifest['sql_sha256'] ?? ''),
+                [
+                    'token' => $token,
+                    'backup_filename' => $backup['filename'],
+                    'backup_bytes' => $backup['bytes'],
+                    'target_tables' => $manifest['analysis']['target_tables'] ?? [],
+                ],
+                0,
+                'success',
+                (string)__('SQL 导入备份已下载'),
+                $this->getLoginUserId(),
+                $this->getLoginUsername(),
+                (string)$this->request->clientIP()
+            );
+
+            $content = (string)file_get_contents((string)$backup['path']);
+            $response = $this->request->getResponse();
+            $response->setHeader('Content-Type', 'application/sql; charset=utf-8');
+            $response->setHeader('Content-Disposition', 'attachment; filename="' . $backup['filename'] . '"');
+            $response->setHeader('Content-Length', (string)strlen($content));
+            $response->setHeader('Cache-Control', 'no-store');
+            $response->setBody($content);
+            return $content;
+        } catch (\Throwable $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    #[Acl(
+        'Weline_Database::database_admin_sql_import_execute',
+        '执行 SQL 文件导入',
+        'mdi mdi-database-import-outline',
+        '在已下载备份后执行 SQL 文件导入',
+        'Weline_Database::database_admin_sql_console'
+    )]
+    public function executeSqlImport(): string
+    {
+        $token = (string)$this->request->getPost('token', '');
+        $backupConfirmed = (bool)$this->request->getPost('backup_confirmed', false);
+        $confirmPhrase = (string)$this->request->getPost('confirm_phrase', '');
+
+        try {
+            $result = $this->sqlImportService->execute($token, $backupConfirmed, $confirmPhrase);
+            $this->auditLogService->log(
+                'execute_sql_import',
+                '',
+                '',
+                'sha256:' . (string)$result['sql_sha256'],
+                [
+                    'token' => $token,
+                    'target_tables' => $result['target_tables'],
+                    'elapsed_ms' => $result['elapsed_ms'],
+                ],
+                (int)$result['affected_rows'],
+                'success',
+                (string)__('SQL 导入执行成功'),
+                $this->getLoginUserId(),
+                $this->getLoginUsername(),
+                (string)$this->request->clientIP()
+            );
+
+            return $this->json(['success' => true, 'data' => $result]);
+        } catch (\Throwable $e) {
+            $this->auditLogService->log(
+                'execute_sql_import',
+                '',
+                '',
+                '',
+                ['token' => $token],
+                0,
+                'failed',
+                $e->getMessage(),
+                $this->getLoginUserId(),
+                $this->getLoginUsername(),
+                (string)$this->request->clientIP()
+            );
             return $this->json(['success' => false, 'message' => $e->getMessage()]);
         }
     }

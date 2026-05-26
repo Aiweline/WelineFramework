@@ -328,6 +328,7 @@
                     value: String(option.value || '').trim(),
                     swatchType: String(option.swatch_type || '').trim().toLowerCase(),
                     swatchValue: String(option.swatch_value || '').trim(),
+                    optionImage: String(option.option_image || '').trim(),
                 }))
                 .filter(option => option.value !== '');
         },
@@ -341,7 +342,7 @@
             }
 
             if (option.swatchType === 'image') {
-                const image = this.sanitizeUrl(option.swatchValue);
+                const image = this.sanitizeUrl(option.swatchValue || option.optionImage);
                 if (image !== '#') {
                     return `<span class="mini-cart-item__option-swatch mini-cart-item__option-swatch--image"><img src="${this.escapeHtml(image)}" alt="" loading="lazy"></span>`;
                 }

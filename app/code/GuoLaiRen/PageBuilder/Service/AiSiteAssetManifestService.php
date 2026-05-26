@@ -1864,6 +1864,8 @@ final class AiSiteAssetManifestService
             'aspect_ratio' => \trim((string)($slot['aspect_ratio'] ?? '')),
             'output_format' => \trim((string)($slot['output_format'] ?? '')),
             'background' => \trim((string)($slot['background'] ?? '')),
+            'image_timeout' => (int)($slot['image_timeout'] ?? $slot['image_generation_timeout'] ?? 0),
+            'image_generation_max_attempts' => (int)($slot['image_generation_max_attempts'] ?? $slot['max_image_generation_attempts'] ?? 0),
             'transparent_png_required' => (int)($slot['transparent_png_required'] ?? 0) === 1 ? 1 : 0,
             'identity_transparent_png_required' => (int)($slot['identity_transparent_png_required'] ?? 0) === 1 ? 1 : 0,
             'allowed_pages' => \is_array($slot['allowed_pages'] ?? null) ? $slot['allowed_pages'] : ['*'],
