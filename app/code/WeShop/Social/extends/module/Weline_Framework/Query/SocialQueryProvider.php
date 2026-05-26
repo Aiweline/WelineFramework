@@ -64,6 +64,7 @@ class SocialQueryProvider implements QueryProviderInterface
                         'platform' => ['type' => 'string', 'required' => true, 'max_length' => 32],
                         'url' => ['type' => 'string', 'max_length' => 2048],
                         'product_id' => ['type' => 'int', 'min' => 0],
+                        'affiliate_share_code' => ['type' => 'string', 'max_length' => 64],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Record social share',

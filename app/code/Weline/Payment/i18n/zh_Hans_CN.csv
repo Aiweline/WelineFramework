@@ -11,7 +11,9 @@
 "查询失败: %{1}","查询失败: %{1}"
 缺少支付方式代码,缺少支付方式代码
 支付方式不存在,支付方式不存在
+"Payment method must pass configuration testing before it can be enabled.","Payment method must pass configuration testing before it can be enabled."
 支付方式配置保存成功,支付方式配置保存成功
+"Payment method must pass configuration testing for this scope before it can be enabled.","Payment method must pass configuration testing for this scope before it can be enabled."
 支付方式状态已更新,支付方式状态已更新
 缺少交易ID,缺少交易ID
 支付状态查询成功,支付状态查询成功
@@ -20,6 +22,7 @@
 "查询支付状态失败: %{1}","查询支付状态失败: %{1}"
 支付待处理,支付待处理
 支付处理中,支付处理中
+"Payment method code is required.","Payment method code is required."
 "支付方式 %{code} 不存在或未启用","支付方式 %{code} 不存在或未启用"
 支付提供商实例化失败,支付提供商实例化失败
 "支付方式不支持货币 %{currency}","支付方式不支持货币 %{currency}"
@@ -31,6 +34,9 @@
 只有支付成功的交易才能退款,只有支付成功的交易才能退款
 该交易已经退款,该交易已经退款
 编辑支付方式,编辑支付方式
+"配置 scope","配置 scope"
+"Scope code","Scope code"
+环境,环境
 支付方式代码,支付方式代码
 支付方式名称,支付方式名称
 是否启用,是否启用
@@ -42,6 +48,7 @@
 选择此支付方式支持的优惠方式。如果未选择任何项，则默认支持所有优惠方式。,选择此支付方式支持的优惠方式。如果未选择任何项，则默认支持所有优惠方式。
 暂无可用的优惠方式。请确保营销模块已正确安装。,暂无可用的优惠方式。请确保营销模块已正确安装。
 保存,保存
+测试配置,测试配置
 返回,返回
 保存成功,保存成功
 保存失败,保存失败

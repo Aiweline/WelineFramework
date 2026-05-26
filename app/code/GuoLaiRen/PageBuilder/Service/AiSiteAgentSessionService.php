@@ -1019,6 +1019,7 @@ SQL;
         if ($this->loadById($sessionId, $forAdminUserId) === null) {
             return false;
         }
+        $payload = $this->sanitizeEventPayloadForStorage($payload);
         $event = clone $this->eventModel;
         $event->clearData()->clearQuery();
         $event->setData(AiSiteAgentSessionEvent::schema_fields_AGENT_SESSION_ID, $sessionId);
@@ -1049,6 +1050,73 @@ SQL;
             $event->save();
         }
         return true;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function sanitizeEventPayloadForStorage(array $payload): array
+    {
+        if (\is_array($payload['state'] ?? null)) {
+            /** @var AiSiteAgentWorkspaceStateHelperService $stateHelper */
+            $stateHelper = ObjectManager::getInstance(AiSiteAgentWorkspaceStateHelperService::class);
+            $payload['state'] = $stateHelper->pruneStateForEventPayload($payload['state']);
+        }
+        if (\is_array($payload['task_runtime_context'] ?? null)) {
+            $payload['task_runtime_context'] = $this->summarizeTaskRuntimeContextForEvent($payload['task_runtime_context']);
+        }
+
+        return $this->dedupeTaskSummaryPayloadForEvent($payload);
+    }
+
+    /**
+     * @param array<string, mixed> $runtime
+     * @return array<string, mixed>
+     */
+    private function summarizeTaskRuntimeContextForEvent(array $runtime): array
+    {
+        $summary = [];
+        foreach ([
+            'session_id',
+            'task_key',
+            'task_session_id',
+            'stream_session_key',
+            'content_locale',
+            'build_plan_contract_id',
+        ] as $key) {
+            if (!\array_key_exists($key, $runtime) || \is_array($runtime[$key]) || \is_object($runtime[$key])) {
+                continue;
+            }
+            $summary[$key] = $runtime[$key];
+        }
+        foreach (['target', 'context_refs', 'page_contract', 'allowed_contract_refs'] as $key) {
+            if (\is_array($runtime[$key] ?? null)) {
+                $summary[$key] = $runtime[$key];
+            }
+        }
+        $summary['runtime_context_slimmed'] = true;
+
+        return $summary;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function dedupeTaskSummaryPayloadForEvent(array $payload): array
+    {
+        if (!\is_array($payload['task_summary'] ?? null)) {
+            if (\is_array($payload['task_progress'] ?? null)) {
+                $payload['task_summary'] = $payload['task_progress'];
+            } elseif (\is_array($payload['build_task_summary'] ?? null)) {
+                $payload['task_summary'] = $payload['build_task_summary'];
+            }
+        }
+
+        unset($payload['task_progress'], $payload['build_task_summary']);
+
+        return $payload;
     }
 
     /**

@@ -19,11 +19,28 @@ class Payment extends BaseController
     #[Acl('WeShop_Payment::payment_index', '查看支付方式', 'mdi mdi-credit-card-outline', '查看支付方式管理页面')]
     public function index(): string
     {
-        $data = $this->paymentManagementService->getManagementData();
+        $filters = [
+            'search' => (string) $this->request->getGet('search', ''),
+            'country' => strtoupper((string) $this->request->getGet('country', '')),
+            'currency' => strtoupper((string) $this->request->getGet('currency', '')),
+            'provider' => (string) $this->request->getGet('provider', ''),
+            'status' => (string) $this->request->getGet('status', ''),
+            'tab' => (string) $this->request->getGet('tab', 'enabled'),
+            'scope_type' => (string) $this->request->getGet('scope_type', 'global'),
+            'scope_code' => (string) $this->request->getGet('scope_code', 'default'),
+            'environment' => (string) $this->request->getGet('environment', 'sandbox'),
+        ];
+        $data = $this->paymentManagementService->getManagementData($filters);
 
-        $this->assign('page_title', (string) __('Payment Methods'));
+        $this->assign('page_title', (string) __('支付方式'));
         $this->assign('save_url', $this->_url->getBackendUrl('*/backend/payment/save'));
+        $this->assign('filter_url', $this->_url->getBackendUrl('*/backend/payment'));
         $this->assign('methods', $data['methods'] ?? []);
+        $this->assign('all_methods', $data['all_methods'] ?? []);
+        $this->assign('providers', $data['providers'] ?? []);
+        $this->assign('countries', $data['countries'] ?? []);
+        $this->assign('filters', $data['filters'] ?? []);
+        $this->assign('scope', $data['scope'] ?? []);
         $this->assign('stats', $data['stats'] ?? []);
 
         return $this->fetchBase();

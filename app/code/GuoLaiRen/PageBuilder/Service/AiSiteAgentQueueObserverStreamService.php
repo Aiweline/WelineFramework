@@ -118,14 +118,22 @@ class AiSiteAgentQueueObserverStreamService
 
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         $queueSnapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
-        $queueStatus = \trim((string)($queueSnapshot['status'] ?? ''));
+        $queueStatus = \strtolower(\trim((string)($queueSnapshot['status'] ?? '')));
         $semanticStatus = \strtolower(\trim((string)($queueInfo['semantic_status'] ?? $queueSnapshot['semantic_status'] ?? '')));
-        $queueRecoveredForRetry = !empty($queueInfo['queue_terminal_recovered'])
-            || !empty($queueSnapshot['queue_terminal_recovered'])
-            || !empty($queueInfo['retry_allowed'])
-            || !empty($queueSnapshot['retry_allowed'])
-            || \in_array($semanticStatus, ['cancelled', 'canceled', 'stale'], true);
-        if ($activeStatus === 'done' && $queueStatus !== 'done') {
+        $queueDone = \in_array($queueStatus, ['done', 'complete', 'completed'], true)
+            || \in_array($semanticStatus, ['done', 'complete', 'completed'], true);
+        if ($queueDone && $queueStatus === '') {
+            $queueStatus = 'done';
+        }
+        $queueRecoveredForRetry = !$queueDone
+            && (
+                !empty($queueInfo['queue_terminal_recovered'])
+                || !empty($queueSnapshot['queue_terminal_recovered'])
+                || !empty($queueInfo['retry_allowed'])
+                || !empty($queueSnapshot['retry_allowed'])
+                || \in_array($semanticStatus, ['cancelled', 'canceled', 'stale'], true)
+            );
+        if ($activeStatus === 'done' && !$queueDone) {
             return $activeOperation;
         }
         if ($queueRecoveredForRetry) {
@@ -199,12 +207,18 @@ class AiSiteAgentQueueObserverStreamService
             $activeOperation['message'] = $queueMessage !== '' ? $queueMessage : (string)__('队列执行失败，请重试。');
             $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
             $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
-        } elseif (\in_array($queueStatus, ['done', 'stop', 'stopped', 'cancelled', 'canceled'], true)) {
-            $activeOperation['status'] = $queueStatus === 'done' ? 'done' : 'cancelled';
+        } elseif (\in_array($queueStatus, ['done', 'complete', 'completed', 'stop', 'stopped', 'cancelled', 'canceled'], true)) {
+            $activeOperation['status'] = \in_array($queueStatus, ['done', 'complete', 'completed'], true) ? 'done' : 'cancelled';
+            $activeOperation['semantic_status'] = $activeOperation['status'];
             $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
-            if ($queueStatus === 'done') {
+            if ($activeOperation['status'] === 'done') {
+                $activeOperation['retry_allowed'] = 0;
+                $activeOperation['queue_terminal_recovered'] = 0;
                 $currentMessage = \trim((string)($activeOperation['message'] ?? ''));
-                if ($currentMessage !== '' && $activeStatus !== 'error') {
+                if (
+                    $currentMessage !== ''
+                    && !\in_array($activeStatus, ['error', 'stop', 'stopped', 'cancelled', 'canceled'], true)
+                ) {
                     $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
                     return $activeOperation;
                 }

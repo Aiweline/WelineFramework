@@ -46,6 +46,29 @@ if (!\function_exists('wlsNormalizeMemoryLimit')) {
     }
 }
 
+if (!\function_exists('wlsMemoryLimitToBytes')) {
+    function wlsMemoryLimitToBytes(mixed $value): int
+    {
+        $limit = \strtoupper(\trim((string) $value));
+        if ($limit === '' || $limit === '-1' || $limit === '0') {
+            return 0;
+        }
+
+        $unit = \substr($limit, -1);
+        $number = (float) $limit;
+        if ($number <= 0) {
+            return 0;
+        }
+
+        return match ($unit) {
+            'G' => (int) \round($number * 1024 * 1024 * 1024),
+            'M' => (int) \round($number * 1024 * 1024),
+            'K' => (int) \round($number * 1024),
+            default => (int) \round($number),
+        };
+    }
+}
+
 if (!\function_exists('wlsClearFrameworkCachePools')) {
     /**
      * @return array<string, bool>
@@ -114,6 +137,7 @@ $useReusePort = false;  // 是否使用 SO_REUSEPORT（Linux 直连模式）
 $wlsLoopDriver = 'auto';
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
+$workerCount = 1;
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
@@ -136,6 +160,8 @@ foreach ($argv as $arg) {
         $wlsLoopDriver = (string)\substr($arg, 18);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--worker-count=')) {
+        $workerCount = \max(1, (int)\substr($arg, 15));
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -186,6 +212,9 @@ $_ENV['WLS_INSTANCE'] = $instanceName;
 $_SERVER['WLS_WORKER_ID'] = (string)$workerId;
 $_ENV['WLS_WORKER_ID'] = (string)$workerId;
 @\putenv('WLS_WORKER_ID=' . (string)$workerId);
+$_SERVER['WLS_WORKER_COUNT'] = (string)$workerCount;
+$_ENV['WLS_WORKER_COUNT'] = (string)$workerCount;
+@\putenv('WLS_WORKER_COUNT=' . (string)$workerCount);
 $_SERVER['WLS_PORT'] = (string)$port;
 $_ENV['WLS_PORT'] = (string)$port;
 @\putenv('WLS_PORT=' . (string)$port);
@@ -1187,10 +1216,14 @@ if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRE
 }
 
 // 内存监控配置（防止内存泄漏导致 OOM）
-$maxMemoryBytes = 256 * 1024 * 1024; // 256MB 内存上限
-$memoryCheckInterval = 10; // 每 10 秒检查一次内存
+$maxMemoryBytes = wlsMemoryLimitToBytes($wlsMemoryLimit);
+if ($maxMemoryBytes <= 0) {
+    $maxMemoryBytes = 256 * 1024 * 1024;
+}
+$memoryCheckInterval = 5;
 $lastMemoryCheck = \time();
-$memoryWarningThreshold = 0.8; // 80% 时告警
+$memoryWarningThreshold = 0.80;
+$memoryDrainThreshold = 0.88;
 
 // 最大请求数限制（可选的内存保护措施）
 $maxRequests = 10000; // 处理 10000 个请求后优雅重启（0=禁用）
@@ -1685,18 +1718,35 @@ while (true) {
     if ($now - $lastMemoryCheck >= $memoryCheckInterval) {
         $lastMemoryCheck = $now;
         $currentMemory = \memory_get_usage(true);
-        $memoryPercent = $currentMemory / $maxMemoryBytes;
-        
-        // 超过内存上限，触发优雅重启
-        if ($currentMemory >= $maxMemoryBytes) {
-            $memoryMB = \round($currentMemory / 1024 / 1024, 2);
-            WlsLogger::warning_("内存使用超限 ({$memoryMB}MB >= " . ($maxMemoryBytes / 1024 / 1024) . "MB)，触发优雅重启");
-            $shouldExit = true;
-        }
-        // 达到告警阈值，输出警告日志
-        elseif ($memoryPercent >= $memoryWarningThreshold) {
-            $memoryMB = \round($currentMemory / 1024 / 1024, 2);
-            WlsLogger::warning_("内存使用率较高: {$memoryMB}MB (" . \round($memoryPercent * 100) . "%)");
+        $memoryPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
+
+        if ($memoryPercent >= $memoryDrainThreshold) {
+            $beforeMb = \round($currentMemory / 1024 / 1024, 1);
+            $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+            $currentMemory = \memory_get_usage(true);
+            $memoryPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
+            $afterMb = \round($currentMemory / 1024 / 1024, 1);
+
+            if ($memoryPercent >= $memoryDrainThreshold) {
+                WlsLogger::warning_(
+                    "Worker memory pressure {$afterMb}MB after compact (before={$beforeMb}MB), start drain to avoid OOM reset"
+                );
+                $shouldExit = true;
+                $ipcDraining = true;
+                $drainStartTime = \time();
+                $maxDrainTime = \min($maxDrainTime, 10);
+                if ($socket && \is_resource($socket)) {
+                    @\fclose($socket);
+                    $socket = null;
+                }
+            } elseif ($memoryPercent >= $memoryWarningThreshold) {
+                WlsLogger::warning_(
+                    "Worker memory high {$afterMb}MB after compact (before={$beforeMb}MB, cycles="
+                    . (int)($compaction['cycles'] ?? 0) . ")"
+                );
+            }
+        } elseif ($memoryPercent >= $memoryWarningThreshold) {
+            WlsLogger::warning_("Worker memory high: " . \round($currentMemory / 1024 / 1024, 1) . 'MB');
         }
         
         // 定期记录 Worker 状态到数据库
@@ -2535,6 +2585,28 @@ function wlsHttpReadStep(
     array &$writableConnections,
     array &$pendingClose
 ): array {
+    if (!\is_resource($conn) || !isset($connections[$connId]) || $connections[$connId] !== $conn) {
+        unset(
+            $connections[$connId],
+            $requestBuffers[$connId],
+            $connectionLastActivity[$connId],
+            $requestLogged[$connId],
+            $writeBuffers[$connId],
+            $writableConnections[$connId],
+            $pendingClose[$connId]
+        );
+        if (isset($longLivedConnections[$connId])) {
+            unset($longLivedConnections[$connId]);
+        }
+        if (isset($activeFibers[$connId])) {
+            $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+            $fiberScheduler->unregisterFiber();
+            unset($activeFibers[$connId]);
+        }
+        $activeRequests = \max(0, $activeRequests - 1);
+        return ['closed' => true, 'request_ready' => false];
+    }
+
     if (\Weline\Server\Service\ConnectionReadWriteGuard::shouldDeferRead(
         $writeBuffers,
         $pendingClose,
@@ -3424,11 +3496,13 @@ function sendResponseAndCleanup(
 
     WlsLogger::tick_();
 
+    $responseRequestsClose = \Weline\Server\Service\WorkerResponseMemoryGuard::responseRequestsConnectionClose($response);
+    unset($response, $rawRequest);
+
     if (!$isSseMode && $responseFullyWritten) {
         wlsDrainPostResponseTasks();
     }
 
-    $responseRequestsClose = \Weline\Server\Service\WorkerResponseMemoryGuard::responseRequestsConnectionClose($response);
     $shouldClose = $isSseMode || !$keepAlive || $ipcDraining || $forceCloseAfterResponse || $responseRequestsClose;
     if ($shouldClose) {
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
@@ -4066,6 +4140,7 @@ function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http
     if ($backendPrefix !== '' && $uriPath !== '' && !\str_starts_with($uriPath, $backendPrefix . '/')) {
         $uri = $backendPrefix . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
     }
+    $uri = normalizeBackendReturnUri($uri);
 
     $scheme = $request->isSecure() ? 'https' : 'http';
     $host = (string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: 'localhost');
@@ -4077,6 +4152,41 @@ function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http
 
     $redirectUrl = removeBackendLoginReturnParams($redirectUrl);
     return $redirectUrl . (\str_contains($redirectUrl, '?') ? '&' : '?') . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+}
+
+function normalizeBackendReturnUri(string $uri): string
+{
+    $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: '');
+    if ($path === '') {
+        return $uri;
+    }
+
+    $segments = \explode('/', \trim($path, '/'));
+    $firstSegment = (string)($segments[0] ?? '');
+    if (!isset($segments[1], $segments[2], $segments[3])
+        || $firstSegment === ''
+        || !isBackendReturnCurrencySegment($segments[1])
+        || !isBackendReturnLocaleSegment($segments[2])
+        || $segments[3] !== $firstSegment
+    ) {
+        return $uri;
+    }
+
+    \array_splice($segments, 3, 1);
+    $normalized = '/' . \implode('/', $segments);
+    $query = (string)(\parse_url($uri, PHP_URL_QUERY) ?: '');
+    $fragment = (string)(\parse_url($uri, PHP_URL_FRAGMENT) ?: '');
+    return $normalized . ($query !== '' ? '?' . $query : '') . ($fragment !== '' ? '#' . $fragment : '');
+}
+
+function isBackendReturnCurrencySegment(string $segment): bool
+{
+    return \strlen($segment) === 3 && \ctype_upper($segment);
+}
+
+function isBackendReturnLocaleSegment(string $segment): bool
+{
+    return (bool)\preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
 }
 
 function removeBackendLoginReturnParams(string $url): string

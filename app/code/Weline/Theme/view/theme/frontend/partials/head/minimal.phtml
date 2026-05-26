@@ -15,7 +15,6 @@ $layoutOption = $themeData['layoutOption'] ?? null;
 $theme = $themeData['theme'] ?? null;
 ?>
 <base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
-<?php echo \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Service\Head\HeadRenderer::class)->render($this, ['slot' => 'title']); ?>
 <w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
 <link rel="icon" type="image/svg+xml" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
 <link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">

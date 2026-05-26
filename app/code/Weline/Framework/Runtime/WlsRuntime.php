@@ -443,7 +443,7 @@ class WlsRuntime implements RuntimeInterface
 
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_enabled', '1');
+            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_enabled', '0');
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'], true);
@@ -480,11 +480,15 @@ class WlsRuntime implements RuntimeInterface
         $maxPaths = $this->readyGateDynamicWarmupMaxPaths();
         $configured = Env::get('wls.worker.dynamic_ready_gate_paths', null);
         if ($configured !== null && (!\is_string($configured) || \trim($configured) !== '')) {
-            return \array_slice($this->normalizeDynamicWarmupPathList($configured), 0, $maxPaths);
+            return $this->shardReadyGateWarmupPaths(
+                \array_slice($this->normalizeDynamicWarmupPathList($configured), 0, $maxPaths)
+            );
         }
 
         if (!$this->shouldUseReadyGateDynamicDiscovery()) {
-            return \array_slice($this->readyGateDynamicCriticalWarmupPaths(), 0, $maxPaths);
+            return $this->shardReadyGateWarmupPaths(
+                \array_slice($this->readyGateDynamicCriticalWarmupPaths(), 0, $maxPaths)
+            );
         }
 
         try {
@@ -514,7 +518,56 @@ class WlsRuntime implements RuntimeInterface
             ) ?: [];
         }
 
-        return \array_slice(\array_values($readyGatePaths), 0, $maxPaths);
+        return $this->shardReadyGateWarmupPaths(\array_slice(\array_values($readyGatePaths), 0, $maxPaths));
+    }
+
+    /**
+     * @param list<string> $paths
+     * @return list<string>
+     */
+    private function shardReadyGateWarmupPaths(array $paths): array
+    {
+        if ($paths === [] || !$this->shouldShardReadyGateWarmupPaths()) {
+            return $paths;
+        }
+
+        $workerId = $this->currentWorkerId();
+        $workerCount = $this->currentWorkerCount();
+        if ($workerId <= 0 || $workerCount <= 1) {
+            return $paths;
+        }
+
+        $workerIndex = ($workerId - 1) % $workerCount;
+        $shard = [];
+        foreach (\array_values($paths) as $index => $path) {
+            if (($index % $workerCount) === $workerIndex) {
+                $shard[] = $path;
+            }
+        }
+
+        return $shard;
+    }
+
+    private function shouldShardReadyGateWarmupPaths(): bool
+    {
+        $rawFlag = \getenv('WLS_WORKER_READY_GATE_SHARD_PATHS');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.ready_gate_shard_paths', '1');
+        }
+
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'shard'], true);
+    }
+
+    private function currentWorkerId(): int
+    {
+        return \max(0, (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0));
+    }
+
+    private function currentWorkerCount(): int
+    {
+        $raw = $_SERVER['WLS_WORKER_COUNT'] ?? $_ENV['WLS_WORKER_COUNT'] ?? \getenv('WLS_WORKER_COUNT') ?: 1;
+
+        return \max(1, (int)$raw);
     }
 
     private function shouldUseReadyGateDynamicDiscovery(): bool
@@ -1073,7 +1126,7 @@ class WlsRuntime implements RuntimeInterface
      */
     private function resolveReadyGateBackendWarmupPaths(): array
     {
-        return $this->resolveBackendWarmupPaths('ready-gate');
+        return $this->shardReadyGateWarmupPaths($this->resolveBackendWarmupPaths('ready-gate'));
     }
 
     /**
@@ -2678,6 +2731,8 @@ class WlsRuntime implements RuntimeInterface
             if ($traceEnabled) {
                 RequestLifecycleTrace::recordSpan('url_parser', $timing['url_parser_ms'], 'framework');
             }
+            unset($parse, $cachedFpcResponse, $appApplyUrlProfile);
+            $this->releaseCompletedRequestPhase('url_parser');
             
             // WLS：StateManager::reset() 会在请求结束时 removeInstance(Router\Core)，bootstrap 里缓存的
             // $this->router 会变成指向已脱离 ObjectManager 的孤儿实例；若继续对其 __init/start，
@@ -2748,6 +2803,18 @@ class WlsRuntime implements RuntimeInterface
             if ($traceEnabled) {
                 RequestLifecycleTrace::recordSpan('router_start', $timing['router_start_ms'], 'framework');
             }
+            unset(
+                $router,
+                $accountTiming,
+                $accountSidebarContentTiming,
+                $queryBinTiming,
+                $appApplyUrlProfile,
+                $categoryViewProfile,
+                $productViewProfile,
+                $templateProfile,
+                $routerProfile
+            );
+            $this->releaseCompletedRequestPhase('router_start');
             // 触发 run_after 事件
             $runAfterStart = \microtime(true);
             if ($traceEnabled) {
@@ -2814,6 +2881,9 @@ class WlsRuntime implements RuntimeInterface
             }
             
             $resultStr = $app->normalizeOutput($result);
+            $resultType = \get_debug_type($result);
+            unset($result);
+            $this->releaseCompletedRequestPhase('normalize_output');
             $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
             $telemetryStart = \microtime(true);
             // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
@@ -2855,7 +2925,7 @@ class WlsRuntime implements RuntimeInterface
             $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
             if ($resultStr === '') {
                 $this->logResponseDiagnostic('empty_runtime_response_body', $request, $timing, [
-                    'result_type' => \get_debug_type($result),
+                    'result_type' => $resultType,
                 ]);
             }
             $isDev = \defined('DEV') && DEV;
@@ -2869,6 +2939,7 @@ class WlsRuntime implements RuntimeInterface
             } catch (\Throwable) {
             }
             $this->applyDynamicFirstRenderHeaders($timing, $request, false);
+            $this->clearRequestContextProfileSnapshots();
 
             return $resultStr;
             
@@ -3038,6 +3109,8 @@ class WlsRuntime implements RuntimeInterface
                 $timing['trace_top'] = $this->summarizeTraceSpans($traceSpans, $traceTopLimit);
                 $timing['trace_db_top'] = $this->summarizeTraceSpansByCategory($traceSpans, 'db', $traceDbTopLimit);
                 $timing['trace_category_totals'] = $this->summarizeTraceCategoryTotals($traceSpans);
+                unset($traceSpans);
+                RequestLifecycleTrace::reset();
             }
             // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
             $this->reset();
@@ -3089,9 +3162,78 @@ class WlsRuntime implements RuntimeInterface
                 \Weline\Server\Log\WlsLogger::flush_(true);
             }
             Context::leave();
+            unset(
+                $timing,
+                $requestMeta,
+                $hc,
+                $app,
+                $request,
+                $globalsEmulator,
+                $resultStr,
+                $resultType,
+                $redirectResponse,
+                $cookies,
+                $cookie,
+                $errorContent,
+                $headers,
+                $accountTiming,
+                $accountSidebarContentTiming,
+                $queryBinTiming,
+                $appApplyUrlProfile,
+                $categoryViewProfile,
+                $productViewProfile,
+                $templateProfile,
+                $routerProfile,
+                $pageBuilderRenderProfile
+            );
+            $this->releaseCompletedRequestPhase('request_end');
         }
     }
     
+    /**
+     * Drop stage-local pressure after large WLS request phases.
+     */
+    private function releaseCompletedRequestPhase(string $phase): void
+    {
+        if (!Runtime::isPersistent()
+            || !\class_exists(\Weline\Server\Service\WorkerResponseMemoryGuard::class)) {
+            return;
+        }
+
+        try {
+            $threshold = (float)(Env::get('wls.memory_guard.phase_compact_threshold', 0.70) ?: 0.70);
+            $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compactIfPressure($threshold);
+            if ($compaction !== null && \defined('DEV') && DEV && LogConfig::isVerboseWlsLog()) {
+                w_log_debug(
+                    '[WlsRuntime] phase memory compact phase=' . $phase
+                    . ' memory_usage=' . \memory_get_usage(true)
+                    . ' compaction=' . (\json_encode($compaction, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}'),
+                    [],
+                    'wls'
+                );
+            }
+        } catch (\Throwable) {
+            // Memory pressure cleanup must never affect request completion.
+        }
+    }
+
+    private function clearRequestContextProfileSnapshots(): void
+    {
+        foreach ([
+            'account.index.timing',
+            'account.sidebar_content.timing',
+            'query_bin.timing',
+            'app.apply_url.profile',
+            'category.view.profile',
+            'product.view.profile',
+            'view.template.profile',
+            'router.start.profile',
+            'pagebuilder.render.profile',
+        ] as $key) {
+            RequestContext::remove($key);
+        }
+    }
+
     /**
      * 处理 URL 解析结果
      */
@@ -3910,6 +4052,7 @@ class WlsRuntime implements RuntimeInterface
         if ($backendPrefix !== '' && $uriPath !== '' && !str_starts_with($uriPath, $backendPrefix . '/')) {
             $uri = $backendPrefix . (str_starts_with($uri, '/') ? $uri : '/' . $uri);
         }
+        $uri = $this->normalizeBackendLoginReturnUri($uri);
 
         $scheme = $request?->isSecure() ? 'https' : 'http';
         $host = (string)(
@@ -3925,6 +4068,41 @@ class WlsRuntime implements RuntimeInterface
         ];
 
         return $this->removeBackendLoginReturnParams($redirectUrl) . (str_contains($this->removeBackendLoginReturnParams($redirectUrl), '?') ? '&' : '?') . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    private function normalizeBackendLoginReturnUri(string $uri): string
+    {
+        $path = (string)(parse_url($uri, PHP_URL_PATH) ?: '');
+        if ($path === '') {
+            return $uri;
+        }
+
+        $segments = explode('/', trim($path, '/'));
+        $firstSegment = (string)($segments[0] ?? '');
+        if (!isset($segments[1], $segments[2], $segments[3])
+            || $firstSegment === ''
+            || !$this->isBackendReturnCurrencySegment($segments[1])
+            || !$this->isBackendReturnLocaleSegment($segments[2])
+            || $segments[3] !== $firstSegment
+        ) {
+            return $uri;
+        }
+
+        array_splice($segments, 3, 1);
+        $normalized = '/' . implode('/', $segments);
+        $query = (string)(parse_url($uri, PHP_URL_QUERY) ?: '');
+        $fragment = (string)(parse_url($uri, PHP_URL_FRAGMENT) ?: '');
+        return $normalized . ($query !== '' ? '?' . $query : '') . ($fragment !== '' ? '#' . $fragment : '');
+    }
+
+    private function isBackendReturnCurrencySegment(string $segment): bool
+    {
+        return strlen($segment) === 3 && ctype_upper($segment);
+    }
+
+    private function isBackendReturnLocaleSegment(string $segment): bool
+    {
+        return (bool)preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
     }
 
     private function removeBackendLoginReturnParams(string $url): string
@@ -4111,6 +4289,8 @@ class WlsRuntime implements RuntimeInterface
                 w_log_error('[WlsRuntime] Reset event error: ' . $e->getMessage());
             }
         }
+
+        ObjectManager::clearCurrentFiberInstances();
     }
     
     /**

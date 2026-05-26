@@ -97,13 +97,13 @@ if ($previewContextService->shouldUseStoredContext()) {
 $isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
 
-// 根据环境设置模块配置URL和基础URL（weline-api.js 位于 Weline_Frontend 模块）
+// 根据环境设置模块配置URL和基础URL（weline-api.js 位于 Weline_Backend 模块）
 if ($isDev) {
     $modulesConfigUrl = '/Weline/Backend/view/statics/base/weline.modules.js';
-    $modulesBaseUrl = '/Weline/Frontend/view/statics/js/weline-api';
+    $modulesBaseUrl = '/Weline/Backend/view/statics/js/weline-api';
 } else {
     $modulesConfigUrl = '/static/Weline/Backend/base/weline.modules.js';
-    $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
+    $modulesBaseUrl = '/static/Weline/Backend/js/weline-api';
 }
 
 $themeConfigPayload = [
@@ -131,8 +131,6 @@ $themeConfigPayload = [
 <script data-no-extract="true">
 window.__WelineThemeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
 </script>
-<!-- Weline.Api 同步回退（确保 request 立即可用） -->
-<script src="<?= $isDev ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js' : '/static/Weline/Frontend/js/weline-api-fallback.js' ?>"></script>
 <!-- 主题核心 JS（Weline 对象、模块加载器、API 代理等） -->
 <theme:js>Weline_Theme::theme/backend/assets/js/theme.js</theme:js>
 <!-- 后台全局组件（BackendToast、BackendConfirm 等） -->

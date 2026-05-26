@@ -1923,7 +1923,7 @@ HTML;
         try {
             $providerRegistry = ObjectManager::getInstance(\Weline\Seo\Service\Head\HeadProviderRegistry::class);
             $resolver = new \Weline\Seo\Service\Head\PageSeoContextResolver($providerRegistry);
-            $renderer = new \Weline\Seo\Service\Head\HeadRenderer($resolver, $providerRegistry);
+            $renderer = new \Weline\Seo\Service\Head\HeadRenderer($resolver);
             $html = $renderer->render($template, ['slot' => 'head']);
             return \trim(\trim(\is_string($html) ? $html : '') . "\n" . $this->buildIdentityHeadHtml($page));
         } catch (\Throwable) {

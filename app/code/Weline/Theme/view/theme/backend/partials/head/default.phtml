@@ -98,12 +98,12 @@ $baseUrl = $this->request->getBaseUrl();
 // 根据环境设置模块配置URL和基础URL
 if ($isDev) {
     // 开发模式
-    $modulesConfigUrl = '/Weline/Frontend/view/statics/base/weline.modules.js';
-    $modulesBaseUrl = '/Weline/Frontend/view/statics/js/weline-api';
+    $modulesConfigUrl = '/Weline/Backend/view/statics/base/weline.modules.js';
+    $modulesBaseUrl = '/Weline/Backend/view/statics/js/weline-api';
 } else {
     // 生产模式
-    $modulesConfigUrl = '/static/Weline/Frontend/base/weline.modules.js';
-    $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
+    $modulesConfigUrl = '/static/Weline/Backend/base/weline.modules.js';
+    $modulesBaseUrl = '/static/Weline/Backend/js/weline-api';
 }
 
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');

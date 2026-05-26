@@ -112,6 +112,13 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             $arguments[] = '--win';
         }
 
+        $dispatcherEnabled = $mode === 'linux-direct' ? false : $context->isDispatcherEnabled();
+        $topology = $mode === 'linux-direct'
+            ? 'direct'
+            : ($dispatcherEnabled ? 'dispatcher' : 'independent');
+        $arguments[] = '--wls-dispatcher-enabled=' . ($dispatcherEnabled ? '1' : '0');
+        $arguments[] = '--wls-runtime-topology=' . $topology;
+
         if ($mode === 'linux-direct') {
             $arguments[] = '--reuseport';
         }
@@ -123,13 +130,17 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
         }
         $arguments[] = '--wls-loop-driver=' . $loopDriver;
 
-        if ($context->sslEnabled && $mode !== 'linux-direct') {
+        if ($context->sslEnabled) {
             $arguments[] = '--defer-ssl';
         }
 
         return new ServiceCommand(
             script: $script,
             arguments: $arguments,
+            environment: [
+                'WLS_DISPATCHER_ENABLED' => $dispatcherEnabled ? '1' : '0',
+                'WLS_RUNTIME_TOPOLOGY' => $topology,
+            ],
             processName: $processName,
         );
     }

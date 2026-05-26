@@ -32,7 +32,8 @@ class OrderService
 
     public function __construct(
         private readonly ?Order $orderModel = null,
-        private readonly ?OrderItem $orderItemModel = null
+        private readonly ?OrderItem $orderItemModel = null,
+        private readonly ?EventsManager $eventsManager = null
     ) {
     }
 
@@ -472,6 +473,15 @@ class OrderService
             ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
 
+        $eventData = [
+            'order' => $order,
+            'order_id' => $orderId,
+            'customer_id' => (int) ($order->getData(Order::schema_fields_customer_id) ?? 0),
+            'old_status' => $currentStatus,
+            'new_status' => $status,
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Order::order_status_changed', $eventData);
+
         return $order;
     }
 
@@ -483,6 +493,9 @@ class OrderService
 
         $order = $this->requireOrder($orderId);
         $currentStatus = (string) ($order->getData(Order::schema_fields_status) ?? self::STATUS_PENDING);
+        $currentPaymentStatus = $order->hasField('payment_status')
+            ? (string) ($order->getData('payment_status') ?? self::PAYMENT_STATUS_PENDING)
+            : self::PAYMENT_STATUS_PENDING;
 
         if ($order->hasField('payment_status')) {
             $order->setData('payment_status', $paymentStatus);
@@ -495,6 +508,29 @@ class OrderService
 
         $order->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
             ->save();
+
+        if ($currentPaymentStatus !== $paymentStatus) {
+            $paymentEventData = [
+                'order' => $order,
+                'order_id' => $orderId,
+                'customer_id' => (int) ($order->getData(Order::schema_fields_customer_id) ?? 0),
+                'old_payment_status' => $currentPaymentStatus,
+                'new_payment_status' => $paymentStatus,
+            ];
+            $this->getEventsManager()->dispatch('WeShop_Order::payment_status_changed', $paymentEventData);
+        }
+
+        $newStatus = (string) ($order->getData(Order::schema_fields_status) ?? $currentStatus);
+        if ($newStatus !== $currentStatus) {
+            $statusEventData = [
+                'order' => $order,
+                'order_id' => $orderId,
+                'customer_id' => (int) ($order->getData(Order::schema_fields_customer_id) ?? 0),
+                'old_status' => $currentStatus,
+                'new_status' => $newStatus,
+            ];
+            $this->getEventsManager()->dispatch('WeShop_Order::order_status_changed', $statusEventData);
+        }
 
         return $order;
     }
@@ -577,6 +613,7 @@ class OrderService
         }
 
         $order = $this->requireOrder($orderId);
+        $oldStatus = (string) ($order->getData(Order::schema_fields_status) ?? self::STATUS_PENDING);
         $paymentStatus = $order->hasField('payment_status') ? (string) $order->getData('payment_status') : '';
 
         $order->setData(Order::schema_fields_status, self::STATUS_CANCELLED)
@@ -593,7 +630,19 @@ class OrderService
             'order_id' => $orderId,
             'customer_id' => $customerId,
         ];
-        ObjectManager::getInstance(EventsManager::class)->dispatch('WeShop_Order::cancelled', $eventData);
+        $statusEventData = $eventData + [
+            'old_status' => $oldStatus,
+            'new_status' => self::STATUS_CANCELLED,
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Order::order_status_changed', $statusEventData);
+        if ($paymentStatus === self::PAYMENT_STATUS_PAID) {
+            $paymentEventData = $eventData + [
+                'old_payment_status' => $paymentStatus,
+                'new_payment_status' => self::PAYMENT_STATUS_REFUNDED,
+            ];
+            $this->getEventsManager()->dispatch('WeShop_Order::payment_status_changed', $paymentEventData);
+        }
+        $this->getEventsManager()->dispatch('WeShop_Order::cancelled', $eventData);
 
         return true;
     }
@@ -724,6 +773,11 @@ class OrderService
         return $this->orderItemModel ? clone $this->orderItemModel : ObjectManager::getInstance(OrderItem::class);
     }
 
+    protected function getEventsManager(): EventsManager
+    {
+        return $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
+    }
+
     protected function isValidPaymentStatus(string $paymentStatus): bool
     {
         return in_array($paymentStatus, [
@@ -767,7 +821,7 @@ class OrderService
     }
 
     /**
-     * @return array<int, array<string, string>>
+     * @return array<int, array<string, mixed>>
      */
     protected function normalizeOptions(mixed $rawOptions): array
     {
@@ -832,16 +886,20 @@ class OrderService
                 }
             }
 
-            $code = \trim((string) ($option['code'] ?? ''));
-            if ($code !== '') {
-                $normalized['code'] = $code;
+            foreach (['code', 'attribute_code', 'option_code', 'swatch_type', 'swatch_value', 'option_image'] as $stringKey) {
+                $stringValue = \trim((string) ($option[$stringKey] ?? ''));
+                if ($stringValue !== '') {
+                    $normalized[$stringKey] = $stringValue;
+                }
             }
 
-            $swatchType = \trim((string) ($option['swatch_type'] ?? ''));
-            $swatchValue = \trim((string) ($option['swatch_value'] ?? ''));
-            if ($swatchType !== '' && $swatchValue !== '') {
-                $normalized['swatch_type'] = $swatchType;
-                $normalized['swatch_value'] = $swatchValue;
+            if (($normalized['swatch_type'] ?? '') === 'image') {
+                if (($normalized['swatch_value'] ?? '') === '' && ($normalized['option_image'] ?? '') !== '') {
+                    $normalized['swatch_value'] = $normalized['option_image'];
+                }
+                if (($normalized['option_image'] ?? '') === '' && ($normalized['swatch_value'] ?? '') !== '') {
+                    $normalized['option_image'] = $normalized['swatch_value'];
+                }
             }
 
             $options[] = $normalized;
@@ -851,7 +909,7 @@ class OrderService
     }
 
     /**
-     * @param array<int, array<string, string>> $options
+     * @param array<int, array<string, mixed>> $options
      */
     protected function encodeOptions(array $options): string
     {

@@ -55,6 +55,7 @@ class Social extends BaseController
             $platform = (string) $this->request->getParam('platform', '');
             $targetUrl = (string) $this->request->getParam('url', '');
             $productId = (int) $this->request->getParam('product_id', 0);
+            $affiliateShareCode = trim((string) $this->request->getParam('affiliate_share_code', ''));
 
             if ($platform === '') {
                 return $this->jsonResponse([
@@ -71,6 +72,9 @@ class Social extends BaseController
                 'customer_id' => $customerId,
                 'product_id' => $productId,
             ];
+            if ($affiliateShareCode !== '') {
+                $shareData['affiliate_share_code'] = $affiliateShareCode;
+            }
 
             $share = $this->socialService->recordShare($shareData);
 

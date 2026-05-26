@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Plugin;
 
 use Weline\Framework\Plugin\Config\PluginXmlReader;
+use Weline\Framework\Registry\Service\RegistryProgress;
 
 /**
  * 插件注册表管理
@@ -95,10 +96,16 @@ class PluginRegistry
     public function refresh(): bool
     {
         // 读取所有 plugin.xml 配置
+        RegistryProgress::log('Plugin scan: plugin.xml configs started');
         $pluginData = $this->xmlReader->read();
+        RegistryProgress::count('Plugin XML scan', count($pluginData), 'modules with plugin configs');
 
         // 组织数据结构
+        RegistryProgress::log('Plugin organize registry data');
         $registry = $this->organizeRegistryData($pluginData);
+        RegistryProgress::count('Plugin registry', count($registry['plugins'] ?? []), 'plugin entries organized');
+        unset($pluginData);
+        RegistryProgress::log('Plugin raw XML data released');
 
         // 保存注册表
         return $this->saveRegistry($registry);
@@ -128,13 +135,19 @@ class PluginRegistry
         $this->removeModulePlugins($registry, $moduleNames);
         
         // 3. 扫描目标模块的新数据
+        RegistryProgress::log('Plugin incremental: scanning target plugin configs');
         $pluginData = $this->xmlReader->readForModules($moduleNames);
+        RegistryProgress::count('Plugin incremental XML scan', count($pluginData), 'modules with plugin configs');
         
         // 4. 组织新数据
+        RegistryProgress::log('Plugin incremental: organizing new data');
         $newRegistry = $this->organizeRegistryData($pluginData);
+        unset($pluginData);
+        RegistryProgress::log('Plugin incremental raw XML data released');
         
         // 5. 合并到现有注册表
         $this->mergePluginRegistry($registry, $newRegistry);
+        unset($newRegistry);
         
         // 6. 保存注册表
         return $this->saveRegistry($registry);
@@ -302,6 +315,7 @@ class PluginRegistry
      */
     public function saveRegistry(array $registry): bool
     {
+        RegistryProgress::log('Plugin save registry: generated/plugins.php');
         $content = "<?php return " . w_var_export($registry, true) . ";\n";
 
         // 确保目录存在
@@ -315,9 +329,11 @@ class PluginRegistry
         if ($result !== false) {
             $this->cachedRegistry = $registry;
             $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            RegistryProgress::log('Plugin save registry finished');
             return true;
         }
 
+        RegistryProgress::log('Plugin save registry failed');
         return false;
     }
 
@@ -328,6 +344,12 @@ class PluginRegistry
      * @param string $className 类名
      * @return array
      */
+    public function clearMemoryCache(): void
+    {
+        $this->cachedRegistry = null;
+        $this->cachedFileMtime = null;
+    }
+
     public function getClassPlugins(string $className): array
     {
         $registry = $this->getRegistry();

@@ -8,6 +8,7 @@ use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
+use Weline\Server\Exception\StartupException;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
@@ -112,6 +113,13 @@ class ServiceOrchestratorStartupTest extends TestCase
         $registry->updateInstance($worker);
 
         $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
+        self::assertFalse($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
+        self::assertSame([], $orchestrator->startupReadyMarks);
+
+        $worker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $registry->updateInstance($worker);
+
+        $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
         self::assertTrue($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
         self::assertSame([[
             'instanceName' => 'test',
@@ -119,7 +127,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         ]], $orchestrator->startupReadyMarks);
     }
 
-    public function testServerReadyNotificationWaitsForEveryBusinessWorkerByDefault(): void
+    public function testServerReadyNotificationAcceptsFirstBusinessWorkerByDefault(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
             /** @var list<array{instanceName:string,totalServices:int}> */
@@ -149,18 +157,12 @@ class ServiceOrchestratorStartupTest extends TestCase
             instanceId: 2,
             state: ServiceInstance::STATE_STARTING,
         ));
+        $firstWorker = $registry->getInstance('worker', 1);
+        self::assertInstanceOf(ServiceInstance::class, $firstWorker);
+        $firstWorker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $registry->updateInstance($firstWorker);
         $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
         $this->writePrivate($orchestrator, 'serverReadyNotificationArmed', true);
-
-        $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
-
-        self::assertFalse($this->readPrivateBool($orchestrator, 'serverReadyNotified'));
-        self::assertSame([], $orchestrator->startupReadyMarks);
-
-        $worker = $registry->getInstance('worker', 2);
-        self::assertInstanceOf(ServiceInstance::class, $worker);
-        $worker->state = ServiceInstance::STATE_READY;
-        $registry->updateInstance($worker);
 
         $this->invokePrivate($orchestrator, 'checkAndNotifyServerReady');
 
@@ -171,19 +173,19 @@ class ServiceOrchestratorStartupTest extends TestCase
         ]], $orchestrator->startupReadyMarks);
     }
 
-    public function testStartupAcceptanceRequiresEveryBusinessWorkerReadyByDefault(): void
+    public function testStartupAcceptanceAcceptsFirstBusinessWorkerByDefault(): void
     {
         $orchestrator = new ServiceOrchestrator();
 
-        self::assertSame(8, $this->invokePrivateWithArgs(
+        self::assertSame(1, $this->invokePrivateWithArgs(
             $orchestrator,
             'resolveStartupAcceptanceMinReady',
             [ControlMessage::ROLE_WORKER, 8]
         ));
         $this->writePrivate($orchestrator, 'context', $this->createFrontendContext([
-            'worker_startup_min_ready' => 'legacy',
+            'worker_startup_min_ready' => 'all',
         ]));
-        self::assertSame(1, $this->invokePrivateWithArgs(
+        self::assertSame(8, $this->invokePrivateWithArgs(
             $orchestrator,
             'resolveStartupAcceptanceMinReady',
             [ControlMessage::ROLE_WORKER, 8]
@@ -198,6 +200,48 @@ class ServiceOrchestratorStartupTest extends TestCase
             'resolveStartupAcceptanceMinReady',
             [ControlMessage::ROLE_WORKER, 0]
         ));
+    }
+
+    public function testStartupAcceptanceWaitsForDispatcherPoolConfirmation(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+        ));
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            port: 18080,
+        );
+        $registry->addInstance($worker);
+
+        $startupAcceptance = [
+            ControlMessage::ROLE_WORKER => [
+                'displayName' => 'HTTP Worker',
+                'expected' => 1,
+                'minReady' => 1,
+            ],
+        ];
+
+        self::assertSame(
+            [ControlMessage::ROLE_WORKER . ':0/1'],
+            $this->invokePrivateWithArgs($orchestrator, 'collectStartupAcceptancePendingLabels', [$startupAcceptance])
+        );
+
+        $worker->setMeta('dispatcher_pool_confirmed_at', \microtime(true));
+        $registry->updateInstance($worker);
+
+        self::assertSame(
+            [],
+            $this->invokePrivateWithArgs($orchestrator, 'collectStartupAcceptancePendingLabels', [$startupAcceptance])
+        );
     }
 
     public function testMarkStartupPhaseRunningRestoresControlMetadataWhenInstanceFileIsPartial(): void
@@ -639,6 +683,53 @@ class ServiceOrchestratorStartupTest extends TestCase
             'reason' => 'startup_failure',
             'progressClientId' => null,
         ]], $orchestrator->stopAllCalls);
+    }
+
+    public function testStartupAcceptanceTimeoutThrowsStructuredExceptionAndPersistsDiagnostics(): void
+    {
+        $instanceName = 'ut-startup-failure-' . \bin2hex(\random_bytes(4));
+        $manager = new ServerInstanceManager();
+        $instanceFile = $manager->getInstanceFile($instanceName);
+        $context = $this->createWorkerInfraContextForInstance($instanceName);
+        $orchestrator = new ServiceOrchestrator();
+        $orchestrator->setStartupTimeout(1.5);
+        $orchestrator->setStartupMaxDuration(9.0);
+        $orchestrator->getRegistry()->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            port: $context->getWorkerPort(),
+            pid: 0,
+            state: ServiceInstance::STATE_STARTING,
+        ));
+
+        try {
+            $this->invokePrivateWithArgs($orchestrator, 'handleStartupAcceptanceTimeout', [[
+                ControlMessage::ROLE_WORKER => [
+                    'displayName' => 'HTTP Worker',
+                    'expected' => 1,
+                    'minReady' => 1,
+                ],
+            ], $context, 1.75]);
+            self::fail('Expected startup timeout to throw a structured exception.');
+        } catch (StartupException $exception) {
+            self::assertSame('WLS_STARTUP_READY_TIMEOUT', $exception->getWlsErrorCode());
+            self::assertStringContainsString('worker:0/1', $exception->getMessage());
+            self::assertSame($instanceName, $exception->getContext()['instance'] ?? null);
+            self::assertNotEmpty($exception->getDiagnostics());
+            self::assertStringContainsString('role=worker#1', $exception->getDiagnostics()[0]);
+        } finally {
+            $this->registerFileCleanup($instanceFile);
+        }
+
+        $persisted = $manager->getRawInstanceData($instanceName);
+        self::assertIsArray($persisted);
+        self::assertSame(StartupException::class, $persisted['startup_failure_class'] ?? null);
+        self::assertSame('WLS_STARTUP_READY_TIMEOUT', $persisted['startup_failure_code'] ?? null);
+        self::assertSame(['worker:0/1'], $persisted['startup_failure_pending'] ?? null);
+        self::assertSame($instanceName, $persisted['startup_failure_context']['instance'] ?? null);
+        self::assertNotEmpty($persisted['startup_failure_diagnostics'] ?? []);
+        self::assertStringContainsString('role=worker#1', $persisted['startup_failure_diagnostics'][0] ?? '');
     }
 
     public function testCloseIpcServerTracksCloseReasonInLifecycleState(): void
@@ -1464,6 +1555,175 @@ class ServiceOrchestratorStartupTest extends TestCase
             'port' => 18081,
             'reason' => 'batch_start',
         ]], $orchestrator->cleanupRequests);
+    }
+
+    public function testPhaseOneWorkerBatchStartReprobesPortsAndUsesEmergencyPort(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var array<string, array{command:string,block:bool,foreground:bool}> */
+            public array $capturedCommands = [];
+            /** @var list<array{role:string,instanceId:int,port:int,reason:string}> */
+            public array $cleanupRequests = [];
+
+            protected function batchCreateProcesses(array $commands): array
+            {
+                $this->capturedCommands = $commands;
+
+                return ['worker#1' => 0];
+            }
+
+            protected function prepareLocalPortForStart(string $role, int $port): bool
+            {
+                return !($role === ControlMessage::ROLE_WORKER && $port === 18081);
+            }
+
+            protected function canUseEmergencyDynamicPort(string $role, int $configuredPort, ServiceContext $context): bool
+            {
+                return $role === ControlMessage::ROLE_WORKER && $configuredPort === 18081;
+            }
+
+            protected function allocateEmergencyDynamicPort(string $role, int $instanceId, int $configuredPort, ServiceContext $context): int
+            {
+                return 28081;
+            }
+
+            protected function scheduleEmergencyPortCleanup(string $role, int $instanceId, int $configuredPort, string $reason, int $attempt = 1): void
+            {
+                $this->cleanupRequests[] = [
+                    'role' => $role,
+                    'instanceId' => $instanceId,
+                    'port' => $configuredPort,
+                    'reason' => $reason,
+                ];
+            }
+        };
+        $this->writePrivate($orchestrator, 'running', true);
+        $context = new ServiceContext(
+            instanceName: 'phase-one-emergency-port-test',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 8080,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [],
+            dispatcherEnabled: true,
+            workerCount: 1,
+            workerBasePort: 18080,
+            workerPort: 18081,
+        );
+
+        $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [
+            [new WorkerProvider()],
+            $context,
+        ]);
+
+        self::assertIsArray($result);
+        self::assertInstanceOf(ServiceInstance::class, $result[ControlMessage::ROLE_WORKER][0] ?? null);
+        self::assertSame(28081, $result[ControlMessage::ROLE_WORKER][0]->port);
+        self::assertSame(18081, (int)$result[ControlMessage::ROLE_WORKER][0]->getMeta('configured_port'));
+        self::assertArrayHasKey('worker#1', $orchestrator->capturedCommands);
+        self::assertStringContainsString('28081', $orchestrator->capturedCommands['worker#1']['command']);
+        self::assertSame([[
+            'role' => ControlMessage::ROLE_WORKER,
+            'instanceId' => 1,
+            'port' => 18081,
+            'reason' => 'providers_batch_start',
+        ]], $orchestrator->cleanupRequests);
+    }
+
+    public function testPhaseOneMaintenanceBatchPreflightsPortAndSkipsBlockedSlot(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var array<string, array{command:string,block:bool,foreground:bool}> */
+            public array $capturedCommands = [];
+            /** @var list<array{role:string,port:int}> */
+            public array $preflightPorts = [];
+
+            protected function batchCreateProcesses(array $commands): array
+            {
+                $this->capturedCommands = $commands;
+
+                return [];
+            }
+
+            protected function prepareLocalPortForStart(string $role, int $port): bool
+            {
+                $this->preflightPorts[] = [
+                    'role' => $role,
+                    'port' => $port,
+                ];
+
+                return $role !== ControlMessage::ROLE_MAINTENANCE;
+            }
+        };
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $provider = new MaintenanceWorkerProvider();
+        $provider->enable(1);
+        $context = new ServiceContext(
+            instanceName: 'phase-one-maintenance-port-test',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 8080,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [],
+            dispatcherEnabled: true,
+            workerCount: 3,
+            workerBasePort: 18080,
+            workerPort: 18081,
+        );
+        $expectedPort = $provider->getPort(1, $context);
+
+        $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [
+            [$provider],
+            $context,
+        ]);
+
+        self::assertSame([], $result);
+        self::assertSame([], $orchestrator->capturedCommands);
+        self::assertSame([[
+            'role' => ControlMessage::ROLE_MAINTENANCE,
+            'port' => $expectedPort,
+        ]], $orchestrator->preflightPorts);
+    }
+
+    public function testStartupAcceptanceFailFastReportsFailedWorkerSlot(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $context = $this->createWorkerInfraContext();
+        $orchestrator->getRegistry()->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'failed-worker',
+            port: 0,
+            state: ServiceInstance::STATE_FAILED,
+        ));
+
+        $reason = $this->invokePrivateWithArgs($orchestrator, 'detectStartupAcceptanceFatalFailure', [[
+            ControlMessage::ROLE_WORKER => [
+                'displayName' => 'HTTP Worker',
+                'expected' => 1,
+                'minReady' => 1,
+            ],
+        ], $context, 5.1]);
+
+        self::assertSame('worker#1 failed before READY', $reason);
     }
 
     public function testEmergencyPortCleanupKeepsRetryTaskSchedulable(): void
@@ -4186,6 +4446,18 @@ class ServiceOrchestratorStartupTest extends TestCase
         for ($i = 0; $i < 16; $i++) {
             $this->invokePrivate($orchestrator, 'tickMainLoopTasks');
         }
+    }
+
+    private function registerFileCleanup(string $file): void
+    {
+        \register_shutdown_function(static function () use ($file): void {
+            if (\is_file($file)) {
+                @\unlink($file);
+            }
+            if (\is_file($file . '.lock')) {
+                @\unlink($file . '.lock');
+            }
+        });
     }
 
     private function invokePrivate(object $object, string $method): mixed

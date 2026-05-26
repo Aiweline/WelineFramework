@@ -104,6 +104,8 @@ $getWidgetIcon = function ($type) {
      data-api-render-widget="<?= $this->getUrl('theme/backend/theme-editor/render-widget') ?>"
      data-api-widget-preview="<?= $this->getUrl('theme/backend/theme-editor/widget-preview') ?>"
      data-api-compile-layout="<?= $this->getUrl('theme/backend/theme-editor/compile-layout') ?>"
+     data-api-layout-config="<?= $this->getUrl('theme/backend/theme-editor/layout-config') ?>"
+     data-api-save-layout-config="<?= $this->getUrl('theme/backend/theme-editor/save-layout-config') ?>"
      data-api-layout-preview="<?= $this->getUrl('theme/backend/theme-editor/layout-preview') ?>"
      data-api-frontend-layout-preview="<?= $this->getFrontendUrl('theme/frontend/theme-preview/content') ?>"
      data-api-param-render-form="<?= $this->getUrl('theme/backend/widget/paramrender/form') ?>"
@@ -225,6 +227,10 @@ $getWidgetIcon = function ($type) {
         <div class="editor-config-panel" id="configPanel">
             <div class="panel-header">
                 <h3 class="panel-title"><?= __('部件配置') ?></h3>
+                <div class="config-mode-tabs" role="tablist">
+                    <button type="button" class="config-mode-tab active" id="configModeLayout" data-config-mode="layout"><?= __('布局配置') ?></button>
+                    <button type="button" class="config-mode-tab" id="configModeWidget" data-config-mode="widget"><?= __('部件配置') ?></button>
+                </div>
                 <button type="button" class="panel-close" id="closeConfigPanel">
                     <i class="ri-close-line"></i>
                 </button>
@@ -775,6 +781,40 @@ body {
     color: var(--te-text-primary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.config-mode-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+    background: var(--te-bg-hover);
+    border: 1px solid var(--te-border);
+    border-radius: 6px;
+    margin-left: auto;
+}
+
+.config-mode-tab {
+    border: 0;
+    background: transparent;
+    color: var(--te-text-secondary);
+    font-size: 12px;
+    line-height: 1;
+    padding: 7px 9px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.config-mode-tab.active {
+    background: var(--te-accent);
+    color: #fff;
+}
+
+.layout-config-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .panel-close {
@@ -3748,4 +3788,16 @@ body {
 <!-- 本地 Remix Icon CSS URL，禁止使用外网 CDN -->
 <script>window.WELINE_REMIXICON_CSS_URL = '<?= $this->getRequest()->getBaseHost() . $this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css') ?>';</script>
 <js>Weline_Widget::js/widget-param-types.js</js>
-<script src="@static(Weline_Theme::js/theme-editor.js)"></script>
+<script data-no-extract="true">
+window.WelineApiConfig = Object.assign(
+    {},
+    (window.__WelineThemeConfig && window.__WelineThemeConfig.api) || {},
+    window.WelineApiConfig || {},
+    {
+        requestTimeoutMs: 60000,
+        workerUrl: '@static(Weline_Frontend::js/weline-api-worker.js)'
+    }
+);
+</script>
+<script src="@static(Weline_Frontend::js/weline-api.js)?v=20260525-theme-editor"></script>
+<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260525-version-preview3"></script>

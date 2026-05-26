@@ -297,6 +297,11 @@ class VectorEngineProvider extends OpenAiProvider
             }
         }
 
+        $responseFormat = $this->resolveVectorChatResponseFormat($model, $params, $config);
+        if ($responseFormat !== null) {
+            $payload['response_format'] = $responseFormat;
+        }
+
         $requestUrl = $this->resolveChatUrl($config);
         $response = $this->postJson(
             $requestUrl,
@@ -319,6 +324,92 @@ class VectorEngineProvider extends OpenAiProvider
             'request_url' => $requestUrl,
             'raw' => $response,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>|null
+     */
+    private function resolveVectorChatResponseFormat(AiModel $model, array $params, array $config): ?array
+    {
+        $responseFormat = $params['response_format'] ?? $config['response_format'] ?? null;
+        if (\is_scalar($responseFormat) && \trim((string)$responseFormat) !== '') {
+            $responseFormat = ['type' => \trim((string)$responseFormat)];
+        }
+        if (!\is_array($responseFormat) || $responseFormat === []) {
+            return null;
+        }
+
+        if (\strtolower(\trim((string)($responseFormat['type'] ?? ''))) !== 'json_schema') {
+            return $responseFormat;
+        }
+
+        return $this->supportsVectorJsonSchemaResponseFormat($model, $config)
+            ? $responseFormat
+            : ['type' => 'json_object'];
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function supportsVectorJsonSchemaResponseFormat(AiModel $model, array $config): bool
+    {
+        foreach ([
+            'response_format_json_schema',
+            'supports_response_format_json_schema',
+            'json_schema_response_format',
+            'structured_outputs',
+        ] as $key) {
+            if (\array_key_exists($key, $config)) {
+                $resolved = $this->resolveVectorConfigBoolean($config[$key]);
+                if ($resolved !== null) {
+                    return $resolved;
+                }
+            }
+        }
+
+        foreach ($model->getCapabilities() as $key => $value) {
+            if (\is_string($key)) {
+                if ($value === false || $value === 0 || $value === '0' || $value === null || $value === '') {
+                    continue;
+                }
+                $capability = $key;
+            } else {
+                $capability = (string)$value;
+            }
+            if (\in_array(\strtolower(\trim($capability)), [
+                'structured_outputs',
+                'json_schema',
+                'json_schema_response_format',
+                'response_format_json_schema',
+            ], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolveVectorConfigBoolean(mixed $value): ?bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (bool)$value;
+        }
+        if (\is_string($value)) {
+            $normalized = \strtolower(\trim($value));
+            if (\in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+            if (\in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+                return false;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -582,7 +673,7 @@ class VectorEngineProvider extends OpenAiProvider
      * @param array<string,mixed> $payload
      * @return array<string,mixed>
      */
-    private function postJson(string $url, string $apiKey, array $payload, int $timeout): array
+    protected function postJson(string $url, string $apiKey, array $payload, int $timeout): array
     {
         $this->applyPostJsonExecutionTimeLimit($timeout);
         if (function_exists('curl_init')) {
@@ -636,11 +727,10 @@ class VectorEngineProvider extends OpenAiProvider
 
     private function applyPostJsonExecutionTimeLimit(int $timeout): void
     {
-        @set_time_limit(
-            $timeout > 0
-                ? $timeout + ProviderTimeoutPolicy::EXECUTION_TIME_BUFFER
-                : 0
-        );
+        $limit = ProviderTimeoutPolicy::resolveExecutionTimeLimit($timeout);
+        if ($limit !== null) {
+            @set_time_limit($limit);
+        }
     }
 
     /**

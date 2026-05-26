@@ -111,6 +111,9 @@ final class MaintenanceCheckObserverTest extends TestCase
         $workerSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/bin/worker.php');
         $workerSslSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/bin/worker_ssl.php');
         $interceptorSource = (string) \file_get_contents(BP . 'app/code/Weline/Maintenance/Observer/MaintenanceInterceptor.php');
+        $maintenanceTemplateSource = (string) \file_get_contents(BP . 'app/code/Weline/Maintenance/view/templates/maintenance.phtml');
+        $appSource = (string) \file_get_contents(BP . 'app/code/Weline/Framework/App.php');
+        $fpcObserverSource = (string) \file_get_contents(BP . 'app/code/Weline/Framework/Router/Observer/CheckFullPageCache.php');
 
         self::assertStringContainsString("define('WLS_MAINTENANCE_WORKER', true)", $workerSource);
         self::assertStringContainsString("define('WLS_MAINTENANCE_WORKER', true)", $workerSslSource);
@@ -118,7 +121,18 @@ final class MaintenanceCheckObserverTest extends TestCase
         self::assertStringContainsString('Runtime::isCli()', $interceptorSource);
         self::assertStringContainsString("defined('WLS_MODE')", $interceptorSource);
         self::assertStringNotContainsString("PHP_SAPI === 'cli'", $interceptorSource);
+        self::assertStringContainsString('applyParsedRequestUri()', $interceptorSource);
+        self::assertStringContainsString('isStaticFileFresh', $interceptorSource);
+        self::assertStringContainsString('moduleFallbackTranslations', $interceptorSource);
         self::assertStringContainsString('sendMaintenanceResponse()', $interceptorSource);
+        self::assertStringContainsString('ResponseTerminateException', $interceptorSource);
+        self::assertStringNotContainsString('exit;', $interceptorSource);
+        self::assertStringContainsString("getHook('header-language-switcher')", $maintenanceTemplateSource);
+        self::assertStringContainsString('WelineHeaderChoiceSelector', $maintenanceTemplateSource);
+        self::assertStringContainsString('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml', $maintenanceTemplateSource);
+        self::assertStringContainsString("defined('WLS_MAINTENANCE_WORKER')", $appSource);
+        self::assertStringContainsString("defined('WLS_MAINTENANCE_WORKER')", $fpcObserverSource);
+        self::assertStringContainsString("Env::system('maintenance')", $fpcObserverSource);
         self::assertStringContainsString('setRuntimeMaintenanceMode(false)', $workerSource);
         self::assertStringContainsString('setRuntimeMaintenanceMode(false)', $workerSslSource);
         self::assertStringNotContainsString('setRuntimeMaintenanceMode($mEnabled)', $workerSource);

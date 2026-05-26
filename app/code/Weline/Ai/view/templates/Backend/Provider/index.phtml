@@ -3,6 +3,17 @@
 $activeTab = $activeTab ?? 'account';
 $providerAdd = ['id' => 0];
 $this->assign('providerAdd', $providerAdd);
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT;
+$providerAccountEndpoints = [
+    'listAccounts' => ['url' => $this->getBackendUrl('*/backend/provider/list'), 'method' => 'GET'],
+    'getAccount' => ['url' => $this->getBackendUrl('*/backend/provider/account'), 'method' => 'GET'],
+    'saveAccount' => ['url' => $this->getBackendUrl('*/backend/provider/save'), 'method' => 'POST'],
+    'testConnection' => ['url' => $this->getBackendUrl('*/backend/provider/test-connection'), 'method' => 'POST'],
+    'remoteModelsForSelect' => ['url' => $this->getBackendUrl('*/backend/provider/remote-models-for-select'), 'method' => 'GET'],
+    'getUsageList' => ['url' => $this->getBackendUrl('*/backend/provider/usage-list'), 'method' => 'GET'],
+    'toggleActive' => ['url' => $this->getBackendUrl('*/backend/provider/toggle-active'), 'method' => 'POST'],
+    'deleteAccount' => ['url' => $this->getBackendUrl('*/backend/provider/delete'), 'method' => 'POST'],
+];
 ?>
 <template>Weline_Ai::Backend/Manager/tabs.phtml</template>
 <?php if (empty($embed)): ?>
@@ -354,6 +365,130 @@ $this->assign('providerAdd', $providerAdd);
     var currentSearch = '';
     var currentProvider = '';
     var currentAccounts = [];
+    var providerAccountApiPromise = null;
+    var providerAccountEndpoints = <?= json_encode($providerAccountEndpoints, $jsonFlags) ?>;
+
+    function getProviderAccountApi() {
+        if (providerAccountApiPromise) {
+            return providerAccountApiPromise;
+        }
+        providerAccountApiPromise = waitForWelineApi().then(function(api) {
+            var client = {};
+            Object.keys(providerAccountEndpoints).forEach(function(operation) {
+                client[operation] = function(params) {
+                    return requestProviderAccount(api, operation, params || {});
+                };
+            });
+            return client;
+        });
+        return providerAccountApiPromise;
+    }
+
+    function waitForWelineApi(attemptsLeft) {
+        attemptsLeft = typeof attemptsLeft === 'number' ? attemptsLeft : 80;
+        var api = window.Weline && window.Weline.Api;
+        if (api && api.__backend === true && typeof api.request === 'function') {
+            return Promise.resolve(api);
+        }
+        if (attemptsLeft <= 0) {
+            return Promise.reject(new Error('Weline.Api backend worker API is unavailable.'));
+        }
+        return new Promise(function(resolve, reject) {
+            window.setTimeout(function() {
+                waitForWelineApi(attemptsLeft - 1).then(resolve).catch(reject);
+            }, 50);
+        });
+    }
+
+    function buildProviderAccountPayload(operation, params) {
+        var payload = Object.assign({}, params || {});
+        if (operation === 'saveAccount' || operation === 'testConnection') {
+            payload = Object.assign({}, payload.payload || payload);
+        }
+        return payload;
+    }
+
+    function buildQueryString(params) {
+        var query = new URLSearchParams();
+        Object.keys(params || {}).forEach(function(key) {
+            var value = params[key];
+            if (value === undefined || value === null) {
+                return;
+            }
+            if (Array.isArray(value)) {
+                value.forEach(function(item) {
+                    query.append(key + '[]', item === undefined || item === null ? '' : String(item));
+                });
+                return;
+            }
+            query.append(key, String(value));
+        });
+        return query.toString();
+    }
+
+    function appendQueryString(url, params) {
+        var query = buildQueryString(params);
+        if (!query) {
+            return url;
+        }
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + query;
+    }
+
+    function normalizeProviderAccountResponse(response) {
+        var hasTransportEnvelope = response
+            && typeof response === 'object'
+            && !Array.isArray(response)
+            && Object.prototype.hasOwnProperty.call(response, 'data')
+            && (Object.prototype.hasOwnProperty.call(response, 'status')
+                || Object.prototype.hasOwnProperty.call(response, 'ok')
+                || Object.prototype.hasOwnProperty.call(response, 'headers'));
+        var data = hasTransportEnvelope ? response.data : response;
+        if (typeof data === 'string') {
+            try {
+                data = JSON.parse(data);
+            } catch (e) {
+                data = { success: false, message: data };
+            }
+        }
+        return data || {};
+    }
+
+    function requestProviderAccount(api, operation, params) {
+        var endpoint = providerAccountEndpoints[operation];
+        if (!endpoint || !endpoint.url) {
+            return Promise.reject(new Error('AI provider account operation is unavailable: ' + operation));
+        }
+
+        var payload = buildProviderAccountPayload(operation, params || {});
+        var method = String(endpoint.method || 'GET').toUpperCase();
+        var url = endpoint.url;
+        var options = { method: method };
+
+        if (method === 'GET') {
+            url = appendQueryString(url, payload);
+        } else if (operation === 'toggleActive' || operation === 'deleteAccount') {
+            options.body = new URLSearchParams(payload);
+        } else {
+            options.body = payload;
+        }
+
+        return api.request(url, options).then(normalizeProviderAccountResponse).catch(function(error) {
+            var responseData = error && error.response ? normalizeProviderAccountResponse(error.response.data) : null;
+            if (responseData && responseData.success === false) {
+                return responseData;
+            }
+            throw error;
+        });
+    }
+
+    function providerAccountCall(operation, params) {
+        return getProviderAccountApi().then(function(api) {
+            if (!api || typeof api[operation] !== 'function') {
+                throw new Error('AI provider account operation is unavailable: ' + operation);
+            }
+            return api[operation](params || {}, { keepBusinessResult: true });
+        });
+    }
 
     // 页面加载完成后初始化
     document.addEventListener('DOMContentLoaded', function() {
@@ -385,17 +520,16 @@ $this->assign('providerAdd', $providerAdd);
         page = page || 1;
         currentPage = page;
         
-        var params = new URLSearchParams({
+        var params = {
             page: page,
             limit: 20,
             search: currentSearch,
             provider_code: currentProvider
-        });
-        
-        var listUrl = '<?= $this->getBackendUrl('*/backend/provider/getList') ?>?' + params;
-        var req = window.Weline.Api.get(listUrl, { silent: true });
+        };
+
+        var req = providerAccountCall('listAccounts', params);
         req.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res || {};
             if (data && data.success) {
                     currentAccounts = Array.isArray(data.data) ? data.data : [];
                     displayAccounts(data.data);
@@ -574,11 +708,9 @@ $this->assign('providerAdd', $providerAdd);
         
         // 确保激活状态为1
         data.is_active = '1';
-        var saveUrl0 = '<?= $this->getBackendUrl('*/backend/provider/save') ?>';
-        var opts0 = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) };
-        var req0 = window.Weline.Api.request(saveUrl0, opts0);
+        var req0 = providerAccountCall('saveAccount', { payload: data });
         req0.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res || {};
             if (data && data.success) {
                 // 保存成功，更新账户ID
                 document.getElementById('accountId').value = data.account_id || data.id;
@@ -623,11 +755,9 @@ $this->assign('providerAdd', $providerAdd);
         // 更新状态为测试中
         document.querySelector('label[for="is_active"]').innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i>测试中...';
         
-        var tcUrl = '<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>';
-        var tcOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: accountId }) };
-        var req = window.Weline.Api.request(tcUrl, tcOpts);
+        var req = providerAccountCall('testConnection', { payload: { id: accountId } });
         req.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res || {};
             // 恢复状态
             var originalLabel = '激活';
             document.querySelector('label[for="is_active"]').textContent = originalLabel;
@@ -714,10 +844,9 @@ $this->assign('providerAdd', $providerAdd);
         document.getElementById('proxy_password').value = '';
 
         // 加载账户数据并显示在弹窗中
-        var gaUrl = '<?= $this->getBackendUrl('*/backend/provider/getAccount') ?>?id=' + encodeURIComponent(id);
-        var gaReq = window.Weline.Api.get(gaUrl, { silent: true });
+        var gaReq = providerAccountCall('getAccount', { id: parseInt(id, 10) || 0 });
         gaReq.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res || {};
             if (data && data.success) {
                 var account = data.data;
                 
@@ -812,11 +941,9 @@ $this->assign('providerAdd', $providerAdd);
         
         var formData = new FormData(form);
         var data = Object.fromEntries(formData);
-        var saveUrl2 = '<?= $this->getBackendUrl('*/backend/provider/save') ?>';
-        var opts2 = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) };
-        var req2 = window.Weline.Api.request(saveUrl2, opts2);
+        var req2 = providerAccountCall('saveAccount', { payload: data });
         req2.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res || {};
             if (data && data.success) {
                 bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
                 loadAccounts(currentPage);
@@ -866,30 +993,12 @@ $this->assign('providerAdd', $providerAdd);
             return Promise.resolve('');
         }
         var providerCode = String(account.provider_code || '').trim().toLowerCase();
-        var params = new URLSearchParams({
+        var params = {
             provider_code: providerCode,
-            account_id: account.id || '',
-            require_remote: '1'
-        });
-        var url = '<?= $this->getBackendUrl('*/backend/provider/getRemoteModelsForSelect') ?>?' + params.toString();
-        return fetch(url, {
-            method: 'GET',
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(function(response) {
-            return response.text().then(function(text) {
-                var json;
-                try {
-                    json = text ? JSON.parse(text) : {};
-                } catch (e) {
-                    throw new Error('models endpoint returned non-JSON response');
-                }
-                if (!response.ok) {
-                    throw new Error(json.message || ('models endpoint HTTP ' + response.status));
-                }
-                return json;
-            });
-        }).then(function(data) {
+            account_id: parseInt(account.id || 0, 10) || 0,
+            require_remote: true
+        };
+        return providerAccountCall('remoteModelsForSelect', params).then(function(data) {
             if (!data || !data.success) {
                 throw new Error((data && data.message) || 'models endpoint request failed');
             }
@@ -963,16 +1072,14 @@ $this->assign('providerAdd', $providerAdd);
         var testModal = createTestModal();
         document.body.appendChild(testModal);
 
-        var tcUrl2 = '<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>';
         var payload = { id: id };
         if (modelCode) payload.model_code = modelCode;
         var selectedMeta = modelCode && window.__welineProviderTestModelMeta ? window.__welineProviderTestModelMeta[modelCode] : null;
         if (selectedMeta && selectedMeta.primary_modality) payload.primary_modality = selectedMeta.primary_modality;
         if (selectedMeta && Array.isArray(selectedMeta.capabilities)) payload.capabilities = selectedMeta.capabilities;
-        var tcOpts2 = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
-        var req2 = window.Weline.Api.request(tcUrl2, tcOpts2);
+        var req2 = providerAccountCall('testConnection', { payload: payload });
         req2.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res || {};
             btn.innerHTML = originalHtml;
             btn.disabled = false;
             document.body.removeChild(testModal);
@@ -1120,15 +1227,14 @@ $this->assign('providerAdd', $providerAdd);
     function loadUsageList(accountId, page) {
         page = page || 1;
         document.getElementById('usageLoading').style.display = 'block';
-        var params = new URLSearchParams({
+        var params = {
             page: page,
             limit: 20,
             account_id: accountId
-        });
-        var ulUrl = '<?= $this->getBackendUrl('*/backend/provider/getUsageList') ?>?' + params;
-        var ulReq = window.Weline.Api.get(ulUrl, { silent: true });
+        };
+        var ulReq = providerAccountCall('getUsageList', params);
         ulReq.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res || {};
                 document.getElementById('usageLoading').style.display = 'none';
                 var tbody = document.getElementById('usageTbody');
                 if (!data.success || !data.data || data.data.length === 0) {
@@ -1180,10 +1286,9 @@ $this->assign('providerAdd', $providerAdd);
 
     // 切换激活状态
     window.toggleActive = function(id) {
-        var taUrl = '<?= $this->getBackendUrl('*/backend/provider/toggleActive') ?>';
-        var taReq = window.Weline.Api.request(taUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) });
+        var taReq = providerAccountCall('toggleActive', { id: parseInt(id, 10) || 0 });
         taReq.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res || {};
             if (!data || !data.success) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
@@ -1214,11 +1319,9 @@ $this->assign('providerAdd', $providerAdd);
     window.deleteAccount = function(id) {
         BackendConfirm.show('<?= __('确定要删除此账户吗？此操作不可恢复！') ?>').then(function(confirmed) {
             if (!confirmed) return;
-            var delUrl = '<?= $this->getBackendUrl('*/backend/provider/delete') ?>';
-            var delOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) };
-            var delReq = window.Weline.Api.request(delUrl, delOpts);
+            var delReq = providerAccountCall('deleteAccount', { id: parseInt(id, 10) || 0 });
             delReq.then(function(res) {
-            var data = (res && res.data) || res;
+            var data = res || {};
             if (data && data.success) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({

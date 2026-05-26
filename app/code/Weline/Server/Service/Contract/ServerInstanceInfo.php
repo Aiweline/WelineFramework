@@ -36,6 +36,11 @@ class ServerInstanceInfo
         public readonly int $startedTimestamp,
         public readonly array $services,
         public readonly string $controlToken = '',
+        public readonly string $startupFailureReason = '',
+        public readonly string $startupFailureCode = '',
+        public readonly string $startupFailureClass = '',
+        public readonly array $startupFailureContext = [],
+        public readonly array $startupFailureDiagnostics = [],
     ) {}
 
     /**

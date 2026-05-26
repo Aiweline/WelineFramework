@@ -2435,6 +2435,9 @@ PROMPT
             . "- Generate exactly one {$region} component for {$sectionName}.\n"
             . "- Site: {$siteTitle}. " . ($brief !== '' ? "Brief: {$brief}. " : '') . "Visitor copy locale: " . ($locale !== '' ? $locale : 'site default') . ".\n"
             . "- Output exactly one minified JSON object with these string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
+            . "- JSON/PHP boundary hard gate: the raw response must begin with `{`, never `<?php`, `<?=`, `<section`, or any raw PHTML/HTML. This task returns JSON transport only.\n"
+            . "- PHP marker hard gate: `<?php` is illegal in every JSON field. `php_variables` is not a PHP file; it contains only `$var = $getConfig('field.key', 'quoted default');` assignment lines, no opening tag, no closing tag, no echo/print, no arrays, no loops. The only legal PHP marker is `<?= ... ?>` inside html_content string values for safe field echoes.\n"
+            . "- PHP fallback literal hard gate: every `$getConfig(...)` default must be a quoted PHP string literal. Never output bare localized words such as Histórico, Segurança, Política, Privacy, Step, or Download outside quotes; if fallback copy would contain an apostrophe, rewrite the sentence without it or escape it.\n"
             . "- Focus on structural correctness first: valid JSON, balanced HTML tags, balanced CSS braces/parentheses, readable visitor copy, and selectors scoped under #componentId.\n"
             . "- Typography is a hard quality signal: css_extra must include non-default brand font-family declarations on both a title selector and a root/body/text selector. Use CTX_CONFIRMED_THEME.font_family when present, otherwise choose a named brand-appropriate family before generic fallback; pure system/Arial/Roboto stacks fail.\n"
             . "- Editable field contract: extra_fields must declare every visitor-visible text/image/CTA value that should be editable, and php_variables may contain only simple `\$var = \$getConfig('field.key', 'default');` assignments for those fields. html_content must render those variables with safe `<?= htmlspecialchars(\$var ?? 'default', ENT_QUOTES, 'UTF-8') ?>` or `<?= nl2br(htmlspecialchars(\$var ?? 'default', ENT_QUOTES, 'UTF-8')) ?>`; do not hardcode visible copy that should be edited later. js_content is normally empty, but CTA/action blocks may include a tiny scoped click bridge when CTX_CTA_ACTION_CONTRACT requires an actionable button. css_responsive 必须包含至少一段 `@media (max-width: 768px)` 与一段 `@media (max-width: 420px)` 完整规则。\n"
@@ -2482,6 +2485,15 @@ PROMPT
         };
 
         $lines = [];
+        if (\str_contains($message, 'component_json.parse')
+            || \str_contains($message, 'valid component json payload')
+            || \str_contains($message, 'json payload')
+            || \str_contains($message, '<?php')
+            || \str_contains($message, 'raw response must begin')
+        ) {
+            $lines[] = "- FAILURE_FIX_JSON_TRANSPORT_PREFIX (FATAL): the previous response was not a component JSON envelope. Return transport JSON only. The first byte must be `{` and the last byte must be `}`. Do not output `<?php`, `?>`, `<?=`, markdown fences, raw HTML, comments, or prose outside the JSON object.";
+            $lines[] = "- FAILURE_FIX_JSON_TRANSPORT_EXAMPLE: correct envelope shape is exactly one object with keys `extra_fields`, `php_variables`, `css_extra`, `css_responsive`, `html_content`, and `js_content`; `php_variables` contains assignment lines only, for example `\$contentTitle = \$getConfig('content.title', 'Final localized title');`, while PHP echo markers are allowed only inside the `html_content` string.";
+        }
         if (\str_contains($message, 'contact fact contract')
             || \str_contains($message, 'contact values')
             || \str_contains($message, 'source truth contract')
@@ -2496,13 +2508,14 @@ PROMPT
             || \str_contains($message, 'contact role example text')
         ) {
             $lines[] = "- FAILURE_FIX_CONTACT_PLACEHOLDER_LEAK: do not render any phone number, WhatsApp number, email address, handle, domain, or support account unless that exact value is present in the frozen task context. If no exact channel value is supplied, render final localized non-numeric guidance such as the official in-app help center, the secure message form, or the live chat/support channel. Never invent sample numbers like +91 98765 43210, 1234567890, 1800..., 800..., 000..., example emails, support@ .com, or phrases copied from role examples.";
+            $lines[] = "- FAILURE_FIX_FORM_EMAIL_PLACEHOLDER (HARD): for form/email fields, labels and placeholders are visitor copy, not contact facts. You may render an email input control, but its placeholder/value/default text must be generic localized wording with no `@`, no dot-domain, and no address-shaped token. Use examples like `Seu e-mail`, `Email address`, or `Secure reply email` rendered through extra_fields/php_variables; never use `name@example.com`, `support@...`, `contact@...`, `privacy@...`, `hello@...`, or any invented domain.";
         }
         if (\str_contains($message, 'editable field contract')
             || \str_contains($message, 'hardcoded html')
             || \str_contains($message, 'hardcoded visible text')
             || \str_contains($message, 'extra_fields/php_variables')
         ) {
-            $lines[] = "- FAILURE_FIX_EDITABLE_FIELD_BINDING (HARD): every visitor-visible text node must be editable. Add one extra_fields metadata row for each heading/body/card/stat/badge/FAQ/form-label/CTA text, bind each row in php_variables with `\$getConfig('field.key', 'default')`, and render only `<?= htmlspecialchars(...) ?>` or `<?= nl2br(htmlspecialchars(...)) ?>` in html_content. Do not leave raw words or numbers between tags. Before returning, delete every `<?= ... ?>` fragment from html_content and strip tags; the leftover decoded text must be empty of visitor copy.";
+            $lines[] = "- FAILURE_FIX_EDITABLE_FIELD_BINDING (HARD): every visitor-visible text node must be editable, including step numbers, card labels, stat values, badge text, short chips, form helper notes, privacy/security notes, image captions, and small microcopy. Add one extra_fields metadata row for each heading/body/card/stat/badge/step-number/FAQ/form-label/form-placeholder/form-note/CTA text, bind each row in php_variables with `\$getConfig('field.key', 'default')`, and render only `<?= htmlspecialchars(...) ?>` or `<?= nl2br(htmlspecialchars(...)) ?>` in html_content. Do not leave raw words or numbers between tags. Before returning, delete every `<?= ... ?>` fragment from html_content and strip tags; the leftover decoded text must be empty of visitor copy.";
         }
         if (\str_contains($message, 'content.description')
             || \str_contains($message, 'required_get_config')
@@ -2533,6 +2546,13 @@ PROMPT
             || \str_contains($message, 'allowed_internal_paths')
         ) {
             $lines[] = "- FAILURE_FIX_ROUTE_CONTRACT (HARD): remove every `<a href>` whose internal target is not listed in REQUIRED_PAGE_ROUTE_CONTRACT_FOR_RECOVERY.allowed_internal_paths. Do not replace `/download` with `#download`, `/faq` with `#faq`, anchors, query strings, or invented nearby paths. For download, FAQ, game, bonus, support, or CTA actions whose page route is not listed, render `<button type='button' class='{$componentPrefix}-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? 'Finished CTA copy', ENT_QUOTES, 'UTF-8') ?></button>` inside an action wrapper and provide the scoped js_content click bridge from CTX_CTA_ACTION_CONTRACT. Only use an `<a>` when its href exactly equals one allowed_internal_paths value.";
+        }
+        if (\str_contains($message, 'cta/action contract')
+            || \str_contains($message, 'cta must be a real anchor')
+            || \str_contains($message, 'data-pb-ai-action')
+            || \str_contains($message, 'action-looking cta')
+        ) {
+            $lines[] = "- FAILURE_FIX_ACTIONABLE_CTA (HARD): every visible CTA control must be actionable. If a real allowed href is available, render `<a class='{$componentPrefix}-cta' href='<?= htmlspecialchars(\$ctaUrl ?? '/allowed-path', ENT_QUOTES, 'UTF-8') ?>'><?= htmlspecialchars(\$ctaText ?? 'Finished CTA copy', ENT_QUOTES, 'UTF-8') ?></a>` and bind both cta.text and cta.url. If no real allowed href is supplied, render exactly a button event control: `<button type='button' class='{$componentPrefix}-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? 'Finished CTA copy', ENT_QUOTES, 'UTF-8') ?></button>` inside a sibling `{$componentPrefix}-action` wrapper. Never output CTA text in a div/span, never output `<button class='{$componentPrefix}-cta'>` without type and data-pb-ai-action, and never invent href values such as #, /download, /faq, /contact, or query strings.";
         }
         if (\str_contains($identity, 'form')
             || \str_contains($message, 'form guidance css')
@@ -2613,7 +2633,7 @@ PROMPT
 
     private function buildFormGuidanceRequiredStructureContract(string $componentPrefix): string
     {
-        return "- FORM_GUIDANCE_REQUIRED_STRUCTURE (HARD): html_content must contain one designed `<form class='{$componentPrefix}-form'>`, not naked inline browser controls. Use repeated field groups shaped like `<div class='{$componentPrefix}-field'><label class='{$componentPrefix}-label' for='{$componentPrefix}-name'><?= htmlspecialchars(\$formLabel1 ?? 'Finished form label', ENT_QUOTES, 'UTF-8') ?></label><input id='{$componentPrefix}-name' class='{$componentPrefix}-input' type='text' placeholder='<?= htmlspecialchars(\$formPlaceholder1 ?? 'Finished localized placeholder', ENT_QUOTES, 'UTF-8') ?>'></div>` and a message group shaped like `<div class='{$componentPrefix}-field'><label class='{$componentPrefix}-label' for='{$componentPrefix}-message'><?= htmlspecialchars(\$messageLabel ?? 'Finished message label', ENT_QUOTES, 'UTF-8') ?></label><textarea id='{$componentPrefix}-message' class='{$componentPrefix}-textarea' placeholder='<?= htmlspecialchars(\$messagePlaceholder ?? 'Finished localized message prompt', ENT_QUOTES, 'UTF-8') ?>'></textarea></div>`. Include at least two `<label>` elements, at least two `<input>` or `<textarea>` controls, and one message/issue textarea. All label, help, placeholder, and CTA text must be backed by extra_fields/php_variables keys such as `form.label_1`, `form.placeholder_1`, `form.message_label`, `form.message_placeholder`, and `form.cta_text`; placeholder/value attributes must be safe PHP field echoes, never raw strings. css_extra must style `#componentId .{$componentPrefix}-form`, `#componentId .{$componentPrefix}-field`, `#componentId .{$componentPrefix}-label`, `#componentId .{$componentPrefix}-input`, and `#componentId .{$componentPrefix}-textarea`: form/field layout needs grid or column flex with real gap; input/textarea need width:100%, padding, border-radius, border/background, box-sizing:border-box, and focus states. Keep the submit action in a separate `{$componentPrefix}-action` wrapper. Do not output email/phone/address cards for this role.\n";
+        return "- FORM_GUIDANCE_REQUIRED_STRUCTURE (HARD): html_content must contain one designed `<form class='{$componentPrefix}-form'>`, not naked inline browser controls. Use repeated field groups shaped like `<div class='{$componentPrefix}-field'><label class='{$componentPrefix}-label' for='{$componentPrefix}-name'><?= htmlspecialchars(\$formLabel1 ?? 'Finished form label', ENT_QUOTES, 'UTF-8') ?></label><input id='{$componentPrefix}-name' class='{$componentPrefix}-input' type='text' placeholder='<?= htmlspecialchars(\$formPlaceholder1 ?? 'Finished localized placeholder', ENT_QUOTES, 'UTF-8') ?>'></div>` and a message group shaped like `<div class='{$componentPrefix}-field'><label class='{$componentPrefix}-label' for='{$componentPrefix}-message'><?= htmlspecialchars(\$messageLabel ?? 'Finished message label', ENT_QUOTES, 'UTF-8') ?></label><textarea id='{$componentPrefix}-message' class='{$componentPrefix}-textarea' placeholder='<?= htmlspecialchars(\$messagePlaceholder ?? 'Finished localized message prompt', ENT_QUOTES, 'UTF-8') ?>'></textarea></div>`. Include at least two `<label>` elements, at least two `<input>` or `<textarea>` controls, and one message/issue textarea. All label, help, placeholder, privacy/security note, small note, and CTA text must be backed by extra_fields/php_variables keys such as `form.label_1`, `form.placeholder_1`, `form.message_label`, `form.message_placeholder`, `form.note_text`, and `form.cta_text`; placeholder/value attributes and note text must be safe PHP field echoes, never raw strings. If you render a note such as secure handling, response time, privacy, or consent copy, use `<small class='{$componentPrefix}-note'><?= htmlspecialchars(\$formNoteText ?? 'Finished localized note', ENT_QUOTES, 'UTF-8') ?></small>` backed by `form.note_text`. Email fields may use `type='email'`, but their placeholder/default text must be generic localized wording with no `@`, no example domain, and no address-shaped token. css_extra must style `#componentId .{$componentPrefix}-form`, `#componentId .{$componentPrefix}-field`, `#componentId .{$componentPrefix}-label`, `#componentId .{$componentPrefix}-input`, and `#componentId .{$componentPrefix}-textarea`: form/field layout needs grid or column flex with real gap; input/textarea need width:100%, padding, border-radius, border/background, box-sizing:border-box, and focus states. Keep the submit action in a separate `{$componentPrefix}-action` wrapper. Do not output email/phone/address cards for this role.\n";
     }
 
     /**
@@ -2694,6 +2714,9 @@ PROMPT
             'visual contract failed',
             'hero image contract failed',
             'hero image cover CSS contract failed',
+            'CTA/action contract failed',
+            'CTA must be a real anchor',
+            'data-pb-ai-action',
             'Required image slot is not referenced',
             'Required image slot is missing editor attributes',
             'Generated image source is outside verified asset allowlist',
@@ -3082,7 +3105,7 @@ GOOD extra_fields/php_variables/html_content:
 "extra_fields": "group:ai_content => AI editable content\ncontent.title => Title:text:Trusted Download\ncontent.description => Description:textarea:Fast setup with secure guidance\ncta.text => CTA text:text:Download APK"
 "php_variables": "$contentTitle = $getConfig('content.title', 'Trusted Download');\n$contentDescription = $getConfig('content.description', 'Fast setup with secure guidance');\n$ctaText = $getConfig('cta.text', 'Download APK');"
 "html_content": "<section class='pb-c-root'><h2><?= htmlspecialchars($contentTitle ?? 'Trusted Download', ENT_QUOTES, 'UTF-8') ?></h2><p><?= nl2br(htmlspecialchars($contentDescription ?? 'Fast setup with secure guidance', ENT_QUOTES, 'UTF-8')) ?></p><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Download APK', ENT_QUOTES, 'UTF-8') ?></button></section>"
-Machine self-check before returning: remove every `<?= ... ?>` fragment from html_content, then strip HTML tags. The remaining decoded text must contain no visitor-facing letters or numbers.
+Machine self-check before returning: remove every `<?= ... ?>` fragment from html_content, then strip HTML tags. The remaining decoded text must contain no visitor-facing letters or numbers; step numbers such as 1/2/3, stat values, card labels, badge text, form helper notes, privacy/security notes, and microcopy are visible content unless they are produced by CSS only.
 PROMPT;
 
         $example = <<<'PROMPT'
@@ -3103,7 +3126,7 @@ PROMPT;
 
         $multiFieldExample = <<<'PROMPT'
 Multiple repeated fields strategy (copy the pattern, not the copy):
-When you create multiple cards, steps, chips, stats, reviews, FAQ rows, form labels, or badges, use one semantic field per visible value. Do not put raw labels, numbers, or short chip text directly in html_content.
+When you create multiple cards, steps, chips, stats, reviews, FAQ rows, form labels, or badges, use one semantic field per visible value. Do not put raw labels, step numbers, stat numbers, or short chip text directly in html_content.
 Use field families that the contract recognizes: content.*, cta.*, media.*, card.*, feature.*, proof.*, stat.*, faq.*, review.*, step.*, form.*, channel.*, badge.*, item.*, policy.*, and rule.*.
 GOOD extra_fields rows:
 proof.item_1_value => Proof 1 value:text:4.8
@@ -4995,7 +5018,10 @@ PROMPT;
             . "- CSS property whitelist: use only position, inset, top, right, bottom, left, overflow, padding, margin, max-width, width, min-width, height, min-height, display, flex, flex-wrap, flex-direction, gap, align-items, justify-content, align-self, grid-template-columns, background, color, border, border-radius, box-shadow, font-family, font-size, font-weight, line-height, z-index, opacity, object-fit, object-position, box-sizing, text-decoration, cursor, and outline. Do not invent property names or write text fragments inside css_extra.\n"
             . "- css_responsive must contain at least one `@media (max-width: 768px)` rule and one `@media (max-width: 420px)` rule. For SAFE_TEXT_ROLE_OUTLINE, responsive rules must preserve the selected visual_signature composition instead of forcing a single three-card grid transition. Put @media blocks only in css_responsive; keep css_extra as scoped base selectors.\n"
             . "- JSON output mode: return exactly one minified JSON object on one line. The first character is `{` and the last character is `}`. Do not wrap it in markdown. Do not append comments or prose. Escape any unavoidable double quote inside string values as `\\\"`; prefer single-quoted HTML attributes so escaping is rarely needed.\n"
-            . "- Return one complete JSON object using the required fields only. Do not output PHP opening or closing tags in html_content.\n"
+            . "- Return one complete JSON object using the required fields only. Never output top-level PHP/PHTML. Do not start the answer with `<?php`, `<?=`, `<section`, or any raw HTML; only a JSON object is valid.\n"
+            . "- PHP boundary: `php_variables` is not wrapped in PHP tags and must contain no `<?php`, no `?>`, no echo/print, no arrays, no loops, and no functions. It is only assignment lines like `$contentTitle = $getConfig('content.title', 'Finished localized title');`.\n"
+            . "- Safe echo exception: html_content may contain `<?= htmlspecialchars(...) ?>` or `<?= nl2br(htmlspecialchars(...)) ?>` inside the JSON string. That exception does not allow `<?php` blocks, full PHTML documents, or raw PHP before/after the JSON object.\n"
+            . "- PHP string literal safety: every `$getConfig` fallback must be quoted; never emit bare visitor words such as Histórico or Segurança as PHP tokens. Avoid apostrophes in fallback text or escape them.\n"
             . $this->buildStrictRequiredImagePromptTail($componentCode, $renderContext);
     }
 
@@ -7725,7 +7751,7 @@ PROMPT;
             'scenario_code' => 'pagebuilder_component_generation',
             'params' => $this->buildAiRuntimeParams([
                 'allow_zero_balance_provider' => true,
-                'response_format' => ['type' => 'json_object'],
+                'response_format' => $this->buildComponentResponseFormat($region),
                 'temperature' => $retry ? 0.05 : 0.15,
                 'max_tokens' => $maxTokens,
                 'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
@@ -7737,6 +7763,37 @@ PROMPT;
             $region,
             'AI did not return a valid component JSON payload'
         );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function buildComponentResponseFormat(string $region): array
+    {
+        $required = match ($region) {
+            'header' => ['extra_fields', 'php_variables', 'css_extra', 'html_extra', 'js_content'],
+            'footer' => ['extra_fields', 'php_variables', 'css_extra', 'html_extra_column', 'html_extra', 'footer_extra_text', 'js_content'],
+            default => ['extra_fields', 'php_variables', 'css_extra', 'css_responsive', 'html_content', 'js_content'],
+        };
+
+        $properties = [];
+        foreach ($required as $key) {
+            $properties[$key] = ['type' => 'string'];
+        }
+
+        return [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'pagebuilder_component_' . \preg_replace('/[^a-z0-9_]+/i', '_', $region),
+                'strict' => true,
+                'schema' => [
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'properties' => $properties,
+                    'required' => $required,
+                ],
+            ],
+        ];
     }
 
     /**
@@ -7767,11 +7824,16 @@ PROMPT;
             '【系统提示词】CRITICAL OUTPUT CONTRACT FOR PAGEBUILDER COMPONENT JSON:',
             '- You may think internally, but final output must contain only one JSON object and nothing else.',
             '- The first character of final output MUST be `{` and the last character MUST be `}`.',
+            '- If the next token would be `<?php`, `<?=`, markdown, prose, or HTML, stop and replace the entire response with the required JSON object envelope. This endpoint is a JSON transport endpoint, not a PHP/PHTML renderer.',
+            '- Valid transport shape example: {"extra_fields":"group:content => Content\\ncontent.title => Title:text:Final title","php_variables":"$contentTitle = $getConfig(\'content.title\', \'Final title\');","css_extra":"#componentId .pb-c-root{position:relative;}","css_responsive":"@media (max-width: 768px){#componentId .pb-c-root{padding:32px 16px;}}@media (max-width: 420px){#componentId .pb-c-root{padding:28px 14px;}}","html_content":"<section class=\'pb-c-root\'><h2><?= htmlspecialchars($contentTitle ?? \'Final title\', ENT_QUOTES, \'UTF-8\') ?></h2></section>","js_content":""}.',
             '- Do not output analysis, reasoning_content, markdown, code fences, comments, or explanatory prose.',
             '- Keep exact JSON field names required by this task; do not rename keys.',
             '- Ensure all JSON string values are properly escaped and syntactically valid.',
             '- Backslashes are only legal for JSON escapes like \\", \\\\, \\/, \\n, \\r, \\t, or \\uXXXX. Do not output stray backslashes before HTML text, class names, tag names, or visitor copy.',
             '- PHP/template code boundary: php_variables may contain only simple getConfig assignments, and html_content may contain only safe field echo expressions using htmlspecialchars or nl2br(htmlspecialchars). No PHP blocks, loops, conditions, echo/print, functions, arrays, or framework template snippets.',
+            '- Top-level output boundary: never start the response with `<?php`, `<?=`, `<section`, `<div`, `<html`, or any PHTML/HTML. The raw final response must start with `{` because it is JSON transport, not a PHP/template file.',
+            '- PHP marker boundary: `<?php` is forbidden in every field. `php_variables` is a JSON string containing assignment lines only, without PHP opening/closing tags. The only allowed PHP marker is a safe `<?= ... ?>` echo inside the html_content JSON string.',
+            '- PHP default literal safety: every `$getConfig` fallback in php_variables must be a quoted PHP string literal. Never output bare locale words such as Histórico, Segurança, Privacy, or Step outside quotes; avoid apostrophes in fallback copy or escape them.',
             '- HTML string fields must be well-formed fragments: balanced tags, closed attribute quotes, no orphan closing tags, and no framework wrapper leakage.',
             '- HTML close-tag contract is strict: never merge adjacent closing tags, never invent tags such as </h>, </h3p>, </h2div>, </pa>, </buttondiv>, or </divsection>, and never close a parent element while a child heading/span/strong is still open.',
             '- Do not create empty tag names. `< class=...>`, `< >`, `</ >`, and `<span=...>` are invalid; use `<div class=...>` or plain text.',
@@ -7973,7 +8035,7 @@ PROMPT;
     {
         if (
             \is_array($params['response_format'] ?? null)
-            && \strtolower(\trim((string)($params['response_format']['type'] ?? ''))) === 'json_object'
+            && \in_array(\strtolower(\trim((string)($params['response_format']['type'] ?? ''))), ['json_object', 'json_schema'], true)
         ) {
             $params = $this->sanitizeStructuredJsonRequestParams($params);
         }
@@ -9955,10 +10017,10 @@ JSON;
         return "Stage-2 component output contract V3 (this overrides any broader visual advice above):\n"
             . "1. Single responsibility: generate only the current block. Do not reinterpret the whole website, do not generate neighboring blocks, and do not print planning/contract/schema text.\n"
             . "2. Return exactly one JSON object. First character `{`, last character `}`. No markdown, no prose, no second object, no raw CSS/HTML outside JSON.\n"
-            . "3. Required string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. For content blocks, extra_fields is the editable field metadata and MUST declare every visitor-visible title/body/card label/stat/CTA/image URL/alt value that this component owns. php_variables may contain only simple `\$var = \$getConfig('field.key', 'default');` assignments for those declared fields. Set js_content to empty unless this block renders a CTA/form/FAQ interaction that needs scoped behavior; CTA buttons may use a tiny component-scoped click bridge from CTX_CTA_ACTION_CONTRACT.\n"
+            . "3. Required string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. For content blocks, extra_fields is the editable field metadata and MUST declare every visitor-visible title/body/card label/stat/CTA/image URL/alt/form helper/privacy/security note value that this component owns. php_variables may contain only simple `\$var = \$getConfig('field.key', 'default');` assignments for those declared fields. Set js_content to empty unless this block renders a CTA/form/FAQ interaction that needs scoped behavior; CTA buttons may use a tiny component-scoped click bridge from CTX_CTA_ACTION_CONTRACT.\n"
             . "3a. REQUIRED_EDITABLE_FIELDS_AUDIT: if CTX_REQUIRED_EDITABLE_FIELDS is present, it overrides examples and naming preferences. For each required `{key}`, output one `extra_fields` row with that exact key and one `php_variables` assignment containing `\$getConfig('{key}', ...)`. Example: required `content.description` requires `content.description => Description:textarea:...` and `\$contentDescription = \$getConfig('content.description', '...');`. Do not satisfy `content.description` with `content.body`, `description`, `$body`, raw paragraph text, or an unbound variable.\n"
             . "3b. Teaching example for content component JSON (copy the shape, not the text; rewrite values from CTX_FROZEN_TASK): {$contentExampleJson}\n"
-            . "3c. HARD visible-text binding example: BAD `<h2>Trusted Download</h2><p>Fast setup</p><span>4.8 stars</span><a>Download APK</a>`. GOOD: the same h2, p, stat span, and CTA button are present, but every label/body/stat/CTA text is rendered by a safe PHP echo variable backed by matching extra_fields rows and php_variables `\$getConfig(...)` assignments for content.title, content.description, stat.item_1_label, and cta.text. Only add cta.url when CTX_CTA_ACTION_CONTRACT supplies a real target; otherwise use the button pattern.\n"
+            . "3c. HARD visible-text binding example: BAD `<h2>Trusted Download</h2><p>Fast setup</p><span>4.8 stars</span><small>Secure handling</small><a>Download APK</a>`. GOOD: the same h2, p, stat span, small note, and CTA button are present, but every label/body/stat/note/CTA text is rendered by a safe PHP echo variable backed by matching extra_fields rows and php_variables `\$getConfig(...)` assignments for content.title, content.description, stat.item_1_label, form.note_text, and cta.text. Only add cta.url when CTX_CTA_ACTION_CONTRACT supplies a real target; otherwise use the button pattern.\n"
             . "3d. Field binding workflow: choose lower-case dot keys from recognized families (`content.*`, `cta.*`, `media.*`, `card.*`, `feature.*`, `proof.*`, `stat.*`, `faq.*`, `review.*`, `step.*`, `form.*`, `channel.*`, `badge.*`, `item.*`, `policy.*`, `rule.*`). Required fields from CTX_REQUIRED_EDITABLE_FIELDS are not suggestions: declare and bind the exact dot key, even when a nearby synonym exists (`content.description` is not interchangeable with `content.body`). Write each row in extra_fields, bind the exact key in php_variables, then use only safe PHP echoes as visible text in html_content. Never use camelCase keys such as contentTitle or channelLabel1 as field keys.\n"
             . "3e. Machine self-check: remove all PHP echo fragments from html_content, strip tags, and decode entities. The remaining text may contain punctuation or whitespace only; any letter or number means the output still has hardcoded visitor copy and must be rewritten before returning.\n"
             . "4. html_content layout: use one root section / inner container / copy panel / optional media panel / optional CTA panel composition. Hero blocks include scrim + text-panel. Non-hero layout must follow CTX_BLOCK_VISUAL_SIGNATURE.composition_pattern when present (stacked editorial, step rail, proof band, FAQ rows, form guidance, CTA band, channel hub, etc.). Split media+copy is only one option, not the default for every block. Do not invent decorative wrapper tags that drop the required parts from CTX_CURRENT_ASSET.responsive_layout_contract.\n"
@@ -9981,7 +10043,7 @@ JSON;
             . "14-content-contract. Do not self-censor normal marketing/support/reward wording solely because it is not an exact source fact. Blocking validation is limited to required JSON/HTML structure plus prompt/blueprint placeholder or visible internal metadata leakage.\n"
             . "14-policy. Policy/compliance page action rule: privacy, terms, refund, shipping, and cookie policy blocks must not inherit the site's primary download/install CTA unless the current block explicitly says it is a conversion CTA. Use policy-info, review, rights, safety, or support-oriented action copy instead.\n"
             . "14a. CSS brace rule: css_extra must be well-formed scoped selector blocks like `#componentId .pb-c-name{property:value;}` plus optional component-named `@keyframes pb-c-name{...}` blocks for motion. @media blocks belong in css_responsive ONLY and must be one complete `@media (...) { selector{...} }` body each. No raw declarations outside selector/keyframes blocks, no `}}` glued without a `{` between, no comma selectors that span unrelated regions. Count opening and closing braces before returning; counts must match exactly.\n"
-            . "14b. Block-role contract: task_key/block_key/page_flow_role are binding. If this is a contact_methods/contact-method block, render a visible contact-channel hub with at least two repeated channel rows/cards using sibling `<span class='pb-c-label'>` and `<span class='pb-c-value'>` elements whose text is safe PHP field echoes; a verified image can support the atmosphere but cannot replace the channel list. If this is support_form_guidance/form-guidance/contact-form/message-form, render a designed `<form class='pb-c-form'>` with repeated `.pb-c-field` groups; every label/control pair must be grouped, label text must be a safe PHP field echo, inputs use `.pb-c-input`, the message textarea uses `.pb-c-textarea`, and css_extra must style `#componentId .pb-c-form`, `.pb-c-field`, `.pb-c-label`, `.pb-c-input`, and `.pb-c-textarea` with column/grid rhythm, gap, width:100%, padding, border-radius, border/background, box-sizing:border-box, and focus states. Do not output naked inline browser inputs or unrelated contact cards for this role. If this is support_faq/faq/faq-list, render repeated `pb-c-faq-item` rows with `pb-c-question` plus separate paragraph `pb-c-answer`, and every question/answer text node must be a safe PHP field echo; css_extra must style `#componentId .pb-c-faq-item` with padding, border-radius, and background/border/box-shadow. If this is contact_cta/final_cta/cta, render one focused next-step CTA band with one primary action and compact proof, not repeated contact cards, a form, FAQ rows, or a reused hero overlay; the primary action must be `<a class='pb-c-cta'>` with a real allowed href or `<button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'>` with a safe PHP echoed label plus scoped js_content. CTA blocks must not output question-answer copy, `pb-c-faq-item`, `pb-c-question`, `pb-c-answer`, partial email fragments such as `support@ .com`, or three-plus contact cards.\n"
+            . "14b. Block-role contract: task_key/block_key/page_flow_role are binding. If this is a contact_methods/contact-method block, render a visible contact-channel hub with at least two repeated channel rows/cards using sibling `<span class='pb-c-label'>` and `<span class='pb-c-value'>` elements whose text is safe PHP field echoes; a verified image can support the atmosphere but cannot replace the channel list. If this is support_form_guidance/form-guidance/contact-form/message-form, render a designed `<form class='pb-c-form'>` with repeated `.pb-c-field` groups; every label/control pair must be grouped, label text must be a safe PHP field echo, inputs use `.pb-c-input`, the message textarea uses `.pb-c-textarea`, and css_extra must style `#componentId .pb-c-form`, `.pb-c-field`, `.pb-c-label`, `.pb-c-input`, and `.pb-c-textarea` with column/grid rhythm, gap, width:100%, padding, border-radius, border/background, box-sizing:border-box, and focus states. Form email inputs may exist, but email placeholders/defaults must be localized words with no `@`, no dot-domain, and no example address. Form helper, response-time, privacy, consent, secure-handling, and small note text are visitor copy too: bind them through extra_fields/php_variables, commonly `form.note_text`, and render a safe PHP echo instead of raw text. Do not output naked inline browser inputs or unrelated contact cards for this role. If this is support_faq/faq/faq-list, render repeated `pb-c-faq-item` rows with `pb-c-question` plus separate paragraph `pb-c-answer`, and every question/answer text node must be a safe PHP field echo; css_extra must style `#componentId .pb-c-faq-item` with padding, border-radius, and background/border/box-shadow. If this is contact_cta/final_cta/cta, render one focused next-step CTA band with one primary action and compact proof, not repeated contact cards, a form, FAQ rows, or a reused hero overlay; the primary action must be `<a class='pb-c-cta'>` with a real allowed href or `<button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'>` with a safe PHP echoed label plus scoped js_content. CTA blocks must not output question-answer copy, `pb-c-faq-item`, `pb-c-question`, `pb-c-answer`, partial email fragments such as `support@ .com`, or three-plus contact cards.\n"
             . "14c. Spacing rhythm contract: CTA/action groups must not touch dividers, channel rows, text rows, or form lines. Put the CTA in a sibling `.pb-c-action`/`.pb-c-actions` wrapper after the rows/forms/cards, not inside a channel/field/FAQ row. Use outer margin-top/padding-top on that wrapper, bottom spacing on the preceding row group, or parent flex/grid row gap; the CTA button's own internal padding does not count as separation.\n"
             . "15. Size budget: html_content <= 2400 chars, css_extra <= 3600 chars for CSS-only hero blocks and <= 2600 chars for other content blocks, css_responsive <= 900 chars. If close to budget, simplify decoration and selector lists first, but keep the block structure, CTA action contract, responsive breakpoints, and JSON validity intact.\n"
             . "16. Final self-check before output: JSON parses; HTML tags/quotes are balanced; CSS braces and parentheses are balanced; CSS selectors match HTML classes exactly; theme palette hex tokens and brand typography are used where they serve the design; if the block has a primary CTA, it is a real anchor/button action control with href or data-pb-ai-action, not a static div; if the block has a primary CTA in a game/APK style, it has visible hover/focus/active polish and safe CSS motion; no raw text after the JSON object.\n";
@@ -11775,6 +11837,7 @@ JSON;
             if (!\is_array($task)) {
                 continue;
             }
+            $task = $this->getBuildTaskService()->inflateBuildBlueprintTaskContext($task, $buildBlueprint);
             $pageType = \trim((string)($task['page_type'] ?? ''));
             $taskType = \trim((string)($task['task_type'] ?? ''));
             if ($pageType === '' || $taskType === 'shared_component') {
@@ -13815,6 +13878,13 @@ JSON;
     private function resolvePrimaryLocale(array $websiteProfile, array $scope): string
     {
         foreach ([
+            $scope['ai_content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $websiteProfile['default_language'] ?? null,
+            $scope['website_profile']['default_language'] ?? null,
             $scope['content_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
             $scope['website_profile']['content_locale'] ?? null,
@@ -13825,12 +13895,6 @@ JSON;
             $websiteProfile['locale'] ?? null,
             $scope['website_profile']['locale'] ?? null,
             $scope['website_locale'] ?? null,
-            $scope['default_locale'] ?? null,
-            $scope['default_language'] ?? null,
-            $websiteProfile['default_locale'] ?? null,
-            $websiteProfile['default_language'] ?? null,
-            $scope['website_profile']['default_locale'] ?? null,
-            $scope['website_profile']['default_language'] ?? null,
             $websiteProfile['locales'][0] ?? null,
             $scope['website_profile']['locales'][0] ?? null,
             $scope['plan_generated_locale'] ?? null,

@@ -46,15 +46,15 @@ class QAQuestionPageDataService
             'has_next' => $resolvedPage < (int) ($questionsResult['page_count'] ?? 1),
             'target_question_id' => $targetQuestionId,
             'can_ask' => true,
-            'ask_action' => $this->url->getUrl('qa/add'),
-            'remove_action' => $this->url->getUrl('qa/remove'),
+            'ask_action' => $this->url->getUrl(QAService::FRONTEND_ADD_ROUTE),
+            'remove_action' => $this->url->getUrl(QAService::FRONTEND_REMOVE_ROUTE),
             'login_url' => $this->url->getUrl('customer/account/login'),
-            'previous_page_url' => $resolvedPage > 1 ? $this->url->getUrl('qa', [
+            'previous_page_url' => $resolvedPage > 1 ? $this->url->getUrl(QAService::FRONTEND_ROUTE, [
                 'product_id' => $productId,
                 'page' => $resolvedPage - 1,
                 'page_size' => $resolvedPageSize,
             ]) : '',
-            'next_page_url' => $resolvedPage < (int) ($questionsResult['page_count'] ?? 1) ? $this->url->getUrl('qa', [
+            'next_page_url' => $resolvedPage < (int) ($questionsResult['page_count'] ?? 1) ? $this->url->getUrl(QAService::FRONTEND_ROUTE, [
                 'product_id' => $productId,
                 'page' => $resolvedPage + 1,
                 'page_size' => $resolvedPageSize,

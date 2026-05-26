@@ -142,10 +142,20 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         });
     }
 
-    public function testReadyGateDynamicWarmupDefaultsToEveryBusinessWorker(): void
+    public function testReadyGateDynamicWarmupDefaultsOffBeforeReady(): void
     {
         $this->withDynamicWarmupEnv([
             'WLS_WORKER_DYNAMIC_READY_GATE_ENABLED' => null,
+            'WLS_WORKER_ID' => '2',
+            'WLS_PROCESS_ROLE' => 'worker',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunReadyGateDynamicFirstRenderWarmup'));
+        });
+
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_DYNAMIC_READY_GATE_ENABLED' => '1',
             'WLS_WORKER_ID' => '2',
             'WLS_PROCESS_ROLE' => 'worker',
         ], function (): void {
@@ -155,7 +165,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         });
 
         $this->withDynamicWarmupEnv([
-            'WLS_WORKER_DYNAMIC_READY_GATE_ENABLED' => null,
+            'WLS_WORKER_DYNAMIC_READY_GATE_ENABLED' => '1',
             'WLS_WORKER_ID' => '2',
             'WLS_PROCESS_ROLE' => 'maintenance',
         ], function (): void {
@@ -191,6 +201,40 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
                 '/',
                 '/catalog/category/clothing',
                 '/en_US/catalog/category/clothing',
+            ], $paths);
+        });
+    }
+
+    public function testReadyGateWarmupPathsAreShardedByWorkerId(): void
+    {
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_ID' => '2',
+            'WLS_WORKER_COUNT' => '3',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertSame(
+                ['b', 'e'],
+                $this->invokePrivate($runtime, 'shardReadyGateWarmupPaths', ['a', 'b', 'c', 'd', 'e', 'f'])
+            );
+        });
+    }
+
+    public function testReadyGateDynamicWarmupShardsCriticalPathsAcrossWorkers(): void
+    {
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_DYNAMIC_READY_GATE_DISCOVERY' => 'critical',
+            'WLS_WORKER_DYNAMIC_READY_GATE_MAX_PATHS' => '8',
+            'WLS_WORKER_ID' => '2',
+            'WLS_WORKER_COUNT' => '3',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+            $paths = $this->invokePrivate($runtime, 'resolveReadyGateDynamicWarmupPaths');
+
+            self::assertSame([
+                '/catalog/category/clothing',
+                '/zh_Hans_CN/catalog/category/clothing',
+                '/en_US/product/demo-category-81-sports',
             ], $paths);
         });
     }

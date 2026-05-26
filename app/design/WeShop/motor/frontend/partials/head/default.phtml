@@ -10,7 +10,6 @@ $frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 ?>
 <!-- Base URL 设置：所有相对链接将基于此路径 -->
 <base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
-<?php echo \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Frontend\Service\Head\HeadRenderer::class)->render($this, ['slot' => 'title']); ?>
 <!-- Favicon Hook: 允许其他模块通过 hook 提供自定义 favicon -->
 <w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
 <link rel="icon" type="image/svg+xml" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">

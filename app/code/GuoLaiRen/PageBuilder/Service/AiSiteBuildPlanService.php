@@ -367,25 +367,25 @@ final class AiSiteBuildPlanService
         array $executionBlueprint = []
     ): string {
         return $this->firstNonEmpty([
-            $scope['content_locale'] ?? null,
             $scope['ai_content_locale'] ?? null,
-            $profile['content_locale'] ?? null,
-            $scope['website_profile']['content_locale'] ?? null,
-            $sourcePlan['i18n']['content_locale'] ?? null,
-            $sourcePlan['i18n']['primary_locale'] ?? null,
-            $sourcePlan['i18n']['locale'] ?? null,
-            $scope['plan_generated_locale'] ?? null,
-            $scope['plan_locale'] ?? null,
-            $executionBlueprint['plan_locale'] ?? null,
-            $sourcePlan['plan_locale'] ?? null,
-            $executionBlueprint['content_locale'] ?? null,
-            $sourcePlan['content_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $profile['default_locale'] ?? null,
             $scope['website_profile']['default_locale'] ?? null,
             $scope['default_language'] ?? null,
             $profile['default_language'] ?? null,
             $scope['website_profile']['default_language'] ?? null,
+            $sourcePlan['i18n']['content_locale'] ?? null,
+            $sourcePlan['i18n']['primary_locale'] ?? null,
+            $sourcePlan['i18n']['locale'] ?? null,
+            $profile['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $scope['plan_generated_locale'] ?? null,
+            $scope['plan_locale'] ?? null,
+            $executionBlueprint['plan_locale'] ?? null,
+            $sourcePlan['plan_locale'] ?? null,
+            $executionBlueprint['content_locale'] ?? null,
+            $sourcePlan['content_locale'] ?? null,
             'zh_Hans_CN',
         ]);
     }
@@ -707,9 +707,14 @@ final class AiSiteBuildPlanService
         $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
 
         $locale = $this->firstNonEmpty([
-            $scope['plan_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $profile['default_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $scope['ai_content_locale'] ?? null,
+            $profile['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['plan_locale'] ?? null,
             'zh_Hans_CN',
         ]);
 
@@ -1788,7 +1793,7 @@ final class AiSiteBuildPlanService
         $execution = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
         $featurePoints = \is_array($execution['feature_points'] ?? null) ? \implode(' ', \array_map('strval', $execution['feature_points'])) : '';
 
-        $copy = $this->firstSafeVisibleCopy([
+        $copy = $this->firstSafeLocalizedVisibleCopy([
             $execution['core_copy'] ?? null,
             $fieldCopy,
             $supporting,
@@ -1958,7 +1963,7 @@ final class AiSiteBuildPlanService
             return $this->hasDominantLatinCopy($value);
         }
 
-        return $this->hasMeaningfulCjkCopy($value);
+        return $this->hasAnyCjkCopy($value);
     }
 
     private function isCjkLocale(string $locale): bool
@@ -2022,6 +2027,11 @@ final class AiSiteBuildPlanService
         }
 
         return $total >= 12;
+    }
+
+    private function hasAnyCjkCopy(string $value): bool
+    {
+        return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $value) === 1;
     }
 
     /**
