@@ -174,6 +174,15 @@ class Env extends DataObject
         'router' => [
             'area_routes' => [],
         ],
+        'queue' => [
+            'cron' => [
+                'max_concurrent' => 4,
+                'memory_limit' => '512M',
+            ],
+            'worker' => [
+                'memory_limit' => '512M',
+            ],
+        ],
         'security' => [
             'csrf' => [
                 'pc_controller_mode' => 'off',

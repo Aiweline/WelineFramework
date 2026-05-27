@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\CacheManager\Service\RuntimeCachePolicy;
-use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
@@ -788,9 +788,9 @@ class SlotRendererService
                 'slot_id' => (string)($widget['slot_id'] ?? ''),
                 'type' => (string)($widget['widget_type'] ?? ''),
                 'config' => $config,
-                'lang' => (string)State::getLang(),
-                'lang_local' => (string)State::getLangLocal(),
-                'currency' => (string)State::getCurrency(),
+                'environment' => KeyBuilder::environmentContext([
+                    'scope' => 'theme-widget-output',
+                ]),
                 'base_url' => (string)$this->template->getRequest()->getBaseUrl(),
                 'path' => (string)$this->template->getRequest()->getPathInfo(),
             ];

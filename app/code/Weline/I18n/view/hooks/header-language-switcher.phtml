@@ -299,7 +299,7 @@ foreach ($languages as $lang) {
             </a>
         <?php endforeach; ?>
         </div>
-        <div class="weline-choice-empty" data-choice-empty hidden><?= $escape(__('无匹配语言')) ?></div>
+        <div class="weline-choice-empty" data-choice-empty hidden><?= $escape(\Weline\Theme\Helper\WidgetI18n::label('无匹配语言')) ?></div>
         <button type="button" class="weline-choice-more" data-choice-more <?= count($languages) <= $selectorPageSize ? 'hidden' : '' ?>><?= $escape(__('加载更多')) ?></button>
     </div>
 </div>

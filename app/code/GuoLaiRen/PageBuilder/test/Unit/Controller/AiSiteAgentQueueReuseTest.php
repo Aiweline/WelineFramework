@@ -54,6 +54,17 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertSame('virtual_theme.block.partial_patch', $method->invoke($controller, 'block_partial_patch'));
     }
 
+    public function testPageSectionBuildDispatchWindowIsConfigurableAndNotHardCodedToOne(): void
+    {
+        $source = \file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
+        self::assertIsString($source);
+
+        self::assertStringNotContainsString('PAGE_SECTION_BUILD_DISPATCH_WINDOW = 1', $source);
+        self::assertStringContainsString('DEFAULT_PAGE_SECTION_BUILD_DISPATCH_WINDOW = 4', $source);
+        self::assertStringContainsString('pagebuilder.ai_site.page_section_build_dispatch_window', $source);
+        self::assertStringContainsString('resolvePageSectionBuildDispatchWindow()', $source);
+    }
+
     public function testLegacyFallbackKeysCoverOldPlanningAndBuildRows(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
@@ -297,7 +308,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
 
         self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'done']));
         self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'running']));
-        self::assertFalse($method->invoke($controller, ['queue_id' => 9, 'status' => 'error']));
+        self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'error']));
         self::assertFalse($method->invoke($controller, ['queue_id' => 9, 'status' => 'running'], true));
         self::assertFalse($method->invoke($controller, ['queue_id' => 0, 'status' => 'done']));
     }
@@ -336,6 +347,20 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString('findSupersedingQueueRow', $source);
         self::assertStringContainsString('skipped duplicate AI execution', $source);
         self::assertStringContainsString('Active operation is already owned by newer queue', $source);
+    }
+
+    public function testBuildQueueLoadsOnlyBuildRuntimeArtifacts(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSiteBuildQueue.php');
+        $artifactList = $this->extractConstantArraySource($source, 'BUILD_QUEUE_SCOPE_ARTIFACT_KEYS');
+
+        self::assertStringContainsString("'build_plan_v2'", $artifactList);
+        self::assertStringContainsString("'build_blueprint'", $artifactList);
+        self::assertStringContainsString("'task_results'", $artifactList);
+        self::assertStringContainsString('loadBuildQueueScope($sessionService', $source);
+        self::assertStringNotContainsString("'plan_workbench'", $artifactList);
+        self::assertStringNotContainsString("'plan_markdown'", $artifactList);
+        self::assertStringNotContainsString("'plan_structured'", $artifactList);
     }
 
     public function testEmptyGeneratedSectionBlockIsNotAcceptedAsSuccessfulBuildTask(): void
@@ -541,6 +566,17 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         );
     }
 
+    public function testBuildTaskGenerationFailureRecordsTaskFailureWithoutBreakingQueueRun(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractControllerMethodSource($source, 'handleBuildTaskGenerationFailure');
+
+        self::assertStringContainsString('markTaskFailed($scope, $taskKey, $message)', $methodSource);
+        self::assertStringContainsString('syncBuildTaskFailuresToRetryableLedger($scope)', $methodSource);
+        self::assertStringContainsString('Build task failed and was recorded for scheduler retry', $methodSource);
+        self::assertStringContainsString("'fatal' => false", $methodSource);
+    }
+
     public function testBuildQueuesDoNotRunAiPlaceholderHydrationBeforeTaskLoop(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
@@ -647,12 +683,15 @@ final class AiSiteAgentQueueReuseTest extends TestCase
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSitePlanQueue.php');
         $methodSource = $this->extractControllerMethodSource($source, 'updateSessionError');
+        $retrySource = $this->extractFunctionSource($source, 'createTransientPlanRetryQueue');
 
         self::assertStringContainsString('markPlanGenerationFailureRetryable', $methodSource);
         self::assertStringContainsString("'plan'] = \$active", $methodSource);
         self::assertStringContainsString('replaceRetryableAiFailures($scope, \'plan\'', $source);
         self::assertStringContainsString("'item_key' => 'stage1_plan'", $source);
         self::assertStringContainsString("'retry_scope' => 'plan'", $source);
+        self::assertStringNotContainsString("'queue', 'create'", $retrySource);
+        self::assertStringContainsString('QUEUE_RETRY same_queue=', $source);
     }
 
     public function testStageScopeWhitelistKeepsPlanRetryStateVisible(): void
@@ -884,12 +923,18 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
         $body = $this->extractControllerMethodSource($source, 'claimActiveOperationExecution');
 
-        $allowUnclaimedQueueOffset = \strpos($body, "\$claimSource === 'queue'\n                    && \$claimedBy === ''");
+        $allowUnclaimedQueueOffset = \strpos($body, "\$claimSource === 'queue'\n                    && \\in_array(\$claimedBy, ['', 'operation_sse', 'queue'], true)");
+        $allowSseObserverOffset = \strpos($body, "'operation_sse'");
+        $allowStaleQueueOffset = \strpos($body, "'queue']");
         $duplicateStreamOffset = \strpos($body, "return ['ok' => false, 'reason' => 'duplicate_stream']");
 
         self::assertNotFalse($allowUnclaimedQueueOffset, 'Queue worker must claim observer-mirrored running operations.');
+        self::assertNotFalse($allowSseObserverOffset, 'Queue worker must be able to take over running operations claimed by SSE observers.');
+        self::assertNotFalse($allowStaleQueueOffset, 'Queue worker must be able to take over stale running operations claimed by a dead queue worker.');
         self::assertNotFalse($duplicateStreamOffset, 'Duplicate-stream guard missing.');
         self::assertLessThan($duplicateStreamOffset, $allowUnclaimedQueueOffset);
+        self::assertLessThan($duplicateStreamOffset, $allowSseObserverOffset);
+        self::assertLessThan($duplicateStreamOffset, $allowStaleQueueOffset);
     }
 
     public function testForeignSessionQueueRuntimeStateIsDiscarded(): void

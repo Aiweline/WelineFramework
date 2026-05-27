@@ -13,11 +13,44 @@ final class QueueDispatchServiceTest extends TestCase
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
         $buildMethodSource = $this->extractPrivateMethodSource($source, 'buildQueueRunProcessName');
 
-        self::assertStringContainsString('resolveWorkerMemoryLimit()', $buildMethodSource);
+        self::assertStringContainsString('resolveWorkerMemoryLimit($queue)', $buildMethodSource);
         self::assertStringContainsString('memory_limit=', $buildMethodSource);
         self::assertStringContainsString('queue:run --id=', $buildMethodSource);
         self::assertStringContainsString("private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';", $source);
         self::assertStringContainsString("'queue.worker.memory_limit'", $source);
+    }
+
+    public function testPageBuilderBuildQueueUsesDedicatedOneGigabyteMemoryLimit(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $resolveMethodSource = $this->extractPrivateMethodSource($source, 'resolveWorkerMemoryLimit');
+
+        self::assertStringContainsString('DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS', $source);
+        self::assertStringContainsString('\\GuoLaiRen\\PageBuilder\\Queue\\AiSitePlanQueue::class => \'1G\'', $source);
+        self::assertStringContainsString('\\GuoLaiRen\\PageBuilder\\Queue\\AiSiteBuildQueue::class => \'1G\'', $source);
+        self::assertStringContainsString('\\GuoLaiRen\\PageBuilder\\Queue\\AiSiteAssetQueue::class => \'1G\'', $source);
+        self::assertStringContainsString("'queue.worker.memory_limit_by_class.' . \$queueClass", $resolveMethodSource);
+        self::assertStringContainsString('self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass]', $resolveMethodSource);
+    }
+
+    public function testQueueRunCommandAppliesClassMemoryLimitWhenStartedManually(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Console/Queue/Run.php');
+
+        self::assertStringContainsString('applyCliMemoryLimitForQueueClass($queueClass)', $source);
+        self::assertStringContainsString("'GuoLaiRen\\PageBuilder\\Queue\\AiSiteBuildQueue' => '1G'", $source);
+        self::assertStringContainsString("'GuoLaiRen\\PageBuilder\\Queue\\AiSitePlanQueue' => '1G'", $source);
+        self::assertStringContainsString("'GuoLaiRen\\PageBuilder\\Queue\\AiSiteAssetQueue' => '1G'", $source);
+        self::assertStringContainsString('ini_set(\'memory_limit\', $target)', $source);
+        self::assertStringContainsString("'queue.worker.memory_limit_by_class.' . \$queueClass", $source);
+    }
+
+    public function testQueueSchedulerConcurrencyIsConfigurable(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+
+        self::assertStringContainsString("'queue.cron.max_concurrent'", $source);
+        self::assertStringContainsString('public function getMaxConcurrent(): int', $source);
     }
 
     public function testQueueWorkerMemoryLimitNormalizationAcceptsPhpIniUnits(): void
@@ -48,6 +81,43 @@ final class QueueDispatchServiceTest extends TestCase
             $finishedOffset,
             'Finished running queues must be completed before no-PID rows are reset to pending.'
         );
+    }
+
+    public function testDispatchQueueIfEligibleReconcilesRunningQueuesBeforeEligibilityCheck(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $dispatchMethodSource = $this->extractPrivateMethodSource($source, 'dispatchQueueIfEligible');
+
+        $reconcileOffset = \strpos($dispatchMethodSource, '$this->reconcileRunningQueues();');
+        $loadFreshOffset = \strpos($dispatchMethodSource, '$freshQueue = $this->loadFreshQueue($queueId);');
+
+        self::assertNotFalse($reconcileOffset);
+        self::assertNotFalse($loadFreshOffset);
+        self::assertLessThan(
+            $loadFreshOffset,
+            $reconcileOffset,
+            'Single-queue wakeups must reconcile stale running rows before checking dispatch eligibility.'
+        );
+    }
+
+    public function testReconcileChecksPidLivenessAndWritesOperatorMessage(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $reconcileMethodSource = $this->extractPrivateMethodSource($source, 'reconcileRunningQueues');
+
+        $pidAliveOffset = \strpos($reconcileMethodSource, 'Processer::isRunningByPid($queuePid)');
+        $managedOffset = \strpos($reconcileMethodSource, 'Processer::isManagedProcessRunning($queuePid');
+
+        self::assertNotFalse($pidAliveOffset);
+        self::assertNotFalse($managedOffset);
+        self::assertLessThan(
+            $managedOffset,
+            $pidAliveOffset,
+            'Stale PID detection must check raw PID liveness before managed-process identity matching.'
+        );
+        self::assertStringContainsString('队列记录的 PID %{1} 已不存在', $source);
+        self::assertStringContainsString('队列记录的 PID %{1} 仍存在', $source);
+        self::assertStringContainsString('setProcess($this->appendProcessMessage($queue->getProcess(), $message))', $reconcileMethodSource);
     }
 
     private function extractPrivateMethodSource(string $source, string $methodName): string

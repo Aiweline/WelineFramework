@@ -16,9 +16,9 @@ $base_host = $this->request->getPrePath();
 // dd($domain);
 $base_router = $this->request->getRouterData('router');
 $current_module = $this->request->getModuleName();
-$area = \Weline\Framework\App\Env::getInstance()->getConfig('admin');
-$api_area = \Weline\Framework\App\Env::getInstance()->getConfig('api');
-$api_admin_area = \Weline\Framework\App\Env::getInstance()->getConfig('api_admin');
+$area = (string)(Env::getAreaRoutePrefix('backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('admin'));
+$api_area = (string)(Env::getAreaRoutePrefix('rest_frontend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api'));
+$api_admin_area = (string)(Env::getAreaRoutePrefix('rest_backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api_admin'));
 /**@var \Weline\Framework\Session\Auth\AuthenticatedSessionInterface $session */
 $session = SessionFactory::backend();
 $user_id = $session->getLoginUserID();
@@ -79,6 +79,7 @@ endif;
         user_id: '{{user_id}}',
         csrf_token: '{{token}}',
         module: '{{current_module}}',
+        area: '{{area}}',
         host: '{{host}}',
         base_host: '{{base_host}}',
         env_model: '{{env_model}}',
@@ -87,6 +88,8 @@ endif;
         currency: '<?= \w_env_currency() ?>',
         lang: '<?= \w_env_lang() ?>',
         frontend_api_host: '{{frontend_api_host}}',
+        api_area: '{{api_area}}',
+        api_admin_area: '{{api_admin_area}}',
         url_host: '{{ url_host }}',
         base_router: '{{base_router}}',
         i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,

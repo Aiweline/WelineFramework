@@ -140,7 +140,7 @@ class AffiliateService
         );
 
         $shareCode = (string) ($share->getData(AffiliateShare::schema_fields_SHARE_CODE) ?? '');
-        $trackingUrl = $this->url()->getUrl('affiliate/redirect', ['code' => $shareCode]);
+        $trackingUrl = $this->url()->getOriginUrl('affiliate/redirect', ['code' => $shareCode]);
         $productUrl = $this->resolveShareTargetUrl($share);
 
         return [

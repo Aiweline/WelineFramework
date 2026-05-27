@@ -1838,7 +1838,13 @@ if ($controlPort > 0 || $supervisorEnabled) {
         );
     }
     $ipcClient = $kernel->getClient();
+    $wlsStartupTrace('ready_gate_warmup_begin', ['control_port' => $controlPort]);
     $runReadyGateWorkerBootstrapWarmup();
+    $wlsStartupTrace('ready_gate_warmup_done', ['control_port' => $controlPort]);
+    $wlsStartupTrace('ipc_ready_report_begin', [
+        'control_port' => $controlPort,
+        'connected' => $kernel->isConnected() ? 1 : 0,
+    ]);
     $readyReported = $kernel->isConnected()
         ? $kernel->sendReady()
         : $kernel->connectAndRegister($controlPort);

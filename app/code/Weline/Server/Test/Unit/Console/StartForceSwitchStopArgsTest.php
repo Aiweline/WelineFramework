@@ -33,6 +33,34 @@ final class StartForceSwitchStopArgsTest extends TestCase
         self::assertArrayNotHasKey('f', $args);
     }
 
+    public function testFastLocalRestartWaitsForResidueToClear(): void
+    {
+        $start = new class extends Start {
+            public int $checks = 0;
+
+            public function waitForFastLocalCleanup(): bool
+            {
+                return $this->waitForRestartCleanupComplete('default', 9981, 4, 0, true);
+            }
+
+            protected function hasRestartCleanupResidue(
+                string $instanceName,
+                int $mainPort,
+                int $workerCount,
+                int $workerPort = 0,
+                bool $fastLocal = false
+            ): bool {
+                unset($instanceName, $mainPort, $workerCount, $workerPort, $fastLocal);
+                $this->checks++;
+
+                return $this->checks < 2;
+            }
+        };
+
+        self::assertTrue($start->waitForFastLocalCleanup());
+        self::assertGreaterThanOrEqual(2, $start->checks);
+    }
+
     public function testMaintenanceModeHelpersSyncFrameworkAndWlsForTargetInstance(): void
     {
         $start = new class extends Start {

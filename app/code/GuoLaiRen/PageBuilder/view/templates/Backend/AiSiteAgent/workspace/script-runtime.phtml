@@ -62,6 +62,66 @@
         return runtimeTruthyFlag(state.latest_build_failed)
             || runtimeTruthyFlag(state.publish_blocked_by_latest_ai_failure);
     }
+    function countRuntimeRetryableAiFailureBucket(bucket) {
+        if (!bucket) {
+            return 0;
+        }
+        if (Array.isArray(bucket)) {
+            return bucket.length;
+        }
+        if (typeof bucket !== 'object') {
+            return 0;
+        }
+        if (bucket.message || bucket.error || bucket.item_key || bucket.page_type || bucket.section_code) {
+            return 1;
+        }
+        var directCount = parseInt(String(bucket.count || bucket.total || bucket.retryable_count || 0), 10) || 0;
+        if (directCount > 0) {
+            return directCount;
+        }
+        var total = 0;
+        Object.keys(bucket).forEach(function (key) {
+            if (key === 'operation' || key === 'message' || key === 'status') {
+                return;
+            }
+            total += countRuntimeRetryableAiFailureBucket(bucket[key]);
+        });
+        return total;
+    }
+    function hasPublishBlockingAiFailureStateForRuntime(source) {
+        var bridge = resolveLivePreviewBridge();
+        var state = source && typeof source === 'object' ? source : getRuntimeWorkspaceStateForPublishGate();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        if (typeof bridge.hasPublishBlockingLatestBuildFailure === 'function'
+            && bridge.hasPublishBlockingLatestBuildFailure(state)
+        ) {
+            return true;
+        }
+        if (runtimeTruthyFlag(state.latest_build_failed)
+            || runtimeTruthyFlag(state.publish_blocked_by_latest_ai_failure)
+            || runtimeTruthyFlag(scope.latest_build_failed)
+            || runtimeTruthyFlag(scope.publish_blocked_by_latest_ai_failure)
+        ) {
+            return true;
+        }
+        if ((parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0) > 0
+            || (parseInt(String(scope.retryable_ai_failure_count || 0), 10) || 0) > 0
+        ) {
+            return true;
+        }
+        if (countRuntimeRetryableAiFailureBucket(state.retryable_ai_failure_summary) > 0
+            || countRuntimeRetryableAiFailureBucket(scope.retryable_ai_failure_summary) > 0
+            || countRuntimeRetryableAiFailureBucket(state.retryable_ai_failures) > 0
+            || countRuntimeRetryableAiFailureBucket(scope.retryable_ai_failures) > 0
+            || collectRetryableFailureItemsFromPayload('', state).length > 0
+        ) {
+            return true;
+        }
+        if (state.state && typeof state.state === 'object' && state.state !== state) {
+            return hasPublishBlockingAiFailureStateForRuntime(state.state);
+        }
+        return false;
+    }
     function syncPublishStartButtonForRuntime() {
         var bridge = resolveLivePreviewBridge();
         if (typeof bridge.syncPublishStartButtonFromWorkspaceState === 'function') {
@@ -1443,6 +1503,10 @@
         if (!completed || queueCompletionReloadTimer) {
             return;
         }
+        if (normalizedOperation === 'plan' && typeof window.__pbSchedulePlanWorkspaceReload === 'function') {
+            window.__pbSchedulePlanWorkspaceReload('plan_queue_done', 900);
+            return;
+        }
         queueCompletionReloadTimer = window.setTimeout(function () {
             reloadWorkspacePageNow();
         }, 650);
@@ -2193,6 +2257,9 @@
         if (!source || typeof source !== 'object') {
             return false;
         }
+        if (hasPublishBlockingAiFailureStateForRuntime(source)) {
+            return false;
+        }
         if (!shouldConsumeBuildTaskProgressSummary(source)) {
             return false;
         }
@@ -2211,13 +2278,19 @@
         var operation = String(readTaskProgressOperation(source) || '').trim().toLowerCase();
         var terminalQueueStatuses = { done: 1, complete: 1, completed: 1, stop: 1, stopped: 1, cancelled: 1, canceled: 1, error: 1 };
         var st = String(status || '').trim().toLowerCase();
+        var blockedByFailure = hasPublishBlockingAiFailureStateForRuntime(source);
         // 队列已标记完成（或失败）但 task_progress / active_operation 未归一时，避免因 shouldConsume=false 永远不清理生成中骨架态
         if ((isBuildSignal || operation === 'build') && terminalQueueStatuses[st]) {
             active = false;
         }
-        if (isBuildSignal || operation === 'build') {
-            taskProgressGeneratingState.active = !!active && !terminalQueueStatuses[st];
+        if (blockedByFailure) {
+            active = false;
+            status = status || 'failed';
+        }
+        if (isBuildSignal || operation === 'build' || blockedByFailure) {
+            taskProgressGeneratingState.active = !!active && !terminalQueueStatuses[st] && !blockedByFailure;
             taskProgressGeneratingState.status = status;
+            taskProgressGeneratingState.blockedByFailure = !!blockedByFailure;
             taskProgressGeneratingState.updatedAt = Date.now();
         }
         return previous !== ((taskProgressGeneratingState.active ? '1' : '0') + ':' + String(taskProgressGeneratingState.status || ''));
@@ -2457,8 +2530,12 @@
             if (staleEl) { staleEl.textContent = String(counts.stale || 0); }
             if (cancelledEl) { cancelledEl.textContent = String(counts.cancelled || 0); }
             if (runningIndicatorEl) {
-                var active = (parseInt(String(counts.queued || 0), 10) || 0) + (parseInt(String(counts.running || 0), 10) || 0);
-                var aiActive = active > 0 || !!summary.ai_generating || !!taskProgressGeneratingState.active;
+                var blockedByFailure = !!taskProgressGeneratingState.blockedByFailure
+                    || hasPublishBlockingAiFailureStateForRuntime(getRuntimeWorkspaceStateForPublishGate());
+                var active = blockedByFailure
+                    ? 0
+                    : (parseInt(String(counts.queued || 0), 10) || 0) + (parseInt(String(counts.running || 0), 10) || 0);
+                var aiActive = !blockedByFailure && (active > 0 || !!summary.ai_generating || !!taskProgressGeneratingState.active);
                 var aiStatus = String(summary.ai_status || taskProgressGeneratingState.status || '').toLowerCase();
                 var label = ['pending', 'queued'].indexOf(aiStatus) !== -1
                     ? runtimeLabels.aiQueuedSummary

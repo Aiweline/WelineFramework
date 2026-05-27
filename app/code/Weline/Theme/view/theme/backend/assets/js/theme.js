@@ -471,6 +471,223 @@
 
     const moduleLoader = new ModuleLoader();
 
+    function readHeaderValue(headers, name) {
+        if (!headers) {
+            return '';
+        }
+        const target = String(name).toLowerCase();
+        if (typeof headers.get === 'function') {
+            return String(headers.get(name) || '');
+        }
+        if (Array.isArray(headers)) {
+            for (const item of headers) {
+                if (Array.isArray(item) && String(item[0]).toLowerCase() === target) {
+                    return String(item[1] || '');
+                }
+            }
+            return '';
+        }
+        for (const key of Object.keys(headers)) {
+            if (String(key).toLowerCase() === target) {
+                return String(headers[key] || '');
+            }
+        }
+        return '';
+    }
+
+    function fetchInputUrl(input) {
+        if (typeof input === 'string' || input instanceof URL) {
+            return String(input);
+        }
+        if (typeof window.Request !== 'undefined' && input instanceof window.Request) {
+            return input.url || '';
+        }
+        if (input && typeof input.url === 'string') {
+            return input.url;
+        }
+        return '';
+    }
+
+    function isStaticFetchPath(pathname) {
+        const path = String(pathname || '').toLowerCase();
+        if (
+            path.indexOf('/static/') !== -1
+            || path.indexOf('/view/statics/') !== -1
+            || path.indexOf('/assets/') !== -1
+        ) {
+            return true;
+        }
+        return /\.(?:js|mjs|css|map|png|jpg|jpeg|gif|webp|svg|ico|woff2?|ttf|eot|wasm|pdf|zip|gz|br|mp4|webm|mp3|wav)(?:$|\?)/.test(path);
+    }
+
+    function isStreamingFetch(url, options) {
+        const headers = (options && options.headers) || null;
+        const accept = readHeaderValue(headers, 'Accept').toLowerCase();
+        const path = String(url.pathname || '').toLowerCase();
+        return accept.indexOf('text/event-stream') !== -1
+            || path.indexOf('stream') !== -1
+            || path.indexOf('sse') !== -1;
+    }
+
+    function shouldUseBackendWorkerFetch(input, options) {
+        if (!window.fetch || (options && options.__welineNativeFetch === true)) {
+            return false;
+        }
+        if (typeof window.Request !== 'undefined' && input instanceof window.Request) {
+            return false;
+        }
+        if (options && options.signal) {
+            return false;
+        }
+        const rawUrl = fetchInputUrl(input);
+        if (!rawUrl) {
+            return false;
+        }
+        let url;
+        try {
+            url = new URL(rawUrl, window.location.origin);
+        } catch (error) {
+            return false;
+        }
+        if (url.origin !== window.location.origin) {
+            return false;
+        }
+        if (isStaticFetchPath(url.pathname) || isStreamingFetch(url, options || {})) {
+            return false;
+        }
+        return true;
+    }
+
+    function setupBackendFetchWorkerBridge() {
+        if (!window.fetch || window.fetch.__welineBackendWorkerBridge === true) {
+            return;
+        }
+
+        const nativeFetch = window.fetch.bind(window);
+        if (!window.WelineNativeFetch) {
+            window.WelineNativeFetch = nativeFetch;
+        }
+
+        const workerFetch = function (input, options) {
+            if (!shouldUseBackendWorkerFetch(input, options || {})) {
+                return nativeFetch(input, options);
+            }
+            const url = fetchInputUrl(input);
+            return moduleLoader.loadModule('api').then((ApiModule) => {
+                if (!ApiModule || typeof ApiModule.fetch !== 'function') {
+                    throw new Error('[Weline.Api] backend worker fetch is unavailable.');
+                }
+                return ApiModule.fetch(url, options || {});
+            });
+        };
+        workerFetch.__welineBackendWorkerBridge = true;
+        workerFetch.__nativeFetch = nativeFetch;
+        window.fetch = workerFetch;
+    }
+
+    function headersToString(headers) {
+        const lines = [];
+        if (headers && typeof headers.forEach === 'function') {
+            headers.forEach((value, key) => {
+                lines.push(String(key) + ': ' + String(value));
+            });
+        }
+        return lines.join('\r\n');
+    }
+
+    function hasCustomJQueryXhr(originalOptions) {
+        return !!(
+            originalOptions
+            && Object.prototype.hasOwnProperty.call(originalOptions, 'xhr')
+            && typeof originalOptions.xhr === 'function'
+        );
+    }
+
+    function shouldUseBackendWorkerAjax(options, originalOptions) {
+        if (!options || options.__welineNativeAjax === true) {
+            return false;
+        }
+        if (options.crossDomain === true || options.async === false || hasCustomJQueryXhr(originalOptions)) {
+            return false;
+        }
+        const dataTypes = Array.isArray(options.dataTypes) ? options.dataTypes : [];
+        if (dataTypes.some(type => type === 'script' || type === 'jsonp')) {
+            return false;
+        }
+        return shouldUseBackendWorkerFetch(options.url || '', {
+            method: options.type || options.method || 'GET',
+            headers: options.headers || {}
+        });
+    }
+
+    function setupJQueryAjaxWorkerTransport(attempt = 0) {
+        const $ = window.jQuery || window.$;
+        if (!$ || typeof $.ajaxTransport !== 'function') {
+            if (attempt < 40) {
+                setTimeout(() => setupJQueryAjaxWorkerTransport(attempt + 1), 50);
+            }
+            return;
+        }
+        if ($.__welineBackendAjaxWorkerTransport === true) {
+            return;
+        }
+        $.__welineBackendAjaxWorkerTransport = true;
+
+        $.ajaxTransport('+*', function (options, originalOptions) {
+            if (!shouldUseBackendWorkerAjax(options, originalOptions)) {
+                return undefined;
+            }
+
+            let aborted = false;
+            return {
+                send: function (headers, complete) {
+                    const method = String(options.type || options.method || 'GET').toUpperCase();
+                    const requestHeaders = Object.assign({}, headers || {}, options.headers || {});
+                    if (options.contentType !== false && options.contentType) {
+                        requestHeaders['Content-Type'] = options.contentType;
+                    }
+                    if (options.mimeType) {
+                        requestHeaders.Accept = options.mimeType;
+                    }
+                    const requestOptions = {
+                        method: method,
+                        headers: requestHeaders
+                    };
+                    if (method !== 'GET' && method !== 'HEAD' && options.data !== undefined) {
+                        requestOptions.body = options.data;
+                    }
+
+                    moduleLoader.loadModule('api')
+                        .then((ApiModule) => ApiModule.fetch(options.url, requestOptions))
+                        .then((response) => {
+                            if (aborted) {
+                                return;
+                            }
+                            response.text().then((text) => {
+                                complete(
+                                    response.status || 200,
+                                    response.statusText || (response.ok ? 'success' : 'error'),
+                                    { text: text },
+                                    headersToString(response.headers)
+                                );
+                            }).catch((error) => {
+                                complete(0, error && error.message ? error.message : 'parsererror', { text: '' }, '');
+                            });
+                        })
+                        .catch((error) => {
+                            if (aborted) {
+                                return;
+                            }
+                            complete(error && error.status ? error.status : 0, error && error.message ? error.message : 'error', { text: '' }, '');
+                        });
+                },
+                abort: function () {
+                    aborted = true;
+                }
+            };
+        });
+    }
+
     function setupDeprecatedConfigAlias() {
         if (Object.getOwnPropertyDescriptor(window, 'WelineConfig')) {
             return;
@@ -958,6 +1175,10 @@
                     throw err;
                 }
             },
+            fetch: async (url, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.fetch(url, options);
+            },
             call: async (provider, operation, params, options) => {
                 const ApiModule = await moduleLoader.loadModule('api');
                 return ApiModule.call(provider, operation, params, options);
@@ -1018,10 +1239,17 @@
                         params: params
                     })
                 });
-                if (!response || response.code !== 200) {
-                    throw new Error((response && response.msg) ? response.msg : __('查询失败'));
+                const isResponseWrapper = response
+                    && typeof response === 'object'
+                    && !Array.isArray(response)
+                    && typeof response.ok === 'boolean'
+                    && Object.prototype.hasOwnProperty.call(response, 'status')
+                    && Object.prototype.hasOwnProperty.call(response, 'data');
+                const payload = isResponseWrapper ? response.data : response;
+                if (!payload || (payload.code !== 200 && payload.success !== true)) {
+                    throw new Error((payload && (payload.msg || payload.message)) ? (payload.msg || payload.message) : 'Query failed.');
                 }
-                return response.data;
+                return payload.data !== undefined ? payload.data : payload;
             }
         },
 
@@ -1224,6 +1452,8 @@
 
     // 挂载到全局
     window.Weline = Weline;
+    setupBackendFetchWorkerBridge();
+    setupJQueryAjaxWorkerTransport();
     window.w_query = function (provider, operation, params = {}, options = {}) {
         return Weline.Query.request(provider, operation, params, options);
     };

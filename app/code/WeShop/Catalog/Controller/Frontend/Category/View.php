@@ -13,7 +13,7 @@ use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
 use WeShop\Product\Service\ProductService;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\FullPageCacheCoordinator;
@@ -493,15 +493,16 @@ class View extends BaseController
         ksort($query);
         $uri = $this->getSemanticCategoryRequestUri($query);
         $host = $this->normalizeViewPayloadCacheHost(function_exists('w_env_http_host') ? (string)w_env_http_host() : '');
+        $environment = KeyBuilder::environmentContext([
+            'scope' => 'catalog-category-view',
+        ]);
 
         return sha1((string)json_encode([
-            'v' => 21,
+            'v' => 24,
             'handle' => (string)($handle ?? ''),
             'category_id' => $categoryId,
             'query' => $query,
-            'lang' => State::getLang(),
-            'lang_local' => State::getLangLocal(),
-            'currency' => State::getCurrency(),
+            'environment' => $environment,
             'host' => $host,
             'uri' => $uri,
             'html_scope' => $this->fullHtmlViewCacheScope(),
@@ -988,6 +989,7 @@ class View extends BaseController
         }
 
         return $this->buildCategorySeoDirectoryItems(
+            $categoryService,
             $children,
             $parentSegments,
             1,
@@ -1000,7 +1002,7 @@ class View extends BaseController
      * @param list<string> $parentSegments
      * @return list<array<string, mixed>>
      */
-    private function buildCategorySeoDirectoryItems(array $categories, array $parentSegments, int $level, int $currentCategoryId): array
+    private function buildCategorySeoDirectoryItems(CategoryService $categoryService, array $categories, array $parentSegments, int $level, int $currentCategoryId): array
     {
         $items = [];
         $position = 1;
@@ -1013,6 +1015,7 @@ class View extends BaseController
             if ($name === '' || $handle === '') {
                 continue;
             }
+            $name = $categoryService->localizeCategoryDisplayName($name);
 
             $segments = $parentSegments;
             $this->appendCategoryHandleSegments($segments, $handle);
@@ -1027,7 +1030,7 @@ class View extends BaseController
                 'level' => $level,
                 'position' => $position,
                 'is_current' => (int)($category['category_id'] ?? $category['id'] ?? 0) === $currentCategoryId,
-                'children' => $children === [] ? [] : $this->buildCategorySeoDirectoryItems($children, $segments, $level + 1, $currentCategoryId),
+                'children' => $children === [] ? [] : $this->buildCategorySeoDirectoryItems($categoryService, $children, $segments, $level + 1, $currentCategoryId),
             ];
 
             $items[] = $item;
@@ -1373,6 +1376,11 @@ class View extends BaseController
                     if ($value !== '') {
                         $product[$field] = $value;
                     }
+
+                    $fallbackValue = $this->localizeProductText((string)($product[$field] ?? ''));
+                    if ($fallbackValue !== '') {
+                        $product[$field] = $fallbackValue;
+                    }
                 }
                 $product['product_id'] = $productId;
                 $product['entity_id'] = $productId;
@@ -1383,5 +1391,24 @@ class View extends BaseController
         }
 
         return $products;
+    }
+
+    private function localizeProductText(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $translated = (string)__($value);
+        if ($translated !== $value) {
+            return $translated;
+        }
+
+        if (class_exists(\Weline\Theme\Helper\WidgetI18n::class)) {
+            return \Weline\Theme\Helper\WidgetI18n::label($value);
+        }
+
+        return $value;
     }
 }
