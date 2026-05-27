@@ -65,6 +65,10 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     #[Acl('Weline_Queue::index', '队列列表快照', 'mdi mdi-refresh', '队列列表实时快照')]
     public function getSnapshot(): string
     {
+        if (!$this->request->isAjax()) {
+            return $this->redirect('*/backend/queue', $this->getQueueSnapshotRedirectParams());
+        }
+
         $this->assignQueueListingState($this->buildQueueListingState(true));
 
         return $this->fetchJson([
@@ -146,8 +150,26 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             'q' => $search,
             'biz_key' => $bizKey,
             'stats' => $this->getQueueStats(),
-            'pagination' => $queueListing->getPagination(),
+            'pagination' => $this->getQueueListingPaginationHtml($queueListing),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getQueueSnapshotRedirectParams(): array
+    {
+        $params = (array)$this->request->getGet();
+        unset($params['isAjax']);
+
+        return $params;
+    }
+
+    private function getQueueListingPaginationHtml(\Weline\Queue\Model\Queue $queueListing): string
+    {
+        unset($queueListing->pagination['html']);
+
+        return $queueListing->getPagination('pagination-rounded', '*/backend/queue', true);
     }
 
     /**

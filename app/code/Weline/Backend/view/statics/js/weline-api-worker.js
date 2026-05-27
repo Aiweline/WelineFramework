@@ -36,6 +36,8 @@
             status: response.status,
             statusText: response.statusText || '',
             headers: collectHeaders(response.headers),
+            url: response.url || url.href,
+            redirected: !!response.redirected,
             body: body,
             maintenance: response.status === 503
         };

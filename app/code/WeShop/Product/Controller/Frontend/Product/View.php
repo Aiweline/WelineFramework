@@ -8,7 +8,7 @@ use WeShop\Frontend\Controller\BaseController;
 use WeShop\Product\Service\ProductViewPageDataService;
 use WeShop\RecentlyViewed\Service\StorefrontRecentlyViewedRecorder;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
-use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -329,15 +329,14 @@ class View extends BaseController
     private function buildViewPayloadCacheKey(int $productId): string
     {
         $host = $this->normalizeViewPayloadCacheHost(\function_exists('w_env_http_host') ? (string)\w_env_http_host() : '');
+        $environment = KeyBuilder::environmentContext([
+            'scope' => 'product-view-payload',
+        ]);
 
         return \sha1((string)\json_encode([
-            'v' => 15,
-            'scope' => 'product-view-payload',
+            'v' => 16,
             'product_id' => $productId,
-            'website' => \function_exists('w_env') ? (string)(\w_env('website_code', '') ?: \w_env('website.id', '') ?: '') : '',
-            'lang' => State::getLang(),
-            'lang_local' => State::getLangLocal(),
-            'currency' => State::getCurrency(),
+            'environment' => $environment,
             'host' => $host,
         ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE));
     }

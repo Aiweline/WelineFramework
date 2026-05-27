@@ -50,14 +50,21 @@ class RegistryProgress
         }
 
         $elapsed = microtime(true) - self::$startedAt;
-        echo sprintf(
+        $line = sprintf(
             '[registry] %s +%.2fs mem=%s peak=%s %s',
             date('H:i:s'),
             $elapsed,
             self::formatBytes(memory_get_usage(true)),
             self::formatBytes(memory_get_peak_usage(true)),
             $message
-        ) . PHP_EOL;
+        );
+
+        if (\defined('STDERR') && \is_resource(STDERR)) {
+            \fwrite(STDERR, $line . PHP_EOL);
+            \fflush(STDERR);
+        } else {
+            echo $line . PHP_EOL;
+        }
 
         if (function_exists('ob_flush')) {
             @ob_flush();

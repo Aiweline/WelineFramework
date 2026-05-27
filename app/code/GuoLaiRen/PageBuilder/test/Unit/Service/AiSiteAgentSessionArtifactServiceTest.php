@@ -85,6 +85,16 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         self::assertContains('render_data_contract', $service->resolveTouchedArtifactKeysFromPatch(['render_data_contract' => []]));
     }
 
+    public function testDecodedPayloadCacheIsBoundedToSmallArtifacts(): void
+    {
+        $source = (string)\file_get_contents((new \ReflectionClass(AiSiteAgentSessionArtifactService::class))->getFileName());
+
+        self::assertStringContainsString('private const PAYLOAD_VALUE_CACHE_LIMIT = 2;', $source);
+        self::assertStringContainsString('private const PAYLOAD_VALUE_CACHE_MAX_BYTES = 1048576;', $source);
+        self::assertStringContainsString('shouldCachePayloadValue($artifact->getPayloadBytes())', $source);
+        self::assertStringContainsString('shouldCachePayloadValue($payloadBytes)', $source);
+    }
+
     public function testUntouchedEmptyPayloadKeepsExistingArtifactReference(): void
     {
         $service = new AiSiteAgentSessionArtifactService(new AiSiteAgentSessionArtifact());
@@ -162,6 +172,30 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         self::assertSame('session_artifact_file_v1', $prepared['scope']['_artifact_refs'][AiSiteAgentSession::STAGE_VISUAL_EDIT]['build_blueprint']['storage'] ?? null);
         self::assertCount(1, $prepared['artifacts']);
         self::assertSame('session_artifact_file_v1', $prepared['artifacts'][0]['storage'] ?? null);
+    }
+
+    public function testLargePreparedArtifactCarriesExternalPointerInsteadOfFullPayloadJson(): void
+    {
+        $service = new AiSiteAgentSessionArtifactService(new AiSiteAgentSessionArtifact());
+        $heavy = \str_repeat('x', 600 * 1024);
+
+        $prepared = $service->prepareScopeForStorage(123, [
+            'build_blueprint' => [
+                'tasks' => [
+                    [
+                        'task_key' => 'page:home_page:hero',
+                        'runtime_context' => ['large_prompt_context' => $heavy],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertCount(1, $prepared['artifacts']);
+        $artifact = $prepared['artifacts'][0];
+        self::assertSame('session_artifact_file_v1', $artifact['storage'] ?? null);
+        self::assertLessThan(2048, \strlen((string)($artifact['payload_json'] ?? '')));
+        self::assertStringContainsString(AiSiteAgentSessionArtifact::EXTERNAL_PAYLOAD_FILE_KEY, (string)$artifact['payload_json']);
+        self::assertStringNotContainsString($heavy, (string)$artifact['payload_json']);
     }
 
     public function testTouchedEmptyPayloadRemovesStaleArtifactReference(): void

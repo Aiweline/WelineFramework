@@ -42,7 +42,7 @@ curl_setopt_array($ch, $sslOpts + [
     CURLOPT_HEADER => true,
     CURLOPT_FOLLOWLOCATION => false,
     CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => http_build_query(['username' => 'admin', 'password' => 'Admin@123']),
+    CURLOPT_POSTFIELDS => http_build_query(['username' => 'admin', 'password' => 'admin']),
     CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
     CURLOPT_COOKIE => $cookieHeader,
     CURLOPT_TIMEOUT => 15,

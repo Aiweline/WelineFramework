@@ -167,6 +167,10 @@ biz_key,biz_key
 "Queue process ended unexpectedly...","Queue process ended unexpectedly..."
 "Detected running state without PID; reset to pending for rescheduling.","Detected running state without PID; reset to pending for rescheduling."
 "Failed to create queue process. Process name: %{1}","Failed to create queue process. Process name: %{1}"
+队列进程已结束，检测到完成标记，已同步为完成状态。,"Queue process ended and a completion marker was detected; status has been synchronized to done."
+"队列记录的 PID %{1} 仍存在，但已不匹配当前队列执行进程，已标记为异常。","The queue record PID %{1} still exists but no longer matches the current queue worker; the queue has been marked as error."
+"队列记录的 PID %{1} 已不存在，已标记为异常。","The queue record PID %{1} no longer exists; the queue has been marked as error."
+"运行中队列没有记录 PID，已重置为 pending 等待重新调度。","The running queue has no recorded PID; it has been reset to pending for rescheduling."
 提交,Submit
 下一步,"Next step"
 温馨提示！,"Friendly Reminder!"

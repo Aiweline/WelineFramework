@@ -372,7 +372,7 @@ class MasterProcess
                 );
             }
             $this->traceStartupPhase('master-preboot-cleanup:after');
-             
+
             // 清理陈旧的锁文件（Master 上次崩溃留下的）
             $this->traceStartupPhase('master-lock-cleanup:before');
             MasterCleanupBootstrap::cleanupLockFiles($this->instanceName);

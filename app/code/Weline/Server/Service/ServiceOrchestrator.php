@@ -2320,8 +2320,12 @@ class ServiceOrchestrator
 
                 $ownerPid = (int)($inspect['pid'] ?? 0);
                 if (!$processRunning && $ownerPid > 0 && !$instance->matchesManagedPid($ownerPid)) {
-                    return "{$role}#{$instance->instanceId} did not register; port {$port} is still owned by stale WLS pid {$ownerPid}"
-                        . ' (' . $this->describeLaunchPortOccupant($role, $port, $inspect) . ')';
+                    $processName = \trim((string)$instance->getMeta('process_name', ''));
+                    $ownerName = \trim((string)($inspect['pname'] ?? ''));
+                    if ($processName === '' || $ownerName !== '--name=' . $processName) {
+                        return "{$role}#{$instance->instanceId} did not register; port {$port} is still owned by stale WLS pid {$ownerPid}"
+                            . ' (' . $this->describeLaunchPortOccupant($role, $port, $inspect) . ')';
+                    }
                 }
 
                 if ($trackingPid > 0 && !$processRunning) {
@@ -8969,7 +8973,8 @@ class ServiceOrchestrator
         }
 
         if ($instance->role === ControlMessage::ROLE_WORKER) {
-            return $instance->getMeta('dispatcher_pool_confirmed_at') === null;
+            return $instance->getMeta('lease_state') !== 'ready_accepted'
+                && $instance->getMeta('lease_state') !== 'dispatcher_active';
         }
 
         return $instance->getMeta('ack_ready_at') === null;
@@ -9096,20 +9101,18 @@ class ServiceOrchestrator
         $readyConfirmationExpired = $this->isPendingReadyConfirmationExpired($instance);
         if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded && !$readyConfirmationExpired) {
             $workerId = (int) ($instance->getMeta('worker_id') ?? $instance->instanceId);
-            if ($instance->role !== ControlMessage::ROLE_WORKER || $instance->getMeta('dispatcher_pool_confirmed_at') !== null) {
-                $this->controlServer?->sendTo(
-                    $clientId,
-                    ControlMessage::ackReady(
-                        $workerId,
-                        $instance->role === ControlMessage::ROLE_WORKER,
-                        (int)($instance->port ?? 0),
-                        (string)($msg['msg_id'] ?? ''),
-                        $this->getInstanceSlotId($instance),
-                        $this->getInstanceLeaseId($instance),
-                        $this->getInstanceGeneration($instance)
-                    )
-                );
-            }
+            $this->controlServer?->sendTo(
+                $clientId,
+                ControlMessage::ackReady(
+                    $workerId,
+                    false,
+                    (int)($instance->port ?? 0),
+                    (string)($msg['msg_id'] ?? ''),
+                    $this->getInstanceSlotId($instance),
+                    $this->getInstanceLeaseId($instance),
+                    $this->getInstanceGeneration($instance)
+                )
+            );
             if ($instance->role === ControlMessage::ROLE_WORKER && $instance->port !== null && $instance->port > 0) {
                 $this->convergeDispatcherRouteTableAfterWorkerReady();
             } elseif ($instance->role === ControlMessage::ROLE_DISPATCHER) {
@@ -9269,9 +9272,9 @@ class ServiceOrchestrator
     }
 
     /**
-     * Dispatcher 入池回执闭环：
-     * - Dispatcher 每次处理 add/set 都会回执 in_pool=true/false
-     * - 仅当 in_pool=true 时，Master 才向目标 Worker 回 ACK_READY 停止重报
+     * Dispatcher 入池回执：
+     * - 仅作为路由观测与 Registry 元数据更新
+     * - Worker 生命周期已在 handleReady() 中由 Master 直接接受
      */
     private function handleWorkerPoolAck(array $msg, int $clientId): void
     {
@@ -9295,14 +9298,6 @@ class ServiceOrchestrator
             }
 
             $this->pendingMaintenanceModeAck['acked'][$ackKey] = true;
-            if (!$skipBusinessDrainAck) {
-                $maintPorts = $this->collectReadyMaintenancePortsSorted();
-                if ($maintPorts !== [] && \count($this->registry->getInstancesByRole(ControlMessage::ROLE_DISPATCHER)) > 0) {
-                    $this->routeTableVersion++;
-                    $this->publishDispatcherRouteTableFromPorts($maintPorts, ControlMessage::ROLE_MAINTENANCE, true);
-                    $this->controlServer?->poll(0, 150000);
-                }
-            }
             $this->logMaintenanceOperation(
                 'Dispatcher 维护池确认: client=' . $clientId . ', port=' . $port
                 . '，' . $this->formatMaintenanceOperationContext(),
