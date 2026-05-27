@@ -258,7 +258,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         });
     }
 
-    public function testBackendReadyGateWarmupDefaultsToBusinessWorkers(): void
+    public function testBackendFirstRenderWarmupRunsDeferredNotInReadyGate(): void
     {
         $this->withDynamicWarmupEnv([
             'WLS_WORKER_BACKEND_READY_GATE_WARMUP' => null,
@@ -266,11 +266,20 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         ], function (): void {
             $runtime = new WlsRuntime();
 
-            self::assertTrue($this->invokePrivate($runtime, 'shouldRunReadyGateBackendFirstRenderWarmup'));
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunReadyGateBackendFirstRenderWarmup'));
         });
 
         $this->withDynamicWarmupEnv([
-            'WLS_WORKER_BACKEND_READY_GATE_WARMUP' => null,
+            'WLS_WORKER_BACKEND_READY_GATE_WARMUP' => '1',
+            'WLS_PROCESS_ROLE' => 'worker',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunReadyGateBackendFirstRenderWarmup'));
+        });
+
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_BACKEND_READY_GATE_WARMUP' => '1',
             'WLS_PROCESS_ROLE' => 'maintenance',
         ], function (): void {
             $runtime = new WlsRuntime();
@@ -279,10 +288,40 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         });
     }
 
-    public function testDeferredBackendWarmupDefaultsToOwnerWorker(): void
+    public function testReadyGateBootstrapWarmupIsExplicitOptIn(): void
     {
         $this->withDynamicWarmupEnv([
-            'WLS_WORKER_BACKEND_DEFERRED_WARMUP' => null,
+            'WLS_WORKER_READY_GATE_BOOTSTRAP_WARMUP' => null,
+            'WLS_PROCESS_ROLE' => 'worker',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunReadyGateWorkerBootstrapWarmup'));
+        });
+
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_READY_GATE_BOOTSTRAP_WARMUP' => '1',
+            'WLS_PROCESS_ROLE' => 'worker',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertTrue($this->invokePrivate($runtime, 'shouldRunReadyGateWorkerBootstrapWarmup'));
+        });
+
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_READY_GATE_BOOTSTRAP_WARMUP' => '1',
+            'WLS_PROCESS_ROLE' => 'maintenance',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunReadyGateWorkerBootstrapWarmup'));
+        });
+    }
+
+    public function testDeferredBackendWarmupAlwaysRunsForOwnerWorker(): void
+    {
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_BACKEND_DEFERRED_WARMUP' => '0',
             'WLS_WORKER_BACKEND_DEFERRED_WARMUP_OWNER_WORKER_ID' => null,
             'WLS_WORKER_ID' => '2',
             'WLS_PROCESS_ROLE' => 'worker',
@@ -293,7 +332,7 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         });
 
         $this->withDynamicWarmupEnv([
-            'WLS_WORKER_BACKEND_DEFERRED_WARMUP' => null,
+            'WLS_WORKER_BACKEND_DEFERRED_WARMUP' => '0',
             'WLS_WORKER_BACKEND_DEFERRED_WARMUP_OWNER_WORKER_ID' => null,
             'WLS_WORKER_ID' => '1',
             'WLS_PROCESS_ROLE' => 'worker',
@@ -301,6 +340,17 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
             $runtime = new WlsRuntime();
 
             self::assertTrue($this->invokePrivate($runtime, 'shouldRunDeferredBackendFirstRenderWarmup'));
+        });
+
+        $this->withDynamicWarmupEnv([
+            'WLS_WORKER_BACKEND_DEFERRED_WARMUP' => '0',
+            'WLS_WORKER_BACKEND_DEFERRED_WARMUP_OWNER_WORKER_ID' => null,
+            'WLS_WORKER_ID' => '1',
+            'WLS_PROCESS_ROLE' => 'maintenance',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredBackendFirstRenderWarmup'));
         });
     }
 

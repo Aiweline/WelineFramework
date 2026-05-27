@@ -263,7 +263,10 @@ class ProductViewPageDataServiceTest extends TestCase
             static fn(array $attribute): bool => ($attribute['code'] ?? '') === 'color'
         ))[0] ?? null;
         $this->assertIsArray($color);
-        $this->assertSame(['red', 'pink', 'green'], array_column($color['options'], 'code'));
+        $colorCodes = array_column($color['options'], 'code');
+        $this->assertGreaterThan(12, count($colorCodes));
+        $this->assertSame(['red', 'pink', 'green'], array_slice($colorCodes, 0, 3));
+        $this->assertContains('navy', $colorCodes);
         $this->assertSame('color', $color['options'][0]['swatch_type']);
         $this->assertSame(HanfuDemoOptionImageProvider::imageFor('red', 'classic'), $color['options'][0]['option_image']);
 
@@ -277,6 +280,11 @@ class ProductViewPageDataServiceTest extends TestCase
         $this->assertSame(HanfuDemoOptionImageProvider::imageFor('red', 'classic'), $style['options'][0]['swatch_value']);
         $this->assertSame(HanfuDemoOptionImageProvider::imageFor('red', 'lifestyle'), $style['options'][1]['option_image']);
         $this->assertSame(HanfuDemoOptionImageProvider::imageMatrix(), $result['configurable_options']['image_matrix']);
+        $this->assertCount(count($colorCodes), $result['configurable_options']['image_matrix']);
+        foreach ($colorCodes as $colorCode) {
+            $this->assertArrayHasKey($colorCode, $result['configurable_options']['image_matrix']);
+            $this->assertNotEmpty($result['configurable_options']['image_matrix'][$colorCode]['classic'] ?? '');
+        }
         $this->assertSame(HanfuDemoOptionImageProvider::defaultImage(), $result['product']['main_image']);
     }
 

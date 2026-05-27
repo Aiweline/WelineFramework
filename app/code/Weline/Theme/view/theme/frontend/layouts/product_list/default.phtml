@@ -32,7 +32,9 @@ $colors = $this->getData('colors') ?? [];
 // 新增参数
 $showFilters = $meta['showFilters'] ?? $this->getData('showFilters') ?? true;
 $showToolbar = $meta['showToolbar'] ?? $this->getData('showToolbar') ?? true;
-$filterDrawerTitle = $meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? __('筛选条件');
+$filterDrawerTitle = \Weline\Theme\Helper\WidgetI18n::label(
+    (string)($meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? '筛选条件')
+);
 $gridColumns = $meta['gridColumns'] ?? $this->getData('gridColumns') ?? 4;
 $isSearchLayout = (bool) $this->getData('is_search_layout');
 

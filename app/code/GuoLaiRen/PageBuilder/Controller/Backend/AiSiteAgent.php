@@ -173,7 +173,7 @@ class AiSiteAgent extends BaseController
     private const STALE_ACTIVE_OPERATION_TTL_SEC = 600;
     private const OBSERVER_QUEUE_SETTLE_DELAY_MS = 3000;
     private const BUILD_TASK_MAX_GENERATION_ATTEMPTS = 3;
-    private const PAGE_SECTION_BUILD_DISPATCH_WINDOW = 1;
+    private const DEFAULT_PAGE_SECTION_BUILD_DISPATCH_WINDOW = 4;
     private const AI_SITE_QUEUE_CONTENT_LIGHT_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key';
     private const AI_SITE_QUEUE_CONTENT_PAYLOAD_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key,content,process,result';
     private const AI_SITE_QUEUE_MAX_CONTENT_JSON_DECODE_BYTES = 262144;
@@ -3364,6 +3364,19 @@ class AiSiteAgent extends BaseController
         $hasConfirmedBuildPlan = (int)($scope['build_plan_confirmed'] ?? 0) === 1
             || \strtolower(\trim((string)($buildPlanMeta['status'] ?? ''))) === 'confirmed';
         return $hasConfirmedBuildPlan && $this->buildTaskServiceForRead()->hasConfirmedBuildPlanForBuild($scope);
+    }
+
+    private function resolvePageSectionBuildDispatchWindow(): int
+    {
+        $configured = (int)\Weline\Framework\App\Env::get(
+            'pagebuilder.ai_site.page_section_build_dispatch_window',
+            self::DEFAULT_PAGE_SECTION_BUILD_DISPATCH_WINDOW
+        );
+        $httpConcurrency = (int)\Weline\Framework\App\Env::get('pagebuilder.ai_site.max_http_concurrency', $configured);
+        $configured = \max(1, $configured);
+        $httpConcurrency = \max(1, $httpConcurrency);
+
+        return \max(1, \min($configured, $httpConcurrency, 16));
     }
 
     private function buildTaskServiceForRead(): AiSiteBuildTaskService
@@ -6706,6 +6719,12 @@ class AiSiteAgent extends BaseController
 
     private function resolveAiSiteCurrentRequestOrigin(): string
     {
+        // 队列/CLI 路径通过 AiSiteAgentForQueue::create() 走 new 构造，没经 __init() / __setModuleInfo()，
+        // typed property $this->request 处于未初始化状态，访问会抛 PHP Error。这里以 isset 短路：
+        // 没有 HTTP 上下文时返回空串，让 normalizeUrlsToLocalBase 退回到 scope/local preview origin 旧逻辑。
+        if (!isset($this->request)) {
+            return '';
+        }
         $host = \trim((string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: ''));
         if ($host === '') {
             return '';
@@ -8094,9 +8113,9 @@ class AiSiteAgent extends BaseController
                 $claimedBy = \trim((string)($active['claimed_by'] ?? ''));
                 if (
                     $claimSource === 'queue'
-                    && $claimedBy === ''
+                    && \in_array($claimedBy, ['', 'operation_sse', 'queue'], true)
                 ) {
-                    // Queue observers may mirror the row to running before the scheduler worker claims it.
+                    // Queue observers and crashed queue workers can leave running claims behind; the queue row owns execution locking.
                     $allowUnclaimedPlanQueueRun = true;
                 } elseif (
                     $operation === 'plan'
@@ -14318,9 +14337,6 @@ class AiSiteAgent extends BaseController
         }
 
         $status = \strtolower(\trim((string)($queueRow['status'] ?? '')));
-        if (\in_array($status, ['error', 'failed', 'fail'], true)) {
-            return false;
-        }
         if ($preserveRunningQueueRow && $status === 'running') {
             return false;
         }
@@ -14863,7 +14879,7 @@ class AiSiteAgent extends BaseController
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $pageTypeLabels = Page::getPageTypes();
         // Keep one queue owner, but generate independent page sections in bounded parallel batches.
-        $dispatchWindow = self::PAGE_SECTION_BUILD_DISPATCH_WINDOW;
+        $dispatchWindow = $this->resolvePageSectionBuildDispatchWindow();
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
         $totalSteps = \max(1, \count($initialPendingTasks) + 1);
         $currentStep = 0;
@@ -15311,7 +15327,7 @@ class AiSiteAgent extends BaseController
                 'status' => 'error',
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
-                    ? (string)__('HTML block build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
+                    ? (string)__('HTML block build has failed tasks; the scheduler will retry unfinished work.')
                     : (string)__('仍存在未归档的构建任务；请在工作区刷新后重试未完成任务再继续。'),
                 'retry_allowed' => 0,
                 'failure_mode' => 'build_failed',
@@ -15337,7 +15353,7 @@ class AiSiteAgent extends BaseController
             'build',
             ($hasBuildFailures || $hasOutstandingTasks)
                 ? ($hasBuildFailures
-                    ? __('HTML block build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
+                    ? __('HTML block build has failed tasks; the scheduler will retry unfinished work.')
                     : __('仍存在未归档的 HTML 区块任务；请刷新后完成剩余任务后再试。'))
                 : __('HTML blocks ready for preview or publish'),
             100,
@@ -15348,7 +15364,7 @@ class AiSiteAgent extends BaseController
 
         return [
             'message' => $hasBuildFailures
-                ? (string)__('HTML block build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
+                ? (string)__('HTML block build has failed tasks; the scheduler will retry unfinished work.')
                 : ($hasOutstandingTasks
                     ? (string)__('HTML 区块构建未完全归档；请刷新并完成剩余任务。')
                     : (string)__('HTML block build complete')),
@@ -16301,7 +16317,7 @@ class AiSiteAgent extends BaseController
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $this->emitBuildInfoEvent(
             $sse,
-            (string)__('Build task failed without automatic retry: %{task} — %{reason}', [
+            (string)__('Build task failed and was recorded for scheduler retry: %{task} — %{reason}', [
                 'task' => $taskKey,
                 'reason' => $reason,
             ]),
@@ -16324,7 +16340,7 @@ class AiSiteAgent extends BaseController
 
         return [
             'scope' => $scope,
-            'fatal' => true,
+            'fatal' => false,
             'throwable' => $throwable,
         ];
     }
@@ -16594,7 +16610,7 @@ class AiSiteAgent extends BaseController
         // queue:run -f：_queue_force_build.active=1 时强制走 AI，并绕过共享 Header/Footer 的进程内静态缓存。
         $pageTypeLabels = Page::getPageTypes();
         // Keep one queue owner, but generate independent virtual-theme sections in bounded parallel batches.
-        $dispatchWindow = self::PAGE_SECTION_BUILD_DISPATCH_WINDOW;
+        $dispatchWindow = $this->resolvePageSectionBuildDispatchWindow();
         $initialPendingTasks = $this->buildTaskService->listPendingTasks($scope);
         $totalSteps = \max(1, \count($initialPendingTasks) + 1);
         $currentStep = 0;
@@ -17130,7 +17146,7 @@ class AiSiteAgent extends BaseController
                 'status' => 'error',
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
-                    ? (string)__('Virtual theme build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
+                    ? (string)__('Virtual theme build has failed tasks; the scheduler will retry unfinished work.')
                     : (string)__('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'),
                 'retry_allowed' => 0,
                 'failure_mode' => 'build_failed',
@@ -17188,7 +17204,7 @@ class AiSiteAgent extends BaseController
             'build',
             ($hasBuildFailures || $hasOutstandingTasks)
                 ? ($hasBuildFailures
-                    ? __('Virtual theme build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
+                    ? __('Virtual theme build has failed tasks; the scheduler will retry unfinished work.')
                     : __('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'))
                 : __('Virtual theme ready for editing'),
             100,
@@ -17198,7 +17214,7 @@ class AiSiteAgent extends BaseController
         );
         return [
             'message' => $hasBuildFailures
-                ? (string)__('Virtual theme build failed; failed AI items will not auto-retry. Regenerate after adjusting the base prompt.')
+                ? (string)__('Virtual theme build has failed tasks; the scheduler will retry unfinished work.')
                 : ($hasOutstandingTasks
                     ? (string)__('虚拟主题构建未完全归档；请刷新并完成剩余任务。')
                     : (string)__('Virtual theme build complete')),

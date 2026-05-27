@@ -68,6 +68,20 @@ PHP);
         self::assertSame('memory_server.instance-a.token', $env->getConfig('wls.memory_service.token_file_name'));
     }
 
+    public function testQueueSchedulerDefaultsExposeConcurrencyConfig(): void
+    {
+        \file_put_contents($this->envPath, <<<'PHP'
+<?php return [
+    'system' => ['maintenance' => false],
+];
+PHP);
+
+        $env = Env::getInstance()->reload();
+
+        self::assertSame(4, $env->getConfig('queue.cron.max_concurrent'));
+        self::assertSame('512M', $env->getConfig('queue.worker.memory_limit'));
+    }
+
     public function testRuntimeMaintenanceModeDoesNotPersistEnvFile(): void
     {
         \file_put_contents($this->envPath, <<<'PHP'

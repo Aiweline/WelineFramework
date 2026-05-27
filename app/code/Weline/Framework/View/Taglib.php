@@ -592,7 +592,19 @@ class Taglib
                         $innerContent = $hook_name_from_raw . $else_match_str . $compiled_fallback;
                     } else {
                         // 没有 <else/>，直接使用 rawContent（只是 hook 名称）
-                        $innerContent = $rawContent;
+                        $compiled_all = '';
+                        if (isset($params['childrenCode']) && is_callable($params['childrenCode'])) {
+                            $compiled_all = $params['childrenCode']();
+                        }
+                        if ($compiled_all !== '' && $compiled_all !== $rawContent) {
+                            $compiled_ltrim = ltrim($compiled_all);
+                            $raw_ltrim = ltrim($rawContent);
+                            $innerContent = ($raw_ltrim !== '' && str_starts_with($compiled_ltrim, $raw_ltrim))
+                                ? $compiled_all
+                                : $rawContent . $compiled_all;
+                        } else {
+                            $innerContent = $rawContent;
+                        }
                     }
                 } elseif (isset($params['childrenCode']) && is_callable($params['childrenCode'])) {
                     $innerContent = $params['childrenCode']();
@@ -3574,6 +3586,9 @@ class Taglib
                             $tagsForRender[$node->name] = $tags[$normalizedName];
                         }
                         $rendered = $this->renderTagNode($node, $tagsForRender, $template, $fileName);
+                        if ($isHookTag) {
+                            $rendered = $this->stripLeakedHookFallbackDelimiter($rendered);
+                        }
                         $result = array_merge($result, $this->compileStringToNodes($rendered, $tags, $template, $fileName));
                         continue;
                     }
@@ -3629,6 +3644,34 @@ class Taglib
         $ast = $this->compileAst($ast, $tags, $template, $fileName);
         $ast = $this->optimizeAst($ast);
         return $ast->children;
+    }
+
+    private function stripLeakedHookFallbackDelimiter(string $content): string
+    {
+        $patterns = [
+            '/<(?:w:)?else\s*\/?>/i',
+            '/<\?php\s*else\s*:?\s*\?>/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (!preg_match($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+
+            $delimiter = $matches[0][0];
+            $delimiterOffset = (int)$matches[0][1];
+            $candidateHookName = preg_replace('/\s+/', '', substr($content, 0, $delimiterOffset));
+            if (!is_string($candidateHookName)
+                || $candidateHookName === ''
+                || !preg_match('/^[A-Za-z0-9_.\-:]+$/', $candidateHookName)
+            ) {
+                continue;
+            }
+
+            return substr($content, $delimiterOffset + strlen($delimiter));
+        }
+
+        return $content;
     }
 
     private function optimizeAst(ProgramNode $root): ProgramNode

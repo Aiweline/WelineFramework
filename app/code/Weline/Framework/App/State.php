@@ -75,6 +75,11 @@ class State extends DataObject
     public static function getLang(): string
     {
         // 优先从 URL 路径解析的变量中读取（从路径配置的 URL）
+        $lang = self::detectLanguageFromRequestPath();
+        if (!empty($lang)) {
+            return $lang;
+        }
+
         $lang = \w_env('user.lang');
         // 如果 w_env 中没有，从 Cookie 读取
         if (empty($lang)) {
@@ -96,6 +101,11 @@ class State extends DataObject
     public static function getCurrency(): string
     {
         // 优先从 URL 路径解析的变量中读取（从路径配置的 URL）
+        $currency = self::detectCurrencyFromRequestPath();
+        if (!empty($currency)) {
+            return $currency;
+        }
+
         $currency = \w_env('user.currency');
         // 如果 w_env 中没有，从 Cookie 读取
         if (empty($currency)) {
@@ -154,5 +164,69 @@ class State extends DataObject
         }
 
         return $langLocal;
+    }
+
+    private static function detectLanguageFromRequestPath(): string
+    {
+        foreach (self::requestPathSegmentsCandidates() as $segments) {
+            foreach ($segments as $segment) {
+                $segment = str_replace('-', '_', trim($segment));
+                if (preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $segment)) {
+                    return $segment;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private static function detectCurrencyFromRequestPath(): string
+    {
+        foreach (self::requestPathSegmentsCandidates() as $segments) {
+            foreach ($segments as $segment) {
+                $segment = strtoupper(trim($segment));
+                if (preg_match('/^[A-Z]{3}$/', $segment)) {
+                    return $segment;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private static function requestPathSegmentsCandidates(): array
+    {
+        $uris = [
+            (string)\w_env('origin_request_uri', ''),
+            (string)\w_env('full_request_uri', ''),
+            (string)\w_env('request.uri', ''),
+            (string)\Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', ''),
+            (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', ''),
+            (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? ''),
+            (string)($_SERVER['REQUEST_URI'] ?? ''),
+        ];
+
+        $candidates = [];
+        foreach ($uris as $uri) {
+            if ($uri === '') {
+                continue;
+            }
+
+            $path = (string)(parse_url($uri, PHP_URL_PATH) ?: $uri);
+            $segments = array_values(array_filter(
+                explode('/', trim($path, '/')),
+                static fn (string $segment): bool => $segment !== ''
+            ));
+            if ($segments === []) {
+                continue;
+            }
+
+            $candidates[] = array_slice($segments, 0, 4);
+        }
+
+        return $candidates;
     }
 }

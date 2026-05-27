@@ -352,7 +352,7 @@ class Start extends CommandAbstract
         $forceRestart = isset($args['r']) || isset($args['restart']);
         $forceSwitch = isset($args['f']); // -f：直接切换，不进入平滑重启（不开维护模式、不等待）
         $mainStop = null;
-        $skipPostStopPortInspection = $forceRestart && $forceSwitch;
+        $skipPostStopPortInspection = false;
         $fastRestartMetadata = $this->resolveFastRestartInstanceMetadata($instanceName, $port, $forceRestart, $forceSwitch);
         $this->traceStartupPhase($instanceName, 'occupant-detect:before', [
             'port' => (int)$port,
@@ -610,7 +610,7 @@ class Start extends CommandAbstract
             'port' => (int)$port,
         ]);
         $mainPortInspect = $this->inspectStartupPortIfOccupied($port, $skipPostStopPortInspection);
-        if ($forceRestart && ($mainPortInspect['in_use'] ?? false)) {
+        if ($forceRestart && !$forceSwitch && ($mainPortInspect['in_use'] ?? false)) {
             $this->printer->error(__('强制重启后主端口 %{1} 仍被占用，已中止启动，避免同名实例切换到新端口。', [$port]));
             $this->printer->note(__('请先确认旧实例已完全停止，再重新执行启动命令。'));
             return;
@@ -685,7 +685,7 @@ class Start extends CommandAbstract
             ]);
             $workerPort = $this->resolveInitialWorkerPort($port, $workerBasePort, $count, $dispatcherEnabled, $useDirectMode);
 
-            if ($forceRestart && !$skipPostStopPortInspection && $this->hasRestartCleanupResidue($instanceName, $port, $count, $workerPort, $forceSwitch)) {
+            if ($forceRestart && !$forceSwitch && !$skipPostStopPortInspection && $this->hasRestartCleanupResidue($instanceName, $port, $count, $workerPort, $forceSwitch)) {
                 $this->printer->error(__('强制重启前仍检测到旧实例 [%{1}] 的残留 WLS 进程或端口，已中止启动。', [$instanceName]));
                 $this->printer->note(__('必须先完成旧实例清理，禁止自动切换主端口或 Worker 端口启动第二个同名实例。'));
                 return;
@@ -4949,11 +4949,7 @@ class Start extends CommandAbstract
         bool $fastLocal = false
     ): bool
     {
-        if ($fastLocal) {
-            return true;
-        }
-
-        $deadline = \microtime(true) + ($fastLocal ? 1.5 : 12.0);
+        $deadline = \microtime(true) + ($fastLocal ? 6.0 : 12.0);
         do {
             Processer::clearPortCache();
             if (!$this->hasRestartCleanupResidue($instanceName, $mainPort, $workerCount, $workerPort, $fastLocal)) {
@@ -4974,10 +4970,6 @@ class Start extends CommandAbstract
         bool $fastLocal = false
     ): bool
     {
-        if ($fastLocal) {
-            return false;
-        }
-
         $ports = [$mainPort, $this->resolvePreferredControlPort($mainPort)];
         if ($mainPort === self::DEFAULT_PORT_HTTPS) {
             $ports[] = self::DEFAULT_PORT;

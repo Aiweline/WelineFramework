@@ -19,7 +19,7 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
      data-product-id="<?= (int) $productId ?>">
     <div class="affiliate-share-head">
         <span class="affiliate-share-title"><?= __('分销分享') ?></span>
-        <span class="affiliate-share-status" data-affiliate-share-status></span>
+        <span class="affiliate-share-status" data-affiliate-share-status aria-live="polite"></span>
     </div>
     <div class="affiliate-share-body">
         <input class="affiliate-share-link"
@@ -36,11 +36,12 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
 
 <style>
 .affiliate-share-panel {
-    margin-top: .85rem;
-    padding: .85rem;
+    margin-top: 1rem;
+    padding: .9rem;
     border: 1px solid #d5d9d9;
     border-radius: 8px;
-    background: #fff;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fafa 100%);
+    box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
 }
 .affiliate-share-head {
     display: flex;
@@ -53,24 +54,46 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     color: #0f1111;
     font-size: .95rem;
     font-weight: 700;
+    line-height: 1.25;
 }
 .affiliate-share-status {
+    min-height: 1.15rem;
+    padding: .1rem .45rem;
+    border-radius: 999px;
     color: #565959;
     font-size: .78rem;
+    line-height: 1.2;
+    text-align: right;
+    white-space: nowrap;
+}
+.affiliate-share-status.is-loading {
+    background: #f7fafa;
+    color: #565959;
+}
+.affiliate-share-status.is-success {
+    background: #e7f4ea;
+    color: #0f5132;
+}
+.affiliate-share-status.is-error {
+    background: #fff4e5;
+    color: #7a3e00;
 }
 .affiliate-share-body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: .5rem;
 }
 .affiliate-share-link {
+    grid-column: 1 / -1;
     min-width: 0;
     height: 2.35rem;
     padding: 0 .65rem;
     border: 1px solid #888c8c;
     border-radius: 6px;
+    background: #fff;
     color: #0f1111;
     font-size: .85rem;
+    line-height: 1.2;
 }
 .affiliate-share-copy,
 .affiliate-share-native,
@@ -79,7 +102,7 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     align-items: center;
     justify-content: center;
     min-height: 2.35rem;
-    padding: 0 .75rem;
+    padding: 0 .7rem;
     border: 1px solid #007185;
     border-radius: 6px;
     background: #fff;
@@ -87,7 +110,18 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     cursor: pointer;
     font-size: .85rem;
     font-weight: 700;
+    line-height: 1.2;
     text-decoration: none;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.affiliate-share-copy:hover:not(:disabled),
+.affiliate-share-native:hover:not(:disabled),
+.affiliate-share-platform:hover {
+    border-color: #004f5f;
+    background: #e6f2f4;
+    color: #004f5f;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(15, 17, 17, .12);
 }
 .affiliate-share-copy:disabled,
 .affiliate-share-native:disabled,
@@ -97,17 +131,30 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     cursor: not-allowed;
 }
 .affiliate-share-platforms {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: .45rem;
     margin-top: .6rem;
 }
+.affiliate-share-platform {
+    min-width: 0;
+}
 @media (max-width: 640px) {
-    .affiliate-share-body {
+    .affiliate-share-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .affiliate-share-status {
+        text-align: left;
+        white-space: normal;
+    }
+    .affiliate-share-body,
+    .affiliate-share-platforms {
         grid-template-columns: 1fr;
     }
     .affiliate-share-copy,
-    .affiliate-share-native {
+    .affiliate-share-native,
+    .affiliate-share-platform {
         width: 100%;
     }
 }
@@ -126,8 +173,11 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     var platformsNode = root.querySelector('[data-affiliate-share-platforms]');
     var shareData = null;
 
-    function setStatus(message) {
-        if (statusNode) statusNode.textContent = message || '';
+    function setStatus(message, type) {
+        if (!statusNode) return;
+        statusNode.textContent = message || '';
+        statusNode.classList.remove('is-loading', 'is-success', 'is-error');
+        if (type) statusNode.classList.add('is-' + type);
     }
 
     function getAffiliateApi() {
@@ -200,7 +250,7 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
         recordOutbound('copy').then(function() {
             return writeShareLinkToClipboard();
         }).then(function() {
-            setStatus(<?= json_encode((string) __('已复制'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+            setStatus(<?= json_encode((string) __('已复制'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>, 'success');
         });
     }
 
@@ -215,7 +265,7 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
                 url: shareData.tracking_url
             });
         }).then(function() {
-            setStatus(<?= json_encode((string) __('已分享'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+            setStatus(<?= json_encode((string) __('已分享'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>, 'success');
         }).catch(function() {});
     }
 
@@ -245,7 +295,7 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     if (copyButton) copyButton.addEventListener('click', copyShareLink);
     if (nativeButton) nativeButton.addEventListener('click', nativeShare);
 
-    setStatus(<?= json_encode((string) __('加载中'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+    setStatus(<?= json_encode((string) __('加载中'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>, 'loading');
     getAffiliateApi()
         .then(function(api) {
             if (!api || typeof api.getProductShareLinks !== 'function') {
@@ -262,7 +312,7 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
             setStatus('');
         })
         .catch(function(error) {
-            setStatus(error && error.message ? error.message : <?= json_encode((string) __('暂不可用'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+            setStatus(error && error.message ? error.message : <?= json_encode((string) __('暂不可用'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>, 'error');
         });
 })();
 </script>

@@ -391,17 +391,17 @@ class CategoryService
         ];
 
         $phraseKey = $map[$name] ?? $name;
-        $translated = (string) \__($phraseKey);
-        if ($translated !== $phraseKey) {
-            return $translated;
-        }
-
         $lang = State::getLangLocal();
         foreach (['WeShop_Catalog', 'Weline_Theme'] as $moduleName) {
             $fromModule = $this->resolveModuleI18nWord($moduleName, $phraseKey, $lang);
             if ($fromModule !== null) {
                 return $fromModule;
             }
+        }
+
+        $translated = (string) \__($phraseKey);
+        if ($translated !== $phraseKey) {
+            return $translated;
         }
 
         return $phraseKey;
@@ -494,7 +494,6 @@ class CategoryService
     {
         return KeyBuilder::environmentHash([
             'scope' => 'catalog-category-display',
-            'lang' => State::getLangLocal(),
         ]);
     }
     

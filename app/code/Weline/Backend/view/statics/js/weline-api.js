@@ -199,8 +199,52 @@
         return error;
     }
 
+    function isObjectPayload(data) {
+        return !!(data && typeof data === 'object' && !Array.isArray(data));
+    }
+
+    function hasOwn(data, key) {
+        return Object.prototype.hasOwnProperty.call(data, key);
+    }
+
+    function businessCode(data) {
+        if (!isObjectPayload(data) || !hasOwn(data, 'code')) {
+            return null;
+        }
+        var code = Number(data.code);
+        return isFinite(code) ? code : null;
+    }
+
+    function isHttpSuccessCode(code) {
+        return code >= 200 && code < 300;
+    }
+
+    function isHttpFailureCode(code) {
+        return code >= 400 && code < 600;
+    }
+
+    function normalizeBusinessResult(data) {
+        if (!isObjectPayload(data) || typeof data.success === 'boolean') {
+            return data;
+        }
+        var code = businessCode(data);
+        if (code === null || (!isHttpSuccessCode(code) && !isHttpFailureCode(code))) {
+            return data;
+        }
+        return Object.assign({}, data, {
+            success: isHttpSuccessCode(code)
+        });
+    }
+
     function isBusinessFailure(data) {
-        return !!(data && typeof data === 'object' && !Array.isArray(data) && data.success === false);
+        if (!isObjectPayload(data)) {
+            return false;
+        }
+        if (data.success === false) {
+            return true;
+        }
+        var code = businessCode(data);
+        return code !== null && isHttpFailureCode(code);
     }
 
     function failureMessage(data, statusText) {
@@ -211,6 +255,85 @@
             return data;
         }
         return statusText || 'Backend request failed.';
+    }
+
+    function makeHeaders(headers) {
+        var normalized = {};
+        Object.keys(headers || {}).forEach(function (key) {
+            normalized[String(key).toLowerCase()] = String(headers[key]);
+        });
+        return {
+            get: function (name) {
+                return normalized[String(name).toLowerCase()] || null;
+            },
+            has: function (name) {
+                return Object.prototype.hasOwnProperty.call(normalized, String(name).toLowerCase());
+            },
+            forEach: function (callback, thisArg) {
+                Object.keys(normalized).forEach(function (key) {
+                    callback.call(thisArg, normalized[key], key, this);
+                }, this);
+            },
+            entries: function () {
+                return Object.keys(normalized).map(function (key) {
+                    return [key, normalized[key]];
+                })[Symbol.iterator]();
+            }
+        };
+    }
+
+    function fetchBodyText(data) {
+        if (typeof data === 'string') {
+            return data;
+        }
+        if (data === undefined || data === null) {
+            return '';
+        }
+        return JSON.stringify(data);
+    }
+
+    function buildFetchResponse(response, requestUrl) {
+        var body = response.data;
+        var text = fetchBodyText(body);
+        var headers = makeHeaders(response.headers || {});
+        return {
+            ok: !!response.ok,
+            status: response.status || 0,
+            statusText: response.statusText || '',
+            headers: headers,
+            redirected: !!response.redirected,
+            url: response.url || requestUrl || '',
+            body: null,
+            json: function () {
+                if (body && typeof body === 'object') {
+                    return Promise.resolve(body);
+                }
+                if (!text) {
+                    return Promise.resolve({});
+                }
+                return Promise.resolve(JSON.parse(text));
+            },
+            text: function () {
+                return Promise.resolve(text);
+            },
+            clone: function () {
+                return buildFetchResponse(response, requestUrl);
+            },
+            blob: function () {
+                if (typeof Blob === 'undefined') {
+                    return Promise.reject(new Error('[Weline.Api] Blob is unavailable.'));
+                }
+                return Promise.resolve(new Blob([text], {
+                    type: headers.get('content-type') || 'text/plain'
+                }));
+            },
+            arrayBuffer: function () {
+                if (typeof TextEncoder === 'undefined') {
+                    return Promise.reject(new Error('[Weline.Api] TextEncoder is unavailable.'));
+                }
+                return Promise.resolve(new TextEncoder().encode(text).buffer);
+            }
+        };
     }
 
     function BackendApiClient(config) {
@@ -243,7 +366,7 @@
         return 'backend_req_' + Date.now() + '_' + this.requestId;
     };
 
-    BackendApiClient.prototype.request = function (url, options) {
+    BackendApiClient.prototype.send = function (url, options, responseMode) {
         this.ensureWorker();
         var requestUrl = sameOriginUrl(url);
         var requestOptions = normalizeOptions(options);
@@ -271,7 +394,8 @@
                 resolve: resolve,
                 reject: reject,
                 timeoutId: timeoutId,
-                requestUrl: requestUrl
+                requestUrl: requestUrl,
+                responseMode: responseMode || 'body'
             };
 
             try {
@@ -289,6 +413,14 @@
         });
     };
 
+    BackendApiClient.prototype.request = function (url, options) {
+        return this.send(url, options, 'body');
+    };
+
+    BackendApiClient.prototype.fetch = function (url, options) {
+        return this.send(url, options, 'fetch');
+    };
+
     BackendApiClient.prototype.handleWorkerMessage = function (event) {
         var message = event.data || {};
         var pending = this.pending[message.id];
@@ -298,21 +430,38 @@
         delete this.pending[message.id];
         window.clearTimeout(pending.timeoutId);
 
-        var response = {
+        var body = normalizeBusinessResult(message.body);
+        var transportResponse = {
             ok: !!message.ok,
             status: message.status || 0,
             statusText: message.statusText || '',
-            data: message.body,
+            data: body,
             headers: message.headers || {},
+            url: message.url || pending.requestUrl,
+            redirected: !!message.redirected,
             maintenance: !!message.maintenance
         };
 
-        if (message.ok && !isBusinessFailure(message.body)) {
-            pending.resolve(message.body);
+        if (pending.responseMode === 'fetch') {
+            if (transportResponse.ok) {
+                pending.resolve(buildFetchResponse(transportResponse, pending.requestUrl));
+                return;
+            }
+            pending.reject(buildError(failureMessage(body, message.statusText), transportResponse, pending.requestUrl));
             return;
         }
 
-        pending.reject(buildError(failureMessage(message.body, message.statusText), response, pending.requestUrl));
+        var businessFailed = isBusinessFailure(body);
+        var response = Object.assign({}, transportResponse, {
+            ok: !!message.ok && !businessFailed
+        });
+
+        if (response.ok) {
+            pending.resolve(body);
+            return;
+        }
+
+        pending.reject(buildError(failureMessage(body, message.statusText), response, pending.requestUrl));
     };
 
     BackendApiClient.prototype.handleWorkerError = function (event) {
@@ -368,6 +517,9 @@
         },
         upload: function (url, formData, options) {
             return client.upload(url, formData, options);
+        },
+        fetch: function (url, options) {
+            return client.fetch(url, options);
         },
         call: function () {
             return Promise.reject(new Error('[Weline.Api] backend call() is not available for direct controller routes.'));
