@@ -2515,6 +2515,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $worker->setMeta('ready_at', \microtime(true) - 4.0);
         $worker->setMeta('ready_received_at', \microtime(true) - 4.0);
         $worker->setMeta('dispatcher_pool_confirmed_at', null);
+        $worker->setMeta('lease_state', 'registered');
         $registry->addInstance($worker);
 
         $this->invokePrivateWithArgs($orchestrator, 'handleRegister', [[
@@ -2642,7 +2643,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $worker->setMeta('slot_id', 'worker#1');
         $worker->setMeta('lease_id', 'worker-lease-new');
         $worker->setMeta('generation', 2);
-        $worker->setMeta('lease_state', 'ready_pending_pool');
+        $worker->setMeta('lease_state', 'ready_accepted');
         $registry->addInstance($worker);
 
         $this->invokePrivateWithArgs($orchestrator, 'handleWorkerPoolAck', [[
@@ -2776,7 +2777,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $worker->setMeta('slot_id', 'worker#1');
         $worker->setMeta('lease_id', 'worker-lease-new');
         $worker->setMeta('generation', 2);
-        $worker->setMeta('lease_state', 'ready_pending_pool');
+        $worker->setMeta('lease_state', 'ready_accepted');
         $registry->addInstance($worker);
 
         $this->invokePrivateWithArgs($orchestrator, 'handleWorkerPoolAck', [[

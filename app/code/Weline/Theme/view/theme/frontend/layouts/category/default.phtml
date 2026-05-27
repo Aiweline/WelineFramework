@@ -34,7 +34,9 @@ $filter_sidebar = $meta['filter_sidebar'] ?? $this->getData('filter_sidebar') ??
 $showHeader = $meta['showHeader'] ?? $this->getData('showHeader') ?? true;
 $showFooter = $meta['showFooter'] ?? $this->getData('showFooter') ?? true;
 $showFilters = $meta['showFilters'] ?? $this->getData('showFilters') ?? true;
-$filterDrawerTitle = $meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? __('筛选条件');
+$filterDrawerTitle = \Weline\Theme\Helper\WidgetI18n::label(
+    (string)($meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? '筛选条件')
+);
 $gridColumns = $meta['gridColumns'] ?? $this->getData('gridColumns') ?? 4;
 $pagination = $this->request->getData('pagination') ?? $this->getData('pagination') ?? '';
 $paginationData = $this->request->getData('pagination_data') ?? $this->getData('pagination_data') ?? [];

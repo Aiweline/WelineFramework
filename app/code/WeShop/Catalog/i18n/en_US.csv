@@ -36,8 +36,8 @@
 "EAV 属性类型不存在: input_string","EAV attribute type does not exist: input_string"
 图标,Icon
 显示图标,"Show icon"
-上级分类,"Superior classification"
-子分类,Sub-Category
+上级分类,"Parent category"
+子分类,Subcategories
 展开子菜单,"Expand submenu"
 更多分类,"More categories"
 更多,More
@@ -52,5 +52,21 @@
 分类目录,"Category Directory"
 相关分类,"Related Categories"
 "浏览 %{category} 的相关分类","Browse related categories for %{category}"
-"%{count} 个子分类","%{count} subcategory"
+"%{count} 个子分类","%{count} subcategories"
+展开/折叠子分类,"Expand/collapse subcategories"
 "SKU: %{sku}","SKU: %{sku}"
+消费电子,"Consumer Electronics"
+汉服系列,"Hanfu Collection"
+汉服常服,"Everyday Hanfu"
+生活空间,"Living Space"
+演示分类,"Demo Category"
+家具,Furniture
+沙发,Sofas
+沙发床,"Sofa Beds"
+餐桌,"Dining Tables"
+茶几,"Coffee Tables"
+椅子,Chairs
+办公椅,"Office Chairs"
+床具,Beds
+衣柜,Wardrobes
+书柜,Bookcases

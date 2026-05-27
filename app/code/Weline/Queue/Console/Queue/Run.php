@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Queue\Console\Queue;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\Manager\ObjectManager;
@@ -23,6 +24,13 @@ use Weline\Queue\QueueInterface;
 
 class Run implements \Weline\Framework\Console\CommandInterface
 {
+    private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
+    private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [
+        'GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue' => '1G',
+        'GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue' => '1G',
+        'GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue' => '1G',
+    ];
+
     private Printing $printing;
     private Queue $queue;
 
@@ -134,6 +142,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
 
         # 获取执行者
         $type = $queue->getType();
+        $queueClass = \ltrim((string)$type->getData('class'), '\\');
+        $this->applyCliMemoryLimitForQueueClass($queueClass);
         if ($force) {
             $content = \json_decode((string)$queue->getContent(), true);
             if (\is_array($content)) {
@@ -148,7 +158,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             }
         }
         /**@var QueueInterface $queue_execute */
-        $queue_execute = ObjectManager::getInstance($type->getData('class'));
+        $queue_execute = ObjectManager::getInstance($queueClass);
         $validate_result = $queue_execute->validate($queue);
         if (is_bool($validate_result) and $validate_result) {
             $queue->setStatus($queue::status_running)
@@ -212,6 +222,105 @@ class Run implements \Weline\Framework\Console\CommandInterface
         @\ini_set('max_execution_time', '0');
         @\set_time_limit(0);
         @\ignore_user_abort(true);
+    }
+
+    private function applyCliMemoryLimitForQueueClass(string $queueClass): void
+    {
+        if (\PHP_SAPI !== 'cli' || $queueClass === '') {
+            return;
+        }
+
+        $target = $this->resolveWorkerMemoryLimit($queueClass);
+        if (!$this->shouldRaiseMemoryLimit((string)\ini_get('memory_limit'), $target)) {
+            return;
+        }
+
+        @\ini_set('memory_limit', $target);
+    }
+
+    private function resolveWorkerMemoryLimit(string $queueClass): string
+    {
+        $configuredByClass = Env::get(
+            'queue.worker.memory_limit_by_class.' . $queueClass,
+            Env::get('queue.worker.memory_limit.' . $queueClass, null)
+        );
+        if ($configuredByClass !== null && $configuredByClass !== '') {
+            return $this->normalizeMemoryLimit(
+                $configuredByClass,
+                self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass] ?? self::DEFAULT_WORKER_MEMORY_LIMIT
+            );
+        }
+
+        if (isset(self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass])) {
+            return $this->normalizeMemoryLimit(
+                self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass],
+                self::DEFAULT_WORKER_MEMORY_LIMIT
+            );
+        }
+
+        return $this->normalizeMemoryLimit(
+            Env::get('queue.worker.memory_limit', Env::get('queue.cron.memory_limit', self::DEFAULT_WORKER_MEMORY_LIMIT)),
+            self::DEFAULT_WORKER_MEMORY_LIMIT
+        );
+    }
+
+    private function shouldRaiseMemoryLimit(string $current, string $target): bool
+    {
+        $currentBytes = $this->memoryLimitToBytes($current);
+        $targetBytes = $this->memoryLimitToBytes($target);
+        if ($targetBytes < 0) {
+            return $currentBytes >= 0;
+        }
+        if ($currentBytes < 0) {
+            return false;
+        }
+
+        return $targetBytes > $currentBytes;
+    }
+
+    private function memoryLimitToBytes(string $value): int
+    {
+        $value = \trim($value);
+        if ($value === '-1') {
+            return -1;
+        }
+        if ($value === '') {
+            return 0;
+        }
+
+        $unit = \strtoupper(\substr($value, -1));
+        $number = (float)$value;
+
+        return match ($unit) {
+            'G' => (int)($number * 1024 * 1024 * 1024),
+            'M' => (int)($number * 1024 * 1024),
+            'K' => (int)($number * 1024),
+            default => (int)$number,
+        };
+    }
+
+    private function normalizeMemoryLimit(mixed $value, string $default): string
+    {
+        if (\is_int($value) || \is_float($value)) {
+            $value = (string)(int)$value;
+        }
+
+        $value = \strtoupper(\trim((string)$value));
+        $default = \strtoupper(\trim($default)) ?: self::DEFAULT_WORKER_MEMORY_LIMIT;
+        if ($value === '') {
+            return $default;
+        }
+        if ($value === '-1') {
+            return '-1';
+        }
+        if (\preg_match('/^[1-9]\d*$/', $value)) {
+            return $value . 'M';
+        }
+        if (\preg_match('/^[1-9]\d*(?:K|M|G)$/', $value)) {
+            return $value;
+        }
+
+        return $default;
     }
 
     public function help(): array|string

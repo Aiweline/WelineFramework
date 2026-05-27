@@ -208,7 +208,7 @@ class AiSitePlanQueue implements QueueInterface
             $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $message, $queueId);
             if ($this->isTransientAiProviderFailure($message) && $this->canScheduleTransientPlanRetry($content)) {
                 $retryQueueId = $this->createTransientPlanRetryQueue($queue, $content, $message);
-                $retryMessage = 'Stage-one plan provider was temporarily busy; replacement queue #' . $retryQueueId . ' was scheduled for the system scheduler with the same adapter model.';
+                $retryMessage = 'Stage-one plan provider was temporarily busy; queue #' . $retryQueueId . ' was marked retryable for the same adapter model.';
                 $this->markQueueRetryScheduled($queue, $retryQueueId, $content, $retryMessage);
                 if ($sse instanceof QueueDbWriter) {
                     $this->queueTrace($sse, $retryMessage);
@@ -1043,26 +1043,11 @@ class AiSitePlanQueue implements QueueInterface
         $content['retry_scope'] = 'plan_provider_transient';
         $content['_force_rebuild'] = (int)($content['_force_rebuild'] ?? 0) === 1 ? 1 : 0;
 
-        $name = \trim((string)$queue->getName());
-        if ($name === '') {
-            $name = 'PageBuilder plan retry';
+        if ($queueId <= 0) {
+            throw new \RuntimeException('Unable to mark PageBuilder plan queue retry after transient provider failure.');
         }
 
-        $created = w_query('queue', 'create', [
-            'class' => self::class,
-            'name' => $name . ' provider retry',
-            'module' => 'GuoLaiRen_PageBuilder',
-            'content' => $content,
-            'status' => Queue::status_pending,
-            'auto' => true,
-            'biz_key' => $queue->getBizKey(),
-        ]);
-        $retryQueueId = (int)($created['queue_id'] ?? 0);
-        if ($retryQueueId <= 0) {
-            throw new \RuntimeException('Unable to schedule PageBuilder plan retry queue after transient provider failure.');
-        }
-
-        return $retryQueueId;
+        return $queueId;
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
@@ -1107,16 +1092,19 @@ class AiSitePlanQueue implements QueueInterface
             return;
         }
 
-        $content['replacement_queue_id'] = $retryQueueId;
-        $line = '[' . \date('H:i:s') . '] QUEUE_REQUEUE replacement_queue=' . $retryQueueId . ' ' . $message;
+        $content['retry_queue_id'] = $retryQueueId;
+        $line = '[' . \date('H:i:s') . '] QUEUE_RETRY same_queue=' . $retryQueueId . ' ' . $message;
         $row = w_query('queue', 'get', ['queue_id' => $queueId]);
         $existing = \is_array($row) ? (string)($row['result'] ?? '') : '';
         w_query('queue', 'update', [
             'queue_id' => $queueId,
             'patch' => [
+                'status' => Queue::status_pending,
                 'content' => (string)(\json_encode($content, \JSON_UNESCAPED_UNICODE) ?: (string)$queue->getContent()),
                 'pid' => 0,
                 'finished' => 0,
+                'start_at' => null,
+                'end_at' => null,
                 'process' => $message,
                 'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
             ],

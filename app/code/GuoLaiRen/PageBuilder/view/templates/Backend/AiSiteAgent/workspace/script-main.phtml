@@ -1064,6 +1064,34 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }
     }
 
+    function peekPlanReloadReason() {
+        try {
+            var raw = String(window.sessionStorage.getItem('pb-ai-plan-reload-reason:' + String(publicId || '')) || '');
+            if (raw === '') {
+                return '';
+            }
+            var parsed = JSON.parse(raw);
+            return String(parsed.reason || '').trim();
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function clearPlanReloadReason() {
+        try {
+            window.sessionStorage.removeItem('pb-ai-plan-reload-reason:' + String(publicId || ''));
+        } catch (error) {
+        }
+    }
+
+    function consumePlanReloadReason() {
+        var reason = peekPlanReloadReason();
+        if (reason !== '') {
+            clearPlanReloadReason();
+        }
+        return reason;
+    }
+
     function schedulePlanWorkspaceReload(reason, delayMs) {
         if (planWorkspaceReloadTimer) {
             return;
@@ -1141,9 +1169,13 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return hasRetryableAiFailures(state, 'plan');
     }
 
-    function shouldAutoConfirmCompletedPlanAfterReload(workspaceState) {
+    function shouldPromptManualPlanReviewAfterReload(workspaceState, reloadReason) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        if (!confirmPlanUrl || !publicId || planConfirmedState || !!state.plan_confirmed) {
+        var reason = String(reloadReason || '').trim();
+        if (!publicId || planConfirmedState || !!state.plan_confirmed) {
+            return false;
+        }
+        if (reason !== 'plan_queue_done') {
             return false;
         }
         if (getPlanReloadReconcileStage(state) !== 'plan') {
@@ -1178,7 +1210,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return true;
     }
 
-    function autoConfirmCompletedPlanAfterReload(workspaceState) {
+    function promptManualPlanReviewAfterReload(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var operation = findPlanSuccessOperationFromWorkspaceState(state) || state.plan_queue_info || {};
         var fingerprint = shortHashText([
@@ -1187,35 +1219,32 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             String(operation.updated_at || operation.finished_at || operation.completed_at || ''),
             String((currentPlanPayload && currentPlanPayload.markdown) || '').length
         ].join('|'));
-        if (!reservePlanReloadAction('confirm', fingerprint)) {
+        if (!reservePlanReloadAction('manual_review', fingerprint)) {
             return false;
         }
-        planReloadReconcileInFlight = true;
-        setPlanGenerationActionLock(true);
-        toast('info', <?= \json_encode((string)__('检测到建站方案已生成完成，刷新后正在自动确认并进入下一阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
-        postForm(confirmPlanUrl, {
-            public_id: publicId,
-            stage: 'plan'
-        }).then(function (data) {
-            planReloadReconcileInFlight = false;
-            if (!data || !data.success) {
-                setPlanGenerationActionLock(false);
-                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
-                syncConfirmPlanButtonEnabled();
-                return;
-            }
-            if (data.data && typeof data.data === 'object') {
-                hydrateWorkspaceFromState(data.data);
-            }
-            toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
-            continueToBuildAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
-        }).catch(function (error) {
-            planReloadReconcileInFlight = false;
-            setPlanGenerationActionLock(false);
-            toast('error', (error && error.message) ? String(error.message) : messages.networkError);
-            schedulePlanWorkspaceReload('confirm_transport_error', 900);
-            syncConfirmPlanButtonEnabled();
-        });
+        var reviewMessage = String(messages.planManualReviewRequired || messages.planGenerated || '').trim();
+        if (reviewMessage === '') {
+            reviewMessage = <?= \json_encode((string)__('建站方案已生成完成。请先审查方案内容，确认无误后点击「确认方案」进入下一阶段。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        }
+        setPlanModalProgress(reviewMessage, 100, true, 'done');
+        setPlanModeStatus(reviewMessage);
+        if (typeof rerenderCurrentPlanPreview === 'function') {
+            rerenderCurrentPlanPreview();
+        }
+        syncConfirmPlanButtonEnabled();
+        toast('info', reviewMessage);
+        var confirmBtn = document.getElementById('pb-ai-confirm-plan');
+        if (confirmBtn && typeof confirmBtn.scrollIntoView === 'function') {
+            window.setTimeout(function () {
+                confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 260);
+        }
+        var planPanel = document.querySelector('[data-stage-panel="plan"]');
+        if (planPanel && typeof planPanel.scrollIntoView === 'function') {
+            window.setTimeout(function () {
+                planPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 120);
+        }
         return true;
     }
 
@@ -1223,16 +1252,19 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (planReloadReconcileInFlight) {
             return;
         }
+        var reloadReason = peekPlanReloadReason();
         var state = getLatestWorkspaceStateForQueuePrompt();
         if (!state || typeof state !== 'object') {
             return;
         }
         if (shouldAutoRetryPlanAfterReload(state)) {
+            consumePlanReloadReason();
             autoRetryPlanAfterReload(state);
             return;
         }
-        if (shouldAutoConfirmCompletedPlanAfterReload(state)) {
-            autoConfirmCompletedPlanAfterReload(state);
+        if (shouldPromptManualPlanReviewAfterReload(state, reloadReason)) {
+            consumePlanReloadReason();
+            promptManualPlanReviewAfterReload(state);
         }
     }
 
@@ -6655,6 +6687,12 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         // 优先取页面上已有的 ul.pb-ai-preview-tabs；若无则创建并返回包裹容器。
         var containers = Array.from(document.querySelectorAll('ul.pb-ai-preview-tabs'));
         if (containers.length > 0) {
+            containers.forEach(function (container) {
+                var wrapper = container.closest('#pb-ai-preview-tabs-wrap');
+                if (wrapper) {
+                    wrapper.classList.remove('d-none');
+                }
+            });
             return containers;
         }
         var ensured = ensurePreviewTabsList();
@@ -15179,7 +15217,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 terminal.log((payload && payload.message) ? String(payload.message) : messages.planModeDone, 'done', payload || {});
             }
             if (shouldNotifyPlanModeSuccess(payload)) {
-                toast('success', (payload && payload.message) ? String(payload.message) : messages.planModeDone);
+                toast('info', messages.planManualReviewRequired || messages.planGenerated);
             }
             if (typeof terminal.stop === 'function') {
                 terminal.stop({ suppressTransportError: true });

@@ -263,7 +263,7 @@ foreach ($currencies as $currency) {
             </a>
         <?php endforeach; ?>
         </div>
-        <div class="weline-choice-empty" data-choice-empty hidden><?= $escape(__('无匹配货币')) ?></div>
+        <div class="weline-choice-empty" data-choice-empty hidden><?= $escape(\Weline\Theme\Helper\WidgetI18n::label('无匹配货币')) ?></div>
         <button type="button" class="weline-choice-more" data-choice-more <?= count($currencies) <= $selectorPageSize ? 'hidden' : '' ?>><?= $escape(__('加载更多')) ?></button>
     </div>
 </div>

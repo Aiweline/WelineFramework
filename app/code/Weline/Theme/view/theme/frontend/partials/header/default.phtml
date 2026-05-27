@@ -36,6 +36,20 @@ $baseUrl = $this->request->getBaseUrl();
 // 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
 // 直接使用colors数组，无需重复读取和处理
 $colors = $this->getData('colors') ?? [];
+$headerLabel = static function ($value): string {
+    $key = trim((string)($value ?? ''));
+    if ($key === '') {
+        return '';
+    }
+    $translated = (string)__($key);
+    if ($translated !== $key) {
+        return $translated;
+    }
+    return \Weline\Theme\Helper\WidgetI18n::label($key);
+};
+$headerEsc = static function ($value) use ($headerLabel): string {
+    return htmlspecialchars($headerLabel($value), ENT_QUOTES, 'UTF-8');
+};
 
 // 注意：navItems 可能在 hook (Weline_Theme::frontend::partials::header::categories-before) 中被设置
 // 如果 hook 设置了 navItems，会覆盖这里的默认值
@@ -328,17 +342,17 @@ $defaultNavItemsFactory = static function (): array {
                                 <else/>
                                 <!-- 分类下拉菜单 -->
                                 <div class="search-category-dropdown">
-                                <select name="category" class="search-category-select" title="<lang>选择分类</lang>">
-                                    <option value=""><lang>全部分类</lang></option>
-                                    <option value="electronics"><lang>电子产品</lang></option>
-                                    <option value="clothing"><lang>服装服饰</lang></option>
-                                    <option value="home"><lang>家居用品</lang></option>
-                                    <option value="sports"><lang>运动户外</lang></option>
-                                    <option value="books"><lang>图书音像</lang></option>
-                                    <option value="food"><lang>食品饮料</lang></option>
+                                <select name="category" class="search-category-select" title="<?= $headerEsc('选择分类') ?>">
+                                    <option value=""><?= $headerEsc('全部分类') ?></option>
+                                    <option value="electronics"><?= $headerEsc('电子产品') ?></option>
+                                    <option value="clothing"><?= $headerEsc('服装服饰') ?></option>
+                                    <option value="home"><?= $headerEsc('家居用品') ?></option>
+                                    <option value="sports"><?= $headerEsc('运动户外') ?></option>
+                                    <option value="books"><?= $headerEsc('图书音像') ?></option>
+                                    <option value="food"><?= $headerEsc('食品饮料') ?></option>
                                 </select>
                                 <div class="search-category-facade">
-                                    <span class="search-category-label"><lang>全部分类</lang></span>
+                                    <span class="search-category-label"><?= $headerEsc('全部分类') ?></span>
                                     <i class="fas fa-chevron-down"></i>
                                 </div>
                                 </div>
@@ -649,14 +663,12 @@ $defaultNavItemsFactory = static function (): array {
                 <w:hook>header-hamburger-menu<else/>
                     <a href="#" class="hamburger-menu-btn" id="hamburger-menu" role="button" aria-label="<lang>打开所有类别菜单</lang>" aria-expanded="false" aria-controls="categories-list">
                         <i class="fas fa-bars" aria-hidden="true"></i>
-                        <span class="hamburger-label"><lang>全部</lang></span>
+                        <span class="hamburger-label"><?= $headerEsc('全部') ?></span>
                     </a>
                 </w:hook>
                 
                 <!-- 分类菜单区域（Hook，横向导航） -->
-                <w:hook>
-                    Weline_Theme::frontend::partials::header::categories-before
-                    <else/>
+                <w:hook>Weline_Theme::frontend::partials::header::categories-before<else/>
                     <div class="header-categories">
                     <?php 
                     // hook 执行后，重新从模板数据中获取 navItems
@@ -670,16 +682,16 @@ $defaultNavItemsFactory = static function (): array {
                             <ul class="categories-list" id="categories-list">
                                 <?php 
                                 // 递归函数：渲染菜单项（支持多级）
-                                $renderMenuItem = function($item, $level = 1) use (&$renderMenuItem) {
+                                $renderMenuItem = function($item, $level = 1) use (&$renderMenuItem, $headerEsc) {
                                     $hasChildren = !empty($item['children']) && is_array($item['children']);
                                     ?>
                                     <li class="category-item <?= $hasChildren ? 'has-children' : '' ?>">
                                         <div class="category-link-wrapper">
                                             <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="category-link">
-                                                <?= htmlspecialchars($item['text'] ?? '') ?>
+                                                <?= $headerEsc($item['text'] ?? '') ?>
                                             </a>
                                             <?php if ($hasChildren): ?>
-                                                <span class="category-arrow" role="button" aria-label="<lang>展开子菜单</lang>"></span>
+                                                <span class="category-arrow" role="button" aria-label="<?= $headerEsc('展开子菜单') ?>"></span>
                                             <?php endif; ?>
                                         </div>
                                         <?php if ($hasChildren): ?>
@@ -697,8 +709,8 @@ $defaultNavItemsFactory = static function (): array {
                                 endforeach; 
                                 ?>
                                 <li class="categories-overflow-wrapper" id="categories-overflow-wrapper" style="display: none;">
-                                    <button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="<lang>更多分类</lang>" aria-expanded="false" type="button">
-                                        <span><lang>更多</lang></span>
+                                    <button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="<?= $headerEsc('更多分类') ?>" aria-expanded="false" type="button">
+                                        <span><?= $headerEsc('更多') ?></span>
                                         <i class="fas fa-chevron-down"></i>
                                     </button>
                                     <ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true">
@@ -723,16 +735,16 @@ $defaultNavItemsFactory = static function (): array {
                 <w:hook>header-nav-links<else/>
                     <nav class="header-nav-links">
                         <ul class="nav-links-list" id="nav-links-list">
-                            <li><a href="/deals"><lang>今日特价</lang></a></li>
-                            <li><a href="/video"><lang>会员视频</lang></a></li>
-                            <li><a href="/registry"><lang>礼品心愿单</lang></a></li>
-                            <li><a href="/gift-cards"><lang>礼品卡</lang></a></li>
-                            <li><a href="/help"><lang>客户服务</lang></a></li>
+                            <li><a href="/deals"><?= $headerEsc('今日特价') ?></a></li>
+                            <li><a href="/video"><?= $headerEsc('会员视频') ?></a></li>
+                            <li><a href="/registry"><?= $headerEsc('礼品心愿单') ?></a></li>
+                            <li><a href="/gift-cards"><?= $headerEsc('礼品卡') ?></a></li>
+                            <li><a href="/help"><?= $headerEsc('客户服务') ?></a></li>
                         </ul>
                         <!-- 更多按钮 -->
                         <div class="nav-more-wrapper" id="nav-more-wrapper" style="display: none;">
-                            <button class="nav-more-btn" id="nav-more-btn" aria-label="<lang>更多</lang>" aria-expanded="false">
-                                <span><lang>更多</lang></span>
+                            <button class="nav-more-btn" id="nav-more-btn" aria-label="<?= $headerEsc('更多') ?>" aria-expanded="false">
+                                <span><?= $headerEsc('更多') ?></span>
                                 <i class="fas fa-chevron-down"></i>
                             </button>
                             <ul class="nav-more-dropdown" id="nav-more-dropdown" role="menu" aria-hidden="true">
@@ -756,7 +768,7 @@ $defaultNavItemsFactory = static function (): array {
 <div class="categories-sidebar-overlay" id="categories-sidebar-overlay" aria-hidden="true"></div>
 <div class="categories-sidebar" id="categories-sidebar" role="dialog" aria-modal="true" aria-labelledby="categories-sidebar-title" aria-hidden="true">
     <div class="categories-sidebar-header">
-        <h2 class="categories-sidebar-title" id="categories-sidebar-title"><lang>全部</lang></h2>
+        <h2 class="categories-sidebar-title" id="categories-sidebar-title"><?= $headerEsc('全部') ?></h2>
         <button class="categories-sidebar-close" id="categories-sidebar-close" aria-label="<lang>关闭菜单</lang>" type="button">
             <i class="fas fa-times" aria-hidden="true"></i>
         </button>
@@ -776,22 +788,22 @@ $defaultNavItemsFactory = static function (): array {
                         $shortcutText = htmlspecialchars($shortcut['text'] ?? '');
                         $shortcutIcon = htmlspecialchars($shortcut['icon'] ?? 'fas fa-circle');
                 ?>
-                    <li><a href="<?= $shortcutUrl ?>"><i class="<?= $shortcutIcon ?>"></i> <lang><?= $shortcutText ?></lang></a></li>
+                    <li><a href="<?= $shortcutUrl ?>"><i class="<?= $shortcutIcon ?>"></i> <?= $headerEsc($shortcut['text'] ?? '') ?></a></li>
                 <?php
                     endforeach;
                 else:
                     // 如果没有 hook 数据，使用默认快捷方式
                 ?>
-                    <li><a href="/deals"><i class="fas fa-bolt"></i> <lang>今日特价</lang></a></li>
-                    <li><a href="/video"><i class="fas fa-play"></i> <lang>会员视频</lang></a></li>
-                    <li><a href="/registry"><i class="fas fa-gift"></i> <lang>礼品心愿单</lang></a></li>
-                    <li><a href="/gift-cards"><i class="fas fa-credit-card"></i> <lang>礼品卡</lang></a></li>
-                    <li><a href="/help"><i class="fas fa-question-circle"></i> <lang>客户服务</lang></a></li>
+                    <li><a href="/deals"><i class="fas fa-bolt"></i> <?= $headerEsc('今日特价') ?></a></li>
+                    <li><a href="/video"><i class="fas fa-play"></i> <?= $headerEsc('会员视频') ?></a></li>
+                    <li><a href="/registry"><i class="fas fa-gift"></i> <?= $headerEsc('礼品心愿单') ?></a></li>
+                    <li><a href="/gift-cards"><i class="fas fa-credit-card"></i> <?= $headerEsc('礼品卡') ?></a></li>
+                    <li><a href="/help"><i class="fas fa-question-circle"></i> <?= $headerEsc('客户服务') ?></a></li>
                 <?php endif; ?>
             </ul>
         </div>
 
-        <nav class="categories-sidebar-nav" role="navigation" aria-label="<lang>分类导航</lang>">
+        <nav class="categories-sidebar-nav" role="navigation" aria-label="<?= $headerEsc('分类导航') ?>">
             <ul class="categories-sidebar-list" id="categories-sidebar-list">
                 <?php 
                 // 确保使用最新的 navItems（hook 可能已经设置了真实分类数据）
@@ -803,19 +815,19 @@ $defaultNavItemsFactory = static function (): array {
                 }
                 // 使用相同的渲染函数生成侧边栏菜单（汉堡菜单）
                 if (!empty($navItems)): 
-                    $renderSidebarItem = function($item, $level = 1) use (&$renderSidebarItem) {
+                    $renderSidebarItem = function($item, $level = 1) use (&$renderSidebarItem, $headerEsc) {
                         $hasChildren = !empty($item['children']) && is_array($item['children']);
                         ?>
                         <li class="sidebar-category-item <?= $hasChildren ? 'has-children' : '' ?>">
                             <div class="sidebar-category-link-wrapper">
                                 <a href="<?= htmlspecialchars($item['url'] ?? '#') ?>" class="sidebar-category-link">
-                                    <?= htmlspecialchars($item['text'] ?? '') ?>
+                                    <?= $headerEsc($item['text'] ?? '') ?>
                                     <?php if ($hasChildren): ?>
-                                        <span class="sidebar-category-badge" aria-label="有子菜单">▶</span>
+                                        <span class="sidebar-category-badge" aria-label="<?= $headerEsc('有子菜单') ?>">▶</span>
                                     <?php endif; ?>
                                 </a>
                                 <?php if ($hasChildren): ?>
-                                    <i class="fas fa-chevron-right sidebar-category-arrow" role="button" aria-label="展开子菜单"></i>
+                                    <i class="fas fa-chevron-right sidebar-category-arrow" role="button" aria-label="<?= $headerEsc('展开子菜单') ?>"></i>
                                 <?php endif; ?>
                             </div>
                             <?php if ($hasChildren): ?>
@@ -3177,6 +3189,21 @@ textarea::-webkit-scrollbar-thumb:hover,
 (function() {
     'use strict';
 
+    const headerMoreCategoriesLabel = <?= json_encode($headerLabel('更多分类'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+    const headerMoreLabel = <?= json_encode($headerLabel('更多'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
+    function escapeHeaderHtml(value) {
+        return String(value).replace(/[&<>"']/g, function(match) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            }[match];
+        });
+    }
+
     function initHeaderInteractions() {
 
 
@@ -3207,7 +3234,7 @@ textarea::-webkit-scrollbar-thumb:hover,
             categoriesOverflowWrapper.className = 'categories-overflow-wrapper';
             categoriesOverflowWrapper.id = 'categories-overflow-wrapper';
             categoriesOverflowWrapper.style.display = 'none';
-            categoriesOverflowWrapper.innerHTML = '<button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="更多分类" aria-expanded="false" type="button"><span>更多</span><i class="fas fa-chevron-down"></i></button><ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true"></ul>';
+            categoriesOverflowWrapper.innerHTML = '<button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="' + escapeHeaderHtml(headerMoreCategoriesLabel) + '" aria-expanded="false" type="button"><span>' + escapeHeaderHtml(headerMoreLabel) + '</span><i class="fas fa-chevron-down"></i></button><ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true"></ul>';
             categoriesList.appendChild(categoriesOverflowWrapper);
             categoriesOverflowBtn = document.getElementById('categories-overflow-btn');
             categoriesOverflowDropdown = document.getElementById('categories-overflow-dropdown');

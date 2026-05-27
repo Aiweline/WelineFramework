@@ -15,6 +15,7 @@
 // 获取分类和产品数据（优先从模板数据，其次从 Request）
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Cache\KeyBuilder;
 use WeShop\Catalog\Service\CategoryProductListHtmlCache;
 use WeShop\Catalog\Service\CategoryService;
 use WeShop\Product\Service\ConfigurableProductService;
@@ -40,12 +41,11 @@ $browseProductIdsForDom = array_values(array_filter(array_map(
 )));
 $__productsHtmlCacheKey = null;
 if (is_array($products)) {
-    $__productsHtmlCacheKey = sha1((string)json_encode([
-        'v' => 1,
+    $__productsHtmlCacheKey = KeyBuilder::environmentHash([
+        'scope' => 'catalog-category-products-html',
+        'v' => 2,
         'ids' => $browseProductIdsForDom,
-        'lang' => \Weline\Framework\App\State::getLangLocal(),
-        'currency' => \Weline\Framework\App\State::getCurrency(),
-    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    ]);
     $__cachedProductsHtml = CategoryProductListHtmlCache::get($__productsHtmlCacheKey);
     if ($__cachedProductsHtml !== null) {
         echo $__cachedProductsHtml;

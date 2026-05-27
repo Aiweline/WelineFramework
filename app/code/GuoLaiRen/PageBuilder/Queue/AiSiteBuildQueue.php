@@ -42,6 +42,20 @@ class AiSiteBuildQueue implements QueueInterface
         'qa_report_v2' => true,
         'repair_patch' => true,
     ];
+    private const BUILD_QUEUE_SCOPE_ARTIFACT_KEYS = [
+        'plan_json',
+        'build_plan_v2',
+        'plan_projection',
+        'content_manifest',
+        'execution_blueprint',
+        'build_blueprint',
+        'build_workbench',
+        'build_contracts',
+        'render_data_contract',
+        'task_results',
+        'qa_report',
+        'repair_patch',
+    ];
 
     public function name(): string
     {
@@ -184,7 +198,7 @@ class AiSiteBuildQueue implements QueueInterface
             );
 
             $scope = $scopeService->normalizeScope(
-                $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                $this->loadBuildQueueScope($sessionService, $session)
             );
             $confirmedScope = $scope;
             if ($operation === 'build') {
@@ -266,7 +280,7 @@ class AiSiteBuildQueue implements QueueInterface
             // controller 入口 runHtmlBlocksBuildOperationV3 也有兜底 reset，这里属于双层防御。
             if ($operation === 'build') {
                 $resumeScope = $scopeService->normalizeScope(
-                    $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                    $this->loadBuildQueueScope($sessionService, $session)
                 );
                 if ($forceFullBuildRegeneration) {
                     $resetScope = $buildTaskService->clearBuildArtifactsForRegeneration($resumeScope);
@@ -278,7 +292,7 @@ class AiSiteBuildQueue implements QueueInterface
                     }
                 }
                 $resumeScope = $scopeService->normalizeScope(
-                    $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                    $this->loadBuildQueueScope($sessionService, $session)
                 );
                 $resetScope = $buildTaskService->resetRunningTasksForInterruptedBuild(
                     $resumeScope,
@@ -344,9 +358,9 @@ class AiSiteBuildQueue implements QueueInterface
                     $attempt,
                     $maxAttempts
                 );
-                if (($gateAction['action'] ?? '') === 'requeued') {
-                    $retryMessage = (string)($gateAction['message'] ?? 'Build queue requeued after completion gate failure.');
-                    $this->queueTrace($sse, 'completion gate blocked, queue requeued: ' . $retryMessage);
+                if (($gateAction['action'] ?? '') === 'retryable') {
+                    $retryMessage = (string)($gateAction['message'] ?? 'Build queue marked retryable after completion gate failure.');
+                    $this->queueTrace($sse, 'completion gate blocked, queue marked retryable: ' . $retryMessage);
 
                     return $retryMessage;
                 }
@@ -440,7 +454,7 @@ class AiSiteBuildQueue implements QueueInterface
         AiSiteScopeCompatibilityService $scopeService
     ): string {
         $scope = $scopeService->normalizeScope(
-            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->loadBuildQueueScope($sessionService, $session)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
@@ -492,7 +506,7 @@ class AiSiteBuildQueue implements QueueInterface
         AiSiteScopeCompatibilityService $scopeService
     ): array {
         $scope = $scopeService->normalizeScope(
-            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->loadBuildQueueScope($sessionService, $session)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
@@ -678,7 +692,7 @@ class AiSiteBuildQueue implements QueueInterface
         AiSiteScopeCompatibilityService $scopeService
     ): array {
         $scope = $scopeService->normalizeScope(
-            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->loadBuildQueueScope($sessionService, $session)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
@@ -775,6 +789,20 @@ class AiSiteBuildQueue implements QueueInterface
         return [];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadBuildQueueScope(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteAgentSession $session
+    ): array {
+        return $sessionService->loadScopeForStage(
+            $session,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            self::BUILD_QUEUE_SCOPE_ARTIFACT_KEYS
+        );
+    }
+
     private function applyForceBuildQueuePreset(
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,
@@ -862,7 +890,7 @@ class AiSiteBuildQueue implements QueueInterface
     ): array {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
         $scope = $scopeService->normalizeScope(
-            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->loadBuildQueueScope($sessionService, $fresh)
         );
         $blueprintTasks = \is_array($scope['build_blueprint']['tasks'] ?? null) ? $scope['build_blueprint']['tasks'] : [];
         if ($blueprintTasks === []) {
@@ -877,7 +905,7 @@ class AiSiteBuildQueue implements QueueInterface
                 $sessionService->replaceScope((int)$fresh->getId(), $adminId, $restoredScope);
                 $fresh = $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
                 $scope = $scopeService->normalizeScope(
-                    $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                    $this->loadBuildQueueScope($sessionService, $fresh)
                 );
             }
         }
@@ -886,13 +914,12 @@ class AiSiteBuildQueue implements QueueInterface
             $sessionService->replaceScope((int)$fresh->getId(), $adminId, $finalizedScope);
             $fresh = $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
             $scope = $scopeService->normalizeScope(
-                $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                $this->loadBuildQueueScope($sessionService, $fresh)
             );
         } else {
             $scope = $finalizedScope;
         }
         $gate = $buildTaskService->inspectBuildCompletionGate($scope);
-        $total = (int)($gate['total'] ?? 0);
         $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
         $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
         $buildSummary['completion_gate'] = $this->stripGateSummary($gate);
@@ -907,13 +934,6 @@ class AiSiteBuildQueue implements QueueInterface
         $content[self::CONTENT_LAST_GATE_AT_KEY] = \date('Y-m-d H:i:s');
         $content[self::CONTENT_LAST_GATE_SNAPSHOT_KEY] = $this->stripGateSummary($gate);
 
-        if ($total <= 0) {
-            $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'error';
-            $this->saveQueueContent($queue, $content);
-
-            throw new \RuntimeException('Build queue returned without any build task summary.');
-        }
-
         if (!empty($gate['passed'])) {
             $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'passed';
             $this->saveQueueContent($queue, $content);
@@ -926,7 +946,7 @@ class AiSiteBuildQueue implements QueueInterface
 
         $message = $this->formatBuildCompletionGateBlockedMessage($buildTaskService, $gate, $operation);
         if ($this->shouldRetryBuildQueue($gate) && $attempt < $maxAttempts) {
-            $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'requeued';
+            $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'retryable';
             $retryQueueId = $this->createCompletionGateRetryQueue($queue, $content, $message);
             $scope = $buildTaskService->resetUnfinishedTasksForQueueRetry($scope, $message);
             $scope = $this->patchBuildActiveOperationForRetry(
@@ -957,8 +977,8 @@ class AiSiteBuildQueue implements QueueInterface
             $this->markQueueRetryScheduled($queue, $retryQueueId, $content, $message);
 
             return [
-                'action' => 'requeued',
-                'message' => $message . ' Replacement queue #' . $retryQueueId . ' scheduled.',
+                'action' => 'retryable',
+                'message' => $message . ' Queue #' . $retryQueueId . ' marked retryable.',
             ];
         }
 
@@ -991,7 +1011,7 @@ class AiSiteBuildQueue implements QueueInterface
     ): void {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
         $scope = $scopeService->normalizeScope(
-            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->loadBuildQueueScope($sessionService, $fresh)
         );
         $gate = $buildTaskService->inspectBuildCompletionGate($scope);
         $fullBuildGatePassed = !empty($gate['passed']);
@@ -1130,14 +1150,22 @@ class AiSiteBuildQueue implements QueueInterface
      */
     private function shouldRetryBuildQueue(array $gate): bool
     {
-        $total = (int)($gate['total'] ?? 0);
-        $failed = (int)($gate['failed'] ?? 0);
         $reason = \trim((string)($gate['reason'] ?? ''));
-        if ($failed > 0 || $reason === 'failed_build_tasks') {
+        if (!empty($gate['passed']) || $reason === 'cancelled_build_tasks') {
             return false;
         }
 
-        return $total > 0 && empty($gate['passed']);
+        if ($reason === '') {
+            return (int)($gate['total'] ?? 0) > 0;
+        }
+
+        return \in_array($reason, [
+            'missing_build_blueprint_tasks',
+            'failed_build_tasks',
+            'invalid_generated_artifacts',
+            'duplicate_generated_artifacts',
+            'unfinished_build_tasks',
+        ], true);
     }
 
     /**
@@ -1298,7 +1326,7 @@ class AiSiteBuildQueue implements QueueInterface
             }
 
             $scope = $scopeService->normalizeScope(
-                $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                $this->loadBuildQueueScope($sessionService, $session)
             );
             $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             if ((string)($active['execution_token'] ?? '') !== $executionToken) {
@@ -1388,7 +1416,7 @@ class AiSiteBuildQueue implements QueueInterface
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
         $scope = $scopeService->normalizeScope(
-            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->loadBuildQueueScope($sessionService, $fresh)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($active['status'] ?? ''));
@@ -1480,7 +1508,7 @@ class AiSiteBuildQueue implements QueueInterface
         string $executionToken
     ): int {
         $scope = $scopeService->normalizeScope(
-            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->loadBuildQueueScope($sessionService, $session)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         if (
@@ -1692,28 +1720,9 @@ class AiSiteBuildQueue implements QueueInterface
     }
 
     /**
-     * @param array<string, mixed> $content
-     */
-    private function requeueQueueToPending(Queue &$queue, array $content, string $message): void
-    {
-        $content = $this->compactQueueContentForStorage($content);
-        $line = '[' . \date('H:i:s') . '] QUEUE_REQUEUE ' . $message;
-        $queue->setStatus(Queue::status_pending)
-            ->setFinished(false)
-            ->setPid(0)
-            ->setData(Queue::schema_fields_start_at, null)
-            ->setData(Queue::schema_fields_end_at, null)
-            ->setContent($this->encodeQueueContent($content))
-            ->setProcess($message)
-            ->setResult($this->appendQueueMessage((string)$queue->getResult(), $line))
-            ->save();
-        $this->mirrorToCli($line);
-    }
-
-    /**
-     * The framework runner marks the current row done after execute() returns.
-     * For scheduler-owned retries, create a replacement pending row instead of
-     * relying on same-row status changes that the runner would overwrite.
+     * Keep retry metadata on the same stage queue row. The HTTP entry layer
+     * resets reused queue rows to pending, so retries and rebuilds do not create
+     * unbounded duplicate rows for the same session stage slot.
      *
      * @param array<string, mixed> $content
      */
@@ -1724,26 +1733,12 @@ class AiSiteBuildQueue implements QueueInterface
         $content['retry_reason'] = $message;
         $content['retry_scheduled_at'] = \date('Y-m-d H:i:s');
         $content['execution_token'] = \trim((string)($content['execution_token'] ?? ''));
-        $name = \trim((string)$queue->getName());
-        if ($name === '') {
-            $name = 'PageBuilder build retry';
-        }
-        $content = $this->compactQueueContentForStorage($content);
-        $created = w_query('queue', 'create', [
-            'class' => self::class,
-            'name' => $name . ' retry',
-            'module' => 'GuoLaiRen_PageBuilder',
-            'content' => $content,
-            'status' => Queue::status_pending,
-            'auto' => true,
-            'biz_key' => $queue->getBizKey(),
-        ]);
-        $retryQueueId = (int)($created['queue_id'] ?? 0);
-        if ($retryQueueId <= 0) {
-            throw new \RuntimeException('Unable to schedule PageBuilder build retry queue after completion gate block.');
+        $this->saveQueueContent($queue, $content);
+        if ($queueId <= 0) {
+            throw new \RuntimeException('Unable to mark PageBuilder build queue retry after completion gate block.');
         }
 
-        return $retryQueueId;
+        return $queueId;
     }
 
     /**
@@ -1752,10 +1747,14 @@ class AiSiteBuildQueue implements QueueInterface
     private function markQueueRetryScheduled(Queue &$queue, int $retryQueueId, array $content, string $message): void
     {
         $content = $this->compactQueueContentForStorage($content);
-        $line = '[' . \date('H:i:s') . '] QUEUE_REQUEUE replacement_queue=' . $retryQueueId . ' ' . $message;
-        $queue->setContent($this->encodeQueueContent($content))
+        $content['retry_queue_id'] = $retryQueueId;
+        $line = '[' . \date('H:i:s') . '] QUEUE_RETRY same_queue=' . $retryQueueId . ' ' . $message;
+        $queue->setStatus(Queue::status_pending)
+            ->setContent($this->encodeQueueContent($content))
             ->setFinished(false)
             ->setPid(0)
+            ->setData(Queue::schema_fields_start_at, null)
+            ->setData(Queue::schema_fields_end_at, null)
             ->setProcess($message)
             ->setResult($this->appendQueueMessage((string)$queue->getResult(), $line))
             ->save();

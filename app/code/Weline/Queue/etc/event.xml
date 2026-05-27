@@ -7,4 +7,11 @@
         <observer name="Weline_Queue::upgrade_queue" instance="Weline\Queue\Observer\QueueCollect" disabled="false"
                   shared="true" sort="0"/>
     </event>
+    <event name="Weline_Framework_Setup::upgrade_after">
+        <observer name="Weline_Queue::setup_upgrade_queue_collect"
+                  instance="Weline\Queue\Observer\SetupUpgradeQueueCollect"
+                  disabled="false"
+                  shared="true"
+                  sort="70"/>
+    </event>
 </config>

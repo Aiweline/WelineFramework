@@ -11,6 +11,7 @@ $title = $this->getData('title') ?: __('PageBuilder网站管理');
 $websites = $this->getData('websites') ?: [];
 $pagination = $this->getData('pagination') ?: '';
 $search = $this->getData('search') ?: '';
+$listUrl = $this->getBackendUrl('*/backend/website-management/index');
 ?>
 
 <style>
@@ -408,14 +409,14 @@ $search = $this->getData('search') ?: '';
             <div class="card-body">
                 <div class="pagebuilder-website-toolbar">
                     <div class="pagebuilder-website-search-wrap">
-                        <form id="pagebuilder-website-search-form" method="get" action="<?= $this->getBackendUrl('*/backend/websiteManagement') ?>" class="d-flex flex-wrap align-items-center gap-2">
+                        <form id="pagebuilder-website-search-form" method="get" action="<?= $listUrl ?>" class="d-flex flex-wrap align-items-center gap-2">
                             <input type="text" id="pagebuilder-website-search-input" name="search" class="form-control" placeholder="<?= __('搜索名称、代码或URL') ?>"
                                    value="<?= htmlspecialchars($search) ?>" style="width: 220px;" autocomplete="off">
                             <button type="submit" class="btn btn-outline-primary" title="<?= __('搜索') ?>">
                                 <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
                             </button>
                             <?php if (!empty($search)) { ?>
-                                <a href="<?= $this->getBackendUrl('*/backend/websiteManagement') ?>" class="btn btn-outline-secondary" id="pagebuilder-website-clear-search" title="<?= __('清除搜索条件') ?>">
+                                <a href="<?= $listUrl ?>" class="btn btn-outline-secondary" id="pagebuilder-website-clear-search" title="<?= __('清除搜索条件') ?>">
                                     <i class="mdi mdi-close"></i> <lang>清除</lang>
                                 </a>
                             <?php } ?>
@@ -474,129 +475,34 @@ $search = $this->getData('search') ?: '';
         });
     }
 
-    // 异步搜索功能
-    var searchTimeout = null;
     var searchForm = document.getElementById('pagebuilder-website-search-form');
     var searchInput = document.getElementById('pagebuilder-website-search-input');
-    var tableContainer = document.getElementById('pagebuilder-website-table-container');
-    var clearSearchBtn = document.getElementById('pagebuilder-website-clear-search');
-    var searchUrl = '<?= $this->getBackendUrl('*/backend/websiteManagement') ?>';
-    
-    // 执行异步搜索
-    function performSearch() {
-        if (!searchForm || !tableContainer) return;
-        
+    var searchUrl = <?= json_encode($listUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+
+    function submitWebsiteSearch() {
         var searchValue = searchInput ? searchInput.value.trim() : '';
-        
-        // 显示加载状态
-        tableContainer.innerHTML = '<div class="pagebuilder-website-loading-wrap"><div class="spinner-border" role="status"></div><p><?= __("正在搜索...") ?></p></div>';
-        
-        // 构建 AJAX URL
         var params = new URLSearchParams();
         if (searchValue) {
-            params.append('search', searchValue);
+            params.set('search', searchValue);
         }
-        var ajaxUrl = searchUrl + (params.toString() ? '?' + params.toString() : '');
-        
-        // 发送 AJAX 请求
-        var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' }, silent: true };
-        var req = window.Weline.Api.request(ajaxUrl, opts);
-        req.then(function(res) {
-            var data = (res && res.data) !== undefined ? res.data : res;
-            if (data.success) {
-                // 更新表格内容
-                tableContainer.innerHTML = data.html;
-                
-                // 执行新插入的 script 标签
-                var scripts = tableContainer.querySelectorAll('script');
-                scripts.forEach(function(oldScript) {
-                    var newScript = document.createElement('script');
-                    Array.from(oldScript.attributes).forEach(function(attr) {
-                        newScript.setAttribute(attr.name, attr.value);
-                    });
-                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
-                    oldScript.parentNode.replaceChild(newScript, oldScript);
-                });
-                
-                // 更新清除按钮显示状态
-                var currentClearBtn = document.getElementById('pagebuilder-website-clear-search');
-                if (searchValue) {
-                    if (!currentClearBtn) {
-                        var btn = document.createElement('a');
-                        btn.href = searchUrl;
-                        btn.className = 'btn btn-outline-secondary';
-                        btn.id = 'pagebuilder-website-clear-search';
-                        btn.innerHTML = '<i class="mdi mdi-close"></i> <?= __("清除") ?>';
-                        searchForm.appendChild(btn);
-                        btn.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            searchInput.value = '';
-                            performSearch();
-                        });
-                    }
-                } else {
-                    if (currentClearBtn && currentClearBtn.parentNode) {
-                        currentClearBtn.parentNode.removeChild(currentClearBtn);
-                    }
-                }
-                
-                // 重新初始化 w-delete 功能
-                if (typeof window.initWDelete === 'function') {
-                    window.initWDelete();
-                }
-            } else {
-                var errMsg = (data && data.message) ? data.message : '<?= __("未知错误") ?>';
-                tableContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __("搜索失败") ?>：' + errMsg + '</div>';
-                if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-                    window.BackendToast.error(errMsg);
-                }
-            }
-        })
-        .catch(function(error) {
-            console.error('Search error:', error);
-            tableContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __("搜索出错，请刷新页面重试") ?></div>';
-            if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-                window.BackendToast.error('<?= __("搜索出错，请刷新页面重试") ?>');
+
+        window.location.href = searchUrl + (params.toString() ? '?' + params.toString() : '');
+    }
+
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitWebsiteSearch();
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitWebsiteSearch();
             }
         });
     }
-    
-    // 初始化
-    document.addEventListener('DOMContentLoaded', function() {
-        if (!searchForm || !searchInput) return;
-        
-        // 阻止表单默认提交
-        searchForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            clearTimeout(searchTimeout);
-            performSearch();
-        });
-        
-        // 输入框输入时自动搜索（防抖）
-        searchInput.addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(function() {
-                performSearch();
-            }, 500);
-        });
-        
-        // 回车键立即搜索
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                clearTimeout(searchTimeout);
-                performSearch();
-            }
-        });
-        
-        // 清除按钮点击事件
-        if (clearSearchBtn) {
-            clearSearchBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                searchInput.value = '';
-                performSearch();
-            });
-        }
-    });
 })();
 </script>

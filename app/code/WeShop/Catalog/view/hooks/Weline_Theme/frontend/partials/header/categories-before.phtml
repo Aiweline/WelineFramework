@@ -42,22 +42,37 @@ $this->setData('meta', $meta);
 if (empty($navItems)) {
     return;
 }
+
+$categoryLabel = static function ($value) use ($categoryService): string {
+    $key = trim((string)($value ?? ''));
+    if ($key === '') {
+        return '';
+    }
+    $translated = (string)__($key);
+    if ($translated !== $key) {
+        return $translated;
+    }
+    return $categoryService->localizeCategoryDisplayName($key);
+};
+$categoryEsc = static function ($value) use ($categoryLabel): string {
+    return htmlspecialchars($categoryLabel($value), ENT_QUOTES, 'UTF-8');
+};
 ?>
 <div class="header-categories">
     <nav class="categories-nav">
         <ul class="categories-list" id="categories-list">
             <?php
-            $renderMenuItem = function (array $item) use (&$renderMenuItem): void {
+            $renderMenuItem = function (array $item) use (&$renderMenuItem, $categoryEsc): void {
                 $children = $item['children'] ?? [];
                 $hasChildren = is_array($children) && !empty($children);
                 ?>
                 <li class="category-item <?= $hasChildren ? 'has-children' : '' ?>">
                     <div class="category-link-wrapper">
                         <a href="<?= htmlspecialchars((string)($item['url'] ?? '#'), ENT_QUOTES, 'UTF-8') ?>" class="category-link">
-                            <?= htmlspecialchars((string)($item['text'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                            <?= $categoryEsc($item['text'] ?? '') ?>
                         </a>
                         <?php if ($hasChildren): ?>
-                            <span class="category-arrow" role="button" aria-label="<lang>展开子菜单</lang>"></span>
+                            <span class="category-arrow" role="button" aria-label="<?= $categoryEsc('展开子菜单') ?>"></span>
                         <?php endif; ?>
                     </div>
                     <?php if ($hasChildren): ?>
@@ -79,8 +94,8 @@ if (empty($navItems)) {
             endforeach;
             ?>
             <li class="categories-overflow-wrapper" id="categories-overflow-wrapper" style="display: none;">
-                <button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="<lang>更多分类</lang>" aria-expanded="false" type="button">
-                    <span><lang>更多</lang></span>
+                <button class="categories-overflow-btn" id="categories-overflow-btn" aria-label="<?= $categoryEsc('更多分类') ?>" aria-expanded="false" type="button">
+                    <span><?= $categoryEsc('更多') ?></span>
                     <i class="fas fa-chevron-down"></i>
                 </button>
                 <ul class="categories-overflow-dropdown" id="categories-overflow-dropdown" role="menu" aria-hidden="true"></ul>

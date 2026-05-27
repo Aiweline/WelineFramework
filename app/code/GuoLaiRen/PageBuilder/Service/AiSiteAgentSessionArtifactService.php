@@ -17,7 +17,21 @@ class AiSiteAgentSessionArtifactService
     private const STORAGE_EXTERNAL_FILE = 'session_artifact_file_v1';
     private const EXTERNAL_PAYLOAD_THRESHOLD_BYTES = 524288;
 
+    // build 流程中同一会话的 plan_workbench / build_blueprint 等 artifact 单文件可能达到 6-8MB JSON，
+    // 同进程内 hydrateScope 会被反复触发（loadScopeForStage 调用 50+ 次）。每次都做 file_get_contents +
+    // json_decode 会让 worker 在 512MB memory_limit 下 OOM。这里按 payload_hash 做 LRU 缓存，
+    // 命中时直接复用已解码的 array（PHP COW 不会立即翻倍内存），未命中再走 disk + decode。
+    // 上限 6 控制最坏情况下缓存常驻内存，超出按 FIFO 淘汰。
+    private const PAYLOAD_VALUE_CACHE_LIMIT = 2;
+    private const PAYLOAD_VALUE_CACHE_MAX_BYTES = 1048576;
+
     private bool $artifactTableEnsured = false;
+
+    /** @var array<string, mixed> payload_hash => decoded payload */
+    private array $payloadValueCache = [];
+
+    /** @var array<string, bool> payload_hash => true，按 LRU 顺序维护 */
+    private array $payloadValueCacheOrder = [];
 
     /**
      * @var array<string, array{stage:string, path:list<string>, empty:mixed}>
@@ -206,6 +220,16 @@ class AiSiteAgentSessionArtifactService
                     unset($json, $value);
                     continue;
                 }
+                $payloadDocumentJson = $json;
+                if ($storage === self::STORAGE_EXTERNAL_FILE && \defined('BP')) {
+                    $relativePath = $this->writeExternalPayloadDocument($sessionId, $stageCode, $artifactKey, $hash, $json);
+                    $payloadDocumentJson = $this->encodeValueDocument([
+                        AiSiteAgentSessionArtifact::EXTERNAL_PAYLOAD_FILE_KEY => $relativePath,
+                        'hash' => $hash,
+                        'bytes' => $bytes,
+                    ]);
+                    unset($json);
+                }
                 $refs[$stageCode][$artifactKey] = [
                     'storage' => $storage,
                     'stage_code' => $stageCode,
@@ -217,13 +241,13 @@ class AiSiteAgentSessionArtifactService
                 $artifacts[] = [
                     'stage_code' => $stageCode,
                     'artifact_key' => $artifactKey,
-                    'payload_json' => $json,
+                    'payload_json' => $payloadDocumentJson,
                     'hash' => $hash,
                     'bytes' => $bytes,
                     'storage' => $storage,
                 ];
                 $scope = $this->setPathValue($scope, $definition['path'], $definition['empty']);
-                unset($value);
+                unset($payloadDocumentJson, $value);
                 continue;
             }
 
@@ -422,7 +446,7 @@ class AiSiteAgentSessionArtifactService
             $payloadHash = \trim((string)($artifactData['hash'] ?? ''));
             $payloadBytes = (int)($artifactData['bytes'] ?? 0);
             if ($payloadJson !== '') {
-                if ($payloadBytes > self::EXTERNAL_PAYLOAD_THRESHOLD_BYTES) {
+                if ($payloadBytes > self::EXTERNAL_PAYLOAD_THRESHOLD_BYTES && !$this->isExternalPayloadDocumentJson($payloadJson)) {
                     $relativePath = $this->writeExternalPayloadDocument($sessionId, $stageCode, $artifactKey, $payloadHash, $payloadJson);
                     $payloadJson = $this->encodeValueDocument([
                         AiSiteAgentSessionArtifact::EXTERNAL_PAYLOAD_FILE_KEY => $relativePath,
@@ -435,9 +459,46 @@ class AiSiteAgentSessionArtifactService
                 $artifact->setPayloadValue($artifactData['payload'] ?? []);
             }
             $artifact->save();
+            // 写入完成的 payload 直接登记进进程内 cache，后续 hydrate 同 hash 时
+            // 无需再 file_get_contents + json_decode 同一份 6MB+ 的大文件。
+            if (
+                $payloadHash !== ''
+                && \array_key_exists('payload', $artifactData)
+                && $this->hasArtifactPayload($artifactData['payload'])
+                && $this->shouldCachePayloadValue($payloadBytes)
+            ) {
+                $this->payloadValueCache[$payloadHash] = $artifactData['payload'];
+                unset($this->payloadValueCacheOrder[$payloadHash]);
+                $this->payloadValueCacheOrder[$payloadHash] = true;
+                while (\count($this->payloadValueCache) > self::PAYLOAD_VALUE_CACHE_LIMIT) {
+                    $evict = \array_key_first($this->payloadValueCacheOrder);
+                    if ($evict === null) {
+                        break;
+                    }
+                    unset($this->payloadValueCache[$evict], $this->payloadValueCacheOrder[$evict]);
+                }
+            }
             $artifact->clearData()->clearQuery();
             unset($artifact, $payloadJson);
         }
+    }
+
+    private function isExternalPayloadDocumentJson(string $payloadJson): bool
+    {
+        if (!\str_contains($payloadJson, AiSiteAgentSessionArtifact::EXTERNAL_PAYLOAD_FILE_KEY)) {
+            return false;
+        }
+
+        try {
+            $decoded = \json_decode($payloadJson, true, 32, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return false;
+        }
+
+        $value = \is_array($decoded) ? ($decoded['value'] ?? null) : null;
+
+        return \is_array($value)
+            && \trim((string)($value[AiSiteAgentSessionArtifact::EXTERNAL_PAYLOAD_FILE_KEY] ?? '')) !== '';
     }
 
     /**
@@ -477,7 +538,7 @@ class AiSiteAgentSessionArtifactService
                 }
             }
 
-            $payload = $artifact->getPayloadValue();
+            $payload = $this->loadCachedOrFreshPayloadValue($artifact);
             if (!$this->hasArtifactPayload($payload)) {
                 continue;
             }
@@ -486,6 +547,42 @@ class AiSiteAgentSessionArtifactService
         }
 
         return $scope;
+    }
+
+    /**
+     * 按 payload_hash 进行进程内 LRU 缓存：避免同一 worker 中反复 file_get_contents +
+     * json_decode 同一份 6MB+ 大 artifact。命中时直接复用已解码 array，PHP COW 保障
+     * 下游 setPathValue 入 scope 后不会立刻翻倍内存。
+     */
+    private function loadCachedOrFreshPayloadValue(AiSiteAgentSessionArtifact $artifact): mixed
+    {
+        $hash = \trim((string)$artifact->getPayloadHash());
+        if ($hash !== '' && \array_key_exists($hash, $this->payloadValueCache)) {
+            unset($this->payloadValueCacheOrder[$hash]);
+            $this->payloadValueCacheOrder[$hash] = true;
+            return $this->payloadValueCache[$hash];
+        }
+
+        $payload = $artifact->getPayloadValue();
+        if ($hash !== '' && $this->hasArtifactPayload($payload) && $this->shouldCachePayloadValue($artifact->getPayloadBytes())) {
+            $this->payloadValueCache[$hash] = $payload;
+            unset($this->payloadValueCacheOrder[$hash]);
+            $this->payloadValueCacheOrder[$hash] = true;
+            while (\count($this->payloadValueCache) > self::PAYLOAD_VALUE_CACHE_LIMIT) {
+                $evict = \array_key_first($this->payloadValueCacheOrder);
+                if ($evict === null) {
+                    break;
+                }
+                unset($this->payloadValueCache[$evict], $this->payloadValueCacheOrder[$evict]);
+            }
+        }
+
+        return $payload;
+    }
+
+    private function shouldCachePayloadValue(int $payloadBytes): bool
+    {
+        return $payloadBytes > 0 && $payloadBytes <= self::PAYLOAD_VALUE_CACHE_MAX_BYTES;
     }
 
     /**

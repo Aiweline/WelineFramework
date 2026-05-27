@@ -126,6 +126,26 @@ SKU,SKU
 选项分页,"Option pagination"
 上一页,"Previous page"
 下一页,"Next page"
+选项轮播,"Option carousel"
+上一组,"Previous group"
+下一组,"Next group"
+红色,Red
+粉色,Pink
+绿色,Green
+黛青,Navy
+米杏,Beige
+月白,White
+天青,Blue
+雪青,Purple
+金棕,Gold
+栗棕,Brown
+墨黑,Black
+银灰,Silver
+原麻,Natural
+烟灰,Gray
+经典款,Classic
+生活款,Lifestyle
+细节款,Detail
 产品规格,"Product Specifications"
 优惠,Discount
 数量,Quantity
@@ -325,3 +345,9 @@ ID,ID
 原价：,"Original Price:"
 现价：,"Current Price:"
 活动倒计时：,Countdown:
+IKEA 宜家 MALM 床架,"IKEA MALM Bed Frame"
+IKEA MALM 床架，Queen尺寸（160x200cm），白色，带储物抽屉,"IKEA MALM bed frame, queen size (160x200 cm), white, with storage drawers"
+IKEA MALM床架设计简洁现代，Queen尺寸适合双人使用，床下带储物抽屉，节省空间。,"The IKEA MALM bed frame has a clean modern design, a queen size for two people, and under-bed storage drawers to save space."
+Herman Miller Aeron 办公椅,"Herman Miller Aeron Office Chair"
+Herman Miller Aeron 人体工学办公椅，B尺寸，全功能配置,"Herman Miller Aeron ergonomic office chair, size B, fully adjustable"
+Herman Miller Aeron是经典的人体工学办公椅，提供卓越的支撑和舒适度，适合长时间办公使用。,"The Herman Miller Aeron is a classic ergonomic office chair with excellent support and comfort for long work sessions."

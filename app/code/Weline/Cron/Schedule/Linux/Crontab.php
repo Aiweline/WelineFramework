@@ -165,6 +165,8 @@ $php_binary bin/w cron:task:run 2>&1 >> $log";
         
         $this->logDev('debug', '[Linux/Crontab] Shell 脚本已写入: {path}', ['path' => $cron_shell_file_path]);
         
+        $this->removeLegacyProjectCronEntries($name);
+
         if (is_string($name) && !empty($name) && $this->exist($name) === false) {
             // 获取现有的crontab内容
             $existing_crontab = [];
@@ -211,6 +213,42 @@ $php_binary bin/w cron:task:run 2>&1 >> $log";
         
         $this->log('warning', '[Linux/Crontab] 定时任务已存在或名称无效: {name}', ['name' => $name]);
         return ['status' => false, 'msg' => '[' . PHP_OS . ']' . __('系统定时任务已存在：%{1}', $name), 'result' => ''];
+    }
+
+    private function removeLegacyProjectCronEntries(string $name): void
+    {
+        $jobs = $this->getAllJobs();
+        if (!$jobs) {
+            return;
+        }
+
+        $generatedDir = Env::path_framework_generated;
+        $filtered = [];
+        $changed = false;
+        foreach ($jobs as $job) {
+            if (
+                str_contains($job, Schedule::cron_flag)
+                && str_contains($job, $generatedDir)
+                && !str_contains($job, $name)
+            ) {
+                $changed = true;
+                continue;
+            }
+            $filtered[] = $job;
+        }
+
+        if (!$changed) {
+            return;
+        }
+
+        $temp_file = tempnam(sys_get_temp_dir(), 'crontab_');
+        file_put_contents($temp_file, implode("\n", $filtered) . "\n");
+        exec("crontab " . $temp_file, $output, $returnCode);
+        unlink($temp_file);
+
+        $this->logDev('debug', '[Linux/Crontab] Removed legacy project cron entries, return code: {code}', [
+            'code' => $returnCode,
+        ]);
     }
 
     public function run(string $name): array

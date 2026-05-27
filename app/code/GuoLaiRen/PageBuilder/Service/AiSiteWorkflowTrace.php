@@ -13,6 +13,12 @@ namespace GuoLaiRen\PageBuilder\Service;
 final class AiSiteWorkflowTrace
 {
     private const CHANNEL = 'pagebuilder_ai_site_trace';
+    private const TRACE_ARRAY_ITEM_LIMIT = 80;
+    private const TRACE_ARRAY_ITEM_LIMIT_VERBOSE = 160;
+    private const TRACE_DEPTH_LIMIT = 8;
+    private const TRACE_DEPTH_LIMIT_VERBOSE = 12;
+    private const TRACE_STRING_LIMIT = 12000;
+    private const TRACE_STRING_LIMIT_VERBOSE = 48000;
 
     private static ?bool $enabled = null;
 
@@ -90,6 +96,7 @@ final class AiSiteWorkflowTrace
             return;
         }
 
+        $payload = self::compactValueForTrace($payload);
         $encoded = (string)\json_encode(
             $payload,
             \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_PARTIAL_OUTPUT_ON_ERROR
@@ -145,5 +152,69 @@ final class AiSiteWorkflowTrace
         }
 
         return ['text' => \substr($trimmed, 0, $limit), 'truncated' => true, 'chars' => \strlen($trimmed)];
+    }
+
+    private static function compactValueForTrace(mixed $value, int $depth = 0): mixed
+    {
+        $verbose = self::verbose();
+        $depthLimit = $verbose ? self::TRACE_DEPTH_LIMIT_VERBOSE : self::TRACE_DEPTH_LIMIT;
+        if ($depth >= $depthLimit) {
+            return self::summarizeTraceValue($value, 'depth_limit');
+        }
+
+        if (\is_string($value)) {
+            $limit = $verbose ? self::TRACE_STRING_LIMIT_VERBOSE : self::TRACE_STRING_LIMIT;
+            if (\strlen($value) <= $limit) {
+                return $value;
+            }
+
+            return [
+                '_trace_truncated_string' => true,
+                'chars' => \strlen($value),
+                'preview' => \substr($value, 0, $limit),
+            ];
+        }
+
+        if (!\is_array($value)) {
+            return $value;
+        }
+
+        $limit = $verbose ? self::TRACE_ARRAY_ITEM_LIMIT_VERBOSE : self::TRACE_ARRAY_ITEM_LIMIT;
+        $result = [];
+        $index = 0;
+        foreach ($value as $key => $item) {
+            if ($index >= $limit) {
+                $result['_trace_truncated_items'] = \max(0, \count($value) - $limit);
+                break;
+            }
+            $result[$key] = self::compactValueForTrace($item, $depth + 1);
+            $index++;
+        }
+
+        return $result;
+    }
+
+    private static function summarizeTraceValue(mixed $value, string $reason): array
+    {
+        if (\is_array($value)) {
+            return [
+                '_trace_summary' => $reason,
+                'type' => 'array',
+                'count' => \count($value),
+            ];
+        }
+
+        if (\is_string($value)) {
+            return [
+                '_trace_summary' => $reason,
+                'type' => 'string',
+                'chars' => \strlen($value),
+            ];
+        }
+
+        return [
+            '_trace_summary' => $reason,
+            'type' => \get_debug_type($value),
+        ];
     }
 }

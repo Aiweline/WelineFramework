@@ -1,11 +1,9 @@
 <?php
 /**
- * 后台首页标签页导航 Hook 实现
+ * Keep the backend dashboard focused on the global overview.
  *
- * Hook 名称：Weline_Admin::backend::layouts::dashboard::main-tabs
- *
- * 功能：
- * - 在 Admin 后台首页标签页导航区域注册像素统计标签页按钮
+ * Pixel analytics is exposed through the dedicated sidebar entry, so this hook
+ * intentionally does not add another dashboard tab.
  *
  * @hook-priority 150
  * @hook-sort-order 0
@@ -13,16 +11,3 @@
  */
 
 /** @var \Weline\Framework\View\Template $this */
-?>
-<button class='btn dashboard-tab' 
-        type='button'
-        id='dashboard-pixel-statistics-tab'
-        data-bs-toggle='tab'
-        data-bs-target='#dashboard-pixel-statistics'
-        role='tab'
-        aria-controls='dashboard-pixel-statistics'
-        aria-selected='false'>
-    <span class='d-none d-sm-inline-block'>
-        <lang>像素</lang>
-    </span>
-</button>

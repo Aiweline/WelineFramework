@@ -6,6 +6,7 @@ namespace WeShop\Filters\Service;
 
 use WeShop\Filters\Api\FilterResultInterface;
 use WeShop\Filters\Model\FilterCache;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -61,10 +62,12 @@ class FilterCacheService
             }
         }
         
-        // 包含语言到缓存键中，确保不同语言使用不同的缓存
-        $lang = \Weline\Framework\App\State::getLangLocal();
+        $environmentHash = KeyBuilder::environmentHash([
+            'scope' => 'filters-result',
+            'category_id' => $categoryId,
+        ]);
         $paramString = json_encode($filterParams);
-        return self::CACHE_PREFIX . $categoryId . '_' . $lang . '_' . md5($paramString);
+        return self::CACHE_PREFIX . $categoryId . '_' . $environmentHash . '_' . md5((string)$paramString);
     }
     
     /**

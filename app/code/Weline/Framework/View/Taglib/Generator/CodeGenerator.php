@@ -339,12 +339,43 @@ final class CodeGenerator
             $result = $callback($params);
             
             if (is_string($result)) {
+                if ($node->name === 'hook' || $node->name === 'w:hook') {
+                    $result = $this->stripLeakedHookFallbackDelimiter($result);
+                }
                 return $result;
             }
         }
 
         // 无回调，生成默认输出
         return $this->generateDefaultTag($node);
+    }
+
+    private function stripLeakedHookFallbackDelimiter(string $content): string
+    {
+        $patterns = [
+            '/<(?:w:)?else\s*\/?>/i',
+            '/<\?php\s*else\s*:?\s*\?>/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (!preg_match($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+
+            $delimiter = $matches[0][0];
+            $delimiterOffset = (int)$matches[0][1];
+            $candidateHookName = preg_replace('/\s+/', '', substr($content, 0, $delimiterOffset));
+            if (!is_string($candidateHookName)
+                || $candidateHookName === ''
+                || !preg_match('/^[A-Za-z0-9_.\-:]+$/', $candidateHookName)
+            ) {
+                continue;
+            }
+
+            return substr($content, $delimiterOffset + strlen($delimiter));
+        }
+
+        return $content;
     }
 
     /**

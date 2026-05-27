@@ -25,6 +25,72 @@ final class HanfuDemoOptionImageProvider
             'origin_value' => 'Green',
             'swatch_value' => '#15803d',
         ],
+        'navy' => [
+            'option_id' => 900104,
+            'label' => '黛青',
+            'origin_value' => 'Navy',
+            'swatch_value' => '#1e3a8a',
+        ],
+        'beige' => [
+            'option_id' => 900105,
+            'label' => '米杏',
+            'origin_value' => 'Beige',
+            'swatch_value' => '#d6c6a8',
+        ],
+        'white' => [
+            'option_id' => 900106,
+            'label' => '月白',
+            'origin_value' => 'White',
+            'swatch_value' => '#f8fafc',
+        ],
+        'blue' => [
+            'option_id' => 900107,
+            'label' => '天青',
+            'origin_value' => 'Blue',
+            'swatch_value' => '#38bdf8',
+        ],
+        'purple' => [
+            'option_id' => 900108,
+            'label' => '雪青',
+            'origin_value' => 'Purple',
+            'swatch_value' => '#a855f7',
+        ],
+        'gold' => [
+            'option_id' => 900109,
+            'label' => '金棕',
+            'origin_value' => 'Gold',
+            'swatch_value' => '#c99700',
+        ],
+        'brown' => [
+            'option_id' => 900110,
+            'label' => '栗棕',
+            'origin_value' => 'Brown',
+            'swatch_value' => '#92400e',
+        ],
+        'black' => [
+            'option_id' => 900111,
+            'label' => '墨黑',
+            'origin_value' => 'Black',
+            'swatch_value' => '#111827',
+        ],
+        'silver' => [
+            'option_id' => 900112,
+            'label' => '银灰',
+            'origin_value' => 'Silver',
+            'swatch_value' => '#c0c7d2',
+        ],
+        'natural' => [
+            'option_id' => 900113,
+            'label' => '原麻',
+            'origin_value' => 'Natural',
+            'swatch_value' => '#b08d57',
+        ],
+        'gray' => [
+            'option_id' => 900114,
+            'label' => '烟灰',
+            'origin_value' => 'Gray',
+            'swatch_value' => '#6b7280',
+        ],
     ];
 
     private const SIZES = [
@@ -66,6 +132,61 @@ final class HanfuDemoOptionImageProvider
             'classic' => 'https://images.pexels.com/photos/11740726/pexels-photo-11740726.jpeg?auto=compress&cs=tinysrgb&w=1200',
             'lifestyle' => 'https://images.pexels.com/photos/11740726/pexels-photo-11740726.jpeg?auto=compress&cs=tinysrgb&w=1200',
             'detail' => 'https://images.pexels.com/photos/11740726/pexels-photo-11740726.jpeg?auto=compress&cs=tinysrgb&w=1200',
+        ],
+        'navy' => [
+            'classic' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=navy-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=navy-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=navy-detail',
+        ],
+        'beige' => [
+            'classic' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=beige-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=beige-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=beige-detail',
+        ],
+        'white' => [
+            'classic' => 'https://images.pexels.com/photos/8152155/pexels-photo-8152155.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=white-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/8152155/pexels-photo-8152155.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=white-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/8152155/pexels-photo-8152155.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=white-detail',
+        ],
+        'blue' => [
+            'classic' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=blue-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=blue-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=blue-detail',
+        ],
+        'purple' => [
+            'classic' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=purple-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=purple-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=purple-detail',
+        ],
+        'gold' => [
+            'classic' => 'https://images.pexels.com/photos/34521643/pexels-photo-34521643.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=gold-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/34521643/pexels-photo-34521643.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=gold-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/34521643/pexels-photo-34521643.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=gold-detail',
+        ],
+        'brown' => [
+            'classic' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=brown-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=brown-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/34521646/pexels-photo-34521646.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=brown-detail',
+        ],
+        'black' => [
+            'classic' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=black-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=black-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/34757910/pexels-photo-34757910.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=black-detail',
+        ],
+        'silver' => [
+            'classic' => 'https://images.pexels.com/photos/30690993/pexels-photo-30690993.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=silver-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/30690993/pexels-photo-30690993.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=silver-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/30690993/pexels-photo-30690993.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=silver-detail',
+        ],
+        'natural' => [
+            'classic' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=natural-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=natural-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/36679433/pexels-photo-36679433.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=natural-detail',
+        ],
+        'gray' => [
+            'classic' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=gray-classic',
+            'lifestyle' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=gray-lifestyle',
+            'detail' => 'https://images.pexels.com/photos/18077456/pexels-photo-18077456.jpeg?auto=compress&cs=tinysrgb&w=1200&demo=gray-detail',
         ],
     ];
 

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Extends\Module\Weline_Framework\Query;
 
+use Weline\Backend\Block\ThemeConfig as BackendThemeConfig;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Model\WelineTheme;
@@ -34,10 +35,57 @@ class ThemeQueryProvider implements QueryProviderInterface
             'getTemplatePath' => $this->getTemplatePath($params),
             'scanThemeLayoutsByType' => $this->scanThemeLayoutsByType($params),
             'editorRequest' => $this->editorRequest($params),
+            'setBackendThemeMode' => $this->setBackendThemeMode($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Theme 查询器不支持的操作：%{1}', $operation)
             ),
         };
+    }
+
+    private function setBackendThemeMode(array $params): array
+    {
+        $mode = strtolower(trim((string)($params['mode'] ?? '')));
+        if (!in_array($mode, ['light', 'dark'], true)) {
+            throw new \InvalidArgumentException((string)__('Invalid backend theme mode: %{1}', $mode));
+        }
+
+        /** @var BackendThemeConfig $themeConfig */
+        $themeConfig = ObjectManager::getInstance(BackendThemeConfig::class);
+        if (method_exists($themeConfig, '__init')) {
+            $themeConfig->__init();
+        }
+
+        $originConfig = $themeConfig->getOriginThemeConfig();
+        if (!is_array($originConfig)) {
+            $originConfig = [];
+        }
+
+        $layouts = isset($originConfig['layouts']) && is_array($originConfig['layouts'])
+            ? $originConfig['layouts']
+            : [];
+        $layouts['data-topbar'] = $mode;
+        $layouts['data-sidebar'] = $mode;
+        $layouts['data-theme-mode'] = $mode;
+        $layouts['data-layout-mode'] = $mode;
+
+        $nextConfig = $originConfig;
+        $nextConfig['theme-mode-switch'] = $mode;
+        $nextConfig['dark-mode-switch'] = $mode === 'dark';
+        $nextConfig['light-mode-switch'] = $mode === 'light';
+        if (array_key_exists('rtl_mode', $params) || array_key_exists('rtl', $params)) {
+            $nextConfig['rtl-mode-switch'] = $this->normalizeBool($params['rtl_mode'] ?? $params['rtl'] ?? false);
+        }
+        $nextConfig['layouts'] = $layouts;
+
+        $themeConfig->setThemeConfig($nextConfig);
+
+        return [
+            'success' => true,
+            'mode' => $mode,
+            'layouts' => $layouts,
+            'msg' => (string)__('同步成功'),
+            'message' => (string)__('同步成功'),
+        ];
     }
 
     private function getActiveTheme(array $params): ?array
@@ -556,6 +604,16 @@ class ThemeQueryProvider implements QueryProviderInterface
                         ['name' => 'body', 'type' => 'string', 'required' => false, 'nullable' => true, 'max_length' => 1048576],
                     ],
                 ],
+                [
+                    'name' => 'setBackendThemeMode',
+                    'description' => __('同步后台亮色/暗色模式'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'mode', 'type' => 'string', 'required' => true, 'description' => __('light 或 dark')],
+                        ['name' => 'rtl_mode', 'type' => 'bool', 'required' => false],
+                        ['name' => 'rtl', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
             ],
         ];
     }
@@ -575,5 +633,19 @@ class ThemeQueryProvider implements QueryProviderInterface
             ThemeContextService::AREA_BACKEND => ThemeContextService::AREA_BACKEND,
             default => null,
         };
+    }
+
+    private function normalizeBool(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_numeric($value)) {
+            return (int)$value === 1;
+        }
+        if (is_string($value)) {
+            return in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
+        }
+        return false;
     }
 }

@@ -286,6 +286,22 @@ if ($previewPageOptions === [] && $virtualPagesByType !== []) {
         ];
     }
 }
+if ($previewPageOptions === [] && $selectedPageTypesSafe !== []) {
+    foreach ($selectedPageTypesSafe as $pageType) {
+        $pageType = \trim((string)$pageType);
+        if ($pageType === '') {
+            continue;
+        }
+        $previewPageOptions[] = [
+            'value' => $pageType,
+            'page_id' => 0,
+            'type' => $pageType,
+            'title' => '',
+            'handle' => '',
+            'label' => (string)($pageTypeLabels[$pageType] ?? $pageType),
+        ];
+    }
+}
 foreach ($previewPageOptions as &$previewPageOption) {
     if (!\is_array($previewPageOption)) {
         continue;

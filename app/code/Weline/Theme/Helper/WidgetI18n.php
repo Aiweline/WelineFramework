@@ -23,7 +23,7 @@ final class WidgetI18n
         }
 
         $lang = self::resolveStorefrontLocale();
-        foreach (['Weline_Theme', 'WeShop_Product'] as $moduleName) {
+        foreach (['Weline_Theme', 'Weline_I18n', 'WeShop_Product', 'WeShop_Catalog'] as $moduleName) {
             $words = self::loadModuleWords($moduleName, $lang);
             if (isset($words[$key]) && $words[$key] !== '' && $words[$key] !== $key) {
                 return $words[$key];
