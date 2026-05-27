@@ -94,48 +94,180 @@ $styleI18n = [
 <?php endif; ?>
 
 <style>
+    .weline-ai-style-page {
+        --style-border: rgba(15, 23, 42, 0.1);
+        --style-border-strong: rgba(15, 23, 42, 0.18);
+        --style-surface: #ffffff;
+        --style-soft: #f8fafc;
+        --style-row: #f7fbff;
+        --style-row-active: #edf6ff;
+        --style-text: #1f2a37;
+        --style-muted: #64748b;
+        --style-accent: #0f766e;
+        color: var(--style-text);
+    }
+    .weline-ai-style-page .style-page-head {
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--style-border);
+    }
     .weline-ai-style-page .style-shell {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 390px);
+        gap: 16px;
+        align-items: start;
         min-height: 720px;
     }
+    .weline-ai-style-page .style-panel {
+        overflow: hidden;
+        border: 1px solid var(--style-border);
+        border-radius: 8px;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+    }
+    .weline-ai-style-page .style-panel > .card-header {
+        border-bottom: 1px solid var(--style-border);
+        background: linear-gradient(180deg, #fbfdff 0%, #f6f8fb 100%);
+    }
+    .weline-ai-style-page .style-filter-card .card-body {
+        padding: 16px 18px;
+    }
     .weline-ai-style-page .style-table-wrap {
-        max-height: 650px;
+        max-height: calc(100vh - 260px);
+        min-height: 320px;
         overflow: auto;
     }
     .weline-ai-style-page .style-catalog-table {
         table-layout: fixed;
+        min-width: 760px;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .weline-ai-style-page .style-catalog-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-bottom: 1px solid var(--style-border-strong);
+        background: #f8fafc;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 700;
     }
     .weline-ai-style-page .style-catalog-table td {
         min-width: 0;
+        border-color: var(--style-border);
+        color: #334155;
+        vertical-align: middle;
+    }
+    .weline-ai-style-page .style-catalog-table th:nth-child(2),
+    .weline-ai-style-page .style-catalog-table td:nth-child(2) {
+        width: 34%;
+    }
+    .weline-ai-style-page .style-catalog-table td:nth-child(3) .small,
+    .weline-ai-style-page .style-catalog-table td:nth-child(4),
+    .weline-ai-style-page .style-catalog-table td:nth-child(5) {
+        white-space: nowrap;
+    }
+    .weline-ai-style-page .style-catalog-table td:nth-child(3) .small {
+        display: block;
+        overflow: hidden;
+        max-width: 108px;
+        text-overflow: ellipsis;
+    }
+    .weline-ai-style-page .style-catalog-table .badge {
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-success {
+        color: #166534 !important;
+        background: #dcfce7 !important;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-primary {
+        color: #1d4ed8 !important;
+        background: #dbeafe !important;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-info {
+        color: #0f766e !important;
+        background: #ccfbf1 !important;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-secondary {
+        color: #475569 !important;
+        background: #e2e8f0 !important;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-danger {
+        color: #991b1b !important;
+        background: #fee2e2 !important;
     }
     .weline-ai-style-page .style-row {
         cursor: pointer;
+        transition: background-color 160ms ease, box-shadow 160ms ease;
+    }
+    .weline-ai-style-page .style-row:hover {
+        background: var(--style-row);
     }
     .weline-ai-style-page .style-row.is-selected {
-        background: rgba(13, 110, 253, 0.08);
+        background: var(--style-row-active);
+        box-shadow: inset 3px 0 0 var(--style-accent);
     }
     .weline-ai-style-page .style-detail-card {
         position: sticky;
         top: 12px;
+        max-height: calc(100vh - 96px);
+        overflow: auto;
+        transition: box-shadow 180ms ease;
+    }
+    .weline-ai-style-page .style-detail-card.is-focus-pulse {
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16), 0 14px 32px rgba(15, 23, 42, 0.08);
+    }
+    .weline-ai-style-page .style-detail-card .card-body,
+    .weline-ai-style-page .style-match-card .card-body {
+        padding: 16px 18px;
+    }
+    .weline-ai-style-page .style-detail-card .form-label,
+    .weline-ai-style-page .style-filter-card .form-label,
+    .weline-ai-style-page .style-match-card .form-label {
+        color: var(--style-muted) !important;
+        font-weight: 700;
+        letter-spacing: 0;
+    }
+    .weline-ai-style-page .style-detail-card .form-control,
+    .weline-ai-style-page .style-detail-card .form-select,
+    .weline-ai-style-page .style-filter-card .form-control,
+    .weline-ai-style-page .style-filter-card .form-select,
+    .weline-ai-style-page .style-match-card .form-control {
+        border-color: #cbd5e1;
+        border-radius: 6px;
+        color: #334155;
+    }
+    .weline-ai-style-page .style-detail-card .form-control:focus,
+    .weline-ai-style-page .style-detail-card .form-select:focus,
+    .weline-ai-style-page .style-filter-card .form-control:focus,
+    .weline-ai-style-page .style-filter-card .form-select:focus,
+    .weline-ai-style-page .style-match-card .form-control:focus {
+        border-color: var(--style-accent);
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
     }
     .weline-ai-style-page .style-editor {
-        min-height: 92px;
+        min-height: 84px;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
         font-size: 12px;
         line-height: 1.45;
     }
     .weline-ai-style-page .style-editor.is-large {
-        min-height: 145px;
+        min-height: 126px;
     }
     .weline-ai-style-page .style-chip {
         display: inline-flex;
         align-items: center;
-        border: 1px solid rgba(108, 117, 125, 0.25);
+        border: 1px solid rgba(15, 118, 110, 0.18);
         border-radius: 999px;
-        padding: 2px 8px;
+        padding: 2px 7px;
         margin: 2px 4px 2px 0;
         font-size: 11px;
-        color: #495057;
-        background: #f8f9fa;
+        color: #0f766e;
+        background: #f0fdfa;
         max-width: 100%;
         white-space: nowrap;
         overflow: hidden;
@@ -152,19 +284,38 @@ $styleI18n = [
         word-break: normal;
         overflow-wrap: normal;
     }
+    .weline-ai-style-page .style-catalog-table .btn {
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+    }
     .weline-ai-style-page .style-empty {
         border: 1px dashed rgba(108, 117, 125, 0.35);
-        border-radius: 12px;
+        border-radius: 8px;
         padding: 32px;
         text-align: center;
         color: #6c757d;
         background: #fbfcfd;
     }
     .weline-ai-style-page .style-muted-line {
-        max-width: 520px;
-        white-space: nowrap;
+        display: -webkit-box;
+        overflow: hidden;
+        max-width: 100%;
+        white-space: normal;
         overflow: hidden;
         text-overflow: ellipsis;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    @media (max-width: 1399.98px) {
+        .weline-ai-style-page .style-shell {
+            grid-template-columns: minmax(0, 1fr);
+            min-height: 0;
+        }
+        .weline-ai-style-page .style-detail-card {
+            position: static;
+            max-height: none;
+        }
     }
     @media (max-width: 1199.98px) {
         .weline-ai-style-page .style-shell {
@@ -196,8 +347,8 @@ $styleI18n = [
             background: var(--backend-color-card-bg, #ffffff);
         }
         .weline-ai-style-page .style-catalog-table .style-row.is-selected {
-            border-color: var(--backend-color-primary, #0d6efd);
-            box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
+            border-color: var(--style-accent);
+            box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
         }
         .weline-ai-style-page .style-catalog-table .style-row td {
             display: block;
@@ -247,7 +398,7 @@ $styleI18n = [
 </style>
 
 <div class="container-fluid py-3 weline-ai-style-page">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+    <div class="style-page-head d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div>
             <h4 class="mb-1"><i class="mdi mdi-palette-outline me-1"></i><?= __('AI 风格') ?></h4>
             <div class="text-muted small"><?= __('管理模块、自定义、匹配和适配器绑定的视觉风格方向。') ?></div>
@@ -262,9 +413,9 @@ $styleI18n = [
         </div>
     </div>
 
-    <div class="row g-3 style-shell">
-        <div class="col-xl-8">
-            <div class="card mb-3">
+    <div class="style-shell">
+        <div class="style-main-panel">
+            <div class="card style-panel style-filter-card mb-3">
                 <div class="card-body">
                     <div class="row g-2 align-items-end">
                         <div class="col-md-4">
@@ -298,7 +449,7 @@ $styleI18n = [
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card style-panel style-catalog-card">
                 <div class="card-header d-flex align-items-center justify-content-between">
                     <strong><?= __('风格目录') ?></strong>
                     <span class="small text-muted" id="ai-style-status"><?= \count($styles) ?><?= __(' 个风格') ?></span>
@@ -306,14 +457,14 @@ $styleI18n = [
                 <div class="card-body p-0">
                     <div class="style-table-wrap">
                         <table class="table table-sm align-middle mb-0 style-catalog-table">
-                            <thead class="table-light position-sticky top-0">
+                            <thead>
                             <tr>
-                                <th style="width: 210px;"><?= __('代码') ?></th>
+                                <th style="width: 190px;"><?= __('代码') ?></th>
                                 <th><?= __('风格') ?></th>
-                                <th style="width: 135px;"><?= __('来源') ?></th>
-                                <th style="width: 100px;"><?= __('状态') ?></th>
-                                <th style="width: 135px;"><?= __('绑定') ?></th>
-                                <th style="width: 120px;"><?= __('操作') ?></th>
+                                <th style="width: 112px;"><?= __('来源') ?></th>
+                                <th style="width: 74px;"><?= __('状态') ?></th>
+                                <th style="width: 82px;"><?= __('绑定') ?></th>
+                                <th style="width: 88px;"><?= __('操作') ?></th>
                             </tr>
                             </thead>
                             <tbody id="ai-style-table-body">
@@ -327,8 +478,8 @@ $styleI18n = [
             </div>
         </div>
 
-        <div class="col-xl-4">
-            <div class="card style-detail-card mb-3">
+        <div class="style-side-panel">
+            <div class="card style-panel style-detail-card mb-3">
                 <div class="card-header d-flex align-items-center justify-content-between">
                     <strong id="ai-style-detail-title"><?= __('风格详情') ?></strong>
                     <span class="small text-muted" id="ai-style-detail-mode"><?= __('未选择') ?></span>
@@ -418,7 +569,7 @@ $styleI18n = [
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card style-panel style-match-card">
                 <div class="card-header"><strong><?= __('按简介匹配风格') ?></strong></div>
                 <div class="card-body">
                     <label class="form-label small text-muted mb-1" for="ai-style-match-title"><?= __('站点标题') ?></label>
@@ -464,6 +615,7 @@ $styleI18n = [
         sourceFilter: document.getElementById('ai-style-source-filter'),
         tableBody: document.getElementById('ai-style-table-body'),
         listStatus: document.getElementById('ai-style-status'),
+        detailCard: document.querySelector('.weline-ai-style-page .style-detail-card'),
         empty: document.getElementById('ai-style-empty'),
         form: document.getElementById('ai-style-form'),
         detailTitle: document.getElementById('ai-style-detail-title'),
@@ -811,6 +963,8 @@ $styleI18n = [
             manageBtn.type = 'button';
             manageBtn.className = 'btn btn-outline-primary btn-sm';
             manageBtn.textContent = i18n.manageAction;
+            manageBtn.dataset.styleManageAction = '1';
+            manageBtn.setAttribute('aria-label', i18n.manageAction + ' ' + code);
             actionTd.appendChild(manageBtn);
             tr.appendChild(actionTd);
 
@@ -902,6 +1056,33 @@ $styleI18n = [
         renderTable();
         renderDetail();
         setStatus(els.formStatus, '', false);
+    }
+
+    function focusManagedStyle() {
+        if (!els.detailCard) {
+            return;
+        }
+        if (typeof els.detailCard.scrollIntoView === 'function') {
+            els.detailCard.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        }
+        els.detailCard.classList.remove('is-focus-pulse');
+        window.setTimeout(function () {
+            els.detailCard.classList.add('is-focus-pulse');
+        }, 0);
+        window.setTimeout(function () {
+            els.detailCard.classList.remove('is-focus-pulse');
+        }, 850);
+
+        var focusTarget = els.detailCard.querySelector('input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])');
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+            window.setTimeout(function () {
+                try {
+                    focusTarget.focus({preventScroll: true});
+                } catch (e) {
+                    focusTarget.focus();
+                }
+            }, 220);
+        }
     }
 
     function newStyle() {
@@ -1109,6 +1290,9 @@ $styleI18n = [
             return;
         }
         selectStyle(row.dataset.code || '');
+        if (event.target.closest('[data-style-manage-action]')) {
+            focusManagedStyle();
+        }
     });
     els.save.addEventListener('click', function () {
         saveCurrent('');

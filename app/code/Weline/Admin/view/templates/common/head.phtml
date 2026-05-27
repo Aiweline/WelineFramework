@@ -6,6 +6,9 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 // 使用 w_env() 获取语言和货币，替代直接访问 $_SERVER
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');
 $currentCurrency = \w_env('user.currency', 'CNY');
+$backendRoutePrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('admin'));
+$restFrontendRoutePrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api'));
+$restBackendRoutePrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api_admin'));
 ?>
 <base href="@backend-url('/')">
 <meta charset="UTF-8">
@@ -90,6 +93,7 @@ if ($previewContextService->shouldUseStoredContext()) {
     }
 }
 ?>
+<css>Weline_Admin::css/modern-admin-polish.css</css>
 <!--JS-->
 <js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>
 <?php
@@ -113,11 +117,17 @@ $themeConfigPayload = [
         'PROD' => !DEV,
     ],
     'baseUrl' => $baseUrl,
+    'area' => $backendRoutePrefix,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
     'debug' => DEV,
+    'url' => [
+        'adminArea' => $backendRoutePrefix,
+        'apiArea' => $restFrontendRoutePrefix,
+        'apiAdminArea' => $restBackendRoutePrefix,
+    ],
     'i18n' => [
         'confirm' => __('确定'),
         'cancel' => __('取消'),

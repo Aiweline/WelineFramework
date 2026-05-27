@@ -954,7 +954,6 @@ class ModuleInstallerService
         }
 
         $platformUrl = Env::get('appstore.platform_url');
-        // Env::get 对显式 null 不会走默认值，这里统一兜底到官方地址。
         return (is_string($platformUrl) && $platformUrl !== '') ? rtrim($platformUrl, '/') : self::DEFAULT_PLATFORM_URL;
     }
 }
