@@ -34,6 +34,14 @@ final class LanguageSwitcherUrlTest extends TestCase
         );
     }
 
+    public function testBuildLanguageHrefRestoresBackendPrefixWhenRequestPathWasStripped(): void
+    {
+        self::assertSame(
+            '/adminKey/CNY/en_US/admin/dashboard',
+            $this->buildLanguageHref('/admin/dashboard', '', 'en_US', 'CNY', 'adminKey')
+        );
+    }
+
     private function buildLanguageHref(
         string $path,
         string $search,

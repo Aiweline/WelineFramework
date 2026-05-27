@@ -219,6 +219,10 @@ class WlsRuntime implements RuntimeInterface
         if ($this->readyGateWorkerBootstrapWarmupCompleted) {
             return;
         }
+        if (!$this->shouldRunReadyGateWorkerBootstrapWarmup()) {
+            $this->readyGateWorkerBootstrapWarmupCompleted = true;
+            return;
+        }
 
         $startedAt = \microtime(true);
         $backendResult = $this->newBackendFirstRenderWarmupResult();
@@ -315,6 +319,21 @@ class WlsRuntime implements RuntimeInterface
                 . ' paths=' . \json_encode($backendResult['paths'] ?? [], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE)
                 . ' elapsed_ms=' . \round((\microtime(true) - $startedAt) * 1000, 2));
         }
+    }
+
+    private function shouldRunReadyGateWorkerBootstrapWarmup(): bool
+    {
+        $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
+            return false;
+        }
+
+        $rawFlag = \getenv('WLS_WORKER_READY_GATE_BOOTSTRAP_WARMUP');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.ready_gate_bootstrap_warmup', '0');
+        }
+
+        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync', 'ready_gate'], true);
     }
 
     private function shouldRunReadyGateWorkerBootstrapObserverWarmup(): bool
@@ -936,12 +955,9 @@ class WlsRuntime implements RuntimeInterface
             return false;
         }
 
-        $rawFlag = \getenv('WLS_WORKER_BACKEND_READY_GATE_WARMUP');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.backend_ready_gate_warmup', '1');
-        }
-
-        return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'sync'], true);
+        // Backend first-render warmup is mandatory, but it runs after READY in
+        // the deferred worker warmup fiber so cold rendering cannot block pool entry.
+        return false;
     }
 
     private function shouldFailOpenReadyGateBackendWarmup(): bool
@@ -961,15 +977,8 @@ class WlsRuntime implements RuntimeInterface
             return false;
         }
 
-        $rawFlag = \getenv('WLS_WORKER_BACKEND_DEFERRED_WARMUP');
-        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.backend_deferred_warmup', '1');
-        }
-
-        if (!\in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'async', 'deferred'], true)) {
-            return false;
-        }
-
+        // This warmup is part of the WLS startup contract. Do not gate it
+        // behind an enable flag; only one owner worker runs it to avoid duplicate load.
         return $this->isDynamicFirstRenderWarmupOwnerWorker(
             'WLS_WORKER_BACKEND_DEFERRED_WARMUP_OWNER_WORKER_ID',
             'wls.worker.backend_deferred_warmup_owner_worker_id',

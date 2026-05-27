@@ -12,6 +12,11 @@ use Weline\Queue\Model\Queue;
 class QueueDispatchService
 {
     private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
+    private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [
+        \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class => '1G',
+        \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class => '1G',
+        \GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue::class => '1G',
+    ];
 
     public function __construct(
         private readonly Queue $queue,
@@ -29,12 +34,12 @@ class QueueDispatchService
             return false;
         }
 
+        $this->reconcileRunningQueues();
         $freshQueue = $this->loadFreshQueue($queueId);
         if ((int)$freshQueue->getId() <= 0 || !$this->isDispatchable($freshQueue)) {
             return false;
         }
 
-        $this->reconcileRunningQueues();
         if ($this->countRunningAutoQueues() >= $this->resolveMaxConcurrent()) {
             return false;
         }
@@ -93,16 +98,17 @@ class QueueDispatchService
                 continue;
             }
             $queueName = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
-            $processName = $this->buildQueueRunProcessName((int)$queue->getId(), $queueName);
+            $processName = $this->buildQueueRunProcessName((int)$queue->getId(), $queueName, $queue);
             $queuePid = (int)($queue->getPid() ?: 0);
-            $running = $queuePid > 0 && Processer::isManagedProcessRunning($queuePid, $queueName, '', $processName);
+            $pidAlive = $queuePid > 0 && Processer::isRunningByPid($queuePid);
+            $running = $pidAlive && Processer::isManagedProcessRunning($queuePid, $queueName, '', $processName);
             if ($running) {
                 continue;
             }
 
             if ($queuePid > 0) {
-                Processer::removePidFile($processName);
                 $output = $this->getManagedProcessOutput($processName, $queuePid);
+                Processer::removePidFile($processName);
                 $freshQueue = $this->loadFreshQueue((int)$queue->getId());
                 if ((int)$freshQueue->getId() > 0) {
                     $queue = $freshQueue;
@@ -111,13 +117,19 @@ class QueueDispatchService
                     ->setPid(0);
                 if ($queue->isFinished() || $queue->getStatus() === $queue::status_done || $this->hasQueueDoneMarker($output, $queue)) {
                     $queue->setFinished(true);
-                    $queue->setResult(PHP_EOL . $output . __('Queue finished...') . $queue->getResult())
+                    $message = (string)__('队列进程已结束，检测到完成标记，已同步为完成状态。');
+                    $queue->setResult($this->prependResultMessage($queue->getResult(), $output, $message))
+                        ->setProcess($this->appendProcessMessage($queue->getProcess(), $message))
                         ->setStatus($queue::status_done)
                         ->save();
                     continue;
                 }
+                $message = $pidAlive
+                    ? (string)__('队列记录的 PID %{1} 仍存在，但已不匹配当前队列执行进程，已标记为异常。', [$queuePid])
+                    : (string)__('队列记录的 PID %{1} 已不存在，已标记为异常。', [$queuePid]);
                 $queue->setStatus($queue::status_error)
-                    ->setResult(PHP_EOL . $output . __('Queue process ended unexpectedly...') . $queue->getResult())
+                    ->setResult($this->prependResultMessage($queue->getResult(), $output, $message))
+                    ->setProcess($this->appendProcessMessage($queue->getProcess(), $message))
                     ->save();
                 continue;
             }
@@ -130,8 +142,10 @@ class QueueDispatchService
                 continue;
             }
 
+            $message = (string)__('运行中队列没有记录 PID，已重置为 pending 等待重新调度。');
             $queue->setStatus($queue::status_pending)
-                ->setResult(\trim((string)$queue->getResult() . PHP_EOL . __('Detected running state without PID; reset to pending for rescheduling.')))
+                ->setResult($this->appendProcessMessage($queue->getResult(), $message))
+                ->setProcess($this->appendProcessMessage($queue->getProcess(), $message))
                 ->save();
         }
     }
@@ -149,6 +163,16 @@ class QueueDispatchService
         return \count($items);
     }
 
+    public function getMaxConcurrent(): int
+    {
+        return $this->resolveMaxConcurrent();
+    }
+
+    public function getWorkerMemoryLimit(): string
+    {
+        return $this->resolveWorkerMemoryLimit();
+    }
+
     private function startQueueProcess(Queue $queue): bool
     {
         if (!$this->isDispatchable($queue)) {
@@ -156,7 +180,7 @@ class QueueDispatchService
         }
 
         $queueName = Process::initTaskName('queue-' . $queue->getName() . '-' . $queue->getId());
-        $processName = $this->buildQueueRunProcessName((int)$queue->getId(), $queueName);
+        $processName = $this->buildQueueRunProcessName((int)$queue->getId(), $queueName, $queue);
         $pid = Processer::create($processName, true, false, true);
         if (!$pid) {
             $output = $this->getManagedProcessOutput($processName);
@@ -208,10 +232,10 @@ class QueueDispatchService
         return $maxConcurrent;
     }
 
-    private function buildQueueRunProcessName(int $queueId, string $queueName): string
+    private function buildQueueRunProcessName(int $queueId, string $queueName, ?Queue $queue = null): string
     {
         $bin = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
-        $memoryLimit = $this->resolveWorkerMemoryLimit();
+        $memoryLimit = $this->resolveWorkerMemoryLimit($queue);
 
         return \escapeshellarg(PHP_BINARY)
             . ' -d memory_limit=' . \escapeshellarg($memoryLimit)
@@ -221,14 +245,48 @@ class QueueDispatchService
             . ' --name=' . $queueName;
     }
 
-    private function resolveWorkerMemoryLimit(): string
+    private function resolveWorkerMemoryLimit(?Queue $queue = null): string
     {
+        $queueClass = $this->resolveQueueClass($queue);
+        if ($queueClass !== '') {
+            $configuredByClass = Env::get(
+                'queue.worker.memory_limit_by_class.' . $queueClass,
+                Env::get('queue.worker.memory_limit.' . $queueClass, null)
+            );
+            if ($configuredByClass !== null && $configuredByClass !== '') {
+                return $this->normalizeMemoryLimit(
+                    $configuredByClass,
+                    self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass] ?? self::DEFAULT_WORKER_MEMORY_LIMIT
+                );
+            }
+
+            if (isset(self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass])) {
+                return $this->normalizeMemoryLimit(
+                    self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass],
+                    self::DEFAULT_WORKER_MEMORY_LIMIT
+                );
+            }
+        }
+
         $configured = Env::get(
             'queue.worker.memory_limit',
             Env::get('queue.cron.memory_limit', self::DEFAULT_WORKER_MEMORY_LIMIT)
         );
 
         return $this->normalizeMemoryLimit($configured, self::DEFAULT_WORKER_MEMORY_LIMIT);
+    }
+
+    private function resolveQueueClass(?Queue $queue): string
+    {
+        if (!$queue instanceof Queue || (int)$queue->getTypeId() <= 0) {
+            return '';
+        }
+
+        try {
+            return \ltrim((string)$queue->getType()->getClass(), '\\');
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     private function normalizeMemoryLimit(mixed $value, string $default): string
@@ -277,6 +335,16 @@ class QueueDispatchService
         }
 
         return '';
+    }
+
+    private function appendProcessMessage(mixed $current, string $message): string
+    {
+        return \trim((string)$current . PHP_EOL . $message);
+    }
+
+    private function prependResultMessage(string $current, string $output, string $message): string
+    {
+        return \trim($output . PHP_EOL . $message . PHP_EOL . $current);
     }
 
     private function hasQueueDoneMarker(string $output, Queue $queue): bool

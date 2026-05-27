@@ -17,7 +17,7 @@ use WeShop\Search\Api\SearchEngineInterface;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Search\Model\SearchHistory;
 use Weline\Eav\Service\AttributeFilterService;
-use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
@@ -599,13 +599,13 @@ class SearchService
     private function buildFallbackFilterPayloadCacheKey(int $categoryId, array $productIds, array $filters): string
     {
         return sha1((string)json_encode([
-            'v' => 1,
+            'v' => 2,
+            'environment' => KeyBuilder::environmentContext([
+                'scope' => 'search-fallback-filter',
+            ]),
             'category_id' => $categoryId,
             'product_ids' => $productIds,
             'filters' => $this->normalizeCacheValue($filters),
-            'lang' => State::getLang(),
-            'lang_local' => State::getLangLocal(),
-            'currency' => State::getCurrency(),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
     }
 
@@ -743,7 +743,10 @@ class SearchService
         $host = function_exists('w_env_http_host') ? (string) w_env_http_host() : '';
 
         return sha1((string) json_encode([
-            'v' => 1,
+            'v' => 2,
+            'environment' => KeyBuilder::environmentContext([
+                'scope' => 'search-browse-result',
+            ]),
             'keyword' => $keyword,
             'filters' => $normalizedFilters,
             'page' => $page,
@@ -751,9 +754,6 @@ class SearchService
             'scope' => $scope,
             'category_ids' => array_values($categoryIds),
             'include_facets' => $includeFacets,
-            'lang' => State::getLang(),
-            'lang_local' => State::getLangLocal(),
-            'currency' => State::getCurrency(),
             'host' => $host,
             'uri' => $uri,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));

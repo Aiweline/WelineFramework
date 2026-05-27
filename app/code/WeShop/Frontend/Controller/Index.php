@@ -9,7 +9,7 @@ use WeShop\Product\Model\Product;
 use WeShop\Product\Service\ProductBestSellerService;
 use WeShop\Product\Service\ProductService;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
-use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Server\Service\MemoryStateFacade;
@@ -217,12 +217,13 @@ class Index extends BaseController
     {
         $uri = function_exists('w_env_request_uri') ? (string)w_env_request_uri() : '';
         $host = function_exists('w_env_http_host') ? (string)w_env_http_host() : '';
+        $environment = KeyBuilder::environmentContext([
+            'scope' => 'frontend-home-view',
+        ]);
 
         return sha1((string)json_encode([
-            'v' => 1,
-            'lang' => State::getLang(),
-            'lang_local' => State::getLangLocal(),
-            'currency' => State::getCurrency(),
+            'v' => 2,
+            'environment' => $environment,
             'host' => $host,
             'uri' => $uri,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));

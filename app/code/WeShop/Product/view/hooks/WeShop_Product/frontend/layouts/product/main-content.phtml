@@ -430,6 +430,15 @@ $productImageVariant = static function (string $url, int $width): string {
                     $optionCount = count($options);
                     $optionPageSize = $hasImageOptions ? 12 : 16;
                     $isPagedOptionList = $optionCount > $optionPageSize;
+                    $optionPageRows = 2;
+                    $optionPageColumns = (int)ceil($optionPageSize / $optionPageRows);
+                    $optionPageGapTotal = max(0, $optionPageColumns - 1) * 0.55;
+                    $optionPageGapTotalText = rtrim(rtrim(number_format($optionPageGapTotal, 2, '.', ''), '0'), '.') . 'rem';
+                    $optionListStyle = $isPagedOptionList
+                        ? ' style="--option-page-rows: ' . $optionPageRows
+                            . '; --option-page-columns: ' . $optionPageColumns
+                            . '; --option-choice-width: calc((100% - ' . $optionPageGapTotalText . ') / ' . $optionPageColumns . ');"'
+                        : '';
                     $usesOptionCardGrid = $isPagedOptionList || ($hasImageOptions && $optionCount > 6);
                     $optionListClass = ($isColorAttribute && !$usesOptionCardGrid)
                         ? 'product-option-swatches'
@@ -445,12 +454,17 @@ $productImageVariant = static function (string $url, int $width): string {
                               data-attribute-id="<?= $attributeId ?>"
                               data-attribute-code="<?= htmlspecialchars($attributeCode, ENT_QUOTES, 'UTF-8') ?>"
                               data-option-paged="<?= $isPagedOptionList ? '1' : '0' ?>"
-                              data-option-page-size="<?= $isPagedOptionList ? $optionPageSize : 0 ?>">
+                              data-option-page-size="<?= $isPagedOptionList ? $optionPageSize : 0 ?>"
+                              data-option-page-rows="<?= $isPagedOptionList ? $optionPageRows : 0 ?>"
+                              data-option-page-columns="<?= $isPagedOptionList ? $optionPageColumns : 0 ?>">
                         <legend class="product-option-title">
                             <?= htmlspecialchars($attributeName, ENT_QUOTES, 'UTF-8') ?>
                             <span class="product-option-selected" data-selected-label-for="<?= $attributeId ?>"></span>
                         </legend>
-                        <div class="<?= $optionListClass ?>"<?= $isPagedOptionList ? ' data-option-page-list' : '' ?>>
+                        <?php if ($isPagedOptionList): ?>
+                        <div class="product-option-carousel" data-option-carousel>
+                        <?php endif; ?>
+                        <div class="<?= $optionListClass ?>"<?= $isPagedOptionList ? ' data-option-page-list' . $optionListStyle : '' ?>>
                             <?php foreach ($options as $option): ?>
                                 <?php
                                 $optionId = (int)($option['option_id'] ?? 0);
@@ -515,10 +529,12 @@ $productImageVariant = static function (string $url, int $width): string {
                             <?php endforeach; ?>
                         </div>
                         <?php if ($isPagedOptionList): ?>
-                        <div class="product-option-pagination" data-option-pagination aria-label="<?= htmlspecialchars((string)__('选项分页'), ENT_QUOTES, 'UTF-8') ?>">
-                            <button type="button" class="product-option-page-control" data-option-page-prev aria-label="<?= htmlspecialchars((string)__('上一页'), ENT_QUOTES, 'UTF-8') ?>">‹</button>
-                            <div class="product-option-page-numbers" data-option-page-numbers></div>
-                            <button type="button" class="product-option-page-control" data-option-page-next aria-label="<?= htmlspecialchars((string)__('下一页'), ENT_QUOTES, 'UTF-8') ?>">›</button>
+                        </div>
+                        <?php endif; ?>
+                        <?php if ($isPagedOptionList): ?>
+                        <div class="product-option-pagination product-option-carousel-controls" data-option-pagination aria-label="<?= htmlspecialchars((string)__('选项轮播'), ENT_QUOTES, 'UTF-8') ?>">
+                            <button type="button" class="product-option-page-control" data-option-page-prev aria-label="<?= htmlspecialchars((string)__('上一组'), ENT_QUOTES, 'UTF-8') ?>">‹</button>
+                            <button type="button" class="product-option-page-control" data-option-page-next aria-label="<?= htmlspecialchars((string)__('下一组'), ENT_QUOTES, 'UTF-8') ?>">›</button>
                         </div>
                         <?php endif; ?>
                     </fieldset>
@@ -1181,6 +1197,27 @@ $productImageVariant = static function (string $url, int $width): string {
     display: none;
 }
 
+.product-option-carousel {
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.product-option-card-grid[data-option-page-list] {
+    --option-carousel-offset: 0px;
+    display: grid;
+    grid-auto-columns: var(--option-choice-width, 92px);
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-template-rows: repeat(var(--option-page-rows, 2), minmax(0, auto));
+    transform: translateX(calc(var(--option-carousel-offset) * -1));
+    transition: transform .28s ease;
+    will-change: transform;
+}
+
+.product-option-card-grid[data-option-page-list] .product-option-choice {
+    width: 100%;
+}
+
 .product-option-pagination {
     display: flex;
     align-items: center;
@@ -1193,6 +1230,10 @@ $productImageVariant = static function (string $url, int $width): string {
     display: inline-flex;
     align-items: center;
     gap: .3rem;
+}
+
+.product-option-carousel-controls {
+    justify-content: center;
 }
 
 .product-option-page-control,
@@ -1749,6 +1790,10 @@ var productDetailI18n = <?= json_encode([
     'addToCartFailed' => (string) __('加入购物车失败'),
     'addedToCart' => (string) __('已加入购物车'),
     'addedToCartSuccess' => (string) __('已成功加入购物车。'),
+    'wishlistApiAddUnsupported' => (string) __('心愿单 API 不支持 add 操作'),
+    'wishlistApiNotInitialized' => (string) __('心愿单 API 未初始化'),
+    'addToWishlistFailed' => (string) __('加入心愿单失败'),
+    'addedToWishlistSuccess' => (string) __('已加入心愿单。'),
     'choosePrefix' => (string) __('请选择'),
     'listSeparator' => (string) __('、'),
     'selectedPrefix' => (string) __('已选'),
@@ -1759,6 +1804,10 @@ var productDetailApiMessageI18n = <?= json_encode([
     '已加入购物车' => (string) __('已加入购物车'),
     '加入购物车失败' => (string) __('加入购物车失败'),
     '添加购物车失败' => (string) __('添加购物车失败'),
+    '已加入心愿单。' => (string) __('已加入心愿单。'),
+    '已加入心愿单' => (string) __('已加入心愿单'),
+    '加入心愿单失败' => (string) __('加入心愿单失败'),
+    '请先登录。' => (string) __('请先登录。'),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
 (function() {
@@ -2385,6 +2434,16 @@ var productDetailApiMessageI18n = <?= json_encode([
         return Number.isFinite(parsed) && parsed > 0 ? parsed : 12;
     }
 
+    function getProductOptionPageRows(group) {
+        var parsed = parseInt(group && group.dataset ? group.dataset.optionPageRows : '0', 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 2;
+    }
+
+    function getProductOptionPageColumns(group) {
+        var parsed = parseInt(group && group.dataset ? group.dataset.optionPageColumns : '0', 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : Math.max(1, Math.ceil(getProductOptionPageSize(group) / getProductOptionPageRows(group)));
+    }
+
     function getProductOptionPagedChoices(group) {
         var list = group ? group.querySelector('[data-option-page-list]') : null;
         return Array.from((list || group || document).querySelectorAll('.product-option-choice'));
@@ -2398,28 +2457,6 @@ var productDetailApiMessageI18n = <?= json_encode([
         }
 
         return Math.floor(index / getProductOptionPageSize(group)) + 1;
-    }
-
-    function appendProductOptionPageNumber(group, numbers, page, currentPage) {
-        var button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'product-option-page-number' + (page === currentPage ? ' is-active' : '');
-        button.textContent = String(page);
-        button.setAttribute('aria-label', productDetailText('pageLabelTemplate').replace('%{1}', String(page)));
-        if (page === currentPage) {
-            button.setAttribute('aria-current', 'page');
-        }
-        button.addEventListener('click', function() {
-            setProductOptionGroupPage(group, page);
-        });
-        numbers.appendChild(button);
-    }
-
-    function appendProductOptionPageEllipsis(numbers) {
-        var ellipsis = document.createElement('span');
-        ellipsis.className = 'product-option-page-ellipsis';
-        ellipsis.textContent = '...';
-        numbers.appendChild(ellipsis);
     }
 
     function renderProductOptionPagination(group, currentPage, pageCount) {
@@ -2437,29 +2474,43 @@ var productDetailApiMessageI18n = <?= json_encode([
         if (next) {
             next.disabled = currentPage >= pageCount;
         }
-        if (!numbers) {
+        if (numbers) {
+            numbers.textContent = '';
+        }
+    }
+
+    function layoutProductOptionCarousel(group) {
+        var list = group ? group.querySelector('[data-option-page-list]') : null;
+        if (!list) {
             return;
         }
 
-        numbers.textContent = '';
-        var lastRenderedPage = 0;
-        for (var page = 1; page <= pageCount; page++) {
-            var shouldRender = page === 1
-                || page === pageCount
-                || Math.abs(page - currentPage) <= 1
-                || (currentPage <= 3 && page <= 4)
-                || (currentPage >= pageCount - 2 && page >= pageCount - 3);
-            if (!shouldRender) {
-                if (lastRenderedPage !== -1) {
-                    appendProductOptionPageEllipsis(numbers);
-                    lastRenderedPage = -1;
-                }
-                continue;
-            }
+        var pageSize = getProductOptionPageSize(group);
+        var columns = getProductOptionPageColumns(group);
+        var choices = getProductOptionPagedChoices(group);
+        list.style.setProperty('--option-page-rows', String(getProductOptionPageRows(group)));
 
-            appendProductOptionPageNumber(group, numbers, page, currentPage);
-            lastRenderedPage = page;
+        choices.forEach(function(choice, index) {
+            var pageIndex = Math.floor(index / pageSize);
+            var indexInPage = index % pageSize;
+            var column = pageIndex * columns + (indexInPage % columns) + 1;
+            var row = Math.floor(indexInPage / columns) + 1;
+            choice.style.gridColumn = String(column);
+            choice.style.gridRow = String(row);
+        });
+    }
+
+    function updateProductOptionCarouselOffset(group, currentPage) {
+        var viewport = group ? group.querySelector('[data-option-carousel]') : null;
+        var list = group ? group.querySelector('[data-option-page-list]') : null;
+        if (!viewport || !list) {
+            return;
         }
+
+        var computed = window.getComputedStyle(list);
+        var gap = parseFloat(computed.columnGap || computed.gap || '0') || 0;
+        var offset = Math.max(0, currentPage - 1) * (viewport.clientWidth + gap);
+        list.style.setProperty('--option-carousel-offset', offset.toFixed(2) + 'px');
     }
 
     function setProductOptionGroupPage(group, page) {
@@ -2475,16 +2526,15 @@ var productDetailApiMessageI18n = <?= json_encode([
         var end = start + pageSize;
         group.dataset.optionPage = String(currentPage);
 
+        layoutProductOptionCarousel(group);
         choices.forEach(function(choice, index) {
             var isVisible = index >= start && index < end;
-            choice.classList.toggle('is-option-page-hidden', !isVisible);
-            if (isVisible) {
-                choice.removeAttribute('aria-hidden');
-            } else {
-                choice.setAttribute('aria-hidden', 'true');
-            }
+            choice.classList.remove('is-option-page-hidden');
+            choice.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+            choice.tabIndex = isVisible ? 0 : -1;
         });
 
+        updateProductOptionCarouselOffset(group, currentPage);
         renderProductOptionPagination(group, currentPage, pageCount);
     }
 
@@ -2573,6 +2623,7 @@ var productDetailApiMessageI18n = <?= json_encode([
     }
 
     var productDetailCartApiPromise = null;
+    var productDetailWishlistApiPromise = null;
 
     function normalizeCartPayload(payload) {
         if (!payload || typeof payload !== 'object') {
@@ -2635,6 +2686,29 @@ var productDetailApiMessageI18n = <?= json_encode([
         return productDetailCartApiPromise;
     }
 
+    function getProductDetailWishlistApi() {
+        if (!productDetailWishlistApiPromise) {
+            productDetailWishlistApiPromise = Promise.resolve().then(function() {
+                if (window.WelineApiModule && typeof window.WelineApiModule.resource === 'function' && window.WelineApiModule.__full === true) {
+                    return window.WelineApiModule.resource('wishlist');
+                }
+                if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                    return window.Weline.Api.resource('wishlist');
+                }
+                return loadProductDetailScript('/Weline/Frontend/view/statics/js/weline-api.js?v=20260517-product-wishlist-api').then(function() {
+                    if (window.WelineApiModule && typeof window.WelineApiModule.resource === 'function') {
+                        return window.WelineApiModule.resource('wishlist');
+                    }
+                    if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                        return window.Weline.Api.resource('wishlist');
+                    }
+                    throw new Error(productDetailText('wishlistApiNotInitialized'));
+                });
+            });
+        }
+        return productDetailWishlistApiPromise;
+    }
+
     function showProductDetailCartMessage(message, type) {
         if (window.Weline && window.Weline.Toast && typeof window.Weline.Toast.show === 'function') {
             window.Weline.Toast.show(message, type || 'info');
@@ -2675,6 +2749,20 @@ var productDetailApiMessageI18n = <?= json_encode([
     function setProductDetailCartButtonLoading(button, loading) {
         button.disabled = loading;
         button.classList.toggle('is-loading', loading);
+    }
+
+    function setProductDetailWishlistButtonLoading(button, loading) {
+        button.disabled = loading;
+        button.classList.toggle('is-loading', loading);
+    }
+
+    function setProductDetailWishlistButtonActive(button, active) {
+        var icon = button.querySelector('.btn-icon');
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        if (icon) {
+            icon.textContent = active ? '💖' : '❤';
+        }
     }
 
     function redirectToProductDetailCheckout() {
@@ -2757,6 +2845,53 @@ var productDetailApiMessageI18n = <?= json_encode([
             });
     }
 
+    function addProductDetailToWishlist(button, productId) {
+        setProductDetailWishlistButtonLoading(button, true);
+        return getProductDetailWishlistApi()
+            .then(function(WishlistApi) {
+                if (!WishlistApi || typeof WishlistApi.add !== 'function') {
+                    throw new Error(productDetailText('wishlistApiAddUnsupported'));
+                }
+                return WishlistApi.add({
+                    product_id: Number(productId)
+                });
+            })
+            .then(normalizeCartPayload)
+            .then(function(result) {
+                if (!result || result.success === false) {
+                    throw new Error(productDetailMessage(result && (result.message || result.msg), 'addToWishlistFailed'));
+                }
+                setProductDetailWishlistButtonActive(button, true);
+                document.dispatchEvent(new CustomEvent('weshop:addToWishlist', {
+                    detail: {
+                        product_id: Number(productId),
+                        productId: Number(productId),
+                        wishlist_item_id: result.item_id,
+                        wishlistItemId: result.item_id,
+                        wishlist_count: result.wishlist_count,
+                        wishlistCount: result.wishlist_count
+                    }
+                }));
+                showProductDetailCartMessage(productDetailMessage(result.message || result.msg, 'addedToWishlistSuccess'), 'success');
+                return result;
+            })
+            .catch(function(error) {
+                console.error('[WeShop Product] Add to wishlist failed:', error);
+                document.dispatchEvent(new CustomEvent('weshop:wishlist:error', {
+                    detail: {
+                        product_id: Number(productId),
+                        productId: Number(productId),
+                        error: error.message || String(error)
+                    }
+                }));
+                showProductDetailCartMessage(productDetailMessage(error.message || String(error), 'addToWishlistFailed'), 'error');
+                throw error;
+            })
+            .finally(function() {
+                setProductDetailWishlistButtonLoading(button, false);
+            });
+    }
+
     if (productDetailRoot) productDetailRoot.querySelectorAll('.product-option-choice').forEach(function(choice) {
         choice.addEventListener('click', function() {
             selectProductOptionChoice(this);
@@ -2777,6 +2912,21 @@ var productDetailApiMessageI18n = <?= json_encode([
     });
     if (productDetailRoot) productDetailRoot.querySelectorAll('.product-option-group[data-option-paged="1"]').forEach(function(group) {
         initProductOptionPagination(group);
+    });
+    var productOptionCarouselResizeFrame = null;
+    window.addEventListener('resize', function() {
+        if (!productDetailRoot) {
+            return;
+        }
+        if (productOptionCarouselResizeFrame !== null) {
+            window.cancelAnimationFrame(productOptionCarouselResizeFrame);
+        }
+        productOptionCarouselResizeFrame = window.requestAnimationFrame(function() {
+            productDetailRoot.querySelectorAll('.product-option-group[data-option-paged="1"]').forEach(function(group) {
+                setProductOptionGroupPage(group, parseInt(group.dataset.optionPage || '1', 10) || 1);
+            });
+            productOptionCarouselResizeFrame = null;
+        });
     });
     updateVariantState();
 
@@ -2864,21 +3014,12 @@ var productDetailApiMessageI18n = <?= json_encode([
     // 收藏
     document.querySelectorAll('.btn-wishlist').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            var productId = this.dataset.productId;
-            var icon = this.querySelector('.btn-icon');
-            
-            // 触发自定义事件
-            var event = new CustomEvent('weshop:addToWishlist', {
-                detail: { productId: productId }
-            });
-            document.dispatchEvent(event);
-            
-            // 切换图标
-            if (icon.textContent === '❤') {
-                icon.textContent = '💖';
-            } else {
-                icon.textContent = '❤';
+            var button = this;
+            var productId = button.dataset.productId;
+            if (!productId) {
+                return;
             }
+            addProductDetailToWishlist(button, productId).catch(function() {});
         });
     });
     if (document.readyState === 'complete') {

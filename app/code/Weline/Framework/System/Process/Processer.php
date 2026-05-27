@@ -2701,6 +2701,7 @@ class Processer
                 $argumentList = self::tokenizeCommandLineArguments($arguments);
             }
             $processName = self::extractCommandLineArg($processCommand, 'name');
+            $logFile = $enableLog ? self::getLogFile($processCommand) : '';
             $item = [
                 'key' => (string) $key,
                 'command' => $processCommand,
@@ -2708,6 +2709,8 @@ class Processer
                 'arguments' => $arguments,
                 'argument_list' => $argumentList,
                 'process_name' => $processName,
+                'stdout_log' => $logFile,
+                'stderr_log' => $logFile !== '' ? $logFile . '.stderr.log' : '',
                 'cwd' => BP,
                 'enable_log' => $enableLog,
                 'block' => $block,
@@ -3724,6 +3727,8 @@ POWERSHELL;
             $argumentList = $item['argument_list'] ?? self::tokenizeCommandLineArguments((string) ($item['arguments'] ?? ''));
             $arguments = \array_map(static fn (mixed $argument): string => (string) $argument, $argumentList);
             $foreground = !empty($item['foreground']);
+            $stdoutLog = (string) ($item['stdout_log'] ?? '');
+            $stderrLog = (string) ($item['stderr_log'] ?? '');
 
             if ($key === '' || $php === '') {
                 return null;
@@ -3739,6 +3744,12 @@ POWERSHELL;
             $lines[] = '    }';
             $lines[] = '    $argList = ' . self::buildPowerShellArrayLiteral($arguments);
             $lines[] = '    if ($argList.Count -gt 0) { $startArgs.ArgumentList = $argList }';
+            if ($stdoutLog !== '') {
+                $lines[] = '    $startArgs.RedirectStandardOutput = ' . self::toPowerShellSingleQuoted($stdoutLog);
+            }
+            if ($stderrLog !== '') {
+                $lines[] = '    $startArgs.RedirectStandardError = ' . self::toPowerShellSingleQuoted($stderrLog);
+            }
             $lines[] = '    $p = Start-Process @startArgs';
             $lines[] = '    Add-WelineResult ' . self::toPowerShellSingleQuoted($key) . ' ([int]$p.Id)';
             $lines[] = '} catch {';
