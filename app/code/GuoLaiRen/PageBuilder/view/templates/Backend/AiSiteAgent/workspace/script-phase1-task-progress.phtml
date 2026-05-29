@@ -26,6 +26,7 @@
         outputTokensLabel: <?= \json_encode((string)__('输出 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         totalTokensLabel: <?= \json_encode((string)__('总 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
     };
+    var LIVE_LOG_MAX_LINES = 200;
 
     function escapeHtml(text) {
         if (typeof bridge.escapeHtml === 'function') {
@@ -311,8 +312,7 @@
             + escapeHtml(snapJson)
             + '</pre>';
         procEl.textContent = String(info.process || '').trim() || '—';
-        resEl.textContent = String(info.result_log || '').trim() || '—';
-        resEl.scrollTop = 0;
+        renderLiveLogSummary(String(info.terminal_summary || info.message || '').trim());
         if (statusEl) {
             statusEl.textContent = String((info.snapshot && (info.snapshot.job_status || info.snapshot.status)) || '').trim();
         }
@@ -329,14 +329,15 @@
     }
 
     function rememberPlanQueueInfo(info) {
-        var state = Object.assign({}, getLastWorkspaceState());
-        state.plan_queue_info = info;
+        var state = sanitizeWorkspaceStateForMemory(getLastWorkspaceState());
+        state.plan_queue_info = sanitizeQueueInfoForMemory(info);
+        var remembered = sanitizeWorkspaceStateForMemory(state);
         try {
-            window.__pbLastWorkspaceState = state;
+            window.__pbLastWorkspaceState = remembered;
         } catch (e) {
             // ignore
         }
-        return state;
+        return remembered;
     }
 
     function syncPanelOpenState(workspaceState) {
@@ -349,7 +350,33 @@
             : {};
         var op = String(active.operation || '').toLowerCase();
         var status = String(active.status || '').toLowerCase();
-        panelEl.open = op === 'plan' && (status === 'queued' || status === 'running');
+        var shouldOpen = op === 'plan' && (status === 'queued' || status === 'running');
+        if (shouldOpen && panelEl.dataset.pbUserClosed !== '1') {
+            panelEl.open = true;
+        } else if (!shouldOpen) {
+            panelEl.dataset.pbProgrammaticToggle = '1';
+            panelEl.open = false;
+            delete panelEl.dataset.pbProgrammaticToggle;
+        }
+    }
+
+    function bindPanelManualToggle() {
+        var panelEl = document.getElementById('pb-ai-plan-queue-info-panel');
+        if (!panelEl || panelEl.dataset.pbManualToggleBound === '1') {
+            return;
+        }
+        panelEl.dataset.pbManualToggleBound = '1';
+        panelEl.addEventListener('toggle', function () {
+            if (panelEl.dataset.pbProgrammaticToggle === '1') {
+                return;
+            }
+            if (panelEl.open) {
+                delete panelEl.dataset.pbUserClosed;
+            } else {
+                panelEl.dataset.pbUserClosed = '1';
+                disposeLiveStream('');
+            }
+        });
     }
 
     function normalizeQueueId(value) {
@@ -357,21 +384,121 @@
         return qid > 0 && !isNaN(qid) ? qid : 0;
     }
 
-    function appendQueueResultLog(current, delta) {
-        var text = String(current || '');
-        var piece = String(delta || '');
-        if (piece === '') {
-            return text;
+    function sanitizeQueueInfoForMemory(info) {
+        var safe = info && typeof info === 'object' ? Object.assign({}, info) : {};
+        ['result_log', 'queue_result_delta', 'chunk', 'content', 'events', 'top_logs'].forEach(function (key) {
+            delete safe[key];
+        });
+        if (safe.snapshot && typeof safe.snapshot === 'object') {
+            safe.snapshot = Object.assign({}, safe.snapshot);
+            ['result_log', 'queue_result_delta', 'chunk', 'content', 'events', 'top_logs'].forEach(function (key) {
+                delete safe.snapshot[key];
+            });
         }
-        if (piece !== '' && piece.slice(-1) !== '\n' && text !== '' && text.charAt(0) !== '\n') {
-            piece += '\n';
+        return safe;
+    }
+
+    function sanitizeWorkspaceStateForMemory(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? Object.assign({}, workspaceState) : {};
+        ['events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'].forEach(function (key) {
+            delete state[key];
+        });
+        if (state.scope && typeof state.scope === 'object') {
+            state.scope = Object.assign({}, state.scope);
+            ['events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'].forEach(function (key) {
+                delete state.scope[key];
+            });
+            if (state.scope.snapshot && typeof state.scope.snapshot === 'object') {
+                state.scope.snapshot = Object.assign({}, state.scope.snapshot);
+                ['events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'].forEach(function (key) {
+                    delete state.scope.snapshot[key];
+                });
+            }
+            ['plan_queue_info', 'build_queue_info'].forEach(function (key) {
+                if (state.scope[key] && typeof state.scope[key] === 'object') {
+                    state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);
+                }
+            });
         }
-        text = piece + text;
-        var max = 24000;
-        if (text.length > max) {
-            text = text.slice(0, max) + '\n…（以下内容已截断，仅保留最新约 ' + max + ' 字符）';
+        if (state.snapshot && typeof state.snapshot === 'object') {
+            state.snapshot = Object.assign({}, state.snapshot);
+            ['events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'].forEach(function (key) {
+                delete state.snapshot[key];
+            });
         }
-        return text;
+        if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
+            state.plan_queue_info = sanitizeQueueInfoForMemory(state.plan_queue_info);
+        }
+        if (state.build_queue_info && typeof state.build_queue_info === 'object') {
+            state.build_queue_info = sanitizeQueueInfoForMemory(state.build_queue_info);
+        }
+        return state;
+    }
+
+    function getLiveLogElement() {
+        return document.getElementById('pb-ai-plan-queue-info-result');
+    }
+
+    function renderLiveLogSummary(summary) {
+        var resEl = getLiveLogElement();
+        if (!resEl) {
+            return;
+        }
+        var text = String(summary || '').trim();
+        if (text !== '') {
+            resEl.dataset.pbLiveLog = '0';
+            resEl.textContent = text;
+            resEl.scrollTop = 0;
+            return;
+        }
+        if (resEl.dataset.pbLiveLog === '1' && resEl.childNodes.length > 0) {
+            return;
+        }
+        resEl.dataset.pbLiveLog = '0';
+        resEl.textContent = '—';
+    }
+
+    function appendLiveQueueLog(delta) {
+        var resEl = getLiveLogElement();
+        var text = String(delta || '');
+        if (!resEl || text === '') {
+            return;
+        }
+        var panelEl = document.getElementById('pb-ai-plan-queue-info-panel');
+        if (panelEl && !panelEl.open) {
+            return;
+        }
+        if (resEl.dataset.pbLiveLog !== '1') {
+            resEl.textContent = '';
+            resEl.dataset.pbLiveLog = '1';
+        }
+        text.split(/\r\n|\n|\r/).forEach(function (line) {
+            var item = String(line || '').trim();
+            if (item === '') {
+                return;
+            }
+            var node = document.createElement('div');
+            node.textContent = item;
+            resEl.appendChild(node);
+            while (resEl.childNodes.length > LIVE_LOG_MAX_LINES) {
+                resEl.removeChild(resEl.firstChild);
+            }
+        });
+        resEl.scrollTop = resEl.scrollHeight;
+    }
+
+    function disposeLiveStream(summary) {
+        var resEl = getLiveLogElement();
+        if (!resEl) {
+            return;
+        }
+        resEl.textContent = '';
+        resEl.dataset.pbLiveLog = '0';
+        renderLiveLogSummary(summary || '');
+    }
+
+    function isTerminalQueueStatus(status) {
+        return ['done', 'complete', 'completed', 'success', 'error', 'failed', 'failure', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(String(status || '').toLowerCase()) >= 0;
     }
 
     function mergePlanQueueInfoFromSsePayload(payload, eventKind) {
@@ -383,10 +510,10 @@
             return null;
         }
         if (payload.state && payload.state.plan_queue_info && typeof payload.state.plan_queue_info === 'object') {
-            return payload.state.plan_queue_info;
+            return sanitizeQueueInfoForMemory(payload.state.plan_queue_info);
         }
         if (payload.queue_info && typeof payload.queue_info === 'object') {
-            return payload.queue_info;
+            return sanitizeQueueInfoForMemory(payload.queue_info);
         }
 
         var hasQueueSignal = !!(
@@ -495,24 +622,23 @@
             process = String(payload.message || '');
         }
 
-        var resultLog = String(existing.result_log || '');
-        if (Object.prototype.hasOwnProperty.call(payload, 'queue_result_log')) {
-            resultLog = String(payload.queue_result_log || '');
-        } else {
-            var delta = '';
-            if (Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')) {
-                delta = String(payload.queue_result_delta || '');
-            } else if (String(eventKind || '') === 'chunk' && payloadQueueId > 0) {
-                delta = String(payload.chunk || payload.content || payload.message || '');
-                if (delta !== '' && delta.slice(-1) !== '\n') {
-                    delta += '\n';
-                }
-            }
-            resultLog = appendQueueResultLog(resultLog, delta);
+        var delta = '';
+        if (Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')) {
+            delta = String(payload.queue_result_delta || '');
+        } else if (String(eventKind || '') === 'chunk' && payloadQueueId > 0) {
+            delta = String(payload.chunk || payload.content || payload.message || '');
+        }
+        appendLiveQueueLog(delta);
+        var terminalStatus = String(payload.queue_status || payload.job_status || payload.status || snapshot.job_status || snapshot.status || '').toLowerCase();
+        var terminalSummary = '';
+        if (Object.prototype.hasOwnProperty.call(payload, 'terminal_summary')) {
+            terminalSummary = String(payload.terminal_summary || '');
+        } else if (isTerminalQueueStatus(terminalStatus)) {
+            terminalSummary = String(payload.message || process || '').trim();
         }
 
         var queueId = normalizeQueueId(existing.queue_id || snapshot.queue_id || payloadQueueId);
-        if (Object.keys(snapshot).length === 0 && queueId <= 0 && process === '' && resultLog === '') {
+        if (Object.keys(snapshot).length === 0 && queueId <= 0 && process === '' && terminalSummary === '') {
             return null;
         }
 
@@ -520,7 +646,7 @@
             queue_id: queueId,
             snapshot: snapshot,
             process: process,
-            result_log: resultLog
+            terminal_summary: terminalSummary
         };
     }
 
@@ -534,22 +660,27 @@
         }
         var state = rememberPlanQueueInfo(info);
         renderPlanQueueInfoPanel(state);
+        var queueStatus = String(payload.queue_status || payload.job_status || payload.status || (info.snapshot && (info.snapshot.job_status || info.snapshot.status)) || '').toLowerCase();
         syncPanelOpenState(Object.assign({}, state, {
-            active_operation: { operation: 'plan', status: 'running' }
+            active_operation: { operation: 'plan', status: queueStatus || 'running' }
         }));
+        if (isTerminalQueueStatus(queueStatus)) {
+            disposeLiveStream(info.terminal_summary || payload.terminal_summary || payload.message || '');
+        }
     }
 
     function syncFromWorkspaceState(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
         }
+        var safeState = sanitizeWorkspaceStateForMemory(workspaceState);
         try {
-            window.__pbLastWorkspaceState = workspaceState;
+            window.__pbLastWorkspaceState = safeState;
         } catch (e) {
             // ignore
         }
-        renderPlanQueueInfoPanel(workspaceState);
-        syncPanelOpenState(workspaceState);
+        renderPlanQueueInfoPanel(safeState);
+        syncPanelOpenState(safeState);
     }
 
     function bindPlanQueueInfoRefresh() {
@@ -581,9 +712,11 @@
         syncFromWorkspaceState: syncFromWorkspaceState,
         syncFromSsePayload: syncFromSsePayload,
         renderPlanQueueInfoPanel: renderPlanQueueInfoPanel,
+        disposeLiveStream: disposeLiveStream,
         bindPlanQueueInfoRefresh: bindPlanQueueInfoRefresh
     };
 
+    bindPanelManualToggle();
     bindPlanQueueInfoRefresh();
     var st = null;
     try {
@@ -592,7 +725,7 @@
         st = null;
     }
     if (st && typeof st === 'object') {
-        renderPlanQueueInfoPanel(st);
+        syncFromWorkspaceState(st);
     }
 })();
 </script>

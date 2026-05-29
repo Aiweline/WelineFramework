@@ -20,6 +20,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\MemoryStateFacade;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
@@ -797,6 +798,9 @@ class Page extends FrontendController
         if ($hostNoPort === '') {
             return null;
         }
+        if ($this->isReservedProjectHost($hostNoPort)) {
+            return null;
+        }
 
         try {
             /** @var WebsiteDomain $domainModel */
@@ -816,22 +820,21 @@ class Page extends FrontendController
                     return $websiteId;
                 }
             }
-
-            /** @var Website $websiteModel */
-            $websiteModel = ObjectManager::getInstance(Website::class);
-            $website = clone $websiteModel;
-            $website->clear()
-                ->where(Website::schema_fields_URL, "%{$hostNoPort}%", 'like')
-                ->find()
-                ->fetch();
-            if ($website->getId()) {
-                return (int)$website->getData(Website::schema_fields_ID);
-            }
         } catch (\Throwable $e) {
             return null;
         }
 
         return null;
+    }
+
+    private function isReservedProjectHost(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        if (\str_starts_with($host, 'www.')) {
+            $host = (string)\substr($host, 4);
+        }
+
+        return LocalDomainPolicy::isStandardProjectHost($host);
     }
 
     private function syncWebsiteContext(int $websiteId): void

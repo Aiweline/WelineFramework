@@ -85,6 +85,13 @@ $this->assign('title', $title);
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::category::content-before</w:hook>
 
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-category-content,layout-default-content,content,category-content,category-filter,category-grid,product-grid,pagination,product-carousel"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="category-layout__content-root-slot">
             <main class="category-layout__main <?= htmlspecialchars($class ?? '') ?>" id="category-layout-main" data-layout="category" data-columns="<?= (int)$gridColumns ?>">
                 <w:hook>Weline_Theme::frontend::layouts::category::main-before</w:hook>
 
@@ -112,15 +119,21 @@ $this->assign('title', $title);
                                 </button>
                             </div>
                             <div class="category-layout__sidebar-content">
-                                <w:hook>Weline_Theme::frontend::layouts::category::filters-before</w:hook>
-                                <w:hook>Weline_Theme::frontend::layouts::category::subcategories-filter</w:hook>
-                                <if condition="meta.filter_sidebar">
-                                    {{meta.filter_sidebar}}
-                                <elseif condition="filter_sidebar"/>
-                                    {{filter_sidebar}}
-                                </if>
-                                <w:widget type="sidebar" name="category-filters"/>
-                                <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
+                                <w:slot id="category-filters"
+                                        name="分类筛选区"
+                                        accept="layout-category-filters,category-filters,attribute-filter,price-filter,category-filter,rating-filter"
+                                        multiple="true"
+                                        position="sidebar">
+                                    <w:hook>Weline_Theme::frontend::layouts::category::filters-before</w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::category::subcategories-filter</w:hook>
+                                    <if condition="meta.filter_sidebar">
+                                        {{meta.filter_sidebar}}
+                                    <elseif condition="filter_sidebar"/>
+                                        {{filter_sidebar}}
+                                    </if>
+                                    <w:widget type="sidebar" name="category-filters"/>
+                                    <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
+                                </w:slot>
                             </div>
                         </aside>
                     </if>
@@ -132,7 +145,7 @@ $this->assign('title', $title);
                     <section class="category-layout__content">
                         <w:slot id="category-products"
                                 name="分类产品区域"
-                                accept="product-grid,product-list-view,category-children"
+                                accept="layout-category-products,product-grid,product-list-view,category-children"
                                 multiple="true"
                                 position="content"
                                 class="category-layout__products">
@@ -154,7 +167,16 @@ $this->assign('title', $title);
                             </w:hook>
                         </w:slot>
                         <?php if ($pagination || ((int)($paginationData['pages'] ?? 0)) > 1): ?>
-                            <div class="category-layout__pagination" data-category-pagination>
+                            <w:slot id="category-pagination"
+                                    name="分类分页区"
+                                    accept="layout-category-pagination,pagination,load-more"
+                                    exclusive="true"
+                                    multiple="false"
+                                    position="content"
+                                    wrapper="div"
+                                    class="category-layout__pagination"
+                                    >
+                            <div data-category-pagination>
                                 <?php if ($pagination): ?>
                                     <?= $pagination ?>
                                 <?php else: ?>
@@ -185,12 +207,25 @@ $this->assign('title', $title);
                                     </nav>
                                 <?php endif; ?>
                             </div>
+                            </w:slot>
                         <?php endif; ?>
                     </section>
                 </div>
 
                 <w:hook>Weline_Theme::frontend::layouts::category::main-after</w:hook>
             </main>
+
+            <w:slot id="category-recommendations"
+                    name="分类推荐区"
+                    accept="layout-category-recommendations,featured-products,bestsellers,new-arrivals,category-grid,product-carousel"
+                    multiple="true"
+                    position="content"
+                    wrapper="section"
+                    class="category-layout__recommendations">
+                <w:hook>Weline_Theme::frontend::layouts::category::recommendations</w:hook>
+            </w:slot>
+
+            </w:slot>
 
             <w:hook>Weline_Theme::frontend::layouts::category::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -225,13 +260,14 @@ $this->assign('title', $title);
 
     .category-layout__container {
         width: 100%;
-        max-width: var(--layout-max-width, 1600px);
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
         margin: 0 auto;
         display: grid;
         grid-template-columns: var(--sidebar-width, 280px) minmax(0, 1fr);
         gap: var(--spacing-6, 1.5rem);
         align-items: flex-start;
-        padding: 0 var(--spacing-4, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
     }
 
     /* ---- 筛选侧边栏 ---- */

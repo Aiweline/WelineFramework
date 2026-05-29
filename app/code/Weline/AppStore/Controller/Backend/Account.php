@@ -5,6 +5,7 @@ namespace Weline\AppStore\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\AppStore\Service\AccountBindService;
 
@@ -33,6 +34,7 @@ class Account extends BackendController
         $this->assign('authorize_url', $authorizeUrl);
         $this->assign('redirect_uri', $redirectUri);
         $this->assign('platform_url', $accountService->getPlatformUrl());
+        $this->assign('title', __('账户绑定'));
         $this->assign('page_title', __('账户绑定'));
 
         return $this->fetch('Weline_AppStore::templates/Backend/Account/index.phtml');
@@ -176,6 +178,36 @@ class Account extends BackendController
 
     private function getOAuthRedirectUri(): string
     {
-        return $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/account/callback');
+        return $this->buildBackendSameOriginUrl('appstore/backend/account/callback');
+    }
+
+    private function buildBackendSameOriginUrl(string $path): string
+    {
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: '');
+        if ($host === '') {
+            return $this->request->getUrlBuilder()->getBackendUrl($path);
+        }
+
+        return $scheme . '://' . $host . $this->buildBackendPathWithPrefix($path);
+    }
+
+    private function buildBackendPathWithPrefix(string $path): string
+    {
+        $backendPrefix = Env::getAreaRoutePrefix('backend');
+        $areaRoute = (string)($this->request->getServer('WELINE_AREA_ROUTE') ?? '');
+
+        if ($backendPrefix !== null && $backendPrefix !== '' && $areaRoute !== ''
+            && ($areaRoute === $backendPrefix || str_starts_with($areaRoute, $backendPrefix . '/'))) {
+            return '/' . trim($areaRoute, '/') . '/' . ltrim($path, '/');
+        }
+
+        if ($backendPrefix !== null && $backendPrefix !== '') {
+            $currency = (string)(w_env('user.currency', 'CNY') ?? 'CNY');
+            $language = (string)(w_env('user.lang', 'zh_Hans_CN') ?? 'zh_Hans_CN');
+            return '/' . trim($backendPrefix, '/') . '/' . $currency . '/' . $language . '/' . ltrim($path, '/');
+        }
+
+        return $this->request->getUrlBuilder()->getBackendUrlPath($path);
     }
 }

@@ -54,13 +54,20 @@ final class AiSiteBuildPlanService
         $policyRef = $this->policyRegistry()->policyRef();
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== []
-            ? $scope['execution_blueprint_draft']
-            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
-        $sourcePlan = $planJson !== [] ? $planJson : ($planStructured !== [] ? $planStructured : $executionBlueprint);
-        $sourceSignature = $this->sourceSignature($scope, $sourcePlan, $executionBlueprint);
-        $expectedPageTypes = $this->resolvePageTypes($scope, $sourcePlan, $executionBlueprint);
         $existing = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if ($this->looksLikeBuildPlanV2($existing)) {
+            $existingMeta = \is_array($existing['contract_meta'] ?? null) ? $existing['contract_meta'] : [];
+            if (\strtolower(\trim((string)($existingMeta['status'] ?? ''))) === 'confirmed') {
+                return $existing;
+            }
+        }
+
+        $sourcePlan = $planJson !== [] ? $planJson : $planStructured;
+        if ($sourcePlan === []) {
+            throw new \RuntimeException('BuildPlan contract failed: stage-one plan JSON is missing. Regenerate the plan instead of using legacy execution blueprint fallback.');
+        }
+        $sourceSignature = $this->sourceSignature($scope, $sourcePlan);
+        $expectedPageTypes = $this->resolvePageTypes($scope, $sourcePlan);
         if (
             $this->looksLikeBuildPlanV2($existing)
             && $this->existingContractMatchesCurrentSource($existing, $sourceSignature, $expectedPageTypes)
@@ -86,24 +93,22 @@ final class AiSiteBuildPlanService
             'AI Site',
         ]);
         $primaryGoal = $this->resolveBuildPlanPrimaryGoal($scope, $profile);
-        $locale = $this->resolveBuildPlanContentLocale($scope, $profile, $sourcePlan, $executionBlueprint);
+        $locale = $this->resolveBuildPlanContentLocale($scope, $profile, $sourcePlan);
         $contractId = 'build_plan_v2_' . \substr($sourceSignature, 0, 16);
         $sourceContracts = $this->buildSourceContractRefs($scope, $sourceSignature);
         $sourceOfTruth = $this->buildBuildPlanSourceOfTruth(
             [],
             $scope,
             $sourcePlan,
-            $executionBlueprint,
             $sourceSignature,
             $siteName,
             $primaryGoal,
             $expectedPageTypes
         );
 
-        [$pages, $blocks, $tasks, $buildOrder, $contentItems] = $this->buildPageBlockTaskGraph(
+        [$pages, $blocks, $contentItems] = $this->buildPageBlockGraph(
             $scope,
             $sourcePlan,
-            $executionBlueprint,
             $siteName,
             $primaryGoal,
             $locale
@@ -145,7 +150,7 @@ final class AiSiteBuildPlanService
                 'summary' => $primaryGoal,
                 'locale' => $locale,
             ],
-            'design_manifest' => $this->buildBuildPlanDesignManifest($policy, $sourcePlan, $executionBlueprint),
+            'design_manifest' => $this->buildBuildPlanDesignManifest($policy, $sourcePlan),
             'i18n' => [
                 'primary_locale' => $locale,
                 'required_locales' => [$locale],
@@ -156,17 +161,15 @@ final class AiSiteBuildPlanService
             ],
             'pages' => $pages,
             'blocks' => $blocks,
-            'tasks' => $tasks,
-            'build_order' => $buildOrder,
             'source_contracts' => $sourceContracts,
             'permission_matrix' => [
-                'read' => ['policy_ref', 'policy_projection', 'design_manifest', 'content_manifest', 'pages', 'blocks', 'tasks', 'build_order'],
+                'read' => ['policy_ref', 'policy_projection', 'design_manifest', 'content_manifest', 'pages', 'blocks'],
                 'create' => ['task_results', 'qa_report', 'repair_patch'],
                 'patch' => ['render_data.*', 'asset_manifest.*', 'content_manifest.items.*', 'qa_gates.*'],
-                'forbidden' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages', 'blocks', 'tasks', 'build_order'],
-                'read_only' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages', 'blocks', 'tasks', 'build_order'],
+                'forbidden' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages', 'blocks'],
+                'read_only' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages', 'blocks'],
             ],
-            'frozen_fields' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages', 'blocks', 'tasks', 'build_order'],
+            'frozen_fields' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages', 'blocks'],
             'mutable_fields' => ['render_data.*', 'asset_manifest.*', 'content_manifest.items.*', 'qa_gates.*'],
             'qa_gates' => [
                 ['id' => 'schema_valid', 'status' => 'pending'],
@@ -184,8 +187,6 @@ final class AiSiteBuildPlanService
             'contract_id' => $contractId,
             'page_count' => \count($pages),
             'block_count' => \count($blocks),
-            'task_count' => \count($tasks),
-            'build_order' => $buildOrder,
             'locale' => $locale,
             'site_name' => $siteName,
             'primary_goal' => $primaryGoal,
@@ -241,7 +242,6 @@ final class AiSiteBuildPlanService
     {
         $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
         return (string)($meta['version'] ?? '') === BuildPlanContractSchema::VERSION
-            && \is_array($contract['tasks'] ?? null)
             && \is_array($contract['pages'] ?? null)
             && \is_array($contract['blocks'] ?? null);
     }
@@ -257,12 +257,12 @@ final class AiSiteBuildPlanService
         $policy = $this->policyRegistry()->get();
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== []
-            ? $scope['execution_blueprint_draft']
-            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
-        $sourcePlan = $planJson !== [] ? $planJson : ($planStructured !== [] ? $planStructured : $executionBlueprint);
-        $sourceSignature = $this->sourceSignature($scope, $sourcePlan, $executionBlueprint);
-        $pageTypes = $this->resolvePageTypes($scope, $sourcePlan, $executionBlueprint);
+        $sourcePlan = $planJson !== [] ? $planJson : $planStructured;
+        if ($sourcePlan === []) {
+            throw new \RuntimeException('BuildPlan contract failed: stage-one plan JSON is missing. Regenerate the plan instead of using legacy execution blueprint fallback.');
+        }
+        $sourceSignature = $this->sourceSignature($scope, $sourcePlan);
+        $pageTypes = $this->resolvePageTypes($scope, $sourcePlan);
         $profile = \array_replace(
             \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
             $websiteProfile
@@ -288,7 +288,6 @@ final class AiSiteBuildPlanService
             \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [],
             $scope,
             $sourcePlan,
-            $executionBlueprint,
             $sourceSignature,
             $siteName,
             $primaryGoal,
@@ -296,23 +295,20 @@ final class AiSiteBuildPlanService
         );
         $contract['design_manifest'] = $this->stripBuildPlanExplanatoryFields(
             \array_replace_recursive(
-                $this->buildBuildPlanDesignManifest($policy, $sourcePlan, $executionBlueprint),
+                $this->buildBuildPlanDesignManifest($policy, $sourcePlan),
                 \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : []
             )
         );
-        $locale = $this->resolveBuildPlanContentLocale($scope, $profile, $sourcePlan, $executionBlueprint);
-        [$freshPages, $freshBlocks, $freshTasks, $freshBuildOrder, $freshContentItems] = $this->buildPageBlockTaskGraph(
+        $locale = $this->resolveBuildPlanContentLocale($scope, $profile, $sourcePlan);
+        [$freshPages, $freshBlocks, $freshContentItems] = $this->buildPageBlockGraph(
             $scope,
             $sourcePlan,
-            $executionBlueprint,
             $siteName,
             $primaryGoal,
             $locale
         );
         $contract['pages'] = $freshPages;
         $contract['blocks'] = $freshBlocks;
-        $contract['tasks'] = $freshTasks;
-        $contract['build_order'] = $freshBuildOrder;
         $contract['content_manifest'] = [
             'primary_locale' => $locale,
             'items' => \array_replace(
@@ -358,34 +354,30 @@ final class AiSiteBuildPlanService
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $profile
      * @param array<string, mixed> $sourcePlan
-     * @param array<string, mixed> $executionBlueprint
      */
     private function resolveBuildPlanContentLocale(
         array $scope,
         array $profile,
-        array $sourcePlan = [],
-        array $executionBlueprint = []
+        array $sourcePlan = []
     ): string {
         return $this->firstNonEmpty([
             $scope['ai_content_locale'] ?? null,
+            $sourcePlan['i18n']['content_locale'] ?? null,
+            $sourcePlan['i18n']['primary_locale'] ?? null,
+            $sourcePlan['i18n']['locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $scope['plan_generated_locale'] ?? null,
+            $scope['plan_locale'] ?? null,
+            $sourcePlan['plan_locale'] ?? null,
+            $sourcePlan['content_locale'] ?? null,
+            $profile['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $profile['default_locale'] ?? null,
             $scope['website_profile']['default_locale'] ?? null,
             $scope['default_language'] ?? null,
             $profile['default_language'] ?? null,
             $scope['website_profile']['default_language'] ?? null,
-            $sourcePlan['i18n']['content_locale'] ?? null,
-            $sourcePlan['i18n']['primary_locale'] ?? null,
-            $sourcePlan['i18n']['locale'] ?? null,
-            $profile['content_locale'] ?? null,
-            $scope['website_profile']['content_locale'] ?? null,
-            $scope['content_locale'] ?? null,
-            $scope['plan_generated_locale'] ?? null,
-            $scope['plan_locale'] ?? null,
-            $executionBlueprint['plan_locale'] ?? null,
-            $sourcePlan['plan_locale'] ?? null,
-            $executionBlueprint['content_locale'] ?? null,
-            $sourcePlan['content_locale'] ?? null,
             'zh_Hans_CN',
         ]);
     }
@@ -470,7 +462,6 @@ final class AiSiteBuildPlanService
      * @param array<string, mixed> $existing
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $sourcePlan
-     * @param array<string, mixed> $executionBlueprint
      * @param list<string> $pageTypes
      * @return array<string, mixed>
      */
@@ -478,20 +469,19 @@ final class AiSiteBuildPlanService
         array $existing,
         array $scope,
         array $sourcePlan,
-        array $executionBlueprint,
         string $sourceSignature,
         string $siteName,
         string $primaryGoal,
         array $pageTypes
     ): array {
         $source = $existing;
-        $source['stage_one_plan_signature'] = (string)($executionBlueprint['signature'] ?? $scope['execution_blueprint_confirmed_signature'] ?? $sourceSignature);
+        $source['stage_one_plan_signature'] = (string)($scope['plan_generated_source_signature'] ?? $sourceSignature);
         $source['design_policy_id'] = AiSiteDesignPolicyRegistry::DEFAULT_POLICY_ID;
 
         $existingRequirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
         $source['user_requirements'] = \array_replace(
             $existingRequirements,
-            $this->buildBuildPlanUserRequirements($sourcePlan, $executionBlueprint, $siteName, $primaryGoal, $pageTypes)
+            $this->buildBuildPlanUserRequirements($sourcePlan, $siteName, $primaryGoal, $pageTypes)
         );
 
         return $source;
@@ -499,13 +489,11 @@ final class AiSiteBuildPlanService
 
     /**
      * @param array<string, mixed> $sourcePlan
-     * @param array<string, mixed> $executionBlueprint
      * @param list<string> $pageTypes
      * @return array<string, mixed>
      */
     private function buildBuildPlanUserRequirements(
         array $sourcePlan,
-        array $executionBlueprint,
         string $siteName,
         string $primaryGoal,
         array $pageTypes
@@ -540,11 +528,6 @@ final class AiSiteBuildPlanService
         $pageIntentContracts = $this->extractPageIntentContracts($requirementExpansion['page_strategy'] ?? null);
         if ($pageIntentContracts !== []) {
             $requirements['requested_page_intents'] = $pageIntentContracts;
-        }
-
-        $blueprintPageTypes = $this->stringList($executionBlueprint['page_types'] ?? []);
-        if ($blueprintPageTypes !== []) {
-            $requirements['execution_blueprint_page_types'] = $blueprintPageTypes;
         }
 
         return \array_filter($requirements, static fn(mixed $value): bool => $value !== '' && $value !== []);
@@ -582,10 +565,9 @@ final class AiSiteBuildPlanService
     /**
      * @param array<string, mixed> $policy
      * @param array<string, mixed> $sourcePlan
-     * @param array<string, mixed> $executionBlueprint
      * @return array<string, mixed>
      */
-    private function buildBuildPlanDesignManifest(array $policy, array $sourcePlan, array $executionBlueprint): array
+    private function buildBuildPlanDesignManifest(array $policy, array $sourcePlan): array
     {
         $manifest = [
             'policy_id' => AiSiteDesignPolicyRegistry::DEFAULT_POLICY_ID,
@@ -626,9 +608,6 @@ final class AiSiteBuildPlanService
         foreach ([
             $sourcePlan['site_design_system'] ?? null,
             $sourcePlan['shared_plan']['site_design_system'] ?? null,
-            $executionBlueprint['site_design_system'] ?? null,
-            $executionBlueprint['shared_prompt_context']['site_design_system'] ?? null,
-            $executionBlueprint['theme_context_snapshot']['site_design_system'] ?? null,
         ] as $candidate) {
             if (\is_array($candidate) && $candidate !== []) {
                 $manifest['site_design_system'] = $this->stripBuildPlanExplanatoryFields($candidate);
@@ -639,8 +618,6 @@ final class AiSiteBuildPlanService
         foreach ([
             $sourcePlan['asset_distribution_policy'] ?? null,
             $sourcePlan['shared_plan']['asset_distribution_policy'] ?? null,
-            $executionBlueprint['asset_distribution_policy'] ?? null,
-            $executionBlueprint['shared_prompt_context']['asset_distribution_policy'] ?? null,
         ] as $candidate) {
             if (\is_array($candidate) && $candidate !== []) {
                 $manifest['asset_distribution_policy'] = $this->stripBuildPlanExplanatoryFields($candidate);
@@ -648,7 +625,7 @@ final class AiSiteBuildPlanService
             }
         }
 
-        $themeContext = \is_array($executionBlueprint['theme_context_snapshot'] ?? null) ? $executionBlueprint['theme_context_snapshot'] : [];
+        $themeContext = \is_array($sourcePlan['theme_context_snapshot'] ?? null) ? $sourcePlan['theme_context_snapshot'] : [];
         if ($themeContext !== []) {
             $manifest['theme_context_snapshot'] = $this->stripBuildPlanExplanatoryFields($themeContext);
         }
@@ -707,14 +684,18 @@ final class AiSiteBuildPlanService
         $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
 
         $locale = $this->firstNonEmpty([
+            $scope['ai_content_locale'] ?? null,
+            $planJson['i18n']['content_locale'] ?? null,
+            $planJson['i18n']['primary_locale'] ?? null,
+            $planJson['i18n']['locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $scope['plan_generated_locale'] ?? null,
+            $scope['plan_locale'] ?? null,
+            $profile['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $profile['default_locale'] ?? null,
             $scope['website_profile']['default_locale'] ?? null,
-            $scope['content_locale'] ?? null,
-            $scope['ai_content_locale'] ?? null,
-            $profile['content_locale'] ?? null,
-            $scope['website_profile']['content_locale'] ?? null,
-            $scope['plan_locale'] ?? null,
             'zh_Hans_CN',
         ]);
 
@@ -1137,25 +1118,21 @@ final class AiSiteBuildPlanService
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $sourcePlan
-     * @param array<string, mixed> $executionBlueprint
-     * @return array{0:list<array<string,mixed>>,1:list<array<string,mixed>>,2:list<array<string,mixed>>,3:list<string>,4:array<string,string>}
+     * @return array{0:list<array<string,mixed>>,1:list<array<string,mixed>>,2:array<string,string>}
      */
-    private function buildPageBlockTaskGraph(
+    private function buildPageBlockGraph(
         array $scope,
         array $sourcePlan,
-        array $executionBlueprint,
         string $siteName,
         string $primaryGoal,
         string $locale
     ): array {
-        $pagesByType = $this->resolvePagesByType($scope, $sourcePlan, $executionBlueprint);
+        $pagesByType = $this->resolvePagesByType($scope, $sourcePlan);
         $pages = [];
         $blocks = [];
-        $tasks = [];
-        $buildOrder = [];
         $contentItems = [];
-        $themeRuntimeContext = $this->resolveTaskThemeRuntimeContext($sourcePlan, $executionBlueprint);
-        $sharedRuntimeContext = $this->resolveTaskSharedPromptRuntimeContext($sourcePlan, $executionBlueprint, $siteName, $primaryGoal, $locale);
+        $themeRuntimeContext = $this->resolveTaskThemeRuntimeContext($sourcePlan);
+        $sharedRuntimeContext = $this->resolveTaskSharedPromptRuntimeContext($sourcePlan, $siteName, $primaryGoal, $locale);
         $siteRuntimeContext = [
             'site_name' => $siteName,
             'primary_goal' => $primaryGoal,
@@ -1164,38 +1141,7 @@ final class AiSiteBuildPlanService
             'language_contract' => $this->buildLanguageRuntimeContract($locale),
         ];
 
-        $sharedTasks = [
-            [
-                'task_id' => 'shared:header',
-                'task_kind' => 'block_build',
-                'executor' => 'AiSiteBuildQueue',
-                'input_scope' => ['region' => 'header', 'component' => 'header'],
-                'runtime_context' => $this->buildSharedTaskRuntimeContext('header', $themeRuntimeContext, $sharedRuntimeContext, $siteRuntimeContext),
-                'output_contract' => $this->buildSharedTaskOutputContract('header'),
-                'policy_slices' => ['layout.grid_alignment', 'typography.refined_font_stack', 'color.readable_contrast'],
-                'context_budget' => ['max_tokens' => 1200],
-                'acceptance' => $this->buildTaskAcceptanceContract(['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'], 'shared header'),
-                'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'],
-                'depends_on' => [],
-            ],
-            [
-                'task_id' => 'shared:footer',
-                'task_kind' => 'block_build',
-                'executor' => 'AiSiteBuildQueue',
-                'input_scope' => ['region' => 'footer', 'component' => 'footer'],
-                'runtime_context' => $this->buildSharedTaskRuntimeContext('footer', $themeRuntimeContext, $sharedRuntimeContext, $siteRuntimeContext),
-                'output_contract' => $this->buildSharedTaskOutputContract('footer'),
-                'policy_slices' => ['layout.grid_alignment', 'typography.body_16_18', 'color.readable_contrast'],
-                'context_budget' => ['max_tokens' => 1200],
-                'acceptance' => $this->buildTaskAcceptanceContract(['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'], 'shared footer'),
-                'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'],
-                'depends_on' => [],
-            ],
-        ];
-        foreach ($sharedTasks as $task) {
-            $tasks[] = $task;
-            $buildOrder[] = (string)$task['task_id'];
-        }
+        unset($themeRuntimeContext, $sharedRuntimeContext, $siteRuntimeContext);
 
         foreach ($pagesByType as $pageIndex => $page) {
             $pageType = (string)($page['page_type'] ?? 'home_page');
@@ -1232,7 +1178,6 @@ final class AiSiteBuildPlanService
                 $blockKey = $this->resolveBlockKey($rawBlock, $blockIndex);
                 $blockId = $pageId . '.' . $this->slugify($blockKey);
                 $sectionCode = 'content/' . \str_replace('_', '-', $this->slugify($pageType)) . '-' . \str_replace('_', '-', $this->slugify($blockKey));
-                $taskId = 'page:' . $pageType . ':' . $sectionCode;
                 $titleKey = 'block.' . $blockId . '.title';
                 $copyKey = 'block.' . $blockId . '.copy';
                 $ctaKey = 'block.' . $blockId . '.cta';
@@ -1275,58 +1220,10 @@ final class AiSiteBuildPlanService
                     'block_contract' => $blockContract,
                     'asset_requirements' => $assetRequirements,
                     'content_keys' => $contentKeys,
-                    'task_ids' => [$taskId],
                     'visual' => $this->buildBlockVisualImplementationContract($rawBlock, $blockType, $blockKey),
                     'sort_order' => 1000 + ((int)$pageIndex * 100) + ((int)$blockIndex * 10),
                 ];
                 $pageBlockIds[] = $blockId;
-                $tasks[] = [
-                    'task_id' => $taskId,
-                    'task_kind' => 'block_build',
-                    'executor' => 'AiSiteBuildQueue',
-                    'input_scope' => [
-                        'page_id' => $pageId,
-                        'page_type' => $pageType,
-                        'block_id' => $blockId,
-                        'block_type' => $blockType,
-                        'section_key' => $blockKey,
-                        'page_flow_role' => $pageFlowRole,
-                    ],
-                    'page_flow_role' => $pageFlowRole,
-                    'visual_signature' => $visualSignature,
-                    'design_tags' => $designTags,
-                    'image_intent' => $imageIntent,
-                    'block_contract' => $blockContract,
-                    'asset_requirements' => $assetRequirements,
-                    'runtime_context' => $this->buildBlockTaskRuntimeContext(
-                        $page,
-                        $pageId,
-                        $pageType,
-                        $blockId,
-                        $blockKey,
-                        $blockType,
-                        $pageFlowRole,
-                        $contentKeys,
-                        $visualSignature,
-                        $imageIntent,
-                        $designTags,
-                        $blockContract,
-                        $implementationSlices,
-                        $responsiveContract,
-                        $themeRuntimeContext,
-                        $sharedRuntimeContext,
-                        $siteRuntimeContext
-                    ),
-                    'output_contract' => $this->buildBlockTaskOutputContract($blockType, $blockKey, $contentKeys, $blockContract),
-                    'policy_slices' => $policySlices,
-                    'context_budget' => ['max_tokens' => 1800],
-                    'implementation_slices' => $implementationSlices,
-                    'responsive_contract' => $responsiveContract,
-                    'acceptance' => $this->buildTaskAcceptanceContract($acceptanceRuleIds, $blockType . ' block'),
-                    'acceptance_rule_ids' => $acceptanceRuleIds,
-                    'depends_on' => ['shared:header', 'shared:footer'],
-                ];
-                $buildOrder[] = $taskId;
             }
 
             $pages[] = [
@@ -1346,18 +1243,16 @@ final class AiSiteBuildPlanService
             ];
         }
 
-        return [$pages, $blocks, $tasks, $buildOrder, $contentItems];
+        return [$pages, $blocks, $contentItems];
     }
 
     /**
      * @param array<string,mixed> $sourcePlan
-     * @param array<string,mixed> $executionBlueprint
      * @return array<string,mixed>
      */
-    private function resolveTaskThemeRuntimeContext(array $sourcePlan, array $executionBlueprint): array
+    private function resolveTaskThemeRuntimeContext(array $sourcePlan): array
     {
         foreach ([
-            $executionBlueprint['theme_context_snapshot'] ?? null,
             $sourcePlan['theme_context_snapshot'] ?? null,
             $sourcePlan['theme_design'] ?? null,
             $sourcePlan['site_design_system'] ?? null,
@@ -1375,18 +1270,15 @@ final class AiSiteBuildPlanService
 
     /**
      * @param array<string,mixed> $sourcePlan
-     * @param array<string,mixed> $executionBlueprint
      * @return array<string,mixed>
      */
     private function resolveTaskSharedPromptRuntimeContext(
         array $sourcePlan,
-        array $executionBlueprint,
         string $siteName,
         string $primaryGoal,
         string $locale
     ): array {
         foreach ([
-            $executionBlueprint['shared_prompt_context'] ?? null,
             $sourcePlan['shared_prompt_context'] ?? null,
             $sourcePlan['shared_plan'] ?? null,
         ] as $candidate) {
@@ -1598,25 +1490,60 @@ final class AiSiteBuildPlanService
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $sourcePlan
-     * @param array<string, mixed> $executionBlueprint
      * @return list<array<string, mixed>>
      */
-    private function resolvePagesByType(array $scope, array $sourcePlan, array $executionBlueprint): array
+    private function resolvePagesByType(array $scope, array $sourcePlan): array
     {
+        $pageTypes = $this->resolvePageTypes($scope, $sourcePlan);
         $sources = [
-            $executionBlueprint['page_plans'] ?? null,
-            $executionBlueprint['pages'] ?? null,
             $sourcePlan['page_plans'] ?? null,
             $sourcePlan['pages'] ?? null,
         ];
         foreach ($sources as $source) {
             $pages = $this->normalizePagesSource($source);
             if ($pages !== []) {
-                return $this->orderPagesByPageTypes($pages, $this->resolvePageTypes($scope, $sourcePlan, $executionBlueprint));
+                $missing = $this->missingPageTypesFromPages($pages, $pageTypes);
+                if ($missing !== []) {
+                    throw new \RuntimeException(
+                        'BuildPlan contract failed: stage-one page plans missing selected page_types: ' . \implode(', ', $missing)
+                    );
+                }
+
+                return $this->orderPagesByPageTypes($pages, $pageTypes);
             }
         }
 
         throw new \RuntimeException('BuildPlan contract failed: stage-one page plans are missing. Regenerate the plan instead of injecting fallback pages.');
+    }
+
+    /**
+     * @param list<array<string, mixed>> $pages
+     * @param list<string> $expectedPageTypes
+     * @return list<string>
+     */
+    private function missingPageTypesFromPages(array $pages, array $expectedPageTypes): array
+    {
+        if ($expectedPageTypes === []) {
+            return [];
+        }
+
+        $actual = [];
+        foreach ($pages as $page) {
+            $pageType = \trim((string)($page['page_type'] ?? ''));
+            if ($pageType !== '') {
+                $actual[$pageType] = true;
+            }
+        }
+
+        $missing = [];
+        foreach ($expectedPageTypes as $pageType) {
+            $pageType = \trim((string)$pageType);
+            if ($pageType !== '' && !isset($actual[$pageType])) {
+                $missing[] = $pageType;
+            }
+        }
+
+        return \array_values(\array_unique($missing));
     }
 
     /**
@@ -1681,14 +1608,12 @@ final class AiSiteBuildPlanService
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $sourcePlan
-     * @param array<string, mixed> $executionBlueprint
      * @return list<string>
      */
-    private function resolvePageTypes(array $scope, array $sourcePlan, array $executionBlueprint): array
+    private function resolvePageTypes(array $scope, array $sourcePlan): array
     {
         $candidates = [
             $scope['page_types'] ?? null,
-            $executionBlueprint['page_types'] ?? null,
             $sourcePlan['page_types'] ?? null,
         ];
         foreach ($candidates as $candidate) {
@@ -2230,13 +2155,11 @@ final class AiSiteBuildPlanService
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $sourcePlan
-     * @param array<string, mixed> $executionBlueprint
      */
-    private function sourceSignature(array $scope, array $sourcePlan, array $executionBlueprint): string
+    private function sourceSignature(array $scope, array $sourcePlan): string
     {
         return \sha1((string)\json_encode([
             'plan_generated_source_signature' => (string)($scope['plan_generated_source_signature'] ?? ''),
-            'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? ''),
             'source_plan' => $sourcePlan,
         ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }

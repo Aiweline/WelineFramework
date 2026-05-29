@@ -207,9 +207,9 @@ final class AiSiteStageOneContractService
                 'field_key_format' => 'short_snake_case_semantic_key',
                 'forbid_empty_field_key' => true,
                 'sample_acceptance_examples' => [
-                    'headline' => 'Trusted APK Download for Indian Card Players',
-                    'supporting_copy' => 'Install the app, review the game lobby, and start from a clear first step.',
-                    'context_detail' => 'Secure setup, game lobby preview, and support access',
+                    'headline' => 'Neon card tables that make play, rules, and rewards clear',
+                    'supporting_copy' => 'Show room choices, game cues, player proof, and fast support before visitors join.',
+                    'context_detail' => 'Popular rooms, bonus events, player trust, and quick support',
                 ],
                 'sample_rejection_examples' => [
                     'Write a title around the main value',
@@ -249,10 +249,10 @@ final class AiSiteStageOneContractService
                 'stage3_must_consume_visual_signature' => true,
             ],
             'build_handoff_rules' => [
-                'stage1_page_block_count_is_build_blueprint_truth' => true,
+                'stage1_page_block_count_is_build_plan_truth' => true,
                 'stage1_block_key_order_is_build_order' => true,
-                'one_page_section_task_per_stage1_block' => true,
-                'completed_task_must_match_task_identity' => true,
+                'one_page_section_execution_per_stage1_block' => true,
+                'completed_block_must_match_block_identity' => true,
                 'duplicated_html_or_title_between_page_blocks_is_invalid' => true,
             ],
             'retry_policy' => [
@@ -397,22 +397,34 @@ final class AiSiteStageOneContractService
             ?? $scope['design_direction']['code']
             ?? ''
         )));
-        $isCardGameStyle = $styleCode === 'india-card-game-apk-dark-neon';
+        $isCardGameStyle = $styleCode === 'india-card-game-apk-dark-neon'
+            && $this->scopeHasPositiveCardGameIntent($scope);
         if ($pageType === Page::TYPE_HOME || $pageType === 'home_page') {
             $sourceRequired = \is_array($scope['source_truth_contract']['required_home_blocks'] ?? null)
                 ? \array_values(\array_filter(\array_map('strval', $scope['source_truth_contract']['required_home_blocks'])))
                 : [];
             if ($isCardGameStyle) {
-                $required = \array_values(\array_unique(\array_merge([
-                    'hero',
-                    'hero_download',
+                $hasDownloadIntent = $this->scopeHasPositiveDownloadIntent($scope)
+                    || \in_array('hero_download', $sourceRequired, true)
+                    || \in_array('final_download_cta', $sourceRequired, true);
+                $baseRequired = [
+                    $hasDownloadIntent ? 'hero_download' : 'hero',
                     'game_showcase_or_features',
                     'trust_security',
                     'player_reviews',
                     'faq_or_rules',
-                    'final_cta',
-                ], $sourceRequired)));
-                $optional = ['bonus_steps', 'install_steps', 'route_chips', 'benefit_cards', 'responsible_play'];
+                    $hasDownloadIntent ? 'final_download_cta' : 'final_cta',
+                ];
+                $required = \array_values(\array_unique(\array_merge($baseRequired, $sourceRequired)));
+                if (!$hasDownloadIntent) {
+                    $required = \array_values(\array_filter(
+                        $required,
+                        static fn(string $blockKey): bool => !\in_array($blockKey, ['hero_download', 'final_download_cta'], true)
+                    ));
+                }
+                $optional = $hasDownloadIntent
+                    ? ['bonus_steps', 'install_steps', 'route_chips', 'benefit_cards', 'responsible_play']
+                    : ['bonus_steps', 'route_chips', 'benefit_cards', 'responsible_play'];
             } else {
                 $required = \array_values(\array_unique(\array_merge(['hero', 'final_cta'], $sourceRequired)));
                 $optional = ['brand_promise', 'featured_offers', 'trust_proof', 'resource_preview', 'experience_highlights'];
@@ -466,6 +478,132 @@ final class AiSiteStageOneContractService
             'required' => \array_values($required),
             'optional' => $optional,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function scopeHasPositiveCardGameIntent(array $scope): bool
+    {
+        $brief = \implode("\n", \array_filter(\array_map('strval', [
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+            $scope['instruction'] ?? null,
+            $scope['source_instruction'] ?? null,
+        ]), static fn(string $value): bool => \trim($value) !== ''));
+        if ($this->containsAnyPositiveIntent($brief, [
+            'APK',
+            'download',
+            'app',
+            '安装',
+            '下载',
+            '推广',
+            '游戏',
+            'game',
+            '棋牌',
+            'card game',
+            'Teen Patti',
+            'rummy',
+            'casino',
+        ])) {
+            return true;
+        }
+        if ($this->sourceTruthForbidsCardGameDirection($scope)) {
+            return false;
+        }
+
+        return \trim($brief) === '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function scopeHasPositiveDownloadIntent(array $scope): bool
+    {
+        $brief = \implode("\n", \array_filter(\array_map('strval', [
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+            $scope['instruction'] ?? null,
+            $scope['source_instruction'] ?? null,
+        ]), static fn(string $value): bool => \trim($value) !== ''));
+
+        return $this->containsAnyPositiveIntent($brief, [
+            'APK',
+            'download',
+            'app',
+            '瀹夎',
+            '涓嬭浇',
+            '鎺ㄥ箍',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function sourceTruthForbidsCardGameDirection(array $scope): bool
+    {
+        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
+        $forbidden = \is_array($sourceTruth['must_not_do'] ?? null) ? $sourceTruth['must_not_do'] : [];
+        $text = \implode("\n", \array_map('strval', $forbidden));
+        if (\trim($text) === '') {
+            return false;
+        }
+
+        return \preg_match('/(?:APK|\bdownload\b|\bapp\b|casino|gambling|gaming|\bcard\b|card game|Teen\s*Patti|rummy|棋牌|游戏|下载|安装)/iu', $text) === 1;
+    }
+
+    /**
+     * @param list<string> $needles
+     */
+    private function containsAnyPositiveIntent(string $haystack, array $needles): bool
+    {
+        if (\trim($haystack) === '') {
+            return false;
+        }
+        foreach ($needles as $needle) {
+            if ($this->containsPositiveIntent($haystack, (string)$needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function containsPositiveIntent(string $haystack, string $needle): bool
+    {
+        $needle = \trim($needle);
+        if (\trim($haystack) === '' || $needle === '') {
+            return false;
+        }
+
+        $quoted = \preg_quote($needle, '/');
+        $pattern = \preg_match('/^[a-z0-9]+$/i', $needle) === 1
+            ? '/(?<![a-z0-9])' . $quoted . '(?![a-z0-9])/iu'
+            : '/' . $quoted . '/iu';
+        if (\preg_match_all($pattern, $haystack, $matches, \PREG_OFFSET_CAPTURE) < 1) {
+            return false;
+        }
+
+        foreach ($matches[0] as $match) {
+            $position = (int)($match[1] ?? 0);
+            if (!$this->isNegatedTermOccurrence($haystack, $position)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isNegatedTermOccurrence(string $haystack, int $bytePosition): bool
+    {
+        $start = \max(0, $bytePosition - 140);
+        $prefix = \substr($haystack, $start, $bytePosition - $start);
+        $prefix = (string)\preg_replace('/^.*[.;!?。！？\r\n]/u', '', $prefix);
+
+        return \preg_match(
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|不是|非|勿|请勿)[^.;!?。！？\r\n]{0,140}$/iu',
+            $prefix
+        ) === 1;
     }
 
     /**

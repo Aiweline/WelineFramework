@@ -58,6 +58,30 @@ class ViewTest extends TestCase
         self::assertSame('shop.example.test', $method->invoke($controller, 'shop.example.test:9503'));
     }
 
+    public function testProductViewCacheKeyIncludesHookTemplateFingerprint(): void
+    {
+        $controller = new View(
+            $this->createMock(StorefrontRecentlyViewedRecorder::class),
+            $this->createMock(ProductViewPageDataService::class)
+        );
+        $method = new \ReflectionMethod(View::class, 'viewPayloadTemplateFingerprint');
+        $method->setAccessible(true);
+
+        $fingerprint = (string)$method->invoke($controller);
+
+        self::assertStringContainsString('hooks.php:', $fingerprint);
+        self::assertStringContainsString('default.phtml:', $fingerprint);
+        self::assertStringContainsString('HanfuDemoOptionImageProvider.php:', $fingerprint);
+        self::assertStringContainsString('ConfigurableProductService.php:', $fingerprint);
+        self::assertStringContainsString('ProductViewPageDataService.php:', $fingerprint);
+        self::assertStringContainsString('view.phtml:', $fingerprint);
+        self::assertStringContainsString('tabs-content.phtml:', $fingerprint);
+        self::assertStringContainsString('en_US.csv:', $fingerprint);
+        self::assertStringContainsString('zh_Hans_CN.csv:', $fingerprint);
+        self::assertStringContainsString('content.phtml:', $fingerprint);
+        self::assertStringContainsString('head-after.phtml:', $fingerprint);
+    }
+
     public function testIndexRedirectsWhenProductIdIsMissing(): void
     {
         $recorder = $this->createMock(StorefrontRecentlyViewedRecorder::class);
@@ -91,18 +115,19 @@ class ViewTest extends TestCase
 
     public function testIndexHandlesProductNotFound(): void
     {
+        $productId = 780077;
         $recorder = $this->createMock(StorefrontRecentlyViewedRecorder::class);
         $recorder->expects($this->never())->method('recordProductView');
 
         $pageDataService = $this->createMock(ProductViewPageDataService::class);
         $pageDataService->expects($this->once())
             ->method('build')
-            ->with(77)
+            ->with($productId)
             ->willReturn([]);
 
         $request = $this->createMock(Request::class);
         $request->method('getParam')->willReturnCallback($this->requestParams([
-            'id' => 77,
+            'id' => $productId,
             'product_id' => 0,
         ]));
 

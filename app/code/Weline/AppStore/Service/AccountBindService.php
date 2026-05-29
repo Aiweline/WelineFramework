@@ -26,6 +26,8 @@ class AccountBindService
      */
     private string $platformUrl;
 
+    private string $platformApiUrl;
+
     /**
      * HTTP 客户端
      */
@@ -41,6 +43,7 @@ class AccountBindService
         $platformUrl = $this->resolvePlatformUrl();
         // Env::get 如果配置项存在但显式为 null，会直接返回 null（不会走 default），因此这里做非空兜底。
         $this->platformUrl = $platformUrl;
+        $this->platformApiUrl = self::normalizePlatformApiBaseUrl($platformUrl);
         
         // 加密密钥必须稳定；未配置时使用确定性后备值，避免重启后无法解密历史 token。
         $encryptionKey = Env::get('appstore.encryption_key');
@@ -64,12 +67,21 @@ class AccountBindService
         return $this->platformUrl;
     }
 
+    public function getPlatformApiUrl(string $path = ''): string
+    {
+        if ($path === '') {
+            return $this->platformApiUrl;
+        }
+
+        return rtrim($this->platformApiUrl, '/') . '/' . ltrim($path, '/');
+    }
+
     public function getAuthorizationUrl(string $redirectUri, ?string $state = null): string
     {
         $params = [
             'client_id' => 'weline-terminal',
             'redirect_uri' => $redirectUri,
-            'domain' => $this->getCurrentDomain(),
+            'domain' => $this->getDomainFromUrl($redirectUri) ?: $this->getCurrentDomain(),
         ];
         if ($state !== null && $state !== '') {
             $params['state'] = $state;
@@ -100,7 +112,7 @@ class AccountBindService
     {
         try {
             // 调用平台 API 验证账户
-            $response = $this->httpClient->post($this->platformUrl . '/api/v1/auth/verify', [
+            $response = $this->httpClient->post($this->getPlatformApiUrl('/api/v1/auth/verify'), [
                 'json' => [
                     'email' => $email,
                     'password' => $password,
@@ -200,7 +212,7 @@ class AccountBindService
     {
         try {
             // 使用授权码换取令牌
-            $response = $this->httpClient->post($this->platformUrl . '/api/v1/oauth/token', [
+            $response = $this->httpClient->post($this->getPlatformApiUrl('/api/v1/oauth/token'), [
                 'json' => [
                     'code' => $code,
                     'grant_type' => 'authorization_code',
@@ -323,7 +335,7 @@ class AccountBindService
         }
 
         try {
-            $response = $this->httpClient->post($this->platformUrl . '/api/v1/auth/refresh', [
+            $response = $this->httpClient->post($this->getPlatformApiUrl('/api/v1/auth/refresh'), [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $token,
                 ],
@@ -386,7 +398,7 @@ class AccountBindService
         }
 
         try {
-            $response = $this->httpClient->get($this->platformUrl . '/api/v1/user/licenses', [
+            $response = $this->httpClient->get($this->getPlatformApiUrl('/api/v1/user/licenses'), [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $token,
                 ],
@@ -467,7 +479,7 @@ class AccountBindService
     private function getUserInfo(string $token): array
     {
         try {
-            $response = $this->httpClient->get($this->platformUrl . '/api/v1/user/info', [
+            $response = $this->httpClient->get($this->getPlatformApiUrl('/api/v1/user/info'), [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $token,
                 ],
@@ -609,7 +621,89 @@ class AccountBindService
      */
     public function getCurrentDomain(): string
     {
-        return (string)\w_env('server.http_host', 'localhost');
+        $requestHost = '';
+        try {
+            /** @var \Weline\Framework\Http\Request $request */
+            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            $requestHost = $this->normalizeDomain((string)$request->getServer('HTTP_HOST'));
+        } catch (\Throwable) {
+            $requestHost = '';
+        }
+
+        if ($requestHost !== '' && !$this->isLoopbackDomain($requestHost)) {
+            return $requestHost;
+        }
+
+        $serverHost = $this->normalizeDomain((string)($_SERVER['HTTP_HOST'] ?? ''));
+        if ($serverHost !== '' && !$this->isLoopbackDomain($serverHost)) {
+            return $serverHost;
+        }
+
+        $envHost = $this->normalizeDomain((string)\w_env('server.http_host', ''));
+        if ($envHost !== '' && !$this->isLoopbackDomain($envHost)) {
+            return $envHost;
+        }
+
+        if ($requestHost !== '') {
+            return $requestHost;
+        }
+
+        if ($serverHost !== '') {
+            return $serverHost;
+        }
+
+        return $envHost !== '' ? $envHost : 'localhost';
+    }
+
+    private function normalizeDomain(string $domain): string
+    {
+        $domain = trim($domain);
+        if ($domain === '') {
+            return '';
+        }
+
+        $parsedHost = parse_url($domain, PHP_URL_HOST);
+        if (is_string($parsedHost) && $parsedHost !== '') {
+            $port = parse_url($domain, PHP_URL_PORT);
+            return $port ? $parsedHost . ':' . $port : $parsedHost;
+        }
+
+        $pathStart = strpos($domain, '/');
+        if ($pathStart !== false) {
+            $domain = substr($domain, 0, $pathStart);
+        }
+
+        return trim($domain);
+    }
+
+    private function isLoopbackDomain(string $domain): bool
+    {
+        $host = strtolower($domain);
+        if (str_starts_with($host, '[')) {
+            $end = strpos($host, ']');
+            if ($end !== false) {
+                $host = substr($host, 1, $end - 1);
+            }
+        } elseif (substr_count($host, ':') === 1) {
+            $host = strstr($host, ':', true) ?: $host;
+        }
+
+        return in_array($host, ['127.0.0.1', 'localhost', '::1', '0.0.0.0'], true);
+    }
+
+    private function getDomainFromUrl(string $url): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return '';
+        }
+
+        $domain = (string)$parts['host'];
+        if (!empty($parts['port'])) {
+            $domain .= ':' . (string)$parts['port'];
+        }
+
+        return $domain;
     }
 
     private function resolvePlatformUrl(): string
@@ -622,5 +716,15 @@ class AccountBindService
         $platformUrl = Env::get('appstore.platform_url');
         // Env::get 濡傛灉閰嶇疆椤瑰瓨鍦ㄤ絾鏄惧紡涓?null锛屼細鐩存帴杩斿洖 null锛堜笉浼氳蛋 default锛夛紝鍥犳杩欓噷鍋氶潪绌哄厹搴曘€?
         return (is_string($platformUrl) && $platformUrl !== '') ? rtrim($platformUrl, '/') : self::DEFAULT_PLATFORM_URL;
+    }
+
+    private static function normalizePlatformApiBaseUrl(string $platformUrl): string
+    {
+        $platformUrl = rtrim(trim($platformUrl), '/');
+        if ($platformUrl === '') {
+            return self::DEFAULT_PLATFORM_URL;
+        }
+
+        return preg_replace('#/([A-Za-z]{3})/([a-z]{2}(?:_[A-Za-z0-9]+){1,2})$#', '', $platformUrl) ?: $platformUrl;
     }
 }

@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteBuildPlanServiceTest extends TestCase
 {
-    public function testBuildsValidBuildPlanV2FromStageOneExecutionBlueprint(): void
+    public function testBuildsValidBuildPlanV2FromStageOnePlanJson(): void
     {
         $service = new AiSiteBuildPlanService();
 
@@ -18,7 +18,7 @@ final class AiSiteBuildPlanServiceTest extends TestCase
             'site_title' => 'Example Site',
             'brief_description' => 'Convert qualified buyers with clear trust proof.',
             'default_locale' => 'en_US',
-            'execution_blueprint_draft' => [
+            'plan_json' => [
                 'signature' => 'stage1-signature',
                 'pages' => [
                     'home_page' => [
@@ -62,14 +62,71 @@ final class AiSiteBuildPlanServiceTest extends TestCase
 
         self::assertTrue($result['valid'], \implode("\n", $result['errors']));
         self::assertSame('2.2', $contract['contract_meta']['version']);
+        self::assertSame('build_plan_v2', $contract['contract_meta']['type']);
         self::assertSame('draft', $contract['contract_meta']['status']);
-        self::assertCount(3, $contract['tasks']);
-        self::assertSame(['shared:header', 'shared:footer', 'page:home_page:content/home-page-hero'], $contract['build_order']);
-        self::assertArrayHasKey('runtime_context', $contract['tasks'][2]);
-        self::assertArrayHasKey('output_contract', $contract['tasks'][2]);
-        self::assertArrayHasKey('acceptance', $contract['tasks'][2]);
-        self::assertSame('en_US', $contract['tasks'][2]['runtime_context']['content_locale'] ?? null);
-        self::assertSame('en_US', $contract['tasks'][2]['runtime_context']['language_contract']['source_of_truth_locale'] ?? null);
+        self::assertArrayNotHasKey('tasks', $contract);
+        self::assertArrayNotHasKey('build_order', $contract);
+        self::assertCount(1, $contract['pages']);
+        self::assertCount(1, $contract['blocks']);
+        self::assertSame('home_page', $contract['pages'][0]['page_id'] ?? null);
+        self::assertSame(['home_page.hero'], $contract['pages'][0]['blocks'] ?? null);
+        self::assertSame('home_page.hero', $contract['blocks'][0]['block_id'] ?? null);
+        self::assertSame('hero', $contract['blocks'][0]['section_key'] ?? null);
+        self::assertSame('en_US', $contract['i18n']['primary_locale'] ?? null);
+        self::assertSame('en_US', $contract['content_manifest']['primary_locale'] ?? null);
+        self::assertSame('Launch reliable AI workflows', $contract['content_manifest']['items']['block.home_page.hero.title'] ?? null);
+        self::assertSame('Book a workflow audit', $contract['content_manifest']['items']['block.home_page.hero.cta'] ?? null);
+        self::assertSame(true, $contract['presentation_projection']['never_feed_to_build'] ?? null);
+    }
+
+    public function testBuildPlanRejectsStageOnePagesMissingSelectedPageTypes(): void
+    {
+        $service = new AiSiteBuildPlanService();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('missing selected page_types: about_page');
+
+        $service->buildFromScope([
+            'page_types' => ['home_page', 'about_page'],
+            'site_title' => 'Example Site',
+            'brief_description' => 'Convert qualified buyers with clear trust proof.',
+            'default_locale' => 'en_US',
+            'plan_json' => [
+                'signature' => 'stage1-signature',
+                'content_locale' => 'zh_Hans_CN',
+                'i18n' => ['locale' => 'pt_BR'],
+                'site_strategy' => [
+                    'core_goal' => 'Baixar o APK Teenipiya com seguranca.',
+                ],
+                'pages' => [
+                    'home_page' => [
+                        'title' => 'Home',
+                        'page_goal' => 'Show the product value and lead visitors to contact sales.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'page_flow_role' => 'opening',
+                                'title' => 'Launch reliable AI workflows',
+                                'goal' => 'Show the core value with a direct CTA.',
+                                'visual_signature' => [
+                                    'composition_pattern' => 'split hero',
+                                    'spatial_rhythm' => 'copy left, media right',
+                                    'media_strategy' => 'Generated hero image in the media panel',
+                                    'surface_treatment' => 'deep blue surface',
+                                ],
+                                'image_intent' => [
+                                    'needs_image' => false,
+                                    'css_motif' => 'thin neon table grid',
+                                ],
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'Operational tooling for dependable automation.'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
     }
 
     public function testBuildPlanUsesContentLocaleInsteadOfPlanLocaleForEveryTask(): void
@@ -83,7 +140,7 @@ final class AiSiteBuildPlanServiceTest extends TestCase
             'content_locale' => 'ar_SA',
             'default_locale' => 'ar_SA',
             'plan_locale' => 'en_US',
-            'execution_blueprint_draft' => [
+            'plan_json' => [
                 'signature' => 'stage1-signature',
                 'pages' => [
                     'home_page' => [
@@ -125,10 +182,11 @@ final class AiSiteBuildPlanServiceTest extends TestCase
 
         self::assertSame('ar_SA', $contract['i18n']['primary_locale'] ?? null);
         self::assertSame('ar_SA', $contract['content_manifest']['primary_locale'] ?? null);
-        foreach ($contract['tasks'] as $task) {
-            self::assertSame('ar_SA', $task['runtime_context']['content_locale'] ?? null);
-            self::assertSame('ar_SA', $task['runtime_context']['language_contract']['source_of_truth_locale'] ?? null);
-        }
+        self::assertArrayNotHasKey('tasks', $contract);
+        self::assertArrayNotHasKey('build_order', $contract);
+        self::assertSame('home_page', $contract['pages'][0]['page_id'] ?? null);
+        self::assertSame('home_page.hero', $contract['blocks'][0]['block_id'] ?? null);
+        self::assertSame('Launch reliable AI workflows', $contract['content_manifest']['items']['block.home_page.hero.title'] ?? null);
     }
 
     public function testBuildPlanPrefersSelectedDefaultLocaleOverPollutedProfileAndPlanLocale(): void
@@ -149,14 +207,12 @@ final class AiSiteBuildPlanServiceTest extends TestCase
                 'brief_description' => '葡萄牙语网站。所有访客文案必须是巴西葡萄牙语。',
             ],
             'plan_json' => [
+                'signature' => 'stage1-signature',
                 'content_locale' => 'zh_Hans_CN',
                 'i18n' => ['locale' => 'pt_BR'],
                 'site_strategy' => [
                     'core_goal' => 'Baixar o APK Teenipiya com segurança.',
                 ],
-            ],
-            'execution_blueprint_draft' => [
-                'signature' => 'stage1-signature',
                 'pages' => [
                     'home_page' => [
                         'title' => 'Início',
@@ -216,9 +272,10 @@ final class AiSiteBuildPlanServiceTest extends TestCase
             'page_types' => ['about_page'],
             'site_title' => 'Teenipiya',
             'brief_description' => 'Build a Portuguese APK landing page.',
+            'content_locale' => 'pt_BR',
             'default_locale' => 'pt_BR',
             'plan_locale' => 'zh_Hans_CN',
-            'execution_blueprint_draft' => [
+            'plan_json' => [
                 'signature' => 'stage1-signature',
                 'pages' => [
                     'about_page' => [
@@ -248,7 +305,9 @@ final class AiSiteBuildPlanServiceTest extends TestCase
                                     'css_motif' => '',
                                 ],
                                 'field_plan' => [
+                                    ['field' => 'title', 'sample' => 'Teenipiya APK seguro'],
                                     ['field' => 'headline', 'sample' => 'Teenipiya nasceu para jogos claros e seguros.'],
+                                    ['field' => 'copy', 'sample' => 'Teenipiya apresenta um APK claro e seguro para jogadores de Teen Patti.'],
                                     ['field' => 'supporting_copy', 'sample' => 'Cada detalhe orienta jogadores a baixar o APK correto.'],
                                     ['field' => 'cta_label', 'sample' => 'Baixar APK'],
                                 ],
@@ -276,7 +335,7 @@ final class AiSiteBuildPlanServiceTest extends TestCase
             'site_title' => 'Example Site',
             'brief_description' => 'Explain the service clearly.',
             'default_locale' => 'en_US',
-            'execution_blueprint_draft' => [
+            'plan_json' => [
                 'signature' => 'stage1-signature',
                 'pages' => [
                     'home_page' => [
@@ -333,7 +392,7 @@ final class AiSiteBuildPlanServiceTest extends TestCase
             'site_title' => 'Example Site',
             'brief_description' => 'Convert qualified buyers with clear trust proof.',
             'default_locale' => 'en_US',
-            'execution_blueprint_draft' => [
+            'plan_json' => [
                 'signature' => 'stage1-signature',
                 'pages' => [
                     'home_page' => [

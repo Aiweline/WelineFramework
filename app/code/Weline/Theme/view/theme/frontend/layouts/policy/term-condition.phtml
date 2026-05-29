@@ -41,7 +41,21 @@ $meta = $this->getData('meta') ?? [];
         <div class="weline-main-content">
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
 
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-policy-term-condition-content,layout-policy-content,layout-default-content,content,policy-content,term-condition,cms-content,faq"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="policy-term-condition__content-root-slot">
             <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> term-condition" id="term-condition-main" data-layout="policy-term-condition">
+                <w:slot id="policy-term-condition-content"
+                        name="服务条款正文"
+                        accept="layout-policy-term-condition-content,layout-policy-content,terms,policy-content,content,faq"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="policy-main__content-slot">
                 <if condition="meta.content">
                     {{meta.content}}
                 <else/>
@@ -173,7 +187,9 @@ $meta = $this->getData('meta') ?? [];
                         </div>
                     </div>
                 </if>
+                </w:slot>
             </main>
+            </w:slot>
 
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>

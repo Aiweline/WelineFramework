@@ -7,6 +7,7 @@ namespace WeShop\Customer\Controller\Frontend\Account;
 use WeShop\Customer\Service\CustomerAccountService;
 use WeShop\Customer\Session\CustomerSession;
 use WeShop\Frontend\Controller\BaseController;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 
 class Register extends BaseController
@@ -28,6 +29,8 @@ class Register extends BaseController
         $this->assign('login_url', $this->getUrl('weshop/customer/account/login'));
         $this->assign('title', __('注册'));
 
+        $this->assign('referral_code', $this->readReferralCode());
+
         return $this->fetch('WeShop_Frontend::templates/frontend/customer/account/register.phtml');
     }
 
@@ -40,6 +43,7 @@ class Register extends BaseController
         $password = (string) ($request->getPost('password') ?? '');
         $passwordConfirm = (string) ($request->getPost('password_confirm') ?? $request->getPost('confirm_password') ?? '');
         $agreeTerms = (bool) ($request->getPost('agree_terms') ?? false);
+        $referralCode = $this->readReferralCode($request);
 
         if ($firstName === '' || $lastName === '') {
             $this->getMessageManager()->addError(__('First name and last name are required.'));
@@ -70,6 +74,7 @@ class Register extends BaseController
             $result = $this->customerAccountService->register($email, $password, [
                 'first_name' => $firstName,
                 'last_name' => $lastName,
+                'referral_code' => $referralCode,
             ]);
 
             $this->customerAccountService->login($result['auth_user']);
@@ -85,5 +90,17 @@ class Register extends BaseController
     public function postRegister(): string
     {
         return $this->postIndex();
+    }
+
+    private function readReferralCode(?Request $request = null): string
+    {
+        $request ??= $this->getRequest();
+        return trim((string) (
+            $request->getPost('ref')
+            ?? $request->getParam('ref')
+            ?? $request->getPost('referral_code')
+            ?? $request->getParam('referral_code')
+            ?? ''
+        ));
     }
 }

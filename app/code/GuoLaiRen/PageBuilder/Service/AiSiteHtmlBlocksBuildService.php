@@ -1352,12 +1352,12 @@ class AiSiteHtmlBlocksBuildService
             }
             $headerItems[] = $item;
             $existingHeaderTypes[$type] = true;
-            if (\count($headerItems) >= 5) {
+            if (\count($headerItems) >= 6) {
                 break;
             }
         }
 
-        return \array_slice($headerItems !== [] ? $headerItems : $items, 0, 5);
+        return \array_slice($headerItems !== [] ? $headerItems : $items, 0, 6);
     }
 
     private function resolveScopedPageTypeLabel(array $scope, string $pageType): string

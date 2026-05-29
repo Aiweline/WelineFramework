@@ -359,6 +359,49 @@ class ApiControllerInitBeforeTest extends TestCase
         self::assertInstanceOf(ApiAppActor::class, $request->getData('api_app_actor'));
     }
 
+    public function testExecuteAllowsBusinessOwnedBearerOnGuestFrontendRoute(): void
+    {
+        $request = $this->createRequestMock(
+            'api/rest/v1/weshop/cart/mini-items',
+            'Cart',
+            'getMiniItems',
+            'WeShop\\ApiBridge\\Api\\Rest\\V1\\Weshop\\Cart',
+            authToken: 'business-owned-token',
+            apiFrontend: true
+        );
+        ObjectManager::setInstance(Request::class, $request);
+
+        $apiSecurityService = $this->createMock(ApiSecurityService::class);
+        $apiSecurityService->expects($this->never())->method('isPublicApi');
+
+        $legacyTokenService = $this->createMock(TokenService::class);
+        $legacyTokenService->expects($this->once())
+            ->method('validateAccessToken')
+            ->with('business-owned-token')
+            ->willReturn(null);
+
+        $appTokenService = $this->createMock(ApiAppTokenService::class);
+        $appTokenService->expects($this->once())
+            ->method('resolveAccessToken')
+            ->with('business-owned-token')
+            ->willReturn(null);
+
+        $observer = new ApiControllerInitBefore(
+            $request,
+            $apiSecurityService,
+            $this->createMock(IpWhitelistService::class),
+            $this->createMock(UserAgentRestrictionService::class),
+            $legacyTokenService,
+            new PublicApiAuthRouteMatcher(),
+            $appTokenService
+        );
+
+        $event = new Event(['data' => []]);
+        $observer->execute($event);
+
+        self::assertSame([], $event->getData('user'));
+    }
+
     private function createRequestMock(
         string $routeUrlPath,
         string $controller,

@@ -12,6 +12,7 @@
  * @widget.position {["footer"]}
  * @widget.page_layouts {["*"]}
  * @widget.slot {newsletter}
+ * @widget.supports {["layout-footer-newsletter","layout-global-footer-newsletter"]}
  * @widget.exclusive {true}
  * 
  * @param title {default="订阅我们的邮件",type="string",label="标题"}
@@ -42,7 +43,7 @@ $widgetId = 'footer-newsletter-' . uniqid();
     </div>
     
     <form class="newsletter-form" action="/newsletter/subscribe" method="post">
-        <div class="form-group">
+        <div class="w-form-group">
             <input type="email" 
                    name="email" 
                    class="newsletter-input" 
@@ -100,12 +101,12 @@ $widgetId = 'footer-newsletter-' . uniqid();
     margin: 0;
 }
 
-.widget-footer-newsletter .form-group {
+.widget-footer-newsletter .w-form-group {
     display: flex;
     gap: 10px;
 }
 
-.widget-footer-newsletter.layout-vertical .form-group {
+.widget-footer-newsletter.layout-vertical .w-form-group {
     flex-direction: column;
 }
 
@@ -145,7 +146,7 @@ $widgetId = 'footer-newsletter-' . uniqid();
         width: 100%;
     }
     
-    .widget-footer-newsletter .form-group {
+    .widget-footer-newsletter .w-form-group {
         flex-direction: column;
     }
 }

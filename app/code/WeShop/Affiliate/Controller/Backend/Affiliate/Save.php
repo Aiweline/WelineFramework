@@ -29,7 +29,7 @@ class Save extends BaseController
             $affiliate = $this->affiliateService->saveAffiliate([
                 'affiliate_id' => $this->request->getParam('affiliate_id', 0),
                 'customer_id' => $this->request->getParam('customer_id', 0),
-                'commission_rate' => $this->request->getParam('commission_rate', 0),
+                'commission_rate' => $this->request->getParam('commission_rate', 0.0),
                 'status' => $this->request->getParam('status', AffiliateService::STATUS_ACTIVE),
             ]);
 

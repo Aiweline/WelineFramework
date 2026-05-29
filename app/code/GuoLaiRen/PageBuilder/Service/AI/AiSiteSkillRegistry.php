@@ -244,9 +244,52 @@ final class AiSiteSkillRegistry
         $lines[] = '- Code craft gate: generated HTML fragments must be structurally balanced, component-scoped, and safe to embed; close every non-void tag before returning JSON.';
         $lines[] = '- Final gut check (silently before output): would this look like it came from a specific designer for this exact brief, or like generic AI? If generic, rebalance toward specificity (bolder color, heavier type weight, bigger hero, fewer decorative sections).';
         $lines[] = '';
+        \array_push($lines, ...$this->buildFrontendDesignPromptGuideLines());
         \array_push($lines, ...$this->buildSelectedSkillRuleLines($codes, $skillSnapshots));
 
         return $lines;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function buildFrontendDesignPromptGuideLines(): array
+    {
+        $path = $this->resolveRepositoryRelativePath(self::FRONTEND_DESIGN_SKILL_LOCAL_PATH);
+        if ($path === '' || !\is_file($path)) {
+            return [];
+        }
+
+        $body = (string)\file_get_contents($path);
+        $body = \trim($body);
+        if ($body === '') {
+            return [];
+        }
+
+        return [
+            'FRONTEND-DESIGN COMPATIBILITY RULES (user-provided total design guide):',
+            '- Local guide: ' . self::FRONTEND_DESIGN_SKILL_LOCAL_PATH,
+            '- Apply this guide to every plan page, block task, generated HTML/CSS fragment, visual treatment, and image intent.',
+            'Skill body begins:',
+            $this->excerptSkillBody($body),
+            'Skill body ends.',
+            '',
+        ];
+    }
+
+    private function resolveRepositoryRelativePath(string $relativePath): string
+    {
+        $relativePath = \trim($relativePath);
+        if ($relativePath === '') {
+            return '';
+        }
+
+        $normalized = \str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
+        if (\defined('BP')) {
+            return \rtrim((string)\constant('BP'), '\\/') . DIRECTORY_SEPARATOR . $normalized;
+        }
+
+        return \dirname(__DIR__, 6) . DIRECTORY_SEPARATOR . $normalized;
     }
 
     /**

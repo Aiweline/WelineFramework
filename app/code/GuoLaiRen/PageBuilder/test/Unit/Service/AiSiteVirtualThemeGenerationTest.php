@@ -155,4 +155,183 @@ final class AiSiteVirtualThemeGenerationTest extends TestCase
         self::assertArrayHasKey('virtual_page_layouts', $config);
         self::assertIsArray($config['virtual_page_layouts']);
     }
+
+    public function testFullVirtualThemeBuildRefreshesExistingSharedLayoutConfigs(): void
+    {
+        $suffix = \bin2hex(\random_bytes(4));
+        $siteTitle = 'PHPUnit VT Shared Refresh ' . $suffix;
+        $scope = [
+            'site_title' => $siteTitle,
+            'brief_description' => 'Unit test shared refresh scope.',
+            'page_types' => [Page::TYPE_HOME],
+            'virtual_theme_id' => 0,
+        ];
+        $websiteProfile = [
+            'site_title' => $siteTitle,
+            'brief_description' => $scope['brief_description'],
+        ];
+
+        $generation = new class extends AiSitePageComponentGenerationService {
+            public function generateSharedComponents(array $websiteProfile, array $scope): array
+            {
+                return [
+                    'header' => [
+                        'code' => 'header/ai-site-header',
+                        'name' => 'AI Site Header',
+                        'phtml' => '<header><nav>首页</nav></header>',
+                        'default_config' => [
+                            'navigation.items' => "首页=>/",
+                            'cta.text' => '立即开始',
+                        ],
+                    ],
+                    'footer' => [
+                        'code' => 'footer/ai-site-footer',
+                        'name' => 'AI Site Footer',
+                        'phtml' => '<footer><p>保留所有权利。</p></footer>',
+                        'default_config' => [
+                            'links.column1_title' => '重点页面',
+                            'copyright.text' => '保留所有权利。',
+                        ],
+                    ],
+                ];
+            }
+
+            public function generatePageSections(string $pageType, array $websiteProfile, array $scope): array
+            {
+                return [
+                    'blueprint' => ['page_label' => $pageType],
+                    'sections' => [[
+                        'code' => 'content/' . $pageType . '-unit-section',
+                        'name' => $pageType . ' Unit Section',
+                        'phtml' => '<section><h1>Unit</h1></section>',
+                        'default_config' => ['headline' => $pageType . ' headline'],
+                        'sort_order' => 100,
+                        'key' => $pageType . '_unit_section',
+                    ]],
+                ];
+            }
+        };
+
+        $existingLayouts = [
+            Page::TYPE_HOME => [
+                'header' => [
+                    'component' => 'header/ai-site-header',
+                    'config' => ['navigation.items' => 'Home=>/', 'cta.text' => 'Download Now'],
+                ],
+                'footer' => [
+                    'component' => 'footer/ai-site-footer',
+                    'config' => ['links.column1_title' => 'Featured Pages', 'copyright.text' => 'All rights reserved.'],
+                ],
+                'content' => [],
+            ],
+        ];
+
+        $service = new AiSiteVirtualThemeService(new AiSitePageBlueprintService(), $generation);
+        $result = $service->ensureAiGeneratedVirtualTheme(
+            $scope,
+            $websiteProfile,
+            [Page::TYPE_HOME],
+            $existingLayouts,
+            0
+        );
+
+        $homeLayout = $result['page_type_layouts'][Page::TYPE_HOME] ?? [];
+        self::assertSame('立即开始', $homeLayout['header']['config']['cta.text'] ?? null);
+        self::assertSame("首页=>/", $homeLayout['header']['config']['navigation.items'] ?? null);
+        self::assertSame('重点页面', $homeLayout['footer']['config']['links.column1_title'] ?? null);
+        self::assertSame('保留所有权利。', $homeLayout['footer']['config']['copyright.text'] ?? null);
+    }
+
+    public function testRegenerateAiGeneratedVirtualThemePageOnlyGeneratesTargetPage(): void
+    {
+        $suffix = \bin2hex(\random_bytes(4));
+        $siteTitle = 'PHPUnit VT Page Regen ' . $suffix;
+        $pageTypes = [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_BLOG_LIST];
+        $scope = [
+            'site_title' => $siteTitle,
+            'brief_description' => 'Unit test single page regeneration scope.',
+            'page_types' => $pageTypes,
+            'virtual_theme_id' => 0,
+        ];
+        $websiteProfile = [
+            'site_title' => $siteTitle,
+            'brief_description' => $scope['brief_description'],
+            'site_tagline' => 'Tag',
+        ];
+
+        $generation = new class extends AiSitePageComponentGenerationService {
+            /** @var list<string> */
+            public array $generatedPages = [];
+
+            public function generateSharedComponents(array $websiteProfile, array $scope): array
+            {
+                return [
+                    'header' => [
+                        'code' => 'header/ai-site-header',
+                        'name' => 'AI Site Header',
+                        'phtml' => '<header><nav>Home</nav></header>',
+                        'default_config' => ['site_title' => (string)($websiteProfile['site_title'] ?? 'Site')],
+                    ],
+                    'footer' => [
+                        'code' => 'footer/ai-site-footer',
+                        'name' => 'AI Site Footer',
+                        'phtml' => '<footer><p>Footer</p></footer>',
+                        'default_config' => ['site_title' => (string)($websiteProfile['site_title'] ?? 'Site')],
+                    ],
+                ];
+            }
+
+            public function generatePageSections(string $pageType, array $websiteProfile, array $scope): array
+            {
+                $this->generatedPages[] = $pageType;
+
+                return [
+                    'blueprint' => [
+                        'page_label' => $pageType,
+                        'sections' => [
+                            ['code' => 'content/' . $pageType . '-regen-section'],
+                        ],
+                    ],
+                    'sections' => [
+                        [
+                            'code' => 'content/' . $pageType . '-regen-section',
+                            'name' => $pageType . ' Regen Section',
+                            'phtml' => '<section><h1>' . \htmlspecialchars($pageType, \ENT_QUOTES, 'UTF-8') . '</h1></section>',
+                            'default_config' => ['headline' => $pageType . ' headline'],
+                            'sort_order' => 100,
+                            'key' => $pageType . '_regen_section',
+                        ],
+                    ],
+                ];
+            }
+        };
+        $service = new AiSiteVirtualThemeService(new AiSitePageBlueprintService(), $generation);
+
+        $initial = $service->ensureAiGeneratedVirtualTheme($scope, $websiteProfile, $pageTypes, [], 0);
+        $scope['virtual_theme_id'] = (int)$initial['virtual_theme_id'];
+        $scope['page_type_layouts'] = $initial['page_type_layouts'];
+        $generation->generatedPages = [];
+
+        $result = $service->regenerateAiGeneratedVirtualThemePage(
+            $scope,
+            $websiteProfile,
+            $pageTypes,
+            $initial['page_type_layouts'],
+            Page::TYPE_ABOUT,
+            0
+        );
+
+        self::assertSame([Page::TYPE_ABOUT], $generation->generatedPages);
+        self::assertArrayHasKey(Page::TYPE_HOME, $result['page_type_layouts']);
+        self::assertArrayHasKey(Page::TYPE_ABOUT, $result['page_type_layouts']);
+        self::assertArrayHasKey(Page::TYPE_BLOG_LIST, $result['page_type_layouts']);
+        self::assertSame('content/' . Page::TYPE_ABOUT . '-regen-section', $result['page_type_layouts'][Page::TYPE_ABOUT]['content'][0]['code'] ?? '');
+
+        /** @var VirtualTheme $themeModel */
+        $themeModel = ObjectManager::getInstance(VirtualTheme::class);
+        $loaded = clone $themeModel;
+        $loaded->clearData()->clearQuery()->load((int)$result['virtual_theme_id']);
+        $config = $loaded->getConfig();
+        self::assertSame($pageTypes, $config['selected_page_types'] ?? []);
+    }
 }

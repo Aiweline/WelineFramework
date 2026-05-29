@@ -21,17 +21,20 @@ class AffiliateAdminPageDataService
     {
         $sanitizedFilters = $this->sanitizeFilters($filters);
         $result = $this->affiliateService->getAffiliateList($page, $pageSize, $sanitizedFilters);
+        $items = is_array($result['items'] ?? null) ? $result['items'] : [];
+        $pagination = $this->normalizePagination($result, count($items), $page, $pageSize);
         $editingRecord = $editingId ? $this->affiliateService->getAffiliateRecord($editingId) : null;
         $statusOptions = $this->affiliateService->getStatusOptions();
+        $editingRecordData = $editingRecord ? $this->normalizeModel($editingRecord, $statusOptions) : $this->getEmptyRecord($statusOptions);
         $summary = $this->getSummary();
 
         return [
-            'affiliateRecords' => array_map(fn (array $record): array => $this->normalizeRecord($record, $statusOptions), $result['items'] ?? []),
+            'affiliateRecords' => array_map(fn (array $record): array => $this->normalizeRecord($record, $statusOptions), $items),
             'filters' => $sanitizedFilters,
-            'pagination' => $result['pagination'] ?? [],
+            'pagination' => $pagination,
             'statusOptions' => $statusOptions,
             'summary' => $summary,
-            'editingRecord' => $editingRecord ? $this->normalizeModel($editingRecord, $statusOptions) : $this->getEmptyRecord($statusOptions),
+            'editingRecord' => $editingRecordData,
         ];
     }
 
@@ -41,9 +44,9 @@ class AffiliateAdminPageDataService
     public function getSummary(): array
     {
         /** @var Affiliate $affiliate */
-        $affiliate = ObjectManager::getInstance(Affiliate::class);
+        $affiliate = clone ObjectManager::getInstance(Affiliate::class);
 
-        $totalResult = $affiliate->clear()->select()->fetch();
+        $totalResult = $affiliate->clear()->select()->fetchArray();
         $total = is_array($totalResult) ? count($totalResult) : 0;
 
         $activeResult = $affiliate->clear()
@@ -97,11 +100,37 @@ class AffiliateAdminPageDataService
         return $sanitized;
     }
 
+    /**
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    private function normalizePagination(array $result, int $visibleCount, int $page, int $pageSize): array
+    {
+        $pagination = is_array($result['pagination'] ?? null) ? $result['pagination'] : [];
+        $total = max(
+            0,
+            (int) ($result['total'] ?? 0),
+            (int) ($pagination['total'] ?? 0),
+            $visibleCount
+        );
+        $pageSize = max(1, $pageSize);
+
+        $pagination['page'] = max(1, (int) ($pagination['page'] ?? $page));
+        $pagination['total'] = $total;
+        $pagination['page_count'] = max(
+            1,
+            (int) ($pagination['page_count'] ?? 0),
+            (int) ceil($total / $pageSize)
+        );
+
+        return $pagination;
+    }
+
     private function normalizeModel(Affiliate $affiliate, array $statusOptions): array
     {
         $status = (string) ($affiliate->getData(Affiliate::schema_fields_STATUS) ?? '');
         $referralCode = (string) ($affiliate->getData(Affiliate::schema_fields_REFERRAL_CODE) ?? '');
-        $referralLink = $referralCode !== '' ? $this->affiliateService->getReferralBasePath() . '?ref=' . rawurlencode($referralCode) : '';
+        $referralLink = $this->affiliateService->getReferralLink($referralCode);
 
         $totalCommission = (float) ($affiliate->getData(Affiliate::schema_fields_TOTAL_COMMISSION) ?? 0.0);
         $paidCommission = (float) ($affiliate->getData(Affiliate::schema_fields_PAID_COMMISSION) ?? 0.0);
@@ -155,7 +184,7 @@ class AffiliateAdminPageDataService
 
         return [
             'affiliate_id' => 0,
-            'customer_id' => 0,
+            'customer_id' => '',
             'referral_code' => '',
             'commission_rate' => 0.10,
             'total_commission' => 0.0,

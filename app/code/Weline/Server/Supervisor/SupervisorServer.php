@@ -292,27 +292,28 @@ final class SupervisorServer
             return $session;
         }
 
+        $isHello = $type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_HELLO;
+        $isReady = $type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_READY;
+
+        $slotId = $isHello ? (string)($decoded['slot_id'] ?? $session->slotId) : $session->slotId;
         $workerId = $session->workerId;
-        $slotId = (string)($decoded['slot_id'] ?? $session->slotId);
-        if ($workerId <= 0 && \preg_match('/#(\d+)$/', $slotId, $matches) === 1) {
+        if ($isHello && $workerId <= 0 && \preg_match('/#(\d+)$/', $slotId, $matches) === 1) {
             $workerId = (int)$matches[1];
         }
 
         $port = $session->port;
-        $listen = \is_array($decoded['listen'] ?? null) ? $decoded['listen'] : [];
-        if (isset($listen['port'])) {
-            $port = (int)$listen['port'];
-        } elseif (isset($decoded['port'])) {
-            $port = (int)$decoded['port'];
+        if ($isReady) {
+            $listen = \is_array($decoded['listen'] ?? null) ? $decoded['listen'] : [];
+            if (isset($listen['port'])) {
+                $port = (int)$listen['port'];
+            } elseif (isset($decoded['port'])) {
+                $port = (int)$decoded['port'];
+            }
         }
 
         $leaseId = $session->leaseId;
         $generation = $session->generation;
-        if ($type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_LEASE_ASSIGN
-            || $type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_READY_ACK) {
-            $leaseId = (string)($decoded['lease_id'] ?? $leaseId);
-            $generation = (int)($decoded['generation'] ?? $generation);
-        } elseif (isset($decoded['lease_id']) || isset($decoded['generation'])) {
+        if ($isHello || $isReady) {
             $leaseId = (string)($decoded['lease_id'] ?? $leaseId);
             $generation = (int)($decoded['generation'] ?? $generation);
         }
@@ -324,14 +325,14 @@ final class SupervisorServer
             readBuffer: $session->readBuffer,
             writeBuffer: $session->writeBuffer,
             lastActivityAt: $session->lastActivityAt,
-            instance: (string)($decoded['instance'] ?? $session->instance),
-            channel: (string)($decoded['channel'] ?? $session->channel),
-            role: (string)($decoded['role'] ?? $session->role),
+            instance: $isHello ? (string)($decoded['instance'] ?? $session->instance) : $session->instance,
+            channel: $isHello ? (string)($decoded['channel'] ?? $session->channel) : $session->channel,
+            role: $isHello ? (string)($decoded['role'] ?? $session->role) : $session->role,
             slotId: $slotId,
             workerId: $workerId,
-            pid: (int)($decoded['pid'] ?? $session->pid),
+            pid: $isHello ? (int)($decoded['pid'] ?? $session->pid) : $session->pid,
             port: $port,
-            launchNonce: (string)($decoded['launch_nonce'] ?? $session->launchNonce),
+            launchNonce: $isHello ? (string)($decoded['launch_nonce'] ?? $session->launchNonce) : $session->launchNonce,
             leaseId: $leaseId,
             generation: $generation,
         );

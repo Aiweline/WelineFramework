@@ -32,6 +32,16 @@ final class ConsoleHttpRequestServerConfigGuardTest extends TestCase
         self::assertStringContainsString('class_exists(\GuzzleHttp\Client::class)', $contents);
     }
 
+    public function testRequestPrefersWlsRuntimeInstanceMetadata(): void
+    {
+        $contents = $this->readRequestSource();
+
+        self::assertStringContainsString('resolveWlsRuntimeHttpTarget', $contents);
+        self::assertStringContainsString("'instances' . DIRECTORY_SEPARATOR . \$safeName . '.json'", $contents);
+        self::assertStringContainsString("'ssl_enabled'", $contents);
+        self::assertStringContainsString('$runtimeTarget[\'port\']', $contents);
+    }
+
     private function readRequestSource(): string
     {
         $root = \dirname(__DIR__, 7);

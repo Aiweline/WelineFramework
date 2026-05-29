@@ -34,15 +34,40 @@ $meta = $this->getData('meta') ?? [];
 
         <main class="cart-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="cart-main" data-layout="cart">
             <w:hook>Weline_Theme::frontend::layouts::cart::main-before</w:hook>
-            <w:hook>Weline_Theme::frontend::layouts::cart::content-before</w:hook>
-            <if condition="meta.content">
-                {{meta.content}}
-                <elseif condition="content"/>
-                {{content}}
-                <elseif condition="meta.contentTemplate"/>
-                <?php echo $this->getChildHtml('content'); ?>
-            </if>
-            <w:hook>Weline_Theme::frontend::layouts::cart::content-after</w:hook>
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-cart-content,layout-default-content,content,cart-content,cross-sell,up-sell,recently-viewed,you-may-like,product-carousel"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="cart-main__content-root-slot">
+            <w:slot id="cart-content"
+                    name="购物车主内容"
+                    accept="layout-cart-content,cart-content,content"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="cart-main__content-slot">
+                <w:hook>Weline_Theme::frontend::layouts::cart::content-before</w:hook>
+                <if condition="meta.content">
+                    {{meta.content}}
+                    <elseif condition="content"/>
+                    {{content}}
+                    <elseif condition="meta.contentTemplate"/>
+                    <?php echo $this->getChildHtml('content'); ?>
+                </if>
+                <w:hook>Weline_Theme::frontend::layouts::cart::content-after</w:hook>
+            </w:slot>
+            <w:slot id="cart-recommendations"
+                    name="购物车推荐区"
+                    accept="layout-cart-recommendations,cross-sell,up-sell,recently-viewed,you-may-like,product-carousel"
+                    multiple="true"
+                    position="content"
+                    wrapper="section"
+                    class="cart-main__recommendations">
+                <w:hook>Weline_Theme::frontend::layouts::cart::recommendations</w:hook>
+            </w:slot>
+            </w:slot>
             <w:hook>Weline_Theme::frontend::layouts::cart::main-after</w:hook>
         </main>
 

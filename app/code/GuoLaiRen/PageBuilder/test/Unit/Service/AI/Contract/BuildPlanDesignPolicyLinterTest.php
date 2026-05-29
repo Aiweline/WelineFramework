@@ -22,14 +22,12 @@ final class BuildPlanDesignPolicyLinterTest extends TestCase
         $contract = $this->contract();
         $contract['policy_projection']['applied_rule_ids'][] = 'unknown.rule';
         unset($contract['design_manifest']['tokens']['motion']);
-        $contract['tasks'][0]['policy_slices'][] = 'unknown.slice';
 
         $result = (new BuildPlanDesignPolicyLinter())->validate($contract);
 
         self::assertFalse($result['valid']);
         self::assertTrue($this->hasErrorContaining($result['errors'], 'unknown.rule'));
         self::assertTrue($this->hasErrorContaining($result['errors'], 'tokens.motion'));
-        self::assertTrue($this->hasErrorContaining($result['errors'], 'unknown.slice'));
     }
 
     /**
@@ -61,7 +59,7 @@ final class BuildPlanDesignPolicyLinterTest extends TestCase
                 'tokens' => [
                     'layout' => ['container_max_width' => '1280px'],
                     'spacing' => ['desktop_section_padding' => '120px'],
-                    'typography' => ['h1' => 'clamp(40px, 6vw, 76px)'],
+                    'typography' => ['h1' => '64px desktop / 44px mobile'],
                     'colors' => ['primary' => '#2563eb'],
                     'radius' => ['component_radius' => '12px'],
                     'motion' => ['duration' => '240ms'],
@@ -72,13 +70,6 @@ final class BuildPlanDesignPolicyLinterTest extends TestCase
                     'block_id' => 'home.gallery',
                     'block_type' => 'image_gallery',
                     'visual' => ['image_integration' => 'masked cards with shared radius'],
-                ],
-            ],
-            'tasks' => [
-                [
-                    'task_id' => 'task.gallery',
-                    'policy_slices' => ['image.integrated_not_pasted'],
-                    'acceptance_rule_ids' => ['responsive.no_horizontal_scroll'],
                 ],
             ],
         ];

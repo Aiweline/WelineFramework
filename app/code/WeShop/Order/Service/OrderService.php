@@ -55,6 +55,22 @@ class OrderService
         return isset($this->getAvailableStatuses()[$status]);
     }
 
+    public function getAvailablePaymentStatuses(): array
+    {
+        return [
+            self::PAYMENT_STATUS_PENDING => (string) __('待支付'),
+            self::PAYMENT_STATUS_PAID => (string) __('已支付'),
+            self::PAYMENT_STATUS_FAILED => (string) __('支付失败'),
+            self::PAYMENT_STATUS_PARTIAL => (string) __('部分支付'),
+            self::PAYMENT_STATUS_REFUNDED => (string) __('已退款'),
+        ];
+    }
+
+    public function isValidPaymentStatus(string $paymentStatus): bool
+    {
+        return isset($this->getAvailablePaymentStatuses()[$paymentStatus]);
+    }
+
     public function createOrder(array $orderData): Order
     {
         $order = $this->newOrderModel();
@@ -69,6 +85,7 @@ class OrderService
             ->setData(Order::schema_fields_discount_amount, (float) ($orderData['discount_amount'] ?? 0))
             ->setData(Order::schema_fields_tax_amount, (float) ($orderData['tax_amount'] ?? 0))
             ->setData(Order::schema_fields_total, (float) ($orderData['total'] ?? 0))
+            ->setData(Order::schema_fields_currency_code, $this->normalizeCurrencyCode((string) ($orderData['currency_code'] ?? $orderData['currency'] ?? '')))
             ->setData(Order::schema_fields_payment_status, (string) ($orderData['payment_status'] ?? self::PAYMENT_STATUS_PENDING))
             ->setData(Order::schema_fields_fulfillment_status, (string) ($orderData['fulfillment_status'] ?? self::FULFILLMENT_STATUS_PENDING))
             ->setData(Order::schema_fields_shipping_method, (string) ($orderData['shipping_method'] ?? ''))
@@ -247,9 +264,7 @@ class OrderService
     {
         $order = $this->requireOrder($orderId);
         $status = (string) ($order->getData(Order::schema_fields_status) ?? self::STATUS_PENDING);
-        $paymentStatus = $order->hasField(Order::schema_fields_payment_status)
-            ? (string) $order->getData(Order::schema_fields_payment_status)
-            : self::PAYMENT_STATUS_PENDING;
+        $paymentStatus = (string) ($order->getData(Order::schema_fields_payment_status) ?? self::PAYMENT_STATUS_PENDING);
 
         if ($status === self::STATUS_CANCELLED || $status === self::STATUS_REFUNDED) {
             throw new \InvalidArgumentException((string) __('已取消或已退款的订单无法发货。'));
@@ -334,8 +349,8 @@ class OrderService
             $order->where(Order::schema_fields_status, (string) $filters['status']);
         }
 
-        if (!empty($filters['payment_status']) && $order->hasField('payment_status')) {
-            $order->where('payment_status', (string) $filters['payment_status']);
+        if (!empty($filters['payment_status'])) {
+            $order->where(Order::schema_fields_payment_status, (string) $filters['payment_status']);
         }
 
         $total = $this->countCustomerOrders($customerId, $filters);
@@ -371,8 +386,8 @@ class OrderService
             $order->where(Order::schema_fields_status, (string) $filters['status']);
         }
 
-        if (!empty($filters['payment_status']) && $order->hasField('payment_status')) {
-            $order->where('payment_status', (string) $filters['payment_status']);
+        if (!empty($filters['payment_status'])) {
+            $order->where(Order::schema_fields_payment_status, (string) $filters['payment_status']);
         }
 
         return (int)$order->count();
@@ -433,11 +448,8 @@ class OrderService
         $order = $this->newOrderModel();
         $order->clear()
             ->where(Order::schema_fields_customer_id, $customerId)
-            ->where(Order::schema_fields_status, [self::STATUS_PENDING, self::STATUS_PROCESSING], 'IN');
-
-        if ($order->hasField('payment_status')) {
-            $order->where('payment_status', [self::PAYMENT_STATUS_PENDING, self::PAYMENT_STATUS_FAILED], 'IN');
-        }
+            ->where(Order::schema_fields_status, [self::STATUS_PENDING, self::STATUS_PROCESSING], 'IN')
+            ->where(Order::schema_fields_payment_status, [self::PAYMENT_STATUS_PENDING, self::PAYMENT_STATUS_FAILED], 'IN');
 
         return max(0, (int) ($order->select()->getTotalCount() ?? 0));
     }
@@ -448,11 +460,8 @@ class OrderService
         $order->clear()
             ->where(Order::schema_fields_customer_id, $customerId)
             ->where(Order::schema_fields_status, [self::STATUS_PENDING, self::STATUS_PROCESSING], 'IN')
+            ->where(Order::schema_fields_payment_status, [self::PAYMENT_STATUS_PENDING, self::PAYMENT_STATUS_FAILED], 'IN')
             ->order(Order::schema_fields_created_at, 'DESC');
-
-        if ($order->hasField('payment_status')) {
-            $order->where('payment_status', [self::PAYMENT_STATUS_PENDING, self::PAYMENT_STATUS_FAILED], 'IN');
-        }
 
         return $order->select()->fetchArray();
     }
@@ -493,13 +502,8 @@ class OrderService
 
         $order = $this->requireOrder($orderId);
         $currentStatus = (string) ($order->getData(Order::schema_fields_status) ?? self::STATUS_PENDING);
-        $currentPaymentStatus = $order->hasField('payment_status')
-            ? (string) ($order->getData('payment_status') ?? self::PAYMENT_STATUS_PENDING)
-            : self::PAYMENT_STATUS_PENDING;
-
-        if ($order->hasField('payment_status')) {
-            $order->setData('payment_status', $paymentStatus);
-        }
+        $currentPaymentStatus = (string) ($order->getData(Order::schema_fields_payment_status) ?? self::PAYMENT_STATUS_PENDING);
+        $order->setData(Order::schema_fields_payment_status, $paymentStatus);
 
         $targetStatus = $this->deriveOrderStatusFromPaymentStatus($currentStatus, $paymentStatus);
         if ($targetStatus !== null && $this->canTransitionOrderStatus($currentStatus, $targetStatus)) {
@@ -549,8 +553,8 @@ class OrderService
         }
 
         $status = (string) ($order->getData(Order::schema_fields_status) ?? self::STATUS_PENDING);
-        $paymentStatus = $order->hasField('payment_status') ? (string) $order->getData('payment_status') : '';
-        $fulfillmentStatus = $order->hasField('fulfillment_status') ? (string) $order->getData('fulfillment_status') : '';
+        $paymentStatus = (string) ($order->getData(Order::schema_fields_payment_status) ?? self::PAYMENT_STATUS_PENDING);
+        $fulfillmentStatus = (string) ($order->getData(Order::schema_fields_fulfillment_status) ?? self::FULFILLMENT_STATUS_PENDING);
 
         if ($status === self::STATUS_CANCELLED) {
             return ['can_cancel' => false, 'reason' => __('订单已取消。'), 'require_return' => false];
@@ -614,13 +618,13 @@ class OrderService
 
         $order = $this->requireOrder($orderId);
         $oldStatus = (string) ($order->getData(Order::schema_fields_status) ?? self::STATUS_PENDING);
-        $paymentStatus = $order->hasField('payment_status') ? (string) $order->getData('payment_status') : '';
+        $paymentStatus = (string) ($order->getData(Order::schema_fields_payment_status) ?? self::PAYMENT_STATUS_PENDING);
 
         $order->setData(Order::schema_fields_status, self::STATUS_CANCELLED)
             ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'));
 
-        if ($order->hasField('payment_status') && $paymentStatus === self::PAYMENT_STATUS_PAID) {
-            $order->setData('payment_status', self::PAYMENT_STATUS_REFUNDED);
+        if ($paymentStatus === self::PAYMENT_STATUS_PAID) {
+            $order->setData(Order::schema_fields_payment_status, self::PAYMENT_STATUS_REFUNDED);
         }
 
         $order->save();
@@ -665,11 +669,9 @@ class OrderService
             return false;
         }
 
-        if ($order->hasField('payment_status')) {
-            $paymentStatus = (string) $order->getData('payment_status');
-            if (!in_array($paymentStatus, [self::PAYMENT_STATUS_PENDING, self::PAYMENT_STATUS_FAILED], true)) {
-                return false;
-            }
+        $paymentStatus = (string) ($order->getData(Order::schema_fields_payment_status) ?? self::PAYMENT_STATUS_PENDING);
+        if (!in_array($paymentStatus, [self::PAYMENT_STATUS_PENDING, self::PAYMENT_STATUS_FAILED], true)) {
+            return false;
         }
 
         return true;
@@ -776,17 +778,6 @@ class OrderService
     protected function getEventsManager(): EventsManager
     {
         return $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
-    }
-
-    protected function isValidPaymentStatus(string $paymentStatus): bool
-    {
-        return in_array($paymentStatus, [
-            self::PAYMENT_STATUS_PENDING,
-            self::PAYMENT_STATUS_PAID,
-            self::PAYMENT_STATUS_FAILED,
-            self::PAYMENT_STATUS_PARTIAL,
-            self::PAYMENT_STATUS_REFUNDED,
-        ], true);
     }
 
     protected function canTransitionOrderStatus(string $currentStatus, string $targetStatus): bool
@@ -965,7 +956,14 @@ class OrderService
             'discount' => $discount,
             'tax' => $tax,
             'grand_total' => $grandTotal,
+            'currency' => $this->normalizeCurrencyCode((string) ($order->getData(Order::schema_fields_currency_code) ?? '')),
         ];
+    }
+
+    protected function normalizeCurrencyCode(string $currency): string
+    {
+        $currency = strtoupper(trim($currency));
+        return preg_match('/^[A-Z]{3}$/', $currency) ? $currency : 'USD';
     }
 
     /**

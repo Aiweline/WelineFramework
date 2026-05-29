@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\View;
 
-use Weline\Framework\App\Env;
-use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 
 /**
  * Template Cache Manager
@@ -77,7 +76,7 @@ class TemplateCacheManager
 
         $sourceSize = (int) filesize($sourceFile);
         $sourceMtime = (int) (@filemtime($sourceFile) ?: 0);
-        $normalizedSource = $this->normalizePath($sourceFile);
+        $normalizedSource = $this->sourceFileKeyCacheKey($sourceFile);
         $cached = self::$sourceFileKeyCache[$normalizedSource] ?? null;
         if (
             is_array($cached)
@@ -108,13 +107,13 @@ class TemplateCacheManager
     public function getCachedFile(string $sourceFile, bool $isDev = false): ?string
     {
         $cacheKey = $this->getCacheKey($sourceFile);
-        $sourceHash = substr($cacheKey, 0, 32);
+        $artifactHash = $this->artifactHashForCacheKey($cacheKey);
 
         // L1: Check memory cache first (fastest)
         if (isset(self::$memoryCache[$cacheKey])) {
             $cached = self::$memoryCache[$cacheKey];
             if ($this->isCacheValid($cached, $sourceFile, $isDev)) {
-                return $this->cacheRoot . DS . substr($cacheKey, 0, 32) . '.phtml';
+                return $this->cacheRoot . DS . $artifactHash . '.phtml';
             }
         }
 
@@ -128,8 +127,8 @@ class TemplateCacheManager
         }
 
         $entry = $this->manifest[$normalizedSource];
-        $metaFile = $this->getMetaFilePath($sourceHash);
-        $compiledFile = $this->cacheRoot . DS . $sourceHash . '.phtml';
+        $metaFile = $this->getMetaFilePath($artifactHash);
+        $compiledFile = $this->cacheRoot . DS . $artifactHash . '.phtml';
 
         // Verify meta file exists and is valid
         if (!is_file($metaFile) || !is_file($compiledFile)) {
@@ -187,12 +186,12 @@ class TemplateCacheManager
         $this->ensureCacheDir();
 
         $cacheKey = $this->getCacheKey($sourceFile);
-        $sourceHash = substr($cacheKey, 0, 32);
+        $artifactHash = $this->artifactHashForCacheKey($cacheKey);
         $sourceMtime = filemtime($sourceFile);
 
-        $metaFile = $this->getMetaFilePath($sourceHash);
-        $compiledFile = $this->cacheRoot . DS . $sourceHash . '.phtml';
-        $lockFile = $this->cacheRoot . DS . $sourceHash . '.lock';
+        $metaFile = $this->getMetaFilePath($artifactHash);
+        $compiledFile = $this->cacheRoot . DS . $artifactHash . '.phtml';
+        $lockFile = $this->cacheRoot . DS . $artifactHash . '.lock';
 
         // Acquire process lock to prevent concurrent compilation
         $lock = fopen($lockFile, 'c+');
@@ -226,7 +225,7 @@ class TemplateCacheManager
             }
 
             // Ensure cache directory exists (including subdirectory for meta files)
-            $this->ensureCacheDir(substr($sourceHash, 0, 2));
+            $this->ensureCacheDir(substr($artifactHash, 0, 2));
 
             // Write compiled content
             if (file_put_contents($compiledFile, $compiledContent) === false) {
@@ -329,23 +328,41 @@ class TemplateCacheManager
      */
     private function updateManifest(string $sourceFile, string $compiledFile, array $meta): void
     {
+        if ($this->manifest === null) {
+            $this->loadManifest();
+        }
+
         $normalizedSource = $this->normalizePath($sourceFile);
 
         $this->manifest[$normalizedSource] = [
-            'hash' => substr($meta['content_hash'], 0, 32),
+            'hash' => $this->artifactHashForCacheKey((string)$meta['content_hash']),
             'compiled' => $this->normalizePath($compiledFile),
             'compiled_mtime' => $meta['compiled_at'],
             'source_size' => $meta['source_size'],
         ];
 
-        // Write manifest atomically (write to temp, then rename)
-        $tempFile = $this->manifestFile . '.tmp';
-        $content = serialize($this->manifest);
+        $this->writeManifestFile();
+    }
 
-        file_put_contents($tempFile, $content);
-        rename($tempFile, $this->manifestFile);
+    private function writeManifestFile(): void
+    {
+        $this->ensureCacheDir();
 
-        $this->manifestMtime = time();
+        $content = serialize($this->manifest ?? []);
+        $tempFile = $this->manifestFile . '.' . getmypid() . '.' . str_replace('.', '', uniqid('', true)) . '.tmp';
+
+        if (@file_put_contents($tempFile, $content, LOCK_EX) === false) {
+            throw new \RuntimeException(__('Failed to write template manifest temp file: %{1}', $tempFile));
+        }
+
+        if (!@rename($tempFile, $this->manifestFile)) {
+            @unlink($tempFile);
+            if (@file_put_contents($this->manifestFile, $content, LOCK_EX) === false) {
+                throw new \RuntimeException(__('Failed to write template manifest file: %{1}', $this->manifestFile));
+            }
+        }
+
+        $this->manifestMtime = (int)(@filemtime($this->manifestFile) ?: time());
     }
 
     /**
@@ -373,8 +390,8 @@ class TemplateCacheManager
         $this->ensureCacheDir();
 
         $cacheKey = $this->getCacheKey($sourceFile);
-        $sourceHash = substr($cacheKey, 0, 32);
-        $lockFile = $this->cacheRoot . DS . $sourceHash . '.lock';
+        $artifactHash = $this->artifactHashForCacheKey($cacheKey);
+        $lockFile = $this->cacheRoot . DS . $artifactHash . '.lock';
 
         if (!is_file($lockFile)) {
             return false;
@@ -441,16 +458,16 @@ class TemplateCacheManager
         }
 
         $cacheKey = $this->getCacheKey($sourceFile);
-        $sourceHash = substr($cacheKey, 0, 32);
+        $artifactHash = $this->artifactHashForCacheKey($cacheKey);
         $normalizedSource = $this->normalizePath($sourceFile);
 
         // Remove from L1
         unset(self::$memoryCache[$cacheKey]);
-        unset(self::$sourceFileKeyCache[$normalizedSource]);
+        unset(self::$sourceFileKeyCache[$this->sourceFileKeyCacheKey($sourceFile)]);
 
         // Remove from disk
-        $metaFile = $this->getMetaFilePath($sourceHash);
-        $compiledFile = $this->cacheRoot . DS . $sourceHash . '.phtml';
+        $metaFile = $this->getMetaFilePath($artifactHash);
+        $compiledFile = $this->cacheRoot . DS . $artifactHash . '.phtml';
 
         @unlink($metaFile);
         @unlink($compiledFile);
@@ -459,7 +476,7 @@ class TemplateCacheManager
         $this->loadManifest();
         if (isset($this->manifest[$normalizedSource])) {
             unset($this->manifest[$normalizedSource]);
-            file_put_contents($this->manifestFile, serialize($this->manifest));
+            $this->writeManifestFile();
         }
     }
 
@@ -521,6 +538,16 @@ class TemplateCacheManager
         return str_replace(['/', '\\'], DS, rtrim($path, '/\\'));
     }
 
+    private function artifactHashForCacheKey(string $cacheKey): string
+    {
+        return md5($cacheKey);
+    }
+
+    private function sourceFileKeyCacheKey(string $sourceFile): string
+    {
+        return $this->normalizePath($sourceFile) . '|' . $this->sourceCacheEnvironmentHash();
+    }
+
     private function shouldUseSourceKeyCache(): bool
     {
         if (\defined('DEV') && DEV) {
@@ -537,12 +564,12 @@ class TemplateCacheManager
             throw new \RuntimeException(__('Failed to hash template source file: %{1}', $sourceFile));
         }
 
-        $lang = State::getLangLocal();
-        if ($lang === '') {
-            $lang = (string) Env::default_LANGUAGE_CODE;
-        }
+        return $hash . '-' . filesize($sourceFile) . '-' . $this->sourceCacheEnvironmentHash();
+    }
 
-        return $hash . '-' . filesize($sourceFile) . '-' . $lang;
+    private function sourceCacheEnvironmentHash(): string
+    {
+        return KeyBuilder::environmentHash(['scope' => 'template-compile']);
     }
 
     /**

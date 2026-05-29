@@ -1188,10 +1188,10 @@ HTML;
 }
 
 #{$id} .{$cls}-title {
-    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    font-size: 2.25rem;
     font-weight: 700;
     margin-bottom: 20px;
-    letter-spacing: -0.025em;
+    letter-spacing: 0;
 }
 
 #{$id} .{$cls}-desc {

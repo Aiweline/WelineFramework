@@ -340,6 +340,10 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
 
     <form action="/customer/account/register" method="post" class="auth-form__body">
         <?= $this->getFormKey('/customer/account/register') ?>
+        <?php $referralCode = trim((string) ($this->getData('referral_code') ?? ($_GET['ref'] ?? ''))); ?>
+        <?php if ($referralCode !== ''): ?>
+            <input type="hidden" name="ref" value="<?= htmlspecialchars($referralCode, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endif; ?>
 
         <div id="registerClientError" class="wflash wflash--danger auth-form__error" role="alert" hidden></div>
 
@@ -537,6 +541,16 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
         return accountApiPromise;
     }
 
+    function canUseAccountApi() {
+        return Boolean(
+            window.Weline
+            && (
+                (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
+                || typeof window.Weline.load === 'function'
+            )
+        );
+    }
+
     function formDataToObject(formData) {
         var payload = {};
         formData.forEach(function(value, key) {
@@ -630,7 +644,6 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
         });
 
         form.addEventListener('submit', function(e) {
-            e.preventDefault();
             var password = passwordEl.value;
             var confirmPassword = confirmPasswordEl.value;
 
@@ -662,6 +675,11 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
                 return;
             }
 
+            if (!canUseAccountApi()) {
+                return;
+            }
+
+            e.preventDefault();
             setRegisterLoading(form, true);
             getAccountApi()
                 .then(function(AccountApi) {

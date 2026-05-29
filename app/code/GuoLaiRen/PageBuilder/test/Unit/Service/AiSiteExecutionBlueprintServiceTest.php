@@ -55,6 +55,75 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         );
     }
 
+    public function testStageOneContentLocalePrefersGeneratedPlanLocaleOverStaleScopeLocale(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'resolveStageOneContentLocale');
+        $method->setAccessible(true);
+
+        self::assertSame(
+            'zh_Hans_CN',
+            (string)$method->invoke($service, [
+                'plan_locale' => 'zh_Hans_CN',
+                'content_locale' => 'en_US',
+                'plan_generated_locale' => 'zh_Hans_CN',
+                'plan_json' => [
+                    'content_locale' => 'zh_Hans_CN',
+                    'stage1_contract' => [
+                        'content_locale' => 'zh_Hans_CN',
+                    ],
+                ],
+                'stage1_contract' => [
+                    'content_locale' => 'en_US',
+                ],
+            ], 'zh_Hans_CN')
+        );
+
+        self::assertSame(
+            'zh_Hans_CN',
+            (string)$method->invoke($service, [
+                'plan_locale' => 'zh_Hans_CN',
+                'content_locale' => 'en_US',
+                'website_profile' => [
+                    'default_locale' => 'en_US',
+                    'content_locale' => 'en_US',
+                ],
+                'plan_json' => [
+                    'content_locale' => 'en_US',
+                    'stage1_contract' => [
+                        'content_locale' => 'zh_Hans_CN',
+                    ],
+                ],
+            ], 'zh_Hans_CN')
+        );
+    }
+
+    public function testPalettePlanIgnoresNegatedGamingTermsForSaasBrief(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'buildPalettePlan');
+        $method->setAccessible(true);
+
+        $palette = $method->invoke($service, [
+            'brief_description' => 'Workflow automation SaaS for operations teams. Avoid gaming, casino, APK, reward, card, neon, or gambling visual language.',
+        ], [], '');
+
+        self::assertSame('Signal Blue', $palette['name'] ?? null);
+    }
+
+    public function testPalettePlanStillHonorsPositiveGamingBrief(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'buildPalettePlan');
+        $method->setAccessible(true);
+
+        $palette = $method->invoke($service, [
+            'brief_description' => 'Create a poker game landing page for tournament players.',
+        ], [], '');
+
+        self::assertSame('Midnight Ember', $palette['name'] ?? null);
+    }
+
     public function testStageOneJsonRetryParamsPreserveStrictBlockSegmentSchema(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
@@ -153,6 +222,8 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringNotContainsString('placeholder', $promptText);
         self::assertStringNotContainsString('占位', $promptText);
         self::assertStringContainsString('html input hint attribute', $promptText);
+        self::assertStringContainsString('partner marks', $promptText);
+        self::assertStringContainsString('logo-style marks', $promptText);
     }
 
     public function testStageOnePagePromptProvidesExactBlockKeyFramework(): void
@@ -261,6 +332,16 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertStringContainsString('home_page', (string)($artifacts['markdown'] ?? ''));
         self::assertStringContainsString('about_page', (string)($artifacts['markdown'] ?? ''));
         self::assertIsArray($artifacts['plan_json'] ?? null);
+        $stageOneContract = $artifacts['plan_json']['stage1_contract'] ?? [];
+        $stageOneValidationReport = $artifacts['plan_json']['stage1_validation_report'] ?? [];
+        self::assertIsArray($stageOneContract);
+        self::assertIsArray($stageOneValidationReport);
+        self::assertNotSame('', (string)($stageOneContract['contract_hash'] ?? ''));
+        self::assertTrue((bool)($stageOneValidationReport['passed'] ?? false));
+        self::assertSame(
+            (string)($stageOneContract['contract_hash'] ?? ''),
+            (string)($stageOneValidationReport['contract_hash'] ?? '')
+        );
         self::assertStageOneThemeDesignSchema($artifacts['plan_json']['theme_design'] ?? null);
         self::assertStageOneThemeDesignSchema($artifacts['structured']['shared_plan']['theme_design'] ?? null);
         self::assertStageOneThemeDesignSchema($artifacts['execution_blueprint']['shared_prompt_context']['theme_design'] ?? null);

@@ -26,9 +26,14 @@ class AffiliateServiceTest extends TestCase
                 ];
             }
 
-            public function getReferralBasePath(): string
+            public function getReferralLink(string $referralCode): string
             {
-                return '/register';
+                return 'https://shop.example.test/customer/account/register?ref=' . rawurlencode($referralCode);
+            }
+
+            protected function getDefaultShareLinkData(int $customerId): array
+            {
+                return [];
             }
 
             protected function getAffiliateMetrics(int $affiliateId): array
@@ -51,6 +56,17 @@ class AffiliateServiceTest extends TestCase
                     'cancelled_commission' => 0.0,
                 ];
             }
+
+            protected function getAffiliateWorkspaceData(int $affiliateId): array
+            {
+                return [
+                    'share_links' => [],
+                    'referred_customers' => [],
+                    'promoted_products' => [],
+                    'affiliate_orders' => [],
+                    'commission_ledger' => [],
+                ];
+            }
         };
 
         $summary = $service->getAffiliateSummary(12);
@@ -58,7 +74,10 @@ class AffiliateServiceTest extends TestCase
         $this->assertSame(12, $summary['affiliate_id']);
         $this->assertSame('REF00000012ABCD', $summary['referral_code']);
         $this->assertSame(119.5, $summary['pending_commission']);
-        $this->assertSame('/register?ref=REF00000012ABCD', $summary['referral_link']);
+        $this->assertSame('https://shop.example.test/customer/account/register?ref=REF00000012ABCD', $summary['referral_link']);
+        $this->assertStringStartsWith('https://', $summary['referral_link']);
+        $this->assertStringContainsString('/customer/account/register?ref=', $summary['referral_link']);
+        $this->assertStringNotContainsString('https://shop.example.test/register?ref=', $summary['referral_link']);
     }
 
     public function testCommissionBaseDeductsOrderDiscountProportionally(): void
@@ -131,6 +150,27 @@ class AffiliateServiceTest extends TestCase
                     'cancelled_commission' => 0.0,
                 ];
             }
+
+            public function getReferralLink(string $referralCode): string
+            {
+                return 'https://shop.example.test/customer/account/register?ref=' . rawurlencode($referralCode);
+            }
+
+            protected function getDefaultShareLinkData(int $customerId): array
+            {
+                return [];
+            }
+
+            protected function getAffiliateWorkspaceData(int $affiliateId): array
+            {
+                return [
+                    'share_links' => [],
+                    'referred_customers' => [],
+                    'promoted_products' => [],
+                    'affiliate_orders' => [],
+                    'commission_ledger' => [],
+                ];
+            }
         };
 
         $summary = $service->getAffiliateSummary(21);
@@ -151,5 +191,32 @@ class AffiliateServiceTest extends TestCase
         $method->setAccessible(true);
 
         $this->assertSame('/product/frontend/product/view?id=652', $method->invoke($service, $share));
+    }
+
+    public function testShareTargetUsesPublicProductHandleWithoutExtraIdParam(): void
+    {
+        $service = new AffiliateService();
+        $share = new AffiliateShare();
+        $share->setData(AffiliateShare::schema_fields_PRODUCT_ID, 1075);
+        $share->setData(AffiliateShare::schema_fields_TARGET_PATH, 'product/airpods-pro-magsafe');
+
+        $method = new \ReflectionMethod(AffiliateService::class, 'resolveShareTargetUrl');
+        $method->setAccessible(true);
+
+        $this->assertSame('/product/airpods-pro-magsafe', $method->invoke($service, $share));
+    }
+
+    public function testProductShareRedirectRecordsProductViewFallbackForCachedProductPages(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../../Service/AffiliateService.php');
+
+        $this->assertStringContainsString('private const PRODUCT_VIEW_DEDUPE_SECONDS = 60;', $source);
+        $this->assertStringContainsString('$this->recordEngagement(self::EVENT_PRODUCT_VIEWED', $source);
+        $this->assertStringContainsString("'source' => 'product_share_redirect'", $source);
+        $this->assertStringContainsString("'idempotency_key' => 'product_share_redirect:' . \$shareId . ':' . \$visitorKey", $source);
+        $this->assertStringContainsString(
+            '$this->hasRecentTouch($shareId, $eventType, $visitorKey, self::PRODUCT_VIEW_DEDUPE_SECONDS)',
+            $source
+        );
     }
 }

@@ -158,4 +158,76 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
             self::assertNotEmpty($block['block_contract']['media_strategy']['css_motif'] ?? '');
         }
     }
+
+    public function testNeonCardBriefCreatesRoleSpecificImageSubjects(): void
+    {
+        $scope = [
+            'site_title' => '霓虹棋牌馆',
+            'brief_description' => '打造一个霓虹棋牌风格的线上娱乐网站，包含玩家证明、玩法亮点、攻略内容和客服支持。',
+            'page_types' => ['home_page'],
+        ];
+        $pagePlans = [
+            'home_page' => [
+                'blocks' => [
+                    ['block_key' => 'hero', 'page_flow_role' => 'opening', 'goal' => '用霓虹牌桌主视觉吸引玩家进入房间。'],
+                    ['block_key' => 'game_features', 'page_flow_role' => 'details', 'goal' => '展示热门棋牌房间、活动福利和快速上手体验。'],
+                    ['block_key' => 'player_proof', 'page_flow_role' => 'proof', 'goal' => '展示玩家评价、规则透明和支持入口。'],
+                    ['block_key' => 'support_center', 'page_flow_role' => 'support', 'goal' => '说明客服、账号和规则帮助。'],
+                    ['block_key' => 'final_cta', 'page_flow_role' => 'cta', 'goal' => '邀请玩家进入下一场牌局。'],
+                ],
+            ],
+        ];
+        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $pagePlans);
+
+        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $pagePlans, $siteDesignSystem);
+        $blocks = $assembled['page_plans']['home_page']['blocks'] ?? [];
+
+        $subjectsByKey = [];
+        foreach ($blocks as $block) {
+            $key = (string)($block['block_key'] ?? '');
+            $subjectsByKey[$key] = (string)($block['block_contract']['media_strategy']['image_subject'] ?? '');
+        }
+
+        self::assertStringContainsString('neon card-game lobby hero scene', $subjectsByKey['hero'] ?? '');
+        self::assertStringContainsString('neon card-game feature scene', $subjectsByKey['game_features'] ?? '');
+        self::assertStringContainsString('player trust proof scene', $subjectsByKey['player_proof'] ?? '');
+        self::assertNotSame($subjectsByKey['hero'] ?? '', $subjectsByKey['player_proof'] ?? '');
+        self::assertStringContainsString('support-console', (string)($blocks[3]['block_contract']['media_strategy']['css_motif'] ?? ''));
+    }
+
+    public function testBlockContractPreservesPlannedGeneratedImageSubject(): void
+    {
+        $scope = [
+            'site_title' => 'Neon Table Club',
+            'brief_description' => 'Neon card-game site with game rooms, player proof, strategy guides, and support.',
+            'page_types' => ['home_page'],
+        ];
+        $pagePlans = [
+            'home_page' => [
+                'blocks' => [[
+                    'block_key' => 'reward_feature',
+                    'page_flow_role' => 'details',
+                    'goal' => 'Show limited-time table rewards.',
+                    'image_intent' => [
+                        'needs_image' => true,
+                        'image_subject' => 'block visual for rewards: neon poker chips, mahjong tiles, bonus cards, and live table prize UI',
+                        'image_treatment' => 'tight section crop with cyan-magenta prize glow',
+                    ],
+                ]],
+            ],
+        ];
+        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $pagePlans);
+
+        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $pagePlans, $siteDesignSystem);
+        $block = $assembled['page_plans']['home_page']['blocks'][0] ?? [];
+        $media = \is_array($block['block_contract']['media_strategy'] ?? null)
+            ? $block['block_contract']['media_strategy']
+            : [];
+
+        self::assertSame(
+            'block visual for rewards: neon poker chips, mahjong tiles, bonus cards, and live table prize UI',
+            (string)($media['image_subject'] ?? '')
+        );
+        self::assertSame('tight section crop with cyan-magenta prize glow', (string)($media['image_treatment'] ?? ''));
+    }
 }

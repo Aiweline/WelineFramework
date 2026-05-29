@@ -39,7 +39,20 @@ $this->assign('title', $title);
     @template(Weline_Frontend::templates/public/header.phtml)
     
     <main class="checkout-success-main <?= htmlspecialchars($class ?? '') ?>" id="checkout-success-main" data-layout="checkout_success">
-        <div class="checkout-success-container">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-checkout-success-content,layout-default-content,content,checkout-success-content,order-summary,success-state,product-carousel,recently-viewed,you-may-like"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-success-main__content-root-slot">
+        <w:slot id="checkout-success-content"
+                name="结算成功内容"
+                accept="layout-checkout-success-content,checkout-success,order-confirmation,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-success-container">
             <div class="checkout-success-content">
                 <div class="success-icon">
                     <i class="fas fa-check-circle"></i>
@@ -66,16 +79,26 @@ $this->assign('title', $title);
                 
                 <div class="success-actions">
                     <?php if ($viewOrder): ?>
-                        <a href="<?= htmlspecialchars($viewOrder) ?>" class="btn btn-primary">
+                        <a href="<?= htmlspecialchars($viewOrder) ?>" class="w-btn w-btn-primary">
                             <?= __('查看订单') ?>
                         </a>
                     <?php endif; ?>
-                    <a href="<?= htmlspecialchars($continueShopping) ?>" class="btn btn-secondary">
+                    <a href="<?= htmlspecialchars($continueShopping) ?>" class="w-btn w-btn-secondary">
                         <?= __('继续购物') ?>
                     </a>
                 </div>
             </div>
-        </div>
+        </w:slot>
+        <w:slot id="checkout-success-recommendations"
+                name="结算成功推荐区"
+                accept="layout-checkout-success-recommendations,featured-products,bestsellers,new-arrivals,you-may-like,product-carousel"
+                multiple="true"
+                position="content"
+                wrapper="section"
+                class="checkout-success-recommendations">
+            <w:hook>Weline_Theme::frontend::layouts::checkout_success::recommendations</w:hook>
+        </w:slot>
+        </w:slot>
     </main>
     
     @template(Weline_Frontend::templates/public/footer.phtml)

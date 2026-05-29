@@ -394,6 +394,45 @@ final class StatusCommandTest extends TestCase
         self::assertSame('-k https://127.0.0.1:9981', $status->target($info));
     }
 
+    public function testMasterRuntimeStateFallsBackToManagedPidWhenIpcIsUnavailable(): void
+    {
+        $status = new class extends Status {
+            /**
+             * @param array<int, array{pid: int, exists: bool, name?: string, command?: string, memory?: string, cpu?: string, start_time?: string}> $processInfoMap
+             * @return array{running: bool, ipc_ok: bool, source: string, message: string}
+             */
+            public function state(ServerInstanceInfo $info, array $processInfoMap): array
+            {
+                return $this->resolveMasterRuntimeState($info, $processInfoMap);
+            }
+        };
+
+        $info = new ServerInstanceInfo(
+            name: 'default',
+            masterPid: 1234,
+            controlPort: 0,
+            host: '127.0.0.1',
+            port: 9981,
+            sslEnabled: false,
+            dispatcherEnabled: false,
+            workerCount: 1,
+            workerBasePort: 19982,
+            httpRedirectPort: 0,
+            startedAt: '2026-05-25 00:00:00',
+            startedTimestamp: 1779667200,
+            services: [],
+        );
+
+        $state = $status->state($info, [
+            1234 => ['pid' => 1234, 'exists' => true],
+        ]);
+
+        self::assertTrue($state['running']);
+        self::assertFalse($state['ipc_ok']);
+        self::assertSame('pid', $state['source']);
+        self::assertNotSame('', $state['message']);
+    }
+
     /**
      * @param ServiceInfo[] $services
      */

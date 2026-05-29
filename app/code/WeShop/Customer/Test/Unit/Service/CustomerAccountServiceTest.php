@@ -11,6 +11,7 @@ use WeShop\Customer\Service\CustomerProfileService;
 use WeShop\Customer\Session\CustomerSession;
 use Weline\Customer\Model\Customer as AuthCustomer;
 use Weline\Customer\Model\CustomerToken;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 
 class CustomerAccountServiceTest extends TestCase
@@ -32,6 +33,11 @@ class CustomerAccountServiceTest extends TestCase
     {
         $authCustomer = $this->createAuthCustomerDouble();
         $profileService = $this->createMock(CustomerProfileService::class);
+        $eventsManager = $this->createMock(EventsManager::class);
+        $eventsManager->expects($this->exactly(2))
+            ->method('dispatch')
+            ->willReturnSelf();
+
         $profileService->expects($this->once())
             ->method('getOrCreateByAuthUser')
             ->with(
@@ -49,7 +55,8 @@ class CustomerAccountServiceTest extends TestCase
             $profileService,
             $this->createMock(CustomerSession::class),
             $this->createMock(Request::class),
-            $this->createMock(CustomerToken::class)
+            $this->createMock(CustomerToken::class),
+            $eventsManager
         ) extends CustomerAccountService {
             public function findAuthUserByEmail(string $email): ?AuthCustomer
             {

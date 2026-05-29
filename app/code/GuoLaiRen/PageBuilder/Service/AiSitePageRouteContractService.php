@@ -16,6 +16,7 @@ final class AiSitePageRouteContractService
         Page::TYPE_ABOUT,
         Page::TYPE_BLOG_LIST,
         Page::TYPE_CONTACT,
+        Page::TYPE_CUSTOM,
     ];
 
     /** @var list<string> */

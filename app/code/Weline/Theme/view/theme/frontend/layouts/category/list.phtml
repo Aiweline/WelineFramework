@@ -40,25 +40,51 @@ $this->assign('title', $title);
     <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
     
     <main class="category-list-main <?= htmlspecialchars($class ?? '') ?>" id="category-list-main" data-layout="category_list">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-category-list-content,layout-category-content,layout-default-content,content,category-list,category-filter,category-grid,category-nav"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="category-list-main__content-root-slot">
         <div class="category-list-container">
             <?php if ($categoryNav): ?>
                 <nav class="category-nav">
-                    {{categoryNav}}
+                    <w:slot id="category-list-nav"
+                            name="分类列表导航"
+                            accept="layout-category-list-nav,category-list,category-menu,navigation"
+                            multiple="true"
+                            position="content">
+                        {{categoryNav}}
+                    </w:slot>
                 </nav>
             <?php endif; ?>
             
             <div class="category-content-wrapper">
                 <?php if ($filters): ?>
                     <aside class="category-filters">
-                        {{filters}}
+                        <w:slot id="category-list-filters"
+                                name="分类列表筛选"
+                                accept="layout-category-filters,layout-category-list-filters,category-filters,attribute-filter,price-filter"
+                                multiple="true"
+                                position="sidebar">
+                            {{filters}}
+                        </w:slot>
                     </aside>
                 <?php endif; ?>
                 
-                <div class="category-content">
+                <w:slot id="category-list-content"
+                        name="分类列表内容"
+                        accept="layout-category-list-content,layout-category-products,product-grid,product-list-view,category-children"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="category-content">
                     {{content}}
-                </div>
+                </w:slot>
             </div>
         </div>
+        </w:slot>
     </main>
     
     @template(Weline_Frontend::templates/public/footer.phtml)

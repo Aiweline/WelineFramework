@@ -26,9 +26,9 @@ class Run implements \Weline\Framework\Console\CommandInterface
 {
     private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
     private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [
-        'GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue' => '1G',
-        'GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue' => '1G',
-        'GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue' => '1G',
+        'GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue' => '512M',
+        'GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue' => '512M',
+        'GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue' => '512M',
     ];
 
     private Printing $printing;
@@ -170,6 +170,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $result = $queue_execute->execute($queue);
                 // execute() 内常通过 w_query 等直接更新库里的 result；此处必须重新 load，否则会用过期内存覆盖掉过程日志
                 $queue = $this->newQueueModel()->load($id);
+                if ($this->shouldPreserveQueueStateAfterExecute($queue)) {
+                    $queue->setResult(\trim($queue->getResult() . PHP_EOL . $result))
+                        ->save();
+                    $this->printing->title(__('闃熷垪鎵ц璇︽儏') . ' queue_id=' . $id);
+                    $this->printing->note($queue->getResult());
+
+                    return $result;
+                }
                 $queue->setStatus($queue::status_done)
                     ->setPid(0)
                     ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
@@ -197,6 +205,20 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 ->save();
         }
         return $result;
+    }
+
+    private function shouldPreserveQueueStateAfterExecute(Queue $queue): bool
+    {
+        $status = \trim((string)$queue->getStatus());
+        if ($status === '' || $queue->isFinished()) {
+            return false;
+        }
+
+        return \in_array($status, [
+            $queue::status_pending,
+            $queue::status_error,
+            $queue::status_stop,
+        ], true);
     }
 
     /**

@@ -43,4 +43,36 @@ class AccountBindServiceTest extends TestCase
 
         $this->assertSame($rawToken, $decrypted);
     }
+
+    public function testPlatformApiBaseUrlRemovesCurrencyLocaleSuffix(): void
+    {
+        $method = new ReflectionMethod(AccountBindService::class, 'normalizePlatformApiBaseUrl');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            'http://127.0.0.1:9502',
+            $method->invoke(null, 'http://127.0.0.1:9502/CNY/zh_Hans_CN')
+        );
+        $this->assertSame(
+            'https://apps.example.test',
+            $method->invoke(null, 'https://apps.example.test/usd/en_US/')
+        );
+        $this->assertSame(
+            'https://apps.example.test/store',
+            $method->invoke(null, 'https://apps.example.test/store')
+        );
+    }
+
+    public function testGetPlatformApiUrlAppendsPathToNormalizedBase(): void
+    {
+        $service = (new ReflectionClass(AccountBindService::class))->newInstanceWithoutConstructor();
+        $property = new \ReflectionProperty(AccountBindService::class, 'platformApiUrl');
+        $property->setAccessible(true);
+        $property->setValue($service, 'http://127.0.0.1:9502');
+
+        $this->assertSame(
+            'http://127.0.0.1:9502/api/v1/platform/module/check-update',
+            $service->getPlatformApiUrl('/api/v1/platform/module/check-update')
+        );
+    }
 }

@@ -72,6 +72,7 @@ $colors = $this->getData('colors') ?? [];
                 -->
                 <w:slot id="content" 
                         name="内容区域"
+                        accept="layout-homepage-content,layout-default-content,content,container,banner,carousel,product,category"
                         multiple="true"
                         reject="header,footer"
                         position="content"
@@ -84,56 +85,106 @@ $colors = $this->getData('colors') ?? [];
                             <div class="homepage-default-widgets">
                                 
                                 <!-- 1. Hero 轮播图 -->
-                                <section class="homepage-section section-hero">
+                                <w:slot id="homepage-hero"
+                                        name="首页主视觉"
+                                        accept="layout-homepage-hero,hero-slider,promo-banner,banner,carousel"
+                                        exclusive="true"
+                                        multiple="false"
+                                        position="content"
+                                        wrapper="section"
+                                        class="homepage-section section-hero">
                                     <w:widget type="banner" name="hero-slider" params='{"autoplay":true,"autoplay_speed":5000,"show_dots":true,"show_arrows":true,"height":"500px"}'/>
-                                </section>
+                                </w:slot>
                                 
                                 <!-- 2. 推荐产品 -->
-                                <section class="homepage-section section-featured">
+                                <w:slot id="homepage-featured"
+                                        name="首页推荐产品"
+                                        accept="layout-homepage-featured,featured-products,product-carousel,product"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="section"
+                                        class="homepage-section section-featured">
                                     <div class="container">
                                         <w:widget type="product" name="featured-products" params='{"title":"推荐产品","subtitle":"为您精选的优质商品","limit":8,"columns":"4","show_price":true,"show_rating":true,"show_add_to_cart":true,"layout":"grid"}'/>
                                     </div>
-                                </section>
+                                </w:slot>
                                 
                                 <!-- 3. 分类网格 -->
-                                <section class="homepage-section section-categories">
+                                <w:slot id="homepage-categories"
+                                        name="首页分类入口"
+                                        accept="layout-homepage-categories,category-grid,category-list,category"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="section"
+                                        class="homepage-section section-categories">
                                     <div class="container">
                                         <w:widget type="category" name="category-grid" params='{"title":"热门分类","subtitle":"探索我们的商品分类","columns":"4","show_product_count":true}'/>
                                     </div>
-                                </section>
+                                </w:slot>
                                 
                                 <!-- 4. 新品上市 -->
-                                <section class="homepage-section section-new-arrivals">
+                                <w:slot id="homepage-new-arrivals"
+                                        name="首页新品区"
+                                        accept="layout-homepage-new-arrivals,new-arrivals,product-carousel,product"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="section"
+                                        class="homepage-section section-new-arrivals">
                                     <div class="container">
                                         <w:widget type="product" name="new-arrivals" params='{"title":"新品上市","subtitle":"发现最新上架的商品","limit":4,"columns":"4","show_price":true,"show_rating":true}'/>
                                     </div>
-                                </section>
+                                </w:slot>
                                 
                                 <!-- 5. 促销横幅 -->
-                                <section class="homepage-section section-promo">
+                                <w:slot id="homepage-promo"
+                                        name="首页促销横幅"
+                                        accept="layout-homepage-promo,promo-banner,ad-banner,banner"
+                                        exclusive="true"
+                                        multiple="false"
+                                        position="content"
+                                        wrapper="section"
+                                        class="homepage-section section-promo">
                                     <w:widget type="banner" name="promo-banner" params='{"title":"限时特惠","subtitle":"全场满300减50","button_text":"立即抢购","link":"/promotions","background_color":"#f8f9fa"}'/>
-                                </section>
+                                </w:slot>
                                 
                                 <!-- 6. 畅销商品 -->
-                                <section class="homepage-section section-bestsellers">
+                                <w:slot id="homepage-bestsellers"
+                                        name="首页畅销商品"
+                                        accept="layout-homepage-bestsellers,bestsellers,product-carousel,product"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="section"
+                                        class="homepage-section section-bestsellers">
                                     <div class="container">
                                         <w:widget type="product" name="bestsellers" params='{"title":"畅销商品","subtitle":"最受欢迎的热销产品","limit":8,"columns":"4","show_price":true,"show_rating":true,"show_add_to_cart":true}'/>
                                     </div>
-                                </section>
+                                </w:slot>
                                 
                                 <!-- 7. 品牌展示 -->
-                                <section class="homepage-section section-brands">
+                                <w:slot id="homepage-brands"
+                                        name="首页品牌区"
+                                        accept="layout-homepage-brands,brand-logos,content"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="section"
+                                        class="homepage-section section-brands">
                                     <div class="container">
                                         <w:widget type="content" name="brand-logos" params='{"title":"合作品牌","show_title":true}'/>
                                     </div>
-                                </section>
+                                </w:slot>
                                 
                                 <!-- 8. 信任徽章 -->
-                                <section class="homepage-section section-trust">
+                                <w:slot id="homepage-trust"
+                                        name="首页信任徽章"
+                                        accept="layout-homepage-trust,trust-badges,content"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="section"
+                                        class="homepage-section section-trust">
                                     <div class="container">
                                         <w:widget type="content" name="trust-badges" params='{"layout":"horizontal"}'/>
                                     </div>
-                                </section>
+                                </w:slot>
                                 
                             </div>
                         </if>
@@ -260,9 +311,10 @@ $colors = $this->getData('colors') ?? [];
     
     /* 容器 */
     .container {
-        max-width: var(--weline-layout-content-max-width, 1400px);
+        max-width: var(--weline-layout-content-max-width, 1440px);
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, 20px);
+        padding: 0 var(--weline-layout-content-padding-inline, 1rem);
+        box-sizing: border-box;
     }
     
     /* 编辑模式样式已移至 editor-mode.css */

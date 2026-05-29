@@ -53,6 +53,9 @@ class AffiliateCommission extends Model
     #[Col(type: 'decimal', length: '12,2', nullable: false, default: '0.00', comment: 'Commission amount')]
     public const schema_fields_COMMISSION_AMOUNT = 'commission_amount';
 
+    #[Col(type: 'varchar', length: 8, nullable: false, default: '', comment: 'Checkout currency code for this commission')]
+    public const schema_fields_CURRENCY_CODE = 'currency_code';
+
     #[Col(type: 'varchar', length: 24, nullable: false, default: 'pending', comment: 'Commission status')]
     public const schema_fields_STATUS = 'status';
 
@@ -71,6 +74,7 @@ class AffiliateCommission extends Model
         self::schema_fields_SHARE_ID,
         self::schema_fields_ORDER_ID,
         self::schema_fields_PRODUCT_ID,
+        self::schema_fields_CURRENCY_CODE,
         self::schema_fields_STATUS,
         self::schema_fields_CREATED_AT,
     ];

@@ -264,6 +264,7 @@ class View extends BaseController
      */
     private function assignPageData(array $pageData): void
     {
+        RequestContext::set('weshop.product.view.page_data', $pageData);
         foreach ($pageData as $key => $value) {
             $this->assign((string)$key, $value);
         }
@@ -334,11 +335,59 @@ class View extends BaseController
         ]);
 
         return \sha1((string)\json_encode([
-            'v' => 16,
+            'v' => 19,
             'product_id' => $productId,
             'environment' => $environment,
             'host' => $host,
+            'view_fingerprint' => $this->viewPayloadTemplateFingerprint(),
         ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function viewPayloadTemplateFingerprint(): string
+    {
+        $paths = [
+            BP . '/generated/hooks.php',
+            BP . '/app/code/Weline/Theme/view/theme/frontend/layouts/product/default.phtml',
+            BP . '/app/code/WeShop/Product/Helper/HanfuDemoOptionImageProvider.php',
+            BP . '/app/code/WeShop/Product/Service/ConfigurableProductService.php',
+            BP . '/app/code/WeShop/Product/Service/ProductViewPageDataService.php',
+            BP . '/app/code/WeShop/Product/view/templates/frontend/product/view.phtml',
+            BP . '/app/design/WeShop/default/frontend/pages/product/view.phtml',
+        ];
+
+        foreach ($this->viewPayloadHookFingerprintPatterns() as $pattern) {
+            foreach (\glob($pattern) ?: [] as $path) {
+                $paths[] = $path;
+            }
+        }
+
+        $paths = \array_values(\array_unique($paths));
+        \sort($paths, \SORT_STRING);
+
+        $fingerprint = [];
+        foreach ($paths as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            $fingerprint[] = basename($path) . ':' . (string)filemtime($path) . ':' . (string)filesize($path);
+        }
+
+        return implode('|', $fingerprint);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function viewPayloadHookFingerprintPatterns(): array
+    {
+        return [
+            BP . '/app/code/WeShop/Product/i18n/*.csv',
+            BP . '/app/code/WeShop/Product/view/hooks/WeShop_Product/frontend/layouts/product/*.phtml',
+            BP . '/app/code/WeShop/QA/i18n/*.csv',
+            BP . '/app/code/WeShop/Review/i18n/*.csv',
+            BP . '/app/code/WeShop/Review/view/hooks/WeShop_Review/frontend/layouts/product-reviews/*.phtml',
+            BP . '/app/code/WeShop/Review/view/hooks/Weline_Theme/frontend/layouts/base/*.phtml',
+        ];
     }
 
     private function normalizeViewPayloadCacheHost(string $host): string

@@ -21,7 +21,7 @@ $overlay = $this->getData('overlay') ?? true;
 $autoHide = $this->getData('autoHide') ?? true;
 
 // 构建CSS类
-$sectionClass = 'loading-component';
+$sectionClass = 'w-loading loading-component';
 if ($class) {
     $sectionClass .= ' ' . htmlspecialchars($class);
 }
@@ -29,15 +29,15 @@ if ($class) {
 <!--Loading-->
 <section id="<?= htmlspecialchars($id) ?>" class="<?= $sectionClass ?>" style="display: none;">
     <?php if ($overlay): ?>
-        <div class="loading-overlay"></div>
+        <div class="w-loading-overlay loading-overlay"></div>
     <?php endif; ?>
-    <div class="loading-content">
-        <div class="loader loader-<?= htmlspecialchars($type) ?>">
-            <div class="loader-outter"></div>
-            <div class="loader-inner"></div>
+    <div class="w-loading-content loading-content">
+        <div class="w-loader loader w-loader-<?= htmlspecialchars($type) ?> loader-<?= htmlspecialchars($type) ?>">
+            <div class="w-loader-outter loader-outter"></div>
+            <div class="w-loader-inner loader-inner"></div>
         </div>
         <?php if ($text): ?>
-            <div class="loading-text"><?= htmlspecialchars($text) ?></div>
+            <div class="w-loading-text loading-text"><?= htmlspecialchars($text) ?></div>
         <?php endif; ?>
     </div>
 </section>

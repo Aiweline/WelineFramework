@@ -1256,10 +1256,15 @@ class SlotRendererService
                     'id' => $slotId,
                     'name' => $element->getAttribute('data-wslot-name') ?: $slotId,
                     'accept' => array_filter(explode(',', $element->getAttribute('data-wslot-accept') ?: '')),
+                    'reject' => array_filter(explode(',', $element->getAttribute('data-wslot-reject') ?: '')),
                     'exclusive' => $element->getAttribute('data-wslot-exclusive') === 'true',
                     'append' => $element->getAttribute('data-wslot-append') === 'true',
                     'prepend' => $element->getAttribute('data-wslot-prepend') === 'true',
                     'multiple' => $element->getAttribute('data-wslot-multiple') === 'true',
+                    'position' => $element->getAttribute('data-wslot-position') ?: null,
+                    'max' => $element->getAttribute('data-wslot-max') ?: null,
+                    'min' => $element->getAttribute('data-wslot-min') ?: null,
+                    'required' => $element->getAttribute('data-wslot-required') === 'true',
                 ];
             }
         }
@@ -1277,10 +1282,15 @@ class SlotRendererService
                     'id' => $slotId,
                     'name' => $element->getAttribute('data-slot-name') ?: $slotId,
                     'accept' => [],
+                    'reject' => [],
                     'exclusive' => false,
                     'append' => false,
                     'prepend' => false,
                     'multiple' => true,
+                    'position' => null,
+                    'max' => null,
+                    'min' => null,
+                    'required' => false,
                     'legacy' => true, // 标记为旧方式
                 ];
             }

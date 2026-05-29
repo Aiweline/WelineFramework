@@ -48,27 +48,32 @@ final class AiSiteDesignDirectorService
     ): array {
         $policy = $this->policyRegistry()->get();
         $briefText = $this->briefText($scope, $websiteProfile, $themePlan);
+        $isNeonCardDefault = $this->isNeonCardBrief($briefText, $themePlan, $websiteProfile);
         $visualDensity = $this->resolveVisualDensity($briefText, $referenceImageInsights);
-        $assetDensity = $visualDensity === 'minimal' ? 'low' : 'medium';
-        $styleDensity = $visualDensity === 'minimal' ? 'airy' : 'balanced';
+        $assetDensity = $visualDensity === 'minimal' ? 'low' : ($isNeonCardDefault ? 'high' : 'medium');
+        $styleDensity = $visualDensity === 'minimal' ? 'airy' : ($isNeonCardDefault ? 'immersive' : 'balanced');
         $pageTypes = $this->resolvePageTypes($scope, $pagePlans);
         $morphologyPool = $this->resolveMorphologyPool($pageTypes, $pagePlans, $visualDensity);
-        $colorRoles = $this->resolveColorRoles($scope, $themePlan, $referenceImageInsights);
-        $typography = $this->resolveTypographyTokens($scope, $themePlan, $policy);
+        $colorRoles = $this->resolveColorRoles($scope, $themePlan, $referenceImageInsights, $websiteProfile);
+        $typography = $this->resolveTypographyTokens($scope, $themePlan, $policy, $websiteProfile, $briefText);
         $marketPosition = $this->firstMeaningfulString([
             $websiteProfile['brand_positioning'] ?? null,
             $themePlan['theme_purpose'] ?? null,
             $themePlan['style_signature'] ?? null,
-        ], 'premium and practical');
+        ], $isNeonCardDefault ? 'premium neon card-game entertainment' : 'premium and practical');
         $trustAngle = $this->firstMeaningfulString([
             $websiteProfile['trust_angle'] ?? null,
             $scope['trust_angle'] ?? null,
             $themePlan['trust_angle'] ?? null,
             $websiteProfile['value_proposition'] ?? null,
-        ], 'credible proof, transparent details, and a direct path to action');
+        ], $isNeonCardDefault
+            ? 'fair-play cues, responsible entertainment notes, visible player proof, and fast support access'
+            : 'credible proof, transparent details, and a direct path to action');
         $styleMood = $this->resolveStyleMood($briefText, $themePlan, $websiteProfile);
         $geometry = $this->resolveGeometry($briefText, $themePlan);
-        $imagery = $visualDensity === 'minimal' ? 'interface' : 'photo';
+        $imagery = $visualDensity === 'minimal'
+            ? 'interface'
+            : ($isNeonCardDefault ? 'cinematic neon card-room scenes and block-specific editorial gaming imagery' : 'photo');
 
         $system = [
             'version' => self::VERSION,
@@ -125,9 +130,9 @@ final class AiSiteDesignDirectorService
                 'radius_scale' => $this->resolveScaleTokens($policy, 'radius', ['12px', '20px', '28px']),
                 'spacing_scale' => $this->resolveScaleTokens($policy, 'spacing', ['clamp(48px, 7vw, 96px)', 'clamp(24px, 4vw, 56px)']),
                 'type_scale' => [
-                    'hero' => 'clamp(42px, 7vw, 88px)',
-                    'section_title' => 'clamp(28px, 4vw, 52px)',
-                    'body' => 'clamp(15px, 1.4vw, 18px)',
+                    'hero' => '72px desktop / 56px tablet / 40px mobile',
+                    'section_title' => '44px desktop / 36px tablet / 28px mobile',
+                    'body' => '16px desktop / 16px mobile',
                 ],
                 'color_roles' => $colorRoles,
                 'typography' => $typography,
@@ -149,13 +154,19 @@ final class AiSiteDesignDirectorService
                 'page_asset_density' => $assetDensity,
                 'hero_image_rule' => $visualDensity === 'minimal'
                     ? 'hero can use structured CSS motif when the brief asks for low imagery'
-                    : 'hero should prefer one integrated subject image or product scene',
+                    : ($isNeonCardDefault
+                        ? 'hero should use one immersive neon card-room or game-lobby scene with cards, mahjong tiles, chips, table glow, and a text-safe crop'
+                        : 'hero should prefer one integrated subject image or product scene'),
                 'non_hero_image_rule' => $visualDensity === 'minimal'
                     ? 'non-hero sections may use CSS motifs, icons, or data surfaces instead of real images'
-                    : 'distribute required real images beyond the hero into proof, detail, or support sections',
+                    : ($isNeonCardDefault
+                        ? 'distribute block-specific real images into proof, game-feature, article, about, and support sections; do not reuse the same hero lobby subject for every block'
+                        : 'distribute required real images beyond the hero into proof, detail, or support sections'),
                 'image_treatment' => $visualDensity === 'minimal'
                     ? 'use CSS motifs, interface surfaces, and restrained framed media only when the contract requires it'
-                    : 'use responsive crop, editorial framing, contextual subject matter, and palette-compatible overlays',
+                    : ($isNeonCardDefault
+                        ? 'use dark premium neon lighting, cyan/magenta/violet edge glow, gold highlights, green felt or glass card-room texture, responsive crop, readable scrims, and role-specific props'
+                        : 'use responsive crop, editorial framing, contextual subject matter, and palette-compatible overlays'),
                 'text_on_media_rule' => 'text may sit over media only with a contract-defined scrim or separate readable panel',
                 'css_only_rule' => 'CSS-only sections must still declare a concrete motif and visible composition structure',
                 'reference_image_usage' => $this->referenceUsageRule($referenceImageInsights),
@@ -394,9 +405,10 @@ final class AiSiteDesignDirectorService
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $themePlan
      * @param array<string, mixed> $referenceImageInsights
+     * @param array<string, mixed> $websiteProfile
      * @return array<string, string>
      */
-    private function resolveColorRoles(array $scope, array $themePlan, array $referenceImageInsights): array
+    private function resolveColorRoles(array $scope, array $themePlan, array $referenceImageInsights, array $websiteProfile = []): array
     {
         $roles = [];
         foreach ([
@@ -448,6 +460,12 @@ final class AiSiteDesignDirectorService
             }
         }
 
+        if (!isset($roles['primary'], $roles['background'], $roles['surface'], $roles['text'], $roles['accent'], $roles['accent_soft'])
+            && $this->isNeonCardBrief($this->briefText($scope, $websiteProfile, $themePlan), $themePlan, $websiteProfile)
+        ) {
+            return $this->neonCardColorRoles();
+        }
+
         if (!isset($roles['primary'], $roles['background'], $roles['surface'], $roles['text'], $roles['accent'], $roles['accent_soft'])) {
             return $this->semanticColorRoles();
         }
@@ -474,27 +492,58 @@ final class AiSiteDesignDirectorService
     }
 
     /**
+     * @return array<string, string>
+     */
+    private function neonCardColorRoles(): array
+    {
+        return [
+            'primary' => '#8B5CF6',
+            'background' => '#070A18',
+            'surface' => '#10172A',
+            'surface_alt' => '#172033',
+            'text' => '#F8FAFC',
+            'muted_text' => '#A7B0C5',
+            'accent' => '#00F5FF',
+            'accent_soft' => '#FF2BD6',
+            'warning' => '#F7C948',
+            'success' => '#33F28B',
+            'divider' => '#2A3654',
+            'shadow' => '#030712',
+            'on_primary' => '#FFFFFF',
+            'secondary' => '#FF2BD6',
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $themePlan
      * @param array<string, mixed> $policy
+     * @param array<string, mixed> $websiteProfile
      * @return array<string, mixed>
      */
-    private function resolveTypographyTokens(array $scope, array $themePlan, array $policy): array
+    private function resolveTypographyTokens(
+        array $scope,
+        array $themePlan,
+        array $policy,
+        array $websiteProfile = [],
+        string $briefText = ''
+    ): array
     {
         $defaults = \is_array($policy['default_tokens']['typography'] ?? null) ? $policy['default_tokens']['typography'] : [];
+        $isNeonCardDefault = $this->isNeonCardBrief($briefText !== '' ? $briefText : $this->briefText($scope, $websiteProfile, $themePlan), $themePlan, $websiteProfile);
         $font = $this->firstMeaningfulString([
             $themePlan['typography_spacing_radius']['font_family'] ?? null,
             $themePlan['typography']['font_family'] ?? null,
             $themePlan['font_family'] ?? null,
             $scope['theme_design']['typography_spacing_radius']['font_family'] ?? null,
-        ], 'system readable stack');
+        ], $isNeonCardDefault ? 'Chakra Petch, Orbitron, Inter, system-ui, sans-serif' : 'system readable stack');
 
         return \array_replace($defaults, [
             'font_family' => $font,
             'heading_voice' => $this->firstMeaningfulString([
                 $themePlan['typography_spacing_radius']['heading_voice'] ?? null,
                 $themePlan['typography']['heading_voice'] ?? null,
-            ], 'clear section hierarchy'),
+            ], $isNeonCardDefault ? 'angular neon gaming display with readable Chinese support' : 'clear section hierarchy'),
         ]);
     }
 
@@ -506,6 +555,32 @@ final class AiSiteDesignDirectorService
     {
         $tokens = $policy['default_tokens'][$group] ?? [];
         return \is_array($tokens) ? $tokens : [];
+    }
+
+    /**
+     * @param array<string,mixed> $themePlan
+     * @param array<string,mixed> $websiteProfile
+     */
+    private function isNeonCardBrief(string $briefText, array $themePlan = [], array $websiteProfile = []): bool
+    {
+        $raw = \mb_strtolower(\trim($briefText . ' ' . \json_encode([
+            $themePlan['style_signature'] ?? null,
+            $themePlan['visual_tone'] ?? null,
+            $themePlan['visual_keywords'] ?? null,
+            $themePlan['art_direction'] ?? null,
+            $websiteProfile['style_tone'] ?? null,
+            $websiteProfile['brief_description'] ?? null,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)), 'UTF-8');
+        if ($raw === '') {
+            return false;
+        }
+        if (\preg_match('/(?:avoid|without|no|forbid|ban|reject)[^.。；;]{0,80}(?:neon|casino|gaming|gambling|card\s*game|poker|mahjong|棋牌|霓虹|博彩|赌博)/iu', $raw) === 1
+            || \preg_match('/(?:不要|避免|禁止|拒绝)[^。；;]{0,80}(?:霓虹|棋牌|博彩|赌博|娱乐场|赌场|扑克|麻将)/u', $raw) === 1
+        ) {
+            return false;
+        }
+
+        return \preg_match('/(?:neon|casino|card\s*game|poker|mahjong|rummy|teen\s*patti|game\s*lobby|gaming|棋牌|棋牌游戏|霓虹|牌桌|牌局|扑克|麻将|电玩城|线上娱乐|游戏房间|赛事房间)/iu', $raw) === 1;
     }
 
     private function resolveVisualDensity(string $briefText, array $referenceImageInsights): string
@@ -540,6 +615,9 @@ final class AiSiteDesignDirectorService
             $themePlan['visual_tone'] ?? null,
             $websiteProfile['style_tone'] ?? null,
         ], $briefText));
+        if ($this->isNeonCardBrief($briefText, $themePlan, $websiteProfile)) {
+            return 'neon gaming';
+        }
         if (\str_contains($raw, 'luxury') || \str_contains($raw, 'premium')) {
             return 'luxury';
         }
@@ -569,6 +647,9 @@ final class AiSiteDesignDirectorService
             $themePlan['shape_language'] ?? null,
             $themePlan['style_signature'] ?? null,
         ], $briefText));
+        if ($this->isNeonCardBrief($briefText, $themePlan)) {
+            return 'angular';
+        }
         if (\str_contains($raw, 'sharp') || \str_contains($raw, 'angular') || \str_contains($raw, 'brutalist')) {
             return 'sharp';
         }

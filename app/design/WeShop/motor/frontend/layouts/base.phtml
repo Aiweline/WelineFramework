@@ -74,8 +74,16 @@
        ======================================== */
 
     /* 基础重置和全局样式 */
+    :root {
+        --motor-layout-content-max-width: var(--weline-layout-content-max-width, var(--weshop-container-max-width, 1440px));
+    }
+
     * {
         box-sizing: border-box;
+    }
+
+    html[data-theme="motor"] .max-w-7xl {
+        max-width: var(--motor-layout-content-max-width);
     }
 
     html {

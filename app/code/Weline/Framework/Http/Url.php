@@ -205,6 +205,10 @@ class Url implements UrlInterface
     {
         // 优化：使用静态缓存，避免重复查询
         $codeUpper = strtoupper($code);
+        if (Env::isAreaRoutePathSegment($codeUpper)) {
+            return false;
+        }
+
         $parserCacheKey = self::parserValidationStaticKey('currency', $codeUpper);
         if (isset(self::$parserCurrencies[$parserCacheKey])) {
             if (str_starts_with($uri, '/' . $code)) {
@@ -682,6 +686,14 @@ class Url implements UrlInterface
         $websiteLanguage = self::normalizeLanguage(w_env('website.language')) ?: self::getFrameworkDefaultLanguage();
         $frameworkCurrency = self::getFrameworkDefaultCurrency();
         $frameworkLanguage = self::getFrameworkDefaultLanguage();
+
+        if (Env::isAreaRoutePathSegment($currency)) {
+            $currency = '';
+        }
+
+        if (Env::isAreaRoutePathSegment($language)) {
+            $language = '';
+        }
 
         // 默认值（网站默认或框架默认）不拼接到 URL 段中。
         if ('' !== $currency && $currency !== $websiteCurrency && $currency !== $frameworkCurrency) {
@@ -1427,41 +1439,15 @@ class Url implements UrlInterface
                 $url = $path . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
                 $uri = $path . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
             }
-            
-            // 域名不匹配时回退到默认网站：
-            // 当使用非配置域名（如 my.com 而非 127.0.0.1）访问时，上方的 str_starts_with 匹配
-            // 全部失败，导致 WELINE_WEBSITE_CODE/ID 为空。
-            // 依赖网站上下文的逻辑（SEO URL 解码、Store 路由、货币/语言默认值等）
-            // 会因缺少网站信息而失败，导致 404。
-            // 修复：从已加载的 parserSites 中选取默认网站，填充网站元数据，
-            // 但不修改 URL（路径已由上方 host 剥离逻辑正确处理）。
-            if (!empty(self::$parserSites)) {
-                $defaultSite = null;
-                // 优先查找 code='default' 的网站
-                foreach (self::$parserSites as $siteUrl => $siteData) {
-                    if (($siteData['code'] ?? '') === 'default') {
-                        $defaultSite = $siteData;
-                        break;
-                    }
-                }
-                // 无 'default' 则取列表中最后一个（排序后最短 URL，通常为根网站）
-                if ($defaultSite === null) {
-                    $defaultSite = end(self::$parserSites);
-                }
-                if ($defaultSite) {
-                    $data['website'] = $defaultSite;
-                    self::$parserServer['WELINE_WEBSITE_CODE'] = $defaultSite['code'] ?? '';
-                    self::$parserServer['WELINE_WEBSITE_ID'] = $defaultSite['website_id'] ?? '';
-                    self::$parserServer['WELINE_WEBSITE_URL'] = $data['website_url']; // 使用当前请求的 scheme://host:port
-                    self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $defaultSite['default_currency'] ?? '';
-                    self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $defaultSite['default_language'] ?? '';
-                    if (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                        self::$parserServer['WELINE_USER_LANG'] = State::getLang() ?: ($defaultSite['default_language'] ?? '');
-                    }
-                    if (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
-                        self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency() ?: ($defaultSite['default_currency'] ?? '');
-                    }
-                }
+
+            // Host misses must not inherit an arbitrary website context.
+            // Website/PageBuilder rewrites require an explicit Website.url or WebsiteDomain match.
+            if (!isset($data['website'])) {
+                unset($data['website']);
+                self::$parserServer['WELINE_WEBSITE_CODE'] = '';
+                self::$parserServer['WELINE_WEBSITE_ID'] = '';
+                self::$parserServer['WELINE_WEBSITE_CURRENCY'] = '';
+                self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = '';
             }
         }
 
@@ -1615,6 +1601,9 @@ class Url implements UrlInterface
 
         # 匹配语言 self::$parserLanguages 最长倒序
         foreach (\array_unique(self::$parserLanguages) as $language) {
+            if (!State::isAllowedLanguageCode((string)$language)) {
+                continue;
+            }
             if (str_starts_with($url, '/' . $language)) {
                 $candidateUrl = $url;
                 if (self::detectLanguage($candidateUrl, (string)$language)) {
@@ -1632,6 +1621,7 @@ class Url implements UrlInterface
             $data['currency'] === ''
             && \strlen($quickCurrency) === 3
             && \ctype_upper($quickCurrency)
+            && State::isAllowedCurrencyCode($quickCurrency)
         ) {
             $candidateUrl = $url;
             if (self::detectCurrency($candidateUrl, $quickCurrency)) {
@@ -1640,19 +1630,9 @@ class Url implements UrlInterface
                 self::rememberParserCurrency($quickCurrency);
             }
         }
-        if ($data['language'] === '' && $quickLanguage !== '') {
-            $looksLanguage = (bool)\preg_match('/^[a-z]{2}_[A-Z]{2}$/', $quickLanguage)
-                || (bool)\preg_match('/^[a-z]{2}_[A-Z][a-z]+_[A-Z]{2}$/', $quickLanguage);
-            if ($looksLanguage) {
-                $candidateUrl = $url;
-                $knownLanguage = self::detectLanguage($candidateUrl, $quickLanguage);
-            } else {
-                $candidateUrl = $url;
-                $knownLanguage = self::hasRememberedParserLanguage($quickLanguage)
-                    || $quickLanguage === (self::$parserServer['WELINE_WEBSITE_LANGUAGE'] ?? null)
-                    || $quickLanguage === (self::$parserServer['WELINE_USER_LANG'] ?? null);
-            }
-            if ($knownLanguage) {
+        if ($data['language'] === '' && $quickLanguage !== '' && State::isAllowedLanguageCode($quickLanguage)) {
+            $candidateUrl = $url;
+            if (self::detectLanguage($candidateUrl, $quickLanguage)) {
                 $url = $candidateUrl;
                 $data['language'] = $quickLanguage;
                 self::rememberParserLanguage($quickLanguage);
@@ -1672,14 +1652,14 @@ class Url implements UrlInterface
                 $has_language = false;
                 if ($pre_path_1) {
                     # 检查头路径$pre_path_1是否是货币
-                    if (strlen($pre_path_1) === 3 && ctype_upper($pre_path_1)) {
+                    if (strlen($pre_path_1) === 3 && ctype_upper($pre_path_1) && State::isAllowedCurrencyCode($pre_path_1)) {
                         $has_currency = self::detectCurrency($url, $pre_path_1);
                         if ($has_currency) {
                             $data['currency'] = $pre_path_1;
                             self::rememberParserCurrency($pre_path_1);
                         }
                     }
-                    if (!$has_currency && strlen($pre_path_1) > 3 && strlen($pre_path_1) <= 10 && ctype_lower(substr($pre_path_1, 0, 2)) && $pre_path_1[2] === '_') {
+                    if (!$has_currency && State::isAllowedLanguageCode($pre_path_1)) {
                         # 检查头路径$pre_path_1是否是语言
                         $has_language = self::detectLanguage($url, $pre_path_1);
                         if ($has_language) {
@@ -1690,7 +1670,7 @@ class Url implements UrlInterface
                 }
                 if ($pre_path_2) {
                     # 检查第二个路径是否是语言
-                    if (!$has_language && strlen($pre_path_2) > 3 && strlen($pre_path_2) <= 10 && ctype_lower(substr($pre_path_2, 0, 2)) && $pre_path_2[2] === '_') {
+                    if (!$has_language && State::isAllowedLanguageCode($pre_path_2)) {
                         $has_language = self::detectLanguage($url, $pre_path_2);
                         if ($has_language) {
                             $data['language'] = $pre_path_2;
@@ -1699,7 +1679,7 @@ class Url implements UrlInterface
                     }
 
                     # 检查第二个路径是否是货币
-                    if (!$has_currency && strlen($pre_path_2) === 3 && ctype_upper($pre_path_2)) {
+                    if (!$has_currency && strlen($pre_path_2) === 3 && ctype_upper($pre_path_2) && State::isAllowedCurrencyCode($pre_path_2)) {
                         $has_currency = self::detectCurrency($url, $pre_path_2);
                         if ($has_currency) {
                             $data['currency'] = $pre_path_2;

@@ -28,20 +28,45 @@
 
     <div class="account-orders {{meta.class}}" id="account-orders" data-layout="account_orders">
         <aside class="account-orders__sidebar">
-            @template(Weline_Customer::templates/frontend/account/sidebar/side.phtml)
+            <w:slot id="account-orders-sidebar"
+                    name="订单页侧边栏"
+                    accept="layout-account-orders-sidebar,layout-account-sidebar,account-sidebar,sidebar,account-nav"
+                    multiple="true"
+                    position="sidebar">
+                @template(Weline_Customer::templates/frontend/account/sidebar/side.phtml)
+            </w:slot>
         </aside>
 
         <main class="account-orders__main" id="account-orders-content" data-layout="account_orders_content">
             <div class="account-orders__container">
-                <if condition="meta.filters">
-                    <div class="account-orders__filters">
+                <w:slot id="content"
+                        name="内容区"
+                        accept="layout-account-content,layout-account-orders-content,layout-default-content,content,account-orders,account-content"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="account-orders__content-root-slot">
+                    <w:slot id="account-orders-filters"
+                        name="订单筛选区"
+                        accept="layout-account-orders-filters,account-order-filters,filters"
+                        multiple="true"
+                        position="content"
+                        class="account-orders__filters">
+                    <if condition="meta.filters">
                         {{meta.filters}}
-                    </div>
-                </if>
+                    </if>
+                    </w:slot>
 
-                <div class="account-orders__list">
+                    <w:slot id="account-orders-content"
+                        name="订单列表内容"
+                        accept="layout-account-orders-content,account-orders,account-content,content"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="account-orders__list">
                     {{meta.content}}
-                </div>
+                    </w:slot>
+                </w:slot>
             </div>
         </main>
     </div>

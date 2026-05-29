@@ -29,13 +29,17 @@ final class LeaseRegistry
         int $pid = 0,
         int $port = 0,
         string $launchNonce = '',
-        ?float $now = null
+        ?float $now = null,
+        string $leaseId = '',
+        int $generation = 0
     ): SlotLease {
         $now ??= \microtime(true);
-        $generation = ($this->generations[$slotId] ?? 0) + 1;
-        $this->generations[$slotId] = $generation;
+        if ($generation <= 0) {
+            $generation = ($this->generations[$slotId] ?? 0) + 1;
+        }
+        $this->generations[$slotId] = \max($generation, (int)($this->generations[$slotId] ?? 0));
 
-        $leaseId = $this->createLeaseId($slotId, $generation);
+        $leaseId = $leaseId !== '' ? $leaseId : $this->createLeaseId($slotId, $generation);
         $lease = new SlotLease(
             slotId: $slotId,
             leaseId: $leaseId,

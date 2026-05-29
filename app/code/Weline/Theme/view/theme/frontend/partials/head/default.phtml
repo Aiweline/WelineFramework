@@ -169,6 +169,8 @@ $themeConfigPayload = [
             : '/static/Weline/Frontend/js/weline-api-worker.js',
         'endpoint' => '/api/framework/query-bin',
         'queryBinUrl' => '/api/framework/query-bin',
+        'locale' => $currentLang,
+        'currency' => $currentCurrency,
     ],
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
@@ -344,32 +346,10 @@ body {
 
 /* 全局容器样式 */
 .container {
-    max-width: 1400px;
+    max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
     margin: 0 auto;
-    padding: 0 1rem;
-}
-
-/* 全局按钮样式（使用主题变量） */
-.btn {
-    display: inline-block;
-    padding: 0.75rem 2rem;
-    font-size: 1rem;
-    font-weight: 500;
-    text-decoration: none;
-    border-radius: 4px;
-    transition: background-color 0.3s ease, transform 0.2s ease;
-    cursor: pointer;
-    border: none;
-}
-
-.btn-primary {
-    background-color: var(--color-primary, #f0c14b);
-    color: #fff;
-}
-
-.btn-primary:hover {
-    background-color: var(--color-primary-dark, #e7b92e);
-    transform: translateY(-2px);
+    padding: 0 var(--weline-layout-content-padding-inline, 1rem);
+    box-sizing: border-box;
 }
 
 /* 全局响应式设计 */
