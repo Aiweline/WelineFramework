@@ -86,6 +86,9 @@ class ControlClient implements ChildControlClientInterface
     /** 是否已标记为就绪 */
     private bool $isReady = false;
 
+    /** 最近一次连接失败详情，用于子进程启动诊断 */
+    private string $lastConnectError = '';
+
     /** READY 是否已收到 Master 闭环 ACK（worker 需等待 Dispatcher 入池确认） */
     private bool $readyStateConfirmed = false;
 
@@ -117,10 +120,12 @@ class ControlClient implements ChildControlClientInterface
 
         if (!$this->socket) {
             $this->socket = null;
-            $this->ipcLog("[IPC-{$this->selfTag}] CONNECT FAILED 连接 Master 失败 {$host}:{$port} - {$errstr}");
+            $this->lastConnectError = \trim("errno={$errno}, errstr={$errstr}");
+            $this->ipcLog("[IPC-{$this->selfTag}] CONNECT FAILED 连接 Master 失败 {$host}:{$port} - {$this->lastConnectError}");
             return false;
         }
 
+        $this->lastConnectError = '';
         \stream_set_blocking($this->socket, false);
         @\stream_set_write_buffer($this->socket, 0);
         $this->buffer = '';
@@ -135,6 +140,11 @@ class ControlClient implements ChildControlClientInterface
     public function isConnected(): bool
     {
         return $this->socket !== null && \is_resource($this->socket);
+    }
+
+    public function getLastConnectError(): string
+    {
+        return $this->lastConnectError;
     }
 
     /**

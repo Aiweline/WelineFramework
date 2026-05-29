@@ -159,8 +159,8 @@ class DefaultLayoutSeeder
             ThemeLayout::PAGE_TYPE_HOME => [
                 // Banner 区域 - Hero Slider
                 [
-                    'area' => ThemeLayout::AREA_BANNER,
-                    'slot_id' => 'banner',
+                    'area' => ThemeLayout::AREA_CONTENT,
+                    'slot_id' => 'homepage-hero',
                     'widget_code' => 'hero-slider',
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'banner',
@@ -175,7 +175,7 @@ class DefaultLayoutSeeder
                 // 主内容区域 - 特色产品
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'main-content',
+                    'slot_id' => 'homepage-featured',
                     'widget_code' => 'featured-products',
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
@@ -189,7 +189,7 @@ class DefaultLayoutSeeder
                 // 产品推荐区域 - 新品上市
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'products',
+                    'slot_id' => 'homepage-new-arrivals',
                     'widget_code' => 'new-arrivals',
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
@@ -207,7 +207,7 @@ class DefaultLayoutSeeder
                 // 相关产品推荐
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'product-related',
+                    'slot_id' => 'product-related-products',
                     'widget_code' => 'related-products',
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
@@ -221,7 +221,7 @@ class DefaultLayoutSeeder
                 // 最近浏览
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'product-related',
+                    'slot_id' => 'product-recently-viewed',
                     'widget_code' => 'recently-viewed',
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
@@ -235,7 +235,7 @@ class DefaultLayoutSeeder
                 // 热销产品（全宽推荐区，避免挤在右侧栏导致布局溢出）
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'product-related',
+                    'slot_id' => 'product-bestsellers',
                     'widget_code' => 'bestsellers',
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
@@ -272,7 +272,7 @@ class DefaultLayoutSeeder
                 // 相关分类
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
-                    'slot_id' => 'category-related',
+                    'slot_id' => 'category-recommendations',
                     'widget_code' => 'category-grid',
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'category',

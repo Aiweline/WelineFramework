@@ -47,6 +47,19 @@
         document.cookie = cookieString;
     }
 
+    function writeLanguagePreference(lang) {
+        try {
+            if (window.localStorage) {
+                localStorage.setItem('weline_user_lang', lang);
+                localStorage.removeItem('api_doc_locale');
+                localStorage.removeItem('WELINE_USER_LANG');
+            }
+        } catch (error) {
+            // localStorage can be unavailable in privacy modes.
+        }
+        writeCookieValue('WELINE_USER_LANG', lang, 365);
+    }
+
     /**
      * 获取当前语言代码
      */
@@ -318,8 +331,7 @@
         );
 
         // 保存语言偏好
-        localStorage.setItem('weline_user_lang', lang);
-        writeCookieValue('WELINE_USER_LANG', lang, 365);
+        writeLanguagePreference(lang);
 
         // 立即跳转到新 URL
         window.location.href = langUrl;

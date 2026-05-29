@@ -31,6 +31,26 @@
         return {};
     };
 
+    const getRuntimeConfig = () => {
+        if (window.Weline && window.Weline.config) {
+            return window.Weline.config;
+        }
+        if (window.__WelineThemeConfig) {
+            return window.__WelineThemeConfig;
+        }
+        return {};
+    };
+
+    const normalizeLocale = (value) => {
+        const locale = String(value || '').trim();
+        return /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/.test(locale) ? locale : '';
+    };
+
+    const normalizeCurrency = (value) => {
+        const currency = String(value || '').trim().toUpperCase();
+        return /^[A-Z]{3}$/.test(currency) ? currency : '';
+    };
+
     const sameOriginUrl = (path, fallbackPath) => {
         const value = path || fallbackPath;
         const url = new URL(value, window.location.origin);
@@ -192,6 +212,7 @@
     };
 
     const apiConfig = getConfig();
+    const runtimeConfig = getRuntimeConfig();
     const config = Object.assign({
         endpoint: '/api/framework/query-bin',
         deployVersion: 'dev',
@@ -201,6 +222,8 @@
         cartCountCookieKey: 'weline_cart_item_count',
         autoEnableOnCartClickSelector: '[data-weline-cart-trigger]',
         area: '',
+        locale: '',
+        currency: '',
         onHttpError: null,
         requestTimeoutMs: 15000,
     }, apiConfig);
@@ -210,6 +233,8 @@
     config.deployVersion = String(apiConfig.deployVersion || apiConfig.deploy_version || config.deployVersion || 'dev');
     config.workerBuildId = String(apiConfig.workerBuildId || apiConfig.worker_build_id || config.workerBuildId || 'dev');
     config.area = String(apiConfig.area || apiConfig.context || config.area || '');
+    config.locale = normalizeLocale(apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || config.locale);
+    config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || config.currency);
 
     class WelineApiClient {
         constructor(clientConfig) {
@@ -397,6 +422,8 @@
                         endpoint: this.config.endpoint,
                         deployVersion: this.config.deployVersion,
                         workerBuildId: this.config.workerBuildId,
+                        locale: this.config.locale,
+                        currency: this.config.currency,
                     },
                 }));
             });

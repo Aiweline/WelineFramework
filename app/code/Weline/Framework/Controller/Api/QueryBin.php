@@ -84,6 +84,8 @@ class QueryBin extends FrontendController
                 $markPhase('read_signed_headers');
                 $this->validateSignedRequest($headers, $rawBody);
                 $markPhase('validate_signed_request');
+                $this->applyLocalizationContext($payload);
+                $markPhase('apply_localization_context');
 
                 $result = $this->gateway->execute($payload, $headers['capability']);
                 $markPhase('gateway_execute');
@@ -249,6 +251,41 @@ class QueryBin extends FrontendController
         if (!\hash_equals($expected, $headers['signature'])) {
             throw new FrontendQueryException('auth_error', 'Worker signature mismatch.', 401);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function applyLocalizationContext(array $payload): void
+    {
+        $context = $payload['context'] ?? null;
+        if (!\is_array($context)) {
+            return;
+        }
+
+        $language = $this->normalizeWorkerLanguage(
+            $context['locale'] ?? $context['lang'] ?? $context['language'] ?? ''
+        );
+        if ($language !== '') {
+            RequestContext::setWelineUserLang($language);
+        }
+
+        $currency = $this->normalizeWorkerCurrency($context['currency'] ?? '');
+        if ($currency !== '') {
+            RequestContext::setWelineUserCurrency($currency);
+        }
+    }
+
+    private function normalizeWorkerLanguage(mixed $value): string
+    {
+        $language = \trim((string)$value);
+        return \preg_match('/^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/', $language) === 1 ? $language : '';
+    }
+
+    private function normalizeWorkerCurrency(mixed $value): string
+    {
+        $currency = \strtoupper(\trim((string)$value));
+        return \preg_match('/^[A-Z]{3}$/', $currency) === 1 ? $currency : '';
     }
 
     private function assertProtocolHeaders(): void

@@ -20,4 +20,13 @@ class SaveTest extends TestCase
         $this->assertTrue($reflection->hasMethod('post'));
         $this->assertTrue($reflection->hasMethod('index'));
     }
+
+    public function testCommissionRateRequestDefaultPreservesDecimals(): void
+    {
+        $reflection = new \ReflectionClass(Save::class);
+        $content = file_get_contents((string) $reflection->getFileName());
+
+        $this->assertIsString($content);
+        $this->assertStringContainsString("getParam('commission_rate', 0.0)", $content);
+    }
 }

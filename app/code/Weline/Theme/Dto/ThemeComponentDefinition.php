@@ -39,6 +39,7 @@ class ThemeComponentDefinition
         public readonly ?int $componentId = null,
         public readonly ?int $versionId = null,
         public readonly int $sortOrder = 0,
+        public readonly array $supports = [],
     ) {
     }
 
@@ -73,6 +74,7 @@ class ThemeComponentDefinition
             'page_layouts' => $this->pageLayouts,
             'slots' => $this->slots,
             'slot' => $this->slot,
+            'supports' => $this->supports,
             'exclusive' => $this->exclusive,
             'compatible' => $this->compatible,
             'is_container' => $this->isContainer,
@@ -103,6 +105,7 @@ class ThemeComponentDefinition
             'page_layouts' => $this->pageLayouts,
             'slot' => $this->slot,
             'slots' => $this->slots,
+            'supports' => $this->supports,
             'exclusive' => $this->exclusive,
             'compatible' => $this->compatible,
             'is_container' => $this->isContainer,

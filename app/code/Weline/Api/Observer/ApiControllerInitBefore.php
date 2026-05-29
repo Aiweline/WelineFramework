@@ -400,6 +400,10 @@ class ApiControllerInitBefore implements ObserverInterface
                     return;
                 }
 
+                if (!$requireAuthentication) {
+                    return;
+                }
+
                 // 閻犲鍟抽惁顖炴晬濮樻剚鍞剁憸鐗堟oken濡ょ姴鐭侀惁澶嬪緞鏉堫偉袝
                 w_log_warning('Frontend API: Token validation failed. Token prefix: ' . substr($token, 0, 20), [], 'api');
                 $this->returnError(401, __('Token is invalid or expired.'));

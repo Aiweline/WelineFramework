@@ -1,0 +1,415 @@
+uid=11_0 RootWebArea "Web终端 - JumpServer 开源堡垒机" url="http://13.126.81.141/luna/?_=1779843121280&oid=00000000-0000-0000-0000-000000000002"
+  uid=25_0 ignored
+    uid=25_1 generic
+      uid=25_2 ignored
+        uid=25_3 list
+          uid=25_4 listitem level="1"
+            uid=25_5 ignored
+              uid=25_6 image url="http://13.126.81.141/static/img/logo.png"
+          uid=25_7 listitem level="1"
+            uid=25_8 generic
+              uid=11_1 StaticText "文件管理"
+                uid=11_8 InlineTextBox "文件管理"
+          uid=25_9 listitem level="1"
+            uid=25_10 generic
+              uid=11_2 StaticText "视图"
+                uid=11_8 InlineTextBox "视图"
+          uid=25_11 listitem level="1"
+            uid=25_12 generic
+              uid=11_3 StaticText "语言"
+                uid=11_8 InlineTextBox "语言"
+          uid=25_13 listitem level="1"
+            uid=25_14 generic
+              uid=11_4 StaticText "设置"
+                uid=11_8 InlineTextBox "设置"
+          uid=25_15 listitem level="1"
+            uid=25_16 generic
+              uid=11_5 StaticText "窗口"
+                uid=11_8 InlineTextBox "窗口"
+          uid=25_17 listitem level="1"
+            uid=25_18 generic
+              uid=11_6 StaticText "主题"
+                uid=11_8 InlineTextBox "主题"
+          uid=25_19 listitem level="1"
+            uid=25_20 generic
+              uid=11_7 StaticText "帮助"
+                uid=11_8 InlineTextBox "帮助"
+        uid=25_21 ignored
+          uid=25_22 ignored
+            uid=25_23 ignored
+              uid=25_24 ignored
+                uid=25_25 ignored
+                  uid=25_26 generic
+                    uid=25_27 ignored
+                      uid=11_8 StaticText ""
+                        uid=11_8 InlineTextBox ""
+                  uid=25_28 ignored
+                    uid=11_9 StaticText "Administrator"
+                      uid=11_8 InlineTextBox "Administrator"
+                  uid=25_29 generic
+                    uid=25_30 ignored
+                      uid=11_8 StaticText ""
+                        uid=11_8 InlineTextBox ""
+      uid=25_31 generic
+        uid=25_32 ignored
+          uid=25_33 generic
+            uid=25_34 ignored
+              uid=25_35 ignored
+                uid=25_36 ignored
+                  uid=25_37 ignored
+                    uid=25_38 ignored
+                      uid=25_39 ignored
+                        uid=25_40 ignored
+                          uid=25_41 ignored
+                            uid=25_42 generic
+                              uid=25_43 ignored
+                                uid=25_44 generic
+                                  uid=11_8 StaticText ""
+                                    uid=11_8 InlineTextBox ""
+                              uid=25_45 ignored
+                                uid=11_10 StaticText "我的资产"
+                                  uid=11_8 InlineTextBox "我的资产"
+                            uid=25_46 ignored
+                              uid=25_47 generic
+                                uid=25_48 generic
+                                  uid=25_49 generic
+                                    uid=11_8 StaticText ""
+                                      uid=11_8 InlineTextBox ""
+                                uid=11_11 textbox value="saas"
+                                  uid=25_50 generic
+                                    uid=25_51 StaticText "saas"
+                                      uid=11_8 InlineTextBox "saas"
+                              uid=25_52 generic
+                                uid=25_53 generic
+                                  uid=11_8 StaticText ""
+                                    uid=11_8 InlineTextBox ""
+                              uid=25_54 generic
+                                uid=25_55 generic
+                                  uid=11_8 StaticText ""
+                                    uid=11_8 InlineTextBox ""
+                          uid=25_56 generic
+                            uid=25_57 list
+                              uid=11_12 listitem level="1"
+                                uid=25_58 generic
+                                  uid=25_59 generic
+                                    uid=11_8 StaticText ""
+                                      uid=11_8 InlineTextBox ""
+                                uid=25_60 generic
+                                  uid=25_61 generic
+                                    uid=25_62 generic
+                                      uid=11_8 StaticText ""
+                                        uid=11_8 InlineTextBox ""
+                                  uid=25_63 generic
+                                    uid=11_13 StaticText "收藏夹 (0)"
+                                      uid=11_8 InlineTextBox "收藏夹 (0)"
+                              uid=11_14 listitem level="1"
+                                uid=25_64 generic
+                                  uid=25_65 generic
+                                    uid=11_8 StaticText ""
+                                      uid=11_8 InlineTextBox ""
+                                uid=25_66 generic
+                                  uid=25_67 generic
+                                    uid=25_68 generic
+                                      uid=11_8 StaticText ""
+                                        uid=11_8 InlineTextBox ""
+                                  uid=25_69 generic
+                                    uid=11_15 StaticText "DEFAULT (29)"
+                                      uid=11_8 InlineTextBox "DEFAULT (29)"
+                                uid=25_70 list
+                                  uid=11_16 listitem level="2"
+                                    uid=25_71 generic
+                                      uid=25_72 generic
+                                        uid=11_8 StaticText ""
+                                          uid=11_8 InlineTextBox ""
+                                    uid=25_73 generic
+                                      uid=25_74 generic
+                                        uid=25_75 generic
+                                          uid=11_8 StaticText ""
+                                            uid=11_8 InlineTextBox ""
+                                      uid=25_76 generic
+                                        uid=11_17 StaticText "SSH服务器 (12)"
+                                          uid=11_8 InlineTextBox "SSH服务器 (12)"
+                                    uid=25_77 list
+                                      uid=16_0 listitem level="3"
+                                        uid=25_78 generic
+                                        uid=25_79 generic description="3.111.186.155"
+                                          uid=25_80 generic
+                                            uid=25_81 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_82 generic
+                                            uid=16_1 StaticText "Monitor"
+                                              uid=11_8 InlineTextBox "Monitor"
+                                      uid=16_2 listitem level="3"
+                                        uid=25_83 generic
+                                        uid=25_84 generic description="43.205.103.113"
+                                          uid=25_85 generic
+                                            uid=25_86 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_87 generic
+                                            uid=16_3 StaticText "SAAS"
+                                              uid=11_8 InlineTextBox "SAAS"
+                                      uid=16_4 listitem level="3"
+                                        uid=25_88 generic
+                                        uid=25_89 generic description="3.7.199.83"
+                                          uid=25_90 generic
+                                            uid=25_91 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_92 generic
+                                            uid=16_5 StaticText "SEO1"
+                                              uid=11_8 InlineTextBox "SEO1"
+                                      uid=16_6 listitem level="3"
+                                        uid=25_93 generic
+                                        uid=25_94 generic description="13.203.163.19"
+                                          uid=25_95 generic
+                                            uid=25_96 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_97 generic
+                                            uid=16_7 StaticText "SEO2-a"
+                                              uid=11_8 InlineTextBox "SEO2-a"
+                                      uid=16_8 listitem level="3"
+                                        uid=25_98 generic
+                                        uid=25_99 generic description="13.234.229.115"
+                                          uid=25_100 generic
+                                            uid=25_101 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_102 generic
+                                            uid=16_9 StaticText "SEO2-b"
+                                              uid=11_8 InlineTextBox "SEO2-b"
+                                      uid=16_10 listitem level="3"
+                                        uid=25_103 generic
+                                        uid=25_104 generic description="13.235.153.67"
+                                          uid=25_105 generic
+                                            uid=25_106 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_107 generic
+                                            uid=16_11 StaticText "SEO2-c"
+                                              uid=11_8 InlineTextBox "SEO2-c"
+                                      uid=16_12 listitem level="3"
+                                        uid=25_108 generic
+                                        uid=25_109 generic description="13.203.120.70"
+                                          uid=25_110 generic
+                                            uid=25_111 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_112 generic
+                                            uid=16_13 StaticText "SEO2-d"
+                                              uid=11_8 InlineTextBox "SEO2-d"
+                                      uid=16_14 listitem level="3"
+                                        uid=25_113 generic
+                                        uid=25_114 generic description="3.108.32.152"
+                                          uid=25_115 generic
+                                            uid=25_116 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_117 generic
+                                            uid=16_15 StaticText "SEO3-a"
+                                              uid=11_8 InlineTextBox "SEO3-a"
+                                      uid=16_16 listitem level="3"
+                                        uid=25_118 generic
+                                        uid=25_119 generic description="35.154.202.191"
+                                          uid=25_120 generic
+                                            uid=25_121 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_122 generic
+                                            uid=16_17 StaticText "SEO3-b"
+                                              uid=11_8 InlineTextBox "SEO3-b"
+                                      uid=16_18 listitem level="3"
+                                        uid=25_123 generic
+                                        uid=25_124 generic description="65.1.179.107"
+                                          uid=25_125 generic
+                                            uid=25_126 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_127 generic
+                                            uid=16_19 StaticText "SEO3-c"
+                                              uid=11_8 InlineTextBox "SEO3-c"
+                                      uid=16_20 listitem level="3"
+                                        uid=25_128 generic
+                                        uid=25_129 generic description="15.206.74.129"
+                                          uid=25_130 generic
+                                            uid=25_131 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_132 generic
+                                            uid=16_21 StaticText "SEO5"
+                                              uid=11_8 InlineTextBox "SEO5"
+                                      uid=16_22 listitem level="3"
+                                        uid=25_133 generic
+                                        uid=25_134 generic description="13.205.128.46"
+                                          uid=25_135 generic
+                                            uid=25_136 generic
+                                              uid=11_8 StaticText ""
+                                                uid=11_8 InlineTextBox ""
+                                          uid=25_137 generic
+                                            uid=16_23 StaticText "SEO6"
+                                              uid=11_8 InlineTextBox "SEO6"
+                                  uid=11_18 listitem level="2"
+                                    uid=25_138 generic
+                                      uid=25_139 generic
+                                        uid=11_8 StaticText ""
+                                          uid=11_8 InlineTextBox ""
+                                    uid=25_140 generic
+                                      uid=25_141 generic
+                                        uid=25_142 generic
+                                          uid=11_8 StaticText ""
+                                            uid=11_8 InlineTextBox ""
+                                      uid=25_143 generic
+                                        uid=11_19 StaticText "Web控制台 (5)"
+                                          uid=11_8 InlineTextBox "Web控制台 (5)"
+                                  uid=11_20 listitem level="2"
+                                    uid=25_144 generic
+                                      uid=25_145 generic
+                                        uid=11_8 StaticText ""
+                                          uid=11_8 InlineTextBox ""
+                                    uid=25_146 generic
+                                      uid=25_147 generic
+                                        uid=25_148 generic
+                                          uid=11_8 StaticText ""
+                                            uid=11_8 InlineTextBox ""
+                                      uid=25_149 generic
+                                        uid=11_21 StaticText "宝塔面板 (12)"
+                                          uid=11_8 InlineTextBox "宝塔面板 (12)"
+                        uid=25_150 ignored
+                          uid=25_151 ignored
+                            uid=25_152 generic
+                              uid=25_153 ignored
+                                uid=25_154 generic
+                                  uid=11_8 StaticText ""
+                                    uid=11_8 InlineTextBox ""
+                              uid=25_155 ignored
+                                uid=11_22 StaticText "类型树"
+                                  uid=11_8 InlineTextBox "类型树"
+              uid=25_156 ignored
+                uid=25_157 generic
+                  uid=25_158 generic
+                    uid=25_159 ignored
+                      uid=11_8 StaticText ""
+                        uid=11_8 InlineTextBox ""
+                uid=25_160 ignored
+                  uid=11_23 StaticText "Version"
+                    uid=11_8 InlineTextBox "Version"
+                  uid=25_161 strong
+                    uid=11_24 StaticText "v4.10.17"
+                      uid=11_8 InlineTextBox "v4.10.17"
+        uid=25_162 separator orientation="horizontal"
+          uid=25_163 generic
+        uid=25_164 ignored
+          uid=25_165 generic
+            uid=25_166 generic
+              uid=25_167 ignored
+                uid=25_168 generic
+                  uid=25_169 link ""
+                    uid=25_170 generic
+                      uid=25_171 ignored
+                        uid=11_8 StaticText ""
+                          uid=11_8 InlineTextBox ""
+                  uid=25_172 link ""
+                    uid=25_173 generic
+                      uid=25_174 ignored
+                        uid=11_8 StaticText ""
+                          uid=11_8 InlineTextBox ""
+                uid=25_175 generic
+                  uid=25_176 list
+                    uid=25_177 generic
+                      uid=25_178 listitem "SAAS" level="1"
+                        uid=25_179 generic
+                          uid=25_180 ignored
+                            uid=25_181 generic
+                              uid=11_8 StaticText ""
+                                uid=11_8 InlineTextBox ""
+                          uid=25_182 ignored
+                            uid=24_0 StaticText "SAAS"
+                              uid=11_8 InlineTextBox "SAAS"
+                        uid=25_183 link "×"
+                          uid=24_1 StaticText "×"
+                            uid=11_8 InlineTextBox "×"
+                uid=25_184 generic
+              uid=25_185 generic
+                uid=25_186 generic
+                  uid=25_187 generic
+                    uid=25_188 generic
+                    uid=25_189 ignored
+                      uid=25_190 ignored
+                        uid=25_191 generic
+                          uid=25_192 ignored
+                            uid=25_193 generic
+                              uid=25_194 generic
+                                uid=24_2 Iframe
+                                  uid=24_3 RootWebArea "Web终端 - JumpServer 开源堡垒机" url="http://13.126.81.141/koko/connect/?disableautohash=false&token=f555d7b5-c081-4cb3-9d30-b282adcfaab5&_=1779843225010"
+                                    uid=25_195 ignored
+                                      uid=25_196 ignored
+                                        uid=25_197 generic
+                                          uid=25_198 ignored
+                                            uid=25_199 ignored
+                                              uid=25_200 ignored
+                                                uid=25_201 generic
+                                                  uid=25_202 generic
+                                                    uid=25_203 generic
+                                                    uid=25_204 generic
+                                                      uid=25_205 generic
+                                                        uid=24_4 textbox "Terminal input" focusable focused
+                                                          uid=25_206 generic
+                                                      uid=25_207 Canvas
+                                                      uid=25_208 Canvas
+                                                      uid=25_209 ignored
+                                        uid=25_210 ignored
+                                          uid=25_211 ignored
+                                        uid=25_212 ignored
+                                          uid=25_213 ignored
+                                        uid=25_214 ignored
+                                          uid=25_215 ignored
+                                        uid=25_216 ignored
+                                          uid=25_217 ignored
+                                        uid=25_218 ignored
+                                          uid=25_219 ignored
+                                        uid=25_220 ignored
+                                          uid=25_221 ignored
+                                            uid=25_222 ignored
+                                              uid=25_223 ignored
+                                              uid=25_224 ignored
+                                            uid=25_225 ignored
+                                              uid=25_226 ignored
+                                            uid=25_227 ignored
+                                              uid=25_228 ignored
+                                            uid=25_229 ignored
+                                              uid=25_230 ignored
+                                            uid=25_231 ignored
+                                              uid=25_232 ignored
+                                            uid=25_233 ignored
+                                              uid=25_234 ignored
+                                            uid=25_235 ignored
+                                              uid=25_236 ignored
+                                            uid=25_237 ignored
+                                              uid=25_238 ignored
+                                            uid=25_239 ignored
+                                              uid=25_240 ignored
+                                            uid=25_241 ignored
+                                              uid=25_242 ignored
+                                            uid=25_243 ignored
+                                              uid=25_244 ignored
+                                                uid=25_245 ignored
+                                            uid=25_246 ignored
+                                              uid=25_247 ignored
+                                            uid=25_248 ignored
+                                              uid=25_249 ignored
+                                            uid=25_250 ignored
+                                              uid=25_251 ignored
+                                            uid=25_252 ignored
+                                              uid=25_253 ignored
+                uid=25_254 ignored
+      uid=25_255 generic
+        uid=25_256 generic
+          uid=25_257 generic
+            uid=25_258 ignored
+              uid=25_259 generic
+                uid=24_5 button
+                  uid=25_260 generic
+                    uid=25_261 ignored
+                      uid=25_262 generic

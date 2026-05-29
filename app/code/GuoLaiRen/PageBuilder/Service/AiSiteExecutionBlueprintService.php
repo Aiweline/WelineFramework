@@ -218,6 +218,19 @@ final class AiSiteExecutionBlueprintService
     {
         foreach ([
             $scope['ai_content_locale'] ?? null,
+            \is_array($scope['plan_json'] ?? null) && \is_array($scope['plan_json']['stage1_contract'] ?? null)
+                ? ($scope['plan_json']['stage1_contract']['content_locale'] ?? null)
+                : null,
+            \is_array($scope['plan_json'] ?? null) && \is_array($scope['plan_json']['i18n'] ?? null)
+                ? ($scope['plan_json']['i18n']['content_locale'] ?? null)
+                : null,
+            \is_array($scope['plan_structured'] ?? null) && \is_array($scope['plan_structured']['stage1_contract'] ?? null)
+                ? ($scope['plan_structured']['stage1_contract']['content_locale'] ?? null)
+                : null,
+            \is_array($scope['plan_json'] ?? null) ? ($scope['plan_json']['content_locale'] ?? null) : null,
+            \is_array($scope['plan_structured'] ?? null) ? ($scope['plan_structured']['content_locale'] ?? null) : null,
+            \is_array($scope['stage1_contract'] ?? null) ? ($scope['stage1_contract']['content_locale'] ?? null) : null,
+            $scope['plan_generated_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['website_profile']['default_locale'] ?? null,
             $scope['website_profile']['content_locale'] ?? null,
@@ -243,7 +256,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *   plan_json:array<string, mixed>,
      *   structured:array<string, mixed>,
-     *   execution_blueprint:array<string, mixed>,
+     *   build_plan_v2:array<string, mixed>,
      *   derived_scope_patch:array<string, mixed>,
      *   markdown:string
      * }
@@ -354,6 +367,9 @@ final class AiSiteExecutionBlueprintService
             $pageTypes,
             $planLocale
         );
+        $sharedPromptContext['local_stage1_contract'] = \is_array($planningScope['stage1_contract'] ?? null)
+            ? $planningScope['stage1_contract']
+            : [];
         $pagePlans = [];
         $stageOneQueue = $this->buildStageOneHeaderFooterQueueEnvelope(
             $planningScope,
@@ -405,7 +421,7 @@ final class AiSiteExecutionBlueprintService
             'asset_distribution_policy' => $assetDistributionPolicy,
             'stage1_queue' => $stageOneQueue,
             'shared_components' => $sharedComponents,
-            'pages' => $pages,
+            'pages' => $pagePlans,
             'page_plans' => $pagePlans,
             'block_index' => $blockIndex,
             'tasks' => $tasks,
@@ -449,14 +465,40 @@ final class AiSiteExecutionBlueprintService
             ],
             'stage1_queue' => $stageOneQueue,
             'page_types' => $pageTypes,
-            'pages' => $pages,
+            'pages' => $pagePlans,
             'page_plans' => $pagePlans,
             'block_index' => $blockIndex,
             'queue_jobs' => $stageOneQueueJobs,
             'execution_steps' => $this->buildExecutionSteps($tasks),
         ];
+        $stageOneValidationContract = $this->getStageOneContractService()->normalize(
+            \is_array($planningScope['stage1_contract'] ?? null) ? $planningScope['stage1_contract'] : [],
+            $planningScope,
+            $pageTypes,
+            $planLocale,
+            $contentLocale,
+            'validation'
+        );
+        $planningScope['stage1_contract'] = $stageOneValidationContract;
+        $structured['stage1_contract'] = $stageOneValidationContract;
         $planJson = $this->buildPlanJson($structured);
         $planJson['content_locale'] = $contentLocale;
+        $planJson['stage1_contract'] = $stageOneValidationContract;
+        $stageOneGenerationAttempts = ['local_planner' => 1];
+        $stageOneValidationReport = $this->buildStageOneValidationReport(
+            $planJson,
+            $pageTypes,
+            \trim((string)($planningScope['brief_description'] ?? $planningScope['user_description'] ?? $websiteProfile['brief_description'] ?? '')),
+            $planLocale,
+            $planningScope,
+            $stageOneGenerationAttempts
+        );
+        $planJson['stage1_validation_report'] = $stageOneValidationReport;
+        $planJson['stage1_first_pass'] = !empty($stageOneValidationReport['passed']) && !empty($stageOneValidationReport['first_pass']) ? 1 : 0;
+        $planJson['stage1_generation_attempts'] = $stageOneGenerationAttempts;
+        $structured['stage1_validation_report'] = $stageOneValidationReport;
+        $structured['stage1_first_pass'] = (int)$planJson['stage1_first_pass'];
+        $structured['stage1_generation_attempts'] = $stageOneGenerationAttempts;
         $markdown = $this->buildMarkdownPlan($planJson, $planLocale);
         $planWorkbench = $this->buildPlanWorkbenchArtifacts(
             $planningScope,
@@ -470,7 +512,6 @@ final class AiSiteExecutionBlueprintService
         return [
             'plan_json' => $planJson,
             'structured' => $structured,
-            'execution_blueprint' => $executionBlueprint,
             'derived_scope_patch' => $this->buildDerivedScopePatch($planningScope, $websiteProfile, $structured, $executionBlueprint),
             'markdown' => $markdown,
             'plan_workbench' => $planWorkbench,
@@ -487,7 +528,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *   plan_json:array<string, mixed>,
      *   structured:array<string, mixed>,
-     *   execution_blueprint:array<string, mixed>,
+     *   build_plan_v2:array<string, mixed>,
      *   derived_scope_patch:array<string, mixed>,
      *   markdown:string,
      *   ai_generated?:int
@@ -3731,64 +3772,64 @@ final class AiSiteExecutionBlueprintService
             'generated_image_block' => [
                 'block_key' => 'hero',
                 'page_flow_role' => 'opening',
-                'goal' => 'Drive APK downloads with a concrete product/game visual.',
-                'keywords' => ['APK download', 'card game'],
-                'content' => 'Download the APK and start playing trusted card games today.',
+                'goal' => 'Invite visitors into a premium neon card-game room with a concrete table visual.',
+                'keywords' => ['neon card room', 'poker mahjong lobby'],
+                'content' => 'Enter a neon card room with clear game choices, rewards, and support.',
                 'design_tags' => [
-                    'visual' => ['split hero', 'phone mockup'],
-                    'motion' => ['soft reveal', 'CTA glow'],
+                    'visual' => ['cinematic neon hero', 'card table scene'],
+                    'motion' => ['chip glow reveal', 'CTA rim pulse'],
                     'interaction' => ['primary CTA hover'],
-                    'texture' => ['felt gradient', 'gold rim'],
+                    'texture' => ['felt table', 'magenta cyan rim'],
                     'responsive' => ['mobile stacked', 'desktop split'],
-                    'color_layering' => 'dark felt base with gold highlight',
-                    'implementation_note' => 'Keep copy left and media right.',
+                    'color_layering' => 'dark base with cyan and magenta highlights',
+                    'implementation_note' => 'Keep copy and table visual balanced.',
                 ],
                 'visual_signature' => [
-                    'composition_pattern' => 'split hero with phone mockup',
-                    'spatial_rhythm' => 'copy left, generated product visual right',
-                    'media_strategy' => 'Generated hero image sits beside the CTA as a rounded phone mockup',
-                    'surface_treatment' => 'dark felt gradient with gold rim light',
-                    'interaction_pattern' => 'CTA hover glow and subtle image parallax',
+                    'composition_pattern' => 'split hero with cinematic card-room scene',
+                    'spatial_rhythm' => 'headline rail beside one generated table visual',
+                    'media_strategy' => 'Generated hero image shows poker, mahjong, chips, and lobby glow',
+                    'surface_treatment' => 'dark glass panels with cyan-magenta rim light',
+                    'interaction_pattern' => 'CTA glow on hover and reduced-motion image depth',
                 ],
                 'image_intent' => [
                     'needs_image' => true,
                     'image_role' => 'hero_image',
-                    'image_subject' => 'phone APK install screen with playing-card table behind it',
+                    'image_subject' => 'neon card-game lobby hero scene with poker cards, mahjong tiles, chips, glowing table felt, and mobile room UI',
                     'placement' => 'media_panel',
-                    'visual_atmosphere' => 'premium trusted game-lobby mood with warm gold lighting',
-                    'image_treatment' => 'rounded phone mockup with shallow shadow and gold overlay',
+                    'visual_atmosphere' => 'premium dark entertainment room with cyan-magenta lighting and fair-play cues',
+                    'image_treatment' => 'wide cinematic crop with readable center subject and dark neon overlay',
                     'reuse_policy' => 'reuse_when_intent_matches',
                     'css_motif' => '',
                 ],
                 'field_plan' => [
-                    ['field' => 'headline', 'sample' => 'Play Today', 'implementation_note' => 'Render as the main H1.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Fast APK download with trusted gameplay.', 'implementation_note' => 'Render below headline.'],
-                    ['field' => 'cta_label', 'sample' => 'Download APK', 'implementation_note' => 'Use for the primary button.'],
+                    ['field' => 'headline', 'sample' => 'Step into the neon card room', 'implementation_note' => 'Render as the main H1.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Choose a room, review the rules, and start with support nearby.', 'implementation_note' => 'Render below headline.'],
+                    ['field' => 'cta_label', 'sample' => 'Enter the table', 'implementation_note' => 'Use for the primary button.'],
                 ],
                 'execution_script' => [
-                    'feature_points' => ['Fast download', 'Secure setup'],
-                    'core_copy' => 'Download the APK and start playing trusted card games today.',
+                    'feature_points' => ['Live rooms', 'Fair play'],
+                    'core_copy' => 'Visitors can see game choices, reward cues, and support before entering a neon table.',
                     'typography' => 'Bold display headline with readable body text',
-                    'style_tone' => 'Confident and conversion-focused',
-                    'background_direction' => 'Dark felt gradient with gold highlights',
-                    'media_assets' => ['hero-phone-apk-install.png'],
+                    'style_tone' => 'Immersive, confident, and entertainment-focused',
+                    'background_direction' => 'Dark card-room surface with cyan and magenta highlights',
+                    'media_assets' => ['hero-neon-card-room.png'],
                 ],
                 'reusable' => 'no',
                 'seo_impact' => 'high',
             ],
             'css_only_block' => [
-                'block_key' => 'player_reviews',
+                'block_key' => 'customer_proof',
                 'page_flow_role' => 'proof',
                 'goal' => 'Build trust with player feedback without generating image assets.',
-                'keywords' => ['reviews', 'secure app'],
-                'content' => 'Real players trust the app for quick, secure gameplay.',
+                'keywords' => ['player reviews', 'fair play proof'],
+                'content' => 'Players trust the room for clear rules, quick support, and steady table flow.',
                 'design_tags' => [
-                    'visual' => ['review cards', 'star badges'],
-                    'motion' => ['hover lift', 'badge shimmer'],
+                    'visual' => ['review cards', 'rating chips'],
+                    'motion' => ['hover lift', 'neon badge fade'],
                     'interaction' => ['card hover'],
-                    'texture' => ['glass cards', 'border glow'],
+                    'texture' => ['dark glass cards', 'neon border glow'],
                     'responsive' => ['mobile stack', 'desktop rail'],
-                    'color_layering' => 'dark glass cards with warm accent badges',
+                    'color_layering' => 'dark cards with violet, cyan, and gold accents',
                     'implementation_note' => 'Use CSS initials and rating chips.',
                 ],
                 'visual_signature' => [
@@ -3803,22 +3844,22 @@ final class AiSiteExecutionBlueprintService
                     'image_role' => 'css_motif',
                     'image_subject' => 'none',
                     'placement' => 'background_layer',
-                    'visual_atmosphere' => 'secure premium review wall with social proof energy',
+                    'visual_atmosphere' => 'neon card-room review wall with trusted player energy',
                     'image_treatment' => 'CSS gradients, initials, star badges, and border glow are the final visual treatment',
                     'reuse_policy' => 'no_generated_image',
-                    'css_motif' => 'glass testimonial cards with accent side borders and gold star badges',
+                    'css_motif' => 'testimonial cards with neon borders, rating stars, chip badges, and fair-play labels',
                 ],
                 'field_plan' => [
-                    ['field' => 'headline', 'sample' => 'Trusted by Players', 'implementation_note' => 'Render above review cards.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Secure gameplay with quick support.', 'implementation_note' => 'Render as proof copy.'],
-                    ['field' => 'proof_detail', 'sample' => '4.8 star average rating', 'implementation_note' => 'Render as a badge.'],
+                    ['field' => 'headline', 'sample' => 'Players trust the neon room', 'implementation_note' => 'Render above review cards.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Clear rules, quick replies, and stable tables keep play moving.', 'implementation_note' => 'Render as proof copy.'],
+                    ['field' => 'proof_detail', 'sample' => 'Fast support response', 'implementation_note' => 'Render as a badge.'],
                 ],
                 'execution_script' => [
-                    'feature_points' => ['Verified reviews', 'Quick support'],
-                    'core_copy' => 'Real players trust the app for quick, secure gameplay.',
+                    'feature_points' => ['Player proof', 'Quick support'],
+                    'core_copy' => 'Players see clear table proof, fair-play cues, and support signals before joining.',
                     'typography' => 'Compact headline with badge text',
                     'style_tone' => 'Reassuring and factual',
-                    'background_direction' => 'Layered cards on a soft gradient surface',
+                    'background_direction' => 'Layered neon cards on a dark felt surface',
                     'media_assets' => [],
                 ],
                 'reusable' => 'no',
@@ -3833,19 +3874,19 @@ final class AiSiteExecutionBlueprintService
     {
         $examples = [
             'cta_block' => [
-                ['field' => 'headline', 'sample' => 'Start Playing Today', 'implementation_note' => 'Main CTA heading.'],
-                ['field' => 'supporting_copy', 'sample' => 'Download the APK and follow the quick setup steps.', 'implementation_note' => 'Body sentence before button.'],
-                ['field' => 'cta_label', 'sample' => 'Download APK', 'implementation_note' => 'Primary action button.'],
+                ['field' => 'headline', 'sample' => 'Ready for the next neon table?', 'implementation_note' => 'Main CTA heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'Check the room, rules, and support path before you join.', 'implementation_note' => 'Body sentence before button.'],
+                ['field' => 'cta_label', 'sample' => 'Start playing', 'implementation_note' => 'Primary action button.'],
             ],
             'proof_block' => [
-                ['field' => 'headline', 'sample' => 'Trusted by Players', 'implementation_note' => 'Proof section heading.'],
-                ['field' => 'supporting_copy', 'sample' => 'Verified reviews highlight fast setup and secure play.', 'implementation_note' => 'Trust body copy.'],
-                ['field' => 'proof_detail', 'sample' => '4.8 average rating', 'implementation_note' => 'Badge or stat chip.'],
+                ['field' => 'headline', 'sample' => 'Trusted by card-room players', 'implementation_note' => 'Proof section heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'Verified feedback highlights clear rules and quick support.', 'implementation_note' => 'Trust body copy.'],
+                ['field' => 'proof_detail', 'sample' => 'Quick support response', 'implementation_note' => 'Badge or stat chip.'],
             ],
             'media_or_feature_block' => [
-                ['field' => 'headline', 'sample' => 'See the Game Flow', 'implementation_note' => 'Feature heading.'],
-                ['field' => 'supporting_copy', 'sample' => 'A guided screen shows setup, play, and rewards.', 'implementation_note' => 'Feature body copy.'],
-                ['field' => 'image_brief', 'sample' => 'Phone screen with card table behind it', 'implementation_note' => 'Asset brief if needs_image=true.'],
+                ['field' => 'headline', 'sample' => 'See the room lineup', 'implementation_note' => 'Feature heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'A guided table view shows games, rewards, and entry cues.', 'implementation_note' => 'Feature body copy.'],
+                ['field' => 'image_brief', 'sample' => 'Neon poker and mahjong table with chips and live room UI', 'implementation_note' => 'Asset brief if needs_image=true.'],
             ],
             'support_or_form_block' => [
                 ['field' => 'headline', 'sample' => 'Need Help?', 'implementation_note' => 'Support heading.'],
@@ -3858,37 +3899,37 @@ final class AiSiteExecutionBlueprintService
                 ['field' => 'policy_summary', 'sample' => 'Data use, rights, and contact options', 'implementation_note' => 'Policy summary chip.'],
             ],
             'multi_item_blocks_still_use_three_rows' => [
-                'player_reviews' => [
-                    ['field' => 'headline', 'sample' => 'Players Trust the App', 'implementation_note' => 'Review section heading.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Ravi likes quick setup; Anika values secure play; Dev trusts the lobby.', 'implementation_note' => 'Intro plus three review snippets.'],
-                    ['field' => 'proof_detail', 'sample' => '4.8 average rating from active players', 'implementation_note' => 'Single rating badge, not extra rows.'],
+                'customer_reviews' => [
+                    ['field' => 'headline', 'sample' => 'Players trust the room', 'implementation_note' => 'Review section heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Regular players value fair cues, steady tables, and support clarity.', 'implementation_note' => 'Intro plus three review snippets.'],
+                    ['field' => 'proof_detail', 'sample' => 'Fast support response', 'implementation_note' => 'Single metric badge, not extra rows.'],
                 ],
                 'support_faq' => [
                     ['field' => 'headline', 'sample' => 'Support Questions', 'implementation_note' => 'FAQ heading.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Get help with install steps, account access, and game basics.', 'implementation_note' => 'One FAQ intro sentence.'],
-                    ['field' => 'context_detail', 'sample' => 'Install help | Account help | Game rules', 'implementation_note' => 'Multiple FAQ topics inside one row.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Get help with room entry, account access, and play basics.', 'implementation_note' => 'One FAQ intro sentence.'],
+                    ['field' => 'context_detail', 'sample' => 'Room help | Account help | Play rules', 'implementation_note' => 'Multiple FAQ topics inside one row.'],
                 ],
             ],
             'by_common_block_key' => [
-                'hero_download' => [
-                    ['field' => 'headline', 'sample' => 'Download in Three Clear Steps', 'implementation_note' => 'Heading for download guidance.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Follow the install prompts and open the game lobby safely.', 'implementation_note' => 'Body copy before action.'],
-                    ['field' => 'cta_label', 'sample' => 'Download APK', 'implementation_note' => 'Primary download action.'],
+                'game_room_overview' => [
+                    ['field' => 'headline', 'sample' => 'Launch in three clear steps', 'implementation_note' => 'Heading for setup guidance.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Pick a table, review rules, and join with support nearby.', 'implementation_note' => 'Body copy before action.'],
+                    ['field' => 'cta_label', 'sample' => 'Enter a room', 'implementation_note' => 'Primary action.'],
                 ],
-                'player_reviews' => [
-                    ['field' => 'headline', 'sample' => 'Players Trust the App', 'implementation_note' => 'Review section heading.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Short reviews highlight smooth setup and secure play.', 'implementation_note' => 'Review intro sentence.'],
-                    ['field' => 'proof_detail', 'sample' => '4.8 average rating', 'implementation_note' => 'Rating badge detail.'],
+                'customer_proof' => [
+                    ['field' => 'headline', 'sample' => 'Players trust the room', 'implementation_note' => 'Review section heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Short reviews highlight steady tables and clear support.', 'implementation_note' => 'Review intro sentence.'],
+                    ['field' => 'proof_detail', 'sample' => 'Quick support response', 'implementation_note' => 'Metric badge detail.'],
                 ],
                 'faq_or_rules' => [
-                    ['field' => 'headline', 'sample' => 'Rules Before You Play', 'implementation_note' => 'FAQ/rules heading.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Review the basics before starting your first table.', 'implementation_note' => 'Intro sentence.'],
-                    ['field' => 'context_detail', 'sample' => 'Teen Patti, Rummy, and Poker basics', 'implementation_note' => 'Topic chip or summary.'],
+                    ['field' => 'headline', 'sample' => 'Questions before launch', 'implementation_note' => 'FAQ/rules heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Review table rules before your first round.', 'implementation_note' => 'Intro sentence.'],
+                    ['field' => 'context_detail', 'sample' => 'Rooms, rewards, and support basics', 'implementation_note' => 'Topic chip or summary.'],
                 ],
                 'article_collection' => [
-                    ['field' => 'headline', 'sample' => 'Latest Strategy Guides', 'implementation_note' => 'Article list heading.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Browse practical tips for safer and smarter play.', 'implementation_note' => 'Collection intro.'],
-                    ['field' => 'article_teaser', 'sample' => 'Beginner Teen Patti table guide', 'implementation_note' => 'First article teaser.'],
+                    ['field' => 'headline', 'sample' => 'Latest table guides', 'implementation_note' => 'Article list heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Browse practical tips for rooms, rewards, and safe play.', 'implementation_note' => 'Collection intro.'],
+                    ['field' => 'article_teaser', 'sample' => 'Beginner room-entry guide', 'implementation_note' => 'First article teaser.'],
                 ],
             ],
         ];
@@ -4016,24 +4057,24 @@ final class AiSiteExecutionBlueprintService
     {
         $examples = [
             'generated_media_block' => [
-                'composition_pattern' => 'split hero with copy rail and phone media panel',
+                'composition_pattern' => 'split hero with copy rail and neon card-room scene',
                 'spatial_rhythm' => 'large headline column balanced by one generated visual',
-                'media_strategy' => 'Generated phone APK install image anchors the right panel beside CTA copy',
-                'surface_treatment' => 'dark felt gradient, gold rim light, and soft glass card depth',
-                'interaction_pattern' => 'CTA glow on hover; generated media panel uses reduced-motion parallax',
+                'media_strategy' => 'Generated poker and mahjong table image anchors the CTA copy',
+                'surface_treatment' => 'dark glass depth, cyan-magenta borders, and table-felt shadow',
+                'interaction_pattern' => 'CTA border shift on hover; media panel uses reduced-motion parallax',
             ],
             'css_only_static_block' => [
                 'composition_pattern' => 'staggered proof cards with compact badge row',
                 'spatial_rhythm' => 'three short cards, tight copy, and one accent stat strip',
-                'media_strategy' => 'CSS-only/no generated image; initials, chips, dividers, and card-suit motifs create the visual',
-                'surface_treatment' => 'glass panels with amber border glow and subtle patterned texture',
+                'media_strategy' => 'CSS-only/no generated image; initials, rating chips, dividers, and fair-play motifs create the visual',
+                'surface_treatment' => 'dark panels with violet-cyan border glow and subtle table texture',
                 'interaction_pattern' => 'card hover lift, focus-visible links, no ambient motion',
             ],
             'faq_or_rules_block' => [
-                'composition_pattern' => 'accordion-style rule rows inside a framed help panel',
+                'composition_pattern' => 'accordion-style FAQ rows inside a framed help panel',
                 'spatial_rhythm' => 'left intro copy, right stacked questions, compact row gaps',
-                'media_strategy' => 'CSS-only/no generated image; rule numbers, suit icons, and divider lines guide scanning',
-                'surface_treatment' => 'matte dark panel with gold separators and soft inset shadow',
+                'media_strategy' => 'CSS-only/no generated image; question numbers, status icons, and divider lines guide scanning',
+                'surface_treatment' => 'matte light panel with blue separators and soft inset shadow',
                 'interaction_pattern' => 'accordion row expand, keyboard focus ring, no floating animation',
             ],
         ];
@@ -4045,25 +4086,25 @@ final class AiSiteExecutionBlueprintService
     {
         $example = [
             'requirement_expansion' => [
-                'original_brief' => 'Teen Patti APK download site for Indian players',
-                'expanded_brief' => 'Create a trusted Indian card-game APK site with fast download guidance, safety proof, rules education, and support clarity.',
-                'planning_summary' => 'Conversion-first app-download experience with strong trust and beginner education.',
-                'site_goal' => 'Help visitors understand, trust, and download the APK.',
-                'business_goals' => ['Increase APK downloads', 'Build safety confidence'],
-                'target_users' => ['Indian card players', 'New APK users'],
-                'business_context' => 'Mobile game discovery site for Teen Patti-style card gameplay.',
-                'content_direction' => 'Use direct download copy, rule summaries, trust proof, FAQ, and support guidance.',
-                'conversion_strategy' => 'Lead with download CTA, reinforce with safety/reviews, repeat one final CTA.',
-                'primary_cta' => 'Download APK',
+                'original_brief' => 'Neon card-game entertainment site',
+                'expanded_brief' => 'Create a trusted neon card-game website that explains game rooms, table rules, rewards, player proof, responsible-play cues, and support.',
+                'planning_summary' => 'Immersive gaming experience with clear room entry, block-specific imagery, trust proof, and a confident play path.',
+                'site_goal' => 'Help visitors understand the rooms, trust the play model, and enter a table.',
+                'business_goals' => ['Increase table entries', 'Clarify play value'],
+                'target_users' => ['Card-game players', 'Mahjong fans', 'Tournament visitors'],
+                'business_context' => 'Online card-game entertainment site with neon tables, player proof, and quick support.',
+                'content_direction' => 'Use room choices, game highlights, rewards, rules, player reviews, guides, FAQ, and support guidance.',
+                'conversion_strategy' => 'Lead with table-entry CTA, reinforce with player proof, then close with a clear support-backed play path.',
+                'primary_cta' => 'Start playing',
                 'page_strategy' => [
                     [
                         'page_type' => 'home_page',
-                        'intent' => 'convert visitors with hero, proof, features, and CTA flow',
-                        'content_focus' => 'download benefit, games, safety, reviews',
+                        'intent' => 'convert visitors with hero, room proof, feature clarity, and CTA flow',
+                        'content_focus' => 'game rooms, table rules, rewards, player proof',
                         'conversion_role' => 'primary conversion',
                     ],
                 ],
-                'technical_direction' => ['Mobile-first layout', 'Reusable CTA pattern', 'Verified image slots only'],
+                'technical_direction' => ['Responsive gaming landing layout', 'Reusable CTA pattern', 'Verified block-specific image slots only'],
             ],
         ];
 
@@ -4074,34 +4115,34 @@ final class AiSiteExecutionBlueprintService
     {
         $example = [
             'site_strategy' => [
-                'site_display_name' => 'Teenipiya',
-                'summary' => 'Trusted APK download and learning hub for Indian card-game players.',
-                'website_type' => 'game APK landing and resource site',
-                'core_goal' => 'Convert visitors to safe APK downloads.',
-                'target_users' => 'Indian mobile card-game players',
-                'content_strategy' => 'Pair download CTAs with rules, trust proof, and support.',
-                'conversion_path' => 'Hero CTA, game proof, safety proof, FAQ, final CTA.',
-                'primary_cta' => 'Download APK',
+                'site_display_name' => 'Neon Table Club',
+                'summary' => 'Neon card-game site for players who want clear rooms, rules, rewards, and support.',
+                'website_type' => 'online card-game entertainment site',
+                'core_goal' => 'Convert qualified players to table entries.',
+                'target_users' => 'Card-game players and tournament visitors',
+                'content_strategy' => 'Pair room choices with gameplay highlights, rewards, player proof, guides, FAQ, and support.',
+                'conversion_path' => 'Hero CTA, room proof, feature clarity, FAQ, final play CTA.',
+                'primary_cta' => 'Start playing',
             ],
             'theme_design' => [
-                'style_signature' => 'premium Indian card-room launch style with felt depth and gold CTA accents',
+                'style_signature' => 'premium neon card-room style with dark glass depth and cyan-magenta signal colors',
                 'art_direction' => [
-                    'layout_motif' => 'diagonal hero, proof rail, compact CTA stage',
-                    'background_system' => 'dark felt gradients with subtle pattern layers',
-                    'surface_treatment' => 'glass cards, gold rims, tactile CTA glow',
-                    'visual_detail_rule' => 'use CSS card suits/chips as motifs; real images only for phone/game scenes',
-                    'motion_rule' => 'short reveal, hover lift, CTA glow; no generic floating blobs',
+                    'layout_motif' => 'cinematic table hero, room rail, compact CTA stage',
+                    'background_system' => 'dark felt surfaces with violet, cyan, magenta, and gold signal layers',
+                    'surface_treatment' => 'glass panels, crisp neon borders, and table-light depth',
+                    'visual_detail_rule' => 'use poker cards, mahjong tiles, chips, table UI, and fair-play proof as motifs',
+                    'motion_rule' => 'short reveal, neon border shift, no generic floating blobs',
                 ],
-                'visual_keywords' => ['felt depth', 'gold CTA', 'glass proof cards', 'phone mockup'],
-                'forbidden_styles' => ['plain SaaS blue gradient', 'generic white card grid', 'purple AI glow'],
+                'visual_keywords' => ['neon card room', 'cyan magenta glow', 'player proof', 'mahjong poker table'],
+                'forbidden_styles' => ['plain SaaS dashboard', 'APK download pitch', 'corporate process motifs', 'generic purple AI glow'],
             ],
             'page_type_overviews' => [
                 'home_page' => [
                     'page_role' => 'primary conversion',
-                    'content_focus' => 'download, games, proof, FAQ',
-                    'theme_color_application' => 'gold CTAs over dark card-room surfaces',
-                    'section_layering_hint' => 'hero then feature/proof rhythm',
-                    'interaction_intent' => 'CTA glow and card hover lift',
+                    'content_focus' => 'game rooms, rewards, player proof, rules, FAQ',
+                    'theme_color_application' => 'cyan CTA with magenta proof accents on dark surfaces',
+                    'section_layering_hint' => 'hero then room/proof rhythm',
+                    'interaction_intent' => 'CTA focus ring and neon panel hover border',
                     'differentiation_note' => 'marketing landing, not legal text layout',
                 ],
             ],
@@ -4114,84 +4155,84 @@ final class AiSiteExecutionBlueprintService
     {
         $example = [
             'page' => [
-                'page_goal' => 'Convert visitors to APK downloads while proving safety and game value.',
-                'theme_alignment_summary' => 'Uses dark felt surfaces, gold CTAs, and proof rails from the shared card-room theme.',
+                'page_goal' => 'Convert visitors to table entries while proving neon card-game trust and value.',
+                'theme_alignment_summary' => 'Uses dark card-room surfaces, cyan CTAs, and magenta proof rails from the shared neon theme.',
                 'page_design_plan' => [
                     'page_role' => 'conversion home',
-                    'content_narrative' => 'download promise, game benefits, trust proof, FAQ, final action',
-                    'visual_hierarchy' => 'large opening, dense feature proof, compact final CTA',
+                    'content_narrative' => 'table promise, game benefits, trust proof, FAQ, final action',
+                    'visual_hierarchy' => 'large opening, dense product proof, compact final CTA',
                     'visual_signature_application' => 'each block gets a distinct composition, surface, media, and interaction signature',
-                    'composition_motif' => 'diagonal launch hero with staggered proof rail',
-                    'color_layering' => 'dark base, warm gold accents, lighter support panels',
-                    'section_flow' => ['opening download promise', 'features and proof before final CTA'],
-                    'interaction_notes' => ['CTA hover glow', 'cards lift on hover'],
-                    'polish_details' => ['CSS chip motifs', 'subtle patterned background'],
+                    'composition_motif' => 'neon table hero with staggered proof rail',
+                    'color_layering' => 'dark base, cyan CTA accents, magenta support panels',
+                    'section_flow' => ['opening table promise', 'features and proof before final CTA'],
+                    'interaction_notes' => ['CTA focus ring', 'panels shift neon border on hover'],
+                    'polish_details' => ['card and chip motifs', 'subtle table grid'],
                     'anti_monotony_rule' => 'alternate media, proof cards, FAQ rows, and CTA stage instead of repeated card grids',
                 ],
-                'ordered_block_keys' => ['hero', 'hero_download', 'game_showcase_or_features', 'trust_security', 'player_reviews', 'faq_or_rules', 'final_cta'],
+                'ordered_block_keys' => ['hero', 'game_room_overview', 'feature_showcase', 'trust_security', 'customer_proof', 'faq_or_rules', 'final_cta'],
                 'generated_image_target_block_key' => 'hero',
                 'block_blueprints' => [
                     [
                         'block_key' => 'hero',
                         'page_flow_role' => 'opening',
-                        'goal' => 'make the APK download promise immediately clear',
-                        'content_focus' => 'download CTA plus trusted game intro',
-                        'visual_signature_hint' => 'split hero with phone/game scene and CTA panel',
-                        'image_intent_hint' => 'generated phone APK install screen with card table behind it',
+                        'goal' => 'make the neon card-room promise immediately clear',
+                        'content_focus' => 'table CTA plus game value intro',
+                        'visual_signature_hint' => 'split hero with neon table scene and CTA panel',
+                        'image_intent_hint' => 'generated poker and mahjong table scene with live room UI',
                         'handoff_rule' => 'block worker must return full field_plan, visual_signature, and image_intent',
                     ],
                     [
-                        'block_key' => 'hero_download',
+                        'block_key' => 'game_room_overview',
                         'page_flow_role' => 'cta',
-                        'goal' => 'make download steps and action obvious',
-                        'content_focus' => 'APK install step and CTA label',
-                        'visual_signature_hint' => 'compact download rail with CSS chip/step badges',
-                        'image_intent_hint' => 'CSS-only download step motif',
+                        'goal' => 'make the room path and play action obvious',
+                        'content_focus' => 'room entry steps and CTA label',
+                        'visual_signature_hint' => 'compact game-room rail with CSS table chips',
+                        'image_intent_hint' => 'CSS-only table step motif',
                         'handoff_rule' => 'cta block row 2 must be cta_label or action_label',
                     ],
                     [
-                        'block_key' => 'game_showcase_or_features',
+                        'block_key' => 'feature_showcase',
                         'page_flow_role' => 'details',
-                        'goal' => 'show the core card-game experience without repeating the hero',
-                        'content_focus' => 'game modes, phone lobby, and quick play value',
-                        'visual_signature_hint' => 'feature grid with one phone-lobby media panel',
-                        'image_intent_hint' => 'generated phone game lobby or CSS feature cards',
+                        'goal' => 'show core game features without repeating the hero',
+                        'content_focus' => 'rooms, rewards, rules, support, and table variety',
+                        'visual_signature_hint' => 'feature grid with one room media panel',
+                        'image_intent_hint' => 'generated table UI or CSS feature cards',
                         'handoff_rule' => 'row 2 should be image_brief when generated, otherwise context_detail',
                     ],
                     [
                         'block_key' => 'trust_security',
                         'page_flow_role' => 'proof',
-                        'goal' => 'make safety and APK confidence visible before reviews',
-                        'content_focus' => 'secure install, fair play, and app trust cues',
-                        'visual_signature_hint' => 'trust checklist band with shield chips and audit badges',
-                        'image_intent_hint' => 'CSS-only shield chips and secure-install motif',
+                        'goal' => 'make fair-play confidence visible before reviews',
+                        'content_focus' => 'clear rules, responsible-play cues, account safety, and support',
+                        'visual_signature_hint' => 'trust checklist band with neon status chips and fair-play badges',
+                        'image_intent_hint' => 'CSS-only fair-play and account-safety motif',
                         'handoff_rule' => 'must include full CSS-only image_intent if no generated image',
                     ],
                     [
-                        'block_key' => 'player_reviews',
+                        'block_key' => 'customer_proof',
                         'page_flow_role' => 'proof',
-                        'goal' => 'add player trust proof without another hero shell',
-                        'content_focus' => 'short reviews and rating detail',
-                        'visual_signature_hint' => 'staggered testimonial cards with rating badges',
+                        'goal' => 'add customer proof without another hero shell',
+                        'content_focus' => 'short player reviews and table trust metrics',
+                        'visual_signature_hint' => 'staggered testimonial cards with metric badges',
                         'image_intent_hint' => 'CSS-only initials and star badges',
                         'handoff_rule' => 'proof block row 2 should be proof_detail',
                     ],
                     [
                         'block_key' => 'faq_or_rules',
                         'page_flow_role' => 'details',
-                        'goal' => 'answer common play and install questions in a scannable format',
-                        'content_focus' => 'rules basics, APK setup, and responsible play cues',
-                        'visual_signature_hint' => 'accordion-style rule rows inside framed help panel',
-                        'image_intent_hint' => 'CSS-only rule numbers, suit icons, and divider lines',
+                        'goal' => 'answer room, rule, and support questions in a scannable format',
+                        'content_focus' => 'room entry, reward terms, account safety, and support',
+                        'visual_signature_hint' => 'accordion-style FAQ rows inside framed help panel',
+                        'image_intent_hint' => 'CSS-only question numbers and divider lines',
                         'handoff_rule' => 'all five visual_signature fields must be non-empty',
                     ],
                     [
                         'block_key' => 'final_cta',
                         'page_flow_role' => 'cta',
-                        'goal' => 'close the page with one confident download action',
-                        'content_focus' => 'final reassurance and APK action label',
-                        'visual_signature_hint' => 'compact CTA stage with glow button and trust chips',
-                        'image_intent_hint' => 'CSS-only CTA glow, chip rail, and card-suit texture',
+                        'goal' => 'close the page with one confident play action',
+                        'content_focus' => 'final reassurance and table-entry action label',
+                        'visual_signature_hint' => 'compact CTA stage with clear button and trust chips',
+                        'image_intent_hint' => 'CSS-only CTA rail and neon chip texture',
                         'handoff_rule' => 'row 2 must be cta_label/action_label/button_text',
                     ],
                 ],
@@ -4515,7 +4556,7 @@ final class AiSiteExecutionBlueprintService
             'needs_image type rule: image_intent.needs_image MUST be the JSON boolean true or false. Never return "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text; put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment.',
             'needs_image GOOD/BAD examples: GOOD {"needs_image":true}; GOOD {"needs_image":false}; BAD {"needs_image":"CSS-only"}; BAD {"needs_image":"no"}; BAD {"needs_image":{"value":false}}.',
             'Image intent location rule: output image_intent only at block top level. Do not output visual.image_intent, nested image_intent copies, rationale, reason, or why fields.',
-            'Image intent examples: generated {"needs_image":true,"image_role":"hero_image","image_subject":"phone APK install screen with Teen Patti table behind it","placement":"media_panel","visual_atmosphere":"warm trusted casino lobby mood","image_treatment":"rounded phone mockup with amber overlay","reuse_policy":"reuse_when_intent_matches","css_motif":""}; CSS-only {"needs_image":false,"image_role":"css_motif","image_subject":"none","placement":"background_layer","visual_atmosphere":"secure premium dark-card mood","image_treatment":"CSS gradient cards and border glow only","reuse_policy":"no_generated_image","css_motif":"amber grid badges with neon trust outlines"}',
+            'Image intent examples: generated {"needs_image":true,"image_role":"hero_image","image_subject":"neon card-game lobby with poker cards, mahjong tiles, chips, glowing felt table, and mobile room UI","placement":"media_panel","visual_atmosphere":"premium dark entertainment room with cyan-magenta lighting and fair-play cues","image_treatment":"wide cinematic crop with readable center subject and dark neon overlay","reuse_policy":"reuse_when_intent_matches","css_motif":""}; CSS-only {"needs_image":false,"image_role":"css_motif","image_subject":"none","placement":"background_layer","visual_atmosphere":"trusted neon player-proof section","image_treatment":"CSS grid lines, rating chips, and neon border highlights only","reuse_policy":"no_generated_image","css_motif":"card-table rails with cyan trust outlines and chip badges"}',
             'CSS-only image_intent examples by common block_key: ' . $cssOnlyImageIntentExamplesJson,
             'Icon/decorative visual boundary: small icons, badges, arrows, dividers, chips, rating stars, initials, and abstract marks should normally be CSS/SVG/icon-font motifs inside design_tags or css_motif with needs_image=false. Use needs_image=true only for a real generated scene/product/interface/editorial visual, not for an isolated icon.',
             'Image intent consistency rule: never set image_intent.needs_image=true while any media field says CSS-only/no generated image/no image. Choose generated-image path or CSS-only path, not both.',
@@ -5270,6 +5311,7 @@ final class AiSiteExecutionBlueprintService
         ];
         $lines[] = 'BuildPlan no-reason field rule: do not add extra explanatory keys named reason, why, rationale, thinking, analysis, explanation, chain_of_thought, design_reason, or reasoning anywhere unless the active schema explicitly lists that exact key. Theme selection_reason is allowed only in theme_style, palette, and theme_design when the schema lists it; do not invent selection_reason on pages, blocks, image_intent, visual_signature, field_plan, or execution_script.';
         $lines[] = 'Template scaffold translation rule: style templates, default configs, layout JSON, and examples are structural references only. Treat #download, #contact, #faq, href="#", fake URLs, fake media names, old brands, old CTA targets, and sample social/support links as stale scaffold values. Do not copy them into Stage-1 output; use exact route-contract paths when provided, otherwise omit the link or describe a button/event action.';
+        $lines[] = 'Negative-intent rule: words after avoid, do not, no, without, exclude, forbid, 禁止, 避免, 不要, 不得, 排除, or 请勿 are hard exclusions, not requirements. If the brief says to avoid gaming, casino, APK, reward, card, neon, gambling, or similar terms, never use those excluded words as the site category, CTA, visual style, image subject, or copy direction.';
         $lines[] = 'Output vocabulary gate: do not write internal filler tokens, HTML input hint attribute names, or localized filler-media words in any returned JSON value. For form inputs, return the final hint text itself, such as "Describe your issue in one sentence"; never describe the field as an input-hint attribute or filler value.';
         return $lines;
     }
@@ -5380,7 +5422,7 @@ final class AiSiteExecutionBlueprintService
             ...$this->buildStageOneGatePromptLines($pageTypes, $scope, 'theme'),
             'Schema:',
             '{"i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},"site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","content_strategy":"string","conversion_path":"string","primary_cta":"string"},"theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"internal fit summary, not shown as a plan reason"},"palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"internal palette fit summary, not shown as a plan reason"},"theme_design":{"theme_purpose":"string","style_signature":"brief-derived visual identity, not a generic theme name","reference_style_context":{"summary":"string","style_keywords":["string"],"color_palette":["#hex"],"layout_cues":["string"],"component_cues":["string"],"typography_cues":["string"],"do_not_use":["string"],"implementation_rule":"string"},"art_direction":{"layout_motif":"string","background_system":"string","surface_treatment":"string","visual_detail_rule":"string","motion_rule":"string"},"color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"internal brief-alignment summary; must copy at least one exact noun/action phrase from Brief or Instruction"},"page_type_overviews":{"home_page":{"page_role":"string","content_focus":"string","theme_color_application":"string","section_layering_hint":"string","interaction_intent":"string","differentiation_note":"string"}},"navigation_plan":{"header_items":[{"label":"string","href":"string"}]},"footer_plan":{"featured":[{"label":"string","href":"string"}],"policies":[{"label":"string","href":"string"}]},"shared_components":{"header":{"component":"header","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"},"footer":{"component":"footer","title":"string","goal":"string","implementation_detail":"string","realtime_content":{"headline":"string","supporting_copy":["string"],"cta":[{"label":"string","target":"string"}],"editable_slots":["string"]},"editable_fields":["string"],"responsive_rule":"string"}},"seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"}}',
-            'Compact example style: {"i18n":{"locale":"th_TH","labels":{"title":"Site theme","site":"Teenipiya","summary":"Summary","site_structure":"Structure","shared_global_plan":"Shared plan","page_details":"Pages"}},"page_type_overviews":{"home_page":{"page_role":"conversion home","content_focus":"download trust proof","theme_color_application":"amber CTA on dark cards","section_layering_hint":"hero then proof zones","interaction_intent":"hover lift only","differentiation_note":"not legal layout"}}}',
+            'Compact example style: {"i18n":{"locale":"en_US","labels":{"title":"Site theme","site":"Neon Table Club","summary":"Summary","site_structure":"Structure","shared_global_plan":"Shared plan","page_details":"Pages"}},"page_type_overviews":{"home_page":{"page_role":"conversion home","content_focus":"room proof and play intent","theme_color_application":"cyan CTA on dark neon panels","section_layering_hint":"hero then table proof zones","interaction_intent":"hover border shift only","differentiation_note":"not legal layout"}}}',
             'Theme teaching example (copy the structure, not the content; invent the visual system from the current brief): ' . $this->stageOneThemeExampleJson(),
             'SEO strategy contract: seo_strategy is a REQUIRED top-level contract section in this shared pass. It is planning metadata, not visible website copy. It must include core_intent, 3-6 primary_keywords, keyword_page_map covering every selected page type at least once, content_strategy, internal_linking, and url_structure. Do not omit seo_strategy when compacting JSON.',
             'Hard rules: theme_design and shared_components.header/footer must be concrete implementation decisions derived from the expanded requirement; navigation_plan.header_items must include exact labels and route-contract hrefs for selected page types plus the primary CTA; footer_plan must include featured links, and must include policy/help links when policy pages are selected or trust/safety/support links to existing selected pages only when policy pages are not selected; shared_components.header/footer must include visible content, editable slots, responsive behavior, and implementation_detail; page_type_overviews must cover every selected page type with page role, content focus, theme color application, section layering hint, interaction intent, and differentiation note; these overviews are conceptual page planning only, not block lists; keep output compact and shorten strings before adding detail.',
@@ -5509,7 +5551,7 @@ final class AiSiteExecutionBlueprintService
             '- page_design_plan.section_flow must describe the visual rhythm across the block sequence: opening impact, middle information/proof layer, and closing action or reassurance layer.',
             '- page_design_plan.interaction_notes must describe hover/focus/mobile behavior that matches the page role, not just generic CTA hover.',
             '- Visual polish is mandatory: every page must include at least one specific motif/detail (inline SVG idea, CSS texture, framed media treatment, asymmetric composition, editorial type contrast, or tactile button state) that fits the brief.',
-            '- Customer-intent lock: page_design_plan and every block must preserve the user brief as an experience, not just as copy. If the user asks for gaming, APK, booking, consulting, education, or local service, the layout, affordances, effects, and CTAs must visibly fit that scenario.',
+            '- Customer-intent lock: page_design_plan and every block must preserve the user brief as an experience, not just as copy. If the user explicitly asks for gaming, APK, booking, consulting, education, or local service, the layout, affordances, effects, and CTAs must visibly fit that scenario; excluded words remain forbidden by the Negative-intent rule.',
             '- Interaction/effects plan: every page_design_plan.polish_details item must say where the effect appears, which CSS/SVG technique implements it, and how mobile/reduced-motion behavior stays friendly.',
             'Critical page differentiation rules:',
             '- Design this page from its page_type intent, not by copying the home page and changing nouns.',
@@ -5552,7 +5594,7 @@ final class AiSiteExecutionBlueprintService
             '- needs_image type rule: image_intent.needs_image MUST be the JSON boolean true or false. Never return "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text; put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment.',
             '- needs_image GOOD/BAD examples: GOOD {"needs_image":true}; GOOD {"needs_image":false}; BAD {"needs_image":"CSS-only"}; BAD {"needs_image":"no"}; BAD {"needs_image":{"value":false}}.',
             '- Image intent location rule: output image_intent only at block top level. Do not output visual.image_intent, nested image_intent copies, rationale, reason, or why fields.',
-            '- Image intent examples: generated {"needs_image":true,"image_role":"hero_image","image_subject":"phone APK install screen with Teen Patti table behind it","placement":"media_panel","visual_atmosphere":"warm trusted casino lobby mood","image_treatment":"rounded phone mockup with amber overlay","reuse_policy":"reuse_when_intent_matches","css_motif":""}; CSS-only {"needs_image":false,"image_role":"css_motif","image_subject":"none","placement":"background_layer","visual_atmosphere":"secure premium dark-card mood","image_treatment":"CSS gradient cards and border glow only","reuse_policy":"no_generated_image","css_motif":"amber grid badges with neon trust outlines"}.',
+            '- Image intent examples: generated {"needs_image":true,"image_role":"hero_image","image_subject":"neon card-game lobby with poker cards, mahjong tiles, chips, glowing felt table, and mobile room UI","placement":"media_panel","visual_atmosphere":"premium dark entertainment room with cyan-magenta lighting and fair-play cues","image_treatment":"wide cinematic crop with readable center subject and dark neon overlay","reuse_policy":"reuse_when_intent_matches","css_motif":""}; CSS-only {"needs_image":false,"image_role":"css_motif","image_subject":"none","placement":"background_layer","visual_atmosphere":"trusted neon player-proof section","image_treatment":"CSS grid lines, rating chips, and neon border highlights only","reuse_policy":"no_generated_image","css_motif":"card-table rails with cyan trust outlines and chip badges"}.',
             '- CSS-only image_intent examples by common block_key: ' . $cssOnlyImageIntentExamplesJson,
             '- Complete block examples (copy the shape, not the exact content; rewrite for this page/locale/block): ' . $blockReturnExamplesJson,
             '- When image_intent.needs_image=true, image_subject must be a concrete block-level generated visual: a scene, product/editorial photograph, interface/product mockup, environment, people moment, or premium illustration tied to the block goal. When needs_image=false, image_subject must be "none" and css_motif carries the visual plan.',
@@ -5561,7 +5603,7 @@ final class AiSiteExecutionBlueprintService
             '- Non-policy opening image direction: for home_page, about_page, contact_page, and custom marketing pages, prefer a concrete generated scene/product/interface subject early in the page when it supports the narrative, but do not force block index 0 to be the generated-image block.',
             '- Do not use icon-only image subjects for page blocks. Invalid page-block subjects include app icon, shield badge, logo mark, sparkle glyph, line icon, avatar badge, chevron, symbol, SVG icon, download arrow, coin mark, or any subject that is only a decorative mark.',
             '- Icon/decorative visual boundary: when the visual need is small icons, badges, arrows, dividers, chips, rating stars, initials, or abstract marks, keep needs_image=false and describe the motif in css_motif/design_tags. Use needs_image=true only when the block needs a real generated scene/product/interface/editorial visual.',
-            '- Abstract trust/reward/security/payment/download marks are not generated image subjects by themselves. Convert them into a real scene or product visual: players at a Teen Patti table, a phone APK install screen, a support desk, a product interface, or an editorial brand moment.',
+            '- Abstract trust/reward/security/payment/download marks are not generated image subjects by themselves. Convert them into a real scene or product visual: a room interface, a support desk, a human-in-context trust moment, a service environment, or an editorial brand moment.',
             '- If execution_script.media_assets or visual_signature.media_strategy mentions a photo, image, screenshot, mockup, scene, hero image, banner image, background image, or avatar, set image_intent.needs_image=true and provide a concrete generated asset brief.',
             '- Real media contract: when a block plans an image, screenshot, phone screen, mockup, scene, background image, or media asset, describe the actual generated asset and integration. Never use low-fidelity filler-media wording or localized filler-image terms in design_tags, visual_signature, image_intent, field_plan, or execution_script.',
             '- If the block uses only CSS cards, gradients, patterns, lines, badges, or small icons, set needs_image=false and provide a full CSS-only image_intent: image_role css_motif or none, placement none/background_layer/inline_visual, non-empty css_motif, visual_atmosphere, image_treatment, and visual_signature.media_strategy that starts with the exact ASCII marker "CSS-only/no generated image" before any localized explanation.',
@@ -5751,7 +5793,7 @@ final class AiSiteExecutionBlueprintService
                 ? (' Exact image_subject target(s): ' . \implode(', ', \array_values(\array_unique($iconOnlyImageTargets))) . '.')
                 : '';
             $rules[] = 'Issue-specific rule for icon_only_image_subject:' . $targetText
-                . ' replace the generated image subject with a real scene, product interface, editorial environment, or human-in-context visual tied to the block. Do not use an isolated badge, logo, icon, glyph, shield, coin mark, sparkle, arrow, or decorative symbol as the image_subject. For Teenipiya-style pages, prefer a phone APK lobby screen, Indian card table, support dashboard, safety verification scene, or player community scene when it matches the block.';
+                . ' replace the generated image subject with a real scene, product interface, editorial environment, or human-in-context visual tied to the block. Do not use an isolated badge, logo, icon, glyph, shield, coin mark, sparkle, arrow, or decorative symbol as the image_subject. For SaaS/product pages, prefer a product interface, support desk, product proof scene, or customer operations moment when it matches the block.';
         }
         if (isset($codes['invalid_image_intent_needs_image'])) {
             $rules[] = 'Issue-specific rule for invalid_image_intent_needs_image: rewrite image_intent.needs_image as the JSON boolean true or false only. Never use "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text. Put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment and keep the rest of the block creative and page-specific.';
@@ -5905,6 +5947,8 @@ final class AiSiteExecutionBlueprintService
             '',
         ]);
         $contentLocale = $this->resolveStageOneContentLocale($scope, $planLocale);
+        $scope['content_locale'] = $contentLocale;
+        $scope['ai_content_locale'] = $contentLocale;
         $repairedPlanJson = $this->repairAiStageOnePlanJsonBeforeValidation(
             $planJson,
             $pageTypes,
@@ -5913,6 +5957,13 @@ final class AiSiteExecutionBlueprintService
             $scope,
             $contentLocale
         );
+        $repairedPlanJson['content_locale'] = $contentLocale;
+        if (\is_array($repairedPlanJson['i18n'] ?? null)) {
+            $repairedPlanJson['i18n']['content_locale'] = $contentLocale;
+        }
+        if (\is_array($repairedPlanJson['stage1_contract'] ?? null)) {
+            $repairedPlanJson['stage1_contract']['content_locale'] = $contentLocale;
+        }
         $scope['plan_json'] = $repairedPlanJson;
         $scope['plan_structured'] = $repairedPlanJson;
         $stageOneGenerationAttempts = \is_array($scope['stage1_generation_attempts'] ?? null)
@@ -5966,7 +6017,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *   plan_json:array<string, mixed>,
      *   structured:array<string, mixed>,
-     *   execution_blueprint:array<string, mixed>,
+     *   build_plan_v2:array<string, mixed>,
      *   derived_scope_patch:array<string, mixed>,
      *   markdown:string,
      *   change_scope_report:array<string, mixed>
@@ -6000,7 +6051,6 @@ final class AiSiteExecutionBlueprintService
         ];
         $artifacts['structured']['change_scope_report'] = $report;
         $artifacts['plan_json']['change_scope_report'] = $report;
-        $artifacts['execution_blueprint']['signature'] = $this->buildExecutionBlueprintSignature($artifacts['execution_blueprint']);
         $artifacts['change_scope_report'] = $report;
 
         return $artifacts;
@@ -6016,7 +6066,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *   plan_json:array<string, mixed>,
      *   structured:array<string, mixed>,
-     *   execution_blueprint:array<string, mixed>,
+     *   build_plan_v2:array<string, mixed>,
      *   markdown:string,
      *   plan_workbench:array<string, mixed>,
      *   page_refine_summary:array<string, mixed>
@@ -6141,7 +6191,6 @@ final class AiSiteExecutionBlueprintService
         return [
             'plan_json' => $planJson,
             'structured' => $structured,
-            'execution_blueprint' => $executionBlueprint,
             'markdown' => $markdown,
             'plan_workbench' => $planWorkbench,
             'page_refine_summary' => $summary,
@@ -6670,7 +6719,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *   plan_json:array<string, mixed>,
      *   structured:array<string, mixed>,
-     *   execution_blueprint:array<string, mixed>,
+     *   build_plan_v2:array<string, mixed>,
      *   derived_scope_patch:array<string, mixed>,
      *   markdown:string,
      *   rebuild_summary:array<string, mixed>
@@ -6691,13 +6740,12 @@ final class AiSiteExecutionBlueprintService
             'mode' => 'rebuild',
             'round' => $round,
             'instruction' => $instruction,
-            'task_count' => \count(\is_array($artifacts['execution_blueprint']['tasks'] ?? null) ? $artifacts['execution_blueprint']['tasks'] : []),
-            'page_type_count' => \count(\is_array($artifacts['execution_blueprint']['page_types'] ?? null) ? $artifacts['execution_blueprint']['page_types'] : []),
+            'block_count' => \count(\is_array($artifacts['plan_json']['blocks'] ?? null) ? $artifacts['plan_json']['blocks'] : []),
+            'page_type_count' => \count(\is_array($artifacts['plan_json']['page_types'] ?? null) ? $artifacts['plan_json']['page_types'] : []),
             'updated_at' => \date('Y-m-d H:i:s'),
         ];
         $artifacts['structured']['rebuild_summary'] = $summary;
         $artifacts['plan_json']['rebuild_summary'] = $summary;
-        $artifacts['execution_blueprint']['signature'] = $this->buildExecutionBlueprintSignature($artifacts['execution_blueprint']);
         $artifacts['rebuild_summary'] = $summary;
 
         return $artifacts;
@@ -6726,10 +6774,6 @@ final class AiSiteExecutionBlueprintService
         $baselineText = $baselinePlanJson === []
             ? '{}'
             : (\json_encode($baselinePlanJson, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}');
-        $baselineExecutionBlueprint = \is_array($baseline['execution_blueprint'] ?? null) ? $baseline['execution_blueprint'] : [];
-        $baselineExecutionBlueprintText = $baselineExecutionBlueprint === []
-            ? '{}'
-            : (\json_encode($baselineExecutionBlueprint, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}');
         $selectedPageCoverageHints = $this->buildSelectedPageCoverageHints($pageTypes);
         $promptInputProfile = $this->buildPromptInputProfile($scope, $websiteProfile, $instruction, $targetScope);
 
@@ -6785,11 +6829,11 @@ final class AiSiteExecutionBlueprintService
             '',
             'GOOD vs BAD examples (do NOT copy verbatim, learn the structure only):',
             'BAD field_plan.sample : "Write a title around the main value"',
-            'GOOD field_plan.sample: "Trusted APK Download for Indian Card Players"',
+            'GOOD field_plan.sample: "Neon tables for focused card-game players"',
             'BAD blocks[].content   : "Highlight brand value and guide action"',
-            'GOOD blocks[].content  : "Download the APK, review the game lobby, and start from a clear first step."',
+            'GOOD blocks[].content  : "Choose a room, review rules, and enter a neon table with support nearby."',
             'BAD execution_script.core_copy : "Briefly explain product benefits"',
-            'GOOD execution_script.core_copy: "Players can understand the install step, game lobby, and safety proof before downloading."',
+            'GOOD execution_script.core_copy: "Players can understand room choices, reward cues, fair-play proof, and support before entering a table."',
             'BAD navigation_plan.header_items : []',
             'GOOD navigation_plan.header_items: [{"label":"Home","href":"/"},{"label":"About","href":"/about"},{"label":"Blog","href":"/blog"},{"label":"Contact","href":"/contact"}]',
             '',
@@ -6844,7 +6888,7 @@ final class AiSiteExecutionBlueprintService
             '- execution_script.core_copy must summarize the actual content message already written for the block.',
             '- Treat the output as a customer-visible implementation plan: every visible sentence must answer the user brief directly.',
             '- The hero title/subtitle/description MUST reuse the most concrete nouns from the one-line requirement (market, product type, offer, download/service words) instead of abstract labels like "核心价值" or "下一步动作".',
-            '- If the brief mentions app/APK download, booking, consultation, pricing, trial, or signup, at least one CTA label must reflect that exact action directly.',
+            '- If the brief positively mentions app/APK download, booking, consultation, pricing, trial, or signup, at least one CTA label must reflect that exact action directly; excluded terms from the Negative-intent rule must never become CTA labels.',
             '- page_types can only use selected_page_types.',
             '- If information is missing, you may make reasonable assumptions, but mark them with the prefix "[假设]".',
             '- Even in refine/rebuild/translation mode, you must still output the full plan, not fragments.',
@@ -6873,8 +6917,6 @@ final class AiSiteExecutionBlueprintService
             $promptInputProfile,
             'baseline_plan_json:',
             $baselineText,
-            'baseline_execution_blueprint:',
-            $baselineExecutionBlueprintText,
         ];
         if (\function_exists('w_log')) {
             \call_user_func('w_log', 'info', \implode("\n", $cleanPrompt), [], 'buildAiPlanPrompt');
@@ -7356,7 +7398,7 @@ final class AiSiteExecutionBlueprintService
             $this->assertAiStageOnePlanJsonIsStrict($planJson, $validationPageTypes, $briefDescription, $planLocale, $scope);
         }
 
-        $executionBlueprint = \is_array($baseline['execution_blueprint'] ?? null) ? $baseline['execution_blueprint'] : [];
+        $executionBlueprint = \is_array($baseline['structured'] ?? null) ? $baseline['structured'] : [];
         $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
         $planJson = $this->syncStageOneOverviewFieldsFromRequirementExpansion($planJson);
         $structured = \array_replace(
@@ -7569,7 +7611,6 @@ final class AiSiteExecutionBlueprintService
         return \array_replace($baseline, [
             'plan_json' => $planJson,
             'structured' => $structured,
-            'execution_blueprint' => $executionBlueprint,
             'derived_scope_patch' => $derivedScopePatch,
             'markdown' => $markdown,
             'plan_workbench' => $planWorkbench,
@@ -8210,7 +8251,7 @@ final class AiSiteExecutionBlueprintService
             '预约', '咨询', '批发', '代理', '课程', '下载站',
             'download', 'booking', 'consulting', 'pricing', 'trial',
         ] as $candidate) {
-            if ($candidate !== '' && \mb_stripos($brief, $candidate) !== false) {
+            if ($candidate !== '' && $this->containsPositiveIntent($brief, $candidate)) {
                 $signals[] = $candidate;
             }
         }
@@ -10396,7 +10437,7 @@ final class AiSiteExecutionBlueprintService
             ];
         }
 
-        if ($this->containsAny($brief, ['棋牌', 'casino', 'rummy', 'ludo', 'poker', 'aviator', 'satta', 'game', 'gaming'])) {
+        if ($this->containsAnyPositiveIntent($brief, ['棋牌', 'casino', 'rummy', 'ludo', 'poker', 'aviator', 'satta', 'game', 'gaming'])) {
             return [
                 'name' => 'Midnight Ember',
                 'primary' => '#111827',
@@ -10921,38 +10962,21 @@ final class AiSiteExecutionBlueprintService
         $baseKeywords = \array_values(\array_filter([
             $siteDisplayName,
             $brief !== '' ? $this->clipText($brief, 20) : '',
-            $siteDisplayName !== '' ? ($siteDisplayName . ' 官网') : '',
-            $siteDisplayName !== '' ? ($siteDisplayName . ' 首页') : '',
+            $siteDisplayName !== '' ? ($siteDisplayName . ' official website') : '',
+            $siteDisplayName !== '' ? ($siteDisplayName . ' home page') : '',
         ], static fn(string $value): bool => \trim($value) !== ''));
 
         return [
-            'core_intent' => '围绕站点核心价值建立首页承接、页面分发与咨询转化的搜索结构。',
+            'core_intent' => 'Build a search structure that supports the homepage value proposition, page-level discovery, and consultation conversion.',
             'primary_keywords' => \array_values(\array_unique($baseKeywords)),
             'keyword_page_map' => $this->buildSeoKeywordPageMap($baseKeywords, $pageTypes),
             'page_type_count' => \count($pageTypes),
-            'meta_rule' => '标题优先承接主词与页面价值，description 用自然短句说明利益点与下一步动作。',
-            'content_strategy' => $instruction !== '' ? ('本轮 SEO 内容重点同步用户补充说明：' . $this->clipText($instruction, 80)) : '每个页面都要围绕页面目标给出可读内容、关键词承接和清晰内链。',
-            'internal_linking' => '首页串联 About、FAQ、Contact 等页面，区块内 CTA 与锚点同步承担内链分发。',
-            'url_structure' => '保持简洁的英文 slug，首页为 /，其他页面采用稳定的语义化路径。',
-        ];
-
-        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''));
-        $baseKeywords = \array_values(\array_filter([
-            $siteDisplayName,
-            $brief !== '' ? $this->clipText($brief, 20) : '',
-            $siteDisplayName !== '' ? ($siteDisplayName . ' ??') : '',
-            $siteDisplayName !== '' ? ($siteDisplayName . ' ??') : '',
-        ], static fn(string $value): bool => \trim($value) !== ''));
-
-        return [
-            'core_intent' => '?????????????????????????????????????',
-            'primary_keywords' => \array_values(\array_unique($baseKeywords)),
-            'keyword_page_map' => $this->buildSeoKeywordPageMap($baseKeywords, $pageTypes),
-            'page_type_count' => \count($pageTypes),
-            'meta_rule' => '???????????????????????????description ????????????????',
-            'content_strategy' => $instruction !== '' ? '?? SEO ????????????' . $this->clipText($instruction, 80) : '????????????????????????????',
-            'internal_linking' => '????????????????????FAQ?????????????',
-            'url_structure' => '???????????????? URL slug?',
+            'meta_rule' => 'Meta titles should carry the primary keyword and page value; descriptions should state the visitor benefit and next action in natural language.',
+            'content_strategy' => $instruction !== ''
+                ? ('Align this SEO pass with the user-provided priorities: ' . $this->clipText($instruction, 80))
+                : 'Each page should carry a clear page goal, readable supporting content, keyword alignment, and useful internal links.',
+            'internal_linking' => 'The homepage should connect to About, FAQ, Contact, and other supporting pages; section CTAs and anchor links should reinforce discovery and conversion.',
+            'url_structure' => 'Use concise English slugs: the homepage stays at /, and other pages use stable semantic paths.',
         ];
     }
 
@@ -12126,7 +12150,6 @@ final class AiSiteExecutionBlueprintService
                 $this->buildMarkdownPlan($this->buildPlanJson($structured), (string)($structured['i18n']['locale'] ?? $scope['plan_locale'] ?? '')),
                 (string)($structured['i18n']['locale'] ?? $scope['plan_locale'] ?? '')
             ),
-            'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? ''),
         ];
 
         $themeDesign['theme_design'] = $this->applyReferenceImageInsightsToThemeDesign(
@@ -12620,7 +12643,7 @@ final class AiSiteExecutionBlueprintService
                     'kind' => 'scope_path',
                     'scope_path' => 'plan_workbench.stage1.page_plans.' . $pageKey,
                     'structured_path' => 'plan_structured.page_plans.' . $pageKey,
-                    'execution_blueprint_path' => 'execution_blueprint_draft.page_plans.' . $pageKey,
+                    'build_plan_path' => 'build_plan_v2.pages.' . $pageKey,
                     'context_hash' => $pageContextHash,
                 ],
                 'retry_count' => 0,
@@ -12845,9 +12868,10 @@ final class AiSiteExecutionBlueprintService
             $assembledPagePlan,
             $sharedPromptContext
         );
+        $sourceBlocks = $this->buildStageOneContractAlignedBlocks($pageType, $assembledPagePlan, $sharedPromptContext);
         $blocks = [];
         $usedVisualFingerprints = [];
-        foreach (\is_array($assembledPagePlan['blocks'] ?? null) ? $assembledPagePlan['blocks'] : [] as $index => $block) {
+        foreach ($sourceBlocks as $index => $block) {
             if (!\is_array($block)) {
                 continue;
             }
@@ -12871,6 +12895,661 @@ final class AiSiteExecutionBlueprintService
         $assembledPagePlan['page_context_hash'] = $this->buildStageOnePageContextHash($pageType, $assembledPagePlan);
 
         return $assembledPagePlan;
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $sharedPromptContext
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageOneContractAlignedBlocks(string $pageType, array $pagePlan, array $sharedPromptContext): array
+    {
+        $contract = \is_array($sharedPromptContext['local_stage1_contract'] ?? null)
+            ? $sharedPromptContext['local_stage1_contract']
+            : [];
+        $pageContract = \is_array($contract['page_contracts'][$pageType] ?? null)
+            ? $contract['page_contracts'][$pageType]
+            : [];
+        $existingBlocks = \is_array($pagePlan['blocks'] ?? null) ? \array_values($pagePlan['blocks']) : [];
+        if ($pageContract === []) {
+            return $existingBlocks;
+        }
+
+        $required = $this->normalizeStringList($pageContract['required_block_keys'] ?? []);
+        $optional = $this->normalizeStringList($pageContract['recommended_optional_block_keys'] ?? []);
+        $targetBlocks = \max(\count($required), (int)($pageContract['target_blocks'] ?? 0));
+        if ($targetBlocks <= 0) {
+            return $existingBlocks;
+        }
+
+        $forbidden = \array_fill_keys(\array_map(
+            static fn(string $value): string => \mb_strtolower(\trim($value)),
+            \is_array($pageContract['forbidden_block_keys'] ?? null)
+                ? \array_map('strval', $pageContract['forbidden_block_keys'])
+                : AiSiteStageOneContractService::GENERIC_BLOCK_KEYS
+        ), true);
+        if (!$this->stageOneBlocksNeedContractAlignment($existingBlocks, $pageContract, $required, $forbidden, $targetBlocks)) {
+            return $existingBlocks;
+        }
+        $existingByKey = [];
+        foreach ($existingBlocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? ''));
+            if ($blockKey === '') {
+                continue;
+            }
+            $normalizedKey = \mb_strtolower($blockKey);
+            if (isset($forbidden[$normalizedKey]) || isset($existingByKey[$blockKey])) {
+                continue;
+            }
+            $existingByKey[$blockKey] = $block;
+        }
+
+        $orderedKeys = [];
+        foreach (\array_merge($required, $optional) as $blockKey) {
+            $blockKey = \trim((string)$blockKey);
+            if ($blockKey === '' || isset($orderedKeys[$blockKey])) {
+                continue;
+            }
+            $orderedKeys[$blockKey] = true;
+            if (\count($orderedKeys) >= $targetBlocks) {
+                break;
+            }
+        }
+        if (\count($orderedKeys) < $targetBlocks) {
+            foreach ($existingByKey as $blockKey => $_) {
+                if (isset($orderedKeys[$blockKey])) {
+                    continue;
+                }
+                $orderedKeys[$blockKey] = true;
+                if (\count($orderedKeys) >= $targetBlocks) {
+                    break;
+                }
+            }
+        }
+
+        $preferredGeneratedImageBlockKey = \trim((string)($pageContract['first_generated_image_block_key'] ?? ''));
+        if ($preferredGeneratedImageBlockKey === '' && !$this->isStageOnePolicyPageType($pageType)) {
+            $preferredGeneratedImageBlockKey = \array_key_first($orderedKeys) ?? '';
+        }
+
+        $aligned = [];
+        foreach (\array_keys($orderedKeys) as $index => $blockKey) {
+            $aligned[] = $this->buildStageOneContractBlock(
+                $pageType,
+                $pagePlan,
+                \is_array($existingByKey[$blockKey] ?? null) ? $existingByKey[$blockKey] : [],
+                $blockKey,
+                (int)$index,
+                $preferredGeneratedImageBlockKey,
+                $sharedPromptContext
+            );
+        }
+
+        return $aligned;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @param array<string, mixed> $pageContract
+     * @param list<string> $requiredBlockKeys
+     * @param array<string, bool> $forbiddenBlockKeys
+     */
+    private function stageOneBlocksNeedContractAlignment(
+        array $blocks,
+        array $pageContract,
+        array $requiredBlockKeys,
+        array $forbiddenBlockKeys,
+        int $targetBlocks
+    ): bool {
+        if ($blocks === []) {
+            return true;
+        }
+        $minBlocks = \max(0, (int)($pageContract['min_blocks'] ?? 0));
+        $maxBlocks = \max($minBlocks, (int)($pageContract['max_blocks'] ?? $targetBlocks));
+        $count = \count($blocks);
+        if ($count < $minBlocks || $count > $maxBlocks) {
+            return true;
+        }
+        if ($targetBlocks > 0 && $count < $targetBlocks) {
+            return true;
+        }
+
+        $seen = [];
+        foreach ($blocks as $block) {
+            if (!\is_array($block)) {
+                return true;
+            }
+            $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? ''));
+            if ($blockKey === '') {
+                return true;
+            }
+            $normalizedKey = \mb_strtolower($blockKey);
+            if (isset($forbiddenBlockKeys[$normalizedKey])) {
+                return true;
+            }
+            $seen[$blockKey] = true;
+        }
+
+        foreach ($requiredBlockKeys as $blockKey) {
+            if (!isset($seen[$blockKey])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $existingBlock
+     * @param array<string, mixed> $sharedPromptContext
+     * @return array<string, mixed>
+     */
+    private function buildStageOneContractBlock(
+        string $pageType,
+        array $pagePlan,
+        array $existingBlock,
+        string $blockKey,
+        int $index,
+        string $preferredGeneratedImageBlockKey,
+        array $sharedPromptContext
+    ): array {
+        $sectionLabel = $this->humanizeStageOneBlockKey($blockKey);
+        $siteDisplayName = $this->resolveStageOneContractSiteDisplayName($sharedPromptContext, $pagePlan);
+        $contentLocale = (string)($sharedPromptContext['content_locale'] ?? '');
+        $pageLabel = \trim((string)($pagePlan['page_label'] ?? $this->resolveStageOnePageTypeLabel($pageType, $contentLocale)));
+        $pageGoal = \trim((string)($pagePlan['page_goal'] ?? ''));
+        $role = $this->resolveStageOneContractBlockRole($blockKey, $index);
+        $needsImage = $preferredGeneratedImageBlockKey !== '' && $blockKey === $preferredGeneratedImageBlockKey;
+        $headline = $this->buildStageOneContractBlockHeadline($siteDisplayName, $pageLabel, $sectionLabel, $role, $contentLocale);
+        $supportingCopy = $this->buildStageOneContractBlockSupportingCopy($siteDisplayName, $pageLabel, $sectionLabel, $role, $pageGoal, $contentLocale);
+        $detailCopy = $role === 'cta'
+            ? $this->buildStageOneContractBlockCtaLabel($sectionLabel, $contentLocale)
+            : $this->buildStageOneContractBlockDetailCopy($siteDisplayName, $sectionLabel, $role, $contentLocale);
+        $fieldPlan = [
+            [
+                'field' => 'headline',
+                'sample' => $headline,
+                'implementation_note' => 'Render as the block headline.',
+            ],
+            [
+                'field' => 'supporting_copy',
+                'sample' => $supportingCopy,
+                'implementation_note' => 'Render as the main supporting sentence.',
+            ],
+            [
+                'field' => $role === 'cta' ? 'cta_label' : 'context_detail',
+                'sample' => $detailCopy,
+                'implementation_note' => $role === 'cta' ? 'Render as the primary action label.' : 'Render as proof, detail, or media context.',
+            ],
+        ];
+        $visualSignature = $this->buildStageOneContractVisualSignature(
+            $blockKey,
+            $role,
+            $needsImage,
+            $index,
+            $sectionLabel,
+            $sharedPromptContext,
+            $pagePlan
+        );
+        $executionScript = [
+            'feature_points' => [
+                $this->clipText($sectionLabel, 28),
+                $role === 'cta' ? 'Clear action' : 'Visitor proof',
+            ],
+            'core_copy' => $supportingCopy,
+            'typography' => $index === 0 ? 'confident headline scale' : 'scannable editorial scale',
+            'style_tone' => $role === 'proof' ? 'trust-led proof tone' : 'clear customer-first tone',
+            'background_direction' => $index % 2 === 0 ? 'layered contrast band' : 'quiet surface panel',
+            'media_assets' => $needsImage ? ['Generated ' . $sectionLabel . ' visual'] : [],
+        ];
+        $block = \array_replace($existingBlock, [
+            'block_key' => $blockKey,
+            'section_code' => $blockKey,
+            'component_kind' => $role === 'cta' ? 'cta' : ($index === 0 ? 'hero' : 'content'),
+            'order' => ($index + 1) * 10,
+            'page_flow_role' => $role,
+            'title' => $headline,
+            'goal' => $pageGoal !== '' ? $pageGoal : ($pageLabel . ' ' . $sectionLabel),
+            'content' => $headline . ' ' . $supportingCopy,
+            'field_plan' => $fieldPlan,
+            'realtime_content' => [
+                'headline' => $headline,
+                'supporting_copy' => [$supportingCopy],
+                'cta' => $role === 'cta' ? [['label' => $detailCopy, 'target' => '']] : [],
+                'media' => $needsImage ? [['kind' => 'image', 'rule' => $sectionLabel . ' generated visual']] : [],
+                'data_slots' => ['headline', 'supporting_copy', $role === 'cta' ? 'cta_label' : 'context_detail'],
+                'editable_slots' => ['headline', 'supporting_copy', $role === 'cta' ? 'cta_label' : 'context_detail'],
+            ],
+            'editable_fields' => ['headline', 'supporting_copy', $role === 'cta' ? 'cta_label' : 'context_detail'],
+            'design_tags' => $this->buildStageOneContractDesignTags($sharedPromptContext, $pagePlan, $sectionLabel, $role),
+            'visual_signature' => $visualSignature,
+            'image_intent' => $this->buildStageOneContractImageIntent(
+                $siteDisplayName,
+                $sectionLabel,
+                $needsImage,
+                $index,
+                $blockKey,
+                $role,
+                $sharedPromptContext,
+                $pagePlan
+            ),
+            'execution_script' => $executionScript,
+            'reusable' => $role === 'cta' ? 'no' : 'yes',
+            'seo_impact' => $index === 0 ? 'high' : ($role === 'support' ? 'low' : 'medium'),
+            'completion_rule' => 'Block is complete when the visible copy, visual signature, image intent, and CTA/detail field render without guessing.',
+        ]);
+        unset($block['reason'], $block['why']);
+
+        return $block;
+    }
+
+    private function resolveStageOneContractBlockRole(string $blockKey, int $index): string
+    {
+        $normalized = $this->normalizeStageOneRoleToken($blockKey);
+        if ($index === 0 || \str_contains($normalized, 'hero') || \str_contains($normalized, 'origin') || \str_contains($normalized, 'intro')) {
+            return 'opening';
+        }
+        if (\str_contains($normalized, 'trust') || \str_contains($normalized, 'proof') || \str_contains($normalized, 'review') || \str_contains($normalized, 'security')) {
+            return 'proof';
+        }
+        if (\str_contains($normalized, 'cta') || \str_contains($normalized, 'contact') || \str_contains($normalized, 'download')) {
+            return 'cta';
+        }
+        if (\str_contains($normalized, 'faq') || \str_contains($normalized, 'support') || \str_contains($normalized, 'resource')) {
+            return 'support';
+        }
+
+        return 'details';
+    }
+
+    private function humanizeStageOneBlockKey(string $blockKey): string
+    {
+        $label = \trim((string)\preg_replace('/[_-]+/', ' ', $blockKey));
+        $label = \trim((string)\preg_replace('/\s+/', ' ', $label));
+        if ($label === '') {
+            return 'content section';
+        }
+
+        return \ucwords($label);
+    }
+
+    private function buildStageOneContractBlockHeadline(string $siteDisplayName, string $pageLabel, string $sectionLabel, string $role, string $contentLocale = ''): string
+    {
+        if ($this->isChineseLocale($contentLocale)) {
+            return match ($role) {
+                'opening' => $siteDisplayName . '，霓虹牌桌即刻开局',
+                'proof' => '玩家信任与公平体验证明',
+                'cta' => '进入下一场霓虹牌局',
+                'support' => '规则、客服和常见问题',
+                default => '热门玩法与房间亮点',
+            };
+        }
+
+        return match ($role) {
+            'opening' => $siteDisplayName . ' introduces the main promise for ' . $pageLabel,
+            'proof' => 'Proof that ' . $siteDisplayName . ' can support real customer decisions',
+            'cta' => 'Start the next step with ' . $siteDisplayName,
+            'support' => 'Answers that keep ' . $siteDisplayName . ' easy to evaluate',
+            default => 'Useful details that make ' . $siteDisplayName . ' easier to choose',
+        };
+    }
+
+    private function buildStageOneContractBlockSupportingCopy(string $siteDisplayName, string $pageLabel, string $sectionLabel, string $role, string $pageGoal, string $contentLocale = ''): string
+    {
+        if ($this->isChineseLocale($contentLocale)) {
+            return match ($role) {
+                'opening' => '展示房间选择、玩法规则、活动福利和客服支持，让玩家放心入座。',
+                'proof' => '用玩家评价、透明规则和支持入口降低进入牌桌前的不确定。',
+                'cta' => '确认房间、规则和支持入口后，直接进入下一场牌局。',
+                'support' => '用清晰问答说明房间、奖励、账号和客服问题。',
+                default => '用具体场景说明热门房间、玩法亮点和快速上手体验。',
+            };
+        }
+
+        $goalTail = $pageGoal !== ''
+            ? (' while supporting ' . \rtrim($pageGoal, ". \t\n\r\0\x0B"))
+            : (' for the ' . $pageLabel . ' journey');
+
+        return match ($role) {
+            'opening' => $siteDisplayName . ' leads with a specific outcome and a clear reason to continue' . $goalTail . '.',
+            'proof' => 'Concrete proof points reduce uncertainty before visitors commit.',
+            'cta' => 'The next action stays focused, visible, and directly tied to visitor intent.',
+            'support' => 'Support content answers likely questions before they slow the journey.',
+            default => 'Specific context helps the page feel complete, credible, and ready to act on.',
+        };
+    }
+
+    private function buildStageOneContractBlockDetailCopy(string $siteDisplayName, string $sectionLabel, string $role, string $contentLocale = ''): string
+    {
+        if ($this->isChineseLocale($contentLocale)) {
+            return match ($role) {
+                'proof' => '玩家评价、规则透明、客服响应',
+                'support' => '房间问题、奖励说明、账号帮助',
+                default => '牌桌亮点、活动福利、快速上手',
+            };
+        }
+
+        return match ($role) {
+            'proof' => 'Evidence, reassurance, and brand-safe trust details for ' . $siteDisplayName,
+            'support' => 'Short answers, useful resources, and clear next-step guidance',
+            default => $sectionLabel . ' detail with one concrete customer benefit',
+        };
+    }
+
+    private function buildStageOneContractBlockCtaLabel(string $sectionLabel, string $contentLocale = ''): string
+    {
+        $normalized = \mb_strtolower($sectionLabel);
+        if ($this->isChineseLocale($contentLocale)) {
+            if (\str_contains($normalized, 'contact')) {
+                return '联系客服';
+            }
+
+            return '开始游戏';
+        }
+        if (\str_contains($normalized, 'contact')) {
+            return 'Contact us';
+        }
+        if (\str_contains($normalized, 'download')) {
+            return 'Download now';
+        }
+
+        return 'Start now';
+    }
+
+    /**
+     * @param array<string, mixed> $sharedPromptContext
+     * @param array<string, mixed> $pagePlan
+     */
+    private function resolveStageOneContractSiteDisplayName(array $sharedPromptContext, array $pagePlan): string
+    {
+        $themeDesign = \is_array($sharedPromptContext['theme_design'] ?? null) ? $sharedPromptContext['theme_design'] : [];
+        $siteStrategy = \is_array($sharedPromptContext['site_strategy'] ?? null) ? $sharedPromptContext['site_strategy'] : [];
+        $pageSiteStrategy = \is_array($pagePlan['site_strategy'] ?? null) ? $pagePlan['site_strategy'] : [];
+        $websiteProfile = \is_array($sharedPromptContext['website_profile'] ?? null) ? $sharedPromptContext['website_profile'] : [];
+        $siteDesignSystem = \is_array($sharedPromptContext['site_design_system'] ?? null) ? $sharedPromptContext['site_design_system'] : [];
+        $brandPositioning = \is_array($siteDesignSystem['brand_positioning'] ?? null) ? $siteDesignSystem['brand_positioning'] : [];
+        $contentManifest = \is_array($sharedPromptContext['content_manifest'] ?? null) ? $sharedPromptContext['content_manifest'] : [];
+        $manifestItems = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
+        $contentLocale = (string)($sharedPromptContext['content_locale'] ?? '');
+
+        foreach ([
+            $sharedPromptContext['site_display_name'] ?? null,
+            $sharedPromptContext['site_title'] ?? null,
+            $sharedPromptContext['site_name'] ?? null,
+            $siteStrategy['site_display_name'] ?? null,
+            $themeDesign['site_display_name'] ?? null,
+            $websiteProfile['site_display_name'] ?? null,
+            $websiteProfile['site_title'] ?? null,
+            $websiteProfile['business_name'] ?? null,
+            $websiteProfile['name'] ?? null,
+            $brandPositioning['site_name'] ?? null,
+            $brandPositioning['brand_name'] ?? null,
+            $pagePlan['site_display_name'] ?? null,
+            $pageSiteStrategy['site_display_name'] ?? null,
+            $manifestItems['site.name'] ?? null,
+        ] as $candidate) {
+            $name = \trim((string)$candidate);
+            if ($name !== '' && !$this->isPlaceholderSiteDisplayName($name)) {
+                return $name;
+            }
+        }
+
+        return $this->isChineseLocale($contentLocale) ? '该网站' : 'the product';
+    }
+
+    private function isPlaceholderSiteDisplayName(string $name): bool
+    {
+        $normalized = \mb_strtolower(\trim($name));
+        return \in_array($normalized, [
+            'this site',
+            'the site',
+            'brand name',
+            'your brand',
+            'your site',
+            'site name',
+            '品牌名称',
+            '该网站',
+        ], true);
+    }
+
+    /**
+     * @param array<string, mixed> $sharedPromptContext
+     * @param array<string, mixed> $pagePlan
+     * @return array{visual:list<string>,motion:list<string>,interaction:list<string>,texture:list<string>,responsive:list<string>,color_layering:string,implementation_note:string}
+     */
+    private function buildStageOneContractDesignTags(array $sharedPromptContext, array $pagePlan, string $sectionLabel, string $role): array
+    {
+        $pageDesignPlan = \is_array($pagePlan['page_design_plan'] ?? null) ? $pagePlan['page_design_plan'] : [];
+        $colorLayering = \trim((string)($pageDesignPlan['color_layering'] ?? ''));
+        if ($colorLayering === '') {
+            $themeDesign = \is_array($sharedPromptContext['theme_design'] ?? null) ? $sharedPromptContext['theme_design'] : [];
+            $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
+            $colorLayering = 'Use shared palette surfaces with accent states and readable contrast.';
+            if (\trim((string)($colorScheme['accent'] ?? '')) !== '') {
+                $colorLayering = 'Use shared surfaces with ' . (string)$colorScheme['accent'] . ' accent states and readable contrast.';
+            }
+        }
+
+        return [
+            'visual' => [$role . ' layout', $sectionLabel . ' focus'],
+            'motion' => ['subtle entrance', 'hover feedback'],
+            'interaction' => [$role === 'cta' ? 'primary action clarity' : 'scan-friendly reading', 'visible focus state'],
+            'texture' => ['layered surface', 'section contrast'],
+            'responsive' => ['mobile stacks cleanly', 'desktop keeps rhythm'],
+            'color_layering' => $colorLayering,
+            'implementation_note' => 'Carry the page color layering and distinct section rhythm into build output.',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function buildStageOneContractVisualSignature(
+        string $blockKey,
+        string $role,
+        bool $needsImage,
+        int $index,
+        string $sectionLabel,
+        array $sharedPromptContext,
+        array $pagePlan
+    ): array {
+        $patterns = [
+            'opening' => ['full_bleed_hero_stage', 'split_editorial_hero'],
+            'proof' => ['staggered_proof_rail', 'credential_badge_wall'],
+            'cta' => ['cta_conversion_stage', 'cinematic_action_band'],
+            'support' => ['resource_answer_rail', 'support_guidance_split'],
+            'details' => ['stacked_editorial_band', 'asymmetric_media_feature', 'feature_matrix_band'],
+        ];
+        $rolePatterns = $patterns[$role] ?? $patterns['details'];
+        $composition = $rolePatterns[$index % \count($rolePatterns)];
+        $surface = ['elevated_soft_cards', 'inset_glass_panels', 'outlined_editorial_slabs', 'layered_contrast_bands'][$index % 4];
+        if ($this->stageOneContextHasNeonCardIntent($sharedPromptContext, $pagePlan)) {
+            $mediaStrategy = $needsImage
+                ? 'Generated neon card-room image for ' . $sectionLabel . ' with cards, chips, room UI, and text-safe dark neon crop'
+                : 'CSS-only/no generated image; ' . $this->stageOneNeonCardCssMotif($blockKey, $role, $sectionLabel);
+        } else {
+            $mediaStrategy = $needsImage
+                ? 'Generated editorial image for ' . $sectionLabel . ' with text-safe integration'
+                : 'CSS-only/no generated image using ' . \mb_strtolower($sectionLabel) . ' motifs, dividers, and surface accents';
+        }
+
+        return [
+            'composition_pattern' => $composition,
+            'spatial_rhythm' => $index === 0 ? 'strong opening cadence with clear action path' : 'alternating section rhythm with readable spacing',
+            'media_strategy' => $mediaStrategy,
+            'surface_treatment' => $surface,
+            'interaction_pattern' => $role === 'cta' ? 'cta_micro_motion' : 'subtle_hover_lift',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildStageOneContractImageIntent(
+        string $siteDisplayName,
+        string $sectionLabel,
+        bool $needsImage,
+        int $index,
+        string $blockKey,
+        string $role,
+        array $sharedPromptContext,
+        array $pagePlan
+    ): array
+    {
+        if ($this->stageOneContextHasNeonCardIntent($sharedPromptContext, $pagePlan)) {
+            $subject = $this->stageOneNeonCardImageSubject($siteDisplayName, $blockKey, $role, $sectionLabel);
+            $cssMotif = $this->stageOneNeonCardCssMotif($blockKey, $role, $sectionLabel);
+            if ($needsImage) {
+                return [
+                    'needs_image' => true,
+                    'image_role' => $index === 0 ? 'hero_image' : 'section_image',
+                    'image_subject' => $subject,
+                    'placement' => $index === 0 ? 'background_layer' : 'media_panel',
+                    'visual_atmosphere' => 'dark neon gaming, card-table texture, cyan and magenta rim light, gold chip highlights, text-safe composition',
+                    'image_treatment' => 'cinematic neon card-room crop with readable dark scrim and block-specific props',
+                    'reuse_policy' => 'reuse_when_intent_matches',
+                    'css_motif' => $cssMotif,
+                ];
+            }
+
+            return [
+                'needs_image' => false,
+                'image_role' => 'css_motif',
+                'image_subject' => 'CSS-only neon card-room visual motif for ' . $sectionLabel,
+                'placement' => 'inline_visual',
+                'visual_atmosphere' => 'dark neon game-room surface with block-specific props and readable contrast',
+                'image_treatment' => 'structured CSS motif with cards, chips, glow rails, badges, dividers, and responsive spacing',
+                'reuse_policy' => 'no_generated_image',
+                'css_motif' => $cssMotif,
+            ];
+        }
+
+        if ($needsImage) {
+            return [
+                'needs_image' => true,
+                'image_role' => $index === 0 ? 'hero_image' : 'section_image',
+                'image_subject' => $siteDisplayName . ' ' . $sectionLabel . ' editorial scene with real product or service context',
+                'placement' => $index === 0 ? 'background_layer' : 'media_panel',
+                'visual_atmosphere' => 'premium, credible, and useful without stock-photo filler',
+                'image_treatment' => 'text-safe crop with restrained overlay and brand color integration',
+                'reuse_policy' => 'reuse_when_intent_matches',
+                'css_motif' => '',
+            ];
+        }
+
+        return [
+            'needs_image' => false,
+            'image_role' => 'css_motif',
+            'image_subject' => 'none',
+            'placement' => 'inline_visual',
+            'visual_atmosphere' => 'clean CSS motif with enough contrast and no filler media',
+            'image_treatment' => 'use dividers, badges, lines, and surface accents only',
+            'reuse_policy' => 'no_generated_image',
+            'css_motif' => \mb_strtolower($sectionLabel) . ' motif with badges, dividers, and layered panels',
+        ];
+    }
+
+    private function stageOneContextHasNeonCardIntent(array $sharedPromptContext, array $pagePlan): bool
+    {
+        $siteDesignSystem = \is_array($sharedPromptContext['site_design_system'] ?? null) ? $sharedPromptContext['site_design_system'] : [];
+        $brandPositioning = \is_array($siteDesignSystem['brand_positioning'] ?? null) ? $siteDesignSystem['brand_positioning'] : [];
+        $styleAxis = \is_array($siteDesignSystem['style_axis'] ?? null) ? $siteDesignSystem['style_axis'] : [];
+        $mediaStrategy = \is_array($siteDesignSystem['media_strategy'] ?? null) ? $siteDesignSystem['media_strategy'] : [];
+        $themeDesign = \is_array($sharedPromptContext['theme_design'] ?? null) ? $sharedPromptContext['theme_design'] : [];
+
+        $text = \implode("\n", \array_filter(\array_map(
+            static function (mixed $value): string {
+                if (\is_array($value)) {
+                    return (string)\json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+                }
+                return \is_scalar($value) ? (string)$value : '';
+            },
+            [
+                $brandPositioning['site_name'] ?? null,
+                $brandPositioning['promise'] ?? null,
+                $brandPositioning['market_position'] ?? null,
+                $styleAxis['mood'] ?? null,
+                $styleAxis['imagery'] ?? null,
+                $mediaStrategy['hero_image_rule'] ?? null,
+                $mediaStrategy['non_hero_image_rule'] ?? null,
+                $themeDesign['theme_purpose'] ?? null,
+                $themeDesign['selection_reason'] ?? null,
+                $themeDesign['visual_keywords'] ?? null,
+                $pagePlan['page_goal'] ?? null,
+            ]
+        ), static fn(string $value): bool => \trim($value) !== ''));
+
+        return $this->containsAnyPositiveIntent($text, [
+            '霓虹棋牌',
+            '棋牌游戏',
+            '牌桌',
+            '棋牌',
+            '扑克',
+            '麻将',
+            'Teen Patti',
+            'Rummy',
+            'Poker',
+            'card game',
+            'card-room',
+            'neon card',
+            'neon gaming',
+        ]);
+    }
+
+    private function stageOneNeonCardImageSubject(string $siteDisplayName, string $blockKey, string $role, string $sectionLabel): string
+    {
+        $normalized = $this->normalizeStageOneRoleToken($blockKey);
+        if ($role === 'opening' || \str_contains($normalized, 'hero')) {
+            return $siteDisplayName . ' immersive neon card-game lobby hero scene, glowing card table, poker cards, mahjong tiles, chip stacks, room UI panels, cyan-magenta rim light, text-safe dark space';
+        }
+        if (\str_contains($normalized, 'game') || \str_contains($normalized, 'feature') || \str_contains($normalized, 'showcase')) {
+            return $siteDisplayName . ' game showcase scene with multiple neon table rooms, card variants, chip badges, rule cards, jackpot-style gold highlights, dark casino-felt surface';
+        }
+        if ($role === 'proof' || \str_contains($normalized, 'review') || \str_contains($normalized, 'trust') || \str_contains($normalized, 'security')) {
+            return $siteDisplayName . ' player trust proof scene with avatar review rail, fair-play shield, secure table badge, glowing chips, ratings, and readable dark neon cards';
+        }
+        if ($role === 'support' || \str_contains($normalized, 'faq') || \str_contains($normalized, 'rule')) {
+            return $siteDisplayName . ' rules and support scene with FAQ rulebook panels, headset support console, card-table help chips, neon dividers, and calm readable dark surfaces';
+        }
+        if ($role === 'cta' || \str_contains($normalized, 'cta')) {
+            return $siteDisplayName . ' final play CTA scene with glowing entry button, stacked chips, cards fanning toward a neon table room, gold-orange action light, and safe copy area';
+        }
+
+        return $siteDisplayName . ' ' . $sectionLabel . ' neon card-room feature scene with block-specific gaming props, cards, chips, room UI, and dark premium lighting';
+    }
+
+    private function stageOneNeonCardCssMotif(string $blockKey, string $role, string $sectionLabel): string
+    {
+        $normalized = $this->normalizeStageOneRoleToken($blockKey);
+        if (\str_contains($normalized, 'game') || \str_contains($normalized, 'feature') || \str_contains($normalized, 'showcase')) {
+            return 'neon game-room bento with card-suit tiles, chip badges, table-room tabs, jackpot meter, dark felt texture, cyan edges, and gold dividers';
+        }
+        if ($role === 'proof' || \str_contains($normalized, 'review') || \str_contains($normalized, 'trust') || \str_contains($normalized, 'security')) {
+            return 'player proof rail with avatar initials, rating chips, fair-play shield badge, black quote cards, teal left borders, and glowing chip separators';
+        }
+        if ($role === 'support' || \str_contains($normalized, 'faq') || \str_contains($normalized, 'rule')) {
+            return 'FAQ rulebook accordion motif with numbered capsules, card-table dividers, support-console chips, plus/minus affordances, and calm neon teal focus lines';
+        }
+        if ($role === 'cta' || \str_contains($normalized, 'cta')) {
+            return 'conversion band with glowing gold-orange play button, chip spark dots, card fan, pulse halo, and dark table-room depth';
+        }
+
+        return 'dark card-table surface for ' . $sectionLabel . ' with subtle felt texture, neon suit marks, chip badges, glass panels, and gold edge dividers';
+    }
+
+    private function isStageOnePolicyPageType(string $pageType): bool
+    {
+        return \in_array($pageType, [
+            Page::TYPE_PRIVACY_POLICY,
+            Page::TYPE_TERMS_OF_SERVICE,
+            Page::TYPE_REFUND_POLICY,
+            Page::TYPE_SHIPPING_POLICY,
+            Page::TYPE_COOKIE_POLICY,
+        ], true);
     }
 
     /**
@@ -13291,9 +13970,21 @@ final class AiSiteExecutionBlueprintService
                 $overview['section_layering_hint'] ?? null,
                 'Build a clear opening, supporting middle layer, and conversion or reassurance close.',
             ]),
+            'visual_signature_application' => $this->firstNonEmptyString([
+                $raw['visual_signature_application'] ?? null,
+                'Give every block a distinct composition, surface, media strategy, and interaction pattern.',
+            ]),
+            'composition_motif' => $this->firstNonEmptyString([
+                $raw['composition_motif'] ?? null,
+                $overview['composition_motif'] ?? null,
+                'Alternating editorial bands with proof rails and focused action zones.',
+            ]),
             'color_layering' => $colorLayering,
             'section_flow' => $sectionFlow,
             'interaction_notes' => $interactionNotes,
+            'polish_details' => $this->normalizeStringList($raw['polish_details'] ?? []) !== []
+                ? $this->normalizeStringList($raw['polish_details'] ?? [])
+                : ['Layered dividers separate sections.', 'Reduced-motion states keep interactions calm.'],
             'anti_monotony_rule' => $this->firstNonEmptyString([
                 $raw['anti_monotony_rule'] ?? null,
                 'Do not render the whole page as one flat color; every block needs a distinct surface, card, divider, texture, illustration, or contrast band while staying inside the approved palette.',
@@ -13708,7 +14399,7 @@ final class AiSiteExecutionBlueprintService
                 'kind' => 'scope_path',
                 'scope_path' => 'plan_workbench.stage1.theme_context_snapshot',
                 'structured_path' => 'plan_structured.theme_context_snapshot',
-                'execution_blueprint_path' => 'execution_blueprint_draft.theme_context_snapshot',
+                'build_plan_path' => 'build_plan_v2.design_manifest',
                 'context_hash' => $stableHash,
             ],
             'theme_context_snapshot' => $themeContextSnapshot,
@@ -14005,7 +14696,6 @@ final class AiSiteExecutionBlueprintService
                 ],
                 'structured_plan' => $structured,
                 'plan_json' => $planJson,
-                'execution_blueprint' => $executionBlueprint,
                 'block_index' => \is_array($structured['block_index'] ?? null) ? $structured['block_index'] : [],
                 'shared_prompt_context' => \is_array($structured['shared_plan']['shared_prompt_context'] ?? null) ? $structured['shared_plan']['shared_prompt_context'] : [],
                 'confirmed_signature' => (string)($executionBlueprint['signature'] ?? ''),
@@ -14027,6 +14717,12 @@ final class AiSiteExecutionBlueprintService
             $scope[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? []
         ));
         $skillSnapshots = $registry->buildSkillSnapshots($selectedCodes);
+        if ($selectedCodes === []) {
+            $selectedCodes = \array_values(\array_filter(\array_map(
+                static fn(array $snapshot): string => \trim((string)($snapshot['code'] ?? '')),
+                $skillSnapshots
+            ), static fn(string $code): bool => $code !== ''));
+        }
         $snapshotHashSource = [];
         foreach ($skillSnapshots as $snapshot) {
             $snapshotHashSource[] = [
@@ -14434,12 +15130,14 @@ final class AiSiteExecutionBlueprintService
      */
     private function resolveStageOneExecutionBlueprint(array $scope): array
     {
-        $draft = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
-        if ($draft !== []) {
-            return $draft;
+        if (\is_array($scope['plan_structured'] ?? null) && $scope['plan_structured'] !== []) {
+            return $scope['plan_structured'];
+        }
+        if (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
+            return $scope['plan_json'];
         }
 
-        return \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        return [];
     }
 
     /**
@@ -14779,6 +15477,7 @@ final class AiSiteExecutionBlueprintService
                 continue;
             }
             $stageOnePagePlan = \is_array($stageOnePagePlans[$pageType] ?? null) ? $stageOnePagePlans[$pageType] : [];
+            $sourcePagePlan = $stageOnePagePlan !== [] ? \array_replace($pagePlan, $stageOnePagePlan) : $pagePlan;
             $stageOneBlocksByKey = [];
             foreach (\is_array($stageOnePagePlan['blocks'] ?? null) ? $stageOnePagePlan['blocks'] : [] as $stageOneBlock) {
                 if (!\is_array($stageOneBlock)) {
@@ -14790,47 +15489,49 @@ final class AiSiteExecutionBlueprintService
                 }
             }
             $blockRows = [];
-            foreach ($this->sortStageOneBlocksForPlanBookMarkdown(\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []) as $offset => $block) {
+            foreach ($this->sortStageOneBlocksForPlanBookMarkdown(\is_array($sourcePagePlan['blocks'] ?? null) ? $sourcePagePlan['blocks'] : []) as $offset => $block) {
                 if (!\is_array($block)) {
                     continue;
                 }
                 $blockKey = (string)($block['block_key'] ?? $block['section_code'] ?? 'block');
                 $stageOneBlock = \is_array($stageOneBlocksByKey[$blockKey] ?? null) ? $stageOneBlocksByKey[$blockKey] : [];
+                $sourceBlock = $stageOneBlock !== [] ? \array_replace($block, $stageOneBlock) : $block;
                 $blockRows[] = [
                     'block_key' => $blockKey,
-                    'sort_order' => $this->resolveStageOnePlanBookBlockSortOrder($block, (int)$offset),
-                    'page_flow_role' => (string)($stageOneBlock['page_flow_role'] ?? $block['page_flow_role'] ?? ''),
-                    'morphology_id' => (string)($stageOneBlock['morphology_id'] ?? $block['morphology_id'] ?? ''),
-                    'content' => $this->buildBlockContentSummary($block),
-                    'implementation_note' => $this->buildBlockImplementationFocus($block, (string)($structured['i18n']['locale'] ?? '')),
+                    'sort_order' => $this->resolveStageOnePlanBookBlockSortOrder($sourceBlock, (int)$offset),
+                    'page_flow_role' => (string)($sourceBlock['page_flow_role'] ?? ''),
+                    'morphology_id' => (string)($sourceBlock['morphology_id'] ?? ''),
+                    'content' => $this->buildBlockContentSummary($sourceBlock),
+                    'implementation_note' => $this->buildBlockImplementationFocus($sourceBlock, (string)($structured['i18n']['locale'] ?? '')),
                     'keywords' => \array_values(\array_filter(\array_map(
                         static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                        \is_array($block['keywords'] ?? null)
-                            ? $block['keywords']
-                            : (\is_array($block['seo_brief']['keywords'] ?? null) ? $block['seo_brief']['keywords'] : [])
+                        \is_array($sourceBlock['keywords'] ?? null)
+                            ? $sourceBlock['keywords']
+                            : (\is_array($sourceBlock['seo_brief']['keywords'] ?? null) ? $sourceBlock['seo_brief']['keywords'] : [])
                     ), static fn(string $value): bool => $value !== '')),
-                    'field_plan' => $this->normalizeStageOneFieldPlanForCustomerView(\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : []),
-                    'execution_script' => \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [],
-                    'visual_signature' => \is_array($stageOneBlock['visual_signature'] ?? null) ? $stageOneBlock['visual_signature'] : [],
-                    'image_intent' => \is_array($stageOneBlock['image_intent'] ?? null) ? $stageOneBlock['image_intent'] : [],
-                    'asset_requirements' => \is_array($stageOneBlock['asset_requirements'] ?? null) ? $stageOneBlock['asset_requirements'] : [],
-                    'block_contract' => \is_array($stageOneBlock['block_contract'] ?? null) ? $stageOneBlock['block_contract'] : [],
+                    'field_plan' => $this->normalizeStageOneFieldPlanForCustomerView(\is_array($sourceBlock['field_plan'] ?? null) ? $sourceBlock['field_plan'] : []),
+                    'execution_script' => \is_array($sourceBlock['execution_script'] ?? null) ? $sourceBlock['execution_script'] : [],
+                    'design_tags' => \is_array($sourceBlock['design_tags'] ?? null) ? $sourceBlock['design_tags'] : [],
+                    'visual_signature' => \is_array($sourceBlock['visual_signature'] ?? null) ? $sourceBlock['visual_signature'] : [],
+                    'image_intent' => \is_array($sourceBlock['image_intent'] ?? null) ? $sourceBlock['image_intent'] : [],
+                    'asset_requirements' => \is_array($sourceBlock['asset_requirements'] ?? null) ? $sourceBlock['asset_requirements'] : [],
+                    'block_contract' => \is_array($sourceBlock['block_contract'] ?? null) ? $sourceBlock['block_contract'] : [],
                 ];
             }
             $pageBlocks[(string)$pageType] = [
-                'page_goal' => \trim((string)($pagePlan['page_goal'] ?? '')),
+                'page_goal' => \trim((string)($sourcePagePlan['page_goal'] ?? '')),
                 'theme_alignment_summary' => \trim((string)(
-                    $stageOnePagePlan['theme_alignment_summary']
-                    ?? $pagePlan['theme_alignment_summary']
+                    $sourcePagePlan['theme_alignment_summary']
                     ?? ''
                 )),
+                'page_design_plan' => \is_array($sourcePagePlan['page_design_plan'] ?? null) ? $sourcePagePlan['page_design_plan'] : [],
                 'primary_keywords' => \array_values(\array_filter(\array_map(
                     static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                    \is_array($pagePlan['primary_keywords'] ?? null) ? $pagePlan['primary_keywords'] : []
+                    \is_array($sourcePagePlan['primary_keywords'] ?? null) ? $sourcePagePlan['primary_keywords'] : []
                 ), static fn(string $value): bool => $value !== '')),
                 'secondary_keywords' => \array_values(\array_filter(\array_map(
                     static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                    \is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : []
+                    \is_array($sourcePagePlan['secondary_keywords'] ?? null) ? $sourcePagePlan['secondary_keywords'] : []
                 ), static fn(string $value): bool => $value !== '')),
                 'blocks' => $blockRows,
                 'asset_distribution_policy' => \is_array($stageOnePagePlan['asset_distribution_policy'] ?? null) ? $stageOnePagePlan['asset_distribution_policy'] : [],
@@ -16520,6 +17221,54 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param list<string> $needles
+     */
+    private function containsAnyPositiveIntent(string $haystack, array $needles): bool
+    {
+        if (\trim($haystack) === '') {
+            return false;
+        }
+        foreach ($needles as $needle) {
+            if ($this->containsPositiveIntent($haystack, (string)$needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function containsPositiveIntent(string $haystack, string $needle): bool
+    {
+        $needle = \trim($needle);
+        if (\trim($haystack) === '' || $needle === '') {
+            return false;
+        }
+
+        $offset = 0;
+        $needleLength = \max(1, \mb_strlen($needle));
+        while (($position = \mb_stripos($haystack, $needle, $offset)) !== false) {
+            if (!$this->isNegatedTermOccurrence($haystack, (int)$position)) {
+                return true;
+            }
+            $offset = (int)$position + $needleLength;
+        }
+
+        return false;
+    }
+
+    private function isNegatedTermOccurrence(string $haystack, int $position): bool
+    {
+        $start = \max(0, $position - 100);
+        $prefix = \mb_substr($haystack, $start, $position - $start);
+        $prefix = (string)\preg_replace('/^.*[.;!?。！？\r\n]/u', '', $prefix);
+
+        return \preg_match(
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|不是|非|勿|请勿)[^.;!?。！？\r\n]{0,100}$/iu',
+            $prefix
+        ) === 1;
+    }
+
+    /**
      * @param mixed $raw
      * @return list<string>
      */
@@ -16788,7 +17537,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *     plan_json:array<string, mixed>,
      *     structured:array<string, mixed>,
-     *     execution_blueprint:array<string, mixed>,
+     *     build_plan_v2:array<string, mixed>,
      *     markdown:string,
      *     plan_workbench:array<string, mixed>,
      *     reorder_summary:array<string, mixed>
@@ -16810,12 +17559,11 @@ final class AiSiteExecutionBlueprintService
         $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null)
             ? $executionBlueprint['page_plans']
             : (\is_array($structured['page_plans'] ?? null) ? $structured['page_plans'] : []);
-        $pages = \is_array($executionBlueprint['pages'] ?? null)
-            ? $executionBlueprint['pages']
-            : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []);
-        if ($pages === [] && $pagePlans !== []) {
-            $pages = $pagePlans;
-        }
+        $pages = $pagePlans !== []
+            ? $pagePlans
+            : (\is_array($executionBlueprint['pages'] ?? null)
+                ? $executionBlueprint['pages']
+                : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []));
         if ($pages === []) {
             $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         }
@@ -16886,7 +17634,6 @@ final class AiSiteExecutionBlueprintService
         return [
             'plan_json' => $planJson,
             'structured' => $structured,
-            'execution_blueprint' => $executionBlueprint,
             'markdown' => $markdown,
             'plan_workbench' => $planWorkbench,
             'reorder_summary' => [
@@ -16904,7 +17651,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *     plan_json:array<string, mixed>,
      *     structured:array<string, mixed>,
-     *     execution_blueprint:array<string, mixed>,
+     *     build_plan_v2:array<string, mixed>,
      *     markdown:string,
      *     plan_workbench:array<string, mixed>,
      *     mutation_summary:array<string, mixed>,
@@ -16933,9 +17680,14 @@ final class AiSiteExecutionBlueprintService
 
         $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
         $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
-        $pages = \is_array($executionBlueprint['pages'] ?? null)
-            ? $executionBlueprint['pages']
-            : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []);
+        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null)
+            ? $executionBlueprint['page_plans']
+            : (\is_array($structured['page_plans'] ?? null) ? $structured['page_plans'] : []);
+        $pages = $pagePlans !== []
+            ? $pagePlans
+            : (\is_array($executionBlueprint['pages'] ?? null)
+                ? $executionBlueprint['pages']
+                : (\is_array($structured['pages'] ?? null) ? $structured['pages'] : []));
         $pagePlan = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
         if ($pagePlan === []) {
             throw new \RuntimeException('Stage-1 page plan not found for page type: ' . $pageType);
@@ -17053,7 +17805,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *     plan_json:array<string, mixed>,
      *     structured:array<string, mixed>,
-     *     execution_blueprint:array<string, mixed>,
+     *     build_plan_v2:array<string, mixed>,
      *     markdown:string,
      *     plan_workbench:array<string, mixed>
      * }
@@ -17100,7 +17852,6 @@ final class AiSiteExecutionBlueprintService
         return [
             'plan_json' => $planJson,
             'structured' => $structured,
-            'execution_blueprint' => $executionBlueprint,
             'markdown' => $markdown,
             'plan_workbench' => $planWorkbench,
         ];
@@ -17246,7 +17997,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *     plan_json:array<string, mixed>,
      *     structured:array<string, mixed>,
-     *     execution_blueprint:array<string, mixed>,
+     *     build_plan_v2:array<string, mixed>,
      *     markdown:string,
      *     plan_workbench:array<string, mixed>,
      *     mutation_summary:array<string, mixed>,
@@ -17381,7 +18132,6 @@ final class AiSiteExecutionBlueprintService
         $assembled = [
             'plan_json' => $planJson,
             'structured' => $structured,
-            'execution_blueprint' => $executionBlueprint,
             'markdown' => $markdown,
             'plan_workbench' => $planWorkbench,
         ];
@@ -17567,7 +18317,7 @@ final class AiSiteExecutionBlueprintService
      * @return array{
      *     plan_json:array<string, mixed>,
      *     structured:array<string, mixed>,
-     *     execution_blueprint:array<string, mixed>,
+     *     build_plan_v2:array<string, mixed>,
      *     markdown:string,
      *     plan_workbench:array<string, mixed>,
      *     reorder_summary:array<string, mixed>
@@ -17646,7 +18396,6 @@ final class AiSiteExecutionBlueprintService
         return [
             'plan_json' => $planJson,
             'structured' => $structured,
-            'execution_blueprint' => $executionBlueprint,
             'markdown' => $markdown,
             'plan_workbench' => $planWorkbench,
             'reorder_summary' => [
@@ -17935,6 +18684,18 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \str_starts_with($locale, 'en');
+    }
+
+    private function isChineseLocale(string $locale): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        if ($locale === '') {
+            return false;
+        }
+
+        return \str_starts_with($locale, 'zh')
+            || \str_contains($locale, 'hans')
+            || \str_contains($locale, 'hant');
     }
 
     /**

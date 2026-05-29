@@ -1913,3 +1913,4 @@ KEY,KEY
 异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},"Exception: The module containing the template file you specified does not exist! Module: %{1}, template used: %{2}"
 资源不存在：%{1}，模组：%{2},"Resource does not exist: %{1}, Module: %{2}"
 资源不存在：%{1},"Resource does not exist: %{1}"
+请先登录。,"Please log in."

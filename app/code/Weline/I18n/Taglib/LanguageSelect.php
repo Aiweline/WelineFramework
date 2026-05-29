@@ -176,6 +176,7 @@ $__wls_search_placeholder = $__wls_trim_text(
 );
 $__wls_on_change = $__wls_trim_text($Taglib__on_change ?? '');
 $__wls_show_reference = $__wls_normalize_bool($Taglib__show_reference ?? true, true);
+$__wls_inline_dropdown = $__wls_normalize_bool($Taglib__inline_dropdown ?? false, false);
 $__wls_selected_json = \json_encode(
     $__wls_selected_values,
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
@@ -422,6 +423,7 @@ PHP;
     data-field-id="<?= htmlspecialchars($__wls_field_id, ENT_QUOTES, 'UTF-8') ?>"
     data-display-only="<?= $__wls_display_only ? 'true' : 'false' ?>"
     data-multiple="<?= $__wls_is_multiple ? 'true' : 'false' ?>"
+    data-inline-dropdown="<?= $__wls_inline_dropdown ? 'true' : 'false' ?>"
 >
     <button
         type="button"
@@ -488,6 +490,7 @@ HTML;
     var allowedValues = <?= $__wls_allowed_json ?> || [];
     var onChangeName = <?= json_encode($__wls_on_change, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var showReference = <?= $__wls_show_reference ? 'true' : 'false' ?>;
+    var inlineDropdown = <?= $__wls_inline_dropdown ? 'true' : 'false' ?>;
     var emptyText = <?= json_encode($__wls_empty_text, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var displayOnlyText = <?= json_encode((string) __('仅展示'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var noMatchText = <?= json_encode((string) __('未找到匹配的语言'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -856,28 +859,76 @@ HTML;
             return;
         }
 
+        var rect = trigger.getBoundingClientRect();
         var width = Math.max(
             1,
             Math.round(
-                trigger.getBoundingClientRect().width
+                rect.width
                 || trigger.offsetWidth
                 || wrapper.getBoundingClientRect().width
                 || 0
             )
         );
 
-        dropdown.style.position = 'absolute';
-        dropdown.style.left = '0px';
+        if (!inlineDropdown && dropdown.parentNode !== document.body) {
+            document.body.appendChild(dropdown);
+        }
+
+        if (inlineDropdown) {
+            dropdown.style.position = 'absolute';
+            dropdown.style.left = '0px';
+            dropdown.style.right = 'auto';
+            dropdown.style.top = 'calc(100% + 0.25rem)';
+            dropdown.style.bottom = 'auto';
+            dropdown.style.width = width + 'px';
+            dropdown.style.minWidth = width + 'px';
+            dropdown.style.maxWidth = 'none';
+            dropdown.style.maxHeight = 'calc(100vh - 24px)';
+            dropdown.style.boxSizing = 'border-box';
+            dropdown.style.zIndex = '4200';
+            dropdown.setAttribute('data-placement', 'internal');
+            return;
+        }
+
+        var viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+        var viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+        var viewportPadding = 8;
+        var availableWidth = Math.max(1, viewportWidth - viewportPadding * 2);
+        var dropdownWidth = Math.min(width, availableWidth);
+        var left = Math.min(
+            Math.max(viewportPadding, Math.round(rect.left)),
+            Math.max(viewportPadding, viewportWidth - dropdownWidth - viewportPadding)
+        );
+        var belowTop = Math.round(rect.bottom + 4);
+        var belowSpace = viewportHeight - belowTop - viewportPadding;
+        var aboveBottom = Math.round(viewportHeight - rect.top + 4);
+        var aboveSpace = rect.top - viewportPadding - 4;
+        var placeAbove = belowSpace < 220 && aboveSpace > belowSpace;
+        var maxHeight = Math.min(360, Math.max(96, placeAbove ? aboveSpace : belowSpace));
+        var listMaxHeight = Math.max(64, maxHeight - 86);
+        var list = dropdown.querySelector('.weline-language-select-list');
+
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = left + 'px';
         dropdown.style.right = 'auto';
-        dropdown.style.top = 'calc(100% + 0.25rem)';
-        dropdown.style.bottom = 'auto';
-        dropdown.style.width = width + 'px';
-        dropdown.style.minWidth = width + 'px';
-        dropdown.style.maxWidth = 'none';
-        dropdown.style.maxHeight = 'calc(100vh - 24px)';
+        dropdown.style.width = dropdownWidth + 'px';
+        dropdown.style.minWidth = dropdownWidth + 'px';
+        dropdown.style.maxWidth = availableWidth + 'px';
+        dropdown.style.maxHeight = maxHeight + 'px';
         dropdown.style.boxSizing = 'border-box';
-        dropdown.style.zIndex = '4200';
-        dropdown.setAttribute('data-placement', 'internal');
+        dropdown.style.zIndex = '200100';
+        if (placeAbove) {
+            dropdown.style.top = 'auto';
+            dropdown.style.bottom = aboveBottom + 'px';
+            dropdown.setAttribute('data-placement', 'body-above');
+        } else {
+            dropdown.style.top = belowTop + 'px';
+            dropdown.style.bottom = 'auto';
+            dropdown.setAttribute('data-placement', 'body-below');
+        }
+        if (list) {
+            list.style.maxHeight = listMaxHeight + 'px';
+        }
     }
 
     function openDropdown() {

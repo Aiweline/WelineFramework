@@ -30,6 +30,8 @@
     --spacing-md: 1rem;
     --spacing-lg: 1.5rem;
     --spacing-xl: 2rem;
+    --weshop-container-max-width: 1440px;
+    --weshop-layout-content-max-width: var(--weline-layout-content-max-width, var(--weshop-container-max-width));
     
     /* Border Radius */
     --radius-sm: 0.25rem;
@@ -78,11 +80,15 @@ html {
 
 /* Container */
 .container-xl {
-    max-width: 1280px;
+    max-width: var(--weshop-layout-content-max-width);
     margin-left: auto;
     margin-right: auto;
     padding-left: 1rem;
     padding-right: 1rem;
+}
+
+.layout-container .max-w-7xl {
+    max-width: var(--weshop-layout-content-max-width);
 }
 
 @media (min-width: 640px) {

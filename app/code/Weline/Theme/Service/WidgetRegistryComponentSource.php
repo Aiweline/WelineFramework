@@ -100,6 +100,7 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                     pageLayouts: $this->normalizeArray($widget['page_layouts'] ?? ['*'], ['*']),
                     slots: is_array($widget['slots'] ?? null) ? $widget['slots'] : [],
                     slot: !empty($widget['slot']) ? (string)$widget['slot'] : null,
+                    supports: $this->normalizeArray($widget['supports'] ?? [], []),
                     exclusive: (bool)($widget['exclusive'] ?? false),
                     compatible: (bool)($widget['compatible'] ?? false),
                     isContainer: (bool)($widget['is_container'] ?? false),

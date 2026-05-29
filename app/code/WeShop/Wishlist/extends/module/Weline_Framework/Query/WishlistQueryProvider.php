@@ -4,9 +4,11 @@ declare(strict_types=1);
 namespace WeShop\Wishlist\Extends\Module\Weline_Framework\Query;
 
 use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Customer\Session\CustomerSession;
 use WeShop\Cart\Service\CartService;
 use WeShop\Wishlist\Service\WishlistService;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class WishlistQueryProvider implements QueryProviderInterface
@@ -17,7 +19,8 @@ class WishlistQueryProvider implements QueryProviderInterface
         private readonly CustomerContextInterface $customerContext,
         private readonly WishlistService $wishlistService,
         private readonly CartService $cartService,
-        private readonly Url $url
+        private readonly Url $url,
+        private readonly ?CustomerSession $customerSession = null
     ) {
     }
 
@@ -162,7 +165,21 @@ class WishlistQueryProvider implements QueryProviderInterface
 
     private function getCustomerId(): int
     {
-        return (int)($this->customerContext->getUserId() ?? 0);
+        $customerId = (int)($this->customerContext->getUserId() ?? 0);
+        if ($customerId > 0) {
+            return $customerId;
+        }
+
+        try {
+            return (int)($this->getCustomerSession()->getUserId() ?? 0);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    private function getCustomerSession(): CustomerSession
+    {
+        return $this->customerSession ?? ObjectManager::getInstance(CustomerSession::class);
     }
 
     private function loginRequired(): array

@@ -8,8 +8,10 @@ use WeShop\Order\Service\OrderService;
 $order = (array) ($this->getData('order') ?? []);
 $items = (array) ($this->getData('items') ?? []);
 $statusOptions = (array) ($this->getData('statusOptions') ?? []);
+$paymentStatusOptions = (array) ($this->getData('paymentStatusOptions') ?? []);
 $orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? '');
 $updateStatusUrl = (string) ($this->getData('updateStatusUrl') ?? '');
+$updatePaymentStatusUrl = (string) ($this->getData('updatePaymentStatusUrl') ?? '');
 $createShipmentUrl = (string) ($this->getData('createShipmentUrl') ?? '');
 $markDeliveredUrl = (string) ($this->getData('markDeliveredUrl') ?? '');
 
@@ -532,6 +534,25 @@ $safeBackUrl = htmlspecialchars((string) ($_SERVER['REQUEST_URI'] ?? ''));
                                class-names='weshop-order-offcanvas-wide'
                                off-canvas-body-style=''/>
                     <?php endif; ?>
+
+                    <form method='post' action='<?= htmlspecialchars($updatePaymentStatusUrl, ENT_QUOTES) ?>' class='border rounded p-3 bg-light-subtle'>
+                        <input type='hidden' name='id' value='<?= $orderId ?>'>
+                        <input type='hidden' name='back_url' value='<?= $safeBackUrl ?>'>
+                        <label class='form-label'><lang>支付状态</lang></label>
+                        <div class='input-group'>
+                            <select class='form-select' name='payment_status'>
+                                <?php foreach ($paymentStatusOptions as $optionValue => $optionLabel): ?>
+                                    <option value='<?= htmlspecialchars((string) $optionValue, ENT_QUOTES) ?>' <?= (string) $optionValue === (string) ($order['payment_status'] ?? '') ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars((string) $optionLabel, ENT_QUOTES) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type='submit' class='btn btn-outline-primary'>
+                                <i class='mdi mdi-credit-card-check-outline me-1'></i>
+                                <lang>更新支付</lang>
+                            </button>
+                        </div>
+                    </form>
 
                     <?php if ($status === OrderService::STATUS_PAID && $fulfillmentStatus !== OrderService::FULFILLMENT_STATUS_SHIPPED): ?>
                         <form method='post' action='<?= $createShipmentUrl ?>' class='border rounded p-3 bg-light-subtle'>

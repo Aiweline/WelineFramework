@@ -92,7 +92,7 @@ $maxWidth = $containerWidth === 'full' ? '100%' : $containerWidth . 'px';
 
 // ===== AI生成的额外PHP变量 =====
 try {
-    {{PHP_VARIABLES}}
+    /* {{PHP_VARIABLES}} */
 } catch (\Throwable $e) {
     w_log_error('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
 }
@@ -194,12 +194,12 @@ try {
 
 /* ===== 标题：丰富效果 ===== */
 #<?= $componentId ?> .<?= $cls ?>-title {
-    font-size: clamp(2rem, 4.5vw, 3.25rem);
+    font-size: 3rem;
     font-weight: 800;
     color: var(--section-heading);
     margin: 0 0 20px 0;
     line-height: 1.15;
-    letter-spacing: -0.03em;
+    letter-spacing: 0;
     background: linear-gradient(135deg, var(--section-heading) 0%, color-mix(in srgb, var(--section-heading) 60%, var(--section-primary)) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -412,7 +412,7 @@ try {
 
 {{CSS_EXTRA}}
 
-<?php if ({{CONTENT_OWNS_AI_SHELL}}): ?>
+<?php if (__PB_PLACEHOLDER_CONTENT_OWNS_AI_SHELL__): ?>
 #<?= $componentId ?> {
     padding: 0;
     background: transparent;
@@ -441,7 +441,7 @@ try {
     }
 
     #<?= $componentId ?> .<?= $cls ?>-title {
-        font-size: clamp(1.5rem, 6vw, 2rem);
+        font-size: 2rem;
     }
 
     #<?= $componentId ?> .<?= $cls ?>-title::after {
@@ -464,7 +464,7 @@ try {
         padding: 16px;
     }
 
-    <?php if ({{CONTENT_OWNS_AI_SHELL}}): ?>
+    <?php if (__PB_PLACEHOLDER_CONTENT_OWNS_AI_SHELL__): ?>
     #<?= $componentId ?> {
         padding: 0;
     }
@@ -481,7 +481,7 @@ try {
 
 <section id="<?= $componentId ?>">
     <div class="<?= $cls ?>-container">
-        <?php if (!{{CONTENT_OWNS_AI_SHELL}} && ($title || $subtitle || $description)): ?>
+        <?php if (!__PB_PLACEHOLDER_CONTENT_OWNS_AI_SHELL__ && ($title || $subtitle || $description)): ?>
         <div class="<?= $cls ?>-header">
             <?php if ($subtitle): ?>
             <div class="<?= $cls ?>-subtitle"><?= htmlspecialchars($subtitle) ?></div>

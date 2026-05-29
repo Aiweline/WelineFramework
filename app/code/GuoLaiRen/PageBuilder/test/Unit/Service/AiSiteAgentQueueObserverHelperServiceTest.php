@@ -73,6 +73,15 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         );
 
         // 2) process 为空但 result 非空 → 取最后一个非空行。
+        self::assertSame(
+            'structured message',
+            $service->resolveMessage(['process' => '', 'message' => ' structured message ', 'result' => 'legacy result'], false)
+        );
+        self::assertSame(
+            'terminal summary',
+            $service->resolveMessage(['process' => '', 'message' => '', 'terminal_summary' => ' terminal summary ', 'result' => 'legacy result'], false)
+        );
+
         $resolved = $service->resolveMessage([
             'process' => '',
             'result' => "line-1\n\n  line-2  \nline-3\n",
@@ -97,33 +106,59 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         self::assertSame($failureFallback, $service->resolveMessage(null, false));
     }
 
-    public function testResolveMessagePrefersResultTailForTerminalQueueStatuses(): void
+    public function testResolveMessageSkipsStreamOmittedPlaceholderOnFailure(): void
     {
         $service = new AiSiteAgentQueueObserverHelperService();
 
-        $resolved = $service->resolveMessage([
-            'status' => 'error',
-            'process' => 'AI 正在生成内容，正文流不写入队列日志',
-            'result' => "[02:33:05] ERROR 阶段一方案生成失败\n第一阶段方案生成失败：AI流式生成完成但未返回任何内容",
-        ], false);
-
-        self::assertSame('第一阶段方案生成失败：AI流式生成完成但未返回任何内容', $resolved);
+        self::assertSame(
+            'stage-one terminal failure detail',
+            $service->resolveMessage([
+                'status' => 'error',
+                'process' => 'AI body stream is intentionally omitted from queue logs',
+                'result' => "line one\nstage-one terminal failure detail",
+            ], false)
+        );
+        self::assertSame(
+            '中文错误摘要',
+            $service->resolveMessage([
+                'status' => 'error',
+                'process' => 'AI 正在生成内容，正文流已从队列 SSE 中省略。',
+                'result' => "progress\n中文错误摘要",
+            ], false)
+        );
     }
 
-    public function testResolveMessagePrefersErrorLineOverTerminalAiProgressTail(): void
+    public function testResolveMessagePrefersStructuredProcessOverTerminalResultHistory(): void
     {
         $service = new AiSiteAgentQueueObserverHelperService();
 
         $resolved = $service->resolveMessage([
             'status' => 'error',
-            'process' => 'AI 正在生成内容，正文流不写入队列日志',
-            'content' => \json_encode(['operation' => 'plan'], \JSON_THROW_ON_ERROR),
-            'result' => "[02:31:58] PROGRESS 需求扩写已完成，正在生成总主题设计\n"
-                . "[02:33:05] ERROR 第一阶段方案生成失败：AI流式生成失败: AI 流式生成完成但未返回任何内容\n"
-                . "[02:33:05] AI_PROGRESS AI 正在生成内容，正文流不写入队列日志（已接收 446 段 / 1965 B）。",
+            'process' => 'structured process summary',
+            'message' => 'structured message',
+            'terminal_summary' => 'terminal summary',
+            'result' => "[02:33:05] ERROR legacy terminal error\nlegacy terminal detail",
         ], false);
 
-        self::assertSame('第一阶段方案生成失败：AI流式生成失败: AI 流式生成完成但未返回任何内容', $resolved);
+        self::assertSame('structured process summary', $resolved);
+    }
+
+    public function testResolveMessageUsesTerminalSummaryBeforeLegacyResultTail(): void
+    {
+        $service = new AiSiteAgentQueueObserverHelperService();
+
+        $resolved = $service->resolveMessage([
+            'status' => 'error',
+            'process' => '',
+            'message' => '',
+            'terminal_summary' => 'terminal summary from structured payload',
+            'content' => \json_encode(['operation' => 'plan'], \JSON_THROW_ON_ERROR),
+            'result' => "[02:31:58] PROGRESS legacy progress\n"
+                . "[02:33:05] ERROR legacy terminal error\n"
+                . "[02:33:05] AI_PROGRESS legacy ai progress",
+        ], false);
+
+        self::assertSame('terminal summary from structured payload', $resolved);
     }
 
     public function testBuildPanelPayloadShapesQueueRowIntoPublicStructure(): void
@@ -149,16 +184,41 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         self::assertSame('正在执行', $payload['process']);
         self::assertSame("line-a\nline-b", $payload['result_log']);
 
-        // 超长 result_log 必须截断到末尾 24000 字符，并在开头附 i18n 提示。
-        $longResult = \str_repeat('A', 24005);
+        $structuredPayload = $service->buildPanelPayload(
+            [
+                'process' => '',
+                'message' => 'current structured message',
+                'terminal_summary' => 'terminal summary',
+                'result' => "old-1\nold-2",
+            ],
+            ['queue_id' => 2],
+        );
+        self::assertSame('current structured message', $structuredPayload['result_log']);
+
+        $legacyPlanPayload = $service->buildPanelPayload(
+            [
+                'process' => '',
+                'content' => \json_encode(['operation' => 'plan'], \JSON_THROW_ON_ERROR),
+                'result' => "legacy markdown body\n[12:34:56] INFO legacy checkpoint",
+            ],
+            ['queue_id' => 3],
+        );
+        self::assertSame(
+            "legacy markdown body\n[12:34:56] INFO legacy checkpoint",
+            $legacyPlanPayload['result_log'],
+            'legacy queue.result is kept only as a byte-bounded tail excerpt, not filtered into replay lines'
+        );
+
+        // result_log 只保留短终态摘要，超长时截断到末尾 4096 字符，并在开头附 i18n 提示。
+        $longResult = \str_repeat('A', 4101);
         $truncated = $service->buildPanelPayload(
             ['process' => '', 'result' => $longResult],
             ['queue_id' => 1],
         );
         $resultLog = (string)$truncated['result_log'];
-        $tail = \substr($longResult, -24000);
-        self::assertStringEndsWith($tail, $resultLog, '截断后必须是末尾 24000 字符');
-        self::assertStringContainsString('24000', $resultLog, '截断提示里应带上 24000 字符数');
+        $tail = \substr($longResult, -4096);
+        self::assertStringEndsWith($tail, $resultLog, '截断后必须是末尾 4096 字符');
+        self::assertStringContainsString('4096', $resultLog, '截断提示里应带上 4096 字符数');
         self::assertStringStartsNotWith($tail, $resultLog, '截断时开头应是 i18n 提示而非原始内容');
 
         // queue_id 缺失 → 回退为 0，保持数值型。
@@ -177,7 +237,9 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         self::assertSame('progress', $service->mapOperationEventName('ai_raw_chunk'));
         self::assertSame('info', $service->mapOperationEventName('plan_refined'));
         self::assertSame('error', $service->mapOperationEventName('operation_failed'));
-        self::assertSame('task_completed', $service->mapOperationEventName('task_completed'));
+        self::assertSame('build_plan_block_completed', $service->mapOperationEventName('build_plan_block_completed'));
+        self::assertSame('build_plan_block_failed', $service->mapOperationEventName('build_plan_block_failed'));
+        self::assertSame('', $service->mapOperationEventName('task_completed'));
 
         self::assertSame('', $service->mapOperationEventName('unknown'));
         self::assertSame('', $service->mapOperationEventName(''));

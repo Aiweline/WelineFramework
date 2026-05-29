@@ -8,6 +8,8 @@ use Weline\Framework\View\Template;
 
 class EditorModeAssetInjector
 {
+    private const EDITOR_MODE_ASSET_VERSION = '20260529-dnd-fallback';
+
     public function __construct(
         private readonly Template $template
     ) {
@@ -20,7 +22,8 @@ class EditorModeAssetInjector
         }
 
         $cssUrl = $this->template->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
-        $jsUrl = $this->template->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
+        $jsSrc = $this->template->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
+        $jsUrl = $jsSrc . '?v=' . self::EDITOR_MODE_ASSET_VERSION;
 
         $editorCss = <<<HTML
 <!-- Theme Editor Mode CSS -->
@@ -40,7 +43,7 @@ HTML;
             }
         }
 
-        if (!str_contains($html, $jsUrl)) {
+        if (!str_contains($html, $jsSrc)) {
             if (stripos($html, '</body>') !== false) {
                 $html = str_ireplace('</body>', $editorJs . "\n</body>", $html);
             } else {

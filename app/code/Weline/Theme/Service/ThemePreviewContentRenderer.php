@@ -121,6 +121,17 @@ class ThemePreviewContentRenderer
             ? ThemeLayout::STATUS_PUBLISHED
             : ThemeLayout::STATUS_DRAFT;
 
+        if ($requestedStatus === ThemeLayout::STATUS_DRAFT) {
+            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+            if ($this->hasWidgets($draftLayout)) {
+                return [$draftLayout, $pageType, ThemeLayout::STATUS_DRAFT, false];
+            }
+
+            if ($this->hasEmptyCurrentRestoreVersion($themeId, $pageType)) {
+                return [[], $pageType, ThemeLayout::STATUS_DRAFT, false];
+            }
+        }
+
         foreach ($this->buildLookupCandidates($pageType, $requestedStatus) as [$candidatePageType, $candidateStatus]) {
             $layout = $this->layoutService->getFullLayout($themeId, $candidatePageType, $candidateStatus);
             if ($this->hasWidgets($layout)) {
@@ -138,6 +149,16 @@ class ThemePreviewContentRenderer
         }
 
         return [[], $pageType, $requestedStatus, $usedSeed];
+    }
+
+    private function hasEmptyCurrentRestoreVersion(int $themeId, string $pageType): bool
+    {
+        $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType);
+        if (!$currentVersion?->isRestoreType()) {
+            return false;
+        }
+
+        return !$this->hasWidgets($currentVersion->getSnapshotData());
     }
 
     /**

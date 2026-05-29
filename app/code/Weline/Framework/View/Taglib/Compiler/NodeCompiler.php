@@ -134,7 +134,8 @@ final class NodeCompiler
         $node = $node->withStage($stage);
 
         // 递归编译子节点
-        $compiledChildren = $this->compileNodes($node->children);
+        $children = $this->isSlotTag($node) ? $this->selectSlotElseFallbackNodes($node->children) : $node->children;
+        $compiledChildren = $this->compileNodes($children);
         $node = $node->withChildren($compiledChildren);
 
         // 编译期标签立即执行回调
@@ -149,6 +150,22 @@ final class NodeCompiler
     /**
      * 执行编译期标签
      */
+    private function isSlotTag(TagNode $node): bool
+    {
+        return $node->name === 'slot' || $node->name === 'w:slot';
+    }
+
+    private function selectSlotElseFallbackNodes(array $children): array
+    {
+        foreach ($children as $index => $child) {
+            if ($child instanceof TagNode && ($child->name === 'else' || $child->name === 'w:else')) {
+                return array_slice($children, $index + 1);
+            }
+        }
+
+        return $children;
+    }
+
     private function executeCompileTimeTag(TagNode $node): ?Node
     {
         $callback = $this->getTagCallbackWithAlias($node->name);

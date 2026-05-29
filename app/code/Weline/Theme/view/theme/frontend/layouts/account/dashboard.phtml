@@ -2,7 +2,7 @@
 布局：个人中心 - 仪表盘（dashboard）
 
 与首页一致：Partials 加载前台 Header/Footer，meta.showHeader / meta.showFooter 控制显隐；
-中部为面包屑 + 侧栏 + 主内容（结构与 account/default 中部相同）。
+中部为侧栏 + 主内容（结构与 account/default 中部相同）。
 
 字段
 @meta.name {default="个人中心仪表盘",name="个人中心仪表盘",description="个人中心仪表盘布局"}
@@ -46,10 +46,14 @@ $this->assign('meta', $meta);
             min-height: 100vh;
         }
         .account-dashboard-layout .weline-main-content {
+            --account-page-background: var(--weline-layout-surface-secondary, var(--color-bg-secondary, #f3f3f3));
+            --account-page-top-gap: clamp(1.5rem, 2.2vw, 2.25rem);
+            --account-page-bottom-gap: var(--spacing-xl, 2rem);
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: var(--color-bg-secondary);
+            background: var(--account-page-background);
+            box-shadow: inset 0 10px 14px -16px rgba(15, 23, 42, 0.55);
         }
         .account-dashboard {
             min-height: 100vh;
@@ -57,17 +61,15 @@ $this->assign('meta', $meta);
             flex-direction: column;
             background: var(--color-bg-secondary);
         }
-        .account-dashboard__breadcrumb {
-            background: var(--color-bg-primary);
-            border-bottom: 1px solid var(--color-border-light);
-        }
         .account-main-content {
             flex: 1;
             display: flex;
-            max-width: var(--layout-max-width, 1600px);
+            max-width: var(--weline-layout-content-max-width, var(--layout-max-width, var(--container-max-width, 1440px)));
             margin: 0 auto;
             width: 100%;
+            padding: var(--account-page-top-gap) var(--weline-layout-content-padding-inline, 1rem) var(--account-page-bottom-gap);
             gap: var(--spacing-xl, 2rem);
+            box-sizing: border-box;
         }
         .account-sidebar {
             width: var(--sidebar-width, 280px);
@@ -101,7 +103,7 @@ $this->assign('meta', $meta);
         @media (max-width: 1024px) {
             .account-main-content {
                 flex-direction: column;
-                padding: var(--spacing-md, 1rem);
+                padding: var(--spacing-lg, 1.5rem) var(--weline-layout-content-padding-inline, 1rem);
                 gap: var(--spacing-md, 1rem);
             }
             .account-sidebar {
@@ -135,13 +137,6 @@ $this->assign('meta', $meta);
         </if>
 
         <div class="weline-main-content">
-            <div class="account-dashboard__breadcrumb">
-                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::account::breadcrumb-before</w:hook>
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
-                <w:hook>Weline_Theme::frontend::layouts::account::breadcrumb-after</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
-            </div>
             <main class="account-main-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-main-content" data-layout="account">
                 <?php $accountSidebarHtml = (string)($meta['sidebar'] ?? $this->getData('sidebar') ?? ''); ?>
                 <?php if (trim($accountSidebarHtml) === '' && function_exists('w_log_warning')) {
@@ -157,28 +152,50 @@ $this->assign('meta', $meta);
                     } catch (\Throwable) {
                     }
                 } ?>
-                <?php if (trim($accountSidebarHtml) !== ''): ?>
-                    <w:hook>Weline_Theme::frontend::layouts::account::sidebar-before</w:hook>
-                    <aside class="account-sidebar <?= !empty($meta['sidebarCollapsed']) ? 'collapsed' : '' ?>">
-                        <?= $accountSidebarHtml ?>
-                    </aside>
-                    <w:hook>Weline_Theme::frontend::layouts::account::sidebar-after</w:hook>
-                <?php endif; ?>
+                <w:slot id="account-dashboard-sidebar"
+                        name="账户仪表盘侧边栏"
+                        accept="layout-account-dashboard-sidebar,layout-account-sidebar,account-sidebar,sidebar,account-nav"
+                        multiple="true"
+                        position="sidebar">
+                    <?php if (trim($accountSidebarHtml) !== ''): ?>
+                        <w:hook>Weline_Theme::frontend::layouts::account::sidebar-before</w:hook>
+                        <aside class="account-sidebar <?= !empty($meta['sidebarCollapsed']) ? 'collapsed' : '' ?>">
+                            <?= $accountSidebarHtml ?>
+                        </aside>
+                        <w:hook>Weline_Theme::frontend::layouts::account::sidebar-after</w:hook>
+                    <?php endif; ?>
+                </w:slot>
 
                 <div class="account-main">
                     <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
                     <w:hook>Weline_Theme::frontend::layouts::account::content-before</w:hook>
-                    <if condition="meta.content">
-                        {{meta.content}}
-                        <elseif condition="content"/>
-                        {{content}}
-                        <elseif condition="meta.contentTemplate"/>
-                        <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
-                        <elseif condition="contentTemplate"/>
-                        <?php echo $this->fetch($this->getData("contentTemplate")); ?>
-                        <else/>
-                        <?= $this->getChildHtml('content') ?>
-                    </if>
+                    <w:slot id="content"
+                            name="内容区"
+                            accept="layout-account-content,layout-account-dashboard-content,layout-default-content,content,account-content"
+                            reject="header,footer"
+                            multiple="true"
+                            position="content"
+                            class="account-dashboard__content-root-slot">
+                        <w:slot id="account-dashboard-content"
+                            name="账户仪表盘主内容"
+                            accept="layout-account-dashboard-content,layout-account-content,account-content,content"
+                            reject="header,footer"
+                            multiple="true"
+                            position="content"
+                            class="account-dashboard__content-slot">
+                        <if condition="meta.content">
+                            {{meta.content}}
+                            <elseif condition="content"/>
+                            {{content}}
+                            <elseif condition="meta.contentTemplate"/>
+                            <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                            <elseif condition="contentTemplate"/>
+                            <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+                            <else/>
+                            <?= $this->getChildHtml('content') ?>
+                        </if>
+                        </w:slot>
+                    </w:slot>
                     <w:hook>Weline_Theme::frontend::layouts::account::content-after</w:hook>
                     <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
                 </div>

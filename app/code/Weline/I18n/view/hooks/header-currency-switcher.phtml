@@ -257,7 +257,7 @@ foreach ($currencies as $currency) {
                 <span class="weline-choice-symbol" aria-hidden="true"><?= $escape($currencySymbol !== '' ? $currencySymbol : $currencyCode) ?></span>
                 <span class="weline-choice-text">
                     <span class="weline-choice-name"><?= $escape($currencyName) ?></span>
-                    <span class="weline-choice-meta"><?= $escape($currencyCode) ?><?php if ($currencySymbol !== ''): ?> · <?= $escape($currencySymbol) ?><?php endif; ?></span>
+                    <span class="weline-choice-meta"><?= $escape($currencyCode) ?></span>
                 </span>
                 <i class="fas fa-check" aria-hidden="true"></i>
             </a>
@@ -268,8 +268,9 @@ foreach ($currencies as $currency) {
     </div>
 </div>
 <?php
-if (!defined('WELINE_I18N_HEADER_CHOICE_ASSETS_RENDERED')) {
-    define('WELINE_I18N_HEADER_CHOICE_ASSETS_RENDERED', true);
+$assetsFlagKey = '__weline_i18n_header_choice_assets_rendered';
+if (!$this->getData($assetsFlagKey)) {
+    $this->setData($assetsFlagKey, true);
     echo $this->fetch('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml');
 }
 ?>

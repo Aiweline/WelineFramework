@@ -53,14 +53,15 @@ $reviewUiTextJson = json_encode([
     'loginUsernameRequired' => (string) __('请输入用户名或邮箱。'),
     'loginPasswordRequired' => (string) __('请输入密码。'),
     'tokenUnable' => (string) __('暂时无法初始化评价表单，请稍后重试。'),
-    'translate' => (string) __('Translate'),
-    'translating' => (string) __('Translating...'),
-    'showOriginal' => (string) __('Show original'),
-    'showTranslation' => (string) __('Show translation'),
-    'translateUnavailable' => (string) __('Browser translation is unavailable in this Chrome session.'),
-    'translateSameLanguage' => (string) __('This comment already matches the current language.'),
-    'mentionHint' => (string) __('This reply will notify %{1}.'),
-    'loginToReply' => (string) __('Please sign in before replying.'),
+    'translate' => (string) __('翻译'),
+    'translating' => (string) __('翻译中...'),
+    'showOriginal' => (string) __('显示原文'),
+    'showTranslation' => (string) __('显示译文'),
+    'translateUnavailable' => (string) __('当前 Chrome 无法使用浏览器翻译。'),
+    'translateSameLanguage' => (string) __('这条评论已经是当前语言。'),
+    'mentionHint' => (string) __('本次回复会通知 %{1}。', ['__REVIEW_MENTION__']),
+    'loginToReply' => (string) __('请先登录再回复。'),
+    'customer' => (string) __('客户'),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
 $buildPaginationUrl = function (int $targetPage) use ($reviewUrl, $productId, $pageSize): string {
     $params = [
@@ -73,22 +74,22 @@ $buildPaginationUrl = function (int $targetPage) use ($reviewUrl, $productId, $p
 
     return $reviewUrl . ($query !== '' ? '?' . $query : '');
 };
-$productName = (string) ($product['name'] ?? __('Product Reviews'));
+$productName = (string) ($product['name'] ?? __('商品评论'));
 ?>
-<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+<main class="review-page mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
     <section class="rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
         <div class="grid gap-6 p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
             <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Customer Reviews') ?></p>
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('商品评价') ?></p>
                 <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= htmlspecialchars($productName, ENT_QUOTES) ?></h1>
                 <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
                     <?= $isAnonymousReviewMode
                         ? __('阅读其他买家的评价，也可以直接提交你的使用体验。')
-                        : __('Read what others say, and share your own experience with this product after purchase.') ?>
+                        : __('阅读其他买家的评价，下单后也可以分享你的真实使用体验。') ?>
                 </p>
             </div>
             <div class="rounded-3xl border border-border-light bg-background-light p-6 text-center dark:border-border-dark dark:bg-background-dark">
-                <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Average Rating') ?></p>
+                <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('平均评分') ?></p>
                 <p class="mt-3 text-5xl font-black text-primary"><?= number_format($averageRating, 1) ?></p>
                 <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('基于 %{1} 条已审核评价', $total) ?></p>
             </div>
@@ -108,7 +109,7 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                     ?>
                     <article id="review-<?= $reviewId ?>" class="scroll-mt-24 rounded-3xl border <?= $isTargetReview ? 'border-primary ring-2 ring-primary/25' : 'border-border-light dark:border-border-dark' ?> bg-background-light p-4 shadow-sm dark:bg-background-dark" data-review-id="review-<?= $reviewId ?>" data-review-author-id="<?= $reviewCustomerId ?>" data-review-author-name="<?= htmlspecialchars($reviewCustomerName, ENT_QUOTES) ?>">
                         <div class="flex items-center justify-between">
-                            <h2 class="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($review['title'] ?: __('Rating')), ENT_QUOTES) ?></h2>
+                            <h2 class="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($review['title'] ?: __('评分')), ENT_QUOTES) ?></h2>
                             <div class="flex items-center gap-1 text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark">
                                 <span><?= number_format((float) ($review['rating'] ?? 0), 1) ?></span>
                                 <span class="material-symbols-outlined text-xs text-primary">star</span>
@@ -118,7 +119,7 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                         <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
                             <button type="button" class="inline-flex items-center gap-1 font-semibold text-primary hover:underline" data-review-translate data-review-translate-source="#review-body-<?= $reviewId ?>" data-review-translate-status="#review-translate-status-<?= $reviewId ?>">
                                 <span class="material-symbols-outlined text-sm">translate</span>
-                                <span data-review-translate-label><?= __('Translate') ?></span>
+                                <span data-review-translate-label><?= __('翻译') ?></span>
                             </button>
                             <span id="review-translate-status-<?= $reviewId ?>" class="text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-status></span>
                         </div>
@@ -165,13 +166,13 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                         <?php if (!empty($review['verified_purchase'])): ?>
                             <span class="mt-2 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">
                                 <span class="material-symbols-outlined text-sm">verified</span>
-                                <?= __('Verified purchase') ?>
+                                <?= __('已验证购买') ?>
                             </span>
                         <?php endif; ?>
                         <?php $replies = is_array($review['replies'] ?? null) ? $review['replies'] : []; ?>
                         <div class="mt-4 border-t border-border-light pt-3 dark:border-border-dark">
                             <div class="flex items-center justify-between gap-3">
-                                <span class="text-xs font-semibold uppercase tracking-[0.2em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('Replies') ?></span>
+                                <span class="text-xs font-semibold uppercase tracking-[0.2em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('回复列表') ?></span>
                                 <?php if ($reviewId > 0): ?>
                                     <button type="button" class="inline-flex items-center gap-1 rounded-full border border-border-light px-3 py-1 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark" data-review-reply-toggle data-review-id-value="<?= $reviewId ?>" data-parent-reply-id="0" data-mention-customer-id="<?= $reviewCustomerId ?>" data-mention-label="<?= htmlspecialchars($reviewCustomerName, ENT_QUOTES) ?>">
                                         <span class="material-symbols-outlined text-sm">reply</span>
@@ -185,7 +186,7 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                                     $replyId = (int) ($reply['reply_id'] ?? 0);
                                     $parentReplyId = (int) ($reply['parent_reply_id'] ?? 0);
                                     $replyCustomerId = (int) ($reply['customer_id'] ?? 0);
-                                    $replyCustomerName = (string) ($reply['customer_name'] ?? __('Customer'));
+                                    $replyCustomerName = (string) ($reply['customer_name'] ?? __('客户'));
                                     $isTargetReply = !empty($reply['is_target']);
                                     ?>
                                     <div id="review-reply-<?= $replyId ?>" class="scroll-mt-24 rounded-2xl <?= $isTargetReply ? 'border border-primary ring-2 ring-primary/25' : '' ?> bg-surface-light p-3 text-sm dark:bg-surface-dark" data-review-reply-id="<?= $replyId ?>" data-review-reply-author-id="<?= $replyCustomerId ?>" data-review-reply-author-name="<?= htmlspecialchars($replyCustomerName, ENT_QUOTES) ?>">
@@ -202,7 +203,7 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                                         <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
                                             <button type="button" class="inline-flex items-center gap-1 font-semibold text-primary hover:underline" data-review-translate data-review-translate-source="#review-reply-body-<?= $replyId ?>" data-review-translate-status="#review-reply-translate-status-<?= $replyId ?>">
                                                 <span class="material-symbols-outlined text-sm">translate</span>
-                                                <span data-review-translate-label><?= __('Translate') ?></span>
+                                                <span data-review-translate-label><?= __('翻译') ?></span>
                                             </button>
                                             <span id="review-reply-translate-status-<?= $replyId ?>" class="text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-status></span>
                                         </div>
@@ -240,14 +241,14 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
 
             <div id="review-empty-state" class="<?= $reviews ? 'hidden ' : '' ?>rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark">
                 <span class="material-symbols-outlined text-5xl text-primary">reviews</span>
-                <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No reviews yet') ?></h3>
-                <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Be the first to review this product and help other shoppers.') ?></p>
+                <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('暂无评论') ?></h3>
+                <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('成为第一个评价该商品的人，帮助其他买家做决定。') ?></p>
             </div>
 
             <nav class="mt-6 flex flex-col gap-3 text-sm text-text-secondary-light dark:text-text-secondary-dark sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex flex-wrap items-center gap-3">
-                    <span><?= __('Page %{1} of %{2}', [$page, $pageCount]) ?></span>
-                    <span><?= __('Per page: %{1}', $pageSize) ?></span>
+                    <span><?= __('第%{1}页，共%{2}页', [$page, $pageCount]) ?></span>
+                    <span><?= __('每页 %{1} 条', $pageSize) ?></span>
                 </div>
                 <?php if ($pageCount > 1): ?>
                     <div class="flex flex-wrap gap-3">
@@ -256,14 +257,14 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                             class="rounded-full border border-border-light bg-background-light px-4 py-2 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark <?= $hasPrevious ? '' : 'pointer-events-none opacity-40' ?>"
                             aria-disabled="<?= $hasPrevious ? 'false' : 'true' ?>"
                         >
-                            <?= __('Previous page') ?>
+                            <?= __('上一页') ?>
                         </a>
                         <a
                             href="<?= $hasNext ? htmlspecialchars($buildPaginationUrl($page + 1), ENT_QUOTES) : '#' ?>"
                             class="rounded-full border border-border-light bg-background-light px-4 py-2 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark <?= $hasNext ? '' : 'pointer-events-none opacity-40' ?>"
                             aria-disabled="<?= $hasNext ? 'false' : 'true' ?>"
                         >
-                            <?= __('Next page') ?>
+                            <?= __('下一页') ?>
                         </a>
                     </div>
                 <?php endif; ?>
@@ -273,8 +274,8 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
         <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h2 class="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Share your view') ?></h2>
-                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Submit a rating and tell other shoppers what you loved or what can be improved.') ?></p>
+                    <h2 class="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('分享你的评价') ?></h2>
+                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('提交评分并告诉其他买家你的真实体验。') ?></p>
                 </div>
                 <button type="button" id="review-write-trigger" class="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary/90">
                     <span class="material-symbols-outlined text-base">rate_review</span>
@@ -299,10 +300,10 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                 <input type="hidden" name="product_id" value="<?= htmlspecialchars((string) ($product['product_id'] ?? ''), ENT_QUOTES) ?>">
                 <input type="hidden" name="review_mode" id="review-mode-input" value="<?= htmlspecialchars($reviewMode, ENT_QUOTES) ?>">
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Rating') ?>
+                    <?= __('评分') ?>
                     <select name="rating" class="form-select rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
                         <?php for ($i = 5; $i >= 1; $i--): ?>
-                            <option value="<?= $i ?>"><?= $i ?> <?= __('star', $i) ?></option>
+                            <option value="<?= $i ?>"><?= __('%{1}星', $i) ?></option>
                         <?php endfor; ?>
                     </select>
                 </label>
@@ -320,7 +321,7 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                                 <select name="rating_scores[<?= htmlspecialchars($optionCode, ENT_QUOTES) ?>]" class="form-select rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
                                     <option value=""><?= __('不评分') ?></option>
                                     <?php for ($i = 5; $i >= 1; $i--): ?>
-                                        <option value="<?= $i ?>"><?= $i ?> <?= __('star', $i) ?></option>
+                                        <option value="<?= $i ?>"><?= __('%{1}星', $i) ?></option>
                                     <?php endfor; ?>
                                 </select>
                             </label>
@@ -328,12 +329,12 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                     </div>
                 <?php endif; ?>
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Title') ?>
-                    <input type="text" name="title" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= __('Write a headline for your review') ?>">
+                    <?= __('标题') ?>
+                    <input type="text" name="title" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= __('写一个简短的评价标题') ?>">
                 </label>
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Review') ?>
-                    <textarea name="content" rows="4" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= __('Describe your experience with this product') ?>"></textarea>
+                    <?= __('评价内容') ?>
+                    <textarea name="content" rows="4" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= __('描述你使用这件商品的体验') ?>"></textarea>
                 </label>
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
                     <?= __('图片链接') ?>
@@ -344,38 +345,55 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                     <textarea name="video_urls" rows="2" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= __('每行一个视频链接') ?>"></textarea>
                 </label>
                 <button type="button" id="review-submit" class="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
-                    <?= __('Submit review') ?>
+                    <?= __('提交评价') ?>
                 </button>
             </form>
             </div>
             <div id="review-feedback" class="mt-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"></div>
         </article>
     </section>
-    <div id="review-auth-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4" hidden aria-hidden="true">
-        <div class="w-full max-w-md rounded-3xl border border-border-light bg-surface-light p-6 shadow-xl dark:border-border-dark dark:bg-surface-dark">
-            <div class="flex items-start justify-between gap-4">
-                <div>
-                    <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('登录后评论') ?></h2>
-                    <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('登录成功后会自动刷新评价资格。') ?></p>
+    <div id="review-auth-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="review-auth-title" aria-describedby="review-auth-description">
+        <div class="review-auth-dialog w-full max-w-md rounded-3xl border border-border-light bg-surface-light shadow-xl dark:border-border-dark dark:bg-surface-dark">
+            <div class="review-auth-header">
+                <div class="review-auth-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a4 4 0 0 1-4 4H8l-5 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>
+                        <path d="M8 8h8"/>
+                        <path d="M8 12h5"/>
+                    </svg>
                 </div>
-                <button type="button" class="rounded-full p-1 text-text-secondary-light hover:text-primary dark:text-text-secondary-dark" data-review-auth-close aria-label="<?= htmlspecialchars((string) __('关闭'), ENT_QUOTES) ?>">
-                    <span class="material-symbols-outlined text-xl">close</span>
+                <div>
+                    <h2 id="review-auth-title" class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('登录后评论') ?></h2>
+                    <p id="review-auth-description" class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('登录成功后会自动刷新评价资格。') ?></p>
+                </div>
+                <button type="button" class="review-auth-close rounded-full p-1 text-text-secondary-light hover:text-primary dark:text-text-secondary-dark" data-review-auth-close aria-label="<?= htmlspecialchars((string) __('关闭'), ENT_QUOTES) ?>">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M18 6 6 18"/>
+                        <path d="m6 6 12 12"/>
+                    </svg>
                 </button>
             </div>
-            <form class="mt-5 space-y-4" data-review-auth-form>
-                <div class="text-sm text-red-500" data-review-auth-alert></div>
-                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+            <form class="review-auth-form mt-5 space-y-4" data-review-auth-form>
+                <div class="review-auth-alert text-sm text-red-500" data-review-auth-alert role="alert" aria-live="polite"></div>
+                <label class="review-auth-field flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
                     <?= __('用户名或邮箱') ?>
-                    <input type="text" name="username" autocomplete="username" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
+                    <input type="text" name="username" autocomplete="username" class="review-auth-input form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
                 </label>
-                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                <label class="review-auth-field flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
                     <?= __('密码') ?>
-                    <input type="password" name="password" autocomplete="current-password" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
+                    <input type="password" name="password" autocomplete="current-password" class="review-auth-input form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
                 </label>
                 <input type="hidden" name="remember_duration" value="604800">
-                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                    <button type="button" class="rounded-full border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light dark:border-border-dark dark:text-text-primary-dark" data-review-auth-close><?= __('取消') ?></button>
-                    <button type="submit" class="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary/90" data-review-auth-submit><?= __('登录并继续') ?></button>
+                <div class="review-auth-actions flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" class="review-auth-secondary rounded-full border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light dark:border-border-dark dark:text-text-primary-dark" data-review-auth-close><?= __('取消') ?></button>
+                    <button type="submit" class="review-auth-primary rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary/90" data-review-auth-submit>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                            <path d="m10 17 5-5-5-5"/>
+                            <path d="M15 12H3"/>
+                        </svg>
+                        <span class="review-auth-primary-label"><?= __('登录并继续') ?></span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -683,24 +701,33 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                 return reviewId > 0 ? document.getElementById('review-' + reviewId) : null;
             }
 
-            function focusDeepLinkedReviewNode() {
+            function applyDeepLinkedReviewFocus() {
                 var node = findDeepLinkedReviewNode();
                 if (!node) {
                     return;
                 }
 
-                window.setTimeout(function () {
-                    node.classList.add('ring-2', 'ring-primary/30', 'border-primary');
-                    if (!node.hasAttribute('tabindex')) {
-                        node.setAttribute('tabindex', '-1');
-                    }
-                    node.scrollIntoView({behavior: 'smooth', block: 'center'});
-                    try {
-                        node.focus({preventScroll: true});
-                    } catch (error) {
-                        node.focus();
-                    }
-                }, 120);
+                node.classList.add('ring-2', 'ring-primary/30', 'border-primary');
+                node.setAttribute('data-review-deep-link-target', '1');
+                if (!node.hasAttribute('tabindex')) {
+                    node.setAttribute('tabindex', '-1');
+                }
+                node.scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});
+                try {
+                    node.focus({preventScroll: true});
+                } catch (error) {
+                    node.focus();
+                }
+            }
+
+            function focusDeepLinkedReviewNode() {
+                if (!findDeepLinkedReviewNode()) {
+                    return;
+                }
+
+                [80, 350, 900, 1600].forEach(function (delay) {
+                    window.setTimeout(applyDeepLinkedReviewFocus, delay);
+                });
             }
 
             function isSafeMediaUrl(url) {
@@ -715,9 +742,34 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                 return true;
             }
 
+            function resolveThemeApiResource(provider) {
+                if (window.WelineApiModule && window.WelineApiModule.__full === true && typeof window.WelineApiModule.resource === 'function') {
+                    return Promise.resolve(window.WelineApiModule.resource(provider));
+                }
+                if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                    return Promise.resolve(window.Weline.Api.resource(provider));
+                }
+                if (window.Weline && typeof window.Weline.use === 'function') {
+                    return Promise.resolve(window.Weline.use('api')).then(function () {
+                        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                            return window.Weline.Api.resource(provider);
+                        }
+                        if (window.WelineApiModule && typeof window.WelineApiModule.resource === 'function') {
+                            return window.WelineApiModule.resource(provider);
+                        }
+                        throw new Error('Weline.Api.resource is not available.');
+                    });
+                }
+
+                return Promise.reject(new Error('Weline.Api.resource is not available.'));
+            }
+
             function getReviewApi() {
                 if (!apiPromise) {
-                    apiPromise = Promise.resolve(window.Weline.Api.resource('review'));
+                    apiPromise = resolveThemeApiResource('review').catch(function (error) {
+                        apiPromise = null;
+                        throw error;
+                    });
                 }
 
                 return apiPromise;
@@ -725,9 +777,10 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
 
             function getAccountApi() {
                 if (!accountApiPromise) {
-                    accountApiPromise = window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function'
-                        ? Promise.resolve(window.Weline.Api.resource('account'))
-                        : Promise.reject(new Error('Weline.Api is unavailable.'));
+                    accountApiPromise = resolveThemeApiResource('account').catch(function (error) {
+                        accountApiPromise = null;
+                        throw error;
+                    });
                 }
 
                 return accountApiPromise;
@@ -818,8 +871,22 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                     writeTrigger.hidden = true;
                     writeTrigger.classList.add('hidden');
                 }
-                ensureReviewFormToken();
-                return resolveReviewModeForIntent();
+                return resolveReviewModeForIntent().then(function () {
+                    return ensureReviewFormToken();
+                });
+            }
+
+            function handleReviewWriteIntent(event) {
+                if (event) {
+                    event.preventDefault();
+                }
+                if (!isAccountLoggedInSync()) {
+                    openAuthModal(function () {
+                        showWritePanel();
+                    });
+                    return;
+                }
+                showWritePanel();
             }
 
             function updateReviewMode(mode, description, icon) {
@@ -1019,7 +1086,7 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                     ? '<span class="ml-2 font-normal text-text-secondary-light dark:text-text-secondary-dark">' + escapeHtml(texts.replyTo) + ' #' + parentReplyId + '</span>'
                     : '';
 
-                return '<div id="review-reply-' + replyId + '" class="rounded-2xl bg-surface-light p-3 text-sm dark:bg-surface-dark" data-review-reply-id="' + replyId + '" data-review-reply-author-id="' + Number(reply.customer_id || 0) + '" data-review-reply-author-name="' + escapeHtml(reply.customer_name || 'Customer') + '">'
+                return '<div id="review-reply-' + replyId + '" class="rounded-2xl bg-surface-light p-3 text-sm dark:bg-surface-dark" data-review-reply-id="' + replyId + '" data-review-reply-author-id="' + Number(reply.customer_id || 0) + '" data-review-reply-author-name="' + escapeHtml(reply.customer_name || texts.customer || '客户') + '">'
                     + '<div class="flex items-center justify-between gap-3 text-xs text-text-secondary-light dark:text-text-secondary-dark">'
                     + '<span class="font-semibold text-text-primary-light dark:text-text-primary-dark">' + escapeHtml(reply.customer_name || '客户') + parentHtml + '</span>'
                     + '<span>' + escapeHtml(createdAt) + '</span>'
@@ -1030,7 +1097,7 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                     + '<span class="material-symbols-outlined text-sm">translate</span><span data-review-translate-label>' + escapeHtml(texts.translate) + '</span></button>'
                     + '<span id="review-reply-translate-status-' + replyId + '" class="text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-status></span>'
                     + '</div>'
-                    + '<button type="button" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary" data-review-reply-toggle data-review-id-value="' + Number(reply.review_id || 0) + '" data-parent-reply-id="' + replyId + '" data-mention-customer-id="' + Number(reply.customer_id || 0) + '" data-mention-label="' + escapeHtml(reply.customer_name || 'Customer') + '">'
+                    + '<button type="button" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary" data-review-reply-toggle data-review-id-value="' + Number(reply.review_id || 0) + '" data-parent-reply-id="' + replyId + '" data-mention-customer-id="' + Number(reply.customer_id || 0) + '" data-mention-label="' + escapeHtml(reply.customer_name || texts.customer || '客户') + '">'
                     + '<span class="material-symbols-outlined text-sm">reply</span>'
                     + escapeHtml(texts.reply) + '</button>'
                     + '</div>';
@@ -1100,9 +1167,15 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                 if (!hintNode) {
                     return;
                 }
-                hintNode.textContent = target
-                    ? String(texts.mentionHint || '').replace('%{1}', '@' + target.label)
-                    : '';
+                if (!target) {
+                    hintNode.textContent = '';
+                    return;
+                }
+                var mentionLabel = '@' + target.label;
+                var template = String(texts.mentionHint || '');
+                hintNode.textContent = template.indexOf('__REVIEW_MENTION__') !== -1
+                    ? template.replace('__REVIEW_MENTION__', mentionLabel)
+                    : template.replace('%{1}', mentionLabel);
             }
 
             function insertMentionToken(textarea, target) {
@@ -1328,6 +1401,12 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
                     }
                     payload[key] = value;
                 });
+                if (Object.keys(payload.rating_scores).length === 0) {
+                    delete payload.rating_scores;
+                }
+                if (payload.media_items.length === 0) {
+                    delete payload.media_items;
+                }
 
                 return payload;
             }
@@ -1442,11 +1521,11 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
             loadIndexedDbReviews();
             updateEmptyState();
             focusDeepLinkedReviewNode();
+            window.addEventListener('load', focusDeepLinkedReviewNode);
+            window.addEventListener('hashchange', focusDeepLinkedReviewNode);
 
             if (writeTrigger) {
-                writeTrigger.addEventListener('click', function () {
-                    showWritePanel();
-                });
+                writeTrigger.addEventListener('click', handleReviewWriteIntent);
             }
             if (loginTrigger) {
                 loginTrigger.addEventListener('click', function () {
@@ -1532,3 +1611,507 @@ $productName = (string) ($product['name'] ?? __('Product Reviews'));
         })();
     </script>
 </main>
+
+<style>
+.review-page {
+    width: calc(100% - 32px) !important;
+    max-width: 1180px !important;
+    margin: 0 auto;
+    padding: 32px 0 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    color: var(--color-text-primary, #111827);
+}
+
+.review-page *,
+.review-page *::before,
+.review-page *::after {
+    box-sizing: border-box;
+}
+
+.review-page .material-symbols-outlined {
+    display: none;
+}
+
+.review-page > section,
+.review-page > section > article,
+.review-page #review-empty-state,
+.review-page #review-write-panel > div,
+.review-page .review-reply-form {
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 18px;
+    background: var(--color-bg-primary, #fff);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.07);
+}
+
+.review-page > section:first-child {
+    overflow: hidden;
+}
+
+.review-page > section:first-child > div {
+    display: grid;
+    gap: 24px;
+    padding: 28px;
+}
+
+.review-page > section:first-child h1 {
+    margin: 10px 0 0;
+    font-size: clamp(28px, 4vw, 42px);
+    line-height: 1.1;
+}
+
+.review-page > section:first-child p {
+    margin: 8px 0 0;
+}
+
+.review-page > section:first-child > div > div:last-child {
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    background: var(--color-bg-secondary, #f8fafc);
+}
+
+.review-page > section:nth-of-type(2) {
+    display: grid;
+    gap: 24px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+.review-page > section:nth-of-type(2) > article {
+    padding: 24px;
+}
+
+.review-page #review-list {
+    display: grid;
+    gap: 16px;
+}
+
+.review-page #review-list > article {
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 16px;
+    padding: 18px;
+    background: var(--color-bg-secondary, #f8fafc);
+}
+
+.review-page [data-review-deep-link-target="1"] {
+    border: 1px solid var(--color-primary, #f59e0b) !important;
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.22), 0 12px 28px rgba(180, 83, 9, 0.12) !important;
+    background: #fffaf0;
+    scroll-margin-top: 96px;
+}
+
+.review-page h2,
+.review-page h3 {
+    margin: 0;
+    line-height: 1.25;
+}
+
+.review-page p {
+    line-height: 1.65;
+}
+
+.review-page button,
+.review-page a.rounded-full {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    padding: 10px 18px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.review-page button {
+    cursor: pointer;
+}
+
+.review-page #review-write-trigger,
+.review-page #review-submit,
+.review-page [data-review-auth-submit] {
+    background: var(--color-primary, #f59e0b);
+    color: #fff;
+}
+
+.review-page #review-login-trigger,
+.review-page [data-review-translate],
+.review-page [data-review-reply-trigger],
+.review-page a {
+    color: var(--color-primary, #b45309);
+}
+
+.review-page form {
+    display: grid;
+    gap: 16px;
+}
+
+.review-page label {
+    display: grid;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--color-text-secondary, #4b5563);
+}
+
+.review-page input[type="text"],
+.review-page input[type="password"],
+.review-page textarea,
+.review-page select {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid var(--color-border-default, #d1d5db);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #fff;
+    color: var(--color-text-primary, #111827);
+    font: inherit;
+}
+
+.review-page textarea {
+    resize: vertical;
+}
+
+.review-page input:focus,
+.review-page textarea:focus,
+.review-page select:focus {
+    outline: 2px solid rgba(245, 158, 11, 0.25);
+    border-color: var(--color-primary, #f59e0b);
+}
+
+.review-page #review-write-panel[hidden],
+.review-page .hidden,
+.review-page [hidden] {
+    display: none !important;
+}
+
+.review-page #review-write-panel > div {
+    padding: 18px;
+    margin-top: 18px;
+}
+
+.review-page #review-auth-modal {
+    align-items: center;
+    background: rgba(15, 23, 42, 0.56);
+    backdrop-filter: blur(10px);
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 1000;
+}
+
+.review-page #review-auth-modal.flex {
+    display: flex;
+}
+
+.review-page #review-auth-modal .review-auth-dialog {
+    width: min(100%, 456px);
+    max-height: min(720px, calc(100vh - 48px));
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    border-radius: 24px;
+    background: var(--color-bg-primary, #fff);
+    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28), 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.review-page #review-auth-modal .review-auth-header {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 36px;
+    gap: 14px;
+    align-items: start;
+    padding: 26px 26px 18px;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), #fff);
+}
+
+.review-page #review-auth-modal .review-auth-icon,
+.review-page #review-auth-modal .material-symbols-outlined {
+    display: inline-flex;
+}
+
+.review-page #review-auth-modal .review-auth-icon svg,
+.review-page #review-auth-modal .review-auth-close svg,
+.review-page #review-auth-modal .review-auth-primary svg {
+    flex-shrink: 0;
+}
+
+.review-page #review-auth-modal .review-auth-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.review-page #review-auth-modal .review-auth-icon {
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(245, 158, 11, 0.24);
+    border-radius: 14px;
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--color-primary, #b45309);
+}
+
+.review-page #review-auth-modal h2 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.review-page #review-auth-modal p {
+    margin-top: 6px;
+    color: var(--color-text-secondary, #475569);
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.review-page #review-auth-modal .review-auth-close {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border-color: transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-text-secondary, #64748b);
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.review-page #review-auth-modal .review-auth-close svg {
+    width: 18px;
+    height: 18px;
+}
+
+.review-page #review-auth-modal .review-auth-close:hover,
+.review-page #review-auth-modal .review-auth-close:focus-visible {
+    border-color: rgba(226, 232, 240, 0.95);
+    background: rgba(248, 250, 252, 0.96);
+    color: var(--color-primary, #b45309);
+    text-decoration: none;
+}
+
+.review-page #review-auth-modal .review-auth-form {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+    padding: 22px 26px 26px;
+}
+
+.review-page #review-auth-modal .review-auth-alert {
+    min-height: 0;
+    border: 1px solid rgba(239, 68, 68, 0.22);
+    border-radius: 12px;
+    background: rgba(254, 242, 242, 0.95);
+    color: #b91c1c;
+    padding: 10px 12px;
+    line-height: 1.45;
+}
+
+.review-page #review-auth-modal .review-auth-alert:empty {
+    display: none;
+}
+
+.review-page #review-auth-modal .review-auth-field {
+    display: grid;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 750;
+    color: var(--color-text-secondary, #475569);
+}
+
+.review-page #review-auth-modal .review-auth-input {
+    min-height: 48px;
+    border-color: rgba(203, 213, 225, 0.95);
+    border-radius: 14px;
+    background: #fff;
+    padding: 12px 14px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.review-page #review-auth-modal .review-auth-input:focus {
+    border-color: var(--color-primary, #f59e0b);
+    outline: 3px solid rgba(245, 158, 11, 0.22);
+}
+
+.review-page #review-auth-modal .review-auth-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 2px;
+}
+
+.review-page #review-auth-modal .review-auth-secondary,
+.review-page #review-auth-modal .review-auth-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    border-radius: 999px;
+    padding: 10px 18px;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.review-page #review-auth-modal .review-auth-primary svg {
+    width: 16px;
+    height: 16px;
+}
+
+.review-page #review-auth-modal .review-auth-secondary {
+    border-color: rgba(203, 213, 225, 0.95);
+    background: #fff;
+    color: var(--color-text-primary, #111827);
+}
+
+.review-page #review-auth-modal .review-auth-secondary:hover,
+.review-page #review-auth-modal .review-auth-secondary:focus-visible {
+    border-color: rgba(148, 163, 184, 0.9);
+    background: #f8fafc;
+}
+
+.review-page #review-auth-modal .review-auth-primary {
+    min-width: 128px;
+    border-color: transparent !important;
+    background: linear-gradient(135deg, var(--color-primary, #f59e0b), #b45309) !important;
+    color: #fff !important;
+    box-shadow: 0 12px 24px rgba(180, 83, 9, 0.2);
+}
+
+.review-page #review-auth-modal .review-auth-primary .review-auth-primary-label,
+.review-page #review-auth-modal .review-auth-primary svg {
+    color: #fff !important;
+    opacity: 1;
+}
+
+.review-page #review-auth-modal .review-auth-primary:hover,
+.review-page #review-auth-modal .review-auth-primary:focus-visible {
+    background: linear-gradient(135deg, #d97706, #92400e) !important;
+    color: #fff !important;
+    box-shadow: 0 14px 28px rgba(180, 83, 9, 0.24);
+}
+
+.review-page #review-auth-modal .review-auth-primary:disabled {
+    background: linear-gradient(135deg, var(--color-primary, #f59e0b), #b45309) !important;
+    color: #fff !important;
+    cursor: wait;
+    opacity: 0.72;
+}
+
+.review-page #review-feedback {
+    min-height: 20px;
+}
+
+.review-page #review-empty-state {
+    padding: 36px 24px;
+    text-align: center;
+    color: var(--color-text-secondary, #4b5563);
+}
+
+.review-page nav {
+    margin-top: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--color-text-secondary, #4b5563);
+}
+
+.review-page .grid {
+    display: grid;
+    gap: 16px;
+}
+
+.review-page .flex {
+    display: flex;
+    gap: 12px;
+}
+
+.review-page .flex-wrap {
+    flex-wrap: wrap;
+}
+
+.review-page .items-center {
+    align-items: center;
+}
+
+.review-page .justify-between {
+    justify-content: space-between;
+}
+
+.review-page .text-primary {
+    color: var(--color-primary, #b45309);
+}
+
+.review-page .text-white {
+    color: #fff;
+}
+
+.review-page .bg-primary {
+    background: var(--color-primary, #f59e0b);
+}
+
+@media (min-width: 900px) {
+    .review-page > section:first-child > div {
+        grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+        align-items: center;
+    }
+
+    .review-page > section:nth-of-type(2) {
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+        align-items: start;
+    }
+}
+
+@media (max-width: 640px) {
+    .review-page {
+        width: calc(100% - 20px) !important;
+        padding-top: 20px;
+    }
+
+    .review-page > section:first-child > div,
+    .review-page > section:nth-of-type(2) > article {
+        padding: 18px;
+    }
+
+    .review-page #review-auth-modal {
+        padding: 14px;
+    }
+
+    .review-page #review-auth-modal .review-auth-dialog {
+        width: 100%;
+        max-height: calc(100vh - 28px);
+        overflow-y: auto;
+        border-radius: 20px;
+    }
+
+    .review-page #review-auth-modal .review-auth-header {
+        grid-template-columns: 40px minmax(0, 1fr) 34px;
+        padding: 22px 20px 16px;
+    }
+
+    .review-page #review-auth-modal .review-auth-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 13px;
+    }
+
+    .review-page #review-auth-modal .review-auth-form {
+        padding: 20px;
+    }
+
+    .review-page #review-auth-modal .review-auth-actions {
+        flex-direction: column-reverse;
+    }
+
+    .review-page #review-auth-modal .review-auth-actions > button {
+        width: 100%;
+    }
+}
+</style>

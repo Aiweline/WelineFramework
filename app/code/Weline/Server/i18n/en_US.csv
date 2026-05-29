@@ -2038,3 +2038,7 @@ LiteSSL,LiteSSL
 "Weline Server 未运行","Weline Server is not running"
 "Weline Server 正在运行，Master PID：%{1}","Weline Server is running, Master PID: %{1}"
 "Weline Server 已停止","Weline Server stopped"
+"Master PID is running, but IPC status did not respond within 0.5s; the control plane may be busy or in an orchestrator full-restart cycle.","Master PID is running, but IPC status did not respond within 0.5s; the control plane may be busy or in an orchestrator full-restart cycle."
+"The instance may still be inside an Orchestrator bootstrap or full-restart cycle; avoid repeating server:start based only on this warning.","The instance may still be inside an Orchestrator bootstrap or full-restart cycle; avoid repeating server:start based only on this warning."
+"Set wls.orchestrator.background_master_confirm_wait_sec to extend the Master control-plane confirmation window.","Set wls.orchestrator.background_master_confirm_wait_sec to extend the Master control-plane confirmation window."
+"server:stop only stops WLS-managed processes; independent bin/w commands such as setup:upgrade or cron:task:run must be handled separately.","server:stop only stops WLS-managed processes; independent bin/w commands such as setup:upgrade or cron:task:run must be handled separately."

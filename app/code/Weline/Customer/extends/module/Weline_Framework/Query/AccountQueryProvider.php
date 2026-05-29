@@ -186,6 +186,7 @@ class AccountQueryProvider implements QueryProviderInterface
         $confirmPassword = (string)($params['confirm_password'] ?? $params['password_confirm'] ?? '');
         $agreeTerms = $this->toBool($params['agree_terms'] ?? false);
         $redirectUrl = $this->normalizeRedirectTarget((string)($params['redirect_url'] ?? $params['redirect'] ?? ''));
+        $referralCode = trim((string)($params['ref'] ?? $params['referral_code'] ?? ''));
 
         if ($firstName === '' || $lastName === '') {
             return $this->failure('First name and last name are required.');
@@ -207,6 +208,7 @@ class AccountQueryProvider implements QueryProviderInterface
             $result = $this->customerAccountService->register($email, $password, [
                 'first_name' => $firstName,
                 'last_name' => $lastName,
+                'referral_code' => $referralCode,
             ]);
             $user = $result['customer'] ?? null;
             if (!$user instanceof Customer || !$user->getId()) {

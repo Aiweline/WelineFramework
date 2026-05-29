@@ -28,30 +28,6 @@ class AiSiteAgentSession extends Model
     private const ASSET_IMAGE_FAILURE_MAX_ITEMS = 80;
     private const ASSET_IMAGE_FAILURE_MESSAGE_MAX_LEN = 800;
     private const WORKSPACE_TRACK_VIRTUAL_THEME = 'virtual_theme';
-    /**
-     * build_tasks should keep mutable execution state only; task definitions live
-     * in build_blueprint.tasks and are rejoined at runtime.
-     *
-     * @var array<string, true>
-     */
-    private const BUILD_TASK_DUPLICATE_STATE_KEYS = [
-        'task_type' => true,
-        'group_key' => true,
-        'page_type' => true,
-        'section_code' => true,
-        'dependencies' => true,
-        'can_parallel' => true,
-        'progress_weight' => true,
-        'runtime_context' => true,
-        'plan_context' => true,
-        'task_script' => true,
-        'block_task' => true,
-        'implementation_contract' => true,
-    ];
-    private const BUILD_RUNTIME_SHARED_CONTEXT_KEYS = [
-        'theme_context_snapshot' => true,
-        'shared_prompt_context' => true,
-    ];
     private const ARTIFACT_BACKED_SCOPE_PATHS = [
         self::STAGE_PLAN => [
             'plan_json' => [['plan_json'], []],
@@ -59,7 +35,6 @@ class AiSiteAgentSession extends Model
             'build_plan_v2' => [['build_plan_v2'], []],
             'plan_projection' => [['plan_projection'], []],
             'content_manifest' => [['content_manifest'], []],
-            'execution_blueprint' => [['execution_blueprint'], []],
             'plan_workbench' => [['plan_workbench'], []],
         ],
         self::STAGE_VISUAL_EDIT => [
@@ -68,9 +43,7 @@ class AiSiteAgentSession extends Model
             'build_plan_v2' => [['build_plan_v2'], []],
             'plan_projection' => [['plan_projection'], []],
             'content_manifest' => [['content_manifest'], []],
-            'execution_blueprint' => [['execution_blueprint'], []],
             'plan_workbench' => [['plan_workbench'], []],
-            'build_blueprint' => [['build_blueprint'], []],
             'build_workbench' => [['build_workbench'], []],
             'build_contracts' => [['build_contracts'], []],
             'render_data_contract' => [['render_data_contract'], []],
@@ -387,10 +360,7 @@ class AiSiteAgentSession extends Model
         }
 
         $scope = $this->compactPlanWorkbenchSnapshotsForStorage($scope);
-        $scope = $this->compactConfirmedStageOneExecutionBlueprintSnapshotForStorage($scope);
         $scope = $this->compactConfirmedStageOnePlanPayloadsForStorage($scope);
-        $scope = $this->compactConfirmedBuildBlueprintTaskRuntimeForStorage($scope);
-        $scope = $this->compactConfirmedBuildTaskStateForStorage($scope);
         $scope = $this->removePersistentSnapshotBackupsForStorage($scope);
 
         return $scope;
@@ -429,11 +399,6 @@ class AiSiteAgentSession extends Model
 
             $planWorkbench['stage1'] = $slimStageOne;
         }
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
-        if (($executionBlueprint !== [] || $executionBlueprintDraft !== []) && \is_array($planWorkbench['confirmed']['execution_blueprint'] ?? null)) {
-            unset($planWorkbench['confirmed']['execution_blueprint']);
-        }
         if ((int)($scope['plan_confirmed'] ?? 0) === 1 || $this->hasMaterializedStageOnePlanArtifacts($scope)) {
             $planWorkbench['confirmed'] = $this->compactPlanWorkbenchConfirmedForStorage($planWorkbench['confirmed']);
         }
@@ -447,7 +412,7 @@ class AiSiteAgentSession extends Model
      */
     private function hasMaterializedStageOnePlanArtifacts(array $scope): bool
     {
-        foreach (['plan_structured', 'plan_json', 'execution_blueprint', 'execution_blueprint_draft'] as $key) {
+        foreach (['plan_structured', 'plan_json', 'build_plan_v2'] as $key) {
             if (\is_array($scope[$key] ?? null) && $scope[$key] !== []) {
                 return true;
             }
@@ -507,30 +472,6 @@ class AiSiteAgentSession extends Model
     }
 
     /**
-     * Once stage one is confirmed, keep a single confirmed execution blueprint
-     * copy and drop stale draft mirrors.
-     *
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactConfirmedStageOneExecutionBlueprintSnapshotForStorage(array $scope): array
-    {
-        if ((int)($scope['plan_confirmed'] ?? 0) !== 1) {
-            return $scope;
-        }
-
-        $confirmed = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $draft = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
-        if ($confirmed === [] || $draft === []) {
-            return $scope;
-        }
-
-        $scope['execution_blueprint_draft'] = [];
-
-        return $scope;
-    }
-
-    /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
@@ -539,112 +480,6 @@ class AiSiteAgentSession extends Model
         if ((int)($scope['plan_confirmed'] ?? 0) !== 1) {
             return $scope;
         }
-
-        return $scope;
-    }
-
-    /**
-     * Build-plan runtime snapshots are identical across tasks. Store them once
-     * at scope level, then keep task definitions focused on task-specific data.
-     *
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactConfirmedBuildBlueprintTaskRuntimeForStorage(array $scope): array
-    {
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $tasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
-        if ((string)($buildBlueprint['source'] ?? '') !== 'build_plan_v2' || $tasks === []) {
-            return $scope;
-        }
-
-        $changed = false;
-        foreach (self::BUILD_RUNTIME_SHARED_CONTEXT_KEYS as $key => $_) {
-            if (\array_key_exists($key, $buildBlueprint)) {
-                $changed = true;
-            }
-        }
-        foreach ($tasks as $idx => $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-
-            foreach (self::BUILD_RUNTIME_SHARED_CONTEXT_KEYS as $key => $_) {
-                if (\array_key_exists($key, $task)) {
-                    unset($task[$key]);
-                    $changed = true;
-                }
-            }
-
-            $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
-            if ($runtimeContext !== []) {
-                $runtimeContext = $this->stripTaskRuntimeSharedContextForStorage($runtimeContext);
-                if ($runtimeContext === []) {
-                    unset($task['runtime_context']);
-                } else {
-                    $task['runtime_context'] = $runtimeContext;
-                }
-                $changed = true;
-            }
-
-            $tasks[$idx] = $task;
-        }
-
-        if ($changed) {
-            unset(
-                $buildBlueprint['theme_context_snapshot'],
-                $buildBlueprint['shared_prompt_context']
-            );
-            $buildBlueprint['tasks'] = $tasks;
-            $scope['build_blueprint'] = $buildBlueprint;
-        }
-
-        return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactConfirmedBuildTaskStateForStorage(array $scope): array
-    {
-        $buildTasks = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
-        if ($buildTasks === []) {
-            return $scope;
-        }
-
-        $buildTaskDefinitions = $this->indexBuildBlueprintTasksByTaskKey(
-            \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : []
-        );
-        foreach ($buildTasks as $taskKey => $taskState) {
-            if (!\is_array($taskState)) {
-                continue;
-            }
-
-            $taskKey = (string)$taskKey;
-            foreach (self::BUILD_TASK_DUPLICATE_STATE_KEYS as $key => $_) {
-                unset($taskState[$key]);
-            }
-
-            $runtimeContext = \is_array($taskState['runtime_context'] ?? null) ? $taskState['runtime_context'] : [];
-            $definitionRuntimeContext = \is_array($buildTaskDefinitions[$taskKey]['runtime_context'] ?? null)
-                ? $buildTaskDefinitions[$taskKey]['runtime_context']
-                : [];
-            if ($runtimeContext === [] || $runtimeContext == $definitionRuntimeContext) {
-                unset($taskState['runtime_context']);
-            }
-
-            if (isset($taskState['result_ref']) && !\is_array($taskState['result_ref'])) {
-                $taskState['result_ref'] = [];
-            }
-            if (isset($taskState['message']) && !\is_scalar($taskState['message'])) {
-                $taskState['message'] = '';
-            }
-
-            $buildTasks[$taskKey] = $taskState;
-        }
-
-        $scope['build_tasks'] = $buildTasks;
 
         return $scope;
     }
@@ -696,83 +531,7 @@ class AiSiteAgentSession extends Model
             $scope['shared_prompt_context']
         );
 
-        foreach (['build_blueprint'] as $rootKey) {
-            if (\is_array($scope[$rootKey] ?? null)) {
-                $scope[$rootKey] = $this->stripSnapshotBackupsFromPlanTree($scope[$rootKey]);
-            }
-        }
-
         return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $tree
-     * @return array<string, mixed>
-     */
-    private function stripSnapshotBackupsFromPlanTree(array $tree): array
-    {
-        unset(
-            $tree['theme_context_snapshot'],
-            $tree['shared_prompt_context'],
-            $tree['confirmed_stage1_plan_book']
-        );
-
-        if (\is_array($tree['runtime_context'] ?? null)) {
-            $tree['runtime_context'] = $this->stripTaskRuntimeSharedContextForStorage($tree['runtime_context']);
-            if ($tree['runtime_context'] === []) {
-                unset($tree['runtime_context']);
-            }
-        }
-
-        foreach (['tasks', 'shared_tasks'] as $listKey) {
-            if (!\is_array($tree[$listKey] ?? null)) {
-                continue;
-            }
-            foreach ($tree[$listKey] as $idx => $item) {
-                if (\is_array($item)) {
-                    $tree[$listKey][$idx] = $this->stripSnapshotBackupsFromPlanTree($item);
-                }
-            }
-        }
-
-        foreach (['page_tasks', 'pages'] as $mapKey) {
-            if (!\is_array($tree[$mapKey] ?? null)) {
-                continue;
-            }
-            foreach ($tree[$mapKey] as $key => $value) {
-                if (\is_array($value)) {
-                    $tree[$mapKey][$key] = $this->stripSnapshotBackupsFromPlanTree($value);
-                }
-            }
-        }
-
-        if (\is_array($tree['execution_blueprint']['tasks'] ?? null)) {
-            foreach ($tree['execution_blueprint']['tasks'] as $idx => $task) {
-                if (\is_array($task)) {
-                    $tree['execution_blueprint']['tasks'][$idx] = $this->stripSnapshotBackupsFromPlanTree($task);
-                }
-            }
-        }
-
-        if (\is_array($tree['execution_blueprint']['task_groups'] ?? null)) {
-            $tree['execution_blueprint']['task_groups'] = $this->stripSnapshotBackupsFromPlanTree($tree['execution_blueprint']['task_groups']);
-        }
-
-        return $tree;
-    }
-
-    /**
-     * @param array<string, mixed> $runtimeContext
-     * @return array<string, mixed>
-     */
-    private function stripTaskRuntimeSharedContextForStorage(array $runtimeContext): array
-    {
-        unset(
-            $runtimeContext['theme_context_snapshot'],
-            $runtimeContext['shared_prompt_context']
-        );
-
-        return $runtimeContext;
     }
 
     /**
@@ -810,27 +569,6 @@ class AiSiteAgentSession extends Model
         }
 
         return $config;
-    }
-
-    /**
-     * @param array<string, mixed> $buildBlueprint
-     * @return array<string, array<string, mixed>>
-     */
-    private function indexBuildBlueprintTasksByTaskKey(array $buildBlueprint): array
-    {
-        $indexed = [];
-        foreach (\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [] as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $taskKey = \trim((string)($task['task_key'] ?? ''));
-            if ($taskKey === '') {
-                continue;
-            }
-            $indexed[$taskKey] = $task;
-        }
-
-        return $indexed;
     }
 
     /**

@@ -23,6 +23,19 @@ class State extends DataObject
 
     public const area_base = 'base';
 
+    /** @var array<string, true>|null */
+    private static ?array $allowedCurrencyCodeMap = null;
+
+    private static string $allowedCurrencyCodeScope = '';
+
+    /** @var array<string, true>|null language code lower-case => true */
+    private static ?array $allowedLanguageCodeMap = null;
+
+    private static string $allowedLanguageCodeScope = '';
+
+    /** @var array{currency: string, language: string}|null 单次请求路径前缀解析缓存 */
+    private static ?array $pathLocalizationCache = null;
+
     public static bool $is_backend = false;
 
     /** 请求级缓存：getLangLocal() 结果，同请求内只触发一次事件，WLS 下由 StateManager 重置 */
@@ -168,54 +181,488 @@ class State extends DataObject
 
     private static function detectLanguageFromRequestPath(): string
     {
-        foreach (self::requestPathSegmentsCandidates() as $segments) {
-            foreach ($segments as $segment) {
-                $segment = str_replace('-', '_', trim($segment));
-                if (preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $segment)) {
-                    return $segment;
-                }
+        return self::resolveRequestPathLocalization()['language'];
+    }
+
+    /**
+     * 按固定顺序解析路径前缀：可选 area → currency → language（最多 3 段），其余为业务路由。
+     *
+     * @param list<string> $segments
+     * @return array{currency: string, language: string}
+     */
+    public static function resolveLocalizationFromPathSegments(array $segments): array
+    {
+        if ($segments === []) {
+            return ['currency' => '', 'language' => ''];
+        }
+
+        if (\count($segments) > 3) {
+            $segments = \array_slice($segments, 0, 3);
+        }
+
+        $index = 0;
+        if (isset($segments[$index]) && Env::isAreaRoutePathSegment($segments[$index])) {
+            $index++;
+        }
+
+        $currency = '';
+        if (isset($segments[$index]) && self::isCurrencySegmentCandidate($segments[$index])) {
+            $code = strtoupper($segments[$index]);
+            if (self::isAllowedCurrencyCode($code)) {
+                $currency = $code;
+                $index++;
             }
         }
 
-        return '';
+        $language = '';
+        if (isset($segments[$index]) && self::isLanguageSegmentCandidate($segments[$index])) {
+            $code = self::normalizeLanguageSegment($segments[$index]);
+            if (self::isAllowedLanguageCode($code)) {
+                $language = $code;
+            }
+        }
+
+        return ['currency' => $currency, 'language' => $language];
+    }
+
+    /**
+     * @return array{currency: string, language: string}
+     */
+    private static function resolveRequestPathLocalization(): array
+    {
+        if (self::$pathLocalizationCache !== null) {
+            return self::$pathLocalizationCache;
+        }
+
+        self::$pathLocalizationCache = self::resolveLocalizationFromPathSegments(
+            self::requestPathPrefixSegments()
+        );
+
+        return self::$pathLocalizationCache;
+    }
+
+    /**
+     * 单元测试 / WLS 请求切换后重置路径解析缓存。
+     */
+    public static function resetRequestPathLocalizationCache(): void
+    {
+        self::$pathLocalizationCache = null;
+    }
+
+    /**
+     * 判断路径段是否为当前请求允许的语言代码。
+     *
+     * 优先级：当前网站关联语言 > 全局已启用语言 > i18n 缓存/库探测。
+     */
+    public static function isAllowedLanguageCode(string $code): bool
+    {
+        $code = self::normalizeLanguageSegment($code);
+        if (!self::isLanguageSegmentCandidate($code)) {
+            return false;
+        }
+        if (Env::isAreaRoutePathSegment($code)) {
+            return false;
+        }
+
+        $allowedMap = self::resolveAllowedLanguageCodeMap();
+        if ($allowedMap !== []) {
+            return isset($allowedMap[strtolower($code)]);
+        }
+
+        return self::probeLanguageExistsInStore($code);
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private static function resolveAllowedLanguageCodeMap(): array
+    {
+        $scope = (string)\w_env('website_id', '')
+            . '|' . (string)\w_env('website.code', '')
+            . '|' . (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', '');
+        if (self::$allowedLanguageCodeMap !== null && self::$allowedLanguageCodeScope === $scope) {
+            return self::$allowedLanguageCodeMap;
+        }
+
+        $map = [];
+        foreach (self::loadWebsiteBoundLanguageCodes() as $code) {
+            $map[strtolower($code)] = true;
+        }
+        if ($map === []) {
+            foreach (self::loadGlobalEnabledLanguageCodes() as $code) {
+                $map[strtolower($code)] = true;
+            }
+        }
+
+        self::$allowedLanguageCodeScope = $scope;
+        self::$allowedLanguageCodeMap = $map;
+
+        return self::$allowedLanguageCodeMap;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function loadWebsiteBoundLanguageCodes(): array
+    {
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
+                $codes = \Weline\Websites\Data\WebsiteData::getLanguageCodes();
+                if ($codes !== []) {
+                    return self::normalizeLanguageCodeList($codes);
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $websiteId = (int)\w_env('website_id', 0);
+        if ($websiteId <= 0) {
+            $websiteId = (int)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', 0);
+        }
+        if ($websiteId <= 0 || !\class_exists(\Weline\Websites\Model\WebsiteLanguage::class, false)) {
+            return [];
+        }
+
+        try {
+            $websiteLanguage = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteLanguage::class);
+            return self::normalizeLanguageCodeList($websiteLanguage->getWebsiteLanguageCodes($websiteId));
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function loadGlobalEnabledLanguageCodes(): array
+    {
+        try {
+            if (!\class_exists(\Weline\I18n\Model\Locals::class, false)) {
+                return [];
+            }
+            $localModel = ObjectManager::getInstance(\Weline\I18n\Model\Locals::class);
+            $rows = $localModel->clear()
+                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_INSTALL, 1)
+                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_ACTIVE, 1)
+                ->select()
+                ->fetchArray();
+            $codes = [];
+            foreach ((array)$rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $code = trim((string)($row[\Weline\I18n\Model\Locals::schema_fields_CODE] ?? ''));
+                if ($code !== '') {
+                    $codes[] = $code;
+                }
+            }
+            return self::normalizeLanguageCodeList($codes);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<int, string> $codes
+     * @return list<string>
+     */
+    private static function normalizeLanguageCodeList(array $codes): array
+    {
+        $normalized = [];
+        foreach ($codes as $code) {
+            $code = self::normalizeLanguageSegment((string)$code);
+            if (self::isLanguageLocaleShape($code)) {
+                $normalized[] = $code;
+            }
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
+    private static function normalizeLanguageSegment(string $code): string
+    {
+        return str_replace('-', '_', trim($code));
+    }
+
+    private static function isLanguageLocaleShape(string $code): bool
+    {
+        return self::isLanguageSegmentCandidate($code);
+    }
+
+    /**
+     * 语言路径段快速形态判断（无正则）：xx_Name 或 xx_Name_CC。
+     */
+    private static function isLanguageSegmentCandidate(string $segment): bool
+    {
+        $code = self::normalizeLanguageSegment($segment);
+        if (\strlen($code) < 5 || $code[2] !== '_') {
+            return false;
+        }
+        if (!ctype_lower($code[0]) || !ctype_lower($code[1]) || !ctype_alpha($code[0]) || !ctype_alpha($code[1])) {
+            return false;
+        }
+
+        $parts = explode('_', $code);
+        if (\count($parts) < 2 || \count($parts) > 3 || \strlen($parts[0]) !== 2) {
+            return false;
+        }
+        if (\strlen($parts[1]) < 2 || !ctype_alpha($parts[1])) {
+            return false;
+        }
+        if (\count($parts) === 3) {
+            return \strlen($parts[2]) === 2 && ctype_upper($parts[2]) && ctype_alpha($parts[2]);
+        }
+
+        return true;
+    }
+
+    private static function isCurrencySegmentCandidate(string $segment): bool
+    {
+        return \strlen($segment) === 3
+            && $segment === strtoupper($segment)
+            && ctype_alpha($segment);
+    }
+
+    private static function probeLanguageExistsInStore(string $code): bool
+    {
+        $codeLower = strtolower(self::normalizeLanguageSegment($code));
+        if ($codeLower === '') {
+            return false;
+        }
+
+        try {
+            $cache = w_cache('i18n');
+            $checkCacheKey = 'lang_check_' . $codeLower;
+            $checkResult = $cache->get($checkCacheKey);
+            if ($checkResult !== null && $checkResult !== false) {
+                return (bool)$checkResult;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (!\class_exists(\Weline\I18n\Model\Locals::class, false)) {
+                return false;
+            }
+            $localModel = ObjectManager::getInstance(\Weline\I18n\Model\Locals::class);
+            $local = $localModel->clear()
+                ->where(\Weline\I18n\Model\Locals::schema_fields_CODE, $code)
+                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_INSTALL, 1)
+                ->where(\Weline\I18n\Model\Locals::schema_fields_IS_ACTIVE, 1)
+                ->find()
+                ->fetch();
+            return (bool)$local->getId();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * 判断路径段是否为当前请求允许的 ISO 货币码。
+     *
+     * 优先级：当前网站关联货币 > 全局启用货币 > 货币表缓存探测。
+     * 永远排除区域路由前缀（如 api），避免与 REST 路径混淆。
+     */
+    public static function isAllowedCurrencyCode(string $code): bool
+    {
+        $code = strtoupper(trim($code));
+        if (!self::isCurrencySegmentCandidate($code)) {
+            return false;
+        }
+        if (Env::isAreaRoutePathSegment($code)) {
+            return false;
+        }
+
+        $allowedMap = self::resolveAllowedCurrencyCodeMap();
+        if ($allowedMap !== []) {
+            return isset($allowedMap[$code]);
+        }
+
+        return self::probeCurrencyExistsInStore($code);
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private static function resolveAllowedCurrencyCodeMap(): array
+    {
+        $scope = (string)\w_env('website_id', '')
+            . '|' . (string)\w_env('website.code', '')
+            . '|' . (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', '');
+        if (self::$allowedCurrencyCodeMap !== null && self::$allowedCurrencyCodeScope === $scope) {
+            return self::$allowedCurrencyCodeMap;
+        }
+
+        $map = [];
+        foreach (self::loadWebsiteBoundCurrencyCodes() as $code) {
+            $map[$code] = true;
+        }
+        if ($map === []) {
+            foreach (self::loadGlobalEnabledCurrencyCodes() as $code) {
+                $map[$code] = true;
+            }
+        }
+
+        self::$allowedCurrencyCodeScope = $scope;
+        self::$allowedCurrencyCodeMap = $map;
+
+        return self::$allowedCurrencyCodeMap;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function loadWebsiteBoundCurrencyCodes(): array
+    {
+        try {
+            if (\class_exists(\Weline\Websites\Data\WebsiteData::class, false)) {
+                $codes = \Weline\Websites\Data\WebsiteData::getCurrencyCodes();
+                if ($codes !== []) {
+                    return self::normalizeCurrencyCodeList($codes);
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $websiteId = (int)\w_env('website_id', 0);
+        if ($websiteId <= 0) {
+            $websiteId = (int)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', 0);
+        }
+        if ($websiteId <= 0 || !\class_exists(\Weline\Websites\Model\WebsiteCurrency::class, false)) {
+            return [];
+        }
+
+        try {
+            $websiteCurrency = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteCurrency::class);
+            return self::normalizeCurrencyCodeList($websiteCurrency->getWebsiteCurrencyCodes($websiteId));
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function loadGlobalEnabledCurrencyCodes(): array
+    {
+        try {
+            if (\class_exists(\Weline\Currency\Data\CurrencyData::class, false)) {
+                $codes = [];
+                foreach (\Weline\Currency\Data\CurrencyData::getCurrencies() as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    $code = strtoupper(trim((string)($row['code'] ?? '')));
+                    if ($code !== '') {
+                        $codes[] = $code;
+                    }
+                }
+                if ($codes !== []) {
+                    return self::normalizeCurrencyCodeList($codes);
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (!\class_exists(\Weline\Currency\Model\Currency::class, false)) {
+                return [];
+            }
+            $currencyModel = ObjectManager::getInstance(\Weline\Currency\Model\Currency::class);
+            $rows = $currencyModel->clear()
+                ->where(\Weline\Currency\Model\Currency::schema_fields_STATUS, true)
+                ->select()
+                ->fetchArray();
+            $codes = [];
+            foreach ((array)$rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $code = strtoupper(trim((string)($row[\Weline\Currency\Model\Currency::schema_fields_CODE] ?? '')));
+                if ($code !== '') {
+                    $codes[] = $code;
+                }
+            }
+            return self::normalizeCurrencyCodeList($codes);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<int, string> $codes
+     * @return list<string>
+     */
+    private static function normalizeCurrencyCodeList(array $codes): array
+    {
+        $normalized = [];
+        foreach ($codes as $code) {
+            $code = strtoupper(trim((string)$code));
+            if (self::isCurrencySegmentCandidate($code)) {
+                $normalized[] = $code;
+            }
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
+    private static function probeCurrencyExistsInStore(string $code): bool
+    {
+        try {
+            $cache = w_cache('currency');
+            $cacheKey = 'currency_code_' . $code;
+            $cached = $cache->get($cacheKey);
+            if (\is_array($cached) && isset($cached['code'])) {
+                return true;
+            }
+            if ($cached === []) {
+                return false;
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (\class_exists(\Weline\Currency\Data\CurrencyData::class, false)) {
+                return \Weline\Currency\Data\CurrencyData::getCurrency($code) !== null;
+            }
+        } catch (\Throwable) {
+        }
+
+        return false;
     }
 
     private static function detectCurrencyFromRequestPath(): string
     {
-        foreach (self::requestPathSegmentsCandidates() as $segments) {
-            foreach ($segments as $segment) {
-                $segment = strtoupper(trim($segment));
-                if (preg_match('/^[A-Z]{3}$/', $segment)) {
-                    return $segment;
-                }
-            }
-        }
-
-        return '';
+        return self::resolveRequestPathLocalization()['currency'];
     }
 
     /**
-     * @return list<list<string>>
+     * 取首个可用 URI 的前缀段（最多 3：area / currency / language）。根路径 / 直接返回空数组。
+     *
+     * @return list<string>
      */
-    private static function requestPathSegmentsCandidates(): array
+    private static function requestPathPrefixSegments(): array
     {
         $uris = [
             (string)\w_env('origin_request_uri', ''),
+            (string)\Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', ''),
+            (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? ''),
             (string)\w_env('full_request_uri', ''),
             (string)\w_env('request.uri', ''),
-            (string)\Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', ''),
             (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', ''),
-            (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? ''),
             (string)($_SERVER['REQUEST_URI'] ?? ''),
         ];
 
-        $candidates = [];
         foreach ($uris as $uri) {
-            if ($uri === '') {
+            if ($uri === '' || $uri === '/') {
                 continue;
             }
 
             $path = (string)(parse_url($uri, PHP_URL_PATH) ?: $uri);
+            if ($path === '' || $path === '/') {
+                continue;
+            }
+
             $segments = array_values(array_filter(
                 explode('/', trim($path, '/')),
                 static fn (string $segment): bool => $segment !== ''
@@ -224,9 +671,9 @@ class State extends DataObject
                 continue;
             }
 
-            $candidates[] = array_slice($segments, 0, 4);
+            return \array_slice($segments, 0, 3);
         }
 
-        return $candidates;
+        return [];
     }
 }

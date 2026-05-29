@@ -102,18 +102,18 @@ Actions,Actions
 View,View
 评价,Reviews
 当前产品,"Current product"
-正在确认是否可以按订单评价...,正在确认是否可以按订单评价...
-当前会按匿名评论提交；审核通过前，这条评价只会在当前浏览器中显示。,当前会按匿名评论提交；审核通过前，这条评价只会在当前浏览器中显示。
-当前会按下单后评论提交，系统已确认你购买过该商品。,当前会按下单后评论提交，系统已确认你购买过该商品。
-未查询到该商品订单，已自动切换为匿名评论。,未查询到该商品订单，已自动切换为匿名评论。
-待审核,待审核
-仅当前浏览器可见,仅当前浏览器可见
-已验证购买,已验证购买
-评分,评分
-登录后评论,登录后评论
-登录失败，请检查用户名和密码。,登录失败，请检查用户名和密码。
-请输入用户名或邮箱。,请输入用户名或邮箱。
-请输入密码。,请输入密码。
+正在确认是否可以按订单评价...,"Checking whether this review can be linked to an order..."
+当前会按匿名评论提交；审核通过前，这条评价只会在当前浏览器中显示。,"This will be submitted as an anonymous review. Before approval, it is only visible in this browser."
+当前会按下单后评论提交，系统已确认你购买过该商品。,"This will be submitted as an order-verified review. The system has confirmed that you purchased this product."
+未查询到该商品订单，已自动切换为匿名评论。,"No order was found for this product, so anonymous review mode was selected."
+待审核,"Pending review"
+仅当前浏览器可见,"Only visible in this browser"
+已验证购买,"Verified purchase"
+评分,Rating
+登录后评论,"Log in to review"
+登录失败，请检查用户名和密码。,"Login failed. Check your username and password."
+请输入用户名或邮箱。,"Enter your username or email."
+请输入密码。,"Enter your password."
 Translate,Translate
 Translating...,Translating...
 "Show original","Show original"
@@ -122,26 +122,26 @@ Translating...,Translating...
 "This comment already matches the current language.","This comment already matches the current language."
 "Customer Voices","Customer Voices"
 "Latest Reviews","Latest Reviews"
-我要评论,我要评论
+我要评论,"Write a review"
 "View All Reviews","View All Reviews"
-点击我要评论后自动判断评价方式,点击我要评论后自动判断评价方式
-未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。,未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。
+点击我要评论后自动判断评价方式,"The review mode is selected automatically after you click Write a review"
+未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。,"Guests submit anonymous reviews directly; logged-in customers can be checked for order-verified reviews automatically."
 star,star
-不评分,不评分
+不评分,"No rating"
 Title,Title
 "Write a headline for your review","Write a headline for your review"
 Review,Review
 "Describe your experience with this product","Describe your experience with this product"
-图片链接,图片链接
-每行一个图片链接,每行一个图片链接
-视频链接,视频链接
-每行一个视频链接,每行一个视频链接
+图片链接,"Image links"
+每行一个图片链接,"One image link per line"
+视频链接,"Video links"
+每行一个视频链接,"One video link per line"
 "Submit review","Submit review"
 "No product reviews yet. Be the first to share your experience.","No product reviews yet. Be the first to share your experience."
-登录成功后会自动刷新评价资格。,登录成功后会自动刷新评价资格。
-关闭,关闭
-用户名或邮箱,用户名或邮箱
-密码,密码
+登录成功后会自动刷新评价资格。,"Review eligibility refreshes automatically after login."
+关闭,Close
+用户名或邮箱,"Username or email"
+密码,Password
 取消,Cancel
 登录并继续,登录并继续
 评论管理,"Review Management"
@@ -200,3 +200,40 @@ Detail,Detail
 "Customer Name","Customer Name"
 Email,Email
 Metadata,Metadata
+商品评论,"Product Reviews"
+商品评价,"Product Reviews"
+阅读其他买家的评价，也可以直接提交你的使用体验。,"Read other buyers' reviews, and submit your own experience directly."
+阅读其他买家的评价，下单后也可以分享你的真实使用体验。,"Read other buyers' reviews, and share your real experience after purchase."
+第%{1}页，共%{2}页,"Page %{1} of %{2}"
+每页 %{1} 条,"Per page: %{1}"
+上一页,"Previous page"
+下一页,"Next page"
+回复列表,Replies
+客户,Customer
+评价与回复,"Reviews and replies"
+基于 %{1} 条评价,"Based on %{1} reviews"
+写回复，可用 @customer:123 提及客户。,"Write a reply. Use @customer:123 to mention a customer."
+发送回复,"Send reply"
+回复已提交。,"Reply submitted."
+暂时无法提交回复。,"Unable to submit your reply right now."
+回复内容不能为空。,"Reply content is required."
+回复给,"Reply to"
+翻译,Translate
+翻译中...,Translating...
+显示原文,"Show original"
+显示译文,"Show translation"
+当前 Chrome 无法使用浏览器翻译。,"Browser translation is unavailable in this Chrome session."
+这条评论已经是当前语言。,"This review already matches the current language."
+本次回复会通知 %{1}。,"This reply will notify %{1}."
+请先登录再回复。,"Log in before replying."
+点击标题、内容或提交按钮时，系统会自动选择匿名评论或下单后评论。,"When you focus the title, content, or submit button, the system will choose anonymous or order-verified review mode automatically."
+提交评分并告诉其他买家你的真实体验。,"Submit a rating and tell other buyers about your real experience."
+评论和回复内容不能为空。,"Review and reply content are required."
+评论、客户和回复内容不能为空。,"Review, customer, and reply content are required."
+评论不存在或不可见。,"Review does not exist or is not visible."
+回复目标不存在。,"Reply target does not exist."
+客户 #%{1},"Customer #%{1}"
+你在商品评价回复中被提及,"You were mentioned in a product review reply"
+你的评价有新回复,"Your review has a new reply"
+客户 %{1} 在商品评价回复中提到了你。,"Customer %{1} mentioned you in a product review reply."
+客户 %{1} 回复了商品评价。,"Customer %{1} replied in a product review."

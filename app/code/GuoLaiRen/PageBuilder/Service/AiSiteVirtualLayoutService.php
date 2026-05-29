@@ -42,6 +42,7 @@ class AiSiteVirtualLayoutService
         if (!\is_array($stageScope) || $stageScope === []) {
             $stageScope = $session->getScopeArray();
         }
+        $stageScope = $this->scopeCompatibilityService->normalizePreviewContentLocale($stageScope);
         $scope = $this->scopeCompatibilityService->normalizeScope($stageScope);
         $virtualThemeId = \max(
             (int)($scope['virtual_theme_id'] ?? 0),

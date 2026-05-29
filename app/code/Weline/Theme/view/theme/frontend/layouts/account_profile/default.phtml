@@ -29,13 +29,34 @@
     <div class="account-profile {{meta.class}}">
         <if condition="meta.sidebar">
             <aside class="account-profile__sidebar">
-                {{meta.sidebar}}
+                <w:slot id="account-profile-sidebar"
+                        name="资料页侧边栏"
+                        accept="layout-account-profile-sidebar,layout-account-sidebar,account-sidebar,sidebar,account-nav"
+                        multiple="true"
+                        position="sidebar">
+                    {{meta.sidebar}}
+                </w:slot>
             </aside>
         </if>
 
         <main class="account-profile__main" id="account-profile-content" data-layout="account_profile_content">
             <div class="account-profile__container">
-                {{meta.content}}
+                <w:slot id="content"
+                        name="内容区"
+                        accept="layout-account-content,layout-account-profile-content,layout-default-content,content,account-profile,account-content"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="account-profile__content-root-slot">
+                    <w:slot id="account-profile-content"
+                        name="个人资料内容"
+                        accept="layout-account-profile-content,layout-account-content,account-profile,account-content,content"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content">
+                    {{meta.content}}
+                    </w:slot>
+                </w:slot>
             </div>
         </main>
     </div>

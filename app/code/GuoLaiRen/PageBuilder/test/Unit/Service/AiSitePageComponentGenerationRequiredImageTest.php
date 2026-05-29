@@ -6,19 +6,18 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Runtime\RequestContext;
 
 final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
 {
-    public function testRequiredImageWithoutGeneratorFailsInsteadOfDowngrading(): void
+    public function testRequiredImageWithoutGeneratorDowngradesToCssMediaSurface(): void
     {
         $service = new AiSitePageComponentGenerationService();
         $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'prepareInlineImageAssetForComponentSpec');
         $reflection->setAccessible(true);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('REQUIRED_IMAGE_ASSET_UNRESOLVED');
-
-        $reflection->invoke($service, [
+        /** @var array<string,mixed> $spec */
+        $spec = $reflection->invoke($service, [
             'region' => 'content',
             'defaultConfig' => [
                 'runtime.section_image_required' => '1',
@@ -28,10 +27,192 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
                 '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:home:proof:image'],
             ],
         ]);
+
+        self::assertSame('0', $spec['defaultConfig']['runtime.section_image_required'] ?? null);
+        self::assertSame('1', $spec['defaultConfig']['runtime.section_image_unavailable'] ?? null);
+        self::assertSame('generator_missing', $spec['defaultConfig']['runtime.section_image_unavailable_reason'] ?? null);
+        self::assertSame(0, $spec['renderContext']['_visual_contract']['required'] ?? null);
+        self::assertSame(1, $spec['renderContext']['_visual_contract']['image_unavailable'] ?? null);
+        self::assertArrayNotHasKey('_required_image_assets', $spec['renderContext']);
+        self::assertArrayNotHasKey('visual.image_url', $spec['defaultConfig']);
+    }
+
+    public function testRequiredImageProviderFailureDowngradesInsteadOfFailingSection(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'prepareInlineImageAssetForComponentSpec');
+        $reflection->setAccessible(true);
+
+        /** @var array<string,mixed> $spec */
+        $spec = $reflection->invoke($service, [
+            'region' => 'content',
+            'defaultConfig' => [
+                'runtime.section_image_required' => '1',
+                'runtime.section_image_slot_id' => 'asset:home:hero:image',
+                'visual.image_url' => '/stale.jpg',
+            ],
+            'renderContext' => [
+                '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:home:hero:image', 'final_url' => '/stale.jpg'],
+                '_required_image_assets' => ['asset:home:hero:image' => '/stale.jpg'],
+                '_inline_image_asset_generator' => static function (): void {
+                    throw new \RuntimeException('VectorEngine API returned error (HTTP: 403): request id abc');
+                },
+            ],
+        ]);
+
+        self::assertSame('0', $spec['defaultConfig']['runtime.section_image_required'] ?? null);
+        self::assertSame('1', $spec['defaultConfig']['runtime.section_image_unavailable'] ?? null);
+        self::assertSame('generation_failed', $spec['defaultConfig']['runtime.section_image_unavailable_reason'] ?? null);
+        self::assertSame('asset:home:hero:image', $spec['renderContext']['_inline_image_unavailable']['slot_id'] ?? null);
+        self::assertArrayNotHasKey('visual.image_url', $spec['defaultConfig']);
+        self::assertArrayNotHasKey('final_url', $spec['renderContext']['_visual_contract']);
+        self::assertArrayNotHasKey('_required_image_assets', $spec['renderContext']);
+    }
+
+    public function testBuildQueueImageFailureSuspendsLaterInlineImageAttemptsForCurrentBuild(): void
+    {
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspended');
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspend_reason');
+        $service = new AiSitePageComponentGenerationService();
+        $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'prepareInlineImageAssetForComponentSpec');
+        $reflection->setAccessible(true);
+
+        $buildTask = [
+            'task_key' => 'page:about_page:content/about-page-origin-story',
+            'page_type' => 'about_page',
+            'section_code' => 'content/about-page-origin-story',
+        ];
+
+        $first = $reflection->invoke($service, [
+            'region' => 'content',
+            'defaultConfig' => [
+                'runtime.section_image_required' => '1',
+                'runtime.section_image_slot_id' => 'asset:first:image',
+            ],
+            'renderContext' => [
+                '_build_plan_task' => $buildTask,
+                '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:first:image'],
+                '_inline_image_asset_generator' => static function (): void {
+                    throw new \RuntimeException('VectorEngine timed out');
+                },
+            ],
+        ]);
+
+        $called = false;
+        $second = $reflection->invoke($service, [
+            'region' => 'content',
+            'defaultConfig' => [
+                'runtime.section_image_required' => '1',
+                'runtime.section_image_slot_id' => 'asset:second:image',
+            ],
+            'renderContext' => [
+                '_build_plan_task' => \array_replace($buildTask, ['task_key' => 'page:blog_list:content/blog-list-resource-hero']),
+                '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:second:image'],
+                '_inline_image_asset_generator' => static function () use (&$called): array {
+                    $called = true;
+                    return ['final_url' => '/pub/media/should-not-run.jpg'];
+                },
+            ],
+        ]);
+
+        self::assertSame('generation_failed', $first['defaultConfig']['runtime.section_image_unavailable_reason'] ?? null);
+        self::assertFalse($called);
+        self::assertSame('deferred_after_failure', $second['defaultConfig']['runtime.section_image_unavailable_reason'] ?? null);
+        self::assertSame('1', $second['defaultConfig']['runtime.section_image_deferred_retry'] ?? null);
+        self::assertSame(1, $second['renderContext']['_visual_contract']['image_deferred'] ?? null);
+
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspended');
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspend_reason');
+    }
+
+    public function testExplicitTestSwitchSkipsInlineImageProviderAndDefersRetry(): void
+    {
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspended');
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspend_reason');
+        $service = new AiSitePageComponentGenerationService();
+        $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'prepareInlineImageAssetForComponentSpec');
+        $reflection->setAccessible(true);
+        $called = false;
+
+        /** @var array<string,mixed> $spec */
+        $spec = $reflection->invoke($service, [
+            'region' => 'content',
+            'defaultConfig' => [
+                'runtime.section_image_required' => '1',
+                'runtime.section_image_slot_id' => 'asset:test:image',
+            ],
+            'renderContext' => [
+                '_scope' => [
+                    'ai_site_build_options' => [
+                        'skip_inline_image_generation' => 1,
+                    ],
+                ],
+                '_build_plan_task' => [
+                    'task_key' => 'page:home_page:content/home-page-hero',
+                ],
+                '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:test:image'],
+                '_inline_image_asset_generator' => static function () use (&$called): array {
+                    $called = true;
+                    return ['final_url' => '/pub/media/should-not-run.jpg'];
+                },
+            ],
+        ]);
+
+        self::assertFalse($called);
+        self::assertSame('0', $spec['defaultConfig']['runtime.section_image_required'] ?? null);
+        self::assertSame('disabled_by_test_switch', $spec['defaultConfig']['runtime.section_image_unavailable_reason'] ?? null);
+        self::assertSame('1', $spec['defaultConfig']['runtime.section_image_deferred_retry'] ?? null);
+        self::assertSame(1, $spec['renderContext']['_visual_contract']['image_deferred'] ?? null);
+        self::assertSame('disabled_by_test_switch', $spec['renderContext']['_visual_contract']['deferred_reason'] ?? null);
+    }
+
+    public function testQueueRequestContextSwitchSkipsInlineImageProviderAndDefersRetry(): void
+    {
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspended');
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspend_reason');
+        RequestContext::set('pagebuilder.ai.inline_image_generation.disabled', true);
+
+        try {
+            $service = new AiSitePageComponentGenerationService();
+            $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'prepareInlineImageAssetForComponentSpec');
+            $reflection->setAccessible(true);
+            $called = false;
+
+            /** @var array<string,mixed> $spec */
+            $spec = $reflection->invoke($service, [
+                'region' => 'content',
+                'defaultConfig' => [
+                    'runtime.section_image_required' => '1',
+                    'runtime.section_image_slot_id' => 'asset:test:queue-context-image',
+                ],
+                'renderContext' => [
+                    '_build_plan_task' => [
+                        'task_key' => 'page:blog_list:content/blog-list-resource-hero',
+                    ],
+                    '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:test:queue-context-image'],
+                    '_inline_image_asset_generator' => static function () use (&$called): array {
+                        $called = true;
+                        return ['final_url' => '/pub/media/should-not-run.jpg'];
+                    },
+                ],
+            ]);
+
+            self::assertFalse($called);
+            self::assertSame('0', $spec['defaultConfig']['runtime.section_image_required'] ?? null);
+            self::assertSame('disabled_by_test_switch', $spec['defaultConfig']['runtime.section_image_unavailable_reason'] ?? null);
+            self::assertSame('1', $spec['defaultConfig']['runtime.section_image_deferred_retry'] ?? null);
+            self::assertSame(1, $spec['renderContext']['_visual_contract']['image_deferred'] ?? null);
+        } finally {
+            RequestContext::remove('pagebuilder.ai.inline_image_generation.disabled');
+            RequestContext::remove('pagebuilder.ai.inline_image_generation.suspended');
+            RequestContext::remove('pagebuilder.ai.inline_image_generation.suspend_reason');
+        }
     }
 
     public function testRequiredImageGeneratorWritesVerifiedAssetFields(): void
     {
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspended');
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.suspend_reason');
         $service = new AiSitePageComponentGenerationService();
         $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'prepareInlineImageAssetForComponentSpec');
         $reflection->setAccessible(true);
@@ -69,6 +250,26 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
         );
 
         self::assertTrue((bool)$retry);
+    }
+
+    public function testUnavailableImagePromptAllowsCssMediaWithoutFakeUrls(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+        $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'buildSectionVisualContractPromptAddon');
+        $reflection->setAccessible(true);
+
+        $prompt = (string)$reflection->invoke($service, [
+            'required' => 0,
+            'slot_id' => 'asset:home:hero:image',
+            'image_unavailable' => 1,
+            'unavailable_reason' => 'generation_failed',
+            'fallback_strategy' => 'css_product_ui_media',
+        ]);
+
+        self::assertStringContainsString('image_required: no', $prompt);
+        self::assertStringContainsString('image_unavailable: yes', $prompt);
+        self::assertStringContainsString('CSS-only or product-UI media surface', $prompt);
+        self::assertStringContainsString('Do not invent image URLs', $prompt);
     }
 
     public function testBlockContractPromptContainsMorphologySlotAcceptanceAndForbiddenRepetition(): void

@@ -31,7 +31,20 @@
     @template(Weline_Frontend::templates/public/header.phtml)
     
     <main class="checkout-failer-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="checkout-failer-main" data-layout="checkout_failer">
-        <div class="checkout-failer-container">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-checkout-failer-content,layout-default-content,content,checkout-failer-content,checkout-status,order-summary,support-panel"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-failer-main__content-root-slot">
+        <w:slot id="checkout-failer-content"
+                name="结算失败内容"
+                accept="layout-checkout-failer-content,checkout-failer,checkout-error,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-failer-container">
             <div class="checkout-failer-content">
                 <div class="failer-icon">
                     <i class="fas fa-times-circle"></i>
@@ -50,15 +63,15 @@
                 
                 <div class="failer-actions">
                     <if condition="meta.retryUrl">
-                        <a href="<?= htmlspecialchars($meta['retryUrl'] ?? '') ?>" class="btn btn-primary">
+                        <a href="<?= htmlspecialchars($meta['retryUrl'] ?? '') ?>" class="w-btn w-btn-primary">
                             <i class="fas fa-redo"></i> <?= __('重试提交') ?>
                         </a>
                     </if>
-                    <a href="<?= htmlspecialchars($meta['backToCart'] ?? '/cart') ?>" class="btn btn-secondary">
+                    <a href="<?= htmlspecialchars($meta['backToCart'] ?? '/cart') ?>" class="w-btn w-btn-secondary">
                         <i class="fas fa-shopping-cart"></i> <?= __('返回购物车') ?>
                     </a>
                     <if condition="meta.contactSupport">
-                        <a href="<?= htmlspecialchars($meta['contactSupport'] ?? '') ?>" class="btn btn-outline">
+                        <a href="<?= htmlspecialchars($meta['contactSupport'] ?? '') ?>" class="w-btn w-btn-outline">
                             <i class="fas fa-headset"></i> <?= __('联系客服') ?>
                         </a>
                     </if>
@@ -73,7 +86,8 @@
                     </ul>
                 </div>
             </div>
-        </div>
+        </w:slot>
+        </w:slot>
     </main>
     
     @template(Weline_Frontend::templates/public/footer.phtml)

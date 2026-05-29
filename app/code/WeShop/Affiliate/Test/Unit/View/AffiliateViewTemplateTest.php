@@ -10,11 +10,12 @@ class AffiliateViewTemplateTest extends TestCase
 {
     public function testAffiliateViewTemplateContainsKeyElements(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/view.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertIsString($content);
         $this->assertStringContainsString('Affiliate Details', $content);
+        $this->assertStringContainsString('ws-affiliate-detail', $content);
         $this->assertStringContainsString('affiliate', $content);
         $this->assertStringContainsString('statusOptions', $content);
         $this->assertStringContainsString('affiliateIndexUrl', $content);
@@ -23,7 +24,7 @@ class AffiliateViewTemplateTest extends TestCase
 
     public function testAffiliateViewTemplateUsesI18n(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/view.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('__(\'Affiliate Details\')', $content);
@@ -38,7 +39,7 @@ class AffiliateViewTemplateTest extends TestCase
 
     public function testAffiliateViewTemplateHasCommissionSummary(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/view.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('total_commission', $content);
@@ -52,31 +53,45 @@ class AffiliateViewTemplateTest extends TestCase
 
     public function testAffiliateViewTemplateHasCopyFunctionality(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/view.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
-        $this->assertStringContainsString('copyReferralCode', $content);
-        $this->assertStringContainsString('copyReferralLink', $content);
+        $this->assertStringContainsString('data-copy-value', $content);
+        $this->assertStringContainsString('data-copy-status', $content);
         $this->assertStringContainsString('referral_link', $content);
+        $this->assertStringContainsString('affiliate-referral-link', $content);
         $this->assertStringContainsString('navigator.clipboard', $content);
+        $this->assertStringContainsString('document.execCommand', $content);
+        $this->assertStringNotContainsString('onclick="copyReferral', $content);
     }
 
     public function testAffiliateViewTemplateHasProgressBar(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/view.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('progress', $content);
+        $this->assertStringContainsString('role="progressbar"', $content);
         $this->assertStringContainsString('Payment Progress', $content);
     }
 
     public function testAffiliateViewTemplateEnablesEditModeForValidAffiliate(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/view.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('$isEditMode = $affiliateId > 0;', $content);
-        $this->assertStringContainsString('name="status" class="form-select" <?= $isEditMode ? \'\' : \'disabled\' ?>', $content);
+        $this->assertStringContainsString('name="status" class="ws-select" <?= $isEditMode ? \'\' : \'disabled\' ?>', $content);
         $this->assertStringContainsString('<?= $isEditMode ? \'required\' : \'readonly\' ?>', $content);
+    }
+
+    public function testAffiliateViewTemplateShowsDecimalCommissionRateWithoutPercentInputSuffix(): void
+    {
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/View/index.phtml';
+        $content = (string) file_get_contents($path);
+
+        $this->assertStringContainsString('$commissionRateInput = number_format($commissionRate, 2, \'.\', \'\');', $content);
+        $this->assertStringContainsString('Use a decimal value. 0.10 equals 10%.', $content);
+        $this->assertStringNotContainsString('input-group-text">%</span>', $content);
     }
 }

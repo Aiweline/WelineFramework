@@ -251,7 +251,7 @@ class PixelEventService
         }
 
         $data = [
-            'url' => $url,
+            'url' => (string)$this->truncateScalar($url, 255),
             'module' => substr((string)($post['module'] ?? ''), 0, 255),
             'name' => substr((string)($post['name'] ?? ''), 0, 255),
             'event' => substr((string)($post['eventName'] ?? $post['event'] ?? 'click'), 0, 255),

@@ -47,6 +47,10 @@ class AiSiteAgentSessionService
         'design_direction_mode',
         'design_direction_snapshot',
         'design_direction_version',
+        'design_tokens',
+        'language_contract',
+        'virtual_page_index',
+        'theme_css_ref',
         'draft_website_id',
         'events',
         'fake_mode',
@@ -110,10 +114,6 @@ class AiSiteAgentSessionService
 
     /** @var list<string> */
     private const PLAN_STAGE_SCOPE_KEYS = [
-        'execution_blueprint',
-        'execution_blueprint_confirmed_at',
-        'execution_blueprint_confirmed_signature',
-        'execution_blueprint_draft',
         'plan_confirmed',
         'plan_confirmed_at',
         'plan_ai_generated',
@@ -131,7 +131,6 @@ class AiSiteAgentSessionService
         'stage1_validation_report',
         'stage1_first_pass',
         'stage1_generation_attempts',
-        'stage1_visual_qa_report',
         'shared_components',
         'shared_prompt_context',
         'theme_context_snapshot',
@@ -141,21 +140,13 @@ class AiSiteAgentSessionService
 
     /** @var list<string> */
     private const VISUAL_EDIT_STAGE_SCOPE_KEYS = [
-        'build_blueprint',
-        '_build_page_progress',
         'build_contracts',
         'build_plan_confirmed',
         'build_plan_confirmed_at',
         'build_plan_v2',
         'build_plan_v2_validation',
-        'build_task_summary',
-        'build_tasks',
         'build_workbench',
         'component_refinements',
-        'execution_blueprint',
-        'execution_blueprint_confirmed_at',
-        'execution_blueprint_confirmed_signature',
-        'execution_blueprint_draft',
         'plan_confirmed',
         'plan_confirmed_at',
         'plan_markdown',
@@ -295,6 +286,57 @@ class AiSiteAgentSessionService
     }
 
     /**
+     * 读取 ScopeManifest：不 hydrate 大 artifact，并执行脱水索引。
+     *
+     * @return array<string, mixed>
+     */
+    public function loadScopeManifest(AiSiteAgentSession $session): array
+    {
+        $scope = $this->loadScopeFragmentFromPgsql($session, '');
+        if ($scope === null) {
+            $scope = $this->decodeSessionScopeData($session);
+        }
+
+        return $this->manifestPolicy()->dehydrateScopePaths($scope);
+    }
+
+    /**
+     * 局部 patch manifest 小字段，写回前强制脱水。
+     *
+     * @param array<string, mixed> $patch
+     * @return array<string, mixed>
+     */
+    public function patchScopeManifest(int $sessionId, int $forAdminUserId, array $patch): array
+    {
+        $session = $this->loadById($sessionId, $forAdminUserId);
+        if ($session === null) {
+            return [];
+        }
+
+        $manifest = $this->loadScopeManifest($session);
+        $merged = $this->mergeScopePatch($manifest, $patch);
+        $merged = $this->manifestPolicy()->dehydrateScopePaths($merged);
+        $this->replaceScope($sessionId, $forAdminUserId, $merged);
+
+        return $merged;
+    }
+
+    private function allowFullScopeHydrate(): bool
+    {
+        $raw = \getenv('ai_site.scope.allow_full_hydrate');
+        if ($raw === false || $raw === '') {
+            return false;
+        }
+
+        return \filter_var($raw, \FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function manifestPolicy(): AiSiteScopeManifestPolicy
+    {
+        return ObjectManager::getInstance(AiSiteScopeManifestPolicy::class);
+    }
+
+    /**
      * @param list<string> $artifactKeys
      * @return array<string, mixed>
      */
@@ -321,6 +363,10 @@ class AiSiteAgentSessionService
      */
     public function loadScopeForStage(AiSiteAgentSession $session, string $stageCode, ?array $artifactKeys = null): array
     {
+        if (!$this->allowFullScopeHydrate() && $artifactKeys === null) {
+            return $this->loadScopeManifest($session);
+        }
+
         $scope = $this->loadScopeFragmentFromPgsql($session, $stageCode);
         if ($scope !== null) {
             $scope = $this->hydrateLegacyArtifactsForStage($session, $scope, $stageCode);
@@ -428,8 +474,9 @@ class AiSiteAgentSessionService
      * 整体替换 scope（仍须为对象 JSON 对应的关联数组）
      *
      * @param array<string, mixed> $scope
+     * @param list<string> $touchedArtifactKeys
      */
-    public function replaceScope(int $sessionId, int $forAdminUserId, array $scope): bool
+    public function replaceScope(int $sessionId, int $forAdminUserId, array $scope, array $touchedArtifactKeys = []): bool
     {
         $session = $this->loadById($sessionId, $forAdminUserId);
         if ($session === null) {
@@ -440,7 +487,8 @@ class AiSiteAgentSessionService
             $td = \trim((string)$scope['target_domain']);
             $scope['target_domain'] = $td === '' ? '' : \strtolower($td);
         }
-        $storage = $this->artifactStorage()->prepareScopeForStorage((int)$session->getId(), $scope);
+        $scope = $this->manifestPolicy()->dehydrateScopePaths($scope);
+        $storage = $this->artifactStorage()->prepareScopeForStorage((int)$session->getId(), $scope, $touchedArtifactKeys);
         $scopeForStorage = $storage['scope'];
         $artifacts = $storage['artifacts'];
         unset($storage, $scope);
@@ -1067,7 +1115,7 @@ SQL;
             $payload['task_runtime_context'] = $this->summarizeTaskRuntimeContextForEvent($payload['task_runtime_context']);
         }
 
-        return $this->dedupeTaskSummaryPayloadForEvent($payload);
+        return $payload;
     }
 
     /**
@@ -1098,25 +1146,6 @@ SQL;
         $summary['runtime_context_slimmed'] = true;
 
         return $summary;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @return array<string, mixed>
-     */
-    private function dedupeTaskSummaryPayloadForEvent(array $payload): array
-    {
-        if (!\is_array($payload['task_summary'] ?? null)) {
-            if (\is_array($payload['task_progress'] ?? null)) {
-                $payload['task_summary'] = $payload['task_progress'];
-            } elseif (\is_array($payload['build_task_summary'] ?? null)) {
-                $payload['task_summary'] = $payload['build_task_summary'];
-            }
-        }
-
-        unset($payload['task_progress'], $payload['build_task_summary']);
-
-        return $payload;
     }
 
     /**

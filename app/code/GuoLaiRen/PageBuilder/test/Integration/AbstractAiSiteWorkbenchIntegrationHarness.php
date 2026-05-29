@@ -321,6 +321,27 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
         );
         $websiteProfile = $profileService->generate($scope, false);
         $artifacts = $executionBlueprintService->buildPlanArtifacts($scope, \is_array($websiteProfile) ? $websiteProfile : []);
+        $planOperation = [
+            'operation' => 'plan',
+            'status' => 'done',
+            'message' => 'Stage-one plan prepared by integration harness.',
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+        $planQueueId = (int)($startPlanPayload['queue_id'] ?? 0);
+        if ($planQueueId > 0) {
+            try {
+                w_query('queue', 'update', [
+                    'queue_id' => $planQueueId,
+                    'patch' => [
+                        'status' => 'done',
+                        'finished' => 1,
+                        'process' => 'Stage-one plan prepared by integration harness.',
+                    ],
+                ]);
+                $planOperation['queue_id'] = $planQueueId;
+            } catch (\Throwable) {
+            }
+        }
         $this->sessionService->mergeScope($session->getId(), 1, \array_replace(
             \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [],
             [
@@ -344,6 +365,8 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
                     'message' => '阶段一方案已准备完成',
                     'updated_at' => \date('Y-m-d H:i:s'),
                 ],
+                'active_operation' => $planOperation,
+                'active_operations' => ['plan' => $planOperation],
             ]
         ));
 
@@ -354,6 +377,7 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
             [],
             [
                 'public_id' => $publicId,
+                'start_build' => '0',
             ]
         );
         self::assertTrue((bool)($confirmPlanPayload['success'] ?? false), \json_encode($confirmPlanPayload, \JSON_UNESCAPED_UNICODE));

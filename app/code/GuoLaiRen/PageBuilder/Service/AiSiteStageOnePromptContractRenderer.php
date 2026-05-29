@@ -105,6 +105,7 @@ final class AiSiteStageOnePromptContractRenderer
             '- Page media placement is flexible: do not force blocks[0] to be the generated-image block when the page narrative works better with text, stats, FAQ, reviews, or support content first.',
             '- Preferred generated-image target examples by page type: ' . $this->json($this->generatedImageTargetExamples()) . '. Prefer these required/opening/support/article blocks when present, but keep narrative fit and still return all required blocks.',
             '- Real media contract: when a block plans an image, screenshot, phone screen, mockup, scene, background image, or media asset, describe the actual generated asset and integration. Never use low-fidelity filler-media wording or localized filler-image terms in design_tags, visual_signature, image_intent, field_plan, or execution_script.',
+            '- Trust/logo-grid wording rule: never describe logos, marks, screenshots, panels, or media as stand-ins, dummy visuals, fake assets, temporary slots, blank boxes, or filler. For trust grids, write partner marks, proof badges, customer marks, certification seals, or logo-style marks as final CSS/SVG motifs.',
             '- Non-policy page visual asset rule: every non-policy page should plan at least one real generated image slot, normally on the first/opening/support block. Contact/support pages should use a real generated support-desk, app-help, product-interface, or customer-service scene on the first support block when no other stronger visual exists.',
             '- CSS-only image intent rule: if needs_image is false, image_role must be css_motif or none, placement must be none/background_layer/inline_visual, css_motif must be a non-empty concrete CSS visual direction, visual_atmosphere/image_treatment must be non-empty, and visual_signature.media_strategy must include the exact ASCII marker "CSS-only/no generated image" before any localized explanation. Do not leave css_motif empty and do not list photo/image/screenshot/mockup/scene media_assets in CSS-only blocks.',
             '- CSS-only media assets rule: when image_intent.needs_image=false, execution_script.media_assets must be an empty array []. Do not put avatar/photo/image/screenshot/mockup/scene asset names in CSS-only review, proof, FAQ, support, or CTA blocks.',
@@ -282,25 +283,25 @@ final class AiSiteStageOnePromptContractRenderer
                 'image_intent' => [
                     'needs_image' => true,
                     'image_role' => 'hero_image',
-                    'image_subject' => 'phone APK install screen with playing-card table behind it',
+                    'image_subject' => 'neon card-game lobby scene with glowing poker cards, mahjong tiles, chips, and mobile table UI',
                     'placement' => 'media_panel',
-                    'visual_atmosphere' => 'premium trusted game-lobby mood with warm gold lighting',
-                    'image_treatment' => 'rounded phone mockup with shallow shadow and gold overlay',
+                    'visual_atmosphere' => 'premium neon card-room energy with magenta cyan glow and readable dark overlay',
+                    'image_treatment' => 'wide cinematic banner crop with safe focal area, felt texture, and subtle gold rim light',
                     'reuse_policy' => 'reuse_when_intent_matches',
                     'css_motif' => '',
                 ],
                 'field_plan' => [
-                    ['field' => 'headline', 'sample' => 'Play Today', 'implementation_note' => 'Render as the main H1.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Fast APK download with trusted gameplay.', 'implementation_note' => 'Render below the headline.'],
-                    ['field' => 'cta_label', 'sample' => 'Download APK', 'implementation_note' => 'Use for the primary button.'],
+                    ['field' => 'headline', 'sample' => 'Enter the neon card room', 'implementation_note' => 'Render as the main H1.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Fast table entry, trusted play cues, and clear game highlights for mobile players.', 'implementation_note' => 'Render below the headline.'],
+                    ['field' => 'cta_label', 'sample' => 'Start playing', 'implementation_note' => 'Use for the primary button.'],
                 ],
                 'execution_script' => [
-                    'core_copy' => 'Download the APK and start playing trusted card games today.',
-                    'feature_points' => ['Fast download', 'Secure setup'],
-                    'typography' => 'Bold display headline with readable body text',
-                    'style_tone' => 'Confident and conversion-focused',
-                    'background_direction' => 'Dark felt gradient with gold highlights',
-                    'media_assets' => ['hero-phone-apk-install.png'],
+                    'core_copy' => 'Move players from the first neon impression into a trusted card-game table entry.',
+                    'feature_points' => ['Quick table entry', 'Trusted play cues'],
+                    'typography' => 'Bold gaming headline with readable body text',
+                    'style_tone' => 'Energetic, premium, and responsible',
+                    'background_direction' => 'Dark card-table surface with neon magenta cyan highlights and gold edges',
+                    'media_assets' => ['hero-neon-card-room.png'],
                 ],
             ],
             'css_only_block' => [
@@ -451,19 +452,19 @@ final class AiSiteStageOnePromptContractRenderer
     {
         return [
             'cta_block' => [
-                ['field' => 'headline', 'sample' => 'Start Playing Today', 'implementation_note' => 'Main CTA heading.'],
-                ['field' => 'supporting_copy', 'sample' => 'Download the APK and follow the quick setup steps.', 'implementation_note' => 'Body sentence before button.'],
-                ['field' => 'cta_label', 'sample' => 'Download APK', 'implementation_note' => 'Primary action button.'],
+                ['field' => 'headline', 'sample' => 'Join the next neon table', 'implementation_note' => 'Main CTA heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'Pick a room, review the play cues, and enter with the key support notes still visible.', 'implementation_note' => 'Body sentence before button.'],
+                ['field' => 'cta_label', 'sample' => 'Start playing', 'implementation_note' => 'Primary action button.'],
             ],
             'proof_block' => [
-                ['field' => 'headline', 'sample' => 'Trusted by Players', 'implementation_note' => 'Proof section heading.'],
-                ['field' => 'supporting_copy', 'sample' => 'Verified reviews highlight fast setup and secure play.', 'implementation_note' => 'Trust body copy.'],
+                ['field' => 'headline', 'sample' => 'Trusted by active players', 'implementation_note' => 'Proof section heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'Player reviews highlight quick entry, clear rules, and responsive support.', 'implementation_note' => 'Trust body copy.'],
                 ['field' => 'proof_detail', 'sample' => '4.8 average rating', 'implementation_note' => 'Badge or stat chip.'],
             ],
             'media_or_feature_block' => [
-                ['field' => 'headline', 'sample' => 'See the Game Flow', 'implementation_note' => 'Feature heading.'],
-                ['field' => 'supporting_copy', 'sample' => 'A guided screen shows setup, play, and rewards.', 'implementation_note' => 'Feature body copy.'],
-                ['field' => 'image_brief', 'sample' => 'Phone screen with card table behind it', 'implementation_note' => 'Asset brief if needs_image=true.'],
+                ['field' => 'headline', 'sample' => 'See the table flow', 'implementation_note' => 'Feature heading.'],
+                ['field' => 'supporting_copy', 'sample' => 'A focused game-room view shows table entry, match highlights, and reward cues.', 'implementation_note' => 'Feature body copy.'],
+                ['field' => 'image_brief', 'sample' => 'Neon card table with mobile game UI and player chips', 'implementation_note' => 'Asset brief if needs_image=true.'],
             ],
             'support_or_form_block' => [
                 ['field' => 'headline', 'sample' => 'Need Help?', 'implementation_note' => 'Support heading.'],
@@ -472,36 +473,36 @@ final class AiSiteStageOnePromptContractRenderer
             ],
             'policy_block' => [
                 ['field' => 'headline', 'sample' => 'Privacy Overview', 'implementation_note' => 'Policy heading.'],
-                ['field' => 'supporting_copy', 'sample' => 'This page explains how account and app data is handled.', 'implementation_note' => 'Neutral policy body.'],
+                ['field' => 'supporting_copy', 'sample' => 'This page explains how account, play, and support data is handled.', 'implementation_note' => 'Neutral policy body.'],
                 ['field' => 'policy_summary', 'sample' => 'Data use, rights, and contact options', 'implementation_note' => 'Policy summary chip.'],
             ],
             'multi_item_blocks_still_use_three_rows' => [
-                'player_reviews' => [
-                    ['field' => 'headline', 'sample' => 'Players Trust the App', 'implementation_note' => 'Review section heading.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Ravi likes quick setup; Anika values secure play; Dev trusts the lobby.', 'implementation_note' => 'Intro plus three review snippets.'],
+                'customer_reviews' => [
+                    ['field' => 'headline', 'sample' => 'Players trust the neon room', 'implementation_note' => 'Review section heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'New players find rooms quickly; regulars value clear rules; support answers before friction grows.', 'implementation_note' => 'Intro plus three review snippets.'],
                     ['field' => 'proof_detail', 'sample' => '4.8 average rating from active players', 'implementation_note' => 'Single rating badge, not extra rows.'],
                 ],
                 'support_faq' => [
                     ['field' => 'headline', 'sample' => 'Support Questions', 'implementation_note' => 'FAQ heading.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Get help with install steps, account access, and game basics.', 'implementation_note' => 'One FAQ intro sentence.'],
-                    ['field' => 'context_detail', 'sample' => 'Install help | Account help | Game rules', 'implementation_note' => 'Multiple FAQ topics inside one row.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Get help with room entry, account access, rules, and responsible-play basics.', 'implementation_note' => 'One FAQ intro sentence.'],
+                    ['field' => 'context_detail', 'sample' => 'Room help | Account help | Play rules', 'implementation_note' => 'Multiple FAQ topics inside one row.'],
                 ],
             ],
             'common_block_key_examples' => [
-                'hero_download' => [
-                    ['field' => 'headline', 'sample' => 'Download in Three Clear Steps', 'implementation_note' => 'Heading for download guidance.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Follow the install prompts and open the game lobby safely.', 'implementation_note' => 'Body copy before action.'],
-                    ['field' => 'cta_label', 'sample' => 'Download APK', 'implementation_note' => 'Primary download action.'],
+                'hero_demo' => [
+                    ['field' => 'headline', 'sample' => 'Enter a table in three clear steps', 'implementation_note' => 'Heading for demo guidance.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Choose the room, review the table notes, and start with the key play cues visible.', 'implementation_note' => 'Body copy before action.'],
+                    ['field' => 'cta_label', 'sample' => 'Start playing', 'implementation_note' => 'Primary action.'],
                 ],
-                'player_reviews' => [
-                    ['field' => 'headline', 'sample' => 'Players Trust the App', 'implementation_note' => 'Review section heading.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Short reviews highlight smooth setup and secure play.', 'implementation_note' => 'Review intro sentence.'],
+                'customer_reviews' => [
+                    ['field' => 'headline', 'sample' => 'Players trust the table flow', 'implementation_note' => 'Review section heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Short reviews highlight quick room entry, clear rules, and responsive support.', 'implementation_note' => 'Review intro sentence.'],
                     ['field' => 'proof_detail', 'sample' => '4.8 average rating', 'implementation_note' => 'Rating badge detail.'],
                 ],
                 'article_collection' => [
-                    ['field' => 'headline', 'sample' => 'Latest Strategy Guides', 'implementation_note' => 'Article list heading.'],
-                    ['field' => 'supporting_copy', 'sample' => 'Browse practical tips for safer and smarter play.', 'implementation_note' => 'Collection intro.'],
-                    ['field' => 'article_teaser', 'sample' => 'Beginner Teen Patti table guide', 'implementation_note' => 'First article teaser.'],
+                    ['field' => 'headline', 'sample' => 'Latest card-room guides', 'implementation_note' => 'Article list heading.'],
+                    ['field' => 'supporting_copy', 'sample' => 'Browse practical tips for table selection, rule reading, and responsible play.', 'implementation_note' => 'Collection intro.'],
+                    ['field' => 'article_teaser', 'sample' => 'Beginner table checklist for neon card rooms', 'implementation_note' => 'First article teaser.'],
                 ],
             ],
         ];

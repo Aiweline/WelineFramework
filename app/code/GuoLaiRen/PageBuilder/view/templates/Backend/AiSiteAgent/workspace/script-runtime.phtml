@@ -429,7 +429,7 @@
                 active_operation: terminalActive,
                 message: message
             };
-            rememberOperationFailurePayload(op, failurePayload, message);
+            failurePayload = rememberOperationFailurePayload(op, failurePayload, message);
             markBuildOperationTerminalForRuntimeUi(op, 'error', message);
             resetOperationUiOnFailure(op);
             if (typeof enableNavigationAfterOperation === 'function') {
@@ -610,19 +610,111 @@
 
     relayoutExpertWorkspaceWithRightLog();
 
+    function isRuntimePlainObject(value) {
+        return !!(value && typeof value === 'object' && !Array.isArray(value));
+    }
+
+    function copyRuntimeSummaryFields(source, fields, textLimit) {
+        var safe = {};
+        if (!isRuntimePlainObject(source)) {
+            return safe;
+        }
+        fields.forEach(function (field) {
+            if (!Object.prototype.hasOwnProperty.call(source, field)) {
+                return;
+            }
+            var value = source[field];
+            if (value === null || value === undefined) {
+                return;
+            }
+            if (typeof value === 'string') {
+                safe[field] = compactQueueFailureText(value, textLimit || 240);
+                return;
+            }
+            if (typeof value === 'number' || typeof value === 'boolean') {
+                safe[field] = value;
+            }
+        });
+        return safe;
+    }
+
+    function compactOperationFailurePayload(operation, payload, fallbackMessage) {
+        var source = isRuntimePlainObject(payload) ? payload : {};
+        var state = isRuntimePlainObject(source.state) ? source.state : {};
+        var active = isRuntimePlainObject(source.active_operation)
+            ? source.active_operation
+            : (isRuntimePlainObject(state.active_operation) ? state.active_operation : {});
+        var op = String((operation || source.operation || active.operation || '')).trim().toLowerCase();
+        var queueInfo = resolveQueueInfoForOperation(source, op);
+        var safe = {
+            operation: op || String(source.operation || '').trim()
+        };
+        var message = String(
+            source.message
+            || active.message
+            || (queueInfo && (queueInfo.terminal_summary || queueInfo.message || queueInfo.process))
+            || fallbackMessage
+            || ''
+        ).trim();
+        if (message) {
+            safe.message = compactQueueFailureText(message, 512);
+        }
+        if (isRuntimePlainObject(active)) {
+            safe.active_operation = copyRuntimeSummaryFields(active, [
+                'operation',
+                'status',
+                'terminal_status',
+                'message',
+                'queue_id',
+                'execution_token',
+                'page_type',
+                'block_id',
+                'retry_allowed'
+            ], 512);
+        }
+        if (isRuntimePlainObject(queueInfo)) {
+            safe.queue_info = copyRuntimeSummaryFields(queueInfo, [
+                'queue_id',
+                'status',
+                'queue_status',
+                'process',
+                'progress_percent',
+                'terminal_summary',
+                'message'
+            ], 512);
+            if (isRuntimePlainObject(queueInfo.token_usage)) {
+                safe.queue_info.token_usage = copyRuntimeSummaryFields(queueInfo.token_usage, [
+                    'prompt_tokens',
+                    'completion_tokens',
+                    'total_tokens',
+                    'cached_tokens'
+                ], 64);
+            }
+            if (isRuntimePlainObject(queueInfo.snapshot)) {
+                safe.queue_info.snapshot = copyRuntimeSummaryFields(queueInfo.snapshot, [
+                    'queue_id',
+                    'status',
+                    'job_status',
+                    'pid',
+                    'finished'
+                ], 120);
+            }
+        }
+        return safe;
+    }
+
     function rememberOperationFailurePayload(operation, payload, fallbackMessage) {
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
         if (!op) {
-            return;
+            return {};
         }
-        var nextPayload = payload && typeof payload === 'object'
-            ? Object.assign({}, payload)
-            : {};
+        var nextPayload = compactOperationFailurePayload(op, payload, fallbackMessage);
         nextPayload.operation = String(nextPayload.operation || op);
         if (!nextPayload.message && fallbackMessage) {
-            nextPayload.message = String(fallbackMessage);
+            nextPayload.message = compactQueueFailureText(fallbackMessage, 512);
         }
         lastFailurePayloadByOperation[op] = nextPayload;
+        return nextPayload;
     }
 
     function resolveQueueInfoForOperation(payload, operation) {
@@ -640,16 +732,7 @@
     }
 
     function readQueueResultTail(queueInfo) {
-        var resultLog = String((queueInfo && queueInfo.result_log) || '').trim();
-        if (!resultLog) {
-            return '';
-        }
-        var lines = resultLog.split(/\r\n|\n|\r/).map(function (line) {
-            return String(line || '').trim();
-        }).filter(function (line) {
-            return line !== '';
-        });
-        return lines.length ? lines[lines.length - 1] : '';
+        return String((queueInfo && (queueInfo.terminal_summary || queueInfo.message || queueInfo.process)) || '').trim();
     }
 
     function resolveQueueFailureMessage(payload, operation) {
@@ -689,7 +772,7 @@
             /Required image slot is not referenced by generated block:[^.。]*(?:[.。]|$)/i,
             /replacement\.field_schema must be an object/i,
             /AI patch response is not valid JSON/i,
-            /Build task failed:[^.。]*(?:[.。]|$)/i
+            /Build plan block failed:[^.。]*(?:[.。]|$)/i
         ];
         for (var i = 0; i < patterns.length; i++) {
             var matched = text.match(patterns[i]);
@@ -704,7 +787,9 @@
         var lines = [];
         var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
         var queueInfo = resolveQueueInfoForOperation(payload, operation);
-        var activeOperation = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
+        var activeOperation = state.active_operation && typeof state.active_operation === 'object'
+            ? state.active_operation
+            : (payload && payload.active_operation && typeof payload.active_operation === 'object' ? payload.active_operation : {});
         var queueSnapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
         var operationName = String(operation || (payload && payload.operation) || activeOperation.operation || '').trim();
         if (operationName) {
@@ -724,7 +809,7 @@
             lines.push('队列状态：' + queueStatus);
         }
         var opMessage = resolveQueueFailureMessage(payload, operation) || String(activeOperation.message || payload.message || '').trim();
-        var resultLog = String((queueInfo && queueInfo.result_log) || '').trim();
+        var resultLog = String((queueInfo && queueInfo.terminal_summary) || '').trim();
         var summary = extractQueueFailureSummary(opMessage) || extractQueueFailureSummary(resultLog);
         if (summary) {
             lines.push('失败原因：' + summary);
@@ -1136,10 +1221,8 @@
                 break;
             case 'error':
             case 'operation_failed':
-            // build_task_failed 是构建阶段单任务硬失败的 workspace event_type。补进 error 镜像，
-            // 保证 task 失败也能通过 workspace log 流 mirror 到 UI（与直接 SSE task_failed 互为冗余信号）。
-            case 'build_task_failed':
-            case 'task_failed':
+            // Build-plan block failures are mirrored into the operation error channel.
+            case 'build_plan_block_failed':
                 mirroredKind = 'error';
                 break;
             default:
@@ -1290,6 +1373,10 @@
             return;
         }
         lastOperationTerminalFingerprint = fingerprint;
+        if (kind === 'chunk' && typeof workspaceTerminal.writeChunk === 'function') {
+            workspaceTerminal.writeChunk(message);
+            return;
+        }
         workspaceTerminal.log(message, level || 'info');
     }
 
@@ -1734,8 +1821,24 @@
         };
     }
 
+    function disposeOperationLiveStream(operation, summary) {
+        var normalized = String(operation || '').toLowerCase().trim();
+        var finalSummary = String(summary || '');
+        if (normalized === 'plan') {
+            if (window.__pbPhase1TaskProgress && typeof window.__pbPhase1TaskProgress.disposeLiveStream === 'function') {
+                window.__pbPhase1TaskProgress.disposeLiveStream(finalSummary);
+            }
+            return;
+        }
+        if (window.__pbBuildQueueProgress && typeof window.__pbBuildQueueProgress.disposeLiveStream === 'function') {
+            window.__pbBuildQueueProgress.disposeLiveStream(normalized || 'build', finalSummary);
+        }
+    }
+
     function closeOperationSource(source) {
         stopObserverSyncTerminalPulse();
+        var target = source || runningSource;
+        var targetOperation = (!source || source === runningSource) ? String(runningOperationType || '') : '';
         if (!source || source === runningSource) {
             stopDeferredQueueStatePoll();
         }
@@ -1744,7 +1847,6 @@
             window.clearTimeout(runningSourceStartTimer);
             runningSourceStartTimer = null;
         }
-        var target = source || runningSource;
         if (!target) {
             return;
         }
@@ -1753,8 +1855,11 @@
         } catch (error) {
             // no-op
         }
+        disposeOperationLiveStream(targetOperation, '');
         if (!source || target === runningSource) {
             runningSource = null;
+            runningOperationType = '';
+            runningOperationKey = '';
         }
     }
 
@@ -2055,13 +2160,8 @@
         if (!source || typeof source !== 'object') {
             return null;
         }
-        // 主字段优先：task_summary（normalizer 权威）。
-        // 过渡 fallback：build_task_summary（normalizer 镜像别名）。
-        if (source.task_summary && typeof source.task_summary === 'object') {
-            return source.task_summary;
-        }
-        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
-            return source.build_task_summary;
+        if (source.build_plan_execution_summary && typeof source.build_plan_execution_summary === 'object') {
+            return source.build_plan_execution_summary;
         }
         if (source.state && typeof source.state === 'object') {
             return readBuildTaskSummaryCandidate(source.state);
@@ -2159,17 +2259,8 @@
         if (!shouldConsumeBuildTaskProgressSummary(source)) {
             return null;
         }
-        // 主字段：task_summary（后端 AiSiteSsePayloadNormalizer 强制权威）。
-        // 过渡期 fallback：task_progress / build_task_summary 由 normalizer 自动镜像，
-        // 仅作为旧入口未升级的兜底；契约稳定后可在 1-2 个 release 内删除 fallback。
-        if (source.task_summary && typeof source.task_summary === 'object') {
-            return source.task_summary;
-        }
-        if (source.task_progress && typeof source.task_progress === 'object') {
-            return source.task_progress;
-        }
-        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
-            return source.build_task_summary;
+        if (source.build_plan_execution_summary && typeof source.build_plan_execution_summary === 'object') {
+            return source.build_plan_execution_summary;
         }
         if (source.state && typeof source.state === 'object') {
             return extractTaskProgressSummary(source.state);
@@ -2198,7 +2289,7 @@
             return true;
         }
         var buildSummary = readBuildTaskSummaryCandidate(source);
-        if (readTaskProgressSummaryTotal(buildSummary) > 0 && (source.has_pending_build_tasks)) {
+        if (readTaskProgressSummaryTotal(buildSummary) > 0 && (source.has_pending_build_plan_blocks)) {
             return true;
         }
         return false;
@@ -2279,7 +2370,7 @@
         var terminalQueueStatuses = { done: 1, complete: 1, completed: 1, stop: 1, stopped: 1, cancelled: 1, canceled: 1, error: 1 };
         var st = String(status || '').trim().toLowerCase();
         var blockedByFailure = hasPublishBlockingAiFailureStateForRuntime(source);
-        // 队列已标记完成（或失败）但 task_progress / active_operation 未归一时，避免因 shouldConsume=false 永远不清理生成中骨架态
+        // 队列已标记完成（或失败）但 build_plan_progress / active_operation 未归一时，避免因 shouldConsume=false 永远不清理生成中骨架态
         if ((isBuildSignal || operation === 'build') && terminalQueueStatuses[st]) {
             active = false;
         }
@@ -2346,7 +2437,7 @@
         if (isBuildTaskProgressOperation(activeOp)) {
             return true;
         }
-        if (state.has_pending_build_tasks) {
+        if (state.has_pending_build_plan_blocks) {
             return true;
         }
         if ((state.build_plan_confirmed || state.has_build_plan_v2 || state.plan_confirmed) && readTaskProgressSummaryTotal(readBuildTaskSummaryCandidate(state)) > 0) {
@@ -2376,7 +2467,7 @@
         var generatingChanged = updateTaskProgressGeneratingState(workspaceState);
         var shouldConsumeBuildSummary = shouldConsumeBuildTaskProgressSummary(workspaceState);
         var summary = extractTaskProgressSummary(workspaceState);
-        if (!summary && shouldConsumeBuildSummary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'task_progress') {
+        if (!summary && shouldConsumeBuildSummary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'build_plan_progress') {
             summary = mergeSingleTaskProgressPayload(cloneTaskProgressSummary(window.__pbTaskSummary), workspaceState);
         }
         summary = normalizeTaskProgressSummary(summary);
@@ -2838,7 +2929,7 @@
     updateStageStatusSummary({
         active_operation: activeOperation,
         plan_confirmed: getWorkspaceFlagState('getPlanConfirmedState', false),
-        has_execution_blueprint: getWorkspaceFlagState('getHasExecutionBlueprintState', false),
+        has_build_plan_v2: getWorkspaceFlagState('hasBuildPlanV2FlowEvidence', false),
         workspace_status: ''
     });
     startActiveQueueObservationOnLoad();
@@ -3122,16 +3213,16 @@
                 if (!payload || typeof payload !== 'object') {
                     return;
                 }
-                // 任务进度改由 task_progress 专门事件处理，避免 progress/task_progress 双事件重复渲染。
-                if (String(payload.progress_kind || '') === 'task_progress') {
+                // 方案块进度改由 build_plan_progress 专门事件处理，避免双事件重复渲染。
+                if (String(payload.progress_kind || '') === 'build_plan_progress') {
                     return;
                 }
                 handleOperationProgressPayload(payload, 'progress');
             });
 
-            source.addEventListener('task_progress', function (event) {
+            source.addEventListener('build_plan_progress', function (event) {
                 var payload = parsePayload(event);
-                handleOperationProgressPayload(payload, 'task_progress');
+                handleOperationProgressPayload(payload, 'build_plan_progress');
             });
 
         source.addEventListener('chunk', function (event) {
@@ -3305,7 +3396,7 @@
             handleAssetGenerationStreamEvent(event, 'asset_generation_skipped');
         });
 
-        source.addEventListener('task_completed', function (event) {
+        source.addEventListener('build_plan_block_completed', function (event) {
             var payload = parsePayload(event);
             if (!payload || typeof payload !== 'object') {
                 return;
@@ -3315,13 +3406,13 @@
                 updateTaskSummaryFromState(payload.state);
             }
             var taskMessage = String(payload.message || <?= \json_encode((string)__('任务已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-            logOperationToWorkspaceTerminal('task_completed', payload, 'done', taskMessage);
+            logOperationToWorkspaceTerminal('build_plan_block_completed', payload, 'done', taskMessage);
         });
 
-        // task_failed：单个构建任务失败的硬信号。后端直接 sse->sendEvent('task_failed', ...) 发出，
-        // 历史前端从未监听 → 失败信号丢失，UI 只能等 task_summary 间接刷新（延迟 + 易丢）。
-        // 这里 hydrate state + 刷新 task_summary + 把失败行写入 workspace terminal，与 task_completed 对称。
-        source.addEventListener('task_failed', function (event) {
+        // build_plan_block_failed：单个方案块构建失败的硬信号。
+        // 失败信号直接进入 build_plan_progress，避免 UI 只能等汇总间接刷新。
+        // 这里 hydrate state + 刷新构建进度 + 把失败行写入 workspace terminal。
+        source.addEventListener('build_plan_block_failed', function (event) {
             var payload = parsePayload(event);
             if (!payload || typeof payload !== 'object') {
                 return;
@@ -3332,7 +3423,7 @@
             }
             updateTaskSummaryFromState(payload);
             var failureReason = String(payload.failure_reason || payload.error_message || payload.message || <?= \json_encode((string)__('任务执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-            logOperationToWorkspaceTerminal('task_failed', payload, 'error', failureReason);
+            logOperationToWorkspaceTerminal('build_plan_block_failed', payload, 'error', failureReason);
         });
 
         source.addEventListener('block_partial_patch_applied', function (event) {

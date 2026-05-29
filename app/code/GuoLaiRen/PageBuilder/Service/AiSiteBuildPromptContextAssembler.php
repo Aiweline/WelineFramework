@@ -38,13 +38,15 @@ final class AiSiteBuildPromptContextAssembler
         ]);
         $languageContract = \is_array($runtimeContext['language_contract'] ?? null)
             ? $runtimeContext['language_contract']
-            : $this->buildLanguageContract($contentLocale);
+            : $this->buildLanguageContract($contentLocale, $contract);
+        $designTokens = $this->resolveDesignTokens($contract, $runtimeContext);
 
         $assembled = [
             'contract_id' => (string)($contract['contract_meta']['id'] ?? ''),
             'task' => $task,
             'content_locale' => $contentLocale,
             'language_contract' => $languageContract,
+            'design_tokens' => $designTokens,
             'page' => $page,
             'page_goal' => (string)($pageIdentity['page_goal'] ?? ''),
             'page_flow_role' => $blockFlowRole,
@@ -82,8 +84,6 @@ final class AiSiteBuildPromptContextAssembler
             'plan_json' => true,
             'plan_structured' => true,
             'plan_workbench' => true,
-            'execution_blueprint' => true,
-            'execution_blueprint_draft' => true,
             'presentation_projection' => true,
             'ui_projection' => true,
         ];
@@ -204,15 +204,44 @@ final class AiSiteBuildPromptContextAssembler
     }
 
     /**
+     * @param array<string, mixed> $contract
      * @return array<string, mixed>
      */
-    private function buildLanguageContract(string $locale): array
+    private function buildLanguageContract(string $locale, array $contract = []): array
     {
-        return [
+        $base = [
             'source_of_truth_locale' => $locale,
             'visible_copy_rule' => 'All visitor-facing copy must use source_of_truth_locale.',
             'plan_text_rule' => 'BuildPlan copy is intent only and must be rewritten before rendering.',
         ];
+
+        $voiceResolver = new AiSiteLanguageVoiceResolver();
+        $extension = $voiceResolver->buildLanguageContractExtension($contract, $locale);
+
+        return \array_replace($base, $extension);
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @param array<string, mixed> $runtimeContext
+     * @return array<string, mixed>
+     */
+    private function resolveDesignTokens(array $contract, array $runtimeContext): array
+    {
+        if (\is_array($runtimeContext['design_tokens'] ?? null) && $runtimeContext['design_tokens'] !== []) {
+            return $runtimeContext['design_tokens'];
+        }
+
+        $resolver = new AiSiteDesignTokenResolver();
+        $blueprint = \is_array($contract['build_plan_v2'] ?? null)
+            ? $contract['build_plan_v2']
+            : $contract;
+        if (\is_array($contract['plan_json'] ?? null) && !isset($blueprint['theme_design'])) {
+            $blueprint['plan_json'] = $contract['plan_json'];
+            $blueprint['theme_design'] = $contract['plan_json']['theme_design'] ?? [];
+        }
+
+        return $blueprint !== [] ? $resolver->resolveFromBlueprint($blueprint) : [];
     }
 
     /**

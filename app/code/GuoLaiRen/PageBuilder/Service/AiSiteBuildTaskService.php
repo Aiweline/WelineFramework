@@ -14,9 +14,6 @@ use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\PermissionMatrix;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\QaGateHelper;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceContractHelper;
-use GuoLaiRen\PageBuilder\Service\AI\Contract\SourceTruthCoverageLinter;
-use GuoLaiRen\PageBuilder\Service\AI\Contract\VisualAssetUsageValidator;
-use GuoLaiRen\PageBuilder\Service\AI\Contract\VisualContractQaLinter;
 use GuoLaiRen\PageBuilder\Service\AI\QA\RenderDataQualityLinter;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -43,8 +40,6 @@ class AiSiteBuildTaskService
         'Required by block task schema',
         'Built from plan',
         'generated from plan',
-        'Present key terms',
-        'provide download CTA',
         'source intent',
         'customer brief',
         'planning_reason',
@@ -53,22 +48,7 @@ class AiSiteBuildTaskService
         'visitor-visible copy',
         'Return ONLY',
         'Do not use the',
-        'Use concrete',
-        'Directly render',
         'component prompt',
-        'Provide category',
-        'filter tabs',
-        'visually distinct',
-        'Visible CTA path',
-        'Trust content',
-        'Responsive cards',
-        'proof points',
-        'visual hierarchy',
-        'launch-ready content',
-        'Immediately capture',
-        'Instantly communicate',
-        'Immediately inform',
-        'Capture immediate attention',
         '$category',
         'slug ===',
         '提示词',
@@ -87,7 +67,6 @@ class AiSiteBuildTaskService
      */
     public const BUILD_PAGE_PROGRESS_SCOPE_KEY = '_build_page_progress';
 
-    public const BLUEPRINT_VERSION = 1;
     public const TASK_STATUS_PENDING = 'pending';
     public const TASK_STATUS_RUNNING = 'running';
     public const TASK_STATUS_DONE = 'done';
@@ -97,10 +76,6 @@ class AiSiteBuildTaskService
     private const BUILD_LOCKED_PLAN_SCOPE_KEYS = [
         'page_types',
         'page_types_user_customized',
-        'execution_blueprint',
-        'execution_blueprint_draft',
-        'execution_blueprint_confirmed_at',
-        'execution_blueprint_confirmed_signature',
         'plan_confirmed',
         'plan_confirmed_at',
         'plan_json',
@@ -124,26 +99,10 @@ class AiSiteBuildTaskService
         'build_plan_confirmed_at',
         'build_plan_v2_validation',
         'has_build_plan_v2',
-        'build_blueprint',
-        'build_tasks',
-    ];
-    private const DEPRECATED_BUILD_PLAN_SCOPE_KEYS = [
-        'virtual_theme_plan',
-        'task_plan_structured',
-        'task_plan_markdown',
-        'task_plan_generated_at',
-        'task_plan_directory_tree',
-        'task_plan_summary',
-        'task_plan_confirmed',
-        'task_plan_confirmed_at',
-        'task_plan_rebuild_summary',
-        'task_plan_change_scope_report',
-        '_task_plan_sse_request',
-        '_task_plan_rebuild_in_progress',
     ];
     /**
-     * build_tasks is mutable execution state only; definition payload belongs to
-     * build_blueprint.tasks.
+     * Execution rows are stored on build_plan_v2; duplicate definition fields
+     * are removed before persisting block execution state.
      *
      * @var array<string, true>
      */
@@ -161,31 +120,6 @@ class AiSiteBuildTaskService
         'block_task' => true,
         'implementation_contract' => true,
     ];
-    private const BLUEPRINT_SHARED_TASK_CONTEXT_KEY = '_shared_task_context';
-    private const BLUEPRINT_SHARED_RUNTIME_CONTEXT_KEYS = [
-        'site_context' => true,
-        'theme_context_snapshot' => true,
-        'shared_prompt_context' => true,
-        'policy_context' => true,
-        'skill_context' => true,
-        'reference_context' => true,
-        'asset_context' => true,
-    ];
-    private const BLUEPRINT_SHARED_PLAN_CONTEXT_KEYS = [
-        'design_manifest' => true,
-        'policy_projection' => true,
-        'policy_ref' => true,
-    ];
-    private const BLUEPRINT_SHARED_STYLE_PLAN_EXCLUDED_KEYS = [
-        'visual_signature' => true,
-        'image_intent' => true,
-        'page_flow_role' => true,
-        'block_type' => true,
-        'block_key' => true,
-        'section_key' => true,
-        'design_tags' => true,
-    ];
-
     public function __construct(
         private readonly AiSitePageBlueprintService $pageBlueprintService,
     ) {
@@ -198,80 +132,50 @@ class AiSiteBuildTaskService
      */
     public function ensureTaskScope(array $scope, array $websiteProfile, string $workspaceTrack): array
     {
-        $pageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : \array_keys(Page::getPageTypes());
-        unset($websiteProfile);
+        unset($websiteProfile, $workspaceTrack);
         $scope = $this->normalizeConfirmedBuildPlanFlag($scope);
-        $existingBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $existingTasks = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
         $validation = $this->validateConfirmedBuildPlanV2ForBuild($scope);
         if (!($validation['valid'] ?? false)) {
             return $this->markBuildPlanExecutionBlocked($scope, $validation);
         }
-        $blueprint = $this->buildBlueprintFromBuildPlanV2($scope, $pageTypes, $workspaceTrack);
-        if ($blueprint === []) {
-            return $this->markBuildPlanExecutionBlocked($scope, [
-                'valid' => false,
-                'errors' => ['TASK_CONTEXT_MISSING: confirmed build_plan_v2 did not produce an executable task graph'],
-            ]);
-        }
-        $signature = (string)($blueprint['signature'] ?? '');
 
-        if ($signature === '' || (string)($existingBlueprint['signature'] ?? '') !== $signature) {
-            $scope['build_blueprint'] = $blueprint;
-            $scope['build_tasks'] = $existingTasks !== []
-                ? $this->mergeTaskStateWithBlueprint($blueprint, $existingTasks)
-                : $this->buildDefaultTaskState($blueprint);
-            return $scope;
-        }
-
-        $scope['build_blueprint'] = $blueprint;
-        $scope['build_tasks'] = $this->mergeTaskStateWithBlueprint($blueprint, $existingTasks);
-
-        return $scope;
+        return $this->ensureBuildPlanBlockExecutionState($scope);
     }
 
     /**
-     * 将当前 build_blueprint 下所有任务状态重置为 pending（用于 queue:run -f 强制重跑构建，否则会因任务已 done 而秒结束且不调 AI）。
+     * Reset build_plan_v2 execution rows to pending for a forced rebuild.
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
     public function resetBuildTasksToPendingForRebuild(array $scope, bool $reuseAvailableArtifacts = true): array
     {
-        $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
+        $scope = $this->ensureBuildPlanBlockExecutionState($scope);
+        $tasks = $this->extractBlueprintTasks($scope);
         if ($tasks === []) {
             return $scope;
         }
-        $definitionsByTaskKey = [];
-        foreach ($tasks as $task) {
-            if (!\is_array($task)) {
+        $existingTasks = $this->extractTaskState($scope);
+        $now = \date('Y-m-d H:i:s');
+        foreach ($tasks as $definition) {
+            $taskKey = \trim((string)($definition['task_key'] ?? ''));
+            if ($taskKey === '') {
                 continue;
             }
-            $taskKey = \trim((string)($task['task_key'] ?? ''));
-            if ($taskKey !== '') {
-                $definitionsByTaskKey[$taskKey] = $task;
-            }
-        }
-        $existingTasks = $this->extractTaskState($scope);
-        $nextTasks = $this->buildDefaultTaskState($blueprint);
-        $now = \date('Y-m-d H:i:s');
-        foreach ($nextTasks as $taskKey => $defaultState) {
             $existing = \is_array($existingTasks[$taskKey] ?? null) ? $existingTasks[$taskKey] : [];
             $status = $this->normalizeTaskStatus((string)($existing['status'] ?? self::TASK_STATUS_PENDING));
             if ($status === self::TASK_STATUS_CANCELLED) {
-                $nextTasks[$taskKey] = \array_replace($defaultState, $existing, [
+                $scope = $this->setTaskState($scope, $taskKey, [
                     'status' => self::TASK_STATUS_CANCELLED,
-                ]);
+                ], false);
                 continue;
             }
 
-            $definition = \is_array($definitionsByTaskKey[$taskKey] ?? null) ? $definitionsByTaskKey[$taskKey] : [];
-            if ($reuseAvailableArtifacts && $definition !== [] && $this->isGeneratedArtifactAvailableForTask($scope, $definition)) {
+            if ($reuseAvailableArtifacts && $this->isGeneratedArtifactAvailableForTask($scope, $definition)) {
                 $resultRef = \is_array($existing['result_ref'] ?? null) && $existing['result_ref'] !== []
                     ? $existing['result_ref']
                     : $this->buildTaskResultRefFromDefinition($definition);
-                $nextTasks[$taskKey] = \array_replace($defaultState, $existing, [
+                $scope = $this->setTaskState($scope, $taskKey, [
                     'status' => self::TASK_STATUS_DONE,
                     'message' => '',
                     'result_ref' => $resultRef,
@@ -281,11 +185,11 @@ class AiSiteBuildTaskService
                     'finished_at' => \trim((string)($existing['finished_at'] ?? '')) !== ''
                         ? (string)$existing['finished_at']
                         : $now,
-                ]);
+                ], false);
                 continue;
             }
 
-            $nextTasks[$taskKey] = \array_replace($defaultState, [
+            $scope = $this->setTaskState($scope, $taskKey, [
                 'status' => self::TASK_STATUS_PENDING,
                 'attempt_no' => 0,
                 'message' => '',
@@ -293,9 +197,8 @@ class AiSiteBuildTaskService
                 'updated_at' => $now,
                 'started_at' => '',
                 'finished_at' => '',
-            ]);
+            ], false);
         }
-        $scope['build_tasks'] = $nextTasks;
 
         return $scope;
     }
@@ -314,7 +217,6 @@ class AiSiteBuildTaskService
             'pending_generation_page_types',
             self::BUILD_PAGE_PROGRESS_SCOPE_KEY,
             'build_summary',
-            'build_task_summary',
             'build_workbench',
             'build_contracts',
             'render_data_contract',
@@ -344,6 +246,7 @@ class AiSiteBuildTaskService
             $scope[$key] = '';
         }
         $scope['latest_build_failure'] = [];
+        $scope = $this->resetBuildPlanExecutionRows($scope);
 
         $scope = $this->clearRetryableAiFailures($scope, 'build');
         $scope['_build_regeneration'] = [
@@ -360,17 +263,6 @@ class AiSiteBuildTaskService
     public function hasConfirmedBuildPlanForBuild(array $scope): bool
     {
         return $this->hasConfirmedBuildPlanV2ForBuild($scope);
-    }
-
-    /**
-     * @param array<string, mixed> $blueprint
-     */
-    private function isReusableConfirmedBuildBlueprint(array $blueprint): bool
-    {
-        return (string)($blueprint['source'] ?? '') === 'build_plan_v2'
-            && \trim((string)($blueprint['signature'] ?? '')) !== ''
-            && \is_array($blueprint['tasks'] ?? null)
-            && $blueprint['tasks'] !== [];
     }
 
     /**
@@ -420,8 +312,46 @@ class AiSiteBuildTaskService
                 )),
             ];
         }
+        $coverage = $this->inspectConfirmedBuildPlanPageTypeCoverage($scope);
+        $missingPages = \is_array($coverage['missing_page_types'] ?? null) ? $coverage['missing_page_types'] : [];
+        if ($missingPages !== []) {
+            $errors = [];
+            $errors[] = 'BUILD_PLAN_CONTRACT_INVALID: build_plan_v2.pages missing selected page_types: ' . \implode(', ', $missingPages);
+
+            return ['valid' => false, 'errors' => $errors];
+        }
 
         return ['valid' => true, 'errors' => []];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{
+     *   expected_page_types:list<string>,
+     *   actual_page_types:list<string>,
+     *   missing_page_types:list<string>,
+     * }
+     */
+    public function inspectConfirmedBuildPlanPageTypeCoverage(array $scope): array
+    {
+        $expected = $this->normalizeBuildPlanStringList($scope['page_types'] ?? []);
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $actual = [];
+        foreach (\is_array($contract['pages'] ?? null) ? $contract['pages'] : [] as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageType = \trim((string)($page['page_type'] ?? (\is_string($key) ? $key : '')));
+            if ($pageType !== '') {
+                $actual[$pageType] = true;
+            }
+        }
+
+        return [
+            'expected_page_types' => $expected,
+            'actual_page_types' => \array_values(\array_keys($actual)),
+            'missing_page_types' => $this->missingStringSet($expected, \array_values(\array_keys($actual))),
+        ];
     }
 
     /**
@@ -434,41 +364,8 @@ class AiSiteBuildTaskService
         $scope['build_plan_v2_validation'] = $validation;
         $scope['build_plan_confirmed'] = 0;
         $scope['has_build_plan_v2'] = \is_array($scope['build_plan_v2'] ?? null) && $scope['build_plan_v2'] !== [] ? 1 : 0;
-        $scope['build_blueprint'] = [];
-        $scope['build_tasks'] = [];
-        $scope['build_task_summary'] = [
-            'total' => 0,
-            'pending' => 0,
-            'running' => 0,
-            'done' => 0,
-            'failed' => 0,
-        ];
 
         return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function hasConfirmedExecutionBlueprintForBuild(array $scope): bool
-    {
-        $blueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        if ($blueprint === []) {
-            return false;
-        }
-
-        $confirmed = (int)($scope['plan_confirmed'] ?? 0) === 1
-            || \trim((string)($scope['execution_blueprint_confirmed_at'] ?? '')) !== ''
-            || \trim((string)($scope['execution_blueprint_confirmed_signature'] ?? '')) !== '';
-        if (!$confirmed) {
-            return false;
-        }
-
-        $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
-        $pages = \is_array($blueprint['pages'] ?? null) ? $blueprint['pages'] : [];
-        $pageBlueprints = \is_array($blueprint['page_blueprints'] ?? null) ? $blueprint['page_blueprints'] : [];
-
-        return $tasks !== [] && ($pages !== [] || $pageBlueprints !== []);
     }
 
     /**
@@ -508,7 +405,7 @@ class AiSiteBuildTaskService
      */
     public function stripBuildPlanMutationScopePatch(array $scopePatch, array $currentScope): array
     {
-        foreach (\array_merge(self::BUILD_LOCKED_PLAN_SCOPE_KEYS, self::DEPRECATED_BUILD_PLAN_SCOPE_KEYS) as $key) {
+        foreach (self::BUILD_LOCKED_PLAN_SCOPE_KEYS as $key) {
             unset($scopePatch[$key]);
         }
         foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'user_description', 'default_locale', 'plan_locale'] as $key) {
@@ -634,350 +531,7 @@ class AiSiteBuildTaskService
                 unset($scope[$key]);
             }
         }
-        foreach (self::DEPRECATED_BUILD_PLAN_SCOPE_KEYS as $key) {
-            unset($scope[$key]);
-        }
-
         return $this->normalizeConfirmedBuildPlanFlag($scope);
-    }
-
-    /**
-     * @param list<string> $pageTypes
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $websiteProfile
-     * @return array<string, mixed>
-     */
-    public function buildBlueprint(array $pageTypes, array $scope, array $websiteProfile, string $workspaceTrack): array
-    {
-        $pageTypes = \array_values(\array_filter(\array_map(
-            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-            $pageTypes
-        ), static fn(string $value): bool => $value !== ''));
-        if ($pageTypes === []) {
-            $pageTypes = \array_keys(Page::getPageTypes());
-        }
-
-        $stageOneBlueprint = $this->buildBlueprintFromStageOneExecutionBlueprint($pageTypes, $scope, $workspaceTrack);
-        if ($stageOneBlueprint !== []) {
-            return $stageOneBlueprint;
-        }
-
-        $tasks = [
-            [
-                'task_key' => 'shared:header',
-                'task_type' => 'shared_component',
-                'scope_key' => 'shared_components.header',
-                'group_key' => 'shared',
-                'page_type' => '',
-                'region' => 'header',
-                'label' => 'Header',
-                'sort_order' => 10,
-            ],
-            [
-                'task_key' => 'shared:footer',
-                'task_type' => 'shared_component',
-                'scope_key' => 'shared_components.footer',
-                'group_key' => 'shared',
-                'page_type' => '',
-                'region' => 'footer',
-                'label' => 'Footer',
-                'sort_order' => 20,
-            ],
-        ];
-
-        $pageBlueprints = [];
-        foreach ($pageTypes as $pageIndex => $pageType) {
-            $pageBlueprint = $this->pageBlueprintService->buildPageBlueprint($pageType, $scope, $websiteProfile);
-            $pageBlueprints[$pageType] = $pageBlueprint;
-            foreach (($pageBlueprint['sections'] ?? []) as $sectionIndex => $section) {
-                if (!\is_array($section)) {
-                    continue;
-                }
-                $sectionCode = \trim((string)($section['code'] ?? ''));
-                if ($sectionCode === '') {
-                    continue;
-                }
-                $tasks[] = [
-                    'task_key' => 'page:' . $pageType . ':' . $sectionCode,
-                    'task_type' => 'page_section',
-                    'scope_key' => 'page_sections.' . $pageType . '.' . $sectionCode,
-                    'group_key' => $pageType,
-                    'page_type' => $pageType,
-                    'region' => 'content',
-                    'section_code' => $sectionCode,
-                    'section_key' => (string)($section['key'] ?? ''),
-                    'label' => (string)($section['name'] ?? $sectionCode),
-                    'sort_order' => 1000 + ($pageIndex * 100) + ($sectionIndex * 10),
-                ];
-            }
-        }
-
-        return [
-            'version' => self::BLUEPRINT_VERSION,
-            'workspace_track' => $workspaceTrack,
-            'page_types' => $pageTypes,
-            'page_blueprints' => $pageBlueprints,
-            'tasks' => $tasks,
-            'signature' => \sha1((string)\json_encode([
-                'version' => self::BLUEPRINT_VERSION,
-                'workspace_track' => $workspaceTrack,
-                'page_types' => $pageTypes,
-                'tasks' => $tasks,
-            ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param list<string> $fallbackPageTypes
-     * @return array<string, mixed>
-     */
-    private function buildBlueprintFromBuildPlanV2(array $scope, array $fallbackPageTypes, string $workspaceTrack): array
-    {
-        if (!$this->hasConfirmedBuildPlanV2ForBuild($scope)) {
-            return [];
-        }
-
-        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
-        $tasksById = $this->normalizeBuildPlanRecordSet($contract['tasks'] ?? [], ['task_id', 'id']);
-        if ($tasksById === []) {
-            return [];
-        }
-        $blocksById = $this->normalizeBuildPlanRecordSet($contract['blocks'] ?? [], ['block_id', 'id']);
-        $pagesById = $this->normalizeBuildPlanRecordSet($contract['pages'] ?? [], ['page_id', 'id']);
-        $contentManifest = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
-        $contentItems = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
-        $promptContextAssembler = new AiSiteBuildPromptContextAssembler();
-        $orderedTaskIds = $this->normalizeBuildPlanStringList($contract['build_order'] ?? []);
-        foreach (\array_keys($tasksById) as $taskId) {
-            if (!\in_array($taskId, $orderedTaskIds, true)) {
-                $orderedTaskIds[] = $taskId;
-            }
-        }
-
-        $tasks = [];
-        $pageTypeMap = [];
-        foreach ($orderedTaskIds as $sortIndex => $taskId) {
-            $contractTask = \is_array($tasksById[$taskId] ?? null) ? $tasksById[$taskId] : [];
-            if ($contractTask === []) {
-                continue;
-            }
-            $taskRuntimeContext = \is_array($contractTask['runtime_context'] ?? null) ? $contractTask['runtime_context'] : [];
-            $taskOutputContract = \is_array($contractTask['output_contract'] ?? null) ? $contractTask['output_contract'] : [];
-            $taskAcceptance = \is_array($contractTask['acceptance'] ?? null) ? $contractTask['acceptance'] : [];
-            if ($taskRuntimeContext === [] || $taskOutputContract === [] || $taskAcceptance === []) {
-                AiSiteWorkflowTrace::log('build_plan_v2_task_context_missing', [
-                    'contract_id' => (string)($meta['id'] ?? ''),
-                    'task_id' => $taskId,
-                    'missing_runtime_context' => $taskRuntimeContext === [],
-                    'missing_output_contract' => $taskOutputContract === [],
-                    'missing_acceptance' => $taskAcceptance === [],
-                ]);
-                return [];
-            }
-            $inputScope = \is_array($contractTask['input_scope'] ?? null) ? $contractTask['input_scope'] : [];
-            $pageId = \trim((string)($inputScope['page_id'] ?? $contractTask['page_id'] ?? ''));
-            $page = \is_array($pagesById[$pageId] ?? null) ? $pagesById[$pageId] : [];
-            $pageType = \trim((string)($inputScope['page_type'] ?? $page['page_type'] ?? ''));
-            $blockId = \trim((string)($inputScope['block_id'] ?? $contractTask['block_id'] ?? ''));
-            $block = \is_array($blocksById[$blockId] ?? null) ? $blocksById[$blockId] : [];
-            $region = \trim((string)($inputScope['region'] ?? $contractTask['region'] ?? ''));
-            $isShared = $pageType === '' && $region !== '';
-            if ($pageType !== '') {
-                $pageTypeMap[$pageType] = $pageType;
-            }
-            $sectionKey = \trim((string)($inputScope['section_key'] ?? $block['section_key'] ?? ''));
-            if ($sectionKey === '' && $blockId !== '') {
-                $parts = \explode('.', $blockId);
-                $sectionKey = (string)\end($parts);
-            }
-            $sectionCode = $isShared ? '' : $this->resolveBuildPlanSectionCode($pageType, $sectionKey, $blockId);
-            $contentKeys = $this->normalizeBuildPlanStringList($block['content_keys'] ?? []);
-            $label = $this->firstBuildPlanContentValue($contentItems, $contentKeys);
-            if ($label === '') {
-                $label = $isShared
-                    ? \ucfirst($region)
-                    : ($sectionKey !== '' ? \ucfirst(\str_replace(['_', '-'], ' ', $sectionKey)) : $taskId);
-            }
-            $blockType = $this->normalizeBuildPlanRoleToken((string)(
-                $block['block_type']
-                ?? $block['type']
-                ?? $block['template']
-                ?? $contractTask['block_type']
-                ?? $inputScope['block_type']
-                ?? ''
-            ));
-            $pageFlowRole = $this->normalizeBuildPlanRoleToken((string)(
-                $block['page_flow_role']
-                ?? $contractTask['page_flow_role']
-                ?? $inputScope['page_flow_role']
-                ?? ''
-            ));
-            $visualSignature = \is_array($block['visual_signature'] ?? null)
-                ? $block['visual_signature']
-                : (\is_array($contractTask['visual_signature'] ?? null) ? $contractTask['visual_signature'] : []);
-            $imageIntent = \is_array($block['image_intent'] ?? null)
-                ? $block['image_intent']
-                : (\is_array($contractTask['image_intent'] ?? null) ? $contractTask['image_intent'] : []);
-            $stylePlan = \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [];
-            foreach (['design_tags', 'visual_signature', 'image_intent'] as $planKey) {
-                if (\is_array($block[$planKey] ?? null) && $block[$planKey] !== []) {
-                    $stylePlan[$planKey] = $block[$planKey];
-                }
-            }
-            if ($imageIntent !== []) {
-                $stylePlan['image_intent'] = $imageIntent;
-            }
-            if ($pageFlowRole !== '') {
-                $stylePlan['page_flow_role'] = $pageFlowRole;
-            }
-            $planContext = $promptContextAssembler->assemble($contract, $contractTask);
-            if ($blockType !== '') {
-                $planContext['block_type'] = $blockType;
-            }
-            if ($pageFlowRole !== '') {
-                $planContext['page_flow_role'] = $pageFlowRole;
-            }
-            if ($visualSignature !== []) {
-                $planContext['block_visual_signature'] = $visualSignature;
-            }
-            if ($imageIntent !== []) {
-                $planContext['block_image_intent'] = $imageIntent;
-            }
-            $planContext = $this->compactBuildPlanTaskPlanContext($planContext);
-            $contentLocale = $this->firstNonEmptyBuildPlanText([
-                $taskRuntimeContext['content_locale'] ?? null,
-                $contract['i18n']['primary_locale'] ?? null,
-                $contentManifest['primary_locale'] ?? null,
-                $scope['content_locale'] ?? null,
-                $scope['default_locale'] ?? null,
-            ]);
-            $languageContract = \is_array($taskRuntimeContext['language_contract'] ?? null)
-                ? $taskRuntimeContext['language_contract']
-                : $this->buildLanguageRuntimeContract($contentLocale);
-
-            $tasks[] = [
-                'task_key' => $taskId,
-                'task_type' => $isShared ? 'shared_component' : 'page_section',
-                'scope_key' => $isShared
-                    ? 'shared_components.' . $region
-                    : 'page_sections.' . $pageType . '.' . $sectionCode,
-                'group_key' => $isShared ? 'shared' : $pageType,
-                'page_type' => $isShared ? '' : $pageType,
-                'region' => $isShared ? $region : 'content',
-                'section_code' => $sectionCode,
-                'section_key' => $sectionKey,
-                'block_key' => $sectionKey,
-                'block_type' => $blockType,
-                'page_flow_role' => $pageFlowRole,
-                'visual_signature' => $visualSignature,
-                'image_intent' => $imageIntent,
-                'label' => $label,
-                'sort_order' => 100 + ((int)$sortIndex * 10),
-                'dependencies' => $this->normalizeBuildPlanStringList($contractTask['depends_on'] ?? []),
-                'can_parallel' => !$isShared,
-                'materialize_after_done' => !$isShared,
-                'materialize_policy' => $isShared ? 'none' : 'page',
-                'prompt_template_key' => 'build_plan_v2_task_execute',
-                'prompt_variables' => [
-                    'build_plan_contract_id' => (string)($meta['id'] ?? ''),
-                    'task_id' => $taskId,
-                ],
-                'progress_weight' => $isShared ? 1.0 : 2.0,
-                'result_ref' => $isShared
-                    ? ['region' => $region]
-                    : ['page_type' => $pageType, 'section_code' => $sectionCode],
-                'runtime_context' => \array_replace($taskRuntimeContext, [
-                    'build_plan_contract_id' => (string)($meta['id'] ?? ''),
-                    'content_locale' => $contentLocale,
-                    'language_contract' => $languageContract,
-                    'context_refs' => [
-                        'site_brief_ref' => 'build_plan_v2.site_brief',
-                        'design_manifest_ref' => 'build_plan_v2.design_manifest',
-                        'page_context_ref' => $pageId !== '' ? ('build_plan_v2.pages.' . $pageId) : '',
-                        'block_context_ref' => $blockId !== '' ? ('build_plan_v2.blocks.' . $blockId) : '',
-                        'asset_context_ref' => $blockId !== '' ? ('build_plan_v2.blocks.' . $blockId . '.image_intent') : '',
-                    ],
-                ]),
-                'plan_context' => $planContext,
-                'task_script' => [
-                    'component_type' => $isShared ? $region : 'section',
-                    'data_contract' => \is_array($taskOutputContract['render_data'] ?? null) ? $taskOutputContract['render_data'] : [],
-                    'output_contract' => $taskOutputContract,
-                    'acceptance' => $taskAcceptance,
-                    'content_keys' => $contentKeys,
-                    'policy_slices' => $this->normalizeBuildPlanStringList($contractTask['policy_slices'] ?? []),
-                    'acceptance_rule_ids' => $this->normalizeBuildPlanStringList($contractTask['acceptance_rule_ids'] ?? []),
-                ],
-                'block_task' => [
-                    'block_type' => $blockType,
-                    'page_flow_role' => $pageFlowRole,
-                    'task_goal' => $this->contentValueForBuildPlanKey($contentItems, $contentKeys[1] ?? ''),
-                    'content_plan' => $this->sliceBuildPlanContentItems($contentItems, $contentKeys),
-                    'style_plan' => $stylePlan,
-                    'visual_signature' => $visualSignature,
-                    'image_intent' => $imageIntent,
-                    'output_contract' => $taskOutputContract,
-                    'acceptance' => $taskAcceptance,
-                ],
-                'implementation_contract' => [
-                    'source' => 'build_plan_v2',
-                    'contract_id' => (string)($meta['id'] ?? ''),
-                    'task_id' => $taskId,
-                    'block_id' => $blockId,
-                    'data_contract' => \is_array($taskOutputContract['render_data'] ?? null) ? $taskOutputContract['render_data'] : [],
-                    'output_contract' => $taskOutputContract,
-                    'acceptance' => $taskAcceptance,
-                ],
-            ];
-        }
-
-        if ($tasks === []) {
-            return [];
-        }
-
-        $pageTypes = \array_values($pageTypeMap);
-        if ($pageTypes === []) {
-            $pageTypes = \array_values(\array_filter(\array_map(
-                static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-                $fallbackPageTypes
-            ), static fn(string $value): bool => $value !== ''));
-        }
-
-        $blueprint = [
-            'version' => self::BLUEPRINT_VERSION,
-            'source' => 'build_plan_v2',
-            'workspace_track' => $workspaceTrack,
-            'page_types' => $pageTypes,
-            'page_blueprints' => [],
-            'build_plan_contract_id' => (string)($meta['id'] ?? ''),
-            'build_plan_signature' => (string)($meta['signature'] ?? $meta['source_signature'] ?? ''),
-            'tasks' => $tasks,
-            'signature' => $this->buildBuildPlanV2BlueprintSignature(
-                $workspaceTrack,
-                (string)($meta['id'] ?? ''),
-                (string)($meta['signature'] ?? $meta['source_signature'] ?? ''),
-                $tasks
-            ),
-        ];
-        AiSiteWorkflowTrace::log('build_blueprint_from_plan_v2', [
-            'contract_id' => (string)($meta['id'] ?? ''),
-            'workspace_track' => $workspaceTrack,
-            'page_types' => $pageTypes,
-            'task_count' => \count($tasks),
-            'signature' => (string)($blueprint['signature'] ?? ''),
-        ]);
-        AiSiteWorkflowTrace::taskList('build_blueprint_tasks_split', $tasks, [
-            'contract_id' => (string)($meta['id'] ?? ''),
-        ]);
-        if (AiSiteWorkflowTrace::verbose()) {
-            AiSiteWorkflowTrace::json('build_blueprint_task_details', ['tasks' => $tasks], [
-                'contract_id' => (string)($meta['id'] ?? ''),
-            ]);
-        }
-
-        return $this->compactBuildBlueprintSharedTaskContext($blueprint);
     }
 
     /**
@@ -999,10 +553,7 @@ class AiSiteBuildTaskService
             foreach ([
                 'task_id',
                 'id',
-                'task_kind',
-                'executor',
                 'input_scope',
-                'policy_slices',
                 'acceptance_rule_ids',
                 'context_budget',
             ] as $key) {
@@ -1021,300 +572,6 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * The executable blueprint signature must be stable without serializing the
-     * full prompt/runtime context for every task. The rich context is stored on
-     * tasks and compacted below; only identity and execution-shape fields are
-     * needed to decide whether the task ledger still matches the blueprint.
-     *
-     * @param list<array<string, mixed>> $tasks
-     */
-    private function buildBuildPlanV2BlueprintSignature(
-        string $workspaceTrack,
-        string $contractId,
-        string $contractSignature,
-        array $tasks
-    ): string {
-        $taskProjection = [];
-        foreach ($tasks as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
-            $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
-            $runtime = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
-            $taskProjection[] = [
-                'task_key' => (string)($task['task_key'] ?? ''),
-                'task_type' => (string)($task['task_type'] ?? ''),
-                'scope_key' => (string)($task['scope_key'] ?? ''),
-                'group_key' => (string)($task['group_key'] ?? ''),
-                'page_type' => (string)($task['page_type'] ?? ''),
-                'region' => (string)($task['region'] ?? ''),
-                'section_code' => (string)($task['section_code'] ?? ''),
-                'block_key' => (string)($task['block_key'] ?? ''),
-                'block_type' => (string)($task['block_type'] ?? ''),
-                'page_flow_role' => (string)($task['page_flow_role'] ?? ''),
-                'dependencies' => $this->normalizeBuildPlanStringList($task['dependencies'] ?? []),
-                'content_keys' => $this->normalizeBuildPlanStringList($taskScript['content_keys'] ?? []),
-                'content_locale' => (string)($runtime['content_locale'] ?? ''),
-                'materialize_policy' => (string)($task['materialize_policy'] ?? ''),
-                'prompt_template_key' => (string)($task['prompt_template_key'] ?? ''),
-                'image_role' => (string)($blockTask['image_intent']['image_role'] ?? $task['image_intent']['image_role'] ?? ''),
-                'needs_image' => (bool)($blockTask['image_intent']['needs_image'] ?? $task['image_intent']['needs_image'] ?? false),
-            ];
-        }
-
-        return $this->buildSignature([
-            'version' => self::BLUEPRINT_VERSION,
-            'source' => 'build_plan_v2',
-            'workspace_track' => $workspaceTrack,
-            'contract_id' => $contractId,
-            'contract_signature' => $contractSignature,
-            'tasks' => $taskProjection,
-        ]);
-    }
-
-    /**
-     * Keep stable task context once per blueprint. Individual tasks retain only
-     * task-specific overrides and are inflated when a prompt needs them.
-     *
-     * @param array<string, mixed> $blueprint
-     * @return array<string, mixed>
-     */
-    private function compactBuildBlueprintSharedTaskContext(array $blueprint): array
-    {
-        if ((string)($blueprint['source'] ?? '') !== 'build_plan_v2') {
-            return $blueprint;
-        }
-        $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
-        if (\count($tasks) < 2) {
-            return $blueprint;
-        }
-
-        $sharedContext = \is_array($blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY] ?? null)
-            ? $blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY]
-            : [];
-
-        $sharedRuntime = $this->extractSharedTaskContextAtPath(
-            $tasks,
-            ['runtime_context'],
-            self::BLUEPRINT_SHARED_RUNTIME_CONTEXT_KEYS
-        );
-        if ($sharedRuntime !== []) {
-            $tasks = $this->removeTaskContextAtPath($tasks, ['runtime_context'], \array_keys($sharedRuntime));
-            $sharedContext['runtime_context'] = \array_replace_recursive(
-                \is_array($sharedContext['runtime_context'] ?? null) ? $sharedContext['runtime_context'] : [],
-                $sharedRuntime
-            );
-        }
-
-        $sharedPlanContext = $this->extractSharedTaskContextAtPath(
-            $tasks,
-            ['plan_context'],
-            self::BLUEPRINT_SHARED_PLAN_CONTEXT_KEYS
-        );
-        if ($sharedPlanContext !== []) {
-            $tasks = $this->removeTaskContextAtPath($tasks, ['plan_context'], \array_keys($sharedPlanContext));
-            $sharedContext['plan_context'] = \array_replace_recursive(
-                \is_array($sharedContext['plan_context'] ?? null) ? $sharedContext['plan_context'] : [],
-                $sharedPlanContext
-            );
-        }
-
-        $sharedStylePlan = $this->extractSharedTaskContextAtPath(
-            $tasks,
-            ['block_task', 'style_plan'],
-            null,
-            self::BLUEPRINT_SHARED_STYLE_PLAN_EXCLUDED_KEYS
-        );
-        if ($sharedStylePlan !== []) {
-            $tasks = $this->removeTaskContextAtPath($tasks, ['block_task', 'style_plan'], \array_keys($sharedStylePlan));
-            $sharedContext['block_task_style_plan'] = \array_replace_recursive(
-                \is_array($sharedContext['block_task_style_plan'] ?? null) ? $sharedContext['block_task_style_plan'] : [],
-                $sharedStylePlan
-            );
-        }
-
-        if ($sharedContext === []) {
-            return $blueprint;
-        }
-
-        $blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY] = $sharedContext;
-        $blueprint['tasks'] = $tasks;
-
-        return $blueprint;
-    }
-
-    /**
-     * @param list<mixed> $tasks
-     * @param list<string> $path
-     * @param array<string, true>|null $allowedKeys
-     * @param array<string, true> $excludedKeys
-     * @return array<string, mixed>
-     */
-    private function extractSharedTaskContextAtPath(array $tasks, array $path, ?array $allowedKeys = null, array $excludedKeys = []): array
-    {
-        $shared = null;
-        foreach ($tasks as $task) {
-            if (!\is_array($task)) {
-                return [];
-            }
-            $context = $this->getNestedTaskContext($task, $path);
-            if ($context === []) {
-                return [];
-            }
-
-            $candidate = [];
-            foreach ($context as $key => $value) {
-                $key = (string)$key;
-                if (($allowedKeys !== null && !isset($allowedKeys[$key])) || isset($excludedKeys[$key])) {
-                    continue;
-                }
-                if (!$this->isWorthPoolingTaskContextValue($value)) {
-                    continue;
-                }
-                $candidate[$key] = $value;
-            }
-            if ($candidate === []) {
-                return [];
-            }
-
-            if ($shared === null) {
-                $shared = $candidate;
-                continue;
-            }
-
-            foreach (\array_keys($shared) as $key) {
-                if (!\array_key_exists($key, $candidate) || $candidate[$key] != $shared[$key]) {
-                    unset($shared[$key]);
-                }
-            }
-            if ($shared === []) {
-                return [];
-            }
-        }
-
-        return \is_array($shared) ? $shared : [];
-    }
-
-    private function isWorthPoolingTaskContextValue(mixed $value): bool
-    {
-        if (\is_array($value)) {
-            return $value !== [];
-        }
-        if (\is_string($value)) {
-            return \trim($value) !== '';
-        }
-
-        return $value !== null && $value !== false;
-    }
-
-    /**
-     * @param array<string, mixed> $task
-     * @param list<string> $path
-     * @return array<string, mixed>
-     */
-    private function getNestedTaskContext(array $task, array $path): array
-    {
-        $cursor = $task;
-        foreach ($path as $part) {
-            if (!\is_array($cursor[$part] ?? null)) {
-                return [];
-            }
-            $cursor = $cursor[$part];
-        }
-
-        return \is_array($cursor) ? $cursor : [];
-    }
-
-    /**
-     * @param list<mixed> $tasks
-     * @param list<string> $path
-     * @param list<string> $keys
-     * @return list<mixed>
-     */
-    private function removeTaskContextAtPath(array $tasks, array $path, array $keys): array
-    {
-        $keyMap = \array_fill_keys($keys, true);
-        foreach ($tasks as $index => $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $tasks[$index] = $this->removeNestedTaskContextKeys($task, $path, $keyMap);
-        }
-
-        return $tasks;
-    }
-
-    /**
-     * @param array<string, mixed> $task
-     * @param list<string> $path
-     * @param array<string, true> $keyMap
-     * @return array<string, mixed>
-     */
-    private function removeNestedTaskContextKeys(array $task, array $path, array $keyMap): array
-    {
-        if ($path === []) {
-            return \array_diff_key($task, $keyMap);
-        }
-
-        $part = \array_shift($path);
-        if (!\is_string($part) || !\is_array($task[$part] ?? null)) {
-            return $task;
-        }
-        $task[$part] = $this->removeNestedTaskContextKeys($task[$part], $path, $keyMap);
-        if ($task[$part] === []) {
-            unset($task[$part]);
-        }
-
-        return $task;
-    }
-
-    /**
-     * @param array<string, mixed> $task
-     * @param array<string, mixed> $blueprint
-     * @return array<string, mixed>
-     */
-    public function inflateBuildBlueprintTaskContext(array $task, array $blueprint): array
-    {
-        $sharedContext = \is_array($blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY] ?? null)
-            ? $blueprint[self::BLUEPRINT_SHARED_TASK_CONTEXT_KEY]
-            : [];
-        if ($sharedContext === []) {
-            return $task;
-        }
-
-        $sharedRuntime = \is_array($sharedContext['runtime_context'] ?? null) ? $sharedContext['runtime_context'] : [];
-        if ($sharedRuntime !== []) {
-            $task['runtime_context'] = \array_replace_recursive(
-                $sharedRuntime,
-                \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : []
-            );
-        }
-
-        $sharedPlanContext = \is_array($sharedContext['plan_context'] ?? null) ? $sharedContext['plan_context'] : [];
-        if ($sharedPlanContext !== []) {
-            $task['plan_context'] = \array_replace_recursive(
-                $sharedPlanContext,
-                \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : []
-            );
-        }
-
-        $sharedStylePlan = \is_array($sharedContext['block_task_style_plan'] ?? null)
-            ? $sharedContext['block_task_style_plan']
-            : [];
-        if ($sharedStylePlan !== []) {
-            $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
-            $blockTask['style_plan'] = \array_replace_recursive(
-                $sharedStylePlan,
-                \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : []
-            );
-            $task['block_task'] = $blockTask;
-        }
-
-        return $task;
-    }
-
-    /**
      * Stage2 prompt context is frozen while the task tree is built. Later prompt
      * assembly must read these task-level references instead of falling back to
      * broad mutable scope state.
@@ -1325,30 +582,10 @@ class AiSiteBuildTaskService
      */
     private function resolveBuildPlanStage2RuntimeContext(array $scope, array $contract): array
     {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $planWorkbenchConfirmed = \is_array($scope['plan_workbench']['confirmed'] ?? null) ? $scope['plan_workbench']['confirmed'] : [];
-        $workbenchContractContext = \is_array($planWorkbenchConfirmed['contract_context'] ?? null)
-            ? $planWorkbenchConfirmed['contract_context']
-            : [];
         $contractContext = \is_array($scope['contract_context'] ?? null) ? $scope['contract_context'] : [];
 
-        $buildPlanThemeContext = $this->buildThemeContextFromBuildPlanContract($scope, $contract);
-        $themeContext = $buildPlanThemeContext !== []
-            ? $buildPlanThemeContext
-            : (\is_array($executionBlueprint['theme_context_snapshot'] ?? null)
-                ? $executionBlueprint['theme_context_snapshot']
-                : (\is_array($planWorkbenchConfirmed['theme_context_snapshot'] ?? null)
-                    ? $planWorkbenchConfirmed['theme_context_snapshot']
-                    : []));
-
-        $buildPlanSharedContext = $this->buildSharedContextFromBuildPlanContract($scope, $contract);
-        $sharedPromptContext = $buildPlanSharedContext !== []
-            ? $buildPlanSharedContext
-            : (\is_array($executionBlueprint['shared_prompt_context'] ?? null)
-                ? $executionBlueprint['shared_prompt_context']
-                : (\is_array($planWorkbenchConfirmed['shared_prompt_context'] ?? null)
-                    ? $planWorkbenchConfirmed['shared_prompt_context']
-                    : []));
+        $themeContext = $this->buildThemeContextFromBuildPlanContract($scope, $contract);
+        $sharedPromptContext = $this->buildSharedContextFromBuildPlanContract($scope, $contract);
 
         return [
             'site_context' => [
@@ -1366,13 +603,10 @@ class AiSiteBuildTaskService
             'skill_context' => [
                 'selected_skill_codes' => $this->normalizeBuildPlanStringList(
                     $scope['selected_skill_codes']
-                    ?? $workbenchContractContext['selected_skill_codes']
                     ?? $contractContext['selected_skill_codes']
                     ?? []
                 ),
-                'skill_snapshots' => \is_array($workbenchContractContext['skill_snapshots'] ?? null)
-                    ? $workbenchContractContext['skill_snapshots']
-                    : (\is_array($contractContext['skill_snapshots'] ?? null) ? $contractContext['skill_snapshots'] : []),
+                'skill_snapshots' => \is_array($contractContext['skill_snapshots'] ?? null) ? $contractContext['skill_snapshots'] : [],
             ],
             'reference_context' => [
                 'source_contracts' => \is_array($contract['source_contracts'] ?? null) ? $contract['source_contracts'] : [],
@@ -1673,6 +907,32 @@ class AiSiteBuildTaskService
         return \array_values(\array_unique($result));
     }
 
+    /**
+     * @param list<string> $expected
+     * @param list<string> $actual
+     * @return list<string>
+     */
+    private function missingStringSet(array $expected, array $actual): array
+    {
+        $actualSet = [];
+        foreach ($actual as $value) {
+            $value = \trim((string)$value);
+            if ($value !== '') {
+                $actualSet[$value] = true;
+            }
+        }
+
+        $missing = [];
+        foreach ($expected as $value) {
+            $value = \trim((string)$value);
+            if ($value !== '' && !isset($actualSet[$value])) {
+                $missing[] = $value;
+            }
+        }
+
+        return \array_values(\array_unique($missing));
+    }
+
     private function normalizeBuildPlanRoleToken(string $value): string
     {
         $value = \strtolower(\trim($value));
@@ -1683,6 +943,15 @@ class AiSiteBuildTaskService
         $value = \preg_replace('/_+/', '_', $value) ?? $value;
 
         return \trim($value, '_-');
+    }
+
+    private function slugifyForTask(string $value): string
+    {
+        $value = \strtolower(\trim($value));
+        $value = \preg_replace('/[^a-z0-9]+/i', '-', $value) ?? $value;
+        $value = \trim($value, '-');
+
+        return $value !== '' ? $value : 'section';
     }
 
     private function resolveBuildPlanSectionCode(string $pageType, string $sectionKey, string $blockId): string
@@ -1808,515 +1077,6 @@ class AiSiteBuildTaskService
         }
 
         return $result;
-    }
-
-    /**
-     * @param list<string> $pageTypes
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function buildBlueprintFromStageOneExecutionBlueprint(array $pageTypes, array $scope, string $workspaceTrack): array
-    {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $pages = $this->resolveStageOneExecutionBlueprintPagesForBuild($executionBlueprint, $scope, $pageTypes);
-        if ($pages === []) {
-            return [];
-        }
-
-        $tasks = [
-            [
-                'task_key' => 'shared:header',
-                'task_type' => 'shared_component',
-                'scope_key' => 'shared_components.header',
-                'group_key' => 'shared',
-                'page_type' => '',
-                'region' => 'header',
-                'label' => 'Header',
-                'sort_order' => 10,
-            ],
-            [
-                'task_key' => 'shared:footer',
-                'task_type' => 'shared_component',
-                'scope_key' => 'shared_components.footer',
-                'group_key' => 'shared',
-                'page_type' => '',
-                'region' => 'footer',
-                'label' => 'Footer',
-                'sort_order' => 20,
-            ],
-        ];
-        $pageBlueprints = [];
-        foreach ($pageTypes as $pageIndex => $pageType) {
-            $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-            $blocks = $this->collectStageOnePageBlocksForBuild($page);
-            if ($blocks === []) {
-                continue;
-            }
-            $sections = [];
-            foreach ($blocks as $blockIndex => $block) {
-                if (!\is_array($block)) {
-                    continue;
-                }
-                $blockKey = \trim((string)($block['block_key'] ?? $block['source_block_key'] ?? $block['key'] ?? ''));
-                if ($blockKey === '') {
-                    $blockKey = 'block_' . ((int)$blockIndex + 1);
-                }
-                $sectionSlug = $this->slugifyForTask($blockKey);
-                $sectionCode = 'content/' . $this->slugifyForTask($pageType) . '-' . $sectionSlug;
-                $title = $this->firstStageBlockTitle($block, $blockKey);
-                $blockType = $this->resolveStageBlockTypeForBuild($block);
-                $pageFlowRole = $this->normalizeBuildPlanRoleToken((string)($block['page_flow_role'] ?? ''));
-                $visualSignature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
-                $sectionTemplate = $this->resolveSectionTemplateFromPlannedIdentity($blockType, $pageFlowRole, $visualSignature);
-                $sections[] = [
-                    'key' => $blockKey,
-                    'code' => $sectionCode,
-                    'name' => $title,
-                    'template' => $sectionTemplate,
-                    'block_type' => $blockType,
-                    'page_flow_role' => $pageFlowRole,
-                    'visual_signature' => $visualSignature,
-                    'config' => [
-                        'section_title' => $title,
-                        'description' => $this->firstStageBlockDescription($block),
-                        'page_flow_role' => $pageFlowRole,
-                    ],
-                    'sort_order' => (int)($block['sort_order'] ?? $block['order'] ?? (10 + ((int)$blockIndex * 10))),
-                    'source_block_key' => $blockKey,
-                ];
-                $taskKey = 'page:' . $pageType . ':' . $blockKey;
-                // Carry rich stage1 block context into the fallback task so the AI prompt
-                // has content direction, theme constraints, and field contracts — without
-                // this, stage1_execution_blueprint tasks are context-blind and the AI
-                // generates generic/irrelevant content (e.g., white students for an Indian
-                // gaming site).
-                $blockGoal = $this->firstStageBlockGoal($block);
-                $blockStyleDirection = (string)($block['style_direction'] ?? '');
-                $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
-                // 内联 field_plan → field_content_requirements，避免单独私有方法在合并/缓存不一致时出现 undefined method
-                $fieldContentRequirements = [];
-                foreach ($fieldPlan as $fieldRow) {
-                    if (!\is_array($fieldRow)) {
-                        continue;
-                    }
-                    $fieldKey = \trim((string)($fieldRow['field'] ?? ''));
-                    $sampleRaw = \trim((string)($fieldRow['sample'] ?? ''));
-                    if ($fieldKey === '' && $sampleRaw === '') {
-                        continue;
-                    }
-                    $fieldContentRequirements[] = [
-                        'field' => $fieldKey !== '' ? $fieldKey : 'content',
-                        'sample' => $this->stripPlanningLanguage($sampleRaw),
-                        'implementation_note' => (string)($fieldRow['implementation_note'] ?? $fieldRow['delivery_note'] ?? $fieldRow['requirement'] ?? ''),
-                    ];
-                }
-                $execThemeContext = \is_array($executionBlueprint['theme_context_snapshot'] ?? null)
-                    ? $executionBlueprint['theme_context_snapshot']
-                    : (\is_array($scope['plan_workbench']['confirmed']['theme_context_snapshot'] ?? null)
-                        ? $scope['plan_workbench']['confirmed']['theme_context_snapshot']
-                        : []);
-                $execSharedPromptContext = \is_array($executionBlueprint['shared_prompt_context'] ?? null)
-                    ? $executionBlueprint['shared_prompt_context']
-                    : [];
-                $tasks[] = [
-                    'task_key' => $taskKey,
-                    'task_type' => 'page_section',
-                    'scope_key' => 'page_sections.' . $pageType . '.' . $sectionCode,
-                    'group_key' => $pageType,
-                    'page_type' => $pageType,
-                    'region' => 'content',
-                    'section_code' => $sectionCode,
-                    'section_key' => $blockKey,
-                    'block_key' => $blockKey,
-                    'block_type' => $blockType,
-                    'page_flow_role' => $pageFlowRole,
-                    'visual_signature' => $visualSignature,
-                    'label' => $title,
-                    'sort_order' => 1000 + ($pageIndex * 100) + ((int)($block['sort_order'] ?? $blockIndex * 10)),
-                    'dependencies' => ['shared:header', 'shared:footer'],
-                    'source_block_key' => $blockKey,
-                    'stage1_context_hash' => (string)($block['context_hash'] ?? ''),
-                    'plan_context' => [
-                        'stage1_theme_summary' => $blockStyleDirection,
-                        'stage1_block_goal' => $blockGoal,
-                        'stage1_block_content' => $this->firstStageBlockDescription($block),
-                        'stage1_style_direction' => $blockStyleDirection,
-                        'source_page_type' => $pageType,
-                        'source_block_key' => $blockKey,
-                        'block_type' => $blockType,
-                        'page_flow_role' => $pageFlowRole,
-                        'page_goal' => (string)($page['page_goal'] ?? $page['goal'] ?? ''),
-                        'block_goal' => $blockGoal,
-                        'stage1_visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
-                        'stage1_image_intent' => \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [],
-                    ],
-                    'task_script' => [
-                        'component_type' => 'section',
-                        'story_goal' => $blockGoal,
-                        'content_fill_rule' => 'Fill with visitor-facing content matching the customer brief. Rewrite any planning/observation sentences into finished marketing copy.',
-                        'data_contract' => [
-                            'title' => 'string',
-                            'description' => 'string',
-                            'cta' => 'object',
-                        ],
-                        'field_content_requirements' => $fieldContentRequirements,
-                    ],
-                    'block_task' => [
-                        'block_type' => $blockType,
-                        'page_flow_role' => $pageFlowRole,
-                        'task_goal' => $blockGoal,
-                        'content_plan' => $this->extractContentPlanFromStageOneBlock($block),
-                        'style_plan' => $this->extractStylePlanFromStageOneBlock($block),
-                        'implementation_detail' => (string)($block['implementation_detail'] ?? $block['implementation_note'] ?? ''),
-                        'design_tags' => \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [],
-                        'visual_signature' => \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [],
-                        'image_intent' => \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [],
-                        'realtime_content' => \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [],
-                    ],
-                    'runtime_context' => [
-                        'theme_context_snapshot' => $execThemeContext,
-                        'shared_prompt_context' => $execSharedPromptContext,
-                        'content_locale' => (string)($scope['website_profile']['content_locale'] ?? $scope['default_locale'] ?? ''),
-                    ],
-                ];
-            }
-            if ($sections === []) {
-                continue;
-            }
-            $pageBlueprints[$pageType] = [
-                'page_type' => $pageType,
-                'page_label' => (string)(Page::getPageTypes()[$pageType] ?? $pageType),
-                'page_title' => (string)($page['title'] ?? $pageType),
-                'ai_description' => (string)($page['ai_description'] ?? $page['visitor_description'] ?? ''),
-                'meta_title' => (string)($page['meta_title'] ?? ''),
-                'meta_description' => (string)($page['meta_description'] ?? $page['seo_description'] ?? ''),
-                'meta_keywords' => \implode(',', \array_values(\array_filter(\array_map('strval', \is_array($page['primary_keywords'] ?? null) ? $page['primary_keywords'] : [])))),
-                'site_display_name' => (string)($scope['site_title'] ?? ''),
-                'section_refinements' => [],
-                'sections' => $sections,
-            ];
-        }
-
-        if (\count($tasks) <= 2 || $pageBlueprints === []) {
-            return [];
-        }
-
-        return [
-            'version' => self::BLUEPRINT_VERSION,
-            'workspace_track' => $workspaceTrack,
-            'source' => 'stage1_execution_blueprint',
-            'page_types' => \array_values(\array_keys($pageBlueprints)),
-            'page_blueprints' => $pageBlueprints,
-            'tasks' => $tasks,
-            'signature' => \sha1((string)\json_encode([
-                'version' => self::BLUEPRINT_VERSION,
-                'workspace_track' => $workspaceTrack,
-                'source' => 'stage1_execution_blueprint',
-                'page_types' => \array_values(\array_keys($pageBlueprints)),
-                'tasks' => $tasks,
-            ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR)),
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $executionBlueprint
-     * @param array<string, mixed> $scope
-     * @param list<string> $pageTypes
-     * @return array<string, array<string, mixed>>
-     */
-    private function resolveStageOneExecutionBlueprintPagesForBuild(array $executionBlueprint, array $scope, array $pageTypes): array
-    {
-        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null) ? $executionBlueprint['page_plans'] : [];
-        $pages = \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
-        if ($pages === [] && $pagePlans !== []) {
-            $pages = $pagePlans;
-        }
-
-        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        if ($pages === [] && \is_array($planJson['pages'] ?? null)) {
-            $pages = $planJson['pages'];
-        }
-        if ($pages === [] && \is_array($planJson['page_plans'] ?? null)) {
-            $pages = $planJson['page_plans'];
-        }
-
-        $pageTypes = \array_values(\array_filter(\array_map(
-            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-            $pageTypes
-        ), static fn(string $value): bool => $value !== ''));
-        if ($pageTypes === []) {
-            $pageTypes = \array_values(\array_unique(\array_merge(
-                \array_keys($pages),
-                \array_keys($pagePlans)
-            )));
-        }
-
-        $resolved = [];
-        foreach ($pageTypes as $pageType) {
-            $page = \is_array($pages[$pageType] ?? null)
-                ? $pages[$pageType]
-                : (\is_array($pagePlans[$pageType] ?? null) ? $pagePlans[$pageType] : []);
-            if ($page !== []) {
-                $resolved[$pageType] = $page;
-            }
-        }
-
-        return $resolved;
-    }
-
-    /**
-     * @param array<string, mixed> $page
-     * @return list<array<string, mixed>>
-     */
-    private function collectStageOnePageBlocksForBuild(array $page): array
-    {
-        $blocks = \is_array($page['blocks'] ?? null) ? \array_values($page['blocks']) : [];
-        $blocks = \array_values(\array_filter($blocks, static fn(mixed $block): bool => \is_array($block)));
-        if ($blocks !== []) {
-            return $blocks;
-        }
-
-        $displayBlocks = \is_array($page['display_blocks'] ?? null) ? \array_values($page['display_blocks']) : [];
-        $pageBlocks = [];
-        foreach ($displayBlocks as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $displayRole = \trim((string)($block['display_role'] ?? ''));
-            if ($displayRole !== '' && $displayRole !== 'page_block') {
-                continue;
-            }
-            $pageBlocks[] = $block;
-        }
-
-        return $pageBlocks;
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     */
-    private function firstStageBlockGoal(array $block): string
-    {
-        foreach ([
-            $block['block_goal'] ?? null,
-            $block['goal'] ?? null,
-            $block['execution_script']['core_copy'] ?? null,
-            $block['execution_script'] ?? null,
-            $block['content_brief'] ?? null,
-            $block['implementation_detail'] ?? null,
-        ] as $value) {
-            if (!\is_scalar($value) || \trim((string)$value) === '') {
-                continue;
-            }
-            $cleaned = $this->stripPlanningLanguage(\trim((string)$value));
-            if ($cleaned !== '') {
-                return $cleaned;
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     */
-    private function firstStageBlockTitle(array $block, string $fallback): string
-    {
-        foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
-            if (!\is_array($field)) {
-                continue;
-            }
-            $fieldName = \strtolower(\trim((string)($field['field'] ?? '')));
-            if (!\in_array($fieldName, ['title', 'heading', 'headline'], true)) {
-                continue;
-            }
-            $sample = \trim((string)($field['sample'] ?? ''));
-            if ($sample !== '') {
-                $cleaned = $this->stripPlanningLanguage($sample);
-                return $cleaned !== '' ? $cleaned : $fallback;
-            }
-        }
-        $realtimeContent = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
-        foreach ([$realtimeContent['headline'] ?? null, $block['title'] ?? null, $fallback] as $value) {
-            if (\is_scalar($value) && \trim((string)$value) !== '') {
-                $cleaned = $this->stripPlanningLanguage(\trim((string)$value));
-                return $cleaned !== '' ? $cleaned : $fallback;
-            }
-        }
-
-        return $fallback;
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     */
-    private function firstStageBlockDescription(array $block): string
-    {
-        foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
-            if (!\is_array($field)) {
-                continue;
-            }
-            $fieldName = \strtolower(\trim((string)($field['field'] ?? '')));
-            if (!\in_array($fieldName, ['description', 'body', 'copy', 'subtitle'], true)) {
-                continue;
-            }
-            $sample = \trim((string)($field['sample'] ?? ''));
-            if ($sample !== '') {
-                $cleaned = $this->stripPlanningLanguage($sample);
-                if ($cleaned !== '') {
-                    return $cleaned;
-                }
-                // fall through: pure planning language, try next candidate
-            }
-        }
-        $realtimeContent = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
-        foreach (\is_array($realtimeContent['supporting_copy'] ?? null) ? $realtimeContent['supporting_copy'] : [] as $copy) {
-            if (\is_scalar($copy) && \trim((string)$copy) !== '') {
-                $cleaned = $this->stripPlanningLanguage(\trim((string)$copy));
-                if ($cleaned !== '') {
-                    return $cleaned;
-                }
-            }
-        }
-        foreach ([
-            $block['content_brief'] ?? null,
-            $block['content'] ?? null,
-            $block['execution_script']['core_copy'] ?? null,
-            $block['execution_script'] ?? null,
-            $block['block_goal'] ?? null,
-            $block['goal'] ?? null,
-            $block['implementation_detail'] ?? null,
-        ] as $value) {
-            if (\is_scalar($value) && \trim((string)$value) !== '') {
-                $cleaned = $this->stripPlanningLanguage(\trim((string)$value));
-                if ($cleaned !== '') {
-                    return $cleaned;
-                }
-            }
-        }
-
-        return '';
-    }
-
-    private function slugifyForTask(string $value): string
-    {
-        $value = \strtolower(\trim($value));
-        $value = \preg_replace('/[^a-z0-9]+/i', '-', $value) ?? $value;
-        $value = \trim($value, '-');
-        return $value !== '' ? $value : 'section';
-    }
-
-    /**
-     * Strip planning/observation language from stage1 block text so it doesn't leak
-     * into AI prompts as "suggested content" or visible copy.
-     *
-     * Stage-1 AI often writes sentences like "Visitors see the game lobby" or
-     * "Provide clear trust points" — these are planning intent, not copy.
-     */
-    private function stripPlanningLanguage(string $value): string
-    {
-        $value = \trim($value);
-        if ($value === '') {
-            return '';
-        }
-        $patterns = [
-            '/^(Visitors\s+see|Visitor\s+sees|Visitors\s+can|Visitors\s+will|Visitors\s+are|访客看到|用户看到)\s+/iu' => '',
-            '/^(Provide|Show|Display|List|Present|Output)\s+(the\s+)?(visitor\s+)?/iu' => '',
-            '/^(The|This|A)\s+(visitor|customer|user)\s+/iu' => '',
-            '/\s*(从而产生|产生|信任感增强|知道如何).*/u' => '',
-            '/\s+(before\s+publishing|reviewable\s+page\s+content).*$/iu' => '',
-            '/^(优先沿用|输出必须是|直接产出|字段样例).*/u' => '',
-        ];
-        foreach ($patterns as $pattern => $replacement) {
-            $value = \preg_replace($pattern, $replacement, \trim($value));
-        }
-        return \trim($value);
-    }
-
-    /**
-     * Extract a content plan from a stage-1 execution blueprint block.
-     * Pulls from realtime_content (headline, supporting_copy, ctas) and
-     * implementation_detail.
-     *
-     * @param array<string,mixed> $block
-     * @return array<string,mixed>
-     */
-    private function extractContentPlanFromStageOneBlock(array $block): array
-    {
-        $realtime = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
-        $plan = [];
-        $headline = \trim((string)($realtime['headline'] ?? ''));
-        if ($headline !== '') {
-            $plan['title'] = $this->stripPlanningLanguage($headline);
-        }
-        $supporting = [];
-        foreach (\is_array($realtime['supporting_copy'] ?? null) ? $realtime['supporting_copy'] : [] as $copy) {
-            $cleaned = $this->stripPlanningLanguage(\trim((string)$copy));
-            if ($cleaned !== '') {
-                $supporting[] = $cleaned;
-            }
-        }
-        if ($supporting !== []) {
-            $plan['body_copy'] = $supporting;
-        }
-        $ctas = [];
-        foreach (\is_array($realtime['ctas'] ?? null) ? $realtime['ctas'] : [] as $cta) {
-            if (\is_array($cta)) {
-                $ctaText = \trim((string)($cta['text'] ?? $cta['label'] ?? ''));
-                if ($ctaText !== '') {
-                    $ctas[] = $this->stripPlanningLanguage($ctaText);
-                }
-            }
-        }
-        if ($ctas !== []) {
-            $plan['ctas'] = $ctas;
-        }
-        $blockGoal = $this->firstStageBlockGoal($block);
-        $impl = $this->stripPlanningLanguage(\trim((string)($block['implementation_detail'] ?? $block['execution_script']['core_copy'] ?? $block['execution_script'] ?? '')));
-        if ($impl !== '' && $impl !== $blockGoal) {
-            $plan['implementation_notes'] = $impl;
-        }
-        if ($blockGoal !== '') {
-            $plan['block_goal'] = $blockGoal;
-        }
-        return $plan;
-    }
-
-    /**
-     * Extract a style plan from a stage-1 execution blueprint block.
-     * Pulls from design_tags, style_direction, and color-related fields.
-     *
-     * @param array<string,mixed> $block
-     * @return array<string,mixed>
-     */
-    private function extractStylePlanFromStageOneBlock(array $block): array
-    {
-        $plan = [];
-        $styleDirection = \trim((string)($block['style_direction'] ?? ''));
-        if ($styleDirection !== '') {
-            $plan['style_direction'] = $styleDirection;
-        }
-        $designTags = \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [];
-        if ($designTags !== []) {
-            $plan['design_tags'] = $designTags;
-        }
-        $visualSignature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
-        if ($visualSignature !== []) {
-            $plan['visual_signature'] = $visualSignature;
-        }
-        $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
-        if ($imageIntent !== []) {
-            $plan['image_intent'] = $imageIntent;
-        }
-        $pageDesignPlan = \is_array($block['page_design_plan'] ?? null) ? $block['page_design_plan'] : [];
-        if ($pageDesignPlan !== []) {
-            $plan['page_design_plan'] = $pageDesignPlan;
-        }
-        $pageFlowRole = \trim((string)($block['page_flow_role'] ?? ''));
-        if ($pageFlowRole !== '') {
-            $plan['page_flow_role'] = $pageFlowRole;
-        }
-        return $plan;
     }
 
     /**
@@ -2463,6 +1223,7 @@ class AiSiteBuildTaskService
     {
         $scope = $this->setTaskState($scope, $taskKey, [
             'status' => self::TASK_STATUS_DONE,
+            'message' => '',
             'updated_at' => \date('Y-m-d H:i:s'),
             'finished_at' => \date('Y-m-d H:i:s'),
             'result_ref' => $resultRef,
@@ -2601,6 +1362,7 @@ class AiSiteBuildTaskService
     {
         return $this->setTaskState($scope, $taskKey, [
             'status' => self::TASK_STATUS_RUNNING,
+            'message' => '',
             'updated_at' => \date('Y-m-d H:i:s'),
             'started_at' => \date('Y-m-d H:i:s'),
         ], true);
@@ -2615,7 +1377,7 @@ class AiSiteBuildTaskService
         return $this->setTaskState($scope, $taskKey, [
             'status' => self::TASK_STATUS_FAILED,
             'updated_at' => \date('Y-m-d H:i:s'),
-            'message' => \trim($message),
+            'message' => $this->sanitizeBuildTaskFailureMessageForView($message),
         ], false);
     }
 
@@ -2627,7 +1389,7 @@ class AiSiteBuildTaskService
     {
         return $this->setTaskState($scope, $taskKey, [
             'status' => self::TASK_STATUS_PENDING,
-            'message' => \trim($message),
+            'message' => 'Retrying generation in the current queue.',
             'result_ref' => [],
             'started_at' => '',
             'finished_at' => '',
@@ -2644,7 +1406,7 @@ class AiSiteBuildTaskService
         return $this->setTaskState($scope, $taskKey, [
             'status' => self::TASK_STATUS_PENDING,
             'attempt_no' => 0,
-            'message' => \trim($message),
+            'message' => $this->sanitizeBuildTaskFailureMessageForView($message, 'Retrying generation in a fresh queue.'),
             'result_ref' => [],
             'started_at' => '',
             'finished_at' => '',
@@ -2925,9 +1687,10 @@ class AiSiteBuildTaskService
      */
     public function attachBuildRenderDataContract(array $scope): array
     {
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $blueprintTasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
-        if ($buildBlueprint === [] || $blueprintTasks === []) {
+        $scope = $this->syncPageTypeLayoutsWithSharedComponents($scope);
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $executionTasks = $this->extractBlueprintTasks($scope);
+        if ($buildPlan === [] || $executionTasks === []) {
             return $scope;
         }
 
@@ -2943,14 +1706,14 @@ class AiSiteBuildTaskService
             return $scope;
         }
 
-        $sourceContracts = $this->resolveBuildRenderSourceContracts($buildBlueprint);
-        $payload = $this->buildRenderDataContractPayload($scope, $buildBlueprint, $summary);
+        $sourceContracts = $this->resolveBuildRenderSourceContracts($buildPlan);
+        $payload = $this->buildRenderDataContractPayload($scope, $buildPlan, $summary);
+        $meta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
         $contractContext = [
             'version' => 1,
             'stage' => ContractType::STAGE_BUILD,
-            'build_blueprint_signature' => \trim((string)($buildBlueprint['signature'] ?? '')),
-            'build_plan_contract_id' => \trim((string)($buildBlueprint['build_plan_contract_id'] ?? '')),
-            'build_plan_signature' => \trim((string)($buildBlueprint['build_plan_signature'] ?? '')),
+            'build_plan_contract_id' => \trim((string)($meta['contract_id'] ?? $meta['id'] ?? '')),
+            'build_plan_signature' => \trim((string)($meta['signature'] ?? $meta['source_signature'] ?? '')),
             'source_contracts' => $sourceContracts,
         ];
         $qaGateHelper = new QaGateHelper();
@@ -2964,7 +1727,7 @@ class AiSiteBuildTaskService
                 'build_render_data',
                 [
                     'payload_hash' => $this->buildSignature($payload),
-                    'source_signature' => (string)($contractContext['build_blueprint_signature'] ?? ''),
+                    'source_signature' => (string)($contractContext['build_plan_signature'] ?? ''),
                 ]
             ),
             'permission_matrix' => $permissionMatrix->forStage(ContractType::STAGE_BUILD),
@@ -3001,8 +1764,8 @@ class AiSiteBuildTaskService
         $previousRenderDataContract = \is_array($buildContracts[ContractType::TYPE_RENDER_DATA] ?? null)
             ? $buildContracts[ContractType::TYPE_RENDER_DATA]
             : [];
-        $contentQualityFindings = (new RenderDataQualityLinter())->lint($contract);
-        foreach ($contentQualityFindings as $finding) {
+        $structuralFindings = (new RenderDataQualityLinter())->lint($contract);
+        foreach ($structuralFindings as $finding) {
             if (($finding['severity'] ?? '') === 'error') {
                 $detail = \trim((string)($finding['message'] ?? ''));
                 throw new \RuntimeException(
@@ -3010,39 +1773,6 @@ class AiSiteBuildTaskService
                         ? $detail
                         : 'Build render data failed RenderDataQualityLinter structural gate.'
                 );
-            }
-        }
-
-        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $sourceTruth = \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [];
-        if ($sourceTruth !== [] && \is_array($planJson['pages'] ?? null) && $planJson['pages'] !== []) {
-            $coverageLint = (new SourceTruthCoverageLinter())->lintPlanJson($sourceTruth, $planJson);
-            foreach (\is_array($coverageLint['findings'] ?? null) ? $coverageLint['findings'] : [] as $finding) {
-                $contentQualityFindings[] = $finding;
-            }
-        }
-
-        $visualQa = (new VisualContractQaLinter())->analyze($scope, $payload);
-        foreach ((new ContractQaReportBuilder())->buildContentQualityFindings([
-            'contract_type' => 'page_contract',
-            'visual_contract_unused' => $visualQa['visual_contract_unused'] ?? [],
-            'forbidden_visuals_hit' => $visualQa['forbidden_visuals_hit'] ?? [],
-        ]) as $finding) {
-            $contentQualityFindings[] = $finding;
-        }
-
-        $assetHtml = $this->aggregateRenderPayloadHtmlForAssetQa($payload);
-        if ($assetHtml !== '') {
-            $assetManifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
-            $assetCheck = (new VisualAssetUsageValidator())->validate($assetManifest, $assetHtml);
-            foreach (\is_array($assetCheck['violations'] ?? null) ? $assetCheck['violations'] : [] as $violation) {
-                $contentQualityFindings[] = [
-                    'severity' => 'error',
-                    'category' => 'content_quality',
-                    'contract_type' => 'asset_manifest',
-                    'message' => (string)$violation,
-                    'path' => 'content_quality.asset_max_usage_violation',
-                ];
             }
         }
 
@@ -3054,7 +1784,7 @@ class AiSiteBuildTaskService
                 ],
             ],
             $previousRenderDataContract !== [] ? [ContractType::TYPE_RENDER_DATA => $previousRenderDataContract] : [],
-            $contentQualityFindings
+            $structuralFindings
         );
         $buildContracts[ContractType::TYPE_RENDER_DATA] = $contract;
         $buildContracts[ContractType::TYPE_QA_REPORT] = $qaReportContract;
@@ -3071,6 +1801,57 @@ class AiSiteBuildTaskService
             'contract_context' => $contractContext,
             'contracts' => $workbenchContracts,
         ]);
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function syncPageTypeLayoutsWithSharedComponents(array $scope): array
+    {
+        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+        if ($layouts === [] || $sharedComponents === []) {
+            return $scope;
+        }
+
+        $header = \is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : [];
+        $footer = \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [];
+        $headerCode = \trim((string)($header['code'] ?? ''));
+        $footerCode = \trim((string)($footer['code'] ?? ''));
+        $headerConfig = \is_array($header['default_config'] ?? null) ? $header['default_config'] : [];
+        $footerConfig = \is_array($footer['default_config'] ?? null) ? $footer['default_config'] : [];
+        if (($headerCode === '' || $headerConfig === []) && ($footerCode === '' || $footerConfig === [])) {
+            return $scope;
+        }
+
+        $changed = false;
+        foreach ($layouts as $pageType => $layout) {
+            if (!\is_array($layout)) {
+                continue;
+            }
+            if ($headerCode !== '' && $headerConfig !== []) {
+                $layout['header'] = [
+                    'component' => $headerCode,
+                    'config' => $headerConfig,
+                ];
+                $changed = true;
+            }
+            if ($footerCode !== '' && $footerConfig !== []) {
+                $layout['footer'] = [
+                    'component' => $footerCode,
+                    'config' => $footerConfig,
+                ];
+                $changed = true;
+            }
+            $layouts[$pageType] = $layout;
+        }
+
+        if ($changed) {
+            $scope['page_type_layouts'] = $layouts;
+        }
 
         return $scope;
     }
@@ -3104,16 +1885,23 @@ class AiSiteBuildTaskService
 
     /**
      * @param array<string, mixed> $scope
-     * @param array<string, mixed> $buildBlueprint
+     * @param array<string, mixed> $buildPlan
      * @param array<string, mixed> $summary
      * @return array<string, mixed>
      */
-    private function buildRenderDataContractPayload(array $scope, array $buildBlueprint, array $summary): array
+    private function buildRenderDataContractPayload(array $scope, array $buildPlan, array $summary): array
     {
-        $pageTypes = \array_values(\array_filter(\array_map(
-            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-            \is_array($buildBlueprint['page_types'] ?? null) ? $buildBlueprint['page_types'] : []
-        ), static fn(string $value): bool => $value !== ''));
+        $pageTypes = [];
+        foreach (\is_array($buildPlan['pages'] ?? null) ? $buildPlan['pages'] : [] as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageType = \trim((string)($page['page_type'] ?? (\is_string($key) ? $key : '')));
+            if ($pageType !== '') {
+                $pageTypes[$pageType] = true;
+            }
+        }
+        $pageTypes = \array_values(\array_keys($pageTypes));
         $pageTypeSet = \array_fill_keys($pageTypes, true);
         $pageTypeLayouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
         $materializedPagesByType = \is_array($scope['materialized_pages_by_type'] ?? null) ? $scope['materialized_pages_by_type'] : [];
@@ -3126,11 +1914,12 @@ class AiSiteBuildTaskService
             $pagebuilderPagesByType = \array_intersect_key($pagebuilderPagesByType, $pageTypeSet);
         }
 
+        $meta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
+
         return [
-            'build_blueprint_signature' => \trim((string)($buildBlueprint['signature'] ?? '')),
-            'build_plan_contract_id' => \trim((string)($buildBlueprint['build_plan_contract_id'] ?? '')),
-            'build_plan_signature' => \trim((string)($buildBlueprint['build_plan_signature'] ?? '')),
-            'workspace_track' => \trim((string)($buildBlueprint['workspace_track'] ?? $scope['workspace_track'] ?? '')),
+            'build_plan_contract_id' => \trim((string)($meta['contract_id'] ?? $meta['id'] ?? '')),
+            'build_plan_signature' => \trim((string)($meta['signature'] ?? $meta['source_signature'] ?? '')),
+            'workspace_track' => \trim((string)($buildPlan['workspace_track'] ?? $scope['workspace_track'] ?? '')),
             'page_types' => $pageTypes,
             'page_type_layouts' => $pageTypeLayouts,
             'shared_components' => \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [],
@@ -3143,13 +1932,14 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * @param array<string, mixed> $buildBlueprint
+     * @param array<string, mixed> $buildPlan
      * @return list<array{id:string,type:string,version:string,status:string}>
      */
-    private function resolveBuildRenderSourceContracts(array $buildBlueprint): array
+    private function resolveBuildRenderSourceContracts(array $buildPlan): array
     {
         $refs = [];
-        $buildPlanContractId = \trim((string)($buildBlueprint['build_plan_contract_id'] ?? ''));
+        $meta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
+        $buildPlanContractId = \trim((string)($meta['contract_id'] ?? $meta['id'] ?? ''));
         if ($buildPlanContractId !== '') {
             $refs[] = [
                 'id' => $buildPlanContractId,
@@ -3236,7 +2026,7 @@ class AiSiteBuildTaskService
                 'group_key' => $groupKey,
                 'status' => $status,
                 'attempt_no' => (int)($taskState[$taskKey]['attempt_no'] ?? 0),
-                'message' => (string)($taskState[$taskKey]['message'] ?? ''),
+                'message' => $this->sanitizeBuildTaskFailureMessageForView((string)($taskState[$taskKey]['message'] ?? ''), ''),
                 'updated_at' => (string)($taskState[$taskKey]['updated_at'] ?? ''),
                 'finished_at' => (string)($taskState[$taskKey]['finished_at'] ?? ''),
             ];
@@ -3246,8 +2036,8 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * Build completion gate is intentionally sourced only from build_blueprint.tasks
-     * plus build_tasks state. Derived summaries are display snapshots, not truth.
+     * Build completion gate is sourced from build_plan_v2 block execution rows.
+     * Derived summaries are display snapshots, not truth.
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
@@ -3263,6 +2053,13 @@ class AiSiteBuildTaskService
         $cancelled = (int)($summary['cancelled'] ?? 0);
         $invalidArtifacts = $this->countInvalidCompletedTaskArtifacts($scope);
         $duplicateArtifacts = $this->countDuplicateCompletedPageSectionArtifacts($scope);
+        $pageTypeCoverage = $this->inspectBuildCompletionPageTypeCoverage($scope);
+        $missingBuildPageTypes = \is_array($pageTypeCoverage['missing_build_page_types'] ?? null) ? $pageTypeCoverage['missing_build_page_types'] : [];
+        $missingPageTypeLayouts = \is_array($pageTypeCoverage['missing_page_type_layouts'] ?? null) ? $pageTypeCoverage['missing_page_type_layouts'] : [];
+        $emptyPageTypeLayouts = \is_array($pageTypeCoverage['empty_page_type_layouts'] ?? null) ? $pageTypeCoverage['empty_page_type_layouts'] : [];
+        $missingPersistedVirtualThemeLayouts = \is_array($pageTypeCoverage['missing_persisted_virtual_theme_layouts'] ?? null)
+            ? $pageTypeCoverage['missing_persisted_virtual_theme_layouts']
+            : [];
         $unfinished = \max(0, $total - $done, $pending + $running + $failed + $cancelled);
         $hasIncompleteTasks = $total <= 0
             || $this->hasUnfinishedBlueprintTasks($scope)
@@ -3272,21 +2069,33 @@ class AiSiteBuildTaskService
             || $cancelled > 0
             || $invalidArtifacts > 0
             || $duplicateArtifacts > 0
+            || $missingBuildPageTypes !== []
+            || $missingPageTypeLayouts !== []
+            || $emptyPageTypeLayouts !== []
+            || $missingPersistedVirtualThemeLayouts !== []
             || $done < $total;
 
         $reason = '';
         if ($total <= 0) {
-            $reason = 'missing_build_blueprint_tasks';
+            $reason = 'missing_build_plan_blocks';
         } elseif ($failed > 0) {
-            $reason = 'failed_build_tasks';
+            $reason = 'failed_build_plan_blocks';
         } elseif ($cancelled > 0) {
-            $reason = 'cancelled_build_tasks';
+            $reason = 'cancelled_build_plan_blocks';
         } elseif ($invalidArtifacts > 0) {
             $reason = 'invalid_generated_artifacts';
         } elseif ($duplicateArtifacts > 0) {
             $reason = 'duplicate_generated_artifacts';
+        } elseif ($missingBuildPageTypes !== []) {
+            $reason = 'missing_build_plan_page_types';
+        } elseif ($missingPageTypeLayouts !== []) {
+            $reason = 'missing_page_type_layouts';
+        } elseif ($emptyPageTypeLayouts !== []) {
+            $reason = 'empty_page_type_layouts';
+        } elseif ($missingPersistedVirtualThemeLayouts !== []) {
+            $reason = 'missing_persisted_virtual_theme_layouts';
         } elseif ($unfinished > 0) {
-            $reason = 'unfinished_build_tasks';
+            $reason = 'unfinished_build_plan_blocks';
         }
 
         return [
@@ -3300,8 +2109,85 @@ class AiSiteBuildTaskService
             'cancelled' => $cancelled,
             'invalid_artifacts' => $invalidArtifacts,
             'duplicate_artifacts' => $duplicateArtifacts,
+            'page_type_coverage' => $pageTypeCoverage,
+            'missing_build_page_types' => $missingBuildPageTypes,
+            'missing_page_type_layouts' => $missingPageTypeLayouts,
+            'empty_page_type_layouts' => $emptyPageTypeLayouts,
+            'missing_persisted_virtual_theme_layouts' => $missingPersistedVirtualThemeLayouts,
             'unfinished' => $unfinished,
             'summary' => $summary,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{
+     *   expected_page_types:list<string>,
+     *   build_page_types:list<string>,
+     *   layout_page_types:list<string>,
+     *   missing_build_page_types:list<string>,
+     *   missing_page_type_layouts:list<string>,
+     *   empty_page_type_layouts:list<string>,
+     *   missing_persisted_virtual_theme_layouts:list<string>
+     * }
+     */
+    public function inspectBuildCompletionPageTypeCoverage(array $scope): array
+    {
+        $expected = $this->normalizeBuildPlanStringList($scope['page_types'] ?? []);
+        if ($expected === []) {
+            return [
+                'expected_page_types' => [],
+                'build_page_types' => [],
+                'layout_page_types' => [],
+                'missing_build_page_types' => [],
+                'missing_page_type_layouts' => [],
+                'empty_page_type_layouts' => [],
+                'missing_persisted_virtual_theme_layouts' => [],
+            ];
+        }
+
+        $buildPageTypes = [];
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            if (\trim((string)($task['task_type'] ?? '')) !== 'page_section') {
+                continue;
+            }
+            $pageType = \trim((string)($task['page_type'] ?? ''));
+            if ($pageType !== '') {
+                $buildPageTypes[$pageType] = true;
+            }
+        }
+
+        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        $layoutPageTypes = [];
+        $missingLayouts = [];
+        $emptyLayouts = [];
+        $missingPersistedLayouts = [];
+        foreach ($expected as $pageType) {
+            $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
+            if ($layout === []) {
+                $missingLayouts[] = $pageType;
+            } else {
+                $layoutPageTypes[$pageType] = true;
+                if (!$this->layoutHasContentBlocks($layout)) {
+                    $emptyLayouts[] = $pageType;
+                }
+            }
+            if (
+                $this->requiresPersistedVirtualThemeLayoutCheck($scope)
+                && !$this->persistedVirtualThemeLayoutHasContent($scope, $pageType)
+            ) {
+                $missingPersistedLayouts[] = $pageType;
+            }
+        }
+
+        return [
+            'expected_page_types' => $expected,
+            'build_page_types' => \array_values(\array_keys($buildPageTypes)),
+            'layout_page_types' => \array_values(\array_keys($layoutPageTypes)),
+            'missing_build_page_types' => $this->missingStringSet($expected, \array_values(\array_keys($buildPageTypes))),
+            'missing_page_type_layouts' => \array_values(\array_unique($missingLayouts)),
+            'empty_page_type_layouts' => \array_values(\array_unique($emptyLayouts)),
+            'missing_persisted_virtual_theme_layouts' => \array_values(\array_unique($missingPersistedLayouts)),
         ];
     }
 
@@ -3311,7 +2197,7 @@ class AiSiteBuildTaskService
     public function formatBuildCompletionGateFailureDetail(array $gate): string
     {
         $reason = \trim((string)($gate['reason'] ?? ''));
-        if ($reason === 'failed_build_tasks') {
+        if ($reason === 'failed_build_plan_blocks') {
             $failedLines = $this->formatFailedBuildTaskLines(
                 \is_array($gate['summary'] ?? null) ? $gate['summary'] : []
             );
@@ -3324,17 +2210,35 @@ class AiSiteBuildTaskService
         if ($reason === 'invalid_generated_artifacts') {
             $count = (int)($gate['invalid_artifacts'] ?? 0);
 
-            return (string)__('有 %{count} 项构建产物无效，请点击「重试失败项」或「完全重建」后重试。', ['count' => $count]);
+            return (string)__('有 %{count} 项构建产物无效，请点击「重试失败项」或「重新生成当前阶段」后重试。', ['count' => $count]);
         }
         if ($reason === 'duplicate_generated_artifacts') {
             $count = (int)($gate['duplicate_artifacts'] ?? 0);
 
             return 'Build produced ' . $count . ' duplicated page-section artifact(s). Regenerate from the Stage-1 visual_signature contract instead of reusing another block.';
         }
-        if ($reason === 'cancelled_build_tasks') {
+        if (\in_array($reason, [
+            'missing_build_plan_page_types',
+            'missing_page_type_layouts',
+            'empty_page_type_layouts',
+            'missing_persisted_virtual_theme_layouts',
+        ], true)) {
+            $coverage = \is_array($gate['page_type_coverage'] ?? null) ? $gate['page_type_coverage'] : [];
+            $missing = \array_values(\array_unique(\array_merge(
+                \is_array($coverage['missing_build_page_types'] ?? null) ? $coverage['missing_build_page_types'] : [],
+                \is_array($coverage['missing_page_type_layouts'] ?? null) ? $coverage['missing_page_type_layouts'] : [],
+                \is_array($coverage['empty_page_type_layouts'] ?? null) ? $coverage['empty_page_type_layouts'] : [],
+                \is_array($coverage['missing_persisted_virtual_theme_layouts'] ?? null) ? $coverage['missing_persisted_virtual_theme_layouts'] : []
+            )));
+
+            return (string)__('构建结果缺少页面类型产物：%{page_types}。请重新生成建站方案并重新调度构建队列。', [
+                'page_types' => \implode(', ', \array_slice($missing, 0, 12)),
+            ]);
+        }
+        if ($reason === 'cancelled_build_plan_blocks') {
             return (string)__('有构建任务已取消，请检查工作台任务状态后重试。');
         }
-        if ($reason === 'unfinished_build_tasks' || $reason === 'missing_build_blueprint_tasks') {
+        if ($reason === 'unfinished_build_plan_blocks' || $reason === 'missing_build_plan_blocks') {
             $done = (int)($gate['done'] ?? 0);
             $total = (int)($gate['total'] ?? 0);
 
@@ -3810,7 +2714,7 @@ class AiSiteBuildTaskService
                 'retry_scope' => 'build_task',
                 'page_type' => (string)($task['page_type'] ?? ''),
                 'section_code' => (string)($task['section_code'] ?? ''),
-                'message' => $message !== '' ? $message : 'Build task failed.',
+                'message' => $this->sanitizeBuildTaskFailureMessageForView($message),
                 'failed_at' => (string)($state['finished_at'] ?? $state['updated_at'] ?? \date('Y-m-d H:i:s')),
             ];
         }
@@ -3841,11 +2745,11 @@ class AiSiteBuildTaskService
                 'retry_scope' => (string)($latestBuildFailure['retry_scope'] ?? 'build_task'),
                 'page_type' => (string)($latestBuildFailure['page_type'] ?? ''),
                 'section_code' => (string)($latestBuildFailure['section_code'] ?? ''),
-                'message' => \trim((string)(
+                'message' => $this->sanitizeBuildTaskFailureMessageForView((string)(
                     $latestBuildFailure['message']
                     ?? $scope['publish_blocked_reason']
                     ?? ''
-                )) ?: 'Build task failed.',
+                )),
                 'failed_at' => (string)($latestBuildFailure['failed_at'] ?? \date('Y-m-d H:i:s')),
             ];
         }
@@ -3944,17 +2848,232 @@ class AiSiteBuildTaskService
      */
     private function extractBlueprintTasks(array $scope, bool $inflate = false): array
     {
-        $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $tasks = \is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [];
-        $result = [];
-        foreach ($tasks as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $result[] = $inflate ? $this->inflateBuildBlueprintTaskContext($task, $blueprint) : $task;
+        unset($inflate);
+
+        return $this->buildExecutionTasksFromBuildPlan($scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function buildExecutionTasksFromBuildPlan(array $scope): array
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if ($contract === []) {
+            return [];
         }
 
-        return $result;
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+        $pagesById = $this->normalizeBuildPlanRecordSet($contract['pages'] ?? [], ['page_id', 'id']);
+        $contentManifest = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
+        $contentItems = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
+        $runtimeRoot = $this->resolveBuildPlanStage2RuntimeContext($scope, $contract);
+        $contentLocale = $this->firstNonEmptyBuildPlanText([
+            $contract['i18n']['primary_locale'] ?? null,
+            $contentManifest['primary_locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+        ]);
+        $languageContract = $this->buildLanguageRuntimeContract($contentLocale);
+        $tasks = [];
+
+        foreach (['header', 'footer'] as $index => $region) {
+            $tasks[] = [
+                'task_key' => 'shared:' . $region,
+                'task_type' => 'shared_component',
+                'scope_key' => 'shared_components.' . $region,
+                'group_key' => 'shared',
+                'page_type' => '',
+                'region' => $region,
+                'section_code' => '',
+                'section_key' => $region,
+                'block_key' => $region,
+                'block_type' => $region,
+                'page_flow_role' => 'shared_chrome',
+                'label' => \ucfirst($region),
+                'sort_order' => 10 + ($index * 10),
+                'dependencies' => [],
+                'can_parallel' => false,
+                'materialize_after_done' => false,
+                'materialize_policy' => 'none',
+                'prompt_template_key' => 'build_plan_v2_block_execute',
+                'progress_weight' => 1.0,
+                'result_ref' => ['region' => $region],
+                'runtime_context' => \array_replace_recursive($runtimeRoot, [
+                    'content_locale' => $contentLocale,
+                    'language_contract' => $languageContract,
+                    'context_refs' => [
+                        'site_brief_ref' => 'build_plan_v2.site_brief',
+                        'design_manifest_ref' => 'build_plan_v2.design_manifest',
+                        'shared_context_ref' => 'build_plan_v2.site_brief',
+                    ],
+                ]),
+                'plan_context' => [
+                    'site_brief' => \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [],
+                    'design_manifest' => \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [],
+                    'shared_region' => $region,
+                    'page_flow_role' => 'shared_chrome',
+                ],
+                'task_script' => [
+                    'component_type' => $region,
+                    'output_contract' => $this->buildPlanExecutionOutputContract($region, []),
+                    'acceptance' => $this->buildPlanExecutionAcceptanceContract($region),
+                    'content_keys' => ['site.name', 'site.primary_goal'],
+                    'policy_slices' => ['layout.grid_alignment', 'typography.refined_font_stack', 'color.readable_contrast'],
+                    'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'],
+                ],
+                'block_task' => [
+                    'block_type' => $region,
+                    'page_flow_role' => 'shared_chrome',
+                    'task_goal' => $region === 'header' ? 'Render the site navigation header.' : 'Render the site footer.',
+                    'content_plan' => [],
+                    'style_plan' => \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [],
+                    'output_contract' => $this->buildPlanExecutionOutputContract($region, []),
+                    'acceptance' => $this->buildPlanExecutionAcceptanceContract($region),
+                ],
+                'implementation_contract' => [
+                    'source' => 'build_plan_v2.blocks',
+                    'contract_id' => (string)($meta['id'] ?? ''),
+                    'block_id' => '',
+                ],
+            ];
+        }
+
+        $blocks = \array_values($this->normalizeBuildPlanRecordSet($contract['blocks'] ?? [], ['block_id', 'id']));
+        \usort($blocks, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
+        $promptContextAssembler = new AiSiteBuildPromptContextAssembler();
+        foreach ($blocks as $sortIndex => $block) {
+            $blockId = \trim((string)($block['block_id'] ?? $block['id'] ?? ''));
+            $pageId = \trim((string)($block['page_id'] ?? ''));
+            $page = \is_array($pagesById[$pageId] ?? null) ? $pagesById[$pageId] : [];
+            $pageType = \trim((string)($block['page_type'] ?? $page['page_type'] ?? ''));
+            if ($blockId === '' || $pageType === '') {
+                continue;
+            }
+            $sectionKey = \trim((string)($block['section_key'] ?? ''));
+            if ($sectionKey === '') {
+                $parts = \explode('.', $blockId);
+                $sectionKey = (string)\end($parts);
+            }
+            $sectionCode = $this->resolveBuildPlanSectionCode($pageType, $sectionKey, $blockId);
+            $taskId = 'page:' . $pageType . ':' . $sectionCode;
+            $contentKeys = $this->normalizeBuildPlanStringList($block['content_keys'] ?? []);
+            $label = $this->firstBuildPlanContentValue($contentItems, $contentKeys);
+            if ($label === '') {
+                $label = $sectionKey !== '' ? \ucfirst(\str_replace(['_', '-'], ' ', $sectionKey)) : $taskId;
+            }
+            $blockType = $this->normalizeBuildPlanRoleToken((string)($block['block_type'] ?? $block['type'] ?? $block['template'] ?? 'section'));
+            $pageFlowRole = $this->normalizeBuildPlanRoleToken((string)($block['page_flow_role'] ?? ''));
+            $visualSignature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
+            $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+            $stylePlan = \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [];
+            foreach (['design_tags', 'visual_signature', 'image_intent'] as $planKey) {
+                if (\is_array($block[$planKey] ?? null) && $block[$planKey] !== []) {
+                    $stylePlan[$planKey] = $block[$planKey];
+                }
+            }
+            if ($pageFlowRole !== '') {
+                $stylePlan['page_flow_role'] = $pageFlowRole;
+            }
+            $outputContract = $this->buildPlanExecutionOutputContract($blockType, $contentKeys);
+            $acceptance = $this->buildPlanExecutionAcceptanceContract($blockType);
+            $pseudoTask = [
+                'task_id' => $taskId,
+                'input_scope' => [
+                    'page_id' => $pageId,
+                    'page_type' => $pageType,
+                    'block_id' => $blockId,
+                    'block_type' => $blockType,
+                    'section_key' => $sectionKey,
+                    'page_flow_role' => $pageFlowRole,
+                ],
+                'runtime_context' => \array_replace_recursive($runtimeRoot, [
+                    'content_locale' => $contentLocale,
+                    'language_contract' => $languageContract,
+                ]),
+                'output_contract' => $outputContract,
+                'acceptance' => $acceptance,
+            ];
+            $planContext = $this->compactBuildPlanTaskPlanContext($promptContextAssembler->assemble($contract, $pseudoTask));
+            $planContext['block_type'] = $blockType;
+            if ($pageFlowRole !== '') {
+                $planContext['page_flow_role'] = $pageFlowRole;
+            }
+            if ($visualSignature !== []) {
+                $planContext['block_visual_signature'] = $visualSignature;
+            }
+            if ($imageIntent !== []) {
+                $planContext['block_image_intent'] = $imageIntent;
+            }
+
+            $tasks[] = [
+                'task_key' => $taskId,
+                'task_type' => 'page_section',
+                'scope_key' => 'page_sections.' . $pageType . '.' . $sectionCode,
+                'group_key' => $pageType,
+                'page_type' => $pageType,
+                'region' => 'content',
+                'section_code' => $sectionCode,
+                'section_key' => $sectionKey,
+                'block_key' => $sectionKey,
+                'block_id' => $blockId,
+                'block_type' => $blockType,
+                'page_flow_role' => $pageFlowRole,
+                'visual_signature' => $visualSignature,
+                'image_intent' => $imageIntent,
+                'label' => $label,
+                'sort_order' => 100 + ((int)$sortIndex * 10),
+                'dependencies' => ['shared:header', 'shared:footer'],
+                'can_parallel' => true,
+                'materialize_after_done' => true,
+                'materialize_policy' => 'page',
+                'prompt_template_key' => 'build_plan_v2_block_execute',
+                'progress_weight' => 2.0,
+                'result_ref' => ['page_type' => $pageType, 'section_code' => $sectionCode],
+                'runtime_context' => \array_replace_recursive($runtimeRoot, [
+                    'content_locale' => $contentLocale,
+                    'language_contract' => $languageContract,
+                    'context_refs' => [
+                        'site_brief_ref' => 'build_plan_v2.site_brief',
+                        'design_manifest_ref' => 'build_plan_v2.design_manifest',
+                        'page_context_ref' => $pageId !== '' ? ('build_plan_v2.pages.' . $pageId) : '',
+                        'block_context_ref' => 'build_plan_v2.blocks.' . $blockId,
+                        'asset_context_ref' => 'build_plan_v2.blocks.' . $blockId . '.image_intent',
+                    ],
+                ]),
+                'plan_context' => $planContext,
+                'task_script' => [
+                    'component_type' => 'section',
+                    'output_contract' => $outputContract,
+                    'acceptance' => $acceptance,
+                    'content_keys' => $contentKeys,
+                    'policy_slices' => ['layout.4_8_spacing', 'typography.refined_font_stack', 'image.integrated_not_pasted', 'responsive.no_horizontal_scroll'],
+                    'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic', 'color.readable_contrast'],
+                ],
+                'block_task' => [
+                    'block_type' => $blockType,
+                    'page_flow_role' => $pageFlowRole,
+                    'task_goal' => $this->contentValueForBuildPlanKey($contentItems, $contentKeys[1] ?? ''),
+                    'content_plan' => $this->sliceBuildPlanContentItems($contentItems, $contentKeys),
+                    'style_plan' => $stylePlan,
+                    'visual_signature' => $visualSignature,
+                    'image_intent' => $imageIntent,
+                    'output_contract' => $outputContract,
+                    'acceptance' => $acceptance,
+                ],
+                'implementation_contract' => [
+                    'source' => 'build_plan_v2.blocks',
+                    'contract_id' => (string)($meta['id'] ?? ''),
+                    'block_id' => $blockId,
+                    'data_contract' => \is_array($outputContract['render_data'] ?? null) ? $outputContract['render_data'] : [],
+                    'output_contract' => $outputContract,
+                    'acceptance' => $acceptance,
+                ],
+            ];
+        }
+
+        return $tasks;
     }
 
     /**
@@ -4000,7 +3119,14 @@ class AiSiteBuildTaskService
             if ($itemKey === '') {
                 continue;
             }
-            $message = \trim((string)($failure['message'] ?? $failure['error'] ?? ''));
+            $message = $this->sanitizeBuildTaskFailureMessageForView((string)($failure['message'] ?? $failure['error'] ?? ''));
+            $failureForView = $failure;
+            foreach (['message', 'error', 'error_message', 'failure_reason', 'reason'] as $messageKey) {
+                if (!isset($failureForView[$messageKey]) || !\is_scalar($failureForView[$messageKey])) {
+                    continue;
+                }
+                $failureForView[$messageKey] = $this->sanitizeBuildTaskFailureMessageForView((string)$failureForView[$messageKey], $message);
+            }
             $items[$itemKey] = \array_replace([
                 'operation' => $operation,
                 'item_key' => $itemKey,
@@ -4008,13 +3134,65 @@ class AiSiteBuildTaskService
                 'retry_scope' => (string)($failure['retry_scope'] ?? $operation),
                 'message' => $message !== '' ? $message : 'AI generation failed.',
                 'failed_at' => (string)($failure['failed_at'] ?? \date('Y-m-d H:i:s')),
-            ], $failure, [
+            ], $failureForView, [
                 'operation' => \trim((string)($failure['operation'] ?? $operation)),
                 'item_key' => $itemKey,
+                'message' => $message !== '' ? $message : 'AI generation failed.',
             ]);
         }
 
         return $items;
+    }
+
+    private function sanitizeBuildTaskFailureMessageForView(string $message, string $fallback = 'Build task failed.'): string
+    {
+        $message = \trim((string)(\preg_replace('/\s+/u', ' ', $message) ?? $message));
+        $fallback = \trim($fallback);
+        if ($message === '') {
+            return $fallback;
+        }
+
+        $lower = \mb_strtolower($message, 'UTF-8');
+        if (\str_contains($lower, 'required_image_asset_unresolved')
+            || \str_contains($lower, 'inline block image generation failed')
+            || \str_contains($lower, 'image generation failed')
+            || \str_contains($lower, 'vectorengine')
+            || \str_contains($lower, 'generatecontent')
+            || \str_contains($lower, 'chat pre-consumed quota')
+            || \str_contains($lower, 'user quota')
+            || \str_contains($lower, 'need quota')
+        ) {
+            return 'Image generation is temporarily unavailable. The section will need another generation attempt.';
+        }
+
+        if (\str_contains($lower, 'openssl')
+            || \str_contains($lower, 'ssl_read')
+            || \str_contains($lower, 'curl')
+            || \str_contains($lower, 'operation timed out')
+            || \str_contains($lower, 'operation too slow')
+            || \str_contains($lower, 'timed out after')
+        ) {
+            return 'AI generation timed out. The section will need another generation attempt.';
+        }
+
+        if (\str_contains($lower, 'contract findings')
+            || \str_contains($lower, 'hard policy')
+            || \str_contains($lower, 'quality gate failed')
+            || \str_contains($lower, 'quality gate did not')
+            || \str_contains($lower, 'component contract')
+        ) {
+            return 'AI output did not pass the section quality gate. The section will need another generation attempt.';
+        }
+
+        if ((\preg_match('/https?:\\/\\//i', $message) === 1)
+            || (\preg_match('/\\brequest\\s*id\\b/i', $message) === 1)
+            || (\preg_match('/\\bHTTP\\s*:?\\s*\\d{3}\\b/i', $message) === 1)
+            || (\preg_match('/\\b[A-Za-z_]+Exception\\b/', $message) === 1)
+        ) {
+            return $fallback !== '' ? $fallback : 'AI generation failed. The section will need another generation attempt.';
+        }
+
+        return \mb_substr($message, 0, 320, 'UTF-8');
     }
 
     /**
@@ -4036,67 +3214,26 @@ class AiSiteBuildTaskService
      */
     private function extractTaskState(array $scope): array
     {
-        $taskState = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
         $sanitized = [];
-        foreach ($taskState as $taskKey => $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $sanitized[(string)$taskKey] = $this->sanitizeBuildTaskStateRow($row, (string)$taskKey);
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        foreach (['header', 'footer'] as $region) {
+            $row = \is_array($contract['shared_execution'][$region] ?? null) ? $contract['shared_execution'][$region] : [];
+            $taskKey = 'shared:' . $region;
+            $sanitized[$taskKey] = $this->sanitizeBuildTaskStateRow(\array_replace(['task_key' => $taskKey], $row), $taskKey);
         }
-
-        return $sanitized;
-    }
-
-    /**
-     * @param array<string, mixed> $blueprint
-     * @return array<string, array<string, mixed>>
-     */
-    private function buildDefaultTaskState(array $blueprint): array
-    {
-        $taskState = [];
-        foreach (\is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [] as $task) {
-            if (!\is_array($task)) {
+        foreach ($this->normalizeBuildPlanRecordSet($contract['blocks'] ?? [], ['block_id', 'id']) as $blockId => $block) {
+            if (!\is_array($block)) {
                 continue;
             }
-            $taskKey = (string)($task['task_key'] ?? '');
+            $taskKey = $this->buildTaskKeyForPlanBlock($block, (string)$blockId, $contract);
             if ($taskKey === '') {
                 continue;
             }
-            $taskState[$taskKey] = [
-                'task_key' => $taskKey,
-                'status' => self::TASK_STATUS_PENDING,
-                'attempt_no' => 0,
-                'message' => '',
-                'result_ref' => [],
-                'updated_at' => '',
-                'started_at' => '',
-                'finished_at' => '',
-            ];
+            $row = \is_array($block['execution'] ?? null) ? $block['execution'] : [];
+            $sanitized[$taskKey] = $this->sanitizeBuildTaskStateRow(\array_replace(['task_key' => $taskKey], $row), $taskKey);
         }
 
-        return $taskState;
-    }
-
-    /**
-     * @param array<string, mixed> $blueprint
-     * @param array<string, mixed> $existingTasks
-     * @return array<string, array<string, mixed>>
-     */
-    private function mergeTaskStateWithBlueprint(array $blueprint, array $existingTasks): array
-    {
-        $merged = $this->buildDefaultTaskState($blueprint);
-        foreach ($merged as $taskKey => $defaultState) {
-            if (!\is_array($existingTasks[$taskKey] ?? null)) {
-                continue;
-            }
-            $merged[$taskKey] = \array_replace(
-                $defaultState,
-                $this->sanitizeBuildTaskStateRow($existingTasks[$taskKey], $taskKey)
-            );
-        }
-
-        return $merged;
+        return $sanitized;
     }
 
     /**
@@ -4106,19 +3243,208 @@ class AiSiteBuildTaskService
      */
     private function setTaskState(array $scope, string $taskKey, array $patch, bool $bumpAttempt): array
     {
-        $tasks = $this->extractTaskState($scope);
-        $existing = \is_array($tasks[$taskKey] ?? null) ? $tasks[$taskKey] : [
+        $taskKey = \trim($taskKey);
+        if ($taskKey === '') {
+            return $scope;
+        }
+        $states = $this->extractTaskState($scope);
+        $existing = \is_array($states[$taskKey] ?? null) ? $states[$taskKey] : [
             'task_key' => $taskKey,
             'attempt_no' => 0,
         ];
         if ($bumpAttempt) {
             $patch['attempt_no'] = \max((int)($existing['attempt_no'] ?? 0), 0) + 1;
         }
-        $tasks[$taskKey] = \array_replace($existing, $patch);
-        $scope['build_tasks'] = $tasks;
-        $scope['build_task_summary'] = $this->summarize($scope);
+        $next = $this->sanitizeBuildTaskStateRow(\array_replace($existing, $patch), $taskKey);
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if (\str_starts_with($taskKey, 'shared:')) {
+            $region = \trim(\substr($taskKey, 7));
+            if ($region !== '') {
+                $shared = \is_array($contract['shared_execution'] ?? null) ? $contract['shared_execution'] : [];
+                $shared[$region] = $next;
+                $contract['shared_execution'] = $shared;
+                $scope['build_plan_v2'] = $contract;
+            }
+
+            return $this->attachBuildPlanExecutionSummary($scope);
+        }
+
+        $blocks = \is_array($contract['blocks'] ?? null) ? $contract['blocks'] : [];
+        foreach ($blocks as $index => $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockId = \trim((string)($block['block_id'] ?? $block['id'] ?? (\is_string($index) ? $index : '')));
+            if ($this->buildTaskKeyForPlanBlock($block, $blockId, $contract) !== $taskKey) {
+                continue;
+            }
+            $block['execution'] = $next;
+            $blocks[$index] = $block;
+            $contract['blocks'] = $blocks;
+            $scope['build_plan_v2'] = $contract;
+            return $this->attachBuildPlanExecutionSummary($scope);
+        }
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function ensureBuildPlanBlockExecutionState(array $scope): array
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if ($contract === []) {
+            return $scope;
+        }
+
+        $now = \date('Y-m-d H:i:s');
+        $shared = \is_array($contract['shared_execution'] ?? null) ? $contract['shared_execution'] : [];
+        foreach (['header', 'footer'] as $region) {
+            $taskKey = 'shared:' . $region;
+            $shared[$region] = $this->sanitizeBuildTaskStateRow(\array_replace([
+                'task_key' => $taskKey,
+                'status' => self::TASK_STATUS_PENDING,
+                'attempt_no' => 0,
+                'message' => '',
+                'result_ref' => [],
+                'updated_at' => '',
+                'started_at' => '',
+                'finished_at' => '',
+            ], \is_array($shared[$region] ?? null) ? $shared[$region] : []), $taskKey);
+        }
+        $contract['shared_execution'] = $shared;
+
+        $blocks = \is_array($contract['blocks'] ?? null) ? $contract['blocks'] : [];
+        foreach ($blocks as $index => $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockId = \trim((string)($block['block_id'] ?? $block['id'] ?? (\is_string($index) ? $index : '')));
+            $taskKey = $this->buildTaskKeyForPlanBlock($block, $blockId, $contract);
+            if ($taskKey === '') {
+                continue;
+            }
+            $existing = \is_array($block['execution'] ?? null) ? $block['execution'] : [];
+            $block['execution'] = $this->sanitizeBuildTaskStateRow(\array_replace([
+                'task_key' => $taskKey,
+                'status' => self::TASK_STATUS_PENDING,
+                'attempt_no' => 0,
+                'message' => '',
+                'result_ref' => [],
+                'updated_at' => $now,
+                'started_at' => '',
+                'finished_at' => '',
+            ], $existing), $taskKey);
+            $blocks[$index] = $block;
+        }
+        $contract['blocks'] = $blocks;
+        $scope['build_plan_v2'] = $contract;
+
+        return $this->attachBuildPlanExecutionSummary($scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function attachBuildPlanExecutionSummary(array $scope): array
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if ($contract === []) {
+            return $scope;
+        }
+        $summary = $this->summarize($scope);
+        $contract['execution_summary'] = [
+            'total' => (int)($summary['total'] ?? 0),
+            'done' => (int)($summary['done'] ?? 0),
+            'pending' => (int)($summary['pending'] ?? 0),
+            'running' => (int)($summary['running'] ?? 0),
+            'failed' => (int)($summary['failed'] ?? 0),
+            'cancelled' => (int)($summary['cancelled'] ?? 0),
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+        $scope['build_plan_v2'] = $contract;
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function resetBuildPlanExecutionRows(array $scope): array
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if ($contract === []) {
+            return $scope;
+        }
+        unset($contract['execution_summary'], $contract['shared_execution']);
+        if (\is_array($contract['blocks'] ?? null)) {
+            foreach ($contract['blocks'] as $index => $block) {
+                if (\is_array($block)) {
+                    unset($block['execution']);
+                    $contract['blocks'][$index] = $block;
+                }
+            }
+        }
+        $scope['build_plan_v2'] = $contract;
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $contract
+     */
+    private function buildTaskKeyForPlanBlock(array $block, string $blockId, array $contract): string
+    {
+        $pageId = \trim((string)($block['page_id'] ?? ''));
+        $pagesById = $this->normalizeBuildPlanRecordSet($contract['pages'] ?? [], ['page_id', 'id']);
+        $page = \is_array($pagesById[$pageId] ?? null) ? $pagesById[$pageId] : [];
+        $pageType = \trim((string)($block['page_type'] ?? $page['page_type'] ?? ''));
+        if ($pageType === '') {
+            return '';
+        }
+        $sectionKey = \trim((string)($block['section_key'] ?? ''));
+        if ($sectionKey === '' && $blockId !== '') {
+            $parts = \explode('.', $blockId);
+            $sectionKey = (string)\end($parts);
+        }
+        $sectionCode = $this->resolveBuildPlanSectionCode($pageType, $sectionKey, $blockId);
+        if ($sectionCode === '') {
+            return '';
+        }
+
+        return 'page:' . $pageType . ':' . $sectionCode;
+    }
+
+    /**
+     * @param list<string> $contentKeys
+     * @return array<string, mixed>
+     */
+    private function buildPlanExecutionOutputContract(string $componentType, array $contentKeys): array
+    {
+        return [
+            'format' => 'pagebuilder_php_component',
+            'component_type' => $componentType,
+            'required_outputs' => ['html', 'css_extra', 'default_config'],
+            'render_data' => [
+                'content_keys' => $contentKeys,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildPlanExecutionAcceptanceContract(string $componentType): array
+    {
+        return [
+            'definition_of_done' => 'Generate one complete visitor-facing ' . $componentType . ' block from the confirmed plan block.',
+            'checks' => ['valid_json', 'visitor_visible_html', 'responsive_layout'],
+        ];
     }
 
     /**
@@ -4185,9 +3511,10 @@ class AiSiteBuildTaskService
 
         $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
         $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
-        if ($this->layoutContainsSectionCode($layout, $sectionCode)) {
+        $layoutSection = $this->findLayoutSectionByCode($layout, $sectionCode);
+        if ($layoutSection !== null) {
             if (
-                $this->arrayContainsGeneratedArtifactPromptTrace($layout)
+                $this->arrayContainsGeneratedArtifactPromptTrace($layoutSection)
                 || $this->virtualThemeComponentHasPromptTrace($scope, $sectionCode)
             ) {
                 return false;
@@ -4337,7 +3664,7 @@ class AiSiteBuildTaskService
         if (\preg_match('/&lt;\s*\/?\s*[a-z][a-z0-9:-]*[^&\n]{0,160}(?:class\s*=|&gt;)/iu', $payload) === 1) {
             return true;
         }
-        if (\preg_match('/<\s*\/?\s*[0-9][^>\n]{0,160}>/u', $payload) === 1) {
+        if ($this->containsGeneratedArtifactMalformedNumericTag($payload)) {
             return true;
         }
         if ($this->containsGeneratedArtifactMalformedCss($payload)) {
@@ -4354,6 +3681,28 @@ class AiSiteBuildTaskService
         }
         if ($this->containsGeneratedArtifactDuplicateHeroMediaPlaceholder($payload)) {
             return true;
+        }
+
+        return false;
+    }
+
+    private function containsGeneratedArtifactMalformedNumericTag(string $payload): bool
+    {
+        if (\preg_match_all('/<\s*\/?\s*[0-9][^>\n]{0,160}>/u', $payload, $matches) < 1) {
+            return false;
+        }
+
+        foreach ($matches[0] ?? [] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate === '') {
+                continue;
+            }
+            if (\preg_match('/(?:<\?|\?>|[\'"`$,]|ENT_QUOTES|htmlspecialchars)/iu', $candidate) === 1) {
+                continue;
+            }
+            if (\preg_match('/^<\s*\/?\s*[0-9][a-z0-9:-]*\s*\/?\s*>$/iu', $candidate) === 1) {
+                return true;
+            }
         }
 
         return false;
@@ -4524,13 +3873,42 @@ class AiSiteBuildTaskService
      */
     private function layoutContainsSectionCode(array $layout, string $sectionCode): bool
     {
+        return $this->findLayoutSectionByCode($layout, $sectionCode) !== null;
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     * @return array<string, mixed>|null
+     */
+    private function findLayoutSectionByCode(array $layout, string $sectionCode): ?array
+    {
         $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
         foreach ($content as $section) {
             if (!\is_array($section)) {
                 continue;
             }
             foreach (['code', 'component', 'section_code'] as $key) {
-                if (\trim((string)($section[$key] ?? '')) === $sectionCode) {
+                if ($this->sectionIdentityMatches((string)($section[$key] ?? ''), $sectionCode)) {
+                    return $section;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     */
+    private function layoutHasContentBlocks(array $layout): bool
+    {
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        foreach ($content as $section) {
+            if (!\is_array($section)) {
+                continue;
+            }
+            foreach (['code', 'component', 'section_code'] as $key) {
+                if (\trim((string)($section[$key] ?? '')) !== '') {
                     return true;
                 }
             }
@@ -4570,6 +3948,37 @@ class AiSiteBuildTaskService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     */
+    private function persistedVirtualThemeLayoutHasContent(array $scope, string $pageType): bool
+    {
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId <= 0 || $pageType === '') {
+            return false;
+        }
+
+        try {
+            /** @var VirtualThemeLayout $layout */
+            $layout = clone ObjectManager::getInstance(VirtualThemeLayout::class);
+            $layout->clearData()->clearQuery();
+            $layout->where(VirtualThemeLayout::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+                ->where(VirtualThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(VirtualThemeLayout::schema_fields_AREA, 'frontend')
+                ->order(VirtualThemeLayout::schema_fields_ID, 'DESC')
+                ->find()
+                ->fetch();
+
+            $config = $layout->getConfig();
+            return $layout->getId() > 0
+                && \is_array($config)
+                && $this->layoutHasContentBlocks($config)
+                && !$this->arrayContainsGeneratedArtifactPromptTrace($config);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * @param array<string, mixed> $virtualPage
      */
     private function virtualPageContainsSectionCode(array $virtualPage, string $sectionCode): bool
@@ -4580,13 +3989,62 @@ class AiSiteBuildTaskService
                 continue;
             }
             foreach (['section_code', 'code', 'block_code', 'component', 'component_code'] as $key) {
-                if (\trim((string)($block[$key] ?? '')) === $sectionCode) {
+                if ($this->sectionIdentityMatches((string)($block[$key] ?? ''), $sectionCode)) {
                     return true;
                 }
             }
         }
 
         return false;
+    }
+
+    private function sectionIdentityMatches(string $candidate, string $sectionCode): bool
+    {
+        $candidate = \trim($candidate);
+        $sectionCode = \trim($sectionCode);
+        if ($candidate === '' || $sectionCode === '') {
+            return false;
+        }
+        if ($candidate === $sectionCode) {
+            return true;
+        }
+
+        $left = $this->sectionIdentityCandidates($candidate);
+        $right = $this->sectionIdentityCandidates($sectionCode);
+        foreach (\array_keys($left) as $value) {
+            if (isset($right[$value])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function sectionIdentityCandidates(string $value): array
+    {
+        $value = \strtolower(\trim($value));
+        if ($value === '') {
+            return [];
+        }
+
+        $normalized = (string)\preg_replace('/-+/u', '-', \str_replace(['\\', '/', '_'], '-', $value));
+        $normalized = \trim($normalized, '-');
+        if ($normalized === '') {
+            return [];
+        }
+
+        $candidates = [$normalized => true];
+        if (\str_starts_with($normalized, 'content-')) {
+            $withoutPrefix = \trim(\substr($normalized, 8), '-');
+            if ($withoutPrefix !== '') {
+                $candidates[$withoutPrefix] = true;
+            }
+        }
+
+        return $candidates;
     }
 
     private function normalizeTaskStatus(string $status): string

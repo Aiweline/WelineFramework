@@ -105,6 +105,13 @@ class ParamDefinitionNormalizer
     {
         $definition = $this->normalizeAliases($definition);
 
+        $hasExplicitType = array_key_exists('type', $definition) && trim((string)$definition['type']) !== '';
+        if (!$hasExplicitType && array_key_exists('default', $definition) && is_bool($definition['default'])) {
+            $definition['type'] = 'bool';
+            $definition['ui_type'] = $definition['ui_type'] ?? $definition['input'] ?? 'select';
+            $definition['input'] = $definition['input'] ?? $definition['ui_type'];
+        }
+
         $type = trim((string)($definition['type'] ?? 'string'));
         if ($type === '') {
             $type = 'string';
@@ -131,6 +138,9 @@ class ParamDefinitionNormalizer
 
         $options = $definition['options'] ?? $definition['option'] ?? [];
         $definition['options'] = $this->normalizeOptions($options);
+        if (in_array($type, ['bool', 'boolean'], true) && $definition['options'] === []) {
+            $definition['options'] = $this->defaultBooleanOptions($name);
+        }
         if (array_key_exists('option', $definition) && !is_array($definition['option'])) {
             unset($definition['option']);
         }
@@ -154,6 +164,25 @@ class ParamDefinitionNormalizer
         }
 
         return $definition;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function defaultBooleanOptions(string $name): array
+    {
+        $normalizedName = strtolower($name);
+        if (str_starts_with($normalizedName, 'show') || str_contains($normalizedName, 'visible')) {
+            return [
+                '1' => '显示',
+                '0' => '隐藏',
+            ];
+        }
+
+        return [
+            '1' => '是',
+            '0' => '否',
+        ];
     }
 
     /**

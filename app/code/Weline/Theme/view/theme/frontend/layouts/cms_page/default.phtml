@@ -65,6 +65,7 @@ $colors = $this->getData('colors') ?? [];
                 <!-- ========== CONTENT SLOT 主内容插槽 ========== -->
                 <w:slot id="content" 
                         name="内容区域"
+                        accept="layout-cms-content,layout-default-content,content,banner,carousel,product,category,faq,video"
                         multiple="true"
                         reject="header,footer"
                         position="content"
@@ -145,9 +146,10 @@ $colors = $this->getData('colors') ?? [];
     }
     
     .container {
-        max-width: var(--weline-layout-content-max-width, 1200px);
+        max-width: var(--weline-layout-content-max-width, 1440px);
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, 20px);
+        padding: 0 var(--weline-layout-content-padding-inline, 1rem);
+        box-sizing: border-box;
     }
     
     /* CMS内容样式 */

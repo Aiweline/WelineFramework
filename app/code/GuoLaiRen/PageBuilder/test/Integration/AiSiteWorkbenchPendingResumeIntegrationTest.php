@@ -50,7 +50,7 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
         self::assertStringContainsString('workspaceState = normalizeWorkspaceStateShape(mergeWorkspaceStatePatch(workspaceState));', $script);
     }
 
-    public function testSseErrorHandlersDoNotCloseTheStream(): void
+    public function testSseErrorHandlersCloseAndDisposeTheStreamBeforeRetryUi(): void
     {
         $mainScript = (string)\file_get_contents(
             BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
@@ -61,8 +61,37 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
 
         self::assertEventBlocksDoNotContain($mainScript, "terminal.on('error'", 'closeOperationSource(');
         self::assertEventBlocksDoNotContain($mainScript, "terminal.on('failed'", 'closeOperationSource(');
-        self::assertEventBlocksDoNotContain($runtimeScript, "source.addEventListener('error'", 'closeOperationSource(source);');
-        self::assertEventBlocksDoNotContain($runtimeScript, 'source.onerror = function ()', 'closeOperationSource(source);');
+        self::assertEventBlockContainsInOrder(
+            $runtimeScript,
+            "source.addEventListener('error'",
+            'closeOperationSource(source);',
+            'offerRetryForFailedOperation(operation, payload)'
+        );
+        self::assertEventBlockContainsInOrder(
+            $runtimeScript,
+            'source.onerror = function ()',
+            'closeOperationSource(source);',
+            'offerRetryForFailedOperation(operation, failurePayload)'
+        );
+        self::assertStringContainsString('function disposeOperationLiveStream(operation, summary)', $runtimeScript);
+        self::assertStringContainsString('disposeOperationLiveStream(targetOperation, \'\');', $runtimeScript);
+    }
+
+    private static function assertEventBlockContainsInOrder(string $script, string $marker, string $first, string $second): void
+    {
+        $start = \strpos($script, $marker);
+        self::assertNotFalse($start, 'Could not find event marker ' . $marker);
+        $end = \strpos($script, "\n        });", $start);
+        if ($end === false) {
+            $end = \strpos($script, "\n        };", $start);
+        }
+        self::assertNotFalse($end, 'Could not find event block end for ' . $marker);
+        $block = \substr($script, $start, $end - $start);
+        $firstOffset = \strpos($block, $first);
+        $secondOffset = \strpos($block, $second);
+        self::assertNotFalse($firstOffset, $marker . ' missing ' . $first);
+        self::assertNotFalse($secondOffset, $marker . ' missing ' . $second);
+        self::assertLessThan($secondOffset, $firstOffset, $marker . ' must close stream before retry UI');
     }
 
     private static function assertEventBlocksDoNotContain(string $script, string $marker, string $forbidden): void
