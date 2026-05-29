@@ -7,7 +7,9 @@ namespace Weline\Customer\Controller\Account;
 use Weline\Framework\View\Template;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Service\AccountI18nModuleRegistry;
+use Weline\Customer\Service\AccountSidebarContentGate;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * 个人中心控制器
@@ -202,11 +204,13 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             ]);
         }
 
-        $GLOBALS['__weline_account_sidebar_content_section'] = $section;
-
         $startedAt = microtime(true);
-        $html = (string)$this->getTemplate()->getHook('account.sidebar.content');
-        unset($GLOBALS['__weline_account_sidebar_content_section']);
+        AccountSidebarContentGate::setRequestedSection($section);
+        try {
+            $html = (string)$this->getTemplate()->getHook('account.sidebar.content');
+        } finally {
+            AccountSidebarContentGate::setRequestedSection(null);
+        }
         $durationMs = (microtime(true) - $startedAt) * 1000;
         $htmlBytes = strlen($html);
 
@@ -244,7 +248,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             'sections_json' => $jsonMs,
             'sections_bytes' => \strlen((string)$json),
         ]);
-        \Weline\Framework\Runtime\RequestContext::set('account.sidebar_content.timing', [
+        RequestContext::set('account.sidebar_content.timing', [
             'login_ms' => round($loginMs, 3),
             'user_ms' => round($userMs, 3),
             'hook_ms' => round($durationMs, 3),
@@ -253,11 +257,11 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             'html_bytes' => $htmlBytes,
             'json_bytes' => \strlen((string)$json),
         ]);
-        \error_log('[AccountPerf] sidebar_content ' . \json_encode(\Weline\Framework\Runtime\RequestContext::get('account.sidebar_content.timing'), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        \error_log('[AccountPerf] sidebar_content ' . \json_encode(RequestContext::get('account.sidebar_content.timing'), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
 
         if ($totalMs > 150.0 && function_exists('w_log_warning')) {
             w_log_warning('[AccountPerf] slow account sidebar content render', [
-                'request_id' => \Weline\Framework\Runtime\RequestContext::getId(),
+                'request_id' => RequestContext::getId(),
                 'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
                 'lang' => \Weline\Framework\App\State::getLang(),
                 'login_ms' => round($loginMs, 3),

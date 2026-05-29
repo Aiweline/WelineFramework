@@ -6,7 +6,7 @@ Full AI rules are maintained in one place only:
 
 - `dev/ai/global-constraints.md`（第 5.1 节：禁止批量替换与批量脚本改代码；第 8 节：layout 仅默认骨架、占位与 Hook/插槽挂载，禁止交互与业务逻辑）
 
-Start with `AI-ENTRY.md`, then read `dev/ai/global-constraints.md` before any implementation or verification work.
+Start with `AI-ENTRY.md`, then read `dev/ai/global-constraints.md` before any implementation or verification work. Section 0 is mandatory for Claude / Claude Code / CC: every request starts as product-manager decomposition, then architecture splitting, then senior full-stack implementation and product acceptance loops.
 
 ## Quick Commands
 

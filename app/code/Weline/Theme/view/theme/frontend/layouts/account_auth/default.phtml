@@ -109,13 +109,29 @@ $this->assign('meta', $meta);
             <div class="weline-main-content">
                 <main class="account-auth__main" id="account-auth-content" data-layout="account_auth_content">
                     <div class="auth-container">
-                        <if condition="meta.content">
-                            {{meta.content}}
-                            <elseif condition="content"/>
-                            {{content}}
-                            <elseif condition="meta.contentTemplate"/>
-                            <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
-                        </if>
+                        <w:slot id="content"
+                                name="内容区"
+                                accept="layout-account-content,layout-account-auth-content,layout-default-content,content,account-auth,auth-form"
+                                reject="header,footer"
+                                multiple="true"
+                                position="content"
+                                class="account-auth__content-root-slot">
+                            <w:slot id="account-auth-content"
+                                name="账号认证内容"
+                                accept="layout-account-auth-content,account-auth,auth-form,content"
+                                reject="header,footer"
+                                multiple="true"
+                                position="content"
+                                class="account-auth__content-slot">
+                            <if condition="meta.content">
+                                {{meta.content}}
+                                <elseif condition="content"/>
+                                {{content}}
+                                <elseif condition="meta.contentTemplate"/>
+                                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                            </if>
+                            </w:slot>
+                        </w:slot>
                     </div>
                 </main>
             </div>

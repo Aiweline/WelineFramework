@@ -4,7 +4,8 @@
  */
 
 .motor-account-page {
-    width: min(1360px, calc(100% - 2rem));
+    --motor-account-content-max-width: var(--motor-layout-content-max-width, var(--weline-layout-content-max-width, var(--weshop-container-max-width, 1440px)));
+    width: min(var(--motor-account-content-max-width), calc(100% - 2rem));
     margin: 1.25rem auto 2.5rem;
 }
 

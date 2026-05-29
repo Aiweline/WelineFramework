@@ -205,7 +205,7 @@ final class HanfuDemoOptionImageProvider
             $options[] = [
                 'option_id' => $definition['option_id'],
                 'code' => $code,
-                'value' => (string) __($definition['label']),
+                'value' => self::localizedOptionLabel($definition),
                 'origin_value' => $definition['origin_value'],
                 'swatch_type' => 'color',
                 'swatch_value' => $definition['swatch_value'],
@@ -249,7 +249,7 @@ final class HanfuDemoOptionImageProvider
             $options[] = [
                 'option_id' => $definition['option_id'],
                 'code' => $code,
-                'value' => (string) __($definition['label']),
+                'value' => self::localizedOptionLabel($definition),
                 'origin_value' => $definition['origin_value'],
                 'swatch_type' => 'image',
                 'swatch_value' => $image,
@@ -347,5 +347,30 @@ final class HanfuDemoOptionImageProvider
         }
 
         return $rows;
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    private static function localizedOptionLabel(array $definition): string
+    {
+        $sourceLabel = (string)($definition['label'] ?? '');
+        $englishLabel = trim((string)($definition['origin_value'] ?? ''));
+        if ($englishLabel !== '' && !self::usesChineseLocale()) {
+            return $englishLabel;
+        }
+
+        return (string)__($sourceLabel !== '' ? $sourceLabel : $englishLabel);
+    }
+
+    private static function usesChineseLocale(): bool
+    {
+        try {
+            $locale = (string)\Weline\Framework\App\State::getLangLocal();
+        } catch (\Throwable) {
+            $locale = '';
+        }
+
+        return str_starts_with(strtolower(trim($locale)), 'zh');
     }
 }

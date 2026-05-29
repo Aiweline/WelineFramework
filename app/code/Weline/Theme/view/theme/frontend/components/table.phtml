@@ -23,15 +23,15 @@ $bordered = $this->getData('bordered') ?? false;
 $hover = $this->getData('hover') ?? false;
 
 // 构建CSS类
-$tableClass = 'table';
+$tableClass = 'w-table';
 if ($striped) {
-    $tableClass .= ' table-striped';
+    $tableClass .= ' w-table-striped';
 }
 if ($bordered) {
-    $tableClass .= ' table-bordered';
+    $tableClass .= ' w-table-bordered';
 }
 if ($hover) {
-    $tableClass .= ' table-hover';
+    $tableClass .= ' w-table-hover';
 }
 if ($class) {
     $tableClass .= ' ' . htmlspecialchars($class);

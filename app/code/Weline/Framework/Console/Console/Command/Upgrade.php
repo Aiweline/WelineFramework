@@ -242,13 +242,14 @@ class Upgrade extends CommandAbstract
                     continue;
                 }
                 // 直接按文件加载一次，避免命名空间不一致导致的重复加载
+                $candidateClasses = class_exists($class, false) ? [$class] : [];
                 $before = get_declared_classes();
                 if ($fileReal && is_file($fileReal)) {
                     include_once $fileReal;
                     $processedFiles[$fileReal] = true;
                 }
                 $after = get_declared_classes();
-                $newClasses = array_diff($after, $before);
+                $newClasses = array_unique(array_merge($candidateClasses, array_diff($after, $before)));
                 // 逐个检查新声明的类
                 foreach ($newClasses as $declaredClass) {
                     if (isset($processedClasses[$declaredClass])) {
@@ -545,13 +546,14 @@ class Upgrade extends CommandAbstract
                     continue;
                 }
                 
+                $candidateClasses = class_exists($class, false) ? [$class] : [];
                 $before = get_declared_classes();
                 if ($fileReal && is_file($fileReal)) {
                     include_once $fileReal;
                     $processedFiles[$fileReal] = true;
                 }
                 $after = get_declared_classes();
-                $newClasses = array_diff($after, $before);
+                $newClasses = array_unique(array_merge($candidateClasses, array_diff($after, $before)));
                 
                 foreach ($newClasses as $declaredClass) {
                     if (isset($processedClasses[$declaredClass])) {

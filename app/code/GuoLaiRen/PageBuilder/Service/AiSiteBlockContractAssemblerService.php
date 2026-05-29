@@ -481,7 +481,9 @@ final class AiSiteBlockContractAssemblerService
             $block['title'] ?? null,
         ], $role . ' section for ' . $pageType);
         $assetSlotId = $needsImage ? $this->assetSlotId($pageType, $blockKey, $role) : '';
-        $cssMotif = $this->cssMotif($morphologyId, $role, $goal);
+        $cssMotif = $this->cssMotif($morphologyId, $role, $goal, $siteDesignSystem);
+        $plannedImageSubject = $needsImage ? $this->resolvePlannedImageSubject($block) : '';
+        $plannedImageTreatment = $needsImage ? $this->resolvePlannedImageTreatment($block) : '';
 
         return [
             'version' => self::CONTRACT_VERSION,
@@ -505,9 +507,11 @@ final class AiSiteBlockContractAssemblerService
                 'needs_real_image' => $needsImage,
                 'asset_slot_id' => $assetSlotId,
                 'placement' => $needsImage ? (string)($morphology['default_media_placement'] ?? 'media_panel') : 'inline_visual',
-                'image_subject' => $needsImage ? $this->imageSubject($goal, $role, $pageType) : 'CSS motif expressing ' . $goal,
+                'image_subject' => $needsImage
+                    ? ($plannedImageSubject !== '' ? $plannedImageSubject : $this->imageSubject($goal, $role, $pageType, $siteDesignSystem))
+                    : 'CSS motif expressing ' . $goal,
                 'image_treatment' => $needsImage
-                    ? 'responsive crop, integrated frame, accessible alt text, and palette-compatible overlay'
+                    ? ($plannedImageTreatment !== '' ? $plannedImageTreatment : 'responsive crop, integrated frame, accessible alt text, and palette-compatible overlay')
                     : 'structured CSS motif with visible layers, labels, dividers, and responsive spacing',
                 'css_motif' => $needsImage ? '' : $cssMotif,
                 'allow_css_only' => !$needsImage,
@@ -654,14 +658,206 @@ final class AiSiteBlockContractAssemblerService
         return 'page:' . $this->normalizeToken($pageType) . ':' . $this->normalizeToken($blockKey) . ':' . $this->normalizeToken($role) . ':image';
     }
 
-    private function imageSubject(string $goal, string $role, string $pageType): string
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolvePlannedImageSubject(array $block): string
     {
+        $candidates = [];
+        foreach ([
+            ['image_intent', 'image_subject'],
+            ['visual', 'image_intent', 'image_subject'],
+            ['block_contract', 'media_strategy', 'image_subject'],
+            ['visual', 'block_contract', 'media_strategy', 'image_subject'],
+        ] as $path) {
+            $value = $block;
+            foreach ($path as $key) {
+                if (!\is_array($value) || !\array_key_exists($key, $value)) {
+                    $value = null;
+                    break;
+                }
+                $value = $value[$key];
+            }
+            if (\is_scalar($value) || (\is_object($value) && \method_exists($value, '__toString'))) {
+                $candidates[] = (string)$value;
+            }
+        }
+
+        $fieldPlanSubject = $this->resolveFieldPlanImageBrief($block);
+        if ($fieldPlanSubject !== '') {
+            $candidates[] = $fieldPlanSubject;
+        }
+
+        foreach ($candidates as $candidate) {
+            $subject = \trim(\preg_replace('/\s+/u', ' ', $candidate) ?? $candidate);
+            if ($subject !== '' && !$this->isIconOnlyImageSubject($subject)) {
+                return $subject;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolvePlannedImageTreatment(array $block): string
+    {
+        foreach ([
+            ['image_intent', 'image_treatment'],
+            ['visual', 'image_intent', 'image_treatment'],
+            ['block_contract', 'media_strategy', 'image_treatment'],
+            ['visual', 'block_contract', 'media_strategy', 'image_treatment'],
+        ] as $path) {
+            $value = $block;
+            foreach ($path as $key) {
+                if (!\is_array($value) || !\array_key_exists($key, $value)) {
+                    $value = null;
+                    break;
+                }
+                $value = $value[$key];
+            }
+            if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                continue;
+            }
+            $treatment = \trim(\preg_replace('/\s+/u', ' ', (string)$value) ?? (string)$value);
+            if ($treatment !== '' && !$this->isIconOnlyImageSubject($treatment)) {
+                return $treatment;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolveFieldPlanImageBrief(array $block): string
+    {
+        $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
+        foreach ($fieldPlan as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $field = \mb_strtolower(\trim((string)($row['field'] ?? '')), 'UTF-8');
+            if (!\in_array($field, ['image_brief', 'media_brief', 'visual_brief', 'asset_brief'], true)) {
+                continue;
+            }
+            foreach (['sample', 'value', 'content', 'brief'] as $key) {
+                $value = $row[$key] ?? null;
+                if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
+                    continue;
+                }
+                $subject = \trim(\preg_replace('/\s+/u', ' ', (string)$value) ?? (string)$value);
+                if ($subject !== '' && !$this->isIconOnlyImageSubject($subject)) {
+                    return $subject;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function isIconOnlyImageSubject(string $subject): bool
+    {
+        $normalized = \mb_strtolower(\trim($subject), 'UTF-8');
+        if ($normalized === '' || \in_array($normalized, ['none', 'n/a', 'na', 'null', 'css-only', 'css only', 'no generated image'], true)) {
+            return true;
+        }
+        if (\str_contains($normalized, 'css-only/no generated image')) {
+            return true;
+        }
+
+        return \preg_match(
+            '/^(?:an?\s+|the\s+)?(?:icon|logo|badge|shield|sparkle|glyph|arrow|coin|mark|symbol|svg|avatar|divider|chip|chips|star|stars)(?:\s+(?:icon|logo|badge|shield|sparkle|glyph|arrow|coin|mark|symbol|svg|avatar|divider|chip|chips|star|stars))*$/iu',
+            $normalized
+        ) === 1;
+    }
+
+    /**
+     * @param array<string, mixed> $siteDesignSystem
+     */
+    private function imageSubject(string $goal, string $role, string $pageType, array $siteDesignSystem = []): string
+    {
+        $designContext = \json_encode([
+            'media_strategy' => $siteDesignSystem['media_strategy'] ?? [],
+            'typography' => $siteDesignSystem['tokens']['typography'] ?? [],
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '';
+        if ($this->isNeonCardDomainText($goal . ' ' . $role . ' ' . $pageType . ' ' . $designContext)) {
+            return $this->neonCardImageSubject($goal, $role, $pageType);
+        }
+
         return $role . ' visual for ' . $pageType . ': ' . $goal;
     }
 
-    private function cssMotif(string $morphologyId, string $role, string $goal): string
+    /**
+     * @param array<string, mixed> $siteDesignSystem
+     */
+    private function cssMotif(string $morphologyId, string $role, string $goal, array $siteDesignSystem = []): string
     {
+        $designContext = \json_encode([
+            'media_strategy' => $siteDesignSystem['media_strategy'] ?? [],
+            'typography' => $siteDesignSystem['tokens']['typography'] ?? [],
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '';
+        if ($this->isNeonCardDomainText($goal . ' ' . $role . ' ' . $morphologyId . ' ' . $designContext)) {
+            return $this->neonCardCssMotif($morphologyId, $role, $goal);
+        }
+
         return $morphologyId . ' CSS motif for ' . $role . ': ' . $goal;
+    }
+
+    private function isNeonCardDomainText(string $text): bool
+    {
+        $text = \mb_strtolower($text, 'UTF-8');
+        if ($text === '') {
+            return false;
+        }
+
+        return \preg_match('/(?:neon|casino|card\s*game|poker|mahjong|rummy|teen\s*patti|game\s*lobby|gaming|棋牌|棋牌游戏|霓虹|牌桌|牌局|扑克|麻将|电玩城|线上娱乐|游戏房间|赛事房间)/iu', $text) === 1;
+    }
+
+    private function neonCardImageSubject(string $goal, string $role, string $pageType): string
+    {
+        $context = $goal !== '' ? '; block purpose: ' . $goal : '';
+        $identity = \mb_strtolower($role . ' ' . $goal, 'UTF-8');
+
+        if (\preg_match('/opening|hero|banner|masthead/iu', $identity) === 1) {
+            return 'immersive neon card-game lobby hero scene with glowing poker cards, mahjong tiles, chips, green felt table texture, tournament light wall, and safe center crop' . $context;
+        }
+        if (\preg_match('/proof|trust|review|testimonial|rating|security|safe|responsible|玩家|信任|安全/iu', $identity) === 1) {
+            return 'player trust proof scene in a neon card room: verified player cards, fair-play table details, responsible-play cue, support badge surfaces, no generic shield-only icon' . $context;
+        }
+        if (\preg_match('/support|contact|faq|help|客服|联系/iu', $identity) === 1) {
+            return 'VIP support desk for a neon card-game site with live chat panels, headset operator silhouette, card-table glow, help chips, and quick-response interface' . $context;
+        }
+        if (\preg_match('/blog|resource|article|guide|learn|攻略|资讯|文章/iu', $identity) === 1) {
+            return 'editorial strategy-guide visual for neon card games: open guide cards, mahjong and poker props, glowing notes, tournament board accents, readable article mood' . $context;
+        }
+        if (\preg_match('/about|origin|story|mission|brand|team|关于|品牌|故事/iu', $identity) === 1) {
+            return 'brand story scene for a premium neon card-game lounge with crafted tables, game host console, player community atmosphere, and cinematic magenta-cyan lighting' . $context;
+        }
+        if (\preg_match('/cta|conversion|download|join|register|立即|加入|开始/iu', $identity) === 1) {
+            return 'conversion action scene for a neon card-game platform: glowing entry button on mobile game table, cards and chips around the call-to-action, premium dark backdrop' . $context;
+        }
+
+        return 'block-specific neon card-game feature scene with poker cards, mahjong tiles, chips, live table UI, cyan-magenta lighting, and props that match the current section' . $context;
+    }
+
+    private function neonCardCssMotif(string $morphologyId, string $role, string $goal): string
+    {
+        $context = $goal !== '' ? '; section purpose: ' . $goal : '';
+        $identity = \mb_strtolower($role . ' ' . $morphologyId . ' ' . $goal, 'UTF-8');
+        if (\preg_match('/proof|trust|review|rating/iu', $identity) === 1) {
+            return 'glass proof cards with neon suit marks, rating chips, fair-play dividers, cyan-magenta border glow' . $context;
+        }
+        if (\preg_match('/faq|support|contact/iu', $identity) === 1) {
+            return 'support-console rows, help chips, card-suit bullets, and focus-visible neon borders' . $context;
+        }
+        if (\preg_match('/blog|resource|article|guide/iu', $identity) === 1) {
+            return 'editorial guide cards with poker/mahjong marks, read-time chips, and restrained neon separators' . $context;
+        }
+
+        return 'dark card-table surface with subtle felt texture, neon suit marks, chip badges, glass panels, and gold edge dividers' . $context;
     }
 
     /**

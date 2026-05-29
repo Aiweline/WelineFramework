@@ -1212,7 +1212,7 @@ final class AiSiteStageOneContractValidator
             return false;
         }
 
-        return \preg_match('/\b(?:scene|photo|photograph|illustration|cinematic|editorial|environment|people|players|table|room|product|device|phone|smartphone|mobile|screen|interface|app\s+screen|screenshot|mockup)\b/u', $subject) !== 1;
+        return \preg_match('/\b(?:scene|photo|photograph|illustration|cinematic|editorial|environment|people|players|table|room|product|device|phone|smartphone|mobile|screen|interface|app\s+screen|screenshot|mockup|dashboard|workflow|approval|timeline|card|panel|route|alert|chart|graph)\b/u', $subject) !== 1;
     }
 
     /**

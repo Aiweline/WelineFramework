@@ -40,9 +40,25 @@
     <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::homepage::content-before<else/>minimal-content-before</w:hook>
     <main class="homepage-main minimal <?= htmlspecialchars($meta['class'] ?? '') ?>" id="homepage-main" data-layout="homepage_minimal">
-        <w:hook>Weline_Theme::frontend::layouts::homepage::content-before<else/>minimal-content-before</w:hook>
-        {{meta.content}}
-        <w:hook>Weline_Theme::frontend::layouts::homepage::content-after<else/>minimal-content-after</w:hook>
+        <w:slot id="content"
+                name="极简首页内容"
+                accept="layout-homepage-minimal-content,layout-homepage-content,layout-default-content,content,banner,product,category"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="homepage-content-slot homepage-minimal__content-root-slot">
+            <w:slot id="homepage-minimal-content"
+                    name="极简首页内容"
+                    accept="layout-homepage-minimal-content,layout-homepage-content,layout-default-content,content,banner,product,category"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="homepage-minimal__content-slot">
+                <w:hook>Weline_Theme::frontend::layouts::homepage::content-before<else/>minimal-content-before</w:hook>
+                {{meta.content}}
+                <w:hook>Weline_Theme::frontend::layouts::homepage::content-after<else/>minimal-content-after</w:hook>
+            </w:slot>
+        </w:slot>
     </main>
     <w:hook>Weline_Theme::frontend::layouts::homepage::content-after<else/>minimal-content-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>

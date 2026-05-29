@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title><?= $title ?? '网站维护' ?></title>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title><?= $title ?? __('网站维护') ?></title>
     <style>
         :root {
             --primary: #6366f1;
@@ -449,39 +452,39 @@
                 <?php endif; ?>
             </div>
             
-            <h1><?= $heading ?? '系统升级维护中' ?></h1>
-            <p class="subtitle"><?= $message1 ?? '网站正在维护中...' ?><br><?= $message2 ?? '请稍等片刻' ?></p>
+            <h1><?= $heading ?? __('系统升级维护中') ?></h1>
+            <p class="subtitle"><?= $message1 ?? __('网站正在维护中...') ?><br><?= $message2 ?? __('请稍等片刻') ?></p>
             
             <div class="progress-container">
                 <div class="progress">
                     <div class="progress-bar"></div>
                 </div>
             </div>
-            <p class="recovery-notice" aria-live="polite"><?= $recoveryNotice ?? '系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。' ?></p>
+            <p class="recovery-notice" aria-live="polite"><?= $recoveryNotice ?? __('系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。') ?></p>
             
             <div class="info-cards">
                 <div class="card">
                     <div class="card-icon">🤔</div>
-                    <h3><?= $whyTitle ?? '为什么网站会处于维护模式？' ?></h3>
-                    <p><?= $whyContent ?? '网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。' ?></p>
+                    <h3><?= $whyTitle ?? __('为什么网站会处于维护模式？') ?></h3>
+                    <p><?= $whyContent ?? __('网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。') ?></p>
                 </div>
                 
                 <div class="card">
                     <div class="card-icon">⏱️</div>
-                    <h3><?= $howLongTitle ?? '多久能够恢复？' ?></h3>
-                    <p><?= $howLongContent ?? '大部分的网站升级活动都只有几分钟甚至几秒钟的时间。' ?></p>
+                    <h3><?= $howLongTitle ?? __('多久能够恢复？') ?></h3>
+                    <p><?= $howLongContent ?? __('大部分的网站升级活动都只有几分钟甚至几秒钟的时间。') ?></p>
                 </div>
                 
                 <div class="card">
                     <div class="card-icon">💬</div>
-                    <h3><?= $helpTitle ?? '需要帮助吗？' ?></h3>
-                    <p><?= $helpContent ?? '如果你长期看到这个页面，对网站存在疑惑，请联系：' ?> <a href="mailto:<?= $contactEmail ?? 'support@example.com' ?>"><?= $contactEmail ?? 'support@example.com' ?></a></p>
+                    <h3><?= $helpTitle ?? __('需要帮助吗？') ?></h3>
+                    <p><?= $helpContent ?? __('如果你长期看到这个页面，对网站存在疑惑，请联系：') ?> <a href="mailto:<?= $contactEmail ?? 'support@example.com' ?>"><?= $contactEmail ?? 'support@example.com' ?></a></p>
                 </div>
             </div>
             
             <a href="/" class="back-btn">
                 <span>←</span>
-                <span><?= $backHome ?? '返回首页' ?></span>
+                <span><?= $backHome ?? __('返回首页') ?></span>
             </a>
         </div>
     </div>
@@ -510,7 +513,10 @@
                 if (timer) {
                     window.clearTimeout(timer);
                 }
-                timer = window.setTimeout(check, delay + Math.floor(Math.random() * jitter));
+                timer = window.setTimeout(function () {
+                    timer = 0;
+                    check();
+                }, delay + Math.floor(Math.random() * jitter));
             }
 
             function probe(method) {
@@ -536,7 +542,6 @@
 
             function check() {
                 if (document.hidden) {
-                    schedule(initialDelay);
                     return;
                 }
 
@@ -551,9 +556,14 @@
             }
 
             document.addEventListener('visibilitychange', function () {
-                if (!document.hidden) {
-                    schedule(0);
+                if (document.hidden) {
+                    if (timer) {
+                        window.clearTimeout(timer);
+                        timer = 0;
+                    }
+                    return;
                 }
+                schedule(0);
             });
             schedule(initialDelay);
         })();

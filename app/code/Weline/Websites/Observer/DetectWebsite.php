@@ -10,6 +10,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
@@ -116,6 +117,16 @@ class DetectWebsite implements ObserverInterface
         return $host1WithoutWww === $host2WithoutWww;
     }
 
+    private function isReservedProjectHost(string $host): bool
+    {
+        $host = \strtolower(\trim($host));
+        if (\str_starts_with($host, 'www.')) {
+            $host = (string)\substr($host, 4);
+        }
+
+        return LocalDomainPolicy::isStandardProjectHost($host);
+    }
+
     /**
      * @param array<int, array<string, mixed>> $expanded
      * @param array<string, bool> $seen
@@ -135,6 +146,9 @@ class DetectWebsite implements ObserverInterface
         $scheme = (($parsed['scheme'] ?? '') === 'http') ? 'http' : 'https';
         $host = \strtolower(\trim((string)($parsed['host'] ?? '')));
         if ($host === '') {
+            return;
+        }
+        if ($this->isReservedProjectHost($host)) {
             return;
         }
 
@@ -174,6 +188,9 @@ class DetectWebsite implements ObserverInterface
         $parsedRequestUrl = \parse_url($requestUrl);
         $requestScheme = (($parsedRequestUrl['scheme'] ?? '') === 'http') ? 'http' : 'https';
         $requestHost = \strtolower(\trim((string)($parsedRequestUrl['host'] ?? '')));
+        if ($this->isReservedProjectHost($requestHost)) {
+            return null;
+        }
         $requestPort = isset($parsedRequestUrl['port']) ? ':' . $parsedRequestUrl['port'] : '';
         $requestPath = Url::parse_url($requestUrl, 'path') ?: '/';
         $requestPath = '/' . \trim((string)$requestPath, '/');
@@ -248,6 +265,9 @@ class DetectWebsite implements ObserverInterface
                 if ($domain === '') {
                     continue;
                 }
+                if ($this->isReservedProjectHost($domain)) {
+                    continue;
+                }
 
                 $subPath = \trim((string)($domainRow[WebsiteDomain::schema_fields_SUB_PATH] ?? ''), '/');
                 $baseUrl = $scheme . '://' . $domain . $port;
@@ -287,6 +307,9 @@ class DetectWebsite implements ObserverInterface
         }
 
         $hostNorm = \strtolower(\trim($currentHost));
+        if ($this->isReservedProjectHost($hostNorm)) {
+            return null;
+        }
         $candidates = [];
 
         foreach ($domainRows as $domainRow) {
@@ -400,6 +423,9 @@ class DetectWebsite implements ObserverInterface
     {
         $hostNorm = \strtolower(\trim($currentHost));
         if ($hostNorm === '') {
+            return null;
+        }
+        if ($this->isReservedProjectHost($hostNorm)) {
             return null;
         }
 

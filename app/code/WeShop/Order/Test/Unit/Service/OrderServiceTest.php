@@ -40,6 +40,7 @@ class OrderServiceTest extends TestCase
             'discount_amount' => 7.0,
             'tax_amount' => 2.0,
             'total' => 59.5,
+            'currency_code' => 'cny',
         ]);
 
         $this->assertSame(59.5, (float) $createdOrder->getData(Order::schema_fields_subtotal));
@@ -47,6 +48,7 @@ class OrderServiceTest extends TestCase
         $this->assertSame(7.0, (float) $createdOrder->getData(Order::schema_fields_discount_amount));
         $this->assertSame(2.0, (float) $createdOrder->getData(Order::schema_fields_tax_amount));
         $this->assertSame(59.5, (float) $createdOrder->getData(Order::schema_fields_total));
+        $this->assertSame('CNY', $createdOrder->getData(Order::schema_fields_currency_code));
     }
 
     public function testUpdateOrderStatusRejectsIllegalTransition(): void
@@ -132,30 +134,40 @@ class OrderServiceTest extends TestCase
         $this->assertSame(2.0, $result['summary']['tax']);
     }
 
-    public function testGetOrderByIncrementIdLoadsByIncrementField(): void
+    public function testGetOrderByIncrementIdQueriesIncrementField(): void
     {
         $order = new class extends Order {
-            public array $loadedArgs = [];
+            public array $whereArgs = [];
 
             public function __construct()
             {
             }
 
-            public function load(mixed $id = '', mixed $field = null, bool $force = false): static
+            public function clear(bool $with_query = true): static
             {
-                $this->loadedArgs = [$id, $field, $force];
+                return $this;
+            }
+
+            public function where(array|string $field, mixed $value = null, string $condition = '=', string $where_logic = 'AND', string $array_where_logic_type = 'AND'): static
+            {
+                $this->whereArgs[] = [$field, $value, $condition, $where_logic, $array_where_logic_type];
+                return $this;
+            }
+
+            public function select(string $fields = ''): static
+            {
+                return $this;
+            }
+
+            public function fetch(): static
+            {
                 $this->setData(self::schema_fields_ID, 88);
                 return $this;
             }
 
-            public function getId(mixed $default = 0): mixed
+            public function getItems(): array
             {
-                return $this->getData(self::schema_fields_ID) ?? $default;
-            }
-
-            public function hasField(string $field): bool
-            {
-                return false;
+                return [$this];
             }
         };
 
@@ -163,7 +175,7 @@ class OrderServiceTest extends TestCase
         $result = $service->getOrderByIncrementId('WS000088');
 
         $this->assertInstanceOf(Order::class, $result);
-        $this->assertSame(['WS000088', Order::schema_fields_increment_id, false], $result->loadedArgs);
+        $this->assertSame([[Order::schema_fields_increment_id, 'WS000088', '=', 'AND', 'AND']], $result->whereArgs);
         $this->assertSame(88, $result->getId());
     }
 

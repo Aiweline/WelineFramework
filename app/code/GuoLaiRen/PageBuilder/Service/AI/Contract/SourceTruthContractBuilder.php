@@ -42,13 +42,15 @@ final class SourceTruthContractBuilder
         string $contentLocale
     ): array {
         $brief = $this->extractBrief($scope, $websiteProfile);
+        $positiveBrief = $this->removeNegativeConstraintSegments($brief);
+        $positiveInstruction = $this->removeNegativeConstraintSegments($instruction);
         $userLocale = $scope['ai_content_locale'] ?? 'zh_Hans_CN';
 
-        $facts = $this->buildMustIncludeFacts($brief, $instruction, $userLocale, $contentLocale);
-        $keywords = $this->extractKeywords($brief, $instruction);
+        $facts = $this->buildMustIncludeFacts($positiveBrief, $positiveInstruction, $userLocale, $contentLocale);
+        $keywords = $this->extractKeywords($positiveBrief, $positiveInstruction);
         $visualHonor = $this->extractVisualMustHonor($referenceImageInsights);
         $forbidden = $this->extractForbidden($referenceImageInsights, $brief);
-        $requiredBlocks = $this->resolveRequiredHomeBlocks($brief, $instruction);
+        $requiredBlocks = $this->resolveRequiredHomeBlocks($positiveBrief, $positiveInstruction);
 
         $siteName = \trim((string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? ''));
         $brandTerms = $this->normalizeStringList(\array_merge(
@@ -115,7 +117,7 @@ final class SourceTruthContractBuilder
             ],
             'must_include_facts' => $facts,
             'must_include_keywords' => $keywords,
-            'conversion_goals' => $this->extractConversionGoals($brief, $pageTypes),
+            'conversion_goals' => $this->extractConversionGoals($positiveBrief, $pageTypes),
             'required_home_blocks' => $requiredBlocks,
             'visual_must_honor' => $visualHonor,
             'must_not_do' => $forbidden,
@@ -135,7 +137,7 @@ final class SourceTruthContractBuilder
             if ($line === '' || \str_starts_with($line, '#')) {
                 continue;
             }
-            $clauses = \preg_split('/[，,；;。！？!?]+/u', $line) ?: [];
+            $clauses = $this->splitBriefFactClauses($line);
             $addedFromLine = false;
             foreach ($clauses as $clause) {
                 $clause = \trim((string)$clause);
@@ -182,6 +184,24 @@ final class SourceTruthContractBuilder
         return $facts;
     }
 
+    /**
+     * @return list<string>
+     */
+    private function splitBriefFactClauses(string $line): array
+    {
+        $parts = \preg_split('/(?<=[.!?;。！？；])\s+/u', $line) ?: [];
+        $clauses = [];
+        foreach ($parts as $part) {
+            $part = \trim((string)$part);
+            if ($part === '') {
+                continue;
+            }
+            $clauses[] = \trim($part, " \t\n\r\0\x0B.;。！？；");
+        }
+
+        return \array_values(\array_filter($clauses, static fn(string $part): bool => $part !== ''));
+    }
+
     private function isInternalControlInstruction(string $instruction): bool
     {
         $instruction = \trim($instruction);
@@ -192,9 +212,22 @@ final class SourceTruthContractBuilder
         return \preg_match('/(?:^\s*\[FORCE\]|queue:run|--force|\s-f\b|强制重建建站方案|重新跑队列)/iu', $instruction) === 1;
     }
 
+    private function removeNegativeConstraintSegments(string $text): string
+    {
+        if (\trim($text) === '') {
+            return '';
+        }
+
+        return \trim((string)\preg_replace(
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|不是|非|勿|请勿)[^.;!?。！？\r\n]*/iu',
+            '',
+            $text
+        ));
+    }
+
     private function isStyleOnlyBriefClause(string $clause): bool
     {
-        return \preg_match('/(?:风格|丝滑|动效|视觉|配色|色彩|土豪气|高级感|氛围感|质感|UI|界面效果)/iu', $clause) === 1;
+        return \preg_match('/(?:风格|丝滑|动效|视觉|配色|色彩|土豪气|高级感|氛围感|质感|\bUI\b|界面效果|\bvisual\s+direction\b|\baesthetic\b|\bstyle\b|\bpalette\b|\btypography\b|\bmotion\b)/iu', $clause) === 1;
     }
 
     private function isConstraintOnlyBriefClause(string $clause): bool
@@ -226,9 +259,9 @@ final class SourceTruthContractBuilder
         $combined = $brief . "\n" . $instruction;
 
         $patterns = [
-            '/(?:推广|宣传|promote|download|APK|app)\s*(?:下载|download)?/iu',
-            '/(印度|India|棋牌|card game|game|gaming)/iu',
-            '/(下载|download|install|app)/iu',
+            '/(?:推广|宣传|promote|\bdownload\b|APK|\bapp\b)\s*(?:下载|\bdownload\b)?/iu',
+            '/(印度|India|棋牌|card game|\bgame\b|gaming)/iu',
+            '/(下载|\bdownload\b|\binstall\b|\bapp\b)/iu',
         ];
         foreach ($patterns as $pattern) {
             if (\preg_match_all($pattern, $combined, $matches)) {
@@ -280,6 +313,9 @@ final class SourceTruthContractBuilder
             $forbidden[] = 'generic corporate profile site';
             $forbidden[] = 'flat blue SaaS style';
         }
+        foreach ($this->extractNegativeConstraintTerms($brief) as $term) {
+            $forbidden[] = 'Do not use excluded user term as visible site category, CTA, copy, or visual style: ' . $term;
+        }
         if (\preg_match('/(?:英文|大段描述|language|locale|do not.*English)/iu', $brief)) {
             $forbidden[] = 'large visible copy passages outside the requested website language';
         }
@@ -296,7 +332,7 @@ final class SourceTruthContractBuilder
     private function resolveRequiredHomeBlocks(string $brief, string $instruction): array
     {
         $combined = $brief . "\n" . $instruction;
-        $downloadIntent = \preg_match('/(?:APK|download|app|安装|下载|推广)/iu', $combined) === 1;
+        $downloadIntent = \preg_match('/(?:APK|\bdownload\b|\bapp\b|安装|下载|推广)/iu', $combined) === 1;
         $blocks = $downloadIntent
             ? ['hero_download']
             : ['hero'];
@@ -305,10 +341,10 @@ final class SourceTruthContractBuilder
             $blocks[] = $downloadIntent ? 'final_download_cta' : 'final_cta';
         }
 
-        if (\preg_match('/(?:游戏|game|棋牌|card|Teen\s*Patti|rummy)/iu', $combined)) {
+        if (\preg_match('/(?:游戏|\bgame\b|棋牌|\bcard\b|Teen\s*Patti|rummy)/iu', $combined)) {
             $blocks[] = 'game_showcase_or_features';
         }
-        if ($downloadIntent && \preg_match('/(?:游戏|game|棋牌|card|Teen\s*Patti|rummy|APK|download|app)/iu', $combined)) {
+        if ($downloadIntent && \preg_match('/(?:游戏|\bgame\b|棋牌|\bcard\b|Teen\s*Patti|rummy|APK|\bdownload\b|\bapp\b)/iu', $combined)) {
             $blocks[] = 'player_reviews';
             $blocks[] = 'faq_or_rules';
         }
@@ -392,7 +428,7 @@ final class SourceTruthContractBuilder
         $goals = [];
 
         if (\in_array('home_page', $pageTypes, true)) {
-            if (\preg_match('/(?:下载|APK|app|download)/iu', $brief)) {
+            if (\preg_match('/(?:下载|APK|\bapp\b|\bdownload\b)/iu', $brief)) {
                 $goals[] = 'Drive APK/app download click';
             }
             $goals[] = 'Introduce products or services above the fold';
@@ -414,5 +450,35 @@ final class SourceTruthContractBuilder
         }
 
         return $brief;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractNegativeConstraintTerms(string $text): array
+    {
+        if (\trim($text) === '') {
+            return [];
+        }
+        if (\preg_match_all(
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|请勿)\s*([^.;!?。！？\r\n]+)/iu',
+            $text,
+            $matches
+        ) < 1) {
+            return [];
+        }
+
+        $terms = [];
+        foreach ($matches[1] as $rawTerms) {
+            foreach (\preg_split('/[,，、]|\bor\b|\band\b/iu', (string)$rawTerms) ?: [] as $term) {
+                $term = \trim((string)$term);
+                if ($term === '' || \mb_strlen($term) > 48) {
+                    continue;
+                }
+                $terms[] = $term;
+            }
+        }
+
+        return \array_values(\array_unique($terms));
     }
 }

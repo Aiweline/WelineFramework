@@ -119,9 +119,13 @@
     deepMerge(runtimeConfig, defaultConfig);
     mergeConfig(consumeBootstrapConfig());
 
+    const canonicalUrlLocalStorageKeys = {
+        currency: 'weline_user_currency',
+        locale: 'weline_user_lang'
+    };
     const urlLocalStorageKeys = {
-        currency: ['weline_user_currency', 'api_doc_currency', 'WELINE_USER_CURRENCY'],
-        locale: ['weline_user_lang', 'api_doc_locale', 'WELINE_USER_LANG']
+        currency: [canonicalUrlLocalStorageKeys.currency, 'api_doc_currency', 'WELINE_USER_CURRENCY'],
+        locale: [canonicalUrlLocalStorageKeys.locale, 'api_doc_locale', 'WELINE_USER_LANG']
     };
 
     const localePattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/;
@@ -164,6 +168,37 @@
             cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
         });
         document.cookie = cookieString;
+    }
+
+    function writeCanonicalLocalStorage(type, value) {
+        const canonicalKey = canonicalUrlLocalStorageKeys[type];
+        const keys = urlLocalStorageKeys[type] || [];
+        if (!canonicalKey || value === undefined || value === null) {
+            return;
+        }
+        try {
+            if (!window.localStorage) {
+                return;
+            }
+            localStorage.setItem(canonicalKey, value);
+            keys.forEach((key) => {
+                if (key && key !== canonicalKey) {
+                    localStorage.removeItem(key);
+                }
+            });
+        } catch (error) {
+            // localStorage can be unavailable in privacy modes.
+        }
+    }
+
+    function writeLanguagePreference(lang, expiry = 365) {
+        writeCanonicalLocalStorage('locale', lang);
+        writeCookieValue('WELINE_USER_LANG', lang, expiry);
+    }
+
+    function writeCurrencyPreference(currency, expiry = 365) {
+        writeCanonicalLocalStorage('currency', currency);
+        writeCookieValue('WELINE_USER_CURRENCY', currency, expiry);
     }
 
     function isValidCurrency(value) {
@@ -1694,7 +1729,7 @@
                         return window.WelineI18n.switchLang(lang);
                     }
                     // 降级：使用基本 URL 参数切换
-                    localStorage.setItem('weline_user_lang', lang);
+                    writeLanguagePreference(lang);
                     const url = new URL(window.location.href);
                     url.searchParams.set('lang', lang);
                     window.location.href = url.toString();
@@ -1737,7 +1772,7 @@
                     return window.WelineCurrency.switchCurrency(currency);
                 }
                 // 降级：使用基本 URL 参数切换
-                localStorage.setItem('weline_user_currency', currency);
+                writeCurrencyPreference(currency);
                 const url = new URL(window.location.href);
                 url.searchParams.set('currency', currency);
                 window.location.href = url.toString();
@@ -2805,8 +2840,7 @@
             if (typeof window.urlWithLang === 'function') {
                 const currentPath = window.location.pathname + sanitizeLanguageSearch(window.location.search || '');
                 const langUrl = window.urlWithLang(currentPath, lang);
-                localStorage.setItem('weline_user_lang', lang);
-                writeCookieValue('WELINE_USER_LANG', lang, 365);
+                writeLanguagePreference(lang);
                 window.location.href = langUrl;
                 return;
             }
@@ -2814,8 +2848,7 @@
             // 降级方案：使用 inject_path
             if (typeof window.inject_path === 'function') {
                 const langUrl = window.inject_path(window.location.pathname, lang, 'lang') + sanitizeLanguageSearch(window.location.search || '');
-                localStorage.setItem('weline_user_lang', lang);
-                writeCookieValue('WELINE_USER_LANG', lang, 365);
+                writeLanguagePreference(lang);
                 window.location.href = langUrl;
                 return;
             }
@@ -2841,8 +2874,7 @@
             const cleanPath = '/' + filteredParts.join('/');
             const langUrl = '/' + currentCurrency + '/' + lang + cleanPath + sanitizeLanguageSearch(window.location.search || '');
 
-            localStorage.setItem('weline_user_lang', lang);
-            writeCookieValue('WELINE_USER_LANG', lang, 365);
+            writeLanguagePreference(lang);
             window.location.href = langUrl;
         }
 
@@ -3068,8 +3100,7 @@
             if (typeof window.urlWithCurrency === 'function') {
                 const currentPath = window.location.pathname + sanitizeLanguageSearch(window.location.search || '');
                 const currencyUrl = window.urlWithCurrency(currentPath, currency);
-                localStorage.setItem('weline_user_currency', currency);
-                writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+                writeCurrencyPreference(currency);
                 window.location.href = currencyUrl;
                 return;
             }
@@ -3077,8 +3108,7 @@
             // 降级方案：使用 inject_path
             if (typeof window.inject_path === 'function') {
                 const currencyUrl = window.inject_path(window.location.pathname, currency, 'currency') + sanitizeLanguageSearch(window.location.search || '');
-                localStorage.setItem('weline_user_currency', currency);
-                writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+                writeCurrencyPreference(currency);
                 window.location.href = currencyUrl;
                 return;
             }
@@ -3104,8 +3134,7 @@
             const cleanPath = '/' + filteredParts.join('/');
             const currencyUrl = '/' + currency + '/' + currentLang + cleanPath + sanitizeLanguageSearch(window.location.search || '');
 
-            localStorage.setItem('weline_user_currency', currency);
-            writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+            writeCurrencyPreference(currency);
             window.location.href = currencyUrl;
         }
 

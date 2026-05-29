@@ -339,6 +339,7 @@ class ThemeResourceCatalog
             'type' => '',
             'area' => '',
             'position' => [],
+            'supports' => [],
             'slot' => null,
             'exclusive' => false,
             'compatible' => false,
@@ -357,6 +358,7 @@ class ThemeResourceCatalog
             'icon' => '/@widget\.icon\s+([^\r\n]+)/i',
             'page_layouts' => '/@widget\.page_layouts\s+([^\r\n]+)/i',
             'position' => '/@widget\.position\s+([^\r\n]+)/i',
+            'supports' => '/@widget\.supports\s+([^\r\n]+)/i',
         ];
 
         foreach ($patterns as $key => $pattern) {
@@ -380,6 +382,7 @@ class ThemeResourceCatalog
         }
 
         $data['position'] = $this->parseWidgetListValue($data['position']);
+        $data['supports'] = $this->parseWidgetListValue($data['supports']);
         $data['page_layouts'] = $this->parseWidgetListValue($data['page_layouts']) ?: ['*'];
 
         return $data;
@@ -436,7 +439,13 @@ class ThemeResourceCatalog
                     $this->toBool((string)($attributes['multiple'] ?? 'true'), true),
                     $this->toBool((string)($attributes['append'] ?? 'false')),
                     $this->toBool((string)($attributes['prepend'] ?? 'false')),
-                    ['position' => $attributes['position'] ?? null],
+                    [
+                        'position' => $attributes['position'] ?? null,
+                        'reject' => $this->splitCsv((string)($attributes['reject'] ?? '')),
+                        'max' => $this->normalizeOptionalInt($attributes['max'] ?? null),
+                        'min' => $this->normalizeOptionalInt($attributes['min'] ?? null),
+                        'required' => $this->toBool((string)($attributes['required'] ?? 'false')),
+                    ],
                     $filePath,
                 );
             }
@@ -458,7 +467,13 @@ class ThemeResourceCatalog
                     $this->toBool((string)($attributes['data-wslot-multiple'] ?? 'true'), true),
                     $this->toBool((string)($attributes['data-wslot-append'] ?? 'false')),
                     $this->toBool((string)($attributes['data-wslot-prepend'] ?? 'false')),
-                    ['position' => $attributes['data-wslot-position'] ?? null],
+                    [
+                        'position' => $attributes['data-wslot-position'] ?? null,
+                        'reject' => $this->splitCsv((string)($attributes['data-wslot-reject'] ?? '')),
+                        'max' => $this->normalizeOptionalInt($attributes['data-wslot-max'] ?? null),
+                        'min' => $this->normalizeOptionalInt($attributes['data-wslot-min'] ?? null),
+                        'required' => $this->toBool((string)($attributes['data-wslot-required'] ?? 'false')),
+                    ],
                     $filePath,
                 );
             }
@@ -477,6 +492,15 @@ class ThemeResourceCatalog
         }
 
         return $attributes;
+    }
+
+    private function normalizeOptionalInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_numeric($value) ? (int)$value : null;
     }
 
     private function splitCsv(string|array $value): array

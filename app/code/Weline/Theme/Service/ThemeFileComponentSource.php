@@ -73,6 +73,7 @@ class ThemeFileComponentSource implements ThemeComponentSourceInterface
                 pageLayouts: $this->normalizeArray($widgetMeta['page_layouts'] ?? ['*'], ['*']),
                 slots: $resource['slots'] ?? [],
                 slot: !empty($widgetMeta['slot']) ? (string)$widgetMeta['slot'] : null,
+                supports: $this->normalizeArray($widgetMeta['supports'] ?? [], []),
                 exclusive: (bool)($widgetMeta['exclusive'] ?? false),
                 compatible: (bool)($widgetMeta['compatible'] ?? true),
                 isContainer: (bool)($widgetMeta['is_container'] ?? false),

@@ -58,6 +58,58 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
         self::assertGreaterThan(0, (int)($report['blocking_issue_count'] ?? 0));
     }
 
+    public function testDashboardWorkflowSubjectWithBadgeDetailIsNotIconOnly(): void
+    {
+        $validator = new AiSiteStageOneContractValidator();
+        $report = $validator->validatePagePlan(
+            'home_page',
+            $this->pagePlanWithBlock([
+                'image_intent' => [
+                    'needs_image' => true,
+                    'image_role' => 'hero_image',
+                    'image_subject' => 'opsflow ai onepass dashboard showing approval route cards, live status timeline, and an exception alert badge',
+                    'placement' => 'media_panel',
+                    'visual_atmosphere' => 'premium operational SaaS interface',
+                    'image_treatment' => 'crisp product mockup with subtle depth',
+                    'reuse_policy' => 'reuse_when_intent_matches',
+                    'css_motif' => '',
+                ],
+            ]),
+            $this->singleHeroContract('en_US')
+        );
+
+        self::assertNotContains(
+            'icon_only_image_subject',
+            \array_map(static fn(array $issue): string => (string)($issue['code'] ?? ''), $report['issues'] ?? [])
+        );
+    }
+
+    public function testPureIconSubjectStillFailsImageIntentContract(): void
+    {
+        $validator = new AiSiteStageOneContractValidator();
+        $report = $validator->validatePagePlan(
+            'home_page',
+            $this->pagePlanWithBlock([
+                'image_intent' => [
+                    'needs_image' => true,
+                    'image_role' => 'hero_image',
+                    'image_subject' => 'blue sparkle icon badge',
+                    'placement' => 'media_panel',
+                    'visual_atmosphere' => 'premium operational SaaS interface',
+                    'image_treatment' => 'crisp product mockup with subtle depth',
+                    'reuse_policy' => 'reuse_when_intent_matches',
+                    'css_motif' => '',
+                ],
+            ]),
+            $this->singleHeroContract('en_US')
+        );
+
+        self::assertContains(
+            'icon_only_image_subject',
+            \array_map(static fn(array $issue): string => (string)($issue['code'] ?? ''), $report['issues'] ?? [])
+        );
+    }
+
     /**
      * @param array<string, mixed> $blockPatch
      * @return array<string, mixed>

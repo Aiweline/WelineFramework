@@ -18,7 +18,7 @@ class View extends BaseController
     {
         $notificationId = (int) $this->request->getParam('id', 0);
         if ($notificationId <= 0) {
-            $this->getMessageManager()->addError(__('Notification ID is required.'));
+            $this->getMessageManager()->addError(__('通知ID不能为空。'));
             $this->redirect('*/backend/notification');
             return '';
         }
@@ -32,7 +32,7 @@ class View extends BaseController
         }
 
         $this->assign([
-            'title' => (string) __('Notification Detail'),
+            'title' => (string) __('通知详情'),
             'notification' => $detail['notification'],
             'notificationIndexUrl' => $this->getBackendUrl('*/backend/notification'),
             'notificationMarkReadUrl' => $this->getBackendUrl('*/backend/notification/mark-read'),

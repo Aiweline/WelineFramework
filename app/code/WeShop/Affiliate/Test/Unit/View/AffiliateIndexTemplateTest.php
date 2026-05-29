@@ -10,7 +10,7 @@ class AffiliateIndexTemplateTest extends TestCase
 {
     public function testAffiliateIndexTemplateContainsKeyElements(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/index.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertIsString($content);
@@ -23,11 +23,12 @@ class AffiliateIndexTemplateTest extends TestCase
         $this->assertStringContainsString('referral_code', $content);
         $this->assertStringContainsString('filters', $content);
         $this->assertStringContainsString('pagination', $content);
+        $this->assertStringContainsString('ws-affiliate-admin', $content);
     }
 
     public function testAffiliateIndexTemplateUsesI18n(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/index.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('__(\'Affiliate Management\')', $content);
@@ -39,11 +40,12 @@ class AffiliateIndexTemplateTest extends TestCase
         $this->assertStringContainsString('__(\'Reset\')', $content);
         $this->assertStringContainsString('__(\'Edit\')', $content);
         $this->assertStringContainsString('__(\'View\')', $content);
+        $this->assertStringContainsString('__(\'decimal\')', $content);
     }
 
     public function testAffiliateIndexTemplateHasSummaryCards(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/index.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('summary', $content);
@@ -55,7 +57,7 @@ class AffiliateIndexTemplateTest extends TestCase
 
     public function testAffiliateIndexTemplateHasFormAndTableStructure(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/index.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('<form', $content);
@@ -64,11 +66,12 @@ class AffiliateIndexTemplateTest extends TestCase
         $this->assertStringContainsString('</table>', $content);
         $this->assertStringContainsString('affiliate_id', $content);
         $this->assertStringContainsString('customer_id', $content);
+        $this->assertStringNotContainsString('<span class="input-group-text">%</span>', $content);
     }
 
     public function testAffiliateIndexTemplateHasPagination(): void
     {
-        $path = BP . 'app/code/WeShop/Affiliate/view/backend/templates/affiliate/index.phtml';
+        $path = BP . 'app/code/WeShop/Affiliate/view/templates/Backend/Affiliate/Index/index.phtml';
         $content = (string) file_get_contents($path);
 
         $this->assertStringContainsString('pageCount', $content);

@@ -13,8 +13,6 @@ final class BuildPlanFrozenFieldValidator
         'design_manifest',
         'pages',
         'blocks',
-        'tasks',
-        'build_order',
         'permission_matrix',
         'frozen_fields',
     ];

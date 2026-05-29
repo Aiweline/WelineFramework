@@ -11,7 +11,7 @@ final class BuildPlanContractValidator
     public function __construct(
         private readonly ?BuildPlanContractSchema $schema = null,
         private readonly ?BuildPlanNoReasonLinter $noReasonLinter = null,
-        private readonly ?BuildPlanTaskGraphValidator $taskGraphValidator = null,
+        private readonly ?BuildPlanBlockGraphValidator $blockGraphValidator = null,
         private readonly ?BuildPlanDesignPolicyLinter $designPolicyLinter = null,
         private readonly ?BuildPlanContentManifestLinter $contentManifestLinter = null
     ) {
@@ -27,6 +27,11 @@ final class BuildPlanContractValidator
         foreach ($this->schema()->requiredTopLevelFields() as $field) {
             if (!\array_key_exists($field, $contract)) {
                 $errors[] = 'Missing top-level field: ' . $field;
+            }
+        }
+        foreach ($this->schema()->forbiddenTopLevelFields() as $field) {
+            if (\array_key_exists($field, $contract)) {
+                $errors[] = 'Forbidden top-level field: ' . $field;
             }
         }
 
@@ -52,7 +57,7 @@ final class BuildPlanContractValidator
                 $errors[] = $field . ' must be an object';
             }
         }
-        foreach (['pages', 'blocks', 'tasks', 'build_order', 'frozen_fields', 'mutable_fields', 'source_contracts', 'qa_gates'] as $field) {
+        foreach (['pages', 'blocks', 'frozen_fields', 'mutable_fields', 'source_contracts', 'qa_gates'] as $field) {
             if (\array_key_exists($field, $contract) && !\is_array($contract[$field])) {
                 $errors[] = $field . ' must be an array';
             }
@@ -65,7 +70,6 @@ final class BuildPlanContractValidator
             $this->validatePolicyRef($contract),
             $this->validateSiteBrief($contract),
             $this->validateBlocks($contract),
-            $this->validateTasks($contract),
             $this->validatePermissions($contract),
             $this->validatePresentationProjection($contract)
         );
@@ -74,7 +78,7 @@ final class BuildPlanContractValidator
             $this->noReasonLinter()->validate($contract),
             $this->designPolicyLinter()->validate($contract),
             $this->contentManifestLinter()->validate($contract),
-            $this->taskGraphValidator()->validate($contract),
+            $this->blockGraphValidator()->validate($contract),
         ] as $result) {
             $errors = \array_merge($errors, \is_array($result['errors'] ?? null) ? $result['errors'] : []);
         }
@@ -210,161 +214,6 @@ final class BuildPlanContractValidator
      * @param array<string, mixed> $contract
      * @return list<string>
      */
-    private function validateTasks(array $contract): array
-    {
-        $errors = [];
-        $allowedKinds = $this->schema()->allowedTaskKinds();
-        $allowedExecutors = $this->schema()->allowedExecutors();
-        foreach ($this->normalizeRecordSet($contract['tasks'] ?? [], ['task_id', 'id']) as $taskId => $task) {
-            foreach ($this->schema()->requiredTaskFields() as $field) {
-                if ($field === 'task_id') {
-                    continue;
-                }
-                if ($field === 'depends_on') {
-                    if (!\array_key_exists($field, $task) || !\is_array($task[$field])) {
-                        $errors[] = 'Task ' . $taskId . ' is missing required field: ' . $field;
-                    }
-                    continue;
-                }
-                if (!\array_key_exists($field, $task) || (\is_array($task[$field]) && $task[$field] === []) || (!\is_array($task[$field]) && \trim((string)$task[$field]) === '')) {
-                    $errors[] = 'Task ' . $taskId . ' is missing required field: ' . $field;
-                }
-            }
-            $kind = \trim((string)($task['task_kind'] ?? ''));
-            if ($kind !== '' && !\in_array($kind, $allowedKinds, true)) {
-                $errors[] = 'Task ' . $taskId . ' has unsupported task_kind: ' . $kind;
-            }
-            $executor = \trim((string)($task['executor'] ?? ''));
-            if ($executor !== '' && !\in_array($executor, $allowedExecutors, true)) {
-                $errors[] = 'Task ' . $taskId . ' has unsupported executor: ' . $executor;
-            }
-            $inputScope = \is_array($task['input_scope'] ?? null) ? $task['input_scope'] : [];
-            $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
-            $outputContract = \is_array($task['output_contract'] ?? null) ? $task['output_contract'] : [];
-            $acceptance = \is_array($task['acceptance'] ?? null) ? $task['acceptance'] : [];
-            $contextBudget = \is_array($task['context_budget'] ?? null) ? $task['context_budget'] : [];
-            if ($runtimeContext === []) {
-                $errors[] = 'Task ' . $taskId . ' runtime_context must not be empty';
-            }
-            if (\trim((string)($runtimeContext['content_locale'] ?? '')) === '') {
-                $errors[] = 'Task ' . $taskId . ' runtime_context.content_locale is required';
-            }
-            $languageContract = \is_array($runtimeContext['language_contract'] ?? null) ? $runtimeContext['language_contract'] : [];
-            if ($languageContract === []) {
-                $errors[] = 'Task ' . $taskId . ' runtime_context.language_contract is required';
-            } elseif (\trim((string)($languageContract['source_of_truth_locale'] ?? '')) === '') {
-                $errors[] = 'Task ' . $taskId . ' runtime_context.language_contract.source_of_truth_locale is required';
-            }
-            foreach ($this->findForbiddenRuntimeContextKeys($runtimeContext) as $path) {
-                $errors[] = 'Task ' . $taskId . ' runtime_context contains forbidden broad context: ' . $path;
-            }
-            if ($outputContract === []) {
-                $errors[] = 'Task ' . $taskId . ' output_contract must not be empty';
-            } else {
-                if (\trim((string)($outputContract['format'] ?? '')) === '') {
-                    $errors[] = 'Task ' . $taskId . ' output_contract.format is required';
-                }
-                if (!\is_array($outputContract['required_outputs'] ?? null) || $outputContract['required_outputs'] === []) {
-                    $errors[] = 'Task ' . $taskId . ' output_contract.required_outputs must not be empty';
-                }
-            }
-            if ($acceptance === []) {
-                $errors[] = 'Task ' . $taskId . ' acceptance must not be empty';
-            } elseif (!\is_array($acceptance['checks'] ?? null) || $acceptance['checks'] === []) {
-                $errors[] = 'Task ' . $taskId . ' acceptance.checks must not be empty';
-            }
-            $maxTokens = (int)($contextBudget['max_tokens'] ?? 0);
-            if ($maxTokens <= 0) {
-                $errors[] = 'Task ' . $taskId . ' context_budget.max_tokens must be greater than zero';
-            }
-            if ($this->stringList($task['policy_slices'] ?? []) === []) {
-                $errors[] = 'Task ' . $taskId . ' policy_slices must not be empty';
-            }
-            if ($this->stringList($task['acceptance_rule_ids'] ?? []) === []) {
-                $errors[] = 'Task ' . $taskId . ' acceptance_rule_ids must not be empty';
-            }
-            if (\trim((string)($inputScope['page_type'] ?? '')) !== '') {
-                if (\trim((string)($task['page_flow_role'] ?? $inputScope['page_flow_role'] ?? '')) === '') {
-                    $errors[] = 'Task ' . $taskId . ' is missing stage-one page_flow_role';
-                }
-                $signature = \is_array($task['visual_signature'] ?? null) ? $task['visual_signature'] : [];
-                foreach (['composition_pattern', 'spatial_rhythm', 'media_strategy', 'surface_treatment'] as $field) {
-                    if (\trim((string)($signature[$field] ?? '')) === '') {
-                        $errors[] = 'Task ' . $taskId . ' is missing visual_signature.' . $field;
-                    }
-                }
-            }
-            $semanticError = $this->validateTaskExecutorPair($taskId, $kind, $executor);
-            if ($semanticError !== '') {
-                $errors[] = $semanticError;
-            }
-        }
-
-        return $errors;
-    }
-
-    private function validateTaskExecutorPair(string $taskId, string $kind, string $executor): string
-    {
-        if ($kind === '' || $executor === '') {
-            return '';
-        }
-
-        $expected = [
-            'asset_generate' => 'AiSiteAssetQueue',
-            'block_build' => 'AiSiteBuildQueue',
-            'page_assemble' => 'AiSiteBuildQueue',
-            'i18n_generate' => 'AiSiteBuildQueue',
-            'seo_generate' => 'AiSiteBuildQueue',
-            'qa_run' => 'AiSiteQualityGateService',
-            'repair_patch' => 'ContractRepairExecutor',
-            'publish_prepare' => 'AiSiteBuildQueue',
-        ];
-        $requiredExecutor = $expected[$kind] ?? '';
-        if ($requiredExecutor !== '' && $executor !== $requiredExecutor) {
-            return 'Task ' . $taskId . ' executor must be ' . $requiredExecutor . ' for task_kind ' . $kind;
-        }
-
-        return '';
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function findForbiddenRuntimeContextKeys(mixed $value, string $path = 'runtime_context'): array
-    {
-        if (!\is_array($value)) {
-            return [];
-        }
-
-        $forbidden = [
-            'scope' => true,
-            'plan_json' => true,
-            'plan_structured' => true,
-            'plan_workbench' => true,
-            'execution_blueprint' => true,
-            'execution_blueprint_draft' => true,
-            'presentation_projection' => true,
-            'ui_projection' => true,
-        ];
-        $errors = [];
-        foreach ($value as $key => $item) {
-            $keyText = \trim((string)$key);
-            $nextPath = $path . '.' . $keyText;
-            if (isset($forbidden[$keyText])) {
-                $errors[] = $nextPath;
-            }
-            foreach ($this->findForbiddenRuntimeContextKeys($item, $nextPath) as $nestedPath) {
-                $errors[] = $nestedPath;
-            }
-        }
-
-        return \array_values(\array_unique($errors));
-    }
-
-    /**
-     * @param array<string, mixed> $contract
-     * @return list<string>
-     */
     private function validatePermissions(array $contract): array
     {
         $errors = [];
@@ -461,9 +310,9 @@ final class BuildPlanContractValidator
         return $this->noReasonLinter ?? new BuildPlanNoReasonLinter($this->schema());
     }
 
-    private function taskGraphValidator(): BuildPlanTaskGraphValidator
+    private function blockGraphValidator(): BuildPlanBlockGraphValidator
     {
-        return $this->taskGraphValidator ?? new BuildPlanTaskGraphValidator();
+        return $this->blockGraphValidator ?? new BuildPlanBlockGraphValidator();
     }
 
     private function designPolicyLinter(): BuildPlanDesignPolicyLinter

@@ -21,6 +21,9 @@ final class AiSiteAgentWorkspaceDebugDefaultsTest extends TestCase
         self::assertStringNotContainsString('Teenipiya', AiSiteAgentWorkspaceDebugDefaults::SITE_TITLE);
         self::assertStringNotContainsString('APK', AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION);
         self::assertStringNotContainsString('Teenipiya', AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION);
+        self::assertStringContainsString('霓虹', AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION);
+        self::assertStringContainsString('棋牌', AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION);
+        self::assertStringContainsString('图片', AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION);
         self::assertSame('zh_Hans_CN', AiSiteAgentWorkspaceDebugDefaults::DEFAULT_LOCALE);
     }
 

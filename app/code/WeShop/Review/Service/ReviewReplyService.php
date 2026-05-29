@@ -15,6 +15,7 @@ class ReviewReplyService
 {
     private const MAX_MENTIONED_CUSTOMERS = 20;
     private const MAX_NOTIFICATION_RECIPIENTS = 40;
+    private const PRODUCT_VIEW_ROUTE = 'product/view';
 
     public function __construct(
         private readonly ?NotificationService $notificationService = null,
@@ -35,7 +36,7 @@ class ReviewReplyService
         $content = trim((string) ($replyData['content'] ?? ''));
 
         if ($reviewId <= 0 || $customerId <= 0 || $content === '') {
-            throw new \InvalidArgumentException((string) __('Review, customer and reply content are required.'));
+            throw new \InvalidArgumentException((string) __('评论、客户和回复内容不能为空。'));
         }
 
         $review = $this->loadApprovedReview($reviewId);
@@ -160,7 +161,7 @@ class ReviewReplyService
         $review->load($reviewId);
 
         if (!$review->getId() || (string) $review->getData(Review::schema_fields_STATUS) !== Review::STATUS_APPROVED) {
-            throw new \InvalidArgumentException((string) __('Review does not exist or is not visible.'));
+            throw new \InvalidArgumentException((string) __('评论不存在或不可见。'));
         }
 
         return $review;
@@ -178,7 +179,7 @@ class ReviewReplyService
             || (int) $parentReply->getData(ReviewReply::schema_fields_REVIEW_ID) !== $reviewId
             || (string) $parentReply->getData(ReviewReply::schema_fields_STATUS) !== ReviewReply::STATUS_APPROVED
         ) {
-            throw new \InvalidArgumentException((string) __('Reply target does not exist.'));
+            throw new \InvalidArgumentException((string) __('回复目标不存在。'));
         }
 
         return $parentReply;
@@ -203,7 +204,7 @@ class ReviewReplyService
             }
         }
 
-        return (string) __('Customer #%{1}', [$customerId]);
+        return (string) __('客户 #%{1}', [$customerId]);
     }
 
     /**
@@ -242,11 +243,11 @@ class ReviewReplyService
                     'customer_id' => $customerId,
                     'type' => 'review_reply',
                     'title' => $isMention
-                        ? (string) __('You were mentioned in a product review reply')
-                        : (string) __('Your review has a new reply'),
+                        ? (string) __('你在商品评价回复中被提及')
+                        : (string) __('你的评价有新回复'),
                     'content' => $isMention
-                        ? (string) __('Customer %{1} mentioned you in a product review reply.', [$actorName])
-                        : (string) __('Customer %{1} replied in a product review.', [$actorName]),
+                        ? (string) __('客户 %{1} 在商品评价回复中提到了你。', [$actorName])
+                        : (string) __('客户 %{1} 回复了商品评价。', [$actorName]),
                     'target_url' => $targetUrl,
                 ]);
             } catch (\Throwable $throwable) {
@@ -330,20 +331,21 @@ class ReviewReplyService
 
     private function buildReplyTargetUrl(int $productId, int $reviewId, int $replyId): string
     {
-        $path = '/' . ReviewService::FRONTEND_ROUTE
-            . '?product_id=' . $productId
+        $path = '/' . self::PRODUCT_VIEW_ROUTE
+            . '?id=' . $productId
             . '&review_id=' . $reviewId
             . '&reply_id=' . $replyId;
         $url = $path;
         $urlBuilder = $this->getUrlBuilder();
         if ($urlBuilder) {
             try {
-                $url = (string) $urlBuilder->getUrl(ReviewService::FRONTEND_ROUTE, [
-                    'product_id' => $productId,
+                $url = (string) $urlBuilder->getUrl(self::PRODUCT_VIEW_ROUTE, [
+                    'id' => $productId,
                     'review_id' => $reviewId,
                     'reply_id' => $replyId,
                 ]);
-                if (trim($url) === '') {
+                $urlPath = (string) parse_url($url, PHP_URL_PATH);
+                if (trim($url) === '' || !str_contains($urlPath, self::PRODUCT_VIEW_ROUTE)) {
                     $url = $path;
                 }
             } catch (\Throwable) {
@@ -368,7 +370,7 @@ class ReviewReplyService
             'parent_reply_id' => (int) ($row[ReviewReply::schema_fields_PARENT_REPLY_ID] ?? 0),
             'product_id' => (int) ($row[ReviewReply::schema_fields_PRODUCT_ID] ?? 0),
             'customer_id' => (int) ($row[ReviewReply::schema_fields_CUSTOMER_ID] ?? 0),
-            'customer_name' => (string) ($row[ReviewReply::schema_fields_DISPLAY_NAME] ?? __('Customer')),
+            'customer_name' => (string) ($row[ReviewReply::schema_fields_DISPLAY_NAME] ?? __('客户')),
             'content' => (string) ($row[ReviewReply::schema_fields_CONTENT] ?? ''),
             'mentioned_customer_ids' => $this->decodeCustomerIds($row[ReviewReply::schema_fields_MENTIONED_CUSTOMER_IDS] ?? []),
             'status' => (string) ($row[ReviewReply::schema_fields_STATUS] ?? ReviewReply::STATUS_APPROVED),

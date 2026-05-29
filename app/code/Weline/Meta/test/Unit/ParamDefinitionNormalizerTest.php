@@ -61,4 +61,28 @@ PHTML);
         $this->assertSame(['primary' => 'Primary', 'secondary' => 'Secondary'], $definitions['variant']['options']);
         $this->assertSame('select', $definitions['variant']['ui_type']);
     }
+
+    public function testBooleanDefaultInfersSelectableBooleanDefinition(): void
+    {
+        $normalizer = new ParamDefinitionNormalizer();
+
+        $definitions = $normalizer->extractParamAnnotations(<<<'PHTML'
+<?php
+/**
+ * @param.showHeader {default=true,name="是否显示header",description="是否显示顶栏"}
+ * @param showFooter {default=false,name="是否显示footer",description="是否显示底栏"}
+ */
+?>
+PHTML);
+
+        $this->assertSame('bool', $definitions['showHeader']['type']);
+        $this->assertSame('select', $definitions['showHeader']['ui_type']);
+        $this->assertSame(['1' => '显示', '0' => '隐藏'], $definitions['showHeader']['options']);
+        $this->assertTrue($definitions['showHeader']['default']);
+
+        $this->assertSame('bool', $definitions['showFooter']['type']);
+        $this->assertSame('select', $definitions['showFooter']['input']);
+        $this->assertSame(['1' => '显示', '0' => '隐藏'], $definitions['showFooter']['options']);
+        $this->assertFalse($definitions['showFooter']['default']);
+    }
 }

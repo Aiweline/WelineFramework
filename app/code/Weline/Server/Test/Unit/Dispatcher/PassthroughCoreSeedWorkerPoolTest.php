@@ -625,6 +625,20 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame([], $second);
     }
 
+    public function testMaintenancePoolTrustsMasterReadyWithoutStartupProbe(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([
+            19983 => 'early health probe would fail',
+        ]);
+
+        $result = $core->setMaintenanceWorkerPortsFromMasterReady([19983]);
+
+        self::assertSame([19983], $result['accepted']);
+        self::assertSame([], $result['rejected']);
+        self::assertSame([19983], $core->getMaintenanceWorkerPorts());
+        self::assertSame([], $core->healthCalls);
+    }
+
     public function testClaimJoinedWorkerHomepageWarmupCanBeDisabled(): void
     {
         $core = $this->createTrustingMasterReadyWarmupCore([], [], [

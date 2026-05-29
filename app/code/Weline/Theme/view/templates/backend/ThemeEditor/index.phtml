@@ -18,6 +18,18 @@ $theme = $this->getData('theme');
 $themes = $this->getData('themes') ?: [];
 $page_type = $this->getData('page_type') ?: 'homepage';
 $page_types = $this->getData('page_types') ?: [];
+$layout_option = (string)($this->getData('layout_option') ?: 'default');
+$layout_options_by_type = $this->getData('layout_options_by_type') ?: [];
+$current_layout_options = $layout_options_by_type[$page_type] ?? [];
+if (empty($current_layout_options)) {
+    $current_layout_options = [[
+        'value' => $layout_option,
+        'label' => $layout_option === 'default' ? (string)__('Default') : $layout_option,
+        'description' => '',
+        'file' => '',
+    ]];
+}
+$layout_options_json = json_encode($layout_options_by_type, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
 $areas = $this->getData('areas') ?: [];
 $editor_area = $this->getData('editor_area') ?: 'frontend';
 $theme_has_backend = (bool)$this->getData('theme_has_backend');
@@ -31,7 +43,7 @@ $previewParams = [
     'theme_id' => $theme_id,
     'page_type' => $page_type,
     'layout_type' => $page_type,
-    'layout_option' => 'default',
+    'layout_option' => $layout_option,
     'editor_mode' => '1',
     'preview_mode' => 'live',
     'status' => $preview_status,
@@ -39,6 +51,7 @@ $previewParams = [
     'preview_area' => $editor_area,
     'frontend_theme_id' => $frontend_theme_id,
     'backend_theme_id' => $backend_theme_id,
+    '_t' => time(),
 ];
 $initialPreviewUrl = 'about:blank';
 if ($theme_id) {
@@ -84,6 +97,7 @@ $getWidgetIcon = function ($type) {
 <css>Weline_Admin::assets/css/icons.min.css</css>
 <!-- 引入部件配置面板美化样式 -->
 <css>Weline_Theme::css/widget-config-panel.css</css>
+<link rel="stylesheet" href="@static(Weline_Theme::css/widget-config-panel.css)?v=20260529-array-backfill">
 <!-- Widget 参数类型 UI 自包含样式与脚本（唯一前缀 w-param-，闭包） -->
 <css>Weline_Widget::css/widget-param-types.css</css>
 
@@ -94,6 +108,8 @@ $getWidgetIcon = function ($type) {
      data-theme-has-backend="<?= $theme_has_backend ? '1' : '0' ?>"
      data-file-manager-connector-base="<?= $fileManagerConnectorUrl ?>" 
      data-page-type="<?= htmlspecialchars((string)($page_type ?? 'homepage')) ?>"
+     data-layout-option="<?= htmlspecialchars($layout_option) ?>"
+     data-layout-options="<?= htmlspecialchars($layout_options_json, ENT_QUOTES, 'UTF-8') ?>"
      data-api-base="<?= $this->getUrl('theme/backend/theme-editor') ?>"
      data-api-save-widget="<?= $this->getUrl('theme/backend/theme-editor/save-widget') ?>"
      data-api-update-config="<?= $this->getUrl('theme/backend/theme-editor/update-config') ?>"
@@ -105,7 +121,10 @@ $getWidgetIcon = function ($type) {
      data-api-widget-preview="<?= $this->getUrl('theme/backend/theme-editor/widget-preview') ?>"
      data-api-compile-layout="<?= $this->getUrl('theme/backend/theme-editor/compile-layout') ?>"
      data-api-layout-config="<?= $this->getUrl('theme/backend/theme-editor/layout-config') ?>"
+     data-api-layout-options="<?= $this->getUrl('theme/backend/theme-editor/layout-options') ?>"
+     data-api-save-layout-selection="<?= $this->getUrl('theme/backend/theme-editor/save-layout-selection') ?>"
      data-api-save-layout-config="<?= $this->getUrl('theme/backend/theme-editor/save-layout-config') ?>"
+     data-api-ai-translate-config="<?= $this->getUrl('theme/backend/theme-editor/ai-translate-config') ?>"
      data-api-layout-preview="<?= $this->getUrl('theme/backend/theme-editor/layout-preview') ?>"
      data-api-frontend-layout-preview="<?= $this->getFrontendUrl('theme/frontend/theme-preview/content') ?>"
      data-api-param-render-form="<?= $this->getUrl('theme/backend/widget/paramrender/form') ?>"
@@ -135,35 +154,57 @@ $getWidgetIcon = function ($type) {
             </h1>
             
             <div class="toolbar-selects">
-                <select id="themeSelect" class="form-select">
-                    <option value=""><?= __('-- 选择主题 --') ?></option>
-                    <?php foreach ($themes as $t): 
-                        // 支持数组和对象两种格式
-                        $tId = (int)(is_array($t) ? ($t['id'] ?? 0) : (is_object($t) ? $t->getId() : 0));
-                        $tName = is_array($t) ? ($t['name'] ?? '') : (is_object($t) ? ($t->getName() ?? '') : '');
-                        $tName = (string)($tName ?? '');
-                        $tIsActive = is_array($t) ? ($t['is_active'] ?? false) : (is_object($t) ? $t->getIsActive() : false);
-                    ?>
-                        <option value="<?= $tId ?>" <?= $tId === $theme_id ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($tName) ?>
-                            <?= $tIsActive ? '（已启用）' : '' ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <label class="toolbar-select-field toolbar-select-field-theme">
+                    <span class="toolbar-select-label"><?= __('主题') ?></span>
+                    <select id="themeSelect" class="form-select" aria-label="<?= __('主题') ?>">
+                        <option value=""><?= __('-- 选择主题 --') ?></option>
+                        <?php foreach ($themes as $t):
+                            // 支持数组和对象两种格式
+                            $tId = (int)(is_array($t) ? ($t['id'] ?? 0) : (is_object($t) ? $t->getId() : 0));
+                            $tName = is_array($t) ? ($t['name'] ?? '') : (is_object($t) ? ($t->getName() ?? '') : '');
+                            $tName = (string)($tName ?? '');
+                            $tIsActive = is_array($t) ? ($t['is_active'] ?? false) : (is_object($t) ? $t->getIsActive() : false);
+                        ?>
+                            <option value="<?= $tId ?>" <?= $tId === $theme_id ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($tName) ?>
+                                <?= $tIsActive ? '（已启用）' : '' ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
                 
-                <select id="pageTypeSelect" class="form-select" title="<?= __('选择页面布局类型') ?>">
-                    <?php foreach ($page_types as $code => $label): ?>
-                        <option value="<?= $code ?>" <?= $code === $page_type ? 'selected' : '' ?>>
-                            <?= htmlspecialchars((string)($label ?? '')) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <select id="editorAreaSelect" class="form-select" title="<?= __('前端/后端主题') ?>" <?= !$theme_has_backend ? 'style="display:none"' : '' ?>>
-                    <option value="frontend" <?= $editor_area === 'frontend' ? 'selected' : '' ?>><?= __('前端') ?></option>
-                    <?php if ($theme_has_backend): ?>
-                    <option value="backend" <?= $editor_area === 'backend' ? 'selected' : '' ?>><?= __('后端') ?></option>
-                    <?php endif; ?>
-                </select>
+                <label class="toolbar-select-field toolbar-select-field-layout-type">
+                    <span class="toolbar-select-label"><?= __('布局类型') ?></span>
+                    <select id="pageTypeSelect" class="form-select" title="<?= __('选择布局类型') ?>" aria-label="<?= __('布局类型') ?>">
+                        <?php foreach ($page_types as $code => $label): ?>
+                            <option value="<?= $code ?>" <?= $code === $page_type ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string)($label ?? '')) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label class="toolbar-select-field toolbar-select-field-layout-option">
+                    <span class="toolbar-select-label"><?= __('布局选项') ?></span>
+                    <select id="layoutOptionSelect" class="form-select" title="<?= __('选择布局选项') ?>" aria-label="<?= __('布局选项') ?>">
+                        <?php foreach ($current_layout_options as $option):
+                            $optionValue = (string)($option['value'] ?? '');
+                            $optionLabel = (string)($option['label'] ?? $optionValue);
+                        ?>
+                            <option value="<?= htmlspecialchars($optionValue) ?>" <?= $optionValue === $layout_option ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($optionLabel) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label class="toolbar-select-field toolbar-select-field-editor-area" <?= !$theme_has_backend ? 'style="display:none"' : '' ?>>
+                    <span class="toolbar-select-label"><?= __('编辑区域') ?></span>
+                    <select id="editorAreaSelect" class="form-select" title="<?= __('前端/后端主题') ?>" aria-label="<?= __('编辑区域') ?>">
+                        <option value="frontend" <?= $editor_area === 'frontend' ? 'selected' : '' ?>><?= __('前端') ?></option>
+                        <?php if ($theme_has_backend): ?>
+                        <option value="backend" <?= $editor_area === 'backend' ? 'selected' : '' ?>><?= __('后端') ?></option>
+                        <?php endif; ?>
+                    </select>
+                </label>
             </div>
         </div>
         
@@ -226,7 +267,6 @@ $getWidgetIcon = function ($type) {
         <!-- 左侧：配置面板 -->
         <div class="editor-config-panel" id="configPanel">
             <div class="panel-header">
-                <h3 class="panel-title"><?= __('部件配置') ?></h3>
                 <div class="config-mode-tabs" role="tablist">
                     <button type="button" class="config-mode-tab active" id="configModeLayout" data-config-mode="layout"><?= __('布局配置') ?></button>
                     <button type="button" class="config-mode-tab" id="configModeWidget" data-config-mode="widget"><?= __('部件配置') ?></button>
@@ -440,6 +480,12 @@ $getWidgetIcon = function ($type) {
                                     $wPosition = $widget['position'] ?? [];
                                     $wCompatible = $widget['compatible'] ?? false;
                                     $wSlot = (string)($widget['slot'] ?? '');
+                                    $wSupports = $widget['supports'] ?? [];
+                                    $wSlots = $widget['slots'] ?? [];
+                                    $wSlotCodes = array_values(array_filter(array_unique(array_merge(
+                                        is_array($wSupports) ? array_map('strval', $wSupports) : [(string)$wSupports],
+                                        is_array($wSlots) ? array_map('strval', array_keys($wSlots)) : []
+                                    )), static fn(string $item): bool => $item !== ''));
                                     $wPageLayouts = $widget['page_layouts'] ?? ['*'];
                                     $wIsContainer = $widget['is_container'] ?? false;
                                     // 独占属性：部件定义中明确设置 exclusive=true，或者在独占插槽列表中
@@ -455,6 +501,8 @@ $getWidgetIcon = function ($type) {
                                          data-widget-position='<?= json_encode($wPosition) ?>'
                                          data-widget-compatible="<?= $wCompatible ? '1' : '0' ?>"
                                          data-widget-slot="<?= htmlspecialchars($wSlot) ?>"
+                                         data-widget-supports="<?= htmlspecialchars(implode(',', $wSlotCodes)) ?>"
+                                         data-widget-slots="<?= htmlspecialchars(implode(',', is_array($wSlots) ? array_map('strval', array_keys($wSlots)) : [])) ?>"
                                          data-widget-exclusive="<?= $wExclusive ? '1' : '0' ?>"
                                          data-widget-page-layouts='<?= json_encode($wPageLayouts) ?>'
                                          data-widget-is-container="<?= $wIsContainer ? '1' : '0' ?>">
@@ -664,9 +712,25 @@ body {
     overflow: hidden;
 }
 
+body:has(.theme-editor-container) .page-content,
+body:has(.theme-editor-container) .backend-main-content,
+body:has(.theme-editor-container) .page-content > .container-fluid {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+
+body:has(.theme-editor-container) [data-backend-layout-page-header],
+body:has(.theme-editor-container) .footer {
+    display: none;
+}
+
 .theme-editor-container {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    max-width: 100%;
     height: 100vh;
     background: var(--te-bg-dark);
     color: var(--te-text-primary);
@@ -714,9 +778,43 @@ body {
 .toolbar-selects {
     display: flex;
     gap: 8px;
+    align-items: flex-end;
+}
+
+.toolbar-select-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 130px;
+}
+
+.toolbar-select-field-theme {
+    min-width: 200px;
+}
+
+.toolbar-select-field-layout-type {
+    min-width: 180px;
+}
+
+.toolbar-select-field-layout-option {
+    min-width: 150px;
+}
+
+.toolbar-select-field-editor-area {
+    min-width: 110px;
+}
+
+.toolbar-select-label {
+    color: var(--te-text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    padding-left: 2px;
 }
 
 .toolbar-selects .form-select {
+    width: 100%;
     min-width: 130px;
     padding: 8px 32px 8px 12px;
     background-color: var(--te-input-bg);
@@ -791,7 +889,7 @@ body {
     background: var(--te-bg-hover);
     border: 1px solid var(--te-border);
     border-radius: 6px;
-    margin-left: auto;
+    margin-left: 0;
 }
 
 .config-mode-tab {
@@ -2335,7 +2433,8 @@ body {
     gap: 5px;
 }
 
-.preview-widget-item:hover .widget-actions {
+.preview-widget-item:hover .widget-actions,
+.preview-widget-item.selected .widget-actions {
     display: flex;
 }
 
@@ -3547,6 +3646,11 @@ body {
     max-width: min(220px, 28vw);
 }
 
+.toolbar-select-field .form-select {
+    width: 100%;
+    max-width: none;
+}
+
 .editor-main,
 .editor-preview-area,
 .preview-wrapper,
@@ -3800,4 +3904,4 @@ window.WelineApiConfig = Object.assign(
 );
 </script>
 <script src="@static(Weline_Frontend::js/weline-api.js)?v=20260525-theme-editor"></script>
-<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260525-version-preview3"></script>
+<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260529-array-live-refresh-active"></script>

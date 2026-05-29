@@ -31,6 +31,7 @@ class ReviewService
     {
         /** @var Review $review */
         $review = ObjectManager::getInstance(Review::class);
+        $now = date('Y-m-d H:i:s');
         
         $review->clearData()
             ->setData(Review::schema_fields_PRODUCT_ID, $reviewData['product_id'] ?? 0)
@@ -41,6 +42,8 @@ class ReviewService
             ->setData(Review::schema_fields_MEDIA_ITEMS, $this->encodeJson($this->normalizeMediaItems($reviewData['media_items'] ?? [])))
             ->setData(Review::schema_fields_RATING_SCORES, $this->encodeJson($this->normalizeRatingScores($reviewData['rating_scores'] ?? [])))
             ->setData(Review::schema_fields_STATUS, Review::STATUS_PENDING)
+            ->setData(Review::schema_fields_CREATED_AT, (string) ($reviewData['created_at'] ?? $now))
+            ->setData(Review::schema_fields_UPDATED_AT, (string) ($reviewData['updated_at'] ?? $now))
             ->save();
 
         $eventData = [

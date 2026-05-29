@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Http\Url;
 
 class AiSiteVisualUrlService
@@ -36,11 +37,11 @@ class AiSiteVisualUrlService
             $visualEditParams['virtual_theme_id'] = $virtualThemeId;
         }
 
-        return [
+        return $this->normalizePreviewUrlsForCurrentBackendRequest([
             'preview_full_url' => $this->url->getBackendUrl('pagebuilder/backend/preview/full', $previewParams),
             'visual_preview_url' => $this->url->getBackendUrl('pagebuilder/backend/preview/full', $visualPreviewParams),
             'visual_edit_url' => $this->url->getBackendUrl('pagebuilder/backend/page/edit', $visualEditParams),
-        ];
+        ]);
     }
 
     /**
@@ -74,11 +75,125 @@ class AiSiteVisualUrlService
             $visualEditParams['virtual_theme_id'] = $virtualThemeId;
         }
 
-        return [
+        return $this->normalizePreviewUrlsForCurrentBackendRequest([
             'preview_full_url' => $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace-preview', $previewParams),
             'visual_preview_url' => $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace-preview', $visualPreviewParams),
             'visual_edit_url' => $this->url->getBackendUrl('pagebuilder/backend/page/virtual-edit', $visualEditParams),
-        ];
+        ]);
+    }
+
+    /**
+     * @param array{preview_full_url:string,visual_preview_url:string,visual_edit_url:string} $urls
+     * @return array{preview_full_url:string,visual_preview_url:string,visual_edit_url:string}
+     */
+    private function normalizePreviewUrlsForCurrentBackendRequest(array $urls): array
+    {
+        $localePrefix = $this->resolveCurrentBackendLocalePrefix();
+        if ($localePrefix === '') {
+            return $urls;
+        }
+
+        foreach ($urls as $key => $url) {
+            $urls[$key] = $this->insertBackendLocalePrefixIfMissing((string)$url, $localePrefix);
+        }
+
+        return $urls;
+    }
+
+    private function resolveCurrentBackendLocalePrefix(): string
+    {
+        $requestUri = \trim((string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? ''));
+        if ($requestUri === '') {
+            return '';
+        }
+
+        $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: $requestUri);
+        $segments = \array_values(\array_filter(\explode('/', \trim($path, '/')), static fn(string $segment): bool => $segment !== ''));
+        if ($segments === []) {
+            return '';
+        }
+
+        $backendPrefix = \trim((string)Env::getAreaRoutePrefix('backend'), '/');
+        $backendIndex = \array_search($backendPrefix, $segments, true);
+        if ($backendIndex === false) {
+            return '';
+        }
+
+        $first = (string)($segments[$backendIndex + 1] ?? '');
+        $second = (string)($segments[$backendIndex + 2] ?? '');
+        if ($this->isCurrencySegment($first) && $this->isLocaleSegment($second)) {
+            return '/' . $first . '/' . $second;
+        }
+        if ($this->isLocaleSegment($first)) {
+            return '/' . $first;
+        }
+
+        return '';
+    }
+
+    private function insertBackendLocalePrefixIfMissing(string $url, string $localePrefix): string
+    {
+        $url = \trim($url);
+        if ($url === '' || $localePrefix === '') {
+            return $url;
+        }
+
+        $parts = \parse_url($url);
+        if (!\is_array($parts)) {
+            return $url;
+        }
+
+        $path = (string)($parts['path'] ?? '');
+        if ($path === '' || !\str_contains($path, '/pagebuilder/backend/')) {
+            return $url;
+        }
+
+        $backendPrefix = '/' . \trim((string)Env::getAreaRoutePrefix('backend'), '/');
+        if (!\str_starts_with($path . '/', $backendPrefix . '/')) {
+            return $url;
+        }
+
+        $afterBackend = \substr($path, \strlen($backendPrefix));
+        if (\str_starts_with($afterBackend . '/', $localePrefix . '/')) {
+            return $url;
+        }
+        if (\preg_match('#^/[A-Z]{3}/[A-Za-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,2}(?:/|$)#', $afterBackend) === 1
+            || \preg_match('#^/[A-Za-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,2}(?:/|$)#', $afterBackend) === 1
+        ) {
+            return $url;
+        }
+
+        $parts['path'] = $backendPrefix . $localePrefix . $afterBackend;
+
+        return $this->buildUrlFromParts($parts);
+    }
+
+    /**
+     * @param array<string,mixed> $parts
+     */
+    private function buildUrlFromParts(array $parts): string
+    {
+        $scheme = isset($parts['scheme']) ? ((string)$parts['scheme'] . '://') : '';
+        $user = (string)($parts['user'] ?? '');
+        $pass = isset($parts['pass']) ? (':' . (string)$parts['pass']) : '';
+        $auth = $user !== '' ? ($user . $pass . '@') : '';
+        $host = (string)($parts['host'] ?? '');
+        $port = isset($parts['port']) ? (':' . (string)$parts['port']) : '';
+        $path = (string)($parts['path'] ?? '');
+        $query = isset($parts['query']) ? ('?' . (string)$parts['query']) : '';
+        $fragment = isset($parts['fragment']) ? ('#' . (string)$parts['fragment']) : '';
+
+        return $scheme . $auth . $host . $port . $path . $query . $fragment;
+    }
+
+    private function isCurrencySegment(string $value): bool
+    {
+        return \preg_match('/^[A-Z]{3}$/', $value) === 1;
+    }
+
+    private function isLocaleSegment(string $value): bool
+    {
+        return \preg_match('/^[A-Za-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,2}$/', $value) === 1;
     }
 
     /**

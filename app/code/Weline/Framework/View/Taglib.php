@@ -3568,6 +3568,10 @@ class Taglib
                 
                 // 对于 hook/w:hook 标签，不递归编译子节点，因为回调函数需要原始的 <else/> 来分割内容
                 $isHookTag = ($node->name === 'hook' || $node->name === 'w:hook');
+                $isSlotTag = ($node->name === 'slot' || $node->name === 'w:slot');
+                if ($isSlotTag) {
+                    $node->children = $this->selectSlotElseFallbackNodes($node->children);
+                }
                 if (!$isHookTag) {
                     $node->children = $this->compileNodes($node->children, $tags, $template, $fileName);
                 }
@@ -3602,6 +3606,19 @@ class Taglib
     /**
      * 编译属性值中的节点（递归处理标签节点）
      */
+    private function selectSlotElseFallbackNodes(array $children): array
+    {
+        foreach ($children as $index => $child) {
+            if (($child instanceof TagNode || $child instanceof AstTagNode)
+                && ($child->name === 'else' || $child->name === 'w:else')
+            ) {
+                return array_slice($children, $index + 1);
+            }
+        }
+
+        return $children;
+    }
+
     private function compileAttributeValueNodes(array $nodes, array $tags, Template $template, string $fileName): array
     {
         $result = [];

@@ -5,7 +5,10 @@ $modules = is_array($modules ?? null) ? $modules : [];
 $storeError = trim((string)($store_error ?? ''));
 $downloadAction = (string)($download_action ?? '');
 $installAction = (string)($install_action ?? '');
+$authorizeInstallUrl = (string)($authorize_install_url ?? '');
 $accountUrl = (string)($account_url ?? '');
+$installedUrl = (string)($installed_url ?? '');
+$indexUrl = (string)($index_url ?? '');
 $platformUrl = rtrim((string)($platform_url ?? 'https://app.aiweline.com'), '/');
 $storeDomain = (string)($store_domain ?? '');
 $downloadResult = is_array($download_result ?? null) ? $download_result : null;
@@ -14,12 +17,8 @@ $searchQuery = (string)($search_query ?? '');
 $pricingFilter = (string)($pricing_filter ?? '');
 $appUrl = static fn(array $module): string => $platformUrl . '/apps/' . rawurlencode((string)($module['slug'] ?? $module['module_id'] ?? ''));
 ?>
-<div class="container-fluid py-3">
-    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-        <div>
-            <h1 class="h4 mb-1"><?= __('应用商城') ?></h1>
-            <div class="text-muted small"><?= __('从 WelineFramework 官网账户授权后下载模块。') ?></div>
-        </div>
+<div class="appstore-backend-page">
+    <div class="d-flex align-items-center justify-content-end flex-wrap gap-2 mb-3">
         <a class="btn btn-outline-primary" href="<?= htmlspecialchars($accountUrl, ENT_QUOTES, 'UTF-8') ?>">
             <i class="bi bi-person-check me-1"></i><?= __('账户授权') ?>
         </a>
@@ -90,8 +89,8 @@ $appUrl = static fn(array $module): string => $platformUrl . '/apps/' . rawurlen
                     </div>
                 </form>
                 <div class="d-flex flex-wrap gap-2 mt-3 small">
-                    <span class="badge text-bg-light border"><?= __('免费应用直接安装') ?></span>
-                    <span class="badge text-bg-light border"><?= __('付费应用购买后安装') ?></span>
+                    <span class="badge text-bg-light border"><?= __('免费应用授权后安装') ?></span>
+                    <span class="badge text-bg-light border"><?= __('付费应用购买并授权后安装') ?></span>
                     <span class="badge text-bg-light border"><?= __('同一官网账号可多端登录') ?></span>
                 </div>
             </div>
@@ -103,6 +102,8 @@ $appUrl = static fn(array $module): string => $platformUrl . '/apps/' . rawurlen
                 $versionCode = (string)($version['version'] ?? $module['current_version'] ?? '');
                 $isFree = (($module['pricing_type'] ?? '') === 'free') || (float)($module['price'] ?? 0) <= 0.0;
                 $hasLicense = !empty($module['license_key']);
+                $isInstalled = !empty($module['is_installed']);
+                $updateAvailable = !empty($module['update_available']);
                 $searchText = strtolower(trim(implode(' ', [
                     (string)($module['display_name'] ?? ''),
                     (string)($module['name'] ?? ''),
@@ -120,17 +121,34 @@ $appUrl = static fn(array $module): string => $platformUrl . '/apps/' . rawurlen
                                     <h2 class="h5 mb-1"><?= htmlspecialchars((string)($module['display_name'] ?? $module['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h2>
                                     <div class="text-muted small"><?= htmlspecialchars((string)($module['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
                                 </div>
-                                <span class="badge bg-success"><?= $isFree ? __('免费') : __('付费') ?></span>
+                                <div class="d-flex flex-column align-items-end gap-1">
+                                    <span class="badge bg-success"><?= $isFree ? __('免费') : __('付费') ?></span>
+                                    <?php if ($isInstalled): ?>
+                                        <span class="badge text-bg-primary"><?= $updateAvailable ? __('可更新') : __('已安装') ?></span>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                             <p class="text-muted flex-grow-1"><?= htmlspecialchars((string)($module['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
                             <div class="d-flex flex-wrap gap-2 small text-muted mb-3">
                                 <span><?= __('版本：') ?><?= htmlspecialchars($versionCode, ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php if ($isInstalled): ?>
+                                    <span><?= __('本地：') ?><?= htmlspecialchars((string)($module['installed_version'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endif; ?>
                                 <span><?= __('下载：') ?><?= (int)($module['downloads'] ?? 0) ?></span>
                                 <?php if (!empty($version['file_size'])): ?>
                                     <span><?= __('大小：') ?><?= number_format(((int)$version['file_size']) / 1024, 1) ?> KB</span>
                                 <?php endif; ?>
                             </div>
-                            <?php if ($hasLicense): ?>
+                            <?php if ($isInstalled): ?>
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <button class="btn btn-outline-success" type="button" disabled>
+                                        <i class="bi bi-check2-circle me-1"></i><?= __('已安装') ?>
+                                    </button>
+                                    <a class="btn <?= $updateAvailable ? 'btn-primary' : 'btn-outline-primary' ?>" href="<?= htmlspecialchars($installedUrl, ENT_QUOTES, 'UTF-8') ?>">
+                                        <i class="bi <?= $updateAvailable ? 'bi-arrow-repeat' : 'bi-puzzle' ?> me-1"></i><?= $updateAvailable ? __('去更新') : __('我的模块') ?>
+                                    </a>
+                                </div>
+                            <?php elseif ($hasLicense): ?>
                                 <div class="d-flex flex-wrap gap-2">
                                     <form method="post" action="<?= htmlspecialchars($downloadAction, ENT_QUOTES, 'UTF-8') ?>">
                                         <input type="hidden" name="module_id" value="<?= (int)($module['module_id'] ?? 0) ?>">
@@ -140,21 +158,22 @@ $appUrl = static fn(array $module): string => $platformUrl . '/apps/' . rawurlen
                                             <i class="bi bi-cloud-download me-1"></i><?= __('下载') ?>
                                         </button>
                                     </form>
-                                    <form method="post" action="<?= htmlspecialchars($installAction, ENT_QUOTES, 'UTF-8') ?>">
-                                        <input type="hidden" name="module_id" value="<?= (int)($module['module_id'] ?? 0) ?>">
-                                        <input type="hidden" name="license_key" value="<?= htmlspecialchars((string)$module['license_key'], ENT_QUOTES, 'UTF-8') ?>">
-                                        <input type="hidden" name="version" value="<?= htmlspecialchars($versionCode, ENT_QUOTES, 'UTF-8') ?>">
-                                        <button class="btn btn-primary" type="submit">
-                                            <i class="bi bi-download me-1"></i><?= $isFree ? __('直接安装') : __('安装') ?>
-                                        </button>
-                                    </form>
+                                    <?php
+                                    $authUrl = $authorizeInstallUrl . '?' . http_build_query([
+                                        'module_id' => (int)($module['module_id'] ?? 0),
+                                        'version' => $versionCode,
+                                    ]);
+                                    ?>
+                                    <a class="btn btn-primary" href="<?= htmlspecialchars($authUrl, ENT_QUOTES, 'UTF-8') ?>">
+                                        <i class="bi bi-shield-check me-1"></i><?= $isFree ? __('授权并安装') : __('安装授权') ?>
+                                    </a>
                                 </div>
                             <?php elseif (!$isFree): ?>
                                 <div class="d-flex flex-wrap gap-2 align-items-center">
                                     <a class="btn btn-primary" href="<?= htmlspecialchars($appUrl($module), ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
                                         <i class="bi bi-cart-check me-1"></i><?= __('购买') ?>
                                     </a>
-                                    <a class="btn btn-outline-secondary" href="">
+                                    <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($indexUrl, ENT_QUOTES, 'UTF-8') ?>">
                                         <i class="bi bi-arrow-clockwise me-1"></i><?= __('购买后刷新') ?>
                                     </a>
                                 </div>

@@ -322,6 +322,15 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         };
 
         $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'activeControlOperation', [
+            'id' => 'ctrl_op_active',
+            'action' => ControlMessage::ACTION_RELOAD,
+            'clientId' => 20,
+            'payload' => [],
+            'state' => 'running',
+            'queuedAt' => \microtime(true),
+            'startedAt' => \microtime(true),
+        ]);
 
         $this->invokePrivate($orchestrator, 'handleCommand', [[
             'action' => ControlMessage::ACTION_MAINTENANCE_ENABLE,
@@ -533,6 +542,119 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         self::assertSame(ControlMessage::TYPE_SET_ROUTE_TABLE, $server->sent[0]['message']['type'] ?? '');
         self::assertSame(ControlMessage::ROLE_MAINTENANCE, $server->sent[0]['message']['role'] ?? '');
         self::assertSame([19092], $server->sent[0]['message']['ports'] ?? []);
+    }
+
+    public function testQueuedExplicitMaintenanceEnablePromotesStartupMaintenanceToSticky(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            port: 19081,
+        ));
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+        $this->writePrivate($orchestrator, 'maintenanceSticky', false);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 1,
+            ControlMessage::ROLE_MAINTENANCE => 1,
+        ]);
+        $this->writePrivate($orchestrator, 'activeControlOperation', [
+            'id' => 'ctrl_op_active',
+            'action' => ControlMessage::ACTION_RELOAD,
+            'clientId' => 42,
+            'payload' => [],
+            'state' => 'running',
+            'queuedAt' => \microtime(true),
+            'startedAt' => \microtime(true),
+        ]);
+
+        $this->invokePrivate($orchestrator, 'handleCommand', [[
+            'action' => ControlMessage::ACTION_MAINTENANCE_ENABLE,
+        ], 43]);
+
+        $pending = $this->readPrivate($orchestrator, 'pendingControlOperations');
+        self::assertCount(1, $pending);
+        self::assertSame(ControlMessage::ACTION_MAINTENANCE_ENABLE, $pending[0]['action']);
+        self::assertTrue((bool)$this->readPrivate($orchestrator, 'maintenanceMode'));
+        self::assertTrue((bool)$this->readPrivate($orchestrator, 'maintenanceSticky'));
+        self::assertFalse($orchestrator->checkAndDisableMaintenanceIfReady());
+        self::assertTrue((bool)$this->readPrivate($orchestrator, 'maintenanceMode'));
+    }
+
+    public function testMaintenanceCommandRunsImmediatelyAfterQueuedAck(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public int $enableCalls = 0;
+
+            public function enableMaintenanceMode(bool $sticky = false, bool $skipBusinessDrainAck = false): array
+            {
+                $this->enableCalls++;
+
+                return [
+                    'success' => true,
+                    'message' => 'enabled',
+                    'maintenance_workers' => 1,
+                ];
+            }
+        };
+        $server = new class extends MasterControlServer {
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+
+        $this->invokePrivate($orchestrator, 'handleCommand', [[
+            'action' => ControlMessage::ACTION_MAINTENANCE_ENABLE,
+        ], 45]);
+
+        self::assertSame(1, $orchestrator->enableCalls);
+        self::assertSame([], $this->readPrivate($orchestrator, 'pendingControlOperations'));
+        self::assertNull($this->readPrivate($orchestrator, 'activeControlOperation'));
+        self::assertNull($this->readPrivate($orchestrator, 'ipcExclusiveCommand'));
+        self::assertCount(1, $server->sent);
+        self::assertSame('queued', $server->sent[0]['message']['data']['state'] ?? null);
+    }
+
+    public function testMaintenanceEnableContinuesAfterCommandClientDisconnects(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'ipcImperialEpoch', 7);
+        $this->writePrivate($orchestrator, 'ipcExclusiveCommand', ControlMessage::ACTION_MAINTENANCE_ENABLE);
+        $this->writePrivate($orchestrator, 'ipcExclusiveClientId', 44);
+
+        $this->invokePrivate($orchestrator, 'ipcOnExclusiveHolderDisconnect', [44]);
+
+        self::assertSame(7, $this->readPrivate($orchestrator, 'ipcImperialEpoch'));
+        self::assertNull($this->readPrivate($orchestrator, 'ipcExclusiveCommand'));
+        self::assertNull($this->readPrivate($orchestrator, 'ipcExclusiveClientId'));
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed

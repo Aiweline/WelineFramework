@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Service\Query;
 
 use Weline\Framework\Extends\ExtendsData;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\DefaultCrudProvider;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -135,6 +136,8 @@ class QueryProviderRegistry
             return null;
         }
 
+        $this->registerRequestModuleFromSourceFile($sourceFile);
+
         try {
             $instance = ObjectManager::getInstance($className);
             return $instance instanceof QueryProviderInterface ? $instance : null;
@@ -142,6 +145,35 @@ class QueryProviderRegistry
             $this->logLoadFailure($className, $sourceFile, $e);
             return null;
         }
+    }
+
+    private function registerRequestModuleFromSourceFile(string $sourceFile): void
+    {
+        $moduleName = $this->resolveModuleNameFromSourceFile($sourceFile);
+        if ($moduleName === '') {
+            return;
+        }
+
+        try {
+            ObjectManager::getInstance(Request::class)->addModule($moduleName);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function resolveModuleNameFromSourceFile(string $sourceFile): string
+    {
+        $path = \str_replace('\\', '/', $sourceFile);
+        if (!\preg_match('~/app/code/([^/]+)/([^/]+)/~i', $path, $matches)) {
+            return '';
+        }
+
+        $vendor = \trim((string)($matches[1] ?? ''));
+        $module = \trim((string)($matches[2] ?? ''));
+        if ($vendor === '' || $module === '') {
+            return '';
+        }
+
+        return $vendor . '_' . $module;
     }
 
     private function logLoadFailure(string $className, string $sourceFile, \Throwable $e): void

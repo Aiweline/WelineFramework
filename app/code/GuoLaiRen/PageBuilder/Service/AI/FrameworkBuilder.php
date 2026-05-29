@@ -111,7 +111,7 @@ class FrameworkBuilder
             return "<?php\n// no php block\n?>\n";
         }
         $block = substr($framework, 0, $pos + strlen($closeTag));
-        $block = str_replace('{{PHP_VARIABLES}}', $phpVariables, $block);
+        $block = $this->replacePlaceholder($block, 'PHP_VARIABLES', $phpVariables);
         return $block;
     }
 
@@ -216,10 +216,20 @@ class FrameworkBuilder
             }
             
             // 执行替换
-            $result = str_replace('{{' . $placeholder . '}}', $value, $result);
+            $result = $this->replacePlaceholder($result, $placeholder, $value);
         }
         
         return $result;
+    }
+
+    private function replacePlaceholder(string $template, string $placeholder, string $value): string
+    {
+        $token = '{{' . $placeholder . '}}';
+        $template = str_replace('/* ' . $token . ' */', $value, $template);
+        $template = str_replace('/*' . $token . '*/', $value, $template);
+        $template = str_replace('__PB_PLACEHOLDER_' . $placeholder . '__', $value, $template);
+
+        return str_replace($token, $value, $template);
     }
     
     /**
@@ -327,7 +337,7 @@ class FrameworkBuilder
         
         // 检查 html_content 中的 PHP 标签
         if ($fieldName === 'html_content') {
-            if (preg_match('/<\?(php|=)/i', $value)) {
+            if ($this->containsUnsafeHtmlContentPhpTag($value)) {
                 $warnings[] = 'HTML内容中包含PHP标签';
             }
         }
@@ -346,6 +356,20 @@ class FrameworkBuilder
             'valid' => empty($warnings),
             'warnings' => $warnings,
         ];
+    }
+
+    private function containsUnsafeHtmlContentPhpTag(string $value): bool
+    {
+        $withoutSafeEchoes = preg_replace(
+            '/<\?=\s*(?:nl2br\s*\(\s*)?htmlspecialchars\s*\([\s\S]*?\)\s*(?:\))?\s*\?>/iu',
+            '',
+            $value
+        );
+        if (!is_string($withoutSafeEchoes)) {
+            $withoutSafeEchoes = $value;
+        }
+
+        return preg_match('/<\?(?:php|=)?/i', $withoutSafeEchoes) === 1;
     }
     
     /**

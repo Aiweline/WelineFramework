@@ -26,7 +26,7 @@ class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindi
 
     public function getDefaultStyleCodes(): array
     {
-        return ['india-card-game-apk-dark-neon'];
+        return [];
     }
 
     public function getCode(): string

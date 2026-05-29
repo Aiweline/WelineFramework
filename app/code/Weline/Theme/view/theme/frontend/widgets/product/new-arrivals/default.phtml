@@ -11,6 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page", "category"]}
+ * @widget.supports {["layout-homepage-new-arrivals","layout-homepage-content","layout-product-list-recommendations","layout-cms-content","layout-default-content"]}
  * 
  * @param title {default="新品上架",type="string",label="标题"}
  * @param subtitle {default="发现最新商品",type="string",label="副标题"}
@@ -88,7 +89,7 @@ $widgetId = 'new-arrivals-' . uniqid();
                             
                             <?php if ($showNewBadge): ?>
                                 <div class="product-badges">
-                                    <span class="badge badge-new"><?= __('NEW') ?></span>
+                                    <span class="w-badge w-badge-success badge-new"><?= __('NEW') ?></span>
                                 </div>
                             <?php endif; ?>
                             

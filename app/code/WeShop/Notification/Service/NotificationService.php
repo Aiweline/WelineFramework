@@ -15,7 +15,7 @@ class NotificationService
         $notification = ObjectManager::getInstance(Notification::class);
         $customerId = (int) ($notificationData['customer_id'] ?? 0);
         if ($customerId <= 0) {
-            throw new \InvalidArgumentException((string) __('Customer ID is required.'));
+            throw new \InvalidArgumentException((string) __('客户ID不能为空。'));
         }
 
         $notification->clearData()
@@ -64,18 +64,19 @@ class NotificationService
     public function getTypeOptions(): array
     {
         $options = [
-            'info' => (string) __('Info'),
-            'order' => (string) __('Order'),
-            'payment' => (string) __('Payment'),
-            'membership' => (string) __('Membership'),
-            'promotion' => (string) __('Promotion'),
+            'info' => (string) __('信息'),
+            'order' => (string) __('订单'),
+            'payment' => (string) __('支付'),
+            'membership' => (string) __('会员'),
+            'promotion' => (string) __('促销'),
             'qa_mention' => (string) __('商品问答提及'),
             'review_reply' => (string) __('商品评价回复'),
         ];
 
         $rows = $this->createNotificationModel()
             ->clear()
-            ->fields('DISTINCT ' . Notification::schema_fields_TYPE . ' AS type')
+            ->fields(Notification::schema_fields_TYPE)
+            ->group(Notification::schema_fields_TYPE)
             ->select()
             ->fetchArray();
 

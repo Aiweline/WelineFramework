@@ -376,3 +376,20 @@ AI Shared {header|footer} Contract — shared_blocks_ready 门禁反向编码：
 | v3 | 消除 prompt 与门禁打架：允许 gradient/@media/clamp，上调 CSS 预算，取消硬编码 SAFE 色 |
 | v3 | 新增 `AiSiteVisualBlockContractRenderer`：门禁规则反向编码为 AI 自检清单 |
 | v3 | 新增 `AiSiteComponentContractException`：findings 结构化失败回灌 |
+| 2026-05-27 | 待增 §14 font_visible、§15 language_voice（见下方占位） |
+
+---
+
+## 附录 C：待增门禁（2026-05-27 实现中）
+
+### §14 font_visible
+
+- **判定**：`AiSiteQualityGateService::matchFontViolations()` — 检测硬编码 Inter/Roboto/system-ui 或缺失 `var(--pb-font-*)`
+- **Prompt**：`REQUIRED_FONT_TOKEN_MAP (HARD)` in `AiSiteVisualBlockContractRenderer`
+- **规则**：默认固定硬校验，不依赖环境开关
+
+### §15 language_voice
+
+- **判定**：`matchLanguageVoiceViolations()` — CTA 未命中 `cta_lexicon`、中英文标点/称呼混用
+- **Prompt**：`language_voice (HARD)` + `cta_lexicon` from `AiSiteLanguageVoiceResolver`
+- **规则**：默认固定硬校验，不依赖环境开关

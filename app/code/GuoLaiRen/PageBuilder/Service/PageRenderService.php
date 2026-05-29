@@ -1168,7 +1168,7 @@ class PageRenderService
             $componentHtml = $this->renderPhtmlString($templateContent, $vars);
             $componentHtml = $this->applyVirtualThemeConfigOverridesToStaticHtml($componentHtml, $defaultConfig, $componentConfig);
             $componentHtml = $this->applyVirtualThemeSharedStaticLocaleGuards($componentHtml, $region, $componentConfig);
-            $componentHtml = $this->applyVirtualThemeGeneratedComponentRuntimeFramework($componentHtml);
+            $componentHtml = $this->applyVirtualThemeGeneratedComponentRuntimeFramework($componentHtml, $code);
         } catch (\Throwable $throwable) {
             return '<!-- Error rendering virtual theme component ' . \htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
                 . ': ' . \htmlspecialchars($throwable->getMessage(), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . " -->\n";
@@ -1185,18 +1185,71 @@ class PageRenderService
         return $marker . $componentHtml . "\n<!-- Component {$code} rendered successfully -->\n";
     }
 
-    private function applyVirtualThemeGeneratedComponentRuntimeFramework(string $html): string
+    private function applyVirtualThemeGeneratedComponentRuntimeFramework(string $html, string $componentCode = ''): string
     {
         if ($html === '') {
             return $html;
         }
 
         $html = $this->flattenRenderedVirtualThemeNestedResponsiveMedia($html);
+        $html = $this->applyVirtualThemeSharedHeaderMobileMenuRuntimeGuard($html, $componentCode);
         if (\stripos($html, 'data-pb-ai-action') !== false && \strpos($html, 'pb:cta') === false) {
             $html .= "\n" . $this->buildVirtualThemeAiActionBridgeScript();
         }
 
         return $html;
+    }
+
+    private function applyVirtualThemeSharedHeaderMobileMenuRuntimeGuard(string $html, string $componentCode): string
+    {
+        if ($html === '' || \strpos($html, 'data-pb-ai-header-mobile-compact') !== false) {
+            return $html;
+        }
+
+        $normalizedCode = \str_replace('/', '-', \strtolower(\trim($componentCode)));
+        if ($normalizedCode !== 'header-ai-site-header') {
+            return $html;
+        }
+
+        if (\preg_match('/<header\b[^>]*\bid=["\']header-[^"\']+["\']/i', $html) !== 1) {
+            return $html;
+        }
+
+        return $html . "\n" . <<<'HTML'
+<style data-pb-ai-header-mobile-compact="1">
+@media (max-width: 992px) {
+    header[id^="header-"] {
+        position: relative;
+    }
+
+    header[id^="header-"] :is(nav, div)[class*="-nav"] {
+        position: absolute !important;
+        top: calc(100% + 8px) !important;
+        left: 16px !important;
+        right: 16px !important;
+        bottom: auto !important;
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: min(70vh, 360px) !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+        border-radius: 12px !important;
+        transform: translateY(-8px) !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    header[id^="header-"] :is(nav, div)[class*="-nav"].active {
+        transform: translateY(0) !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
+}
+</style>
+HTML;
     }
 
     /**
@@ -1973,6 +2026,8 @@ HTML;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     ' . $headHtml . '
+    ' . $this->buildAiSiteCanvasWidthCss($page) . '
+    ' . $this->buildAiSiteDesignTokenCss($page) . '
     ' . $headerCustomCode . '
 </head>
 <body>
@@ -1983,6 +2038,45 @@ HTML;
     ' . $footerCustomCode . '
 </body>
 </html>';
+    }
+
+    private function buildAiSiteCanvasWidthCss(Page $page): string
+    {
+        unset($page);
+
+        return '<style>
+:root{--pb-ai-site-canvas-width:1200px;--pb-ai-site-canvas-padding:24px;}
+[class^="header-"][class*="-container"],[class*=" header-"][class*="-container"],
+[class^="footer-"][class*="-container"],[class*=" footer-"][class*="-container"],
+.pb-c-inner{max-width:var(--pb-ai-site-canvas-width) !important;width:min(100% - calc(var(--pb-ai-site-canvas-padding) * 2), var(--pb-ai-site-canvas-width)) !important;margin-left:auto !important;margin-right:auto !important;box-sizing:border-box;}
+[class^="header-"][class*="-container"],[class*=" header-"][class*="-container"],
+[class^="footer-"][class*="-container"],[class*=" footer-"][class*="-container"]{padding-left:0 !important;padding-right:0 !important;}
+@media (max-width:768px){:root{--pb-ai-site-canvas-padding:18px;}}
+@media (max-width:420px){:root{--pb-ai-site-canvas-padding:14px;}}
+</style>';
+    }
+
+    private function buildAiSiteDesignTokenCss(Page $page): string
+    {
+        $tokens = \is_array($page->getData('design_tokens') ?? null) ? $page->getData('design_tokens') : [];
+        $themeRef = \is_array($page->getData('theme_css_ref') ?? null) ? $page->getData('theme_css_ref') : [];
+        $cssParts = [];
+
+        if ($tokens !== []) {
+            $resolver = new AiSiteDesignTokenResolver();
+            $cssParts[] = $resolver->buildRootCssVariables($tokens);
+        }
+
+        $themeCss = \trim((string)($themeRef['css'] ?? ''));
+        if ($themeCss !== '') {
+            $cssParts[] = $themeCss;
+        }
+
+        if ($cssParts === []) {
+            return '';
+        }
+
+        return '<style>' . \implode("\n", $cssParts) . '</style>';
     }
 
     private function buildSeoHeadHtml(Page $page): string

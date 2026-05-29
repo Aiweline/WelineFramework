@@ -37,11 +37,16 @@ class RegisterTest extends TestCase
         $assigned = [];
         $controller = $this->getMockBuilder(Register::class)
             ->setConstructorArgs([$session, $this->createMock(CustomerAccountService::class)])
-            ->onlyMethods(['assign', 'fetch', 'redirect', 'getUrl'])
+            ->onlyMethods(['assign', 'fetch', 'redirect', 'getUrl', 'getRequest'])
             ->getMock();
+        $request = $this->createMock(Request::class);
+        $request->method('getPost')->willReturn(null);
+        $request->method('getParam')->willReturn(null);
+
+        $controller->expects($this->once())->method('getRequest')->willReturn($request);
         $controller->method('getUrl')->with('weshop/customer/account/login')->willReturn('weshop/customer/account/login');
         $controller->expects($this->never())->method('redirect');
-        $controller->expects($this->exactly(2))
+        $controller->expects($this->exactly(3))
             ->method('assign')
             ->willReturnCallback(function (string $key, mixed $value) use (&$assigned, $controller): Register {
                 $assigned[$key] = $value;
@@ -53,6 +58,7 @@ class RegisterTest extends TestCase
 
         $this->assertSame('page', $controller->index());
         $this->assertSame('weshop/customer/account/login', $assigned['login_url']);
+        $this->assertSame('', $assigned['referral_code']);
         $this->assertNotSame('', (string) $assigned['title']);
     }
 
@@ -97,6 +103,7 @@ class RegisterTest extends TestCase
             ->with('ada@example.com', 'abc12345', [
                 'first_name' => 'Ada',
                 'last_name' => 'Lovelace',
+                'referral_code' => '',
             ])
             ->willReturn(['auth_user' => $authUser]);
         $service->expects($this->once())->method('login')->with($authUser);
