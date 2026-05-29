@@ -114,7 +114,7 @@ final class StyleRegistry
             $hits = [];
             foreach ($keywords as $keyword) {
                 $needle = $this->normalizer()->lowerForMatch($keyword);
-                if ($needle === '' || !\str_contains($haystack, $needle)) {
+                if ($needle === '' || !$this->keywordMatchesPositiveIntent($haystack, $needle)) {
                     continue;
                 }
                 $hits[] = $keyword;
@@ -144,6 +144,38 @@ final class StyleRegistry
             'matched_keywords' => $bestKeywords,
             'reason' => '自动推荐：命中关键词 ' . \implode('、', \array_slice($bestKeywords, 0, 6)) . '。',
         ];
+    }
+
+    private function keywordMatchesPositiveIntent(string $haystack, string $needle): bool
+    {
+        $quoted = \preg_quote($needle, '/');
+        $pattern = \preg_match('/^[a-z0-9]+$/i', $needle) === 1
+            ? '/(?<![a-z0-9])' . $quoted . '(?![a-z0-9])/iu'
+            : '/' . $quoted . '/iu';
+        if (\preg_match_all($pattern, $haystack, $matches, \PREG_OFFSET_CAPTURE) < 1) {
+            return false;
+        }
+
+        foreach ($matches[0] as $match) {
+            $position = (int)($match[1] ?? 0);
+            if (!$this->isNegatedKeywordOccurrence($haystack, $position)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isNegatedKeywordOccurrence(string $haystack, int $bytePosition): bool
+    {
+        $start = \max(0, $bytePosition - 140);
+        $prefix = \substr($haystack, $start, $bytePosition - $start);
+        $prefix = (string)\preg_replace('/^.*[.;!?。！？\r\n]/u', '', $prefix);
+
+        return \preg_match(
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|不是|非|勿|请勿)[^.;!?。！？\r\n]{0,140}$/iu',
+            $prefix
+        ) === 1;
     }
 
     public function isReservedCode(string $code, int $adminId = 0): bool

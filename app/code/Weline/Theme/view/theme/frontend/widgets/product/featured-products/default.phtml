@@ -11,6 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page", "category"]}
+ * @widget.supports {["layout-homepage-featured","layout-homepage-content","layout-product-list-recommendations","layout-category-recommendations","layout-cms-content","layout-default-content"]}
  * 
  * @param title {default="推荐产品",type="string",label="标题"}
  * @param subtitle {default="为您精选的优质商品",type="string",label="副标题"}
@@ -101,10 +102,10 @@ $widgetId = 'featured-products-' . uniqid();
                             <!-- 标签 -->
                             <div class="product-badges">
                                 <?php if ($product['is_new']): ?>
-                                    <span class="badge badge-new"><?= __('NEW') ?></span>
+                                    <span class="w-badge w-badge-success badge-new"><?= __('NEW') ?></span>
                                 <?php endif; ?>
                                 <?php if ($product['is_sale']): ?>
-                                    <span class="badge badge-sale"><?= __('SALE') ?></span>
+                                    <span class="w-badge w-badge-danger badge-sale"><?= __('SALE') ?></span>
                                 <?php endif; ?>
                             </div>
                             
@@ -296,7 +297,7 @@ $widgetId = 'featured-products-' . uniqid();
     z-index: 2;
 }
 
-.widget-products .badge {
+.widget-products .w-badge {
     padding: 4px 10px;
     font-size: 11px;
     font-weight: 600;

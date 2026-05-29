@@ -26,7 +26,20 @@
     @template(Weline_Frontend::templates/public/header.phtml)
     
     <main class="account-logout-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-logout-content" data-layout="account_logout_content">
-        <div class="logout-container">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-account-content,layout-account-logout-content,layout-default-content,content,account-logout,account-content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="account-logout__content-root-slot">
+            <w:slot id="account-logout-content"
+                name="退出登录内容"
+                accept="layout-account-logout-content,layout-account-content,account-logout,account-content,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="logout-container">
             <if condition="meta.content">
                 {{meta.content}}
                 <elseif condition="content"/>
@@ -34,7 +47,8 @@
                 <elseif condition="meta.contentTemplate"/>
                 <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
             </if>
-        </div>
+            </w:slot>
+        </w:slot>
     </main>
     
     @template(Weline_Frontend::templates/public/footer.phtml)

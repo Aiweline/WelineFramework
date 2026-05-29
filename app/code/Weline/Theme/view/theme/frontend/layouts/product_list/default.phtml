@@ -88,6 +88,13 @@ $this->assign('meta', $meta);
             <w:hook>Weline_Theme::frontend::layouts::product_list::content-before</w:hook>
 
             <!-- ========== 商品列表页主体区域 ========== -->
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-product-list-content,layout-default-content,content,product-list,product-filter,product-grid,product-toolbar,pagination,product-carousel"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="product-list-layout__content-root-slot">
             <main class="product-list-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-list-main" data-layout="product-list" data-columns="<?= (int)$gridColumns ?>">
                 <?php if ($isSearchLayout): ?>
                     <div class="product-list-layout__container product-list-layout__container--search">
@@ -115,7 +122,7 @@ $this->assign('meta', $meta);
                             <div class="product-list-layout__sidebar-content">
                                 <w:slot id="list-filters"
                                         name="筛选器区域"
-                                        accept="attribute-filter,price-filter,category-filter,rating-filter"
+                                        accept="layout-product-list-filters,category-filters,attribute-filter,price-filter,category-filter,rating-filter"
                                         multiple="true"
                                         position="sidebar">
                                     <w:hook>Weline_Theme::frontend::layouts::product_list::filters-before</w:hook>
@@ -149,7 +156,7 @@ $this->assign('meta', $meta);
                         <if condition="meta.showToolbar">
                             <w:slot id="list-toolbar"
                                     name="工具栏区域"
-                                    accept="sort-options,view-switcher,page-size-selector,active-filters"
+                                    accept="layout-product-list-toolbar,sort-options,view-switcher,page-size-selector,active-filters"
                                     multiple="true"
                                     position="content"
                                     class="product-list-layout__toolbar">
@@ -172,8 +179,9 @@ $this->assign('meta', $meta);
                         <!-- ========== 产品网格区域 ========== -->
                         <w:slot id="list-grid"
                                 name="产品网格区域"
-                                accept="product-grid,product-list-view"
+                                accept="layout-product-list-grid,product-grid,product-list-view"
                                 exclusive="true"
+                                multiple="false"
                                 position="content"
                                 class="product-list-layout__grid">
                             <w:hook>Weline_Theme::frontend::layouts::product_list::grid-before</w:hook>
@@ -197,8 +205,9 @@ $this->assign('meta', $meta);
                         <!-- ========== 分页区域 ========== -->
                         <w:slot id="list-pagination"
                                 name="分页区域"
-                                accept="pagination,load-more"
+                                accept="layout-product-list-pagination,pagination,load-more"
                                 exclusive="true"
+                                multiple="false"
                                 position="content"
                                 class="product-list-layout__pagination">
                             <w:hook>Weline_Theme::frontend::layouts::product_list::pagination-before</w:hook>
@@ -218,7 +227,7 @@ $this->assign('meta', $meta);
             <?php if (!$isSearchLayout): ?>
             <w:slot id="list-recommendations"
                     name="推荐产品区域"
-                    accept="featured-products,bestsellers,new-arrivals,recently-viewed,product-carousel"
+                    accept="layout-product-list-recommendations,featured-products,bestsellers,new-arrivals,recently-viewed,you-may-like,product-carousel"
                     multiple="true"
                     position="content"
                     wrapper="section"
@@ -240,6 +249,8 @@ $this->assign('meta', $meta);
 
             <!-- 移动端遮罩层 -->
             <div class="product-list-layout__overlay" id="product-list-overlay" data-overlay hidden></div>
+
+            </w:slot>
 
             <w:hook>Weline_Theme::frontend::layouts::product_list::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -334,9 +345,10 @@ $this->assign('meta', $meta);
 
     .product-list-layout__container {
         width: 100%;
-        max-width: var(--layout-max-width, 1600px);
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
         margin: 0 auto;
-        padding: 0 var(--spacing-4, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
         display: grid;
         grid-template-columns: var(--sidebar-width, 280px) minmax(0, 1fr);
         gap: var(--spacing-6, 1.5rem);
@@ -475,9 +487,10 @@ $this->assign('meta', $meta);
     }
 
     .product-list-layout__recommendations-container {
-        max-width: var(--layout-max-width, 1600px);
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
         margin: 0 auto;
-        padding: 0 var(--spacing-4, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
     }
 
     /* ---- 遮罩层 ---- */

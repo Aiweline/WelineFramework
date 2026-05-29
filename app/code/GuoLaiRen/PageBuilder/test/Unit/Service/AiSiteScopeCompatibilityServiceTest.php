@@ -862,6 +862,82 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         );
     }
 
+    public function testPreviewContentLocalePrefersGeneratedLocaleOverStaleEnglishDefault(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->normalizePreviewContentLocale([
+            'content_locale' => 'en_US',
+            'default_locale' => 'en_US',
+            'website_profile' => [
+                'content_locale' => 'en_US',
+                'default_locale' => 'en_US',
+            ],
+            'plan_generated_locale' => 'zh_Hans_CN',
+        ]);
+
+        self::assertSame('zh_Hans_CN', $scope['content_locale'] ?? null);
+        self::assertSame('zh_Hans_CN', $scope['ai_content_locale'] ?? null);
+        self::assertSame('zh_Hans_CN', $scope['website_profile']['content_locale'] ?? null);
+        self::assertSame('zh_Hans_CN', $service->resolvePreviewContentLocale($scope, 'en_US'));
+        self::assertSame('pt_BR', $service->resolvePreviewContentLocale($scope, 'pt_BR'));
+
+        $layout = $service->localizeSharedLayoutConfigForScope([
+            'header' => [
+                'component' => 'header/ai-site-header',
+                'config' => [
+                    'navigation.items' => '首页=>/',
+                    'cta.text' => '立即加入牌桌',
+                ],
+            ],
+            'footer' => [
+                'component' => 'footer/ai-site-footer',
+                'config' => [
+                    'brand.description' => '让访问者在10秒内理解霓虹棋牌馆的游戏房间价值。',
+                    'links.column1_title' => '重点页面',
+                    'copyright.text' => '保留所有权利。',
+                ],
+            ],
+        ], $scope);
+
+        self::assertSame('首页=>/', $layout['header']['config']['navigation.items']);
+        self::assertSame('立即加入牌桌', $layout['header']['config']['cta.text']);
+        self::assertSame('重点页面', $layout['footer']['config']['links.column1_title']);
+        self::assertSame('保留所有权利。', $layout['footer']['config']['copyright.text']);
+
+        $normalized = $service->normalizeScope($service->normalizePreviewContentLocale([
+            'content_locale' => 'en_US',
+            'default_locale' => 'en_US',
+            'website_profile' => ['content_locale' => 'en_US', 'default_locale' => 'en_US'],
+            'plan_generated_locale' => 'zh_Hans_CN',
+            'page_types' => [Page::TYPE_HOME],
+            'page_type_layouts' => [
+                Page::TYPE_HOME => [
+                    'header' => [
+                        'component' => 'header/ai-site-header',
+                        'config' => [
+                            'navigation.items' => '首页=>/',
+                            'cta.text' => '立即加入牌桌',
+                        ],
+                    ],
+                    'content' => [],
+                    'footer' => [
+                        'component' => 'footer/ai-site-footer',
+                        'config' => [
+                            'brand.description' => '让访问者在10秒内理解霓虹棋牌馆的游戏房间价值。',
+                            'links.column1_title' => '重点页面',
+                            'copyright.text' => '保留所有权利。',
+                        ],
+                    ],
+                ],
+            ],
+        ]));
+
+        self::assertSame('zh_Hans_CN', $normalized['content_locale'] ?? null);
+        self::assertSame('立即加入牌桌', $normalized['page_type_layouts'][Page::TYPE_HOME]['header']['config']['cta.text'] ?? null);
+        self::assertSame('重点页面', $normalized['page_type_layouts'][Page::TYPE_HOME]['footer']['config']['links.column1_title'] ?? null);
+    }
+
     public function testNormalizeScopePrefersSelectedLocaleOverStalePlanLocale(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());

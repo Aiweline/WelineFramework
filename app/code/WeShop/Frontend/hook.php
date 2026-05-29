@@ -31,16 +31,6 @@ return [
         'description' => __('Inject account-related UI into the storefront header.'),
         'doc' => 'frontend/partials/header/account.md',
     ],
-    'WeShop_Frontend::frontend::partials::header::language-switcher' => [
-        'name' => __('Header language switcher'),
-        'description' => __('Inject the language switcher into the storefront header.'),
-        'doc' => 'frontend/partials/header/language-switcher.md',
-    ],
-    'WeShop_Frontend::frontend::partials::header::currency-switcher' => [
-        'name' => __('Header currency switcher'),
-        'description' => __('Inject the currency switcher into the storefront header.'),
-        'doc' => 'frontend/partials/header/currency-switcher.md',
-    ],
     'WeShop_Frontend::frontend::partials::header::mini-cart' => [
         'name' => __('Header mini cart'),
         'description' => __('Render the mini-cart entry inside the storefront header.'),

@@ -10,6 +10,16 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 {
+    public function testAiContentFrameworkDoesNotScaleFontSizeWithViewport(): void
+    {
+        $template = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/style/_ai_frameworks/content_framework.phtml');
+        self::assertIsString($template);
+
+        self::assertDoesNotMatchRegularExpression('/font-size\s*:\s*clamp\s*\(/i', $template);
+        self::assertDoesNotMatchRegularExpression('/font-size\s*:[^;{}]*\bvw\b/i', $template);
+        self::assertDoesNotMatchRegularExpression('/letter-spacing\s*:\s*-/i', $template);
+    }
+
     public function testWorkspaceTemplatePassesArrayDataToNestedFetches(): void
     {
         $workspace = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace.phtml');
@@ -174,6 +184,8 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("parsed.host !== currentUrl.host", $body);
         self::assertStringContainsString("isSessionBoundBackendPath(parsed.pathname)", $body);
         self::assertStringContainsString("parsed.host = currentUrl.host;", $body);
+        self::assertStringContainsString('resolveCurrentBackendLocalePrefix', $body);
+        self::assertStringContainsString('insertBackendLocalePrefix();', $body);
         self::assertStringNotContainsString("isLocalAliasHost(currentHost)", $body);
     }
 
@@ -958,7 +970,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('id="pb-ai-retry-build-failures"', $visualEditPanel);
         self::assertStringContainsString('data-retryable-ai-operation="build"', $visualEditPanel);
         self::assertStringContainsString('data-retryable-ai-operation="build"', $publishCard);
-        self::assertStringContainsString('完全重建', $visualEditPanel);
+        self::assertStringContainsString('重新生成当前阶段', $visualEditPanel);
         self::assertStringContainsString('buildFullRebuildConfirmMessage', $script);
         self::assertStringContainsString('buildResumeFailedTasks', $script);
         self::assertStringContainsString('function bindRetryableAiFailureButtons()', $script);

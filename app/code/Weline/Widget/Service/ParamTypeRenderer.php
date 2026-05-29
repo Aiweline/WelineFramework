@@ -235,11 +235,12 @@ class ParamTypeRenderer
     {
         $processed = [];
         foreach ($params as $key => $param) {
-            $value = $values[$key] ?? null;
+            $hasValue = array_key_exists($key, $values);
+            $value = $hasValue ? $values[$key] : null;
             $type = $this->normalizeType($this->resolveUiType($param));
             $param = array_merge($param, ['type' => $type, 'ui_type' => $type, 'input' => $type]);
             $renderer = $this->getRenderer($type);
-            if ($value === null || $value === '') {
+            if (!$hasValue) {
                 $processed[$key] = $renderer->getDefaultValue($param);
             } else {
                 $processed[$key] = $renderer->processValue($value, $param);

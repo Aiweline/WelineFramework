@@ -56,75 +56,109 @@ $meta = $this->getData('meta') ?? [];
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::activity::content-before</w:hook>
             
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-activity-content,layout-default-content,content,activity-content,activity-hero,activity-products,promo-banner,product-carousel"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="activity-layout__content-root-slot">
             <if condition="meta.banner">
-                <section class="activity-banner">
+                <w:slot id="activity-hero"
+                        name="活动主视觉"
+                        accept="layout-activity-hero,promo-banner,hero-slider,ad-banner,banner"
+                        exclusive="true"
+                        multiple="false"
+                        position="content"
+                        wrapper="section"
+                        class="activity-banner">
                     {{meta.banner}}
-                </section>
+                </w:slot>
             </if>
             
             <if condition="meta.highlight">
-                <section class="activity-section activity-highlight">
+                <w:slot id="activity-highlight"
+                        name="活动亮点区"
+                        accept="layout-activity-highlight,content,image-text,text-block,trust-badges"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="activity-section activity-highlight">
                     <div class="container">
                         {{meta.highlight}}
                     </div>
-                </section>
+                </w:slot>
             </if>
             
             <w:hook>Weline_Theme::frontend::layouts::activity::main-before</w:hook>
             <main class="activity-main <?= htmlspecialchars($meta['class'] ?? '') ?> default" id="activity-main" data-layout="activity">
-                <w:hook>Weline_Theme::frontend::layouts::activity::main-content-before</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::activity::main-content<else/>
-                    <if condition="meta.content">
-                        {{meta.content}}
-                    <else/>
-                        <div class="activity-default-content">
-                            <div class="container">
-                                <section class="activity-header">
-                                    <h1 class="activity-title">
-                                        <if condition="meta.title">
-                                            {{meta.title}}
-                                        <else/>
-                                            <lang>精彩活动进行中</lang>
-                                        </if>
-                                    </h1>
-                                    <p class="activity-description">
-                                        <lang>这里是活动专题默认页面，你可以通过 PageBuilder 自由配置 Banner、活动亮点和活动商品区块。</lang>
-                                    </p>
-                                </section>
-                                
-                                <section class="activity-preview">
-                                    <div class="activity-preview-grid">
-                                        <div class="activity-preview-card">
-                                            <h2 class="section-title"><lang>活动亮点示例</lang></h2>
-                                            <p class="section-text">
-                                                <lang>在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。</lang>
-                                            </p>
+                <w:slot id="activity-content"
+                        name="活动主内容"
+                        accept="layout-activity-content,layout-default-content,content,banner,product,category,faq,video"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content">
+                    <w:hook>Weline_Theme::frontend::layouts::activity::main-content-before</w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::activity::main-content<else/>
+                        <if condition="meta.content">
+                            {{meta.content}}
+                        <else/>
+                            <div class="activity-default-content">
+                                <div class="container">
+                                    <section class="activity-header">
+                                        <h1 class="activity-title">
+                                            <if condition="meta.title">
+                                                {{meta.title}}
+                                            <else/>
+                                                <lang>精彩活动进行中</lang>
+                                            </if>
+                                        </h1>
+                                        <p class="activity-description">
+                                            <lang>这里是活动专题默认页面，你可以通过 PageBuilder 自由配置 Banner、活动亮点和活动商品区块。</lang>
+                                        </p>
+                                    </section>
+                                    
+                                    <section class="activity-preview">
+                                        <div class="activity-preview-grid">
+                                            <div class="activity-preview-card">
+                                                <h2 class="section-title"><lang>活动亮点示例</lang></h2>
+                                                <p class="section-text">
+                                                    <lang>在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。</lang>
+                                                </p>
+                                            </div>
+                                            <div class="activity-preview-card">
+                                                <h2 class="section-title"><lang>活动商品示例</lang></h2>
+                                                <p class="section-text">
+                                                    <lang>在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。</lang>
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div class="activity-preview-card">
-                                            <h2 class="section-title"><lang>活动商品示例</lang></h2>
-                                            <p class="section-text">
-                                                <lang>在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。</lang>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </section>
+                                    </section>
+                                </div>
                             </div>
-                        </div>
-                    </if>
-                </w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::activity::main-content-after</w:hook>
+                        </if>
+                    </w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::activity::main-content-after</w:hook>
+                </w:slot>
             </main>
             <w:hook>Weline_Theme::frontend::layouts::activity::main-after</w:hook>
             
             <if condition="meta.products">
                 <w:hook>Weline_Theme::frontend::layouts::activity::products-before</w:hook>
-                <section class="activity-section activity-products">
+                <w:slot id="activity-products"
+                        name="活动商品区"
+                        accept="layout-activity-products,featured-products,bestsellers,new-arrivals,product-carousel,product"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="activity-section activity-products">
                     <div class="container">
                         {{meta.products}}
                     </div>
-                </section>
+                </w:slot>
                 <w:hook>Weline_Theme::frontend::layouts::activity::products-after</w:hook>
             </if>
+            </w:slot>
             
             <w:hook>Weline_Theme::frontend::layouts::activity::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>

@@ -21,6 +21,7 @@ use Weline\Framework\View\Template;
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
  * @widget.slot {search}
+ * @widget.supports {["search","layout-header-search"]}
  * @widget.exclusive {true}
  * 
  * @param placeholder {default="搜索商品...",type="string",label="占位符文字"}

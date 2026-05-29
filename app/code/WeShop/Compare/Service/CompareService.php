@@ -27,6 +27,7 @@ class CompareService
         $compare->clearData()
             ->setData(Compare::schema_fields_CUSTOMER_ID, $customerId)
             ->setData(Compare::schema_fields_PRODUCT_ID, $productId)
+            ->setData(Compare::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
             ->save();
 
         return $compare;

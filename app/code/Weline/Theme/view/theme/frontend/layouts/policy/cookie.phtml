@@ -41,7 +41,21 @@ $meta = $this->getData('meta') ?? [];
         <div class="weline-main-content">
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
 
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-policy-cookie-content,layout-policy-content,layout-default-content,content,policy-content,cookie-policy,cms-content,faq"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="policy-cookie__content-root-slot">
             <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> cookie-policy" id="cookie-policy-main" data-layout="policy-cookie">
+                <w:slot id="policy-cookie-content"
+                        name="Cookie 政策正文"
+                        accept="layout-policy-cookie-content,layout-policy-content,cookie-policy,policy-content,content,faq"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="policy-main__content-slot">
                 <if condition="meta.content">
                     {{meta.content}}
                 <else/>
@@ -127,7 +141,9 @@ $meta = $this->getData('meta') ?? [];
                         </div>
                     </div>
                 </if>
+                </w:slot>
             </main>
+            </w:slot>
 
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>

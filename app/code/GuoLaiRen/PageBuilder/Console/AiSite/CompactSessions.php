@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Console\AiSite;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionArtifactService;
+use GuoLaiRen\PageBuilder\Service\AiSiteScopeManifestPolicy;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\ConnectionFactory;
@@ -141,6 +142,10 @@ final class CompactSessions implements CommandInterface
                     ++$summary['skipped_invalid_json'];
                     continue;
                 }
+
+                /** @var AiSiteScopeManifestPolicy $manifestPolicy */
+                $manifestPolicy = ObjectManager::getInstance(AiSiteScopeManifestPolicy::class);
+                $decoded = $manifestPolicy->dehydrateScopePaths($decoded);
 
                 if (!$includeRunning && $this->hasActiveOperation($decoded)) {
                     ++$summary['skipped_active'];

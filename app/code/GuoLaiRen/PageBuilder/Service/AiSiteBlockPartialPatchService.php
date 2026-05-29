@@ -272,10 +272,7 @@ class AiSiteBlockPartialPatchService
             $beforeBlock = $currentBlock;
             $scope = $this->syncSharedComponentReplacement($scope, $sharedRegion, $candidate);
             $scope['preview_page_type'] = $pageType;
-            $scope['build_summary'] = \array_replace(
-                \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-                ['task_summary' => $this->safeSummarize($scope)]
-            );
+            $scope['build_plan_execution_summary'] = $this->safeSummarize($scope);
             $scope['block_patch_history'] = $this->appendPatchHistory(
                 \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
                 $pageType,
@@ -355,10 +352,7 @@ class AiSiteBlockPartialPatchService
         // 发布时 publish flow 会将虚拟主题中的 block 拷贝到具体页面。
         // 编辑数据已安全保存在 session scope 中。
         $scope['preview_page_type'] = $pageType;
-        $scope['build_summary'] = \array_replace(
-            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-            ['task_summary' => $this->safeSummarize($scope)]
-        );
+        $scope['build_plan_execution_summary'] = $this->safeSummarize($scope);
         $scope['block_patch_history'] = $this->appendPatchHistory(
             \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
             $pageType,
@@ -1119,10 +1113,7 @@ class AiSiteBlockPartialPatchService
             $scope['virtual_pages_by_type'][$pageType]['last_generated_at'] = $createdAt;
         }
         $scope['preview_page_type'] = $pageType;
-        $scope['build_summary'] = \array_replace(
-            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-            ['task_summary' => $this->safeSummarize($scope)]
-        );
+        $scope['build_plan_execution_summary'] = $this->safeSummarize($scope);
         $scope['block_patch_history'] = $this->appendPatchHistory(
             \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
             $pageType,
@@ -1554,7 +1545,7 @@ class AiSiteBlockPartialPatchService
                 $result['_remaining_count'] = \max(0, \count($value) - $count);
                 break;
             }
-            if (\is_string($key) && \in_array($key, ['virtual_pages_by_type', 'pagebuilder_pages_by_type', 'build_tasks', 'events', 'top_logs'], true)) {
+            if (\is_string($key) && \in_array($key, ['virtual_pages_by_type', 'pagebuilder_pages_by_type', 'events', 'top_logs'], true)) {
                 continue;
             }
             $result[$key] = $this->compactPromptValue($item, $depth + 1);
@@ -1979,38 +1970,16 @@ class AiSiteBlockPartialPatchService
             $tasks[] = $task;
         };
 
-        $blueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        foreach (\is_array($blueprint['tasks'] ?? null) ? $blueprint['tasks'] : [] as $task) {
-            if (\is_array($task)) {
-                $append($task);
-            }
-        }
-
-        foreach (\is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [] as $taskKey => $state) {
-            if (!\is_array($state)) {
-                continue;
-            }
-            $stateTaskKey = \trim((string)($state['task_key'] ?? (\is_scalar($taskKey) ? (string)$taskKey : '')));
-            $definition = $stateTaskKey !== '' ? $this->buildTaskService()->getTaskDefinition($scope, $stateTaskKey) : null;
+        foreach ($this->buildTaskService()->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
+            $definition = $this->buildTaskService()->getTaskDefinition($scope, $taskKey);
             if (\is_array($definition)) {
-                $append(\array_replace($definition, $state));
-                continue;
+                $append($definition);
             }
-            $append($stateTaskKey !== '' ? \array_replace(['task_key' => $stateTaskKey], $state) : $state);
         }
-
-        if ($blueprint !== [] || \is_array($scope['build_tasks'] ?? null)) {
-            foreach ($this->buildTaskService()->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
-                $definition = $this->buildTaskService()->getTaskDefinition($scope, $taskKey);
-                if (\is_array($definition)) {
-                    $append($definition);
-                }
-            }
-            foreach (['shared:header', 'shared:footer'] as $taskKey) {
-                $definition = $this->buildTaskService()->getTaskDefinition($scope, $taskKey);
-                if (\is_array($definition)) {
-                    $append($definition);
-                }
+        foreach (['shared:header', 'shared:footer'] as $taskKey) {
+            $definition = $this->buildTaskService()->getTaskDefinition($scope, $taskKey);
+            if (\is_array($definition)) {
+                $append($definition);
             }
         }
 

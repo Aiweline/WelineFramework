@@ -90,6 +90,7 @@ class VirtualThemeComponentSource implements ThemeComponentSourceInterface
                 pageLayouts: $this->normalizeArray($meta['page_layouts'] ?? ['*'], ['*']),
                 slots: is_array($meta['slots'] ?? null) ? $meta['slots'] : [],
                 slot: !empty($meta['slot']) ? (string)$meta['slot'] : null,
+                supports: $this->normalizeArray($meta['supports'] ?? [], []),
                 exclusive: (bool)($meta['exclusive'] ?? false),
                 compatible: (bool)($meta['compatible'] ?? true),
                 isContainer: (bool)($meta['is_container'] ?? false),

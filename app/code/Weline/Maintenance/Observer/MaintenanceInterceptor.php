@@ -603,6 +603,9 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             [
                 'Content-Type' => $contentType,
                 'Retry-After' => (string)$retryAfter,
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
             ]
         );
     }
@@ -768,6 +771,9 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>{$title}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -805,6 +811,86 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
         <p>{$recoveryNotice}</p>
         <a href="/" class="back-btn">← {$backHome}</a>
     </div>
+    <script>
+        (function () {
+            var initialDelay = 5000;
+            var maxDelay = 30000;
+            var jitter = 1500;
+            var timer = 0;
+
+            if (!window.fetch || !window.URL) {
+                return;
+            }
+
+            function getProbeUrl() {
+                var url = new URL(window.location.href);
+                if (/^\/pub\/errors\/maintenance\//.test(url.pathname)) {
+                    url = new URL('/', window.location.origin);
+                }
+                url.hash = '';
+                url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
+                return url.toString();
+            }
+
+            function schedule(delay) {
+                if (timer) {
+                    window.clearTimeout(timer);
+                }
+                timer = window.setTimeout(function () {
+                    timer = 0;
+                    check();
+                }, delay + Math.floor(Math.random() * jitter));
+            }
+
+            function probe(method) {
+                return window.fetch(getProbeUrl(), {
+                    method: method,
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                    redirect: 'follow',
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+                        'X-Maintenance-Recovery-Check': '1'
+                    }
+                });
+            }
+
+            function handleResponse(response) {
+                if (response.status === 200) {
+                    window.location.reload();
+                    return;
+                }
+                schedule(response.status === 503 ? initialDelay : maxDelay);
+            }
+
+            function check() {
+                if (document.hidden) {
+                    return;
+                }
+
+                probe('HEAD').then(function (response) {
+                    if (response.status === 405 || response.status === 501) {
+                        return probe('GET').then(handleResponse);
+                    }
+                    handleResponse(response);
+                }).catch(function () {
+                    schedule(maxDelay);
+                });
+            }
+
+            document.addEventListener('visibilitychange', function () {
+                if (document.hidden) {
+                    if (timer) {
+                        window.clearTimeout(timer);
+                        timer = 0;
+                    }
+                    return;
+                }
+                schedule(0);
+            });
+            schedule(initialDelay);
+        })();
+    </script>
 </body>
 </html>
 HTML;

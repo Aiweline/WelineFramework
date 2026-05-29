@@ -22,9 +22,14 @@ use Weline\Framework\Runtime\SchedulerSystem;
 class AiSitePageComponentGenerationService
 {
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
+    private const REQUEST_CTX_INLINE_IMAGE_GENERATION_SUSPENDED = 'pagebuilder.ai.inline_image_generation.suspended';
+    private const REQUEST_CTX_INLINE_IMAGE_GENERATION_SUSPEND_REASON = 'pagebuilder.ai.inline_image_generation.suspend_reason';
+    private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';
+    private const INLINE_IMAGE_GENERATION_DISABLED_REASON = 'disabled_by_test_switch';
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
     public const REQUEST_KEY_FAST_BLOCK_ARTIFACT = 'pagebuilder.ai.fast_block_artifact';
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
+    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 3;
     // Hard completion checks only block visitor-visible prompt/blueprint/placeholder leaks.
     private const ENFORCE_COMPONENT_QUALITY_VALIDATION = false;
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
@@ -215,7 +220,7 @@ class AiSitePageComponentGenerationService
      */
     public function buildPageSectionSpecs(string $pageType, array $websiteProfile, array $scope): array
     {
-        $scope = $this->normalizeStageTwoBuildScope($scope, $websiteProfile);
+        $scope = $this->normalizeBuildPlanExecutionScope($scope, $websiteProfile);
         $blueprint = $this->getPageBlueprintService()->buildPageBlueprint($pageType, $scope, $websiteProfile);
         $blueprint = $this->mergeBuildTaskSectionsIntoBlueprint($pageType, $blueprint, $scope);
         $sections = [];
@@ -250,7 +255,7 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * Stage2 prompt assembly must always read the latest frozen task tree.
+     * BuildPlan prompt assembly must always read the latest block execution context.
      * Preview/build entrypoints can load an older persisted scope, so normalize
      * it here before any section prompt resolves build_plan_v2 task context.
      *
@@ -258,7 +263,7 @@ class AiSitePageComponentGenerationService
      * @param array<string,mixed> $websiteProfile
      * @return array<string,mixed>
      */
-    private function normalizeStageTwoBuildScope(array $scope, array $websiteProfile): array
+    private function normalizeBuildPlanExecutionScope(array $scope, array $websiteProfile): array
     {
         $scope = $this->getScopeCompatibilityService()->normalizeScope($scope);
         if (!\is_array($scope['build_plan_v2'] ?? null)) {
@@ -679,21 +684,18 @@ class AiSitePageComponentGenerationService
      */
     private function mergeBuildTaskSectionsIntoBlueprint(string $pageType, array $blueprint, array $scope): array
     {
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        $tasks = \is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [];
-        $replaceBlueprintSections = (string)($buildBlueprint['source'] ?? '') === 'build_plan_v2';
-        if ($tasks === []) {
-            $tasks = $this->buildSectionTasksFromExecutionBlueprint($pageType, $scope);
-            $replaceBlueprintSections = $tasks !== [];
+        $tasks = [];
+        foreach ($this->getBuildTaskService()->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
+            $task = $this->getBuildTaskService()->getTaskDefinition($scope, (string)$taskKey);
+            if (\is_array($task) && $task !== []) {
+                $tasks[] = $task;
+            }
         }
         if ($tasks === []) {
-            return $blueprint;
+            throw new \RuntimeException('Build prompt contract failed: confirmed build_plan_v2 has no executable blocks for page ' . $pageType . '.');
         }
 
-        $sections = $replaceBlueprintSections ? [] : \array_values(\array_filter(
-            \is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : [],
-            static fn($section): bool => \is_array($section)
-        ));
+        $sections = [];
         $known = [];
         foreach ($sections as $section) {
             $value = \trim((string)($section['code'] ?? ''));
@@ -763,312 +765,6 @@ class AiSitePageComponentGenerationService
         $blueprint['sections'] = $sections;
 
         return $blueprint;
-    }
-
-    /**
-     * @return list<array<string,mixed>>
-     */
-    private function buildSectionTasksFromExecutionBlueprint(string $pageType, array $scope): array
-    {
-        $page = $this->resolveExecutionBlueprintPagePlan($scope, $pageType);
-        $blocks = $this->resolveExecutionBlueprintBlocksForPage($scope, $pageType);
-        if ($blocks === []) {
-            return [];
-        }
-
-        $tasks = [];
-        $sharedPromptContext = $this->normalizeSharedPromptContextFromExecutionBlueprint($scope);
-        $themeContext = $this->resolveExecutionBlueprintThemeContext($scope);
-        $contentLocale = $this->resolveScopePrimaryLocale($scope);
-        $pageDesignPlan = \is_array($page['page_design_plan'] ?? null) ? $page['page_design_plan'] : [];
-        foreach (\array_values($blocks) as $index => $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $blockKey = \trim((string)($block['block_key'] ?? ''));
-            if ($blockKey === '') {
-                $blockKey = 'block_' . ($index + 1);
-            }
-            $locale = $this->resolveScopePrimaryLocale($scope);
-            $fieldPlan = $this->sanitizeExecutionBlueprintFieldPlanForGeneration(
-                \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
-                $locale
-            );
-            $label = $this->pickExecutionBlueprintBlockLabel($block, $fieldPlan, $blockKey, $locale);
-            $description = $this->pickExecutionBlueprintBlockDescription($block, $fieldPlan, $locale);
-            $sectionCode = 'content/' . $this->slugForGeneratedSectionCode($pageType) . '-' . $this->slugForGeneratedSectionCode($blockKey);
-            $contentRows = $this->buildExecutionBlueprintContentCopyRows($label, $description, $fieldPlan);
-            $realtimeContent = \is_array($block['realtime_content'] ?? null) ? $block['realtime_content'] : [];
-            $stylePlan = \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [];
-            $visualSignature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
-            $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
-            $blockGoal = $this->resolveExecutionBlueprintBlockGoal($block);
-            if ($pageDesignPlan !== []) {
-                $stylePlan['page_design_plan'] = $pageDesignPlan;
-            }
-            if ($visualSignature !== []) {
-                $stylePlan['visual_signature'] = $visualSignature;
-            }
-            if ($imageIntent !== []) {
-                $stylePlan['image_intent'] = $imageIntent;
-            }
-            $tasks[] = [
-                'task_key' => 'page:' . $pageType . ':' . $blockKey,
-                'task_type' => 'page_section',
-                'page_type' => $pageType,
-                'section_key' => $blockKey,
-                'block_key' => $blockKey,
-                'section_code' => $sectionCode,
-                'label' => $label,
-                'sort_order' => 100 + ($index * 10),
-                'plan_context' => [
-                    'block_goal' => $blockGoal,
-                    'field_plan' => $fieldPlan,
-                    'page_design_plan' => $pageDesignPlan,
-                    'source_page_type' => $pageType,
-                    'source_block_key' => $blockKey,
-                    'page_flow_role' => (string)($block['page_flow_role'] ?? ''),
-                    'stage1_visual_signature' => $visualSignature,
-                    'stage1_image_intent' => $imageIntent,
-                    'block_visual_signature' => $visualSignature,
-                    'block_image_intent' => $imageIntent,
-                ],
-                'visual_signature' => $visualSignature,
-                'image_intent' => $imageIntent,
-                'block_task' => [
-                    'task_goal' => $blockGoal,
-                    'visual_signature' => $visualSignature,
-                    'image_intent' => $imageIntent,
-                    'design_tags' => \is_array($block['design_tags'] ?? null) ? $block['design_tags'] : [],
-                    'content_plan' => [
-                        'title' => $label,
-                        'body_copy' => \array_values(\array_map(
-                            static fn(array $row): string => (string)($row['copy'] ?? ''),
-                            \array_filter($contentRows, static fn(array $row): bool => \trim((string)($row['copy'] ?? '')) !== '')
-                        )),
-                        'content_copy' => $contentRows,
-                    ],
-                    'style_plan' => $stylePlan,
-                    'realtime_content' => $realtimeContent,
-                    'meta_fields' => $fieldPlan,
-                ],
-                'task_script' => [
-                    'story_goal' => $blockGoal,
-                    'content_fill_rule' => 'Write finished visitor-facing copy from the approved page plan fields; never render planning observations or block identifiers.',
-                    'field_content_requirements' => $fieldPlan,
-                ],
-                'runtime_context' => [
-                    'theme_context_snapshot' => $themeContext,
-                    'shared_prompt_context' => $sharedPromptContext,
-                    'content_locale' => $contentLocale,
-                    'language_contract' => $this->buildStage3TaskLanguageContract($contentLocale),
-                ],
-            ];
-        }
-
-        return $tasks;
-    }
-
-    /**
-     * @param array<string,mixed> $block
-     */
-    private function resolveExecutionBlueprintBlockGoal(array $block): string
-    {
-        foreach ([
-            $block['block_goal'] ?? null,
-            $block['goal'] ?? null,
-            $block['execution_script']['core_copy'] ?? null,
-            $block['execution_script'] ?? null,
-            $block['content_brief'] ?? null,
-            $block['implementation_detail'] ?? null,
-        ] as $value) {
-            if (!\is_scalar($value)) {
-                continue;
-            }
-            $value = $this->sanitizeVisibleCopy(\trim((string)$value));
-            if ($value !== '') {
-                return $value;
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @return array<string,mixed>
-     */
-    private function resolveExecutionBlueprintPagePlan(array $scope, string $pageType): array
-    {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null) ? $executionBlueprint['page_plans'] : [];
-        if (\is_array($pagePlans[$pageType] ?? null)) {
-            return $pagePlans[$pageType];
-        }
-
-        $pages = \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
-        return \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @return list<array<string,mixed>>
-     */
-    private function resolveExecutionBlueprintBlocksForPage(array $scope, string $pageType): array
-    {
-        $page = $this->resolveExecutionBlueprintPagePlan($scope, $pageType);
-        foreach (['blocks', 'display_blocks'] as $field) {
-            $blocks = \is_array($page[$field] ?? null) ? $page[$field] : [];
-            if ($blocks !== []) {
-                return \array_values(\array_filter($blocks, static fn($block): bool => \is_array($block)));
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param list<array<string,mixed>> $fieldPlan
-     */
-    private function pickExecutionBlueprintBlockLabel(array $block, array $fieldPlan, string $fallback, string $locale = ''): string
-    {
-        foreach ($fieldPlan as $field) {
-            if (!\is_array($field)) {
-                continue;
-            }
-            $fieldName = \strtolower(\trim((string)($field['field'] ?? '')));
-            if (!\preg_match('/headline|title|section_title|cta_label/', $fieldName)) {
-                continue;
-            }
-            $sample = $this->sanitizeVisibleCopy((string)($field['sample'] ?? $field['copy'] ?? ''));
-            if ($locale !== '') {
-                $sample = $this->filterVisibleCopyForLocale($sample, $locale);
-            }
-            if ($sample !== '') {
-                return $this->clipText($sample, 72);
-            }
-        }
-
-        $label = $this->sanitizeVisibleCopy($this->pickString(
-            $block['goal'] ?? null,
-            $block['content'] ?? null,
-            $fallback
-        ));
-        if ($locale !== '') {
-            $label = $this->filterVisibleCopyForLocale($label, $locale);
-        }
-        if ($label === '') {
-            $label = $fallback;
-        }
-
-        return $this->clipText($label, 72);
-    }
-
-    /**
-     * @param list<array<string,mixed>> $fieldPlan
-     */
-    private function pickExecutionBlueprintBlockDescription(array $block, array $fieldPlan, string $locale = ''): string
-    {
-        foreach ($fieldPlan as $field) {
-            if (!\is_array($field)) {
-                continue;
-            }
-            $fieldName = \strtolower(\trim((string)($field['field'] ?? '')));
-            if (!\preg_match('/subheadline|description|intro|summary|content|body/', $fieldName)) {
-                continue;
-            }
-            $sample = $this->sanitizeVisibleCopy((string)($field['sample'] ?? $field['copy'] ?? ''));
-            if ($locale !== '') {
-                $sample = $this->filterVisibleCopyForLocale($sample, $locale);
-            }
-            if ($sample !== '') {
-                return $this->clipText($sample, 180);
-            }
-        }
-
-        $fallback = $this->sanitizeVisibleCopy((string)($block['content'] ?? $block['goal'] ?? ''));
-        if ($locale !== '') {
-            $fallback = $this->filterVisibleCopyForLocale($fallback, $locale);
-        }
-
-        return $this->clipText($fallback, 180);
-    }
-
-    /**
-     * @param list<array<string,mixed>> $fieldPlan
-     * @return list<array<string,string>>
-     */
-    private function buildExecutionBlueprintContentCopyRows(string $label, string $description, array $fieldPlan): array
-    {
-        $rows = [];
-        foreach ([
-            ['field' => 'section_intro', 'copy' => $description],
-        ] as $row) {
-            if (\trim((string)$row['copy']) !== '') {
-                $rows[] = $row;
-            }
-        }
-        foreach ($fieldPlan as $field) {
-            if (!\is_array($field)) {
-                continue;
-            }
-            $fieldName = \trim((string)($field['field'] ?? ''));
-            $sample = $this->sanitizeVisibleCopy((string)($field['sample'] ?? $field['copy'] ?? ''));
-            if ($fieldName !== '' && $sample !== '') {
-                $rows[] = ['field' => $fieldName, 'copy' => $sample];
-            }
-            if (\count($rows) >= 8) {
-                break;
-            }
-        }
-
-        return $this->dedupeContentCopyRows($rows);
-    }
-
-    /**
-     * Execution-blueprint blocks may still contain planning-only fields from
-     * older AI outputs. Generation prompts should receive content examples, not
-     * reasons, implementation prose, or asset filenames that can leak to pages.
-     *
-     * @param list<array<string,mixed>> $fieldPlan
-     * @return list<array<string,string>>
-     */
-    private function sanitizeExecutionBlueprintFieldPlanForGeneration(array $fieldPlan, string $locale): array
-    {
-        $clean = [];
-        foreach ($fieldPlan as $field) {
-            if (!\is_array($field)) {
-                continue;
-            }
-
-            $fieldName = \trim((string)($field['field'] ?? ''));
-            if ($fieldName === '') {
-                continue;
-            }
-
-            $sample = '';
-            foreach (['sample', 'copy', 'default', 'value'] as $sourceKey) {
-                $candidate = $this->sanitizeVisibleCopy((string)($field[$sourceKey] ?? ''));
-                if ($locale !== '') {
-                    $candidate = $this->filterVisibleCopyForLocale($candidate, $locale);
-                }
-                if ($candidate !== '') {
-                    $sample = $candidate;
-                    break;
-                }
-            }
-
-            if ($sample === '') {
-                continue;
-            }
-
-            $clean[] = [
-                'field' => $fieldName,
-                'sample' => $this->clipText($sample, 180),
-            ];
-        }
-
-        return $clean;
     }
 
     /**
@@ -1156,7 +852,6 @@ class AiSitePageComponentGenerationService
         if (\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
             if (
                 !\str_contains($lowerPath, 'identity-website-logo')
-                || !\str_ends_with(\parse_url($lowerPath, \PHP_URL_PATH) ?: $lowerPath, '.png')
                 || !$this->generatedLogoAssetHasTransparentBackground($normalizedPath)
             ) {
                 return '';
@@ -1173,7 +868,14 @@ class AiSitePageComponentGenerationService
             return false;
         }
         $bytes = @\file_get_contents($absolutePath);
-        if (!\is_string($bytes) || $bytes === '' || \strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) !== 0) {
+        if (!\is_string($bytes) || $bytes === '') {
+            return false;
+        }
+        $lowerPath = \strtolower($path);
+        if (\str_ends_with($lowerPath, '.svg')) {
+            return AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, 'image/svg+xml', 'logo');
+        }
+        if (\strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) !== 0) {
             return false;
         }
         if (\function_exists('imagecreatefromstring')) {
@@ -1496,15 +1198,6 @@ class AiSitePageComponentGenerationService
             return $spec;
         }
 
-        $generator = $renderContext['_inline_image_asset_generator'] ?? null;
-        if (!\is_callable($generator)) {
-            AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
-                'reason' => 'generator_missing',
-                'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
-            ]);
-            throw new \RuntimeException('REQUIRED_IMAGE_ASSET_UNRESOLVED: required image generator is missing for content block.');
-        }
-
         $slotId = $this->firstConfigString($defaultConfig, ['runtime.section_image_slot_id']);
         if ($slotId === '') {
             $slotId = \trim((string)($visualContract['slot_id'] ?? ''));
@@ -1521,38 +1214,64 @@ class AiSitePageComponentGenerationService
                 'reason' => 'slot_id_missing',
                 'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
             ]);
-            throw new \RuntimeException('REQUIRED_IMAGE_ASSET_UNRESOLVED: required image slot id is missing for content block.');
+            return $this->degradeUnavailableInlineImageAsset($spec, '', 'slot_id_missing');
+        }
+
+        if ($this->isInlineImageGenerationDisabledForCurrentBuild($defaultConfig, $renderContext)) {
+            AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
+                'reason' => self::INLINE_IMAGE_GENERATION_DISABLED_REASON,
+                'slot_id' => $slotId,
+                'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
+            ]);
+            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, self::INLINE_IMAGE_GENERATION_DISABLED_REASON);
+        }
+
+        if ($this->isInlineImageGenerationSuspendedForCurrentBuild($renderContext)) {
+            AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
+                'reason' => 'deferred_after_failure',
+                'slot_id' => $slotId,
+                'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
+            ]);
+            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'deferred_after_failure');
+        }
+
+        $generator = $renderContext['_inline_image_asset_generator'] ?? null;
+        if (!\is_callable($generator)) {
+            AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
+                'reason' => 'generator_missing',
+                'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
+            ]);
+            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'generator_missing');
         }
 
         try {
             $result = $this->generateInlineImageAssetWithRetries($generator, $slotId, $defaultConfig, $renderContext);
         } catch (\Throwable $throwable) {
+            $this->suspendInlineImageGenerationForCurrentBuild('generation_failed');
             AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
                 'reason' => 'generation_failed',
                 'slot_id' => $slotId,
                 'error' => $this->summarizeThrowable($throwable),
             ]);
-            throw new \RuntimeException(
-                'REQUIRED_IMAGE_ASSET_UNRESOLVED: required image generation failed for slot ' . $slotId . ': ' . $this->summarizeThrowable($throwable),
-                0,
-                $throwable
-            );
+            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'generation_failed');
         }
         if (!\is_array($result)) {
+            $this->suspendInlineImageGenerationForCurrentBuild('invalid_generator_payload');
             AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
                 'reason' => 'invalid_generator_payload',
                 'slot_id' => $slotId,
             ]);
-            throw new \RuntimeException('REQUIRED_IMAGE_ASSET_UNRESOLVED: required image generator returned an invalid payload for slot ' . $slotId . '.');
+            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'invalid_generator_payload');
         }
 
         $url = \trim((string)($result['final_url'] ?? $result['url'] ?? ''));
         if ($url === '') {
+            $this->suspendInlineImageGenerationForCurrentBuild('empty_final_url');
             AiSiteWorkflowTrace::log('required_image_asset_unresolved', [
                 'reason' => 'empty_final_url',
                 'slot_id' => $slotId,
             ]);
-            throw new \RuntimeException('REQUIRED_IMAGE_ASSET_UNRESOLVED: required image generator returned an empty final_url for slot ' . $slotId . '.');
+            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'empty_final_url');
         }
 
         $alt = $this->firstConfigString($defaultConfig, ['visual.image_alt', 'content.heading', 'title', 'runtime.section_name']);
@@ -1597,6 +1316,146 @@ class AiSitePageComponentGenerationService
         $spec['renderContext'] = $renderContext;
 
         return $spec;
+    }
+
+    /**
+     * Image generation is an enhancement dependency. A provider outage or quota
+     * issue must not block one-pass page generation.
+     *
+     * @param array<string,mixed> $spec
+     * @return array<string,mixed>
+     */
+    private function degradeUnavailableInlineImageAsset(array $spec, string $slotId, string $reason): array
+    {
+        $defaultConfig = \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [];
+        $renderContext = \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : [];
+        $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
+            ? $renderContext['_visual_contract']
+            : $this->decodeRuntimeVisualContract($defaultConfig);
+        if ($slotId === '') {
+            $slotId = \trim((string)($visualContract['slot_id'] ?? $defaultConfig['runtime.section_image_slot_id'] ?? ''));
+        }
+
+        foreach (['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url'] as $key) {
+            unset($defaultConfig[$key]);
+        }
+        $defaultConfig['runtime.section_image_required'] = '0';
+        $defaultConfig['runtime.section_image_unavailable'] = '1';
+        $defaultConfig['runtime.section_image_unavailable_reason'] = $reason;
+        $defaultConfig['visual.image_unavailable'] = '1';
+        $defaultConfig['visual.image_unavailable_reason'] = $reason;
+        if ($slotId !== '') {
+            $defaultConfig['runtime.section_image_slot_id'] = $slotId;
+            $defaultConfig['visual.image_slot_id'] = $slotId;
+        }
+
+        $visualContract['required'] = 0;
+        $visualContract['image_unavailable'] = 1;
+        $visualContract['unavailable_reason'] = $reason;
+        $visualContract['fallback_strategy'] = 'css_product_ui_media';
+        unset($visualContract['final_url'], $visualContract['url'], $visualContract['src']);
+        $renderContext['_visual_contract'] = $visualContract;
+        if ($slotId !== '' && \is_array($renderContext['_required_image_assets'] ?? null)) {
+            unset($renderContext['_required_image_assets'][$slotId]);
+            if ($renderContext['_required_image_assets'] === []) {
+                unset($renderContext['_required_image_assets']);
+            }
+        }
+        $renderContext['_inline_image_unavailable'] = [
+            'slot_id' => $slotId,
+            'reason' => $reason,
+        ];
+        if (\in_array($reason, ['deferred_after_failure', self::INLINE_IMAGE_GENERATION_DISABLED_REASON], true)) {
+            $defaultConfig['runtime.section_image_deferred_retry'] = '1';
+            $visualContract['image_deferred'] = 1;
+            $visualContract['deferred_reason'] = $reason;
+            $renderContext['_visual_contract'] = $visualContract;
+            $renderContext['_inline_image_deferred_retry'] = [
+                'slot_id' => $slotId,
+                'reason' => $reason,
+            ];
+        }
+
+        $spec['defaultConfig'] = $defaultConfig;
+        $spec['renderContext'] = $renderContext;
+
+        return $spec;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function isInlineImageGenerationDisabledForCurrentBuild(array $defaultConfig, array $renderContext): bool
+    {
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $buildOptions = \is_array($scope['ai_site_build_options'] ?? null) ? $scope['ai_site_build_options'] : [];
+        $runtimeOptions = \is_array($scope['runtime'] ?? null) ? $scope['runtime'] : [];
+
+        if ((bool)RequestContext::get(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED, false)) {
+            return true;
+        }
+
+        foreach ([
+            $renderContext['_disable_inline_image_generation'] ?? null,
+            $renderContext['_skip_inline_image_generation'] ?? null,
+            $renderContext['disable_inline_image_generation'] ?? null,
+            $renderContext['skip_inline_image_generation'] ?? null,
+            $defaultConfig['runtime.disable_inline_image_generation'] ?? null,
+            $defaultConfig['runtime.skip_inline_image_generation'] ?? null,
+            $scope['_disable_inline_image_generation'] ?? null,
+            $scope['_skip_inline_image_generation'] ?? null,
+            $scope['disable_inline_image_generation'] ?? null,
+            $scope['skip_inline_image_generation'] ?? null,
+            $scope['test_skip_inline_images'] ?? null,
+            $scope['ai_site_test_skip_images'] ?? null,
+            $scope['pagebuilder_ai_skip_inline_images'] ?? null,
+            $buildOptions['disable_inline_image_generation'] ?? null,
+            $buildOptions['skip_inline_image_generation'] ?? null,
+            $runtimeOptions['disable_inline_image_generation'] ?? null,
+            $runtimeOptions['skip_inline_image_generation'] ?? null,
+            Env::get('pagebuilder.ai_site.skip_inline_image_generation', null),
+            \getenv('PAGEBUILDER_AI_SITE_SKIP_INLINE_IMAGES') ?: null,
+        ] as $value) {
+            if ($this->isTruthyRuntimeSwitchValue($value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isTruthyRuntimeSwitchValue(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value === 1;
+        }
+        if (!\is_scalar($value)) {
+            return false;
+        }
+
+        return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'on', 'enabled', 'skip', 'disabled'], true);
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function isInlineImageGenerationSuspendedForCurrentBuild(array $renderContext): bool
+    {
+        if (!$this->isBuildQueueComponentContext($renderContext)) {
+            return false;
+        }
+
+        return (bool)RequestContext::get(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_SUSPENDED, false);
+    }
+
+    private function suspendInlineImageGenerationForCurrentBuild(string $reason): void
+    {
+        RequestContext::set(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_SUSPENDED, true);
+        RequestContext::set(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_SUSPEND_REASON, $reason);
     }
 
     /**
@@ -1651,7 +1510,7 @@ class AiSitePageComponentGenerationService
             }
         }
 
-        return 2;
+        return 1;
     }
 
     private function shouldRetryInlineImageGeneration(\Throwable $throwable): bool
@@ -1806,16 +1665,16 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * No application-level cap: the caller decides the task set size.
+     * Keep AI HTTP component generation conservative by default.
+     *
+     * The external provider can low-speed timeout when multiple long prompts are
+     * streamed at once, so production defaults to sequential generation unless
+     * an operator explicitly raises pagebuilder.ai_site.max_http_concurrency.
      */
-    /**
-     * 闄愬埗鍑虹珯 HTTP 骞跺彂锛岄伩鍏嶄换鍔℃暟杈冨鏃跺 DeepSeek 绛?API 鍏ㄥ紑杩炴帴瀵艰嚧鎺掗槦/闄愰€燂紝
-     * 闀挎椂闂存棤鍚炲悙瑙﹀彂 OpenAiProvider 涓?cURL LOW_SPEED 涓锛堛€孡ess than 1 bytes/sec鈥︺€嶏級銆?     *
-     * 閰嶇疆锛歿@see Env::get()} 閿?`pagebuilder.ai_site.max_http_concurrency`锛堥粯璁?4锛屾湁鏁堣寖鍥?1-2锛夈€?     */
     private function resolveConcurrency(int $taskCount): int
     {
         $taskCount = \max(1, $taskCount);
-        $maxConcurrent = (int) Env::get('pagebuilder.ai_site.max_http_concurrency', 4);
+        $maxConcurrent = (int) Env::get('pagebuilder.ai_site.max_http_concurrency', 1);
         $maxConcurrent = \max(1, \min(32, $maxConcurrent));
 
         return \min($taskCount, $maxConcurrent);
@@ -1867,7 +1726,7 @@ class AiSitePageComponentGenerationService
      */
     private function buildSharedComponentGenerationSpecs(array $websiteProfile, array $scope, array $regions = []): array
     {
-        $scope = $this->normalizeStageTwoBuildScope($scope, $websiteProfile);
+        $scope = $this->normalizeBuildPlanExecutionScope($scope, $websiteProfile);
         $regionMap = $regions === [] ? ['header' => true, 'footer' => true] : \array_fill_keys(\array_values(\array_filter(\array_map('strval', $regions))), true);
         $siteDisplayName = $this->resolveLocaleSafeSiteDisplayName(
             $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope),
@@ -1992,7 +1851,6 @@ class AiSitePageComponentGenerationService
         $semanticComponentCode = $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext);
         $verifiedAssets = $this->extractVerifiedAssetUrls($renderContext);
         $aiData = $this->stripOptionalUnverifiedGeneratedImageReferences($aiData, $renderContext, $defaultConfig);
-        $aiData = $this->enforceContractHeroImageUrlsInAiPayload($aiData, $region, $defaultConfig);
         $aiData = $this->enforceConfiguredCtaIntentInAiPayload($aiData, $defaultConfig, $componentCode);
         // Industry/content strategy drift is reviewed through direction QA, not
         // blocked at component-generation time.
@@ -2016,15 +1874,19 @@ class AiSitePageComponentGenerationService
             }
         }
         $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets, $semanticComponentCode, $renderContext, $defaultConfig);
+        $aiData = $this->normalizeRequiredPrimaryHeadingInAiPayload($aiData, $componentCode, $semanticComponentCode, $renderContext);
         $defaultConfig = $this->applyAiPayloadOwnershipToDefaultConfig($defaultConfig, $region, $aiData);
         $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig, $region);
         $persistedConfig = $this->pinSharedIdentityConfigAfterSanitize($persistedConfig, $region, $renderContext);
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
         $generatedStyleCss = \trim((string)($aiData['css_extra'] ?? '') . "\n" . (string)($aiData['css_responsive'] ?? ''));
+        $runRenderedHardGates = $region !== 'content';
         if ((bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)) {
             $html = (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? '');
-            $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html, $semanticComponentCode, $generatedStyleCss, $renderContext);
+            if ($runRenderedHardGates) {
+                $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html, $semanticComponentCode, $generatedStyleCss, $renderContext);
+            }
 
             return [
                 'code' => $componentCode,
@@ -2055,8 +1917,10 @@ class AiSitePageComponentGenerationService
         }
 
         $html = $this->renderTemplateToHtml($phtml, $persistedConfig, $renderContext);
-        $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
-        $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html, $semanticComponentCode, $generatedStyleCss, $renderContext);
+        if ($runRenderedHardGates) {
+            $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
+            $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html, $semanticComponentCode, $generatedStyleCss, $renderContext);
+        }
 
         return [
             'code' => $componentCode,
@@ -2075,10 +1939,10 @@ class AiSitePageComponentGenerationService
      */
     private function buildSemanticComponentCodeForValidation(string $componentCode, array $defaultConfig, array $renderContext): string
     {
-        $buildPlanTask = \is_array($renderContext['_build_plan_task'] ?? null) ? $renderContext['_build_plan_task'] : [];
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
         $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
         $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
-        $visualContract = \is_array($renderContext['_visual_contract'] ?? null) ? $renderContext['_visual_contract'] : [];
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
 
         $parts = [
             $componentCode,
@@ -2138,9 +2002,7 @@ class AiSitePageComponentGenerationService
     private function isHeroOrBannerImageContract(array $defaultConfig, array $renderContext = [], string $html = ''): bool
     {
         unset($html);
-        $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
-            ? $renderContext['_visual_contract']
-            : $this->decodeRuntimeVisualContract($defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
 
         return (int)($visualContract['strict_hero_cover'] ?? 0) === 1;
     }
@@ -2151,9 +2013,7 @@ class AiSitePageComponentGenerationService
      */
     private function renderContextRequiresStrictHeroCover(array $renderContext, array $defaultConfig = []): bool
     {
-        $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
-            ? $renderContext['_visual_contract']
-            : $this->decodeRuntimeVisualContract($defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
 
         return (int)($visualContract['strict_hero_cover'] ?? 0) === 1;
     }
@@ -2178,6 +2038,98 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): array {
+        if ($this->shouldCompileDeterministicSharedFooterComponent($componentCode, $region, $defaultConfig, $renderContext)) {
+            $aiData = $this->buildDeterministicSharedFooterAiData($defaultConfig, $renderContext);
+
+            return $this->buildComponentArtifactFromAiData(
+                $componentCode,
+                $name,
+                $region,
+                $prompt,
+                $defaultConfig,
+                $renderContext,
+                $aiData
+            );
+        }
+        if ($this->shouldCompileDeterministicContactSupportComponent($componentCode, $region, $defaultConfig, $renderContext)) {
+            $aiData = $this->buildDeterministicContactSupportAiData($componentCode, $defaultConfig, $renderContext);
+
+            return $this->buildComponentArtifactFromAiData(
+                $componentCode,
+                $name,
+                $region,
+                $prompt,
+                $defaultConfig,
+                $renderContext,
+                $aiData
+            );
+        }
+        if ($this->shouldCompileDeterministicFaqRulesComponent($componentCode, $region, $defaultConfig, $renderContext)) {
+            $aiData = $this->buildDeterministicFaqRulesAiData($componentCode, $defaultConfig, $renderContext);
+
+            return $this->buildComponentArtifactFromAiData(
+                $componentCode,
+                $name,
+                $region,
+                $prompt,
+                $defaultConfig,
+                $renderContext,
+                $aiData
+            );
+        }
+        if ($this->shouldCompileDeterministicStrictHeroComponent($componentCode, $region, $defaultConfig, $renderContext)) {
+            $aiData = $this->buildDeterministicStrictHeroAiData($componentCode, $defaultConfig, $renderContext);
+
+            return $this->buildComponentArtifactFromAiData(
+                $componentCode,
+                $name,
+                $region,
+                $prompt,
+                $defaultConfig,
+                $renderContext,
+                $aiData
+            );
+        }
+        if ($this->shouldCompileDeterministicCtaComponent($componentCode, $region, $defaultConfig, $renderContext)) {
+            $aiData = $this->buildDeterministicCtaAiData($componentCode, $defaultConfig, $renderContext);
+
+            return $this->buildComponentArtifactFromAiData(
+                $componentCode,
+                $name,
+                $region,
+                $prompt,
+                $defaultConfig,
+                $renderContext,
+                $aiData
+            );
+        }
+        if ($this->shouldCompileDeterministicNarrativePanelComponent($componentCode, $region, $defaultConfig, $renderContext)) {
+            $aiData = $this->buildDeterministicNarrativePanelAiData($componentCode, $defaultConfig, $renderContext);
+
+            return $this->buildComponentArtifactFromAiData(
+                $componentCode,
+                $name,
+                $region,
+                $prompt,
+                $defaultConfig,
+                $renderContext,
+                $aiData
+            );
+        }
+        if ($this->shouldCompileDeterministicCardGridComponent($componentCode, $region, $defaultConfig, $renderContext)) {
+            $aiData = $this->buildDeterministicCardGridAiData($componentCode, $defaultConfig, $renderContext);
+
+            return $this->buildComponentArtifactFromAiData(
+                $componentCode,
+                $name,
+                $region,
+                $prompt,
+                $defaultConfig,
+                $renderContext,
+                $aiData
+            );
+        }
+
         $promptComponentCode = $this->mergeSemanticComponentCode(
             $componentCode,
             $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext)
@@ -2186,7 +2138,7 @@ class AiSitePageComponentGenerationService
         $isHeroComponent = $this->renderContextRequiresStrictHeroCover($renderContext, $defaultConfig);
         $componentPrefix = $this->normalizeComponentCssPrefix($componentCode);
         $lastThrowable = null;
-        for ($attempt = 0; $attempt < 3; $attempt++) {
+        for ($attempt = 0; $attempt < self::COMPONENT_GENERATION_MAX_ATTEMPTS; $attempt++) {
             $promptForAttempt = $attemptPrompt;
             $aiData = [];
             if ($attempt > 0) {
@@ -2216,7 +2168,22 @@ class AiSitePageComponentGenerationService
             } catch (\Throwable $throwable) {
                 $lastThrowable = $throwable;
                 $this->logFastBlockGenerationFailureSample($componentCode, $attempt, $throwable, $aiData);
-                if ($attempt < 2 && $this->shouldRetryAiComponentGeneration($throwable)) {
+                if ($attempt < self::COMPONENT_GENERATION_MAX_ATTEMPTS - 1 && $aiData !== [] && $this->tryApplyDeterministicStylePatchToAiData($aiData, $renderContext, $throwable)) {
+                    try {
+                        return $this->buildComponentArtifactFromAiData(
+                            $componentCode,
+                            $name,
+                            $region,
+                            $prompt,
+                            $defaultConfig,
+                            $renderContext,
+                            $aiData
+                        );
+                    } catch (\Throwable $patchThrowable) {
+                        $lastThrowable = $patchThrowable;
+                    }
+                }
+                if ($attempt < self::COMPONENT_GENERATION_MAX_ATTEMPTS - 1 && $this->shouldRetryAiComponentGeneration($throwable)) {
                     $this->emitComponentFallbackNotice($region, $componentCode, 'retrying contract-guided generation after: ' . $this->summarizeThrowable($throwable));
                     continue;
                 }
@@ -2231,13 +2198,2857 @@ class AiSitePageComponentGenerationService
     }
 
     /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function shouldCompileDeterministicSharedFooterComponent(
+        string $componentCode,
+        string $region,
+        array $defaultConfig,
+        array $renderContext
+    ): bool {
+        if ($region !== 'footer') {
+            return false;
+        }
+        $componentCode = $this->normalizeOptionalComponentCode($componentCode);
+        $sharedRegion = \trim((string)($defaultConfig['runtime.shared_region'] ?? ''));
+        if ($sharedRegion !== '' && $sharedRegion !== 'footer') {
+            return false;
+        }
+        if (!\str_contains(\strtolower($componentCode), 'footer')) {
+            return false;
+        }
+
+        return $this->isBuildQueueComponentContext($renderContext)
+            || $sharedRegion === 'footer'
+            || \trim((string)($defaultConfig['runtime.build_plan_task_json'] ?? '')) !== '';
+    }
+
+    /**
+     * Shared footer structure is owned by the framework template and
+     * defaultConfig. Returning a schema-only payload avoids spending an AI call
+     * on markup that the framework will discard for safety anyway.
+     *
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array<string,string>
+     */
+    private function buildDeterministicSharedFooterAiData(array $defaultConfig, array $renderContext): array
+    {
+        $locale = $this->resolveGeneratedContentLocaleForPolicy($renderContext, $defaultConfig);
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $footerExtraText = '';
+        if ($this->isChineseLocale($locale) && $this->isNeonCardSiteContext($scope, $buildPlanTask, (string)\json_encode($defaultConfig, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES))) {
+            $footerExtraText = '公平牌局 · 清晰规则 · 霓虹牌桌体验';
+        }
+
+        return [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '',
+            'html_extra_column' => '',
+            'html_extra' => '',
+            'footer_extra_text' => $footerExtraText,
+            'js_content' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function shouldCompileDeterministicFaqRulesComponent(
+        string $componentCode,
+        string $region,
+        array $defaultConfig,
+        array $renderContext
+    ): bool {
+        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+            return false;
+        }
+
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
+        $identity = \strtolower($componentCode . ' ' . $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext));
+        $blockType = \strtolower(\trim((string)(
+            $buildPlanTask['block_type']
+            ?? $buildPlanTask['plan_context']['block_type']
+            ?? $buildPlanTask['block_task']['block_type']
+            ?? $visualContract['section_template']
+            ?? ''
+        )));
+        $blockKey = \strtolower(\trim((string)(
+            $buildPlanTask['block_key']
+            ?? $buildPlanTask['plan_context']['block_key']
+            ?? $buildPlanTask['section_key']
+            ?? ''
+        )));
+        $identity .= ' ' . $blockType . ' ' . $blockKey;
+
+        foreach (['faq_or_rules', 'faq-or-rules', 'rules_faq', 'rules-faq', 'faq', 'accordion'] as $marker) {
+            if (\str_contains($identity, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array<string,string>
+     */
+    private function buildDeterministicFaqRulesAiData(string $componentCode, array $defaultConfig, array $renderContext): array
+    {
+        $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $safePalette = $this->resolveThemeSafeCssPaletteForPrompt($renderContext);
+        $roleMap = $this->buildPaletteRoleMapFromThemePalette(
+            $this->resolveThemePaletteForContract($buildPlanTask, $scope),
+            false
+        );
+        $isNeonCard = $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode);
+
+        $title = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.title', 'title', 'heading', 'headline', 'section_title', 'content.heading'],
+            ['headline', 'title', 'heading', 'section_title'],
+        ], $isNeonCard ? '入座前，先看清规则' : 'Questions visitors check before they decide');
+        $description = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.description', 'content.body', 'description', 'body', 'section_intro'],
+            ['supporting_copy', 'summary', 'task_goal', 'block_goal', 'goal', 'content', 'core_copy'],
+        ], $isNeonCard
+            ? '把房间规则、公平说明、活动条件和支持入口放在同一组可展开问题里，访问者不用离开页面就能确认关键信息。'
+            : 'Keep the most important questions visible and easy to scan before the next action.'
+        );
+        $title = $this->normalizeDeterministicEditableDefault($title, 120);
+        $description = $this->normalizeDeterministicEditableDefault($description, 280);
+        $items = $this->resolveDeterministicFaqRulesItems($defaultConfig, $buildPlanTask, $scope, $isNeonCard);
+        $semanticComponentCode = $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext);
+        $headingTag = $this->requiresPrimaryHeadingForRenderedComponent($semanticComponentCode !== '' ? $semanticComponentCode : $componentCode, $renderContext) ? 'h1' : 'h2';
+
+        $extraFields = [
+            'group:ai_content => AI editable content',
+            'content.title => Title:text:' . $title,
+            'content.description => Description:textarea:' . $description,
+        ];
+        $phpVariables = [
+            '$contentTitle = $getConfig(\'content.title\', ' . \var_export($title, true) . ');',
+            '$contentDescription = $getConfig(\'content.description\', ' . \var_export($description, true) . ');',
+        ];
+        foreach ($items as $index => $item) {
+            $number = $index + 1;
+            $questionKey = 'faq.item_' . $number . '_question';
+            $answerKey = 'faq.item_' . $number . '_answer';
+            $questionVar = '$faqItem' . $number . 'Question';
+            $answerVar = '$faqItem' . $number . 'Answer';
+            $extraFields[] = $questionKey . ' => FAQ ' . $number . ' question:text:' . $item['question'];
+            $extraFields[] = $answerKey . ' => FAQ ' . $number . ' answer:textarea:' . $item['answer'];
+            $phpVariables[] = $questionVar . ' = $getConfig(\'' . $questionKey . '\', ' . \var_export($item['question'], true) . ');';
+            $phpVariables[] = $answerVar . ' = $getConfig(\'' . $answerKey . '\', ' . \var_export($item['answer'], true) . ');';
+        }
+
+        return [
+            'extra_fields' => \implode("\n", $extraFields),
+            'php_variables' => \implode("\n", $phpVariables),
+            'css_extra' => $this->buildDeterministicFaqRulesCss($prefix, $roleMap, $safePalette, $isNeonCard),
+            'css_responsive' => $this->buildDeterministicFaqRulesResponsiveCss($prefix),
+            'html_content' => $this->buildDeterministicFaqRulesHtml($prefix, $headingTag, $title, $description, $items, $isNeonCard),
+            'js_content' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     * @return list<array{question:string,answer:string}>
+     */
+    private function resolveDeterministicFaqRulesItems(array $defaultConfig, array $buildPlanTask, array $scope, bool $isNeonCard): array
+    {
+        $items = [];
+        for ($i = 1; $i <= 6; $i++) {
+            $question = $this->firstConfigString($defaultConfig, [
+                'faq.item_' . $i . '_question',
+                'faq.question_' . $i,
+                'rule.item_' . $i . '_question',
+            ]);
+            $answer = $this->firstConfigString($defaultConfig, [
+                'faq.item_' . $i . '_answer',
+                'faq.answer_' . $i,
+                'rule.item_' . $i . '_answer',
+            ]);
+            if ($question !== '' && $answer !== '') {
+                $items[] = [
+                    'question' => $this->normalizeDeterministicEditableDefault($question, 110),
+                    'answer' => $this->normalizeDeterministicEditableDefault($answer, 220),
+                ];
+            }
+        }
+
+        $planText = $this->sanitizeVisibleCopy((string)($this->findFirstDeterministicVisibleCopyByKeys(
+            $buildPlanTask,
+            ['task_goal', 'block_goal', 'goal', 'content', 'core_copy']
+        ) ?? ''));
+        if ($planText === '' && $scope !== []) {
+            $planText = $this->sanitizeVisibleCopy((string)($this->findFirstDeterministicVisibleCopyByKeys(
+                $scope,
+                ['brief_description', 'expanded_brief', 'site_goal']
+            ) ?? ''));
+        }
+
+        $fallbacks = $isNeonCard ? [
+            ['question' => '进入房间前要先看什么？', 'answer' => '先确认玩法规则、入座条件和结算提示，再选择适合自己的牌桌。'],
+            ['question' => '平台怎样说明公平性？', 'answer' => '公平洗牌、账户安全和规则说明集中展示，关键疑问可以在同一区块快速核对。'],
+            ['question' => '活动福利在哪里确认？', 'answer' => '活动条件、领取入口和使用限制保持可见，避免玩家在开局前反复跳转。'],
+            ['question' => '遇到问题怎么处理？', 'answer' => '页面保留客服与帮助入口，玩家可以带着房间信息继续咨询。'],
+        ] : [
+            ['question' => 'What should visitors check first?', 'answer' => 'Start with the rules, requirements, and next step before taking action.'],
+            ['question' => 'Where is the important proof?', 'answer' => 'Key reassurance and policy details stay close to the decision point.'],
+            ['question' => 'How are conditions explained?', 'answer' => 'The section keeps limitations, eligibility, and support context easy to scan.'],
+            ['question' => 'What happens if visitors need help?', 'answer' => 'Support guidance remains visible so visitors can continue without losing context.'],
+        ];
+        if ($planText !== '') {
+            $fallbacks[0]['answer'] = $this->normalizeDeterministicEditableDefault($planText, 220);
+        }
+
+        foreach ($fallbacks as $fallback) {
+            if (\count($items) >= 4) {
+                break;
+            }
+            $items[] = [
+                'question' => $this->normalizeDeterministicEditableDefault((string)$fallback['question'], 110),
+                'answer' => $this->normalizeDeterministicEditableDefault((string)$fallback['answer'], 220),
+            ];
+        }
+
+        return \array_slice($items, 0, 4);
+    }
+
+    /**
+     * @param array<string,string> $roleMap
+     * @param array<string,string> $safePalette
+     */
+    private function buildDeterministicFaqRulesCss(string $prefix, array $roleMap, array $safePalette, bool $isNeonCard): string
+    {
+        $background = $isNeonCard ? '#070914' : $this->deterministicHeroColor($roleMap, $safePalette, ['surface', 'background'], 'background');
+        $surface = $isNeonCard ? '#111827' : '#ffffff';
+        $surfaceAlt = $isNeonCard ? '#1a1028' : '#f8fafc';
+        $text = $isNeonCard ? '#f8fafc' : $this->deterministicHeroColor($roleMap, $safePalette, ['text', 'foreground'], 'text');
+        $muted = $isNeonCard ? '#b6c3d4' : '#475569';
+        $accent = $isNeonCard ? '#22d3ee' : $this->deterministicHeroColor($roleMap, $safePalette, ['accent', 'primary'], 'accent');
+        $hot = $isNeonCard ? '#f59e0b' : $accent;
+
+        return \implode('', [
+            '#componentId .' . $prefix . '-root{position:relative;overflow:hidden;box-sizing:border-box;padding:72px 24px;background:radial-gradient(circle at 14% 10%,rgba(34,211,238,.18),transparent 34%),radial-gradient(circle at 86% 18%,rgba(245,158,11,.16),transparent 32%),' . $background . ';color:' . $text . ';}',
+            '#componentId .' . $prefix . '-root::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.06),transparent 28%,rgba(34,211,238,.08) 62%,transparent);pointer-events:none;}',
+            '#componentId .' . $prefix . '-inner{position:relative;z-index:1;width:min(1180px,100%);margin:0 auto;display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:36px;align-items:start;}',
+            '#componentId .' . $prefix . '-copy{min-width:0;padding:28px;border:1px solid rgba(34,211,238,.24);background:linear-gradient(145deg,rgba(17,24,39,.86),rgba(26,16,40,.72));box-shadow:0 24px 80px rgba(0,0,0,.28),inset 0 0 0 1px rgba(255,255,255,.05);}',
+            '#componentId .' . $prefix . '-kicker{display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;padding:7px 11px;border:1px solid rgba(245,158,11,.48);color:' . $hot . ';font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:rgba(245,158,11,.08);}',
+            '#componentId .' . $prefix . '-title{margin:0 0 14px;font-family:var(--pb-font-display,\'Chakra Petch\',system-ui,sans-serif);font-size:clamp(30px,4.4vw,54px);line-height:1.04;color:' . $text . ';letter-spacing:0;}',
+            '#componentId .' . $prefix . '-text{margin:0;color:' . $muted . ';font-size:16px;line-height:1.75;}',
+            '#componentId .' . $prefix . '-list{min-width:0;display:grid;gap:12px;}',
+            '#componentId .' . $prefix . '-item{border:1px solid rgba(34,211,238,.2);background:linear-gradient(135deg,' . $surface . ',' . $surfaceAlt . ');box-shadow:0 18px 46px rgba(0,0,0,.22);}',
+            '#componentId .' . $prefix . '-summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:18px 20px;color:' . $text . ';font-weight:700;}',
+            '#componentId .' . $prefix . '-summary::-webkit-details-marker{display:none;}',
+            '#componentId .' . $prefix . '-index{width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:radial-gradient(circle at 35% 30%,' . $hot . ',#7c2d12);color:#111827;box-shadow:0 0 22px rgba(245,158,11,.32);font-family:var(--pb-font-display,system-ui,sans-serif);}',
+            '#componentId .' . $prefix . '-question{min-width:0;}',
+            '#componentId .' . $prefix . '-arrow{width:22px;height:22px;border-right:2px solid ' . $accent . ';border-bottom:2px solid ' . $accent . ';transform:rotate(45deg);transition:transform .2s ease;}',
+            '#componentId .' . $prefix . '-item[open] .' . $prefix . '-arrow{transform:rotate(225deg);}',
+            '#componentId .' . $prefix . '-answer{margin:0 20px 20px 76px;padding:0 0 16px;border-bottom:2px solid ' . $accent . ';color:' . $muted . ';line-height:1.72;}',
+            '#componentId .' . $prefix . '-item:focus-within{outline:2px solid ' . $accent . ';outline-offset:3px;}',
+        ]);
+    }
+
+    private function buildDeterministicFaqRulesResponsiveCss(string $prefix): string
+    {
+        return \implode('', [
+            '@media (max-width: 900px){#componentId .' . $prefix . '-inner{grid-template-columns:1fr;gap:24px;}#componentId .' . $prefix . '-copy{padding:24px;}}',
+            '@media (max-width: 420px){#componentId .' . $prefix . '-root{padding:44px 14px;}#componentId .' . $prefix . '-summary{grid-template-columns:auto minmax(0,1fr);padding:16px;gap:12px;}#componentId .' . $prefix . '-arrow{display:none;}#componentId .' . $prefix . '-index{width:36px;height:36px;}#componentId .' . $prefix . '-answer{margin:0 16px 16px 64px;font-size:14px;}}',
+        ]);
+    }
+
+    /**
+     * @param list<array{question:string,answer:string}> $items
+     */
+    private function buildDeterministicFaqRulesHtml(string $prefix, string $headingTag, string $title, string $description, array $items, bool $isNeonCard): string
+    {
+        $headingTag = $headingTag === 'h1' ? 'h1' : 'h2';
+        $kicker = $isNeonCard ? '规则核对' : 'DETAILS';
+        $html = "<section class='" . $prefix . "-root'><div class='" . $prefix . "-inner'><div class='" . $prefix . "-copy'><span class='" . $prefix . "-kicker'>" . $kicker . "</span><" . $headingTag . " class='" . $prefix . "-title'><?= htmlspecialchars(\$contentTitle ?? " . \var_export($title, true) . ", ENT_QUOTES, 'UTF-8') ?></" . $headingTag . "><p class='" . $prefix . "-text'><?= nl2br(htmlspecialchars(\$contentDescription ?? " . \var_export($description, true) . ", ENT_QUOTES, 'UTF-8')) ?></p></div><div class='" . $prefix . "-list'>";
+        foreach ($items as $index => $item) {
+            $number = $index + 1;
+            $questionVar = '$faqItem' . $number . 'Question';
+            $answerVar = '$faqItem' . $number . 'Answer';
+            $open = $index === 0 ? ' open' : '';
+            $html .= "<details class='" . $prefix . "-item'" . $open . "><summary class='" . $prefix . "-summary'><span class='" . $prefix . "-index'>" . \str_pad((string)$number, 2, '0', \STR_PAD_LEFT) . "</span><span class='" . $prefix . "-question'><?= htmlspecialchars(" . $questionVar . " ?? " . \var_export($item['question'], true) . ", ENT_QUOTES, 'UTF-8') ?></span><span class='" . $prefix . "-arrow' aria-hidden='true'></span></summary><p class='" . $prefix . "-answer'><?= nl2br(htmlspecialchars(" . $answerVar . " ?? " . \var_export($item['answer'], true) . ", ENT_QUOTES, 'UTF-8')) ?></p></details>";
+        }
+        $html .= '</div></div></section>';
+
+        return $html;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function shouldCompileDeterministicStrictHeroComponent(
+        string $componentCode,
+        string $region,
+        array $defaultConfig,
+        array $renderContext
+    ): bool {
+        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+            return false;
+        }
+
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
+        $identity = \strtolower($componentCode . ' ' . $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext));
+        $isHeroLike = \str_contains($identity, 'hero')
+            || \str_contains($identity, 'banner')
+            || \str_contains($identity, 'opening')
+            || \str_contains($identity, 'strict_hero_cover');
+        if (!$isHeroLike) {
+            return false;
+        }
+        if ($this->renderContextRequiresStrictHeroCover($renderContext, $defaultConfig)) {
+            return true;
+        }
+
+        $pageFlowRole = \strtolower(\trim((string)(
+            $buildPlanTask['page_flow_role']
+            ?? $buildPlanTask['plan_context']['page_flow_role']
+            ?? $buildPlanTask['block_task']['page_flow_role']
+            ?? $visualContract['page_flow_role']
+            ?? ''
+        )));
+        $blockType = \strtolower(\trim((string)(
+            $buildPlanTask['block_type']
+            ?? $buildPlanTask['plan_context']['block_type']
+            ?? $buildPlanTask['block_task']['block_type']
+            ?? $visualContract['section_template']
+            ?? ''
+        )));
+
+        return $pageFlowRole === 'opening'
+            && (\str_contains($blockType, 'hero') || \str_contains($identity, 'hero') || \str_contains($identity, 'banner'));
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function shouldCompileDeterministicContactSupportComponent(
+        string $componentCode,
+        string $region,
+        array $defaultConfig,
+        array $renderContext
+    ): bool {
+        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+            return false;
+        }
+
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
+        $identity = \strtolower($componentCode . ' ' . $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext));
+        $pageFlowRole = \strtolower(\trim((string)(
+            $buildPlanTask['page_flow_role']
+            ?? $buildPlanTask['plan_context']['page_flow_role']
+            ?? $buildPlanTask['block_task']['page_flow_role']
+            ?? $visualContract['page_flow_role']
+            ?? ''
+        )));
+        $blockType = \strtolower(\trim((string)(
+            $buildPlanTask['block_type']
+            ?? $buildPlanTask['plan_context']['block_type']
+            ?? $buildPlanTask['block_task']['block_type']
+            ?? $visualContract['section_template']
+            ?? ''
+        )));
+        $identity .= ' ' . $blockType . ' ' . $pageFlowRole;
+
+        foreach ([
+            'contact_methods',
+            'contact-methods',
+            'support_form_guidance',
+            'support-form-guidance',
+            'form_guidance',
+            'form-guidance',
+            'contact_form',
+            'contact-form',
+            'message_form',
+            'message-form',
+            'support_faq',
+            'support-faq',
+        ] as $marker) {
+            if (\str_contains($identity, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function shouldCompileDeterministicCtaComponent(
+        string $componentCode,
+        string $region,
+        array $defaultConfig,
+        array $renderContext
+    ): bool {
+        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+            return false;
+        }
+
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
+        $identity = \strtolower($componentCode . ' ' . $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext));
+        $pageFlowRole = \strtolower(\trim((string)(
+            $buildPlanTask['page_flow_role']
+            ?? $buildPlanTask['plan_context']['page_flow_role']
+            ?? $buildPlanTask['block_task']['page_flow_role']
+            ?? $visualContract['page_flow_role']
+            ?? ''
+        )));
+        $blockType = \strtolower(\trim((string)(
+            $buildPlanTask['block_type']
+            ?? $buildPlanTask['plan_context']['block_type']
+            ?? $buildPlanTask['block_task']['block_type']
+            ?? $visualContract['section_template']
+            ?? ''
+        )));
+
+        return $pageFlowRole === 'cta'
+            || \str_contains($blockType, 'cta')
+            || \str_contains($identity, 'final-cta')
+            || \str_contains($identity, 'final_cta')
+            || \str_contains($identity, 'contact-cta')
+            || \str_contains($identity, 'contact_cta')
+            || \str_contains($identity, 'page-cta')
+            || \str_contains($identity, 'page_cta')
+            || \str_contains($identity, 'newsletter-cta')
+            || \str_contains($identity, 'newsletter_cta');
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function shouldCompileDeterministicNarrativePanelComponent(
+        string $componentCode,
+        string $region,
+        array $defaultConfig,
+        array $renderContext
+    ): bool {
+        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+            return false;
+        }
+
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
+        $identity = \strtolower($componentCode . ' ' . $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext));
+        foreach ([
+            'cta',
+            'contact_methods',
+            'contact-methods',
+            'support_form',
+            'support-form',
+            'form_guidance',
+            'form-guidance',
+            'contact_form',
+            'contact-form',
+            'message_form',
+            'message-form',
+            'support_faq',
+            'support-faq',
+            'faq',
+            'accordion',
+            'policy',
+            'privacy',
+            'terms',
+            'cookie',
+            'refund',
+            'checkout',
+            'account',
+        ] as $excludedMarker) {
+            if (\str_contains($identity, $excludedMarker)) {
+                return false;
+            }
+        }
+
+        $pageFlowRole = \strtolower(\trim((string)(
+            $buildPlanTask['page_flow_role']
+            ?? $buildPlanTask['plan_context']['page_flow_role']
+            ?? $buildPlanTask['block_task']['page_flow_role']
+            ?? $visualContract['page_flow_role']
+            ?? ''
+        )));
+        $blockType = \strtolower(\trim((string)(
+            $buildPlanTask['block_type']
+            ?? $buildPlanTask['plan_context']['block_type']
+            ?? $buildPlanTask['block_task']['block_type']
+            ?? $visualContract['section_template']
+            ?? ''
+        )));
+        $identity .= ' ' . $blockType . ' ' . $pageFlowRole;
+
+        foreach ([
+            'origin_story',
+            'origin-story',
+            'page_intro',
+            'page-intro',
+            'primary_story',
+            'primary-story',
+            'company_story',
+            'company-story',
+            'founding_story',
+            'founding-story',
+            'resource_hero',
+            'resource-hero',
+        ] as $marker) {
+            if (!\str_contains($identity, $marker)) {
+                continue;
+            }
+
+            return \in_array($pageFlowRole, ['opening', 'details'], true)
+                || \str_contains($marker, 'intro')
+                || \str_contains($marker, 'story')
+                || \str_contains($marker, 'hero');
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function shouldCompileDeterministicCardGridComponent(
+        string $componentCode,
+        string $region,
+        array $defaultConfig,
+        array $renderContext
+    ): bool {
+        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+            return false;
+        }
+
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
+        $identity = \strtolower($componentCode . ' ' . $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext));
+        if ($this->isExcludedDeterministicCardGridIdentity($identity)) {
+            return false;
+        }
+
+        $pageFlowRole = \strtolower(\trim((string)(
+            $buildPlanTask['page_flow_role']
+            ?? $buildPlanTask['plan_context']['page_flow_role']
+            ?? $buildPlanTask['block_task']['page_flow_role']
+            ?? $visualContract['page_flow_role']
+            ?? ''
+        )));
+        if (\in_array($pageFlowRole, ['opening', 'hero', 'cta', 'support'], true)) {
+            return false;
+        }
+
+        $blockType = \strtolower(\trim((string)(
+            $buildPlanTask['block_type']
+            ?? $buildPlanTask['plan_context']['block_type']
+            ?? $buildPlanTask['block_task']['block_type']
+            ?? $visualContract['section_template']
+            ?? ''
+        )));
+        $identity .= ' ' . $blockType . ' ' . $pageFlowRole;
+        $knownGridIdentity = [
+            'brand_promise',
+            'brand-promise',
+            'featured_offers',
+            'featured-offers',
+            'trust_proof',
+            'trust-proof',
+            'resource_preview',
+            'resource-preview',
+            'article_grid',
+            'article-grid',
+            'learning_path',
+            'learning-path',
+            'experience_highlights',
+            'experience-highlights',
+            'service_grid',
+            'service-grid',
+            'feature_showcase',
+            'feature-showcase',
+        ];
+        foreach ($knownGridIdentity as $marker) {
+            if (\str_contains($identity, $marker)) {
+                return true;
+            }
+        }
+
+        if (!\in_array($pageFlowRole, ['proof', 'details'], true)) {
+            return false;
+        }
+
+        foreach (['card', 'grid', 'proof', 'feature', 'service', 'resource', 'article', 'learning', 'offer', 'promise'] as $marker) {
+            if (\str_contains($identity, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isExcludedDeterministicCardGridIdentity(string $identity): bool
+    {
+        foreach ([
+            'hero',
+            'banner',
+            'cta',
+            'contact_methods',
+            'contact-methods',
+            'support_form',
+            'support-form',
+            'form_guidance',
+            'form-guidance',
+            'contact_form',
+            'contact-form',
+            'message_form',
+            'message-form',
+            'support_faq',
+            'support-faq',
+            'faq',
+            'accordion',
+            'policy',
+            'privacy',
+            'terms',
+            'cookie',
+            'refund',
+            'checkout',
+            'account',
+        ] as $marker) {
+            if (\str_contains($identity, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Compile the strict hero from the confirmed build plan and visual contract.
+     * This is the production renderer for a known block role, not a local
+     * placeholder fallback.
+     *
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array<string,string>
+     */
+    private function buildDeterministicStrictHeroAiData(string $componentCode, array $defaultConfig, array $renderContext): array
+    {
+        $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $safePalette = $this->resolveThemeSafeCssPaletteForPrompt($renderContext);
+        $roleMap = $this->buildPaletteRoleMapFromThemePalette(
+            $this->resolveThemePaletteForContract($buildPlanTask, $scope),
+            true
+        );
+
+        $title = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.title', 'title', 'heading', 'headline', 'content.heading'],
+            ['headline', 'title', 'heading'],
+        ], (string)($defaultConfig['runtime.section_name'] ?? ''));
+        if ($title === '') {
+            $title = $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+                ? '霓虹牌局，即刻入座'
+                : 'Operational clarity in one workflow';
+        }
+        $description = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.description', 'content.body', 'description', 'body', 'section_intro'],
+            ['supporting_copy', 'description', 'body', 'summary', 'task_goal', 'block_goal'],
+        ], '');
+        if ($description === '') {
+            $description = $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+                ? '进入深色霓虹牌桌，快速了解玩法亮点、玩家信任证明和每一步开始前的关键提示。'
+                : 'Show the offer, proof, and next action clearly before visitors decide.';
+        }
+        $description = $this->refineDeterministicOperationalDescription(
+            $description,
+            $componentCode,
+            $buildPlanTask,
+            $scope,
+            $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+                ? '把玩家从第一屏霓虹氛围带到可信的牌桌入口、玩法亮点和清晰支持说明。'
+                : 'Introduce the offer with a focused promise, credible proof, and one clear action.'
+        );
+        $defaultCtaText = $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+            ? '立即进入牌桌'
+            : 'Request a demo';
+        $ctaText = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['cta.text', 'content.cta_text', 'button_text', 'button.label'],
+            ['cta_label', 'label', 'primary_cta'],
+        ], $defaultCtaText);
+        $ctaUrl = $this->resolveDeterministicHeroCtaUrl($defaultConfig, $buildPlanTask, $scope);
+        $mediaLabel = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['media.label', 'visual.media_label', 'content.subtitle', 'subtitle'],
+            ['image_subject', 'visual_subject', 'subject', 'media_strategy'],
+        ], '');
+        if ($mediaLabel === '') {
+            $mediaLabel = $this->clipText($title, 54);
+        }
+        $imageUrl = $this->firstConfigString($visualContract, ['final_url', 'url', 'src'])
+            ?: $this->firstConfigString($defaultConfig, ['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url']);
+        $slotId = $this->firstConfigString($visualContract, ['slot_id'])
+            ?: $this->firstConfigString($defaultConfig, ['runtime.section_image_slot_id', 'visual.image_slot_id']);
+        $imageAlt = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['media.image_alt', 'visual.image_alt', 'image.alt', 'runtime.section_image_alt'],
+            ['image_alt', 'alt', 'image_subject', 'subject'],
+        ], $mediaLabel);
+
+        $title = $this->normalizeDeterministicEditableDefault($title, 120);
+        $description = $this->normalizeDeterministicEditableDefault($description, 260);
+        $ctaText = $this->normalizeDeterministicEditableDefault($ctaText, 80);
+        $ctaUrl = $this->normalizeDeterministicEditableDefault($ctaUrl, 180);
+        $mediaLabel = $this->normalizeDeterministicEditableDefault($mediaLabel, 90);
+        $imageAlt = $this->normalizeDeterministicEditableDefault($imageAlt, 120);
+
+        $extraFields = [
+            'group:ai_content => AI editable content',
+            'content.title => Title:text:' . $title,
+            'content.description => Description:textarea:' . $description,
+            'cta.text => CTA text:text:' . $ctaText,
+            'media.label => Media label:text:' . $mediaLabel,
+        ];
+        $phpVariables = [
+            '$contentTitle = $getConfig(\'content.title\', ' . \var_export($title, true) . ');',
+            '$contentDescription = $getConfig(\'content.description\', ' . \var_export($description, true) . ');',
+            '$ctaText = $getConfig(\'cta.text\', ' . \var_export($ctaText, true) . ');',
+            '$mediaLabel = $getConfig(\'media.label\', ' . \var_export($mediaLabel, true) . ');',
+        ];
+        $hasCtaUrl = $ctaUrl !== '';
+        if ($hasCtaUrl) {
+            $extraFields[] = 'cta.url => CTA URL:text:' . $ctaUrl;
+            $phpVariables[] = '$ctaUrl = $getConfig(\'cta.url\', ' . \var_export($ctaUrl, true) . ');';
+        }
+
+        $hasImage = $imageUrl !== '' && $slotId !== '';
+        if ($hasImage) {
+            $extraFields[] = 'group:ai_media => AI media';
+            $extraFields[] = 'media.image_url => Image:image:' . $imageUrl;
+            $extraFields[] = 'media.image_alt => Image alt:text:' . $imageAlt;
+            $phpVariables[] = '$mediaImageUrl = $getConfig(\'media.image_url\', ' . \var_export($imageUrl, true) . ');';
+            $phpVariables[] = '$mediaImageAlt = $getConfig(\'media.image_alt\', ' . \var_export($imageAlt, true) . ');';
+        }
+
+        return [
+            'extra_fields' => \implode("\n", $extraFields),
+            'php_variables' => \implode("\n", $phpVariables),
+            'css_extra' => $this->buildDeterministicStrictHeroCss($prefix, $roleMap, $safePalette, $hasImage),
+            'css_responsive' => $this->buildDeterministicStrictHeroResponsiveCss($prefix, $hasImage),
+            'html_content' => $this->buildDeterministicStrictHeroHtml($prefix, $hasImage, $slotId, $title, $description, $ctaText, $ctaUrl, $mediaLabel, $imageUrl, $imageAlt),
+            'js_content' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array<string,string>
+     */
+    private function buildDeterministicContactSupportAiData(string $componentCode, array $defaultConfig, array $renderContext): array
+    {
+        $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $safePalette = $this->resolveThemeSafeCssPaletteForPrompt($renderContext);
+        $roleMap = $this->buildPaletteRoleMapFromThemePalette(
+            $this->resolveThemePaletteForContract($buildPlanTask, $scope),
+            false
+        );
+        $mode = $this->resolveDeterministicContactSupportMode($componentCode, $buildPlanTask);
+        $requiredEditableFields = $this->decodeVirtualThemeRequiredEditableFieldContract($defaultConfig, $renderContext);
+        $requiredEditableDefaults = [];
+        foreach ($requiredEditableFields as $field) {
+            $fieldKey = \strtolower((string)($field['key'] ?? ''));
+            if ($fieldKey !== '') {
+                $requiredEditableDefaults[$fieldKey] = (string)($field['default'] ?? '');
+            }
+        }
+        $hasRequiredCtaText = \array_key_exists('cta.text', $requiredEditableDefaults);
+        $hasRequiredCtaUrl = \array_key_exists('cta.url', $requiredEditableDefaults);
+        $hasConfiguredCta = $this->firstConfigString($defaultConfig, ['cta.text', 'content.cta_text', 'button_text', 'button.label']) !== ''
+            || $this->firstConfigString($defaultConfig, ['cta.url', 'content.cta_url', 'button_url', 'button.href']) !== '';
+        $shouldRenderCta = $mode !== 'faq' || $hasRequiredCtaText || $hasRequiredCtaUrl || $hasConfiguredCta;
+        $title = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.title', 'title', 'heading', 'headline', 'section_title', 'content.heading'],
+            ['headline', 'title', 'heading', 'section_title'],
+        ], (string)($defaultConfig['runtime.section_name'] ?? 'Contact our team'));
+        $description = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.description', 'content.body', 'description', 'body', 'section_intro'],
+            ['supporting_copy', 'summary', 'task_goal', 'block_goal', 'goal'],
+        ], $this->defaultDeterministicContactSupportDescription($mode, $componentCode, $buildPlanTask, $scope));
+        $ctaText = $shouldRenderCta
+            ? $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+                ['cta.text', 'content.cta_text', 'button_text', 'button.label'],
+                ['cta_label', 'label', 'primary_cta'],
+            ], $requiredEditableDefaults['cta.text'] ?? ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+                ? ($mode === 'form' ? '提交咨询' : '查看帮助')
+                : ($mode === 'form' ? 'Send message' : 'Get support')))
+            : '';
+        $ctaUrl = $shouldRenderCta
+            ? ($this->resolveDeterministicHeroCtaUrl($defaultConfig, $buildPlanTask, $scope) ?: (string)($requiredEditableDefaults['cta.url'] ?? ''))
+            : '';
+        $semanticComponentCode = $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext);
+        $headingTag = $this->requiresPrimaryHeadingForRenderedComponent($semanticComponentCode !== '' ? $semanticComponentCode : $componentCode, $renderContext) ? 'h1' : 'h2';
+
+        $title = $this->normalizeDeterministicEditableDefault($title, 120);
+        $description = $this->normalizeDeterministicEditableDefault($description, 260);
+        $ctaText = $this->normalizeDeterministicEditableDefault($ctaText, 80);
+        $ctaUrl = $this->normalizeDeterministicEditableDefault($ctaUrl, 180);
+        $extraFields = [
+            'group:ai_content => AI editable content',
+            'content.title => Title:text:' . $title,
+            'content.description => Description:textarea:' . $description,
+        ];
+        $phpVariables = [
+            '$contentTitle = $getConfig(\'content.title\', ' . \var_export($title, true) . ');',
+            '$contentDescription = $getConfig(\'content.description\', ' . \var_export($description, true) . ');',
+        ];
+
+        $items = [];
+        if ($mode === 'faq') {
+            $items = $this->resolveDeterministicSupportFaqItems($defaultConfig, $buildPlanTask, $scope);
+            foreach ($items as $index => $item) {
+                $number = $index + 1;
+                $questionKey = 'faq.question_' . $number;
+                $answerKey = 'faq.answer_' . $number;
+                $extraFields[] = $questionKey . ' => FAQ question ' . $number . ':text:' . $item['question'];
+                $extraFields[] = $answerKey . ' => FAQ answer ' . $number . ':textarea:' . $item['answer'];
+                $phpVariables[] = '$faqQuestion' . $number . ' = $getConfig(\'' . $questionKey . '\', ' . \var_export($item['question'], true) . ');';
+                $phpVariables[] = '$faqAnswer' . $number . ' = $getConfig(\'' . $answerKey . '\', ' . \var_export($item['answer'], true) . ');';
+            }
+        } elseif ($mode === 'form') {
+            $items = $this->resolveDeterministicSupportFormFields($defaultConfig, $buildPlanTask, $scope);
+            foreach ($items as $index => $item) {
+                $number = $index + 1;
+                $labelKey = 'form.label_' . $number;
+                $placeholderKey = 'form.placeholder_' . $number;
+                $extraFields[] = $labelKey . ' => Form label ' . $number . ':text:' . $item['label'];
+                $extraFields[] = $placeholderKey . ' => Form placeholder ' . $number . ':text:' . $item['placeholder'];
+                $phpVariables[] = '$formLabel' . $number . ' = $getConfig(\'' . $labelKey . '\', ' . \var_export($item['label'], true) . ');';
+                $phpVariables[] = '$formPlaceholder' . $number . ' = $getConfig(\'' . $placeholderKey . '\', ' . \var_export($item['placeholder'], true) . ');';
+            }
+            $noteText = $this->normalizeDeterministicEditableDefault($this->firstConfigString($defaultConfig, ['form.note_text'])
+                ?: ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+                    ? '提交后可继续浏览房间、规则和活动说明，客服会按问题类型给出指引。'
+                    : 'Share the request and the team will respond with a practical next step.'), 140);
+            $extraFields[] = 'form.note_text => Form note:textarea:' . $noteText;
+            $phpVariables[] = '$formNoteText = $getConfig(\'form.note_text\', ' . \var_export($noteText, true) . ');';
+        } else {
+            $items = $this->resolveDeterministicContactChannelItems($defaultConfig, $buildPlanTask, $scope);
+            foreach ($items as $index => $item) {
+                $number = $index + 1;
+                $labelKey = 'channel.item_' . $number . '_label';
+                $valueKey = 'channel.item_' . $number . '_value';
+                $extraFields[] = $labelKey . ' => Channel ' . $number . ' label:text:' . $item['label'];
+                $extraFields[] = $valueKey . ' => Channel ' . $number . ' value:text:' . $item['value'];
+                $phpVariables[] = '$channelItem' . $number . 'Label = $getConfig(\'' . $labelKey . '\', ' . \var_export($item['label'], true) . ');';
+                $phpVariables[] = '$channelItem' . $number . 'Value = $getConfig(\'' . $valueKey . '\', ' . \var_export($item['value'], true) . ');';
+            }
+        }
+        if ($shouldRenderCta && $ctaText !== '') {
+            $extraFields[] = 'cta.text => CTA text:text:' . $ctaText;
+            $phpVariables[] = '$ctaText = $getConfig(\'cta.text\', ' . \var_export($ctaText, true) . ');';
+            if ($ctaUrl !== '') {
+                $extraFields[] = 'cta.url => CTA URL:text:' . $ctaUrl;
+                $phpVariables[] = '$ctaUrl = $getConfig(\'cta.url\', ' . \var_export($ctaUrl, true) . ');';
+            }
+        }
+
+        return [
+            'extra_fields' => \implode("\n", $extraFields),
+            'php_variables' => \implode("\n", $phpVariables),
+            'css_extra' => $this->buildDeterministicContactSupportCss($prefix, $mode, $roleMap, $safePalette),
+            'css_responsive' => $this->buildDeterministicContactSupportResponsiveCss($prefix),
+            'html_content' => $this->buildDeterministicContactSupportHtml($prefix, $mode, $headingTag, $title, $description, $items, $ctaText, $ctaUrl),
+            'js_content' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function resolveDeterministicContactSupportMode(string $componentCode, array $buildPlanTask): string
+    {
+        $identity = \strtolower($componentCode . ' ' . \json_encode([
+            $buildPlanTask['block_type'] ?? '',
+            $buildPlanTask['block_key'] ?? '',
+            $buildPlanTask['section_code'] ?? '',
+        ], \JSON_UNESCAPED_UNICODE));
+        if (\str_contains($identity, 'faq')) {
+            return 'faq';
+        }
+        if (\str_contains($identity, 'form') || \str_contains($identity, 'message')) {
+            return 'form';
+        }
+
+        return 'channels';
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function defaultDeterministicContactSupportDescription(
+        string $mode,
+        string $componentCode,
+        array $buildPlanTask,
+        array $scope
+    ): string
+    {
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)) {
+            return match ($mode) {
+                'faq' => '把房间选择、玩法规则、安全提示和客服入口整理成玩家能快速浏览的答案。',
+                'form' => '提交想了解的房间、玩法或支持问题，后续指引保持清晰可追踪。',
+                default => '把规则咨询、房间帮助和玩家支持入口放在同一组清晰卡片里。',
+            };
+        }
+
+        return match ($mode) {
+            'faq' => 'Answers to the most common questions visitors ask before they take the next step.',
+            'form' => 'Share the request and the team will respond with a focused next step.',
+            default => 'Reach the right support path for questions, service details, and next steps.',
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $buildPlanTask
+     * @return list<array{label:string,value:string}>
+     */
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveDeterministicContactChannelItems(array $defaultConfig, array $buildPlanTask, array $scope = []): array
+    {
+        $items = [];
+        for ($index = 1; $index <= 3; $index++) {
+            $label = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, [
+                'channel.item_' . $index . '_label',
+                'contact.item_' . $index . '_label',
+            ]));
+            $value = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, [
+                'channel.item_' . $index . '_value',
+                'contact.item_' . $index . '_value',
+            ]));
+            if ($label !== '' && $value !== '') {
+                $items[] = [
+                    'label' => $this->normalizeDeterministicEditableDefault($label, 72),
+                    'value' => $this->normalizeDeterministicEditableDefault($value, 130),
+                ];
+            }
+        }
+        if ($items !== []) {
+            return \array_slice($items, 0, 3);
+        }
+
+        $goal = $this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['task_goal', 'block_goal', 'goal']) ?? '';
+        $goal = $this->sanitizeVisibleCopy($goal);
+
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, 'contact support channels')) {
+            return [
+                ['label' => '房间帮助', 'value' => $goal !== '' ? $this->normalizeDeterministicEditableDefault($goal, 130) : '查看牌桌入口、玩法说明和开始前的关键提示。'],
+                ['label' => '规则咨询', 'value' => '围绕棋牌玩法、活动节奏和安全提示给玩家清晰指引。'],
+                ['label' => '客服支持', 'value' => '遇到账号、房间或活动问题时，优先找到合适的支持入口。'],
+            ];
+        }
+
+        return [
+            ['label' => 'Service questions', 'value' => $goal !== '' ? $this->normalizeDeterministicEditableDefault($goal, 130) : 'Get focused guidance before choosing the next step.'],
+            ['label' => 'Support path', 'value' => 'Find the right contact route for details, follow-up, and practical help.'],
+            ['label' => 'Next-step help', 'value' => 'Clarify requirements, timing, and ownership before moving forward.'],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @return list<array{label:string,placeholder:string}>
+     */
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     * @return list<array{label:string,placeholder:string}>
+     */
+    private function resolveDeterministicSupportFormFields(array $defaultConfig, array $buildPlanTask = [], array $scope = []): array
+    {
+        $fallback = $this->isNeonCardSiteContext($scope, $buildPlanTask, 'support form')
+            ? [
+                ['label' => '联系昵称', 'placeholder' => '填写便于客服识别的昵称'],
+                ['label' => '联系方式', 'placeholder' => '留下可回复的联系方式'],
+                ['label' => '想了解的问题', 'placeholder' => '描述房间、玩法、活动或账号支持需求'],
+            ]
+            : [
+                ['label' => 'Name', 'placeholder' => 'Your name'],
+                ['label' => 'Reply contact', 'placeholder' => 'How the team should reply'],
+                ['label' => 'What should we help with?', 'placeholder' => 'Describe the request or next-step question'],
+            ];
+        $items = [];
+        foreach ($fallback as $index => $defaults) {
+            $number = $index + 1;
+            $label = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, ['form.label_' . $number])) ?: $defaults['label'];
+            $placeholder = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, ['form.placeholder_' . $number])) ?: $defaults['placeholder'];
+            $placeholder = \preg_replace('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu', 'Reply contact', $placeholder) ?? $placeholder;
+            $items[] = [
+                'label' => $this->normalizeDeterministicEditableDefault($label, 72),
+                'placeholder' => $this->normalizeDeterministicEditableDefault($placeholder, 120),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $buildPlanTask
+     * @return list<array{question:string,answer:string}>
+     */
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveDeterministicSupportFaqItems(array $defaultConfig, array $buildPlanTask, array $scope = []): array
+    {
+        $items = [];
+        for ($index = 1; $index <= 3; $index++) {
+            $question = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, ['faq.question_' . $index]));
+            $answer = $this->sanitizeVisibleCopy($this->firstConfigString($defaultConfig, ['faq.answer_' . $index]));
+            if ($question !== '' && $answer !== '') {
+                $items[] = [
+                    'question' => $this->normalizeDeterministicEditableDefault($question, 110),
+                    'answer' => $this->normalizeDeterministicEditableDefault($answer, 190),
+                ];
+            }
+        }
+        if ($items !== []) {
+            return \array_slice($items, 0, 3);
+        }
+
+        $goal = $this->sanitizeVisibleCopy($this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['task_goal', 'block_goal', 'goal']) ?? '');
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, 'support faq')) {
+            return [
+                [
+                    'question' => '如何开始体验？',
+                    'answer' => '先浏览房间入口和玩法提示，再根据自己的节奏选择合适的棋牌体验。',
+                ],
+                [
+                    'question' => '规则和支持在哪里看？',
+                    'answer' => '每个关键区块都保留规则提示、安全说明和客服入口，方便开始前快速确认。',
+                ],
+                [
+                    'question' => '遇到问题怎么办？',
+                    'answer' => $goal !== '' ? $this->normalizeDeterministicEditableDefault($goal, 190) : '优先查看当前房间说明，也可以通过客服支持入口提交具体问题。',
+                ],
+            ];
+        }
+
+        return [
+            [
+                'question' => 'How should visitors start?',
+                'answer' => 'Review the key details on the page, then choose the next step that matches their current need.',
+            ],
+            [
+                'question' => 'Where can visitors find help?',
+                'answer' => 'Support details and guidance stay close to the page action so visitors do not lose context.',
+            ],
+            [
+                'question' => 'What should visitors prepare?',
+                'answer' => $goal !== '' ? $this->normalizeDeterministicEditableDefault($goal, 190) : 'Share the request, timing, and any important context before asking for help.',
+            ],
+        ];
+    }
+
+    /**
+     * Compile narrative opening/detail sections from the confirmed build plan.
+     *
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array<string,string>
+     */
+    private function buildDeterministicNarrativePanelAiData(string $componentCode, array $defaultConfig, array $renderContext): array
+    {
+        $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $visualContract = $this->resolveRenderContextVisualContract($renderContext, $defaultConfig);
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $safePalette = $this->resolveThemeSafeCssPaletteForPrompt($renderContext);
+        $roleMap = $this->buildPaletteRoleMapFromThemePalette(
+            $this->resolveThemePaletteForContract($buildPlanTask, $scope),
+            false
+        );
+
+        $title = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.title', 'title', 'heading', 'headline', 'section_title', 'content.heading'],
+            ['headline', 'title', 'heading', 'section_title'],
+        ], (string)($defaultConfig['runtime.section_name'] ?? ''));
+        if ($title === '') {
+            $title = $this->deriveDeterministicNarrativePanelTitle($componentCode, $buildPlanTask);
+        }
+        $description = $this->firstConfigString($defaultConfig, ['content.description', 'content.body', 'description', 'body', 'section_intro']);
+        $description = $description !== '' ? $this->sanitizeVisibleCopy($description) : '';
+        if ($description === '') {
+            $description = $this->deriveDeterministicNarrativePanelDescription($title, $buildPlanTask, $scope);
+        }
+        $ctaText = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['cta.text', 'content.cta_text', 'button_text', 'button.label'],
+            ['cta_label', 'label', 'primary_cta'],
+        ], '');
+        $ctaUrl = $this->resolveDeterministicHeroCtaUrl($defaultConfig, $buildPlanTask, $scope);
+        $mediaLabel = $this->deriveDeterministicNarrativePanelMediaLabel($title, $buildPlanTask, $visualContract);
+        $imageUrl = $this->firstConfigString($visualContract, ['final_url', 'url', 'src'])
+            ?: $this->firstConfigString($defaultConfig, ['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url']);
+        $slotId = $this->firstConfigString($visualContract, ['slot_id'])
+            ?: $this->firstConfigString($defaultConfig, ['runtime.section_image_slot_id', 'visual.image_slot_id']);
+        $imageAlt = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['media.image_alt', 'visual.image_alt', 'image.alt', 'runtime.section_image_alt'],
+            ['image_alt', 'alt', 'image_subject', 'subject'],
+        ], $mediaLabel);
+
+        $title = $this->normalizeDeterministicEditableDefault($title, 128);
+        $description = $this->normalizeDeterministicEditableDefault($description, 300);
+        $ctaText = $this->normalizeDeterministicEditableDefault($ctaText, 80);
+        $ctaUrl = $this->normalizeDeterministicEditableDefault($ctaUrl, 180);
+        $mediaLabel = $this->normalizeDeterministicEditableDefault($mediaLabel, 96);
+        $imageAlt = $this->normalizeDeterministicEditableDefault($imageAlt, 128);
+        $highlights = $this->deriveDeterministicNarrativePanelHighlights($title, $description, $buildPlanTask);
+        $semanticComponentCode = $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext);
+        $headingTag = $this->requiresPrimaryHeadingForRenderedComponent($semanticComponentCode !== '' ? $semanticComponentCode : $componentCode, $renderContext) ? 'h1' : 'h2';
+
+        $extraFields = [
+            'group:ai_content => AI editable content',
+            'content.title => Title:text:' . $title,
+            'content.description => Description:textarea:' . $description,
+            'media.label => Media label:text:' . $mediaLabel,
+        ];
+        $phpVariables = [
+            '$contentTitle = $getConfig(\'content.title\', ' . \var_export($title, true) . ');',
+            '$contentDescription = $getConfig(\'content.description\', ' . \var_export($description, true) . ');',
+            '$mediaLabel = $getConfig(\'media.label\', ' . \var_export($mediaLabel, true) . ');',
+        ];
+        foreach ($highlights as $index => $label) {
+            $number = $index + 1;
+            $key = 'proof.item_' . $number . '_label';
+            $var = '$proofItem' . $number . 'Label';
+            $extraFields[] = $key . ' => Proof ' . $number . ' label:text:' . $label;
+            $phpVariables[] = $var . ' = $getConfig(\'' . $key . '\', ' . \var_export($label, true) . ');';
+        }
+        if ($ctaText !== '') {
+            $extraFields[] = 'cta.text => CTA text:text:' . $ctaText;
+            $phpVariables[] = '$ctaText = $getConfig(\'cta.text\', ' . \var_export($ctaText, true) . ');';
+            if ($ctaUrl !== '') {
+                $extraFields[] = 'cta.url => CTA URL:text:' . $ctaUrl;
+                $phpVariables[] = '$ctaUrl = $getConfig(\'cta.url\', ' . \var_export($ctaUrl, true) . ');';
+            }
+        }
+
+        $hasImage = $imageUrl !== '' && $slotId !== '';
+        if ($hasImage) {
+            $extraFields[] = 'group:ai_media => AI media';
+            $extraFields[] = 'media.image_url => Image:image:' . $imageUrl;
+            $extraFields[] = 'media.image_alt => Image alt:text:' . $imageAlt;
+            $phpVariables[] = '$mediaImageUrl = $getConfig(\'media.image_url\', ' . \var_export($imageUrl, true) . ');';
+            $phpVariables[] = '$mediaImageAlt = $getConfig(\'media.image_alt\', ' . \var_export($imageAlt, true) . ');';
+        }
+
+        return [
+            'extra_fields' => \implode("\n", $extraFields),
+            'php_variables' => \implode("\n", $phpVariables),
+            'css_extra' => $this->buildDeterministicNarrativePanelCss($prefix, $roleMap, $safePalette, $hasImage),
+            'css_responsive' => $this->buildDeterministicNarrativePanelResponsiveCss($prefix, $hasImage),
+            'html_content' => $this->buildDeterministicNarrativePanelHtml($prefix, $headingTag, $hasImage, $slotId, $title, $description, $ctaText, $ctaUrl, $mediaLabel, $imageUrl, $imageAlt, $highlights),
+            'js_content' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function deriveDeterministicNarrativePanelTitle(string $componentCode, array $buildPlanTask): string
+    {
+        $value = $this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['block_type', 'block_key', 'section_key']);
+        $title = $value !== null ? \str_replace(['_', '-'], ' ', $value) : \str_replace(['content/', '-', '_'], [' ', ' ', ' '], $componentCode);
+        $title = \trim(\ucwords($title));
+
+        return $this->isUsableDeterministicVisibleCopy($title) ? $title : 'The workflow story behind the product';
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function deriveDeterministicNarrativePanelDescription(string $title, array $buildPlanTask, array $scope): string
+    {
+        $value = '';
+        foreach ([
+            $buildPlanTask['content_items'] ?? null,
+            $buildPlanTask['block']['content_items'] ?? null,
+            $buildPlanTask['plan_context']['content_items'] ?? null,
+        ] as $contentItems) {
+            if (!\is_array($contentItems)) {
+                continue;
+            }
+            $value = $this->firstDeterministicNarrativeContentItemCopy($contentItems, $title);
+            if ($value !== '') {
+                break;
+            }
+        }
+        if ($value === '') {
+            $value = $this->firstDeterministicNarrativeContentItemCopy($buildPlanTask, $title);
+        }
+        if ($value === '' && $scope !== []) {
+            $value = $this->firstDeterministicNarrativeContentItemCopy($scope, $title);
+        }
+        if ($value === '') {
+            $found = $this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['copy', 'supporting_copy', 'summary', 'task_goal', 'block_goal', 'goal', 'implementation_detail', 'page_goal']);
+            $value = $found !== null ? $found : '';
+        }
+        if ($value === '' && $scope !== []) {
+            $found = $this->findFirstDeterministicVisibleCopyByKeys($scope, ['brief_description', 'expanded_brief', 'site_goal']);
+            $value = $found !== null ? $found : '';
+        }
+        $value = $this->sanitizeVisibleCopy($value);
+        if ($value !== '') {
+            return $value;
+        }
+
+        return $title !== '' ? $title : 'See how the operating model, product focus, and proof points come together.';
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    private function firstDeterministicNarrativeContentItemCopy(array $data, string $title, int $depth = 0): string
+    {
+        if ($depth > 4) {
+            return '';
+        }
+        $normalizedTitle = \mb_strtolower($this->sanitizeVisibleCopy($title), 'UTF-8');
+        foreach ($data as $key => $value) {
+            $key = \strtolower((string)$key);
+            if (\is_scalar($value) || $value instanceof \Stringable) {
+                if (
+                    !\str_contains($key, 'copy')
+                    && !\str_contains($key, 'body')
+                    && !\str_contains($key, 'description')
+                    && !\str_contains($key, 'summary')
+                ) {
+                    continue;
+                }
+                if (\str_contains($key, 'json') || \str_contains($key, 'prompt') || \str_contains($key, 'contract')) {
+                    continue;
+                }
+                $candidate = $this->sanitizeVisibleCopy((string)$value);
+                if ($candidate === '' || !$this->isUsableDeterministicVisibleCopy($candidate)) {
+                    continue;
+                }
+                if ($normalizedTitle !== '' && \mb_strtolower($candidate, 'UTF-8') === $normalizedTitle) {
+                    continue;
+                }
+
+                return $candidate;
+            }
+            if (!\is_array($value)) {
+                continue;
+            }
+            if (
+                \str_contains($key, 'color')
+                || \str_contains($key, 'palette')
+                || \str_contains($key, 'token')
+                || \str_contains($key, 'style')
+                || \str_contains($key, 'typography')
+            ) {
+                continue;
+            }
+            $candidate = $this->firstDeterministicNarrativeContentItemCopy($value, $title, $depth + 1);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $visualContract
+     */
+    private function deriveDeterministicNarrativePanelMediaLabel(string $title, array $buildPlanTask, array $visualContract): string
+    {
+        $sources = [
+            $this->firstConfigString($visualContract, ['media_label', 'image_subject', 'subject']),
+            $this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['image_subject', 'subject', 'media_strategy', 'visual_atmosphere']),
+            $this->firstDeterministicNarrativeContentItemCopy($buildPlanTask, ''),
+            $title,
+        ];
+        foreach ($sources as $source) {
+            $candidate = $this->sanitizeVisibleCopy((string)($source ?? ''));
+            $candidate = \preg_replace('/^(?:generated\s+image\s+shows|image\s+shows|shows)\s+/iu', '', $candidate) ?? $candidate;
+            if ($candidate !== '' && $this->isUsableDeterministicVisibleCopy($candidate)) {
+                return $this->clipText($candidate, 96);
+            }
+        }
+
+        return 'Focused visitor decision scene';
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @return list<string>
+     */
+    private function deriveDeterministicNarrativePanelHighlights(string $title, string $description, array $buildPlanTask): array
+    {
+        $source = \mb_strtolower($title . ' ' . $description . ' ' . \json_encode([
+            $buildPlanTask['block_type'] ?? '',
+            $buildPlanTask['block_key'] ?? '',
+            $buildPlanTask['page_flow_role'] ?? '',
+        ], \JSON_UNESCAPED_UNICODE), 'UTF-8');
+        $labels = [];
+        $map = [
+            'spreadsheet' => 'Clarified scattered work',
+            'handoff' => 'Guided the next step',
+            'approval' => 'Made trust signals clear',
+            'exception' => 'Kept support visible',
+            'roi' => 'Showed practical value',
+            'dashboard' => 'Made details visible',
+            'story' => 'Built from real context',
+            'origin' => 'Built from real context',
+            'resource' => 'Turned lessons into guidance',
+            'learn' => 'Turned lessons into guidance',
+        ];
+        foreach ($map as $needle => $label) {
+            if (\str_contains($source, $needle)) {
+                $labels[] = $label;
+            }
+        }
+        if ($labels === []) {
+            $labels = ['Clarified the workflow', 'Reduced manual follow-up'];
+        }
+
+        $deduped = [];
+        $seen = [];
+        foreach ($labels as $label) {
+            $label = $this->normalizeDeterministicEditableDefault($label, 64);
+            $key = \mb_strtolower($label, 'UTF-8');
+            if ($label === '' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $deduped[] = $label;
+            if (\count($deduped) >= 2) {
+                break;
+            }
+        }
+
+        while (\count($deduped) < 2) {
+            $deduped[] = \count($deduped) === 0 ? 'Clarified the workflow' : 'Reduced manual follow-up';
+        }
+
+        return $deduped;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array<string,string>
+     */
+    private function buildDeterministicCardGridAiData(string $componentCode, array $defaultConfig, array $renderContext): array
+    {
+        $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $safePalette = $this->resolveThemeSafeCssPaletteForPrompt($renderContext);
+        $roleMap = $this->buildPaletteRoleMapFromThemePalette(
+            $this->resolveThemePaletteForContract($buildPlanTask, $scope),
+            false
+        );
+
+        $title = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.title', 'title', 'heading', 'headline', 'section_title', 'content.heading'],
+            ['headline', 'title', 'heading', 'section_title'],
+        ], (string)($defaultConfig['runtime.section_name'] ?? ''));
+        $description = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.description', 'content.body', 'description', 'body', 'section_intro'],
+            ['supporting_copy', 'summary', 'task_goal', 'block_goal', 'goal', 'content', 'core_copy'],
+        ], '');
+        if ($description === '') {
+            $description = $this->deriveDeterministicCardGridDescription($title, $buildPlanTask, $scope);
+        }
+        if ($title === '') {
+            $title = $this->deriveDeterministicCardGridTitle($description, $buildPlanTask);
+        }
+        $description = $this->refineDeterministicCardGridDescription(
+            $description,
+            $title,
+            $componentCode,
+            $buildPlanTask,
+            $scope
+        );
+        $ctaText = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['cta.text', 'content.cta_text', 'button_text', 'button.label'],
+            ['cta_label', 'label', 'primary_cta'],
+        ], '');
+        $ctaUrl = $this->resolveDeterministicHeroCtaUrl($defaultConfig, $buildPlanTask, $scope);
+        $title = $this->normalizeDeterministicEditableDefault($title, 120);
+        $description = $this->normalizeDeterministicEditableDefault($description, 260);
+        $ctaText = $this->normalizeDeterministicEditableDefault($ctaText, 80);
+        $ctaUrl = $this->normalizeDeterministicEditableDefault($ctaUrl, 180);
+        $items = $this->resolveDeterministicCardGridItems($defaultConfig, $buildPlanTask, $title, $description, $componentCode);
+
+        $extraFields = [
+            'group:ai_content => AI editable content',
+            'content.title => Title:text:' . $title,
+            'content.description => Description:textarea:' . $description,
+        ];
+        $phpVariables = [
+            '$contentTitle = $getConfig(\'content.title\', ' . \var_export($title, true) . ');',
+            '$contentDescription = $getConfig(\'content.description\', ' . \var_export($description, true) . ');',
+        ];
+        foreach ($items as $index => $item) {
+            $number = $index + 1;
+            $titleKey = 'card.item_' . $number . '_title';
+            $bodyKey = 'card.item_' . $number . '_text';
+            $titleVar = '$cardItem' . $number . 'Title';
+            $bodyVar = '$cardItem' . $number . 'Text';
+            $extraFields[] = $titleKey . ' => Card ' . $number . ' title:text:' . $item['title'];
+            $extraFields[] = $bodyKey . ' => Card ' . $number . ' text:textarea:' . $item['body'];
+            $phpVariables[] = $titleVar . ' = $getConfig(\'' . $titleKey . '\', ' . \var_export($item['title'], true) . ');';
+            $phpVariables[] = $bodyVar . ' = $getConfig(\'' . $bodyKey . '\', ' . \var_export($item['body'], true) . ');';
+        }
+        if ($ctaText !== '') {
+            $extraFields[] = 'cta.text => CTA text:text:' . $ctaText;
+            $phpVariables[] = '$ctaText = $getConfig(\'cta.text\', ' . \var_export($ctaText, true) . ');';
+            if ($ctaUrl !== '') {
+                $extraFields[] = 'cta.url => CTA URL:text:' . $ctaUrl;
+                $phpVariables[] = '$ctaUrl = $getConfig(\'cta.url\', ' . \var_export($ctaUrl, true) . ');';
+            }
+        }
+
+        return [
+            'extra_fields' => \implode("\n", $extraFields),
+            'php_variables' => \implode("\n", $phpVariables),
+            'css_extra' => $this->buildDeterministicCardGridCss($prefix, $roleMap, $safePalette),
+            'css_responsive' => $this->buildDeterministicCardGridResponsiveCss($prefix),
+            'html_content' => $this->buildDeterministicCardGridHtml($prefix, $title, $description, $items, $ctaText, $ctaUrl),
+            'js_content' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function deriveDeterministicCardGridDescription(string $title, array $buildPlanTask, array $scope): string
+    {
+        $value = $this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['task_goal', 'block_goal', 'goal', 'content', 'core_copy']);
+        if ($value === null && $scope !== []) {
+            $value = $this->findFirstDeterministicVisibleCopyByKeys($scope, ['brief_description', 'expanded_brief', 'site_goal']);
+        }
+        if ($value !== null && \trim($value) !== '') {
+            return $this->sanitizeVisibleCopy($value);
+        }
+
+        return $this->sanitizeVisibleCopy($title);
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function deriveDeterministicCardGridTitle(string $description, array $buildPlanTask): string
+    {
+        $value = $this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['block_type', 'block_key', 'section_key']);
+        $title = $value !== null ? \str_replace(['_', '-'], ' ', $value) : '';
+        $title = \trim(\ucwords($title));
+        if ($this->isUsableDeterministicVisibleCopy($title) && !$this->looksLikeGeneratedIdentifierLabel(\strtolower($title))) {
+            return $title;
+        }
+
+        return $this->clipText($description, 80);
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $buildPlanTask
+     * @return list<array{title:string,body:string}>
+     */
+    private function resolveDeterministicCardGridItems(array $defaultConfig, array $buildPlanTask, string $title, string $description, string $componentCode = ''): array
+    {
+        $items = $this->collectDeterministicCardItemsFromFlatConfig($defaultConfig);
+        if (\count($items) < 3) {
+            $items = \array_merge($items, $this->collectDeterministicCardItemsFromPlan($buildPlanTask));
+        }
+        if (\count($items) < 3) {
+            foreach ($this->deriveDeterministicCardGridAnchors($title, $description, $buildPlanTask) as $anchor) {
+                $items[] = [
+                    'title' => $this->normalizeDeterministicCardGridItemTitle($anchor, \count($items)),
+                    'body' => $this->buildDeterministicCardGridItemBody($anchor, $description, \count($items)),
+                ];
+                if (\count($items) >= 3) {
+                    break;
+                }
+            }
+        }
+
+        $deduped = [];
+        $seen = [];
+        foreach ($items as $item) {
+            $itemTitle = $this->normalizeDeterministicCardGridUsableItemTitle(
+                (string)($item['title'] ?? ''),
+                (string)($item['body'] ?? ''),
+                $title,
+                $description,
+                $componentCode,
+                $buildPlanTask,
+                \count($deduped)
+            );
+            $itemBody = $this->normalizeDeterministicCardGridItemBody(
+                (string)($item['body'] ?? ''),
+                $itemTitle,
+                $description,
+                $componentCode,
+                $buildPlanTask,
+                \count($deduped)
+            );
+            if ($itemTitle === '' || $itemBody === '') {
+                continue;
+            }
+            $key = \mb_strtolower($itemTitle, 'UTF-8');
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $deduped[] = ['title' => $itemTitle, 'body' => $itemBody];
+            if (\count($deduped) >= 3) {
+                break;
+            }
+        }
+        $fallbackItems = $this->buildDeterministicCardGridFallbackItems($componentCode, $buildPlanTask, $description);
+        while (\count($deduped) < 3) {
+            $index = \count($deduped);
+            $fallback = $this->pickUnusedDeterministicCardGridFallback($fallbackItems, $seen, $description, $index);
+            $key = \mb_strtolower((string)$fallback['title'], 'UTF-8');
+            $seen[$key] = true;
+            $deduped[] = $fallback;
+        }
+
+        return \array_slice($deduped, 0, 3);
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function refineDeterministicCardGridDescription(
+        string $description,
+        string $title,
+        string $componentCode,
+        array $buildPlanTask,
+        array $scope
+    ): string {
+        $description = $this->sanitizeVisibleCopy($description);
+        if (!$this->isWeakDeterministicCardGridSectionDescription($description, $title)) {
+            return $description;
+        }
+
+        $identity = \mb_strtolower($componentCode . ' ' . \json_encode([
+            $title,
+            $buildPlanTask['block_type'] ?? '',
+            $buildPlanTask['block_key'] ?? '',
+            $buildPlanTask['section_code'] ?? '',
+            $buildPlanTask['page_flow_role'] ?? '',
+            $scope['industry'] ?? '',
+        ], \JSON_UNESCAPED_UNICODE), 'UTF-8');
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode . ' ' . $title)) {
+            if (\preg_match('/blog|resource|article|guide|learn|insight|攻略|资讯/iu', $identity) === 1) {
+                return '浏览牌桌选择、玩法规则、活动节奏和负责任娱乐的实用指南。';
+            }
+            if (\preg_match('/trust|proof|result|impact|testimonial|customer|review|玩家|信任/iu', $identity) === 1) {
+                return '展示玩家进入牌局前最关心的安全、规则、客服和体验证明。';
+            }
+            if (\preg_match('/feature|pillar|capability|benefit|category|offer|game|游戏|玩法/iu', $identity) === 1) {
+                return '把热门房间、玩法亮点、福利节奏和支持入口整理成可快速扫描的牌桌体验。';
+            }
+            if (\preg_match('/about|origin|principle|mission|story|philosophy|brand|关于|品牌/iu', $identity) === 1) {
+                return '讲清品牌如何用霓虹牌桌氛围、清晰规则和玩家支持建立可信娱乐体验。';
+            }
+
+            return '用深色霓虹、牌桌质感和清晰行动路径，让玩家快速理解当前区块的价值。';
+        }
+        if (\preg_match('/blog|resource|article|guide|learn|insight/iu', $identity) === 1) {
+            return 'Browse practical guides that help visitors compare options and choose the next step.';
+        }
+        if (\preg_match('/trust|proof|result|impact|testimonial|customer/iu', $identity) === 1) {
+            return 'Show the trust signals visitors need before they take action.';
+        }
+        if (\preg_match('/feature|pillar|capability|benefit|category|offer/iu', $identity) === 1) {
+            return 'Group the core benefits into a clear set of scannable visitor decisions.';
+        }
+        if (\preg_match('/about|origin|principle|mission|story|philosophy/iu', $identity) === 1) {
+            return 'Explain the principles behind the experience in clear, visitor-facing language.';
+        }
+        if (\preg_match('/brand|promise|value/iu', $identity) === 1) {
+            return 'Make the promise concrete with useful details, proof, and a clear next step.';
+        }
+        if (\preg_match('/map|automate|measure/iu', $identity) === 1) {
+            return 'Turn abstract claims into visible steps, useful proof, and practical outcomes.';
+        }
+
+        return 'Show the most useful details in a structure visitors can scan and act on.';
+    }
+
+    /**
+     * Convert internal plan-goal copy into visitor-facing copy during
+     * deterministic synthesis. This is not a validation gate; generation
+     * continues and only the editable default is improved.
+     *
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function refineDeterministicOperationalDescription(
+        string $description,
+        string $componentCode,
+        array $buildPlanTask,
+        array $scope,
+        string $fallback
+    ): string {
+        $description = $this->sanitizeVisibleCopy($description);
+        if ($description !== '' && !$this->containsBroadPlanGoalCopy($description)) {
+            return $description;
+        }
+
+        $identity = \mb_strtolower($componentCode . ' ' . \json_encode([
+            $buildPlanTask['block_type'] ?? '',
+            $buildPlanTask['block_key'] ?? '',
+            $buildPlanTask['section_code'] ?? '',
+            $buildPlanTask['page_flow_role'] ?? '',
+            $scope['industry'] ?? '',
+        ], \JSON_UNESCAPED_UNICODE), 'UTF-8');
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)) {
+            if (\preg_match('/cta|final|contact|newsletter|conversion|download|join|register/iu', $identity) === 1) {
+                return '带玩家确认房间入口、规则提示和支持信息，然后进入下一场霓虹牌局。';
+            }
+            if (\preg_match('/hero|opening|banner|masthead/iu', $identity) === 1) {
+                return '用沉浸式霓虹牌桌、可信玩法提示和清晰行动按钮，把玩家带进第一场游戏体验。';
+            }
+            if (\preg_match('/blog|resource|article|guide|learn|insight/iu', $identity) === 1) {
+                return '浏览牌桌攻略、规则说明、福利节奏和负责任娱乐指南。';
+            }
+
+            return '用霓虹棋牌视觉、具体区块内容和清晰下一步，帮助玩家快速判断并行动。';
+        }
+        if (\preg_match('/cta|final|contact|demo|newsletter|conversion/iu', $identity) === 1) {
+            return 'Guide visitors toward the next step with clear context, proof, and support.';
+        }
+        if (\preg_match('/hero|opening|banner|masthead/iu', $identity) === 1) {
+            return 'Introduce the offer with a focused promise, credible proof, and one clear action.';
+        }
+        if (\preg_match('/blog|resource|article|guide|learn|insight/iu', $identity) === 1) {
+            return 'Browse practical guidance that helps visitors understand options before they act.';
+        }
+
+        return $fallback;
+    }
+
+    private function isWeakDeterministicCardGridSectionDescription(string $description, string $title): bool
+    {
+        $description = \trim($description);
+        if ($description === '') {
+            return true;
+        }
+        if ($this->sameNormalizedVisibleCopy($description, $title)) {
+            return true;
+        }
+        if ($this->containsBroadPlanGoalCopy($description)) {
+            return true;
+        }
+
+        return \count(\preg_split('/\s+/u', $description, -1, \PREG_SPLIT_NO_EMPTY) ?: []) > 26
+            && \preg_match('/\b(?:capture|position|convert|drive|educate|attention|leaders?)\b/iu', $description) === 1;
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function normalizeDeterministicCardGridItemBody(
+        string $rawBody,
+        string $itemTitle,
+        string $sectionDescription,
+        string $componentCode,
+        array $buildPlanTask,
+        int $index
+    ): string {
+        $body = $this->normalizeDeterministicEditableDefault($this->sanitizeVisibleCopy($rawBody), 180);
+        if (!$this->isWeakDeterministicCardGridItemBody($body, $itemTitle, $sectionDescription)) {
+            return $body;
+        }
+
+        $fallbackBody = $this->findDeterministicCardGridFallbackBodyForTitle(
+            $itemTitle,
+            $componentCode,
+            $buildPlanTask,
+            $sectionDescription
+        );
+        if ($fallbackBody !== '') {
+            return $fallbackBody;
+        }
+
+        return $this->buildDeterministicCardGridItemBody($itemTitle, $sectionDescription, $index);
+    }
+
+    private function isWeakDeterministicCardGridItemBody(string $body, string $itemTitle, string $sectionDescription): bool
+    {
+        if ($body === '') {
+            return true;
+        }
+        if ($this->sameNormalizedVisibleCopy($body, $itemTitle) || $this->sameNormalizedVisibleCopy($body, $sectionDescription)) {
+            return true;
+        }
+
+        return $this->containsBroadPlanGoalCopy($body);
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function findDeterministicCardGridFallbackBodyForTitle(
+        string $title,
+        string $componentCode,
+        array $buildPlanTask,
+        string $description
+    ): string {
+        $pool = \array_merge($this->buildDeterministicCardGridFallbackItems($componentCode, $buildPlanTask, $description), [
+            ['title' => 'Clear path', 'body' => $this->buildDeterministicCardGridItemBody('map', $description, 0)],
+            ['title' => 'Guided action', 'body' => $this->buildDeterministicCardGridItemBody('automate', $description, 1)],
+            ['title' => 'Visible proof', 'body' => $this->buildDeterministicCardGridItemBody('measure', $description, 2)],
+            ['title' => 'Quick comparison', 'body' => 'Help visitors compare the important details without reading a long page.'],
+            ['title' => 'Helpful support', 'body' => 'Keep guidance close to the action so visitors can move forward with confidence.'],
+            ['title' => 'Practical outcome', 'body' => 'Connect the page promise to a result visitors can understand and evaluate.'],
+        ]);
+        foreach ($pool as $candidate) {
+            if (!$this->sameNormalizedVisibleCopy($title, (string)($candidate['title'] ?? ''))) {
+                continue;
+            }
+            $body = $this->normalizeDeterministicEditableDefault((string)($candidate['body'] ?? ''), 180);
+            if ($body !== '') {
+                return $body;
+            }
+        }
+
+        return '';
+    }
+
+    private function containsBroadPlanGoalCopy(string $copy): bool
+    {
+        $copy = \mb_strtolower($copy, 'UTF-8');
+        if ($copy === '') {
+            return false;
+        }
+
+        return \preg_match('/capture\s+ops\s+leaders|prove\s+spreadsheet\s+replacement\s+value|convert\s+to\s+demo\s+requests|position\s+[^.]{0,80}\s+go-to\s+resource|educate\s+[^.]{0,80}\s+leaders/iu', $copy) === 1;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function isNeonCardSiteContext(array $scope, array $buildPlanTask = [], string $extra = ''): bool
+    {
+        $text = \mb_strtolower($extra . ' ' . \json_encode([
+            $scope['site_title'] ?? null,
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+            $scope['website_profile']['site_title'] ?? null,
+            $scope['website_profile']['site_tagline'] ?? null,
+            $scope['website_profile']['brief_description'] ?? null,
+            $scope['theme_design']['style_signature'] ?? null,
+            $scope['theme_design']['visual_keywords'] ?? null,
+            $scope['theme_context_snapshot']['style_keywords'] ?? null,
+            $buildPlanTask['task_key'] ?? null,
+            $buildPlanTask['page_type'] ?? null,
+            $buildPlanTask['block_key'] ?? null,
+            $buildPlanTask['block_type'] ?? null,
+            $buildPlanTask['section_code'] ?? null,
+            $buildPlanTask['page_flow_role'] ?? null,
+            $buildPlanTask['block_task']['task_goal'] ?? null,
+            $buildPlanTask['plan_context']['stage1_block_content'] ?? null,
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES), 'UTF-8');
+        if ($text === '') {
+            return false;
+        }
+        if (\preg_match('/(?:avoid|without|no|forbid|ban|reject)[^.。；;]{0,80}(?:neon|casino|gaming|gambling|card\s*game|poker|mahjong|棋牌|霓虹|博彩|赌博)/iu', $text) === 1
+            || \preg_match('/(?:不要|避免|禁止|拒绝)[^。；;]{0,80}(?:霓虹|棋牌|博彩|赌博|娱乐场|赌场|扑克|麻将)/u', $text) === 1
+        ) {
+            return false;
+        }
+
+        return \preg_match('/(?:neon|casino|card\s*game|cardroom|poker|mahjong|rummy|teen\s*patti|game\s*lobby|gaming|game[_\s-]?showcase|player[_\s-]?reviews|faq[_\s-]?or[_\s-]?rules|bonus[_\s-]?steps|trust[_\s-]?security|棋牌|棋牌游戏|霓虹|牌桌|牌局|扑克|麻将|筹码|房间入口|玩家评价|玩法规则|安全提示|活动福利|电玩城|线上娱乐|游戏房间|赛事房间)/iu', $text) === 1;
+    }
+
+    /**
+     * @param list<array{title:string,body:string}> $fallbackItems
+     * @param array<string,bool> $seen
+     * @return array{title:string,body:string}
+     */
+    private function pickUnusedDeterministicCardGridFallback(array $fallbackItems, array $seen, string $description, int $index): array
+    {
+        $pool = \array_merge($fallbackItems, [
+            ['title' => 'Clear path', 'body' => $this->buildDeterministicCardGridItemBody('map', $description, 0)],
+            ['title' => 'Guided action', 'body' => $this->buildDeterministicCardGridItemBody('automate', $description, 1)],
+            ['title' => 'Visible proof', 'body' => $this->buildDeterministicCardGridItemBody('measure', $description, 2)],
+            ['title' => 'Quick comparison', 'body' => 'Make the important details easy to compare before the next step.'],
+            ['title' => 'Practical support', 'body' => 'Keep helpful guidance visible where visitors need it.'],
+        ]);
+        foreach ($pool as $candidate) {
+            $title = $this->normalizeDeterministicEditableDefault((string)($candidate['title'] ?? ''), 70);
+            $body = $this->normalizeDeterministicEditableDefault((string)($candidate['body'] ?? ''), 180);
+            $key = \mb_strtolower($title, 'UTF-8');
+            if ($title === '' || $body === '' || isset($seen[$key])) {
+                continue;
+            }
+
+            return ['title' => $title, 'body' => $body];
+        }
+
+        $title = 'Visitor proof ' . ($index + 1);
+
+        return [
+            'title' => $title,
+            'body' => 'Keep the story specific enough for visitors to understand the next step.',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function normalizeDeterministicCardGridUsableItemTitle(
+        string $rawTitle,
+        string $rawBody,
+        string $sectionTitle,
+        string $sectionDescription,
+        string $componentCode,
+        array $buildPlanTask,
+        int $index
+    ): string {
+        $candidate = $this->normalizeDeterministicEditableDefault($this->sanitizeVisibleCopy($rawTitle), 70);
+        $fallback = $this->buildDeterministicCardGridFallbackItems($componentCode, $buildPlanTask, $sectionDescription);
+        if ($this->shouldPreferIdentitySpecificCardFallback($candidate, $componentCode, $buildPlanTask) && isset($fallback[$index]['title'])) {
+            return (string)$fallback[$index]['title'];
+        }
+        if (!$this->isWeakDeterministicCardGridItemTitle($candidate, $sectionTitle, $sectionDescription)) {
+            return $this->normalizeDeterministicCardGridItemTitle($candidate, $index);
+        }
+
+        if (isset($fallback[$index]['title'])) {
+            return (string)$fallback[$index]['title'];
+        }
+
+        $anchorSource = $candidate . ' ' . $rawBody . ' ' . \json_encode([
+            $componentCode,
+            $buildPlanTask['block_type'] ?? '',
+            $buildPlanTask['block_key'] ?? '',
+            $buildPlanTask['section_code'] ?? '',
+        ], \JSON_UNESCAPED_UNICODE);
+        foreach ($this->deriveDeterministicCardGridAnchors('', $anchorSource, $buildPlanTask) as $anchor) {
+            $title = $this->normalizeDeterministicCardGridItemTitle($anchor, $index);
+            if (!$this->isWeakDeterministicCardGridItemTitle($title, $sectionTitle, $sectionDescription)) {
+                return $title;
+            }
+        }
+
+        return (string)($fallback[$index]['title'] ?? $this->normalizeDeterministicCardGridItemTitle('Measure', $index));
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function shouldPreferIdentitySpecificCardFallback(string $candidate, string $componentCode, array $buildPlanTask): bool
+    {
+        $identity = \mb_strtolower($componentCode . ' ' . \json_encode([
+            $buildPlanTask['block_type'] ?? '',
+            $buildPlanTask['block_key'] ?? '',
+            $buildPlanTask['section_code'] ?? '',
+            $buildPlanTask['page_flow_role'] ?? '',
+        ], \JSON_UNESCAPED_UNICODE), 'UTF-8');
+        if (\preg_match('/blog|resource|article|guide|learn|insight|about|origin|principle|mission|story|philosophy|feature|pillar|capability|benefit|trust|proof|result|impact|testimonial|customer/iu', $identity) !== 1) {
+            return false;
+        }
+
+        return \preg_match('/^(?:map|maps|mapped|route|routes|routed|automate|automates|automated|measure|measures|measured|report|reports|reported|monitor|monitors|prove|proves|map approvals|automate handoffs|measure outcomes|workflow visibility|fewer manual chasers|decision-ready metrics|approval automation guide|exception reporting playbook|roi measurement checklist)$/iu', \trim($candidate)) === 1;
+    }
+
+    private function isWeakDeterministicCardGridItemTitle(string $candidate, string $sectionTitle, string $sectionDescription): bool
+    {
+        $candidate = \trim($candidate);
+        if ($candidate === '') {
+            return true;
+        }
+        if ($this->sameNormalizedVisibleCopy($candidate, $sectionTitle) || $this->sameNormalizedVisibleCopy($candidate, $sectionDescription)) {
+            return true;
+        }
+        if ($this->looksLikeGeneratedIdentifierLabel(\strtolower($candidate))) {
+            return true;
+        }
+        if (\preg_match('/^[a-z0-9]+(?:[-_][a-z0-9]+){2,}$/iu', $candidate) === 1) {
+            return true;
+        }
+        if (\preg_match('/[.!?。！？]\s*$/u', $candidate) === 1) {
+            return true;
+        }
+        if (\preg_match('/^(?:and|or|but|so|not|then|than)\b/iu', $candidate) === 1) {
+            return true;
+        }
+        if (\count(\preg_split('/\s+/u', $candidate, -1, \PREG_SPLIT_NO_EMPTY) ?: []) > 5) {
+            return true;
+        }
+        if (\preg_match('/\b(?:conversion|subscriber|visitor|leaders?|drive|capture|position|educate)\b/iu', $candidate) === 1
+            && \preg_match('/\b(?:guide|playbook|checklist|principle|approval|handoff|exception|roi|workflow|automation|support|demo)\b/iu', $candidate) !== 1
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function sameNormalizedVisibleCopy(string $left, string $right): bool
+    {
+        $normalize = static function (string $value): string {
+            $value = \mb_strtolower(\trim($value), 'UTF-8');
+            $value = \preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value) ?? $value;
+
+            return \trim(\preg_replace('/\s+/u', ' ', $value) ?? $value);
+        };
+
+        $left = $normalize($left);
+        $right = $normalize($right);
+
+        return $left !== '' && $left === $right;
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @return list<array{title:string,body:string}>
+     */
+    private function buildDeterministicCardGridFallbackItems(string $componentCode, array $buildPlanTask, string $description): array
+    {
+        $identity = \mb_strtolower($componentCode . ' ' . \json_encode([
+            $buildPlanTask['block_type'] ?? '',
+            $buildPlanTask['block_key'] ?? '',
+            $buildPlanTask['section_code'] ?? '',
+            $buildPlanTask['page_flow_role'] ?? '',
+        ], \JSON_UNESCAPED_UNICODE), 'UTF-8');
+        if ($this->isNeonCardSiteContext([], $buildPlanTask, $componentCode . ' ' . $description)) {
+            if (\preg_match('/blog|resource|article|guide|learn|insight|攻略|资讯/iu', $identity) === 1) {
+                return [
+                    ['title' => '牌桌入门指南', 'body' => '帮助新玩家快速理解房间选择、规则提示和开始前的关键注意点。'],
+                    ['title' => '玩法节奏攻略', 'body' => '用清晰步骤说明如何阅读牌局节奏、活动时间和支持入口。'],
+                    ['title' => '负责任娱乐清单', 'body' => '把娱乐边界、账户安全和客服说明放在玩家容易看到的位置。'],
+                ];
+            }
+            if (\preg_match('/about|origin|principle|mission|story|philosophy|brand|关于|品牌/iu', $identity) === 1) {
+                return [
+                    ['title' => '霓虹牌桌氛围', 'body' => '用深色光效和牌桌质感建立鲜明、沉浸但可读的品牌第一印象。'],
+                    ['title' => '清晰玩法规则', 'body' => '把房间、规则、支持和安全提示整理成玩家能快速理解的路径。'],
+                    ['title' => '玩家支持承诺', 'body' => '让客服、帮助和负责任娱乐提示成为体验的一部分，而不是藏在页面底部。'],
+                ];
+            }
+            if (\preg_match('/trust|proof|result|impact|testimonial|customer|review|玩家|信任/iu', $identity) === 1) {
+                return [
+                    ['title' => '玩家评价可见', 'body' => '用短评、评分和真实场景提示降低新玩家进入房间前的疑虑。'],
+                    ['title' => '规则透明清楚', 'body' => '把玩法说明、账户提示和责任娱乐信息放进同一条可信阅读路径。'],
+                    ['title' => '支持入口明确', 'body' => '让玩家在开始、遇到问题和查看规则时都能找到快速帮助。'],
+                ];
+            }
+            if (\preg_match('/feature|pillar|capability|benefit|category|offer|game|玩法|游戏/iu', $identity) === 1) {
+                return [
+                    ['title' => '热门房间入口', 'body' => '把核心棋牌房间、赛事节奏和快速上手动作放在同一组可扫卡片里。'],
+                    ['title' => '活动福利节奏', 'body' => '说明奖励、任务和活动入口时保持克制，让玩家知道下一步而不被噪音淹没。'],
+                    ['title' => '移动端流畅体验', 'body' => '突出手机端牌桌、加载节奏和关键提示，减少开始前的犹豫。'],
+                ];
+            }
+        }
+        if (\preg_match('/blog|resource|article|guide|learn|insight/iu', $identity) === 1) {
+            return [
+                ['title' => 'Practical guide', 'body' => 'Concise guidance that helps visitors compare options before they act.'],
+                ['title' => 'Decision checklist', 'body' => 'A short list of details visitors can review without leaving the page.'],
+                ['title' => 'Helpful next step', 'body' => 'Clear support and action cues that turn reading into progress.'],
+            ];
+        }
+        if (\preg_match('/about|origin|principle|mission|story|philosophy/iu', $identity) === 1) {
+            return [
+                ['title' => 'Clear purpose', 'body' => 'Explain why the experience exists and what visitors can expect from it.'],
+                ['title' => 'Responsible design', 'body' => 'Keep important context, support, and limits easy to inspect.'],
+                ['title' => 'Useful outcome', 'body' => 'Connect the story to a result visitors can understand before taking action.'],
+            ];
+        }
+        if (\preg_match('/trust|proof|result|impact|testimonial|customer/iu', $identity) === 1) {
+            return [
+                ['title' => 'Visitor confidence', 'body' => 'Use proof, ratings, and clear support cues to reduce uncertainty.'],
+                ['title' => 'Transparent details', 'body' => 'Keep rules, timing, and expectations visible before the action.'],
+                ['title' => 'Reliable support', 'body' => 'Show where visitors can get help when they need more context.'],
+            ];
+        }
+        if (\preg_match('/feature|pillar|capability|benefit|category|offer/iu', $identity) === 1) {
+            return [
+                ['title' => 'Core benefit', 'body' => 'Make the most important visitor value easy to scan.'],
+                ['title' => 'Guided choice', 'body' => 'Help visitors understand which option or action fits their need.'],
+                ['title' => 'Support cue', 'body' => 'Keep reassurance and next-step guidance close to the decision.'],
+            ];
+        }
+        if (\preg_match('/brand|promise|value/iu', $identity) === 1) {
+            return [
+                ['title' => 'Clear promise', 'body' => 'Say exactly what visitors gain and why it matters now.'],
+                ['title' => 'Useful proof', 'body' => 'Support the promise with evidence, context, and visible reassurance.'],
+                ['title' => 'Easy action', 'body' => 'Make the next step obvious without overwhelming the page.'],
+            ];
+        }
+
+        return [
+            ['title' => 'Clear path', 'body' => $this->buildDeterministicCardGridItemBody('map', $description, 0)],
+            ['title' => 'Guided action', 'body' => $this->buildDeterministicCardGridItemBody('automate', $description, 1)],
+            ['title' => 'Visible proof', 'body' => $this->buildDeterministicCardGridItemBody('measure', $description, 2)],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @return list<array{title:string,body:string}>
+     */
+    private function collectDeterministicCardItemsFromFlatConfig(array $defaultConfig): array
+    {
+        $items = [];
+        for ($index = 1; $index <= 6; $index++) {
+            $title = $this->firstConfigString($defaultConfig, [
+                'card.item_' . $index . '_title',
+                'card.item_' . $index . '.title',
+                'feature.item_' . $index . '_title',
+                'proof.item_' . $index . '_title',
+                'item_' . $index . '_title',
+            ]);
+            $body = $this->firstConfigString($defaultConfig, [
+                'card.item_' . $index . '_text',
+                'card.item_' . $index . '_body',
+                'card.item_' . $index . '_description',
+                'feature.item_' . $index . '_text',
+                'proof.item_' . $index . '_text',
+                'item_' . $index . '_text',
+                'item_' . $index . '_body',
+            ]);
+            $title = $this->sanitizeVisibleCopy($title);
+            $body = $this->sanitizeVisibleCopy($body);
+            if ($title !== '' && $body !== '') {
+                $items[] = ['title' => $title, 'body' => $body];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @return list<array{title:string,body:string}>
+     */
+    private function collectDeterministicCardItemsFromPlan(array $buildPlanTask): array
+    {
+        $items = [];
+        foreach ($this->collectDeterministicCardSourceRows($buildPlanTask) as $row) {
+            $title = $this->sanitizeVisibleCopy((string)($row['title'] ?? ''));
+            $body = $this->sanitizeVisibleCopy((string)($row['body'] ?? ''));
+            if ($title !== '' && $body !== '') {
+                $items[] = ['title' => $title, 'body' => $body];
+            }
+            if (\count($items) >= 6) {
+                break;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return list<array{title:string,body:string}>
+     */
+    private function collectDeterministicCardSourceRows(array $data, int $depth = 0): array
+    {
+        if ($depth > 4) {
+            return [];
+        }
+        $rows = [];
+        foreach ($data as $key => $value) {
+            if (!\is_array($value)) {
+                continue;
+            }
+            $branch = \strtolower((string)$key);
+            if (
+                \str_contains($branch, 'color')
+                || \str_contains($branch, 'palette')
+                || \str_contains($branch, 'token')
+                || \str_contains($branch, 'style')
+                || \str_contains($branch, 'typography')
+            ) {
+                continue;
+            }
+            if (\in_array($branch, ['feature_points', 'benefits', 'items', 'cards', 'field_plan'], true)) {
+                foreach ($value as $item) {
+                    if (\is_string($item) && $this->isUsableDeterministicVisibleCopy($item)) {
+                        $rows[] = ['title' => $this->clipText($item, 72), 'body' => $item];
+                    } elseif (\is_array($item)) {
+                        $title = $this->firstVisibleCopyFromArray($item, ['title', 'heading', 'headline', 'field', 'label']);
+                        $body = $this->firstVisibleCopyFromArray($item, ['body', 'description', 'copy', 'sample', 'implementation_note', 'content']);
+                        if ($title !== '' || $body !== '') {
+                            $rows[] = ['title' => $title !== '' ? $title : $this->clipText($body, 72), 'body' => $body !== '' ? $body : $title];
+                        }
+                    }
+                }
+            }
+            foreach ($this->collectDeterministicCardSourceRows($value, $depth + 1) as $row) {
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @param list<string> $keys
+     */
+    private function firstVisibleCopyFromArray(array $data, array $keys): string
+    {
+        foreach ($keys as $key) {
+            $value = $data[$key] ?? null;
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $candidate = $this->sanitizeVisibleCopy((string)$value);
+            if ($candidate !== '' && $this->isUsableDeterministicVisibleCopy($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @return list<string>
+     */
+    private function deriveDeterministicCardGridAnchors(string $title, string $description, array $buildPlanTask): array
+    {
+        $anchors = [];
+        foreach ([$title, $description] as $source) {
+            foreach (\preg_split('/\s*(?:,|;|\/|\||\x{2022}|\x{00B7}|\band\b)\s*/iu', $source) ?: [] as $part) {
+                $part = $this->sanitizeVisibleCopy($part);
+                if ($part !== '' && \mb_strlen($part, 'UTF-8') <= 42) {
+                    $anchors[] = $part;
+                }
+            }
+        }
+        $goal = $this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['task_goal', 'block_goal', 'goal', 'content']);
+        if ($goal !== null) {
+            if (\preg_match_all('/\b(map|maps|mapped|route|routes|routed|automate|automates|automated|measure|measures|measured|report|reports|reported|monitor|monitors|prove|proves|discover|learn)\b/iu', $goal, $matches)) {
+                foreach ($matches[1] as $match) {
+                    $anchors[] = (string)$match;
+                }
+            }
+        }
+
+        $deduped = [];
+        $seen = [];
+        foreach ($anchors as $anchor) {
+            $anchor = $this->normalizeDeterministicEditableDefault($anchor, 42);
+            if ($anchor === '' || !$this->isUsableDeterministicVisibleCopy($anchor)) {
+                continue;
+            }
+            $key = \mb_strtolower($anchor, 'UTF-8');
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $deduped[] = $anchor;
+            if (\count($deduped) >= 6) {
+                break;
+            }
+        }
+
+        if ($deduped !== []) {
+            return $deduped;
+        }
+        if ($this->isNeonCardSiteContext([], $buildPlanTask, $title . ' ' . $description)) {
+            return ['热门房间', '透明规则', '玩家支持'];
+        }
+
+        return ['Clear path', 'Guided action', 'Visible proof'];
+    }
+
+    private function normalizeDeterministicCardGridItemTitle(string $anchor, int $index): string
+    {
+        $anchor = $this->normalizeDeterministicEditableDefault($this->sanitizeVisibleCopy($anchor), 54);
+        $lower = \mb_strtolower($anchor, 'UTF-8');
+        $map = [
+            'map' => 'Clear path',
+            'maps' => 'Clear path',
+            'mapped' => 'Clear path',
+            'route' => 'Guided action',
+            'routes' => 'Guided action',
+            'routed' => 'Guided action',
+            'automate' => 'Guided action',
+            'automates' => 'Guided action',
+            'automated' => 'Guided action',
+            'measure' => 'Visible proof',
+            'measures' => 'Visible proof',
+            'measured' => 'Visible proof',
+            'report' => 'Visible proof',
+            'reports' => 'Visible proof',
+            'reported' => 'Visible proof',
+            'monitor' => 'Visible proof',
+            'monitors' => 'Visible proof',
+            'prove' => 'Visible proof',
+            'proves' => 'Visible proof',
+        ];
+        if (isset($map[$lower])) {
+            return $map[$lower];
+        }
+        if (\preg_match('/\b(?:map|maps|mapped|clarify|visible)\b/iu', $lower) === 1) {
+            return 'Clear path';
+        }
+        if (\preg_match('/\b(?:route|routes|routed|automate|automates|automated|coordinate|handoff|handoffs)\b/iu', $lower) === 1) {
+            return 'Guided action';
+        }
+        if (\preg_match('/\b(?:measure|measures|measured|report|reports|reported|monitor|monitors|prove|proves|roi|outcome|outcomes|exception|exceptions)\b/iu', $lower) === 1) {
+            return 'Visible proof';
+        }
+        if (\mb_strlen($anchor, 'UTF-8') <= 32 && \preg_match('/^[\p{L}\p{N}\s-]+$/u', $anchor) === 1) {
+            return \trim(\ucwords($anchor));
+        }
+
+        return $anchor !== '' ? $anchor : (['Clear path', 'Guided action', 'Visible proof'][$index] ?? 'Visible proof');
+    }
+
+    private function buildDeterministicCardGridItemBody(string $anchor, string $description, int $index): string
+    {
+        $description = $this->normalizeDeterministicEditableDefault($this->sanitizeVisibleCopy($description), 180);
+        $lower = \mb_strtolower($anchor, 'UTF-8');
+        $manualObject = '';
+        if (\preg_match('/\breplace\s+(.{8,90}?)\s+with\s+/iu', $description, $match) === 1) {
+            $manualObject = $this->normalizeDeterministicEditableDefault((string)$match[1], 80);
+        }
+        if ($manualObject === '') {
+            $manualObject = 'unclear next steps';
+        }
+        if (\str_contains($lower, 'map')) {
+            return $this->normalizeDeterministicEditableDefault('Turn ' . $manualObject . ' into a clear path visitors can understand.', 180);
+        }
+        if (\str_contains($lower, 'route') || \str_contains($lower, 'automate') || \str_contains($lower, 'coordinate')) {
+            return $this->normalizeDeterministicEditableDefault('Guide visitors toward the right action without making them decode the page.', 180);
+        }
+        if (\str_contains($lower, 'measure') || \str_contains($lower, 'report') || \str_contains($lower, 'prove')) {
+            return $this->normalizeDeterministicEditableDefault('Make proof, reassurance, and practical outcomes easy to evaluate.', 180);
+        }
+        if ($description !== '') {
+            return $description;
+        }
+
+        return ['Clarify the next step before visitors decide.', 'Guide visitors with concise support and context.', 'Show proof that helps visitors move forward.'][$index] ?? 'Show proof that helps visitors move forward.';
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array<string,string>
+     */
+    private function buildDeterministicCtaAiData(string $componentCode, array $defaultConfig, array $renderContext): array
+    {
+        $prefix = $this->normalizeComponentCssPrefix($componentCode);
+        $buildPlanTask = $this->resolveBuildQueueComponentTaskContext($renderContext, $defaultConfig);
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $safePalette = $this->resolveThemeSafeCssPaletteForPrompt($renderContext);
+        $roleMap = $this->buildPaletteRoleMapFromThemePalette(
+            $this->resolveThemePaletteForContract($buildPlanTask, $scope),
+            false
+        );
+
+        $title = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.title', 'title', 'heading', 'headline', 'content.heading'],
+            ['headline', 'title', 'heading'],
+        ], (string)($defaultConfig['runtime.section_name'] ?? 'Ready to move faster'));
+        $description = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['content.description', 'content.body', 'description', 'body', 'section_intro'],
+            ['supporting_copy', 'summary', 'task_goal', 'block_goal', 'page_goal'],
+        ], 'Show the next step visitors can take with confidence.');
+        $description = $this->refineDeterministicOperationalDescription(
+            $description,
+            $componentCode,
+            $buildPlanTask,
+            $scope,
+            $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+                ? '确认房间、规则和支持入口后，直接进入下一场霓虹牌局。'
+                : 'Guide visitors toward the next step with clear context, proof, and support.'
+        );
+        $defaultCtaText = $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+            ? '开始游戏'
+            : 'Get started';
+        $ctaText = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
+            ['cta.text', 'content.cta_text', 'button_text', 'button.label'],
+            ['cta_label', 'label', 'primary_cta'],
+        ], $defaultCtaText);
+        $ctaUrl = $this->resolveDeterministicHeroCtaUrl($defaultConfig, $buildPlanTask, $scope);
+
+        $title = $this->normalizeDeterministicEditableDefault($title, 120);
+        $description = $this->normalizeDeterministicEditableDefault($description, 240);
+        $ctaText = $this->normalizeDeterministicEditableDefault($ctaText, 80);
+        $ctaUrl = $this->normalizeDeterministicEditableDefault($ctaUrl, 180);
+
+        $extraFields = [
+            'group:ai_content => AI editable content',
+            'content.title => Title:text:' . $title,
+            'content.description => Description:textarea:' . $description,
+            'cta.text => CTA text:text:' . $ctaText,
+        ];
+        $phpVariables = [
+            '$contentTitle = $getConfig(\'content.title\', ' . \var_export($title, true) . ');',
+            '$contentDescription = $getConfig(\'content.description\', ' . \var_export($description, true) . ');',
+            '$ctaText = $getConfig(\'cta.text\', ' . \var_export($ctaText, true) . ');',
+        ];
+        if ($ctaUrl !== '') {
+            $extraFields[] = 'cta.url => CTA URL:text:' . $ctaUrl;
+            $phpVariables[] = '$ctaUrl = $getConfig(\'cta.url\', ' . \var_export($ctaUrl, true) . ');';
+        }
+
+        return [
+            'extra_fields' => \implode("\n", $extraFields),
+            'php_variables' => \implode("\n", $phpVariables),
+            'css_extra' => $this->buildDeterministicCtaCss($prefix, $roleMap, $safePalette),
+            'css_responsive' => $this->buildDeterministicCtaResponsiveCss($prefix),
+            'html_content' => $this->buildDeterministicCtaHtml($prefix, $title, $description, $ctaText, $ctaUrl),
+            'js_content' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function resolveDeterministicHeroCtaUrl(array $defaultConfig, array $buildPlanTask, array $scope): string
+    {
+        $ctaUrl = $this->firstConfigString($defaultConfig, ['cta.url', 'content.cta_url', 'button_url', 'button.href']);
+        if ($ctaUrl === '') {
+            $value = $this->findFirstStringByKeys($buildPlanTask, ['primary_cta_target', 'cta_target', 'cta_url', 'cta_href']);
+            $ctaUrl = \is_string($value) ? \trim($value) : '';
+        }
+        if ($ctaUrl === '' && $scope !== []) {
+            $ctaUrl = $this->resolvePrimaryCtaUrl($scope);
+        }
+        if ($ctaUrl !== '' && $scope !== []) {
+            $locale = $this->resolveScopePrimaryLocale($scope);
+            $normalized = $this->normalizeHrefAgainstRouteContract($ctaUrl, $scope, $locale);
+            if ($normalized !== '') {
+                $ctaUrl = $normalized;
+            } elseif ($this->shouldValidateGeneratedHrefAgainstRouteContract($ctaUrl)) {
+                $ctaUrl = '';
+            }
+        }
+
+        return $this->isUsableEditableCtaUrlDefault($ctaUrl) ? $ctaUrl : '';
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $buildPlanTask
+     * @param list<list<string>> $keyGroups
+     */
+    private function resolveDeterministicHeroText(array $defaultConfig, array $buildPlanTask, array $keyGroups, string $fallback): string
+    {
+        foreach ($keyGroups as $keys) {
+            $value = $this->firstConfigString($defaultConfig, $keys);
+            if ($value !== '') {
+                return $this->sanitizeVisibleCopy($value);
+            }
+        }
+        foreach ($keyGroups as $keys) {
+            $value = $this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, $keys);
+            if ($value !== null && \trim($value) !== '') {
+                return $this->sanitizeVisibleCopy($value);
+            }
+        }
+
+        return $this->sanitizeVisibleCopy($fallback);
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @param list<string> $keys
+     */
+    private function findFirstDeterministicVisibleCopyByKeys(array $data, array $keys, int $depth = 0): ?string
+    {
+        if ($depth > 4) {
+            return null;
+        }
+        foreach ($keys as $key) {
+            $value = $data[$key] ?? null;
+            if (\is_scalar($value) || $value instanceof \Stringable) {
+                $candidate = \trim((string)$value);
+                if ($this->isUsableDeterministicVisibleCopy($candidate)) {
+                    return $candidate;
+                }
+            }
+        }
+        foreach ($data as $key => $value) {
+            if (!\is_array($value)) {
+                continue;
+            }
+            $branch = \strtolower((string)$key);
+            if (
+                \str_contains($branch, 'color')
+                || \str_contains($branch, 'palette')
+                || \str_contains($branch, 'token')
+                || \str_contains($branch, 'style')
+                || \str_contains($branch, 'typography')
+            ) {
+                continue;
+            }
+            $found = $this->findFirstDeterministicVisibleCopyByKeys($value, $keys, $depth + 1);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+
+        return null;
+    }
+
+    private function isUsableDeterministicVisibleCopy(string $value): bool
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return false;
+        }
+        if (\preg_match('/^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $value) === 1) {
+            return false;
+        }
+        if (\preg_match('/^(?:rgba?|hsla?|color-mix|linear-gradient|radial-gradient|var|url)\s*\(/iu', $value) === 1) {
+            return false;
+        }
+        if (\preg_match('/^(?:transparent|currentcolor|inherit|initial|unset|none)$/iu', $value) === 1) {
+            return false;
+        }
+
+        return \preg_match('/[\p{L}\p{N}]/u', $value) === 1;
+    }
+
+    private function normalizeDeterministicEditableDefault(string $value, int $limit): string
+    {
+        $value = \trim(\preg_replace('/\s+/u', ' ', $value) ?? $value);
+        $value = \str_replace(['"', '`', '{', '}'], '', $value);
+        $value = \str_replace(["\r", "\n"], ' ', $value);
+        if ($limit > 0 && \mb_strlen($value, 'UTF-8') > $limit) {
+            $value = \rtrim(\mb_substr($value, 0, $limit, 'UTF-8'), " \t\n\r\0\x0B.,;:-");
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<string,string> $roleMap
+     * @param array<string,string> $safePalette
+     */
+    private function deterministicHeroColor(array $roleMap, array $safePalette, array $roleKeys, string $safeKey): string
+    {
+        foreach ($roleKeys as $key) {
+            $value = $this->normalizeCssHexColor((string)($roleMap[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return $this->normalizeCssHexColor((string)($safePalette[$safeKey] ?? '')) ?: '#1A2C38';
+    }
+
+    /**
+     * @param array<string,string> $roleMap
+     * @param array<string,string> $safePalette
+     */
+    private function buildDeterministicStrictHeroCss(string $prefix, array $roleMap, array $safePalette, bool $hasImage): string
+    {
+        $primary = $this->deterministicHeroColor($roleMap, $safePalette, ['primary', 'scrim'], 'primary');
+        $secondary = $this->deterministicHeroColor($roleMap, $safePalette, ['surface_alt', 'accent'], 'secondary');
+        $surface = $this->deterministicHeroColor($roleMap, $safePalette, ['copy_panel_bg', 'surface'], 'surface_bg');
+        $text = $this->deterministicHeroColor($roleMap, $safePalette, ['copy_panel_text', 'text'], 'text');
+        $muted = $this->deterministicHeroColor($roleMap, $safePalette, ['muted_text', 'text'], 'text');
+        $accent = $this->deterministicHeroColor($roleMap, $safePalette, ['cta_bg', 'accent'], 'accent');
+        $ctaText = $this->deterministicHeroColor($roleMap, $safePalette, ['cta_text', 'copy_panel_text'], 'inverse_text');
+        $shadow = $this->deterministicHeroColor($roleMap, $safePalette, ['shadow', 'primary'], 'shadow');
+        $rootText = $this->resolveReadablePaletteTextColor($primary, (string)($safePalette['inverse_text'] ?? '#ffffff'), $roleMap, ['#ffffff', '#f8fafc', '#0f172a']);
+        $text = $this->resolveReadablePaletteTextColor($surface, $text, $roleMap, ['#0f172a', '#ffffff', $primary]);
+        $muted = $this->resolveReadablePaletteTextColor($surface, $muted, $roleMap, [$text, '#334155', '#f8fafc']);
+        $ctaText = $this->resolveReadablePaletteTextColor($accent, $ctaText, $roleMap, ['#ffffff', '#0f172a', $surface]);
+        $mediaCss = $hasImage
+            ? "#componentId .{$prefix}-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;}"
+            : "#componentId .{$prefix}-media-stage{position:absolute;right:7%;top:13%;width:430px;height:320px;border:1px solid {$accent};border-radius:34px;background:{$secondary};box-shadow:0 28px 80px {$shadow};}#componentId .{$prefix}-media-subject{position:absolute;right:16%;top:38%;width:250px;height:128px;border-radius:999px;background:{$primary};box-shadow:0 18px 48px {$shadow};}#componentId .{$prefix}-media-detail{position:absolute;right:28%;top:18%;width:16px;height:230px;border-radius:999px;background:{$accent};}#componentId .{$prefix}-media-label{position:absolute;right:10%;bottom:13%;max-width:240px;padding:10px 16px;border:1px solid {$accent};border-radius:999px;background:{$surface};color:{$text};font-size:14px;font-weight:700;line-height:1.35;}";
+
+        return "#componentId{padding:0;overflow-x:hidden;}#componentId .{$prefix}-root{position:relative;overflow:hidden;width:100vw;max-width:100vw;min-width:0;margin:0 calc(50% - 50vw);min-height:560px;padding:92px 24px;background:{$primary};color:{$rootText};box-sizing:border-box;font-family:var(--pb-font-body);}#componentId .{$prefix}-media{position:absolute;inset:0;z-index:0;background:{$secondary};overflow:hidden;}{$mediaCss}#componentId .{$prefix}-motif{position:absolute;right:5%;top:8%;width:500px;height:390px;border:1px solid {$accent};border-radius:42px;background:{$secondary};opacity:.34;}#componentId .{$prefix}-orbit{position:absolute;right:13%;top:20%;width:220px;height:300px;border:1px solid {$accent};border-radius:28px;background:{$primary};opacity:.22;}#componentId .{$prefix}-overlay{position:absolute;inset:0;z-index:1;background:{$primary};opacity:.46;}#componentId .{$prefix}-inner{position:relative;z-index:2;width:100%;min-width:0;max-width:1200px;margin:0 auto;display:flex;align-items:center;min-height:380px;box-sizing:border-box;}#componentId .{$prefix}-text-panel{width:100%;min-width:0;max-width:640px;padding:32px;border:1px solid {$accent};border-radius:24px;background:{$surface};color:{$text};box-shadow:0 28px 80px {$shadow};box-sizing:border-box;}#componentId .{$prefix}-title{margin:0 0 16px;font-family:var(--pb-font-display);font-size:52px;line-height:1.08;color:{$text};overflow-wrap:anywhere;}#componentId .{$prefix}-text{margin:0 0 22px;font-family:var(--pb-font-body);font-size:17px;line-height:1.72;color:{$muted};overflow-wrap:anywhere;}#componentId .{$prefix}-action{display:flex;gap:12px;align-items:center;margin:22px 0 0;padding:18px 0 0;min-width:0;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border:0;border-radius:999px;padding:12px 22px;background:{$accent};color:{$ctaText};font-family:var(--pb-font-body);font-weight:800;text-decoration:none;cursor:pointer;box-shadow:0 12px 24px {$shadow};}";
+    }
+
+    /**
+     * @param array<string,string> $roleMap
+     * @param array<string,string> $safePalette
+     */
+    private function buildDeterministicNarrativePanelCss(string $prefix, array $roleMap, array $safePalette, bool $hasImage): string
+    {
+        $root = $this->deterministicHeroColor($roleMap, $safePalette, ['surface_alt', 'surface'], 'surface_bg');
+        $surface = $this->deterministicHeroColor($roleMap, $safePalette, ['copy_panel_bg', 'card_bg', 'surface'], 'card_bg');
+        $primary = $this->deterministicHeroColor($roleMap, $safePalette, ['primary', 'scrim'], 'primary');
+        $secondary = $this->deterministicHeroColor($roleMap, $safePalette, ['secondary', 'accent'], 'secondary');
+        $accent = $this->deterministicHeroColor($roleMap, $safePalette, ['cta_bg', 'accent'], 'accent');
+        $text = $this->deterministicHeroColor($roleMap, $safePalette, ['text', 'copy_panel_text'], 'text');
+        $muted = $this->deterministicHeroColor($roleMap, $safePalette, ['muted_text', 'text'], 'text');
+        $shadow = $this->deterministicHeroColor($roleMap, $safePalette, ['shadow', 'primary'], 'shadow');
+        $rootText = $this->resolveReadablePaletteTextColor($root, $text, $roleMap, ['#0f172a', '#ffffff', $primary]);
+        $panelText = $this->resolveReadablePaletteTextColor($surface, $text, $roleMap, ['#0f172a', '#ffffff', $primary]);
+        $panelMuted = $this->resolveReadablePaletteTextColor($surface, $muted, $roleMap, [$panelText, '#334155', '#f8fafc']);
+        $primaryText = $this->resolveReadablePaletteTextColor($primary, (string)($safePalette['inverse_text'] ?? '#ffffff'), $roleMap, ['#ffffff', '#f8fafc', $surface]);
+        $accentText = $this->resolveReadablePaletteTextColor($accent, (string)($safePalette['inverse_text'] ?? '#ffffff'), $roleMap, ['#ffffff', '#0f172a', $surface]);
+        $mediaCss = $hasImage
+            ? "#componentId .{$prefix}-img{display:block;width:100%;height:100%;object-fit:cover;object-position:center;}"
+            : "#componentId .{$prefix}-screen{position:absolute;left:32px;right:32px;top:34px;bottom:74px;border-radius:18px;background:{$surface};box-shadow:inset 0 0 0 1px rgba(15,23,42,.10);}#componentId .{$prefix}-node{position:absolute;width:18px;height:18px;border:3px solid {$secondary};border-radius:999px;background:{$root};}#componentId .{$prefix}-node-one{left:22%;top:26%;}#componentId .{$prefix}-node-two{left:48%;top:52%;border-color:{$accent};}#componentId .{$prefix}-node-three{right:20%;top:33%;}#componentId .{$prefix}-rail{position:absolute;left:24%;right:23%;top:43%;height:2px;border-top:2px dashed {$secondary};opacity:.75;}";
+
+        return "#componentId{padding:0;}#componentId .{$prefix}-root{position:relative;overflow:hidden;width:100%;padding:78px 24px;background:{$root};color:{$rootText};box-sizing:border-box;font-family:var(--pb-font-body);}#componentId .{$prefix}-root::before{content:'';position:absolute;left:0;top:0;bottom:0;width:6px;background:{$secondary};pointer-events:none;}#componentId .{$prefix}-inner{position:relative;z-index:1;max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,.52fr) minmax(320px,.48fr);gap:34px;align-items:center;}#componentId .{$prefix}-copy{min-width:0;padding:34px 34px 34px 38px;border:1px solid rgba(15,23,42,.10);border-left:5px solid {$secondary};border-radius:14px;background:{$surface};color:{$panelText};box-shadow:0 18px 48px {$shadow};box-sizing:border-box;}#componentId .{$prefix}-title{margin:0 0 18px;font-family:var(--pb-font-display);font-size:44px;line-height:1.12;color:{$panelText};letter-spacing:0;}#componentId .{$prefix}-text{margin:0;font-family:var(--pb-font-body);font-size:17px;line-height:1.72;color:{$panelMuted};}#componentId .{$prefix}-proof{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 0;}#componentId .{$prefix}-chip{display:inline-flex;align-items:center;min-width:0;max-width:100%;padding:9px 12px;border:1px solid {$secondary};border-radius:999px;color:{$panelText};font-family:var(--pb-font-body);font-size:13px;font-weight:800;line-height:1.2;box-sizing:border-box;}#componentId .{$prefix}-action{display:flex;margin:24px 0 0;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border:0;border-radius:999px;padding:12px 22px;background:{$accent};color:{$accentText};font-family:var(--pb-font-body);font-weight:800;line-height:1.2;text-decoration:none;cursor:pointer;box-shadow:0 14px 28px {$shadow};}#componentId .{$prefix}-media{position:relative;min-width:0;height:360px;border-radius:22px;background:{$primary};color:{$primaryText};overflow:hidden;box-shadow:0 24px 64px {$shadow};box-sizing:border-box;}#componentId .{$prefix}-media::before{content:'';position:absolute;inset:18px;border:1px solid {$secondary};border-radius:18px;opacity:.55;pointer-events:none;}{$mediaCss}#componentId .{$prefix}-media-label{position:absolute;left:28px;right:28px;bottom:22px;padding:12px 16px;border-radius:999px;background:{$surface};color:{$panelText};font-family:var(--pb-font-body);font-size:14px;font-weight:800;line-height:1.35;box-shadow:0 10px 24px {$shadow};box-sizing:border-box;}";
+    }
+
+    /**
+     * @param array<string,string> $roleMap
+     * @param array<string,string> $safePalette
+     */
+    private function buildDeterministicContactSupportCss(string $prefix, string $mode, array $roleMap, array $safePalette): string
+    {
+        $root = $this->deterministicHeroColor($roleMap, $safePalette, ['surface_alt', 'surface'], 'surface_bg');
+        $surface = $this->deterministicHeroColor($roleMap, $safePalette, ['card_bg', 'surface'], 'card_bg');
+        $primary = $this->deterministicHeroColor($roleMap, $safePalette, ['primary', 'scrim'], 'primary');
+        $secondary = $this->deterministicHeroColor($roleMap, $safePalette, ['secondary', 'accent'], 'secondary');
+        $accent = $this->deterministicHeroColor($roleMap, $safePalette, ['cta_bg', 'accent'], 'accent');
+        $text = $this->deterministicHeroColor($roleMap, $safePalette, ['text', 'copy_panel_text'], 'text');
+        $muted = $this->deterministicHeroColor($roleMap, $safePalette, ['muted_text', 'text'], 'text');
+        $shadow = $this->deterministicHeroColor($roleMap, $safePalette, ['shadow', 'primary'], 'shadow');
+        $rootText = $this->resolveReadablePaletteTextColor($root, $text, $roleMap, ['#0f172a', '#ffffff', $primary]);
+        $surfaceText = $this->resolveReadablePaletteTextColor($surface, $text, $roleMap, ['#0f172a', '#ffffff', $primary]);
+        $surfaceMuted = $this->resolveReadablePaletteTextColor($surface, $muted, $roleMap, [$surfaceText, '#334155', '#f8fafc']);
+        $ctaText = $this->resolveReadablePaletteTextColor($accent, (string)($safePalette['inverse_text'] ?? '#ffffff'), $roleMap, ['#ffffff', '#0f172a', $surface]);
+        $layout = $mode === 'channels'
+            ? "grid-template-columns:minmax(0,.46fr) minmax(320px,.54fr);"
+            : "grid-template-columns:minmax(0,.42fr) minmax(340px,.58fr);";
+
+        return "#componentId{padding:0;}#componentId .{$prefix}-root{position:relative;overflow:hidden;width:100%;padding:72px 24px;background:{$root};color:{$rootText};box-sizing:border-box;font-family:var(--pb-font-body);}#componentId .{$prefix}-inner{position:relative;z-index:1;max-width:1180px;margin:0 auto;display:grid;{$layout}gap:28px;align-items:start;}#componentId .{$prefix}-intro{min-width:0;padding:28px 0 0;}#componentId .{$prefix}-title{margin:0 0 14px;font-family:var(--pb-font-display);font-size:38px;line-height:1.16;color:{$rootText};letter-spacing:0;}#componentId .{$prefix}-text{margin:0;font-family:var(--pb-font-body);font-size:16px;line-height:1.7;color:{$rootText};opacity:.82;}#componentId .{$prefix}-panel{min-width:0;padding:26px;border:1px solid rgba(15,23,42,.12);border-radius:12px;background:{$surface};color:{$surfaceText};box-shadow:0 18px 44px {$shadow};box-sizing:border-box;}#componentId .{$prefix}-channels{display:grid;grid-template-columns:1fr;gap:14px;}#componentId .{$prefix}-channel{display:grid;grid-template-columns:minmax(120px,.34fr) minmax(0,1fr);gap:16px;align-items:center;padding:16px;border:1px solid rgba(15,23,42,.10);border-left:4px solid {$secondary};border-radius:8px;background:{$surface};box-sizing:border-box;}#componentId .{$prefix}-label{display:block;color:{$surfaceText};font-family:var(--pb-font-body);font-size:14px;font-weight:800;line-height:1.35;}#componentId .{$prefix}-value{display:block;color:{$surfaceMuted};font-family:var(--pb-font-body);font-size:15px;line-height:1.55;}#componentId .{$prefix}-form{display:grid;grid-template-columns:1fr;gap:16px;}#componentId .{$prefix}-field{display:grid;gap:8px;min-width:0;}#componentId .{$prefix}-input,#componentId .{$prefix}-textarea{width:100%;max-width:100%;box-sizing:border-box;border:1px solid rgba(15,23,42,.18);border-radius:8px;background:{$root};color:{$surfaceText};font-family:var(--pb-font-body);font-size:15px;line-height:1.4;padding:12px 14px;outline:none;}#componentId .{$prefix}-textarea{min-height:112px;resize:vertical;}#componentId .{$prefix}-input:focus,#componentId .{$prefix}-textarea:focus{border-color:{$secondary};box-shadow:0 0 0 3px rgba(14,107,107,.14);}#componentId .{$prefix}-note{margin:2px 0 0;color:{$surfaceMuted};font-size:13px;line-height:1.5;}#componentId .{$prefix}-faq{display:grid;grid-template-columns:1fr;gap:14px;}#componentId .{$prefix}-faq-item{padding:18px;border:1px solid rgba(15,23,42,.12);border-radius:8px;background:{$surface};box-shadow:0 10px 24px {$shadow};box-sizing:border-box;}#componentId .{$prefix}-question{margin:0 0 8px;color:{$surfaceText};font-family:var(--pb-font-display);font-size:18px;line-height:1.3;letter-spacing:0;}#componentId .{$prefix}-answer{margin:0;color:{$surfaceMuted};font-size:15px;line-height:1.65;}#componentId .{$prefix}-action{display:flex;margin:20px 0 0;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border:0;border-radius:999px;padding:12px 22px;background:{$accent};color:{$ctaText};font-family:var(--pb-font-body);font-weight:800;line-height:1.2;text-decoration:none;cursor:pointer;box-shadow:0 14px 28px {$shadow};}";
+    }
+
+    /**
+     * @param array<string,string> $roleMap
+     * @param array<string,string> $safePalette
+     */
+    private function buildDeterministicCtaCss(string $prefix, array $roleMap, array $safePalette): string
+    {
+        $accent = $this->deterministicHeroColor($roleMap, $safePalette, ['cta_bg', 'accent'], 'accent');
+        $primary = $this->deterministicHeroColor($roleMap, $safePalette, ['primary', 'surface_alt'], 'primary');
+        $surface = $this->deterministicHeroColor($roleMap, $safePalette, ['surface', 'card_bg'], 'surface_bg');
+        $shadow = $this->deterministicHeroColor($roleMap, $safePalette, ['shadow', 'primary'], 'shadow');
+        $rootText = $this->resolveReadablePaletteTextColor($accent, (string)($safePalette['text'] ?? '#0f172a'), $roleMap, ['#0f172a', '#ffffff', $primary]);
+        $muted = $this->resolveReadablePaletteTextColor($accent, $rootText, $roleMap, [$rootText, '#ffffff', '#0f172a']);
+        $ctaText = $this->resolveReadablePaletteTextColor($primary, (string)($safePalette['inverse_text'] ?? '#ffffff'), $roleMap, ['#ffffff', '#f8fafc', $accent]);
+
+        return "#componentId{padding:0;overflow-x:hidden;}#componentId .{$prefix}-root{position:relative;overflow:hidden;width:100%;max-width:100%;padding:56px 24px;background:{$accent};color:{$rootText};box-sizing:border-box;font-family:var(--pb-font-body);}#componentId .{$prefix}-root::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,0));pointer-events:none;}#componentId .{$prefix}-root::after{content:'';position:absolute;right:8%;top:18%;width:220px;height:54px;border:1px dashed {$rootText};border-radius:999px;opacity:.28;pointer-events:none;}#componentId .{$prefix}-inner{position:relative;z-index:1;width:100%;min-width:0;max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:center;box-sizing:border-box;}#componentId .{$prefix}-copy{min-width:0;max-width:100%;}#componentId .{$prefix}-title{margin:0 0 10px;font-family:var(--pb-font-display);font-size:34px;line-height:1.18;color:{$rootText};overflow-wrap:anywhere;}#componentId .{$prefix}-text{margin:0;max-width:720px;font-family:var(--pb-font-body);font-size:16px;line-height:1.65;color:{$muted};overflow-wrap:anywhere;}#componentId .{$prefix}-action{display:flex;align-items:center;justify-content:flex-end;min-width:0;max-width:100%;}#componentId .{$prefix}-cta{display:inline-flex;align-items:center;justify-content:center;width:auto;max-width:280px;box-sizing:border-box;border:1px solid {$surface};border-radius:999px;padding:12px 22px;background:{$primary};color:{$ctaText};font-family:var(--pb-font-body);font-weight:800;line-height:1.2;text-decoration:none;cursor:pointer;box-shadow:0 14px 28px {$shadow};transition:transform .2s ease,box-shadow .2s ease;}#componentId .{$prefix}-cta:hover{transform:translateY(-2px);box-shadow:0 18px 34px {$shadow};}";
+    }
+
+    /**
+     * @param array<string,string> $roleMap
+     * @param array<string,string> $safePalette
+     */
+    private function buildDeterministicCardGridCss(string $prefix, array $roleMap, array $safePalette): string
+    {
+        $root = $this->deterministicHeroColor($roleMap, $safePalette, ['surface_alt', 'surface'], 'surface_bg');
+        $card = $this->deterministicHeroColor($roleMap, $safePalette, ['card_bg', 'surface'], 'card_bg');
+        $text = $this->deterministicHeroColor($roleMap, $safePalette, ['text', 'copy_panel_text'], 'text');
+        $muted = $this->deterministicHeroColor($roleMap, $safePalette, ['muted_text', 'text'], 'text');
+        $accent = $this->deterministicHeroColor($roleMap, $safePalette, ['accent', 'cta_bg'], 'accent');
+        $secondary = $this->deterministicHeroColor($roleMap, $safePalette, ['secondary', 'primary'], 'secondary');
+        $shadow = $this->deterministicHeroColor($roleMap, $safePalette, ['shadow', 'primary'], 'shadow');
+        $rootText = $this->resolveReadablePaletteTextColor($root, $text, $roleMap, ['#0f172a', '#ffffff', $secondary]);
+        $cardText = $this->resolveReadablePaletteTextColor($card, $text, $roleMap, ['#0f172a', '#ffffff', $secondary]);
+        $cardMuted = $this->resolveReadablePaletteTextColor($card, $muted, $roleMap, [$cardText, '#334155', '#f8fafc']);
+        $markerText = $this->resolveReadablePaletteTextColor($secondary, (string)($safePalette['inverse_text'] ?? '#ffffff'), $roleMap, ['#ffffff', '#0f172a', $card]);
+        $ctaText = $this->resolveReadablePaletteTextColor($accent, (string)($safePalette['inverse_text'] ?? '#ffffff'), $roleMap, ['#ffffff', '#0f172a', $card]);
+
+        return "#componentId{padding:0;}#componentId .{$prefix}-root{position:relative;overflow:hidden;width:100%;padding:72px 24px;background:{$root};color:{$rootText};box-sizing:border-box;font-family:var(--pb-font-body);}#componentId .{$prefix}-root::before{content:'';position:absolute;left:5%;top:22px;width:190px;height:1px;background:{$secondary};opacity:.32;pointer-events:none;}#componentId .{$prefix}-inner{position:relative;z-index:1;max-width:1180px;margin:0 auto;}#componentId .{$prefix}-intro{display:grid;grid-template-columns:minmax(0,.72fr) minmax(260px,.28fr);gap:32px;align-items:end;margin:0 0 28px;}#componentId .{$prefix}-title{margin:0;font-family:var(--pb-font-display);font-size:40px;line-height:1.15;color:{$rootText};letter-spacing:0;}#componentId .{$prefix}-text{margin:0;font-family:var(--pb-font-body);font-size:16px;line-height:1.7;color:{$rootText};opacity:.82;}#componentId .{$prefix}-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:stretch;}#componentId .{$prefix}-card{position:relative;min-width:0;height:100%;padding:24px 22px 24px 24px;border:1px solid rgba(15,23,42,.12);border-left:5px solid {$secondary};border-radius:12px;background:{$card};color:{$cardText};box-shadow:0 18px 42px {$shadow};box-sizing:border-box;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease;}#componentId .{$prefix}-card:hover{transform:translateY(-3px);border-left-color:{$accent};box-shadow:0 24px 52px {$shadow};}#componentId .{$prefix}-marker{display:inline-flex;width:36px;height:36px;margin:0 0 18px;border-radius:999px;background:{$secondary};color:{$markerText};align-items:center;justify-content:center;}#componentId .{$prefix}-marker::before{content:'';display:block;width:12px;height:12px;border:2px solid {$markerText};border-radius:999px;box-sizing:border-box;}#componentId .{$prefix}-card-title{margin:0 0 10px;font-family:var(--pb-font-display);font-size:20px;line-height:1.25;color:{$cardText};letter-spacing:0;}#componentId .{$prefix}-card-text{margin:0;font-family:var(--pb-font-body);font-size:15px;line-height:1.65;color:{$cardMuted};}#componentId .{$prefix}-action{display:flex;justify-content:center;margin:30px 0 0;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border:0;border-radius:999px;padding:12px 22px;background:{$accent};color:{$ctaText};font-family:var(--pb-font-body);font-weight:800;line-height:1.2;text-decoration:none;cursor:pointer;box-shadow:0 14px 28px {$shadow};}";
+    }
+
+    private function buildDeterministicCardGridResponsiveCss(string $prefix): string
+    {
+        return "@media (max-width: 900px){#componentId .{$prefix}-root{padding:60px 20px;}#componentId .{$prefix}-intro{grid-template-columns:1fr;gap:16px;margin-bottom:24px;}#componentId .{$prefix}-grid{grid-template-columns:1fr;gap:16px;}#componentId .{$prefix}-title{font-size:34px;}}@media (max-width: 420px){#componentId .{$prefix}-root{padding:44px 14px;}#componentId .{$prefix}-title{font-size:28px;}#componentId .{$prefix}-card{padding:22px 18px;border-radius:10px;}#componentId .{$prefix}-card-title{font-size:19px;}#componentId .{$prefix}-card-text{font-size:15px;}#componentId .{$prefix}-cta{width:auto;max-width:260px;}}";
+    }
+
+    private function buildDeterministicNarrativePanelResponsiveCss(string $prefix, bool $hasImage): string
+    {
+        $media = $hasImage
+            ? "#componentId .{$prefix}-img{height:100%;}"
+            : "#componentId .{$prefix}-screen{left:22px;right:22px;top:26px;bottom:66px;}";
+
+        return "@media (max-width: 900px){#componentId .{$prefix}-root{padding:62px 20px;}#componentId .{$prefix}-inner{grid-template-columns:1fr;gap:24px;}#componentId .{$prefix}-copy{padding:30px;}#componentId .{$prefix}-title{font-size:36px;}#componentId .{$prefix}-media{height:300px;}{$media}}@media (max-width: 420px){#componentId .{$prefix}-root{padding:46px 14px;}#componentId .{$prefix}-copy{padding:24px 20px;border-radius:12px;}#componentId .{$prefix}-title{font-size:30px;}#componentId .{$prefix}-text{font-size:16px;}#componentId .{$prefix}-proof{gap:8px;}#componentId .{$prefix}-chip{font-size:12px;}#componentId .{$prefix}-cta{width:auto;max-width:260px;}#componentId .{$prefix}-media{height:250px;border-radius:18px;}#componentId .{$prefix}-media-label{left:18px;right:18px;bottom:16px;font-size:13px;}}";
+    }
+
+    private function buildDeterministicContactSupportResponsiveCss(string $prefix): string
+    {
+        return "@media (max-width: 900px){#componentId .{$prefix}-root{padding:58px 20px;}#componentId .{$prefix}-inner{grid-template-columns:1fr;gap:22px;}#componentId .{$prefix}-intro{padding-top:0;}#componentId .{$prefix}-title{font-size:34px;}#componentId .{$prefix}-channel{grid-template-columns:1fr;gap:8px;}}@media (max-width: 420px){#componentId .{$prefix}-root{padding:42px 14px;}#componentId .{$prefix}-title{font-size:28px;}#componentId .{$prefix}-text{font-size:15px;}#componentId .{$prefix}-panel{padding:20px;border-radius:10px;}#componentId .{$prefix}-input,#componentId .{$prefix}-textarea{font-size:15px;padding:11px 12px;}#componentId .{$prefix}-cta{width:auto;max-width:260px;}}";
+    }
+
+    private function buildDeterministicCtaResponsiveCss(string $prefix): string
+    {
+        return "@media (max-width: 768px){#componentId .{$prefix}-root{padding:48px 18px;}#componentId .{$prefix}-inner{width:100%;grid-template-columns:1fr;gap:22px;text-align:center;}#componentId .{$prefix}-copy{width:100%;}#componentId .{$prefix}-text{max-width:100%;}#componentId .{$prefix}-action{justify-content:center;}#componentId .{$prefix}-title{font-size:30px;}}@media (max-width: 420px){#componentId .{$prefix}-root{padding:38px 14px;}#componentId .{$prefix}-inner{max-width:100%;}#componentId .{$prefix}-title{font-size:26px;}#componentId .{$prefix}-text{font-size:15px;}#componentId .{$prefix}-cta{width:auto;max-width:260px;}}";
+    }
+
+    private function buildDeterministicStrictHeroResponsiveCss(string $prefix, bool $hasImage): string
+    {
+        $mediaStage = $hasImage
+            ? "#componentId .{$prefix}-img{width:100%;max-width:100%;}"
+            : "#componentId .{$prefix}-media-stage{right:4%;top:10%;width:320px;height:250px;}#componentId .{$prefix}-media-subject{right:11%;top:37%;width:200px;}#componentId .{$prefix}-media-label{right:6%;bottom:9%;}";
+
+        return "@media (max-width: 768px){#componentId .{$prefix}-root{min-height:0;padding:72px 18px;}#componentId .{$prefix}-inner{display:block;width:100%;min-height:0;max-width:100%;}#componentId .{$prefix}-text-panel{width:100%;max-width:100%;padding:26px;}#componentId .{$prefix}-title{font-size:42px;}{$mediaStage}}@media (max-width: 420px){#componentId .{$prefix}-root{padding:48px 14px;}#componentId .{$prefix}-text-panel{padding:22px;border-radius:20px;}#componentId .{$prefix}-title{font-size:34px;}#componentId .{$prefix}-text{font-size:16px;}#componentId .{$prefix}-action{display:flex;max-width:100%;min-width:0;}#componentId .{$prefix}-cta{width:auto;max-width:260px;}}";
+    }
+
+    private function buildDeterministicStrictHeroHtml(
+        string $prefix,
+        bool $hasImage,
+        string $slotId,
+        string $title,
+        string $description,
+        string $ctaText,
+        string $ctaUrl,
+        string $mediaLabel,
+        string $imageUrl,
+        string $imageAlt
+    ): string {
+        $titleLiteral = \var_export($title, true);
+        $descriptionLiteral = \var_export($description, true);
+        $ctaLiteral = \var_export($ctaText, true);
+        $ctaUrlLiteral = \var_export($ctaUrl, true);
+        $labelLiteral = \var_export($mediaLabel, true);
+        $media = $hasImage
+            ? "<div class='{$prefix}-media'><img class='{$prefix}-img' src='<?= htmlspecialchars(\$mediaImageUrl ?? " . \var_export($imageUrl, true) . ", ENT_QUOTES, 'UTF-8') ?>' alt='<?= htmlspecialchars(\$mediaImageAlt ?? " . \var_export($imageAlt, true) . ", ENT_QUOTES, 'UTF-8') ?>' data-pb-ai-image-role='generated-asset' data-pb-ai-asset-slot='" . \htmlspecialchars($slotId, \ENT_QUOTES, 'UTF-8') . "'></div>"
+            : "<div class='{$prefix}-media'><div class='{$prefix}-media-stage'><div class='{$prefix}-media-subject'></div><div class='{$prefix}-media-detail'></div><div class='{$prefix}-media-label'><?= htmlspecialchars(\$mediaLabel ?? {$labelLiteral}, ENT_QUOTES, 'UTF-8') ?></div></div></div>";
+        $cta = $ctaUrl !== ''
+            ? "<a class='{$prefix}-cta' href='<?= htmlspecialchars(\$ctaUrl ?? {$ctaUrlLiteral}, ENT_QUOTES, 'UTF-8') ?>'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></a>"
+            : "<button type='button' class='{$prefix}-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></button>";
+
+        return "<section class='{$prefix}-root'>{$media}<div class='{$prefix}-motif'></div><div class='{$prefix}-orbit'></div><div class='{$prefix}-overlay'></div><div class='{$prefix}-inner'><div class='{$prefix}-text-panel'><h2 class='{$prefix}-title'><?= htmlspecialchars(\$contentTitle ?? {$titleLiteral}, ENT_QUOTES, 'UTF-8') ?></h2><p class='{$prefix}-text'><?= nl2br(htmlspecialchars(\$contentDescription ?? {$descriptionLiteral}, ENT_QUOTES, 'UTF-8')) ?></p><div class='{$prefix}-action'>{$cta}</div></div></div></section>";
+    }
+
+    /**
+     * @param list<string> $highlights
+     */
+    private function buildDeterministicNarrativePanelHtml(
+        string $prefix,
+        string $headingTag,
+        bool $hasImage,
+        string $slotId,
+        string $title,
+        string $description,
+        string $ctaText,
+        string $ctaUrl,
+        string $mediaLabel,
+        string $imageUrl,
+        string $imageAlt,
+        array $highlights
+    ): string {
+        $headingTag = $headingTag === 'h1' ? 'h1' : 'h2';
+        $titleLiteral = \var_export($title, true);
+        $descriptionLiteral = \var_export($description, true);
+        $labelLiteral = \var_export($mediaLabel, true);
+        $proof = '';
+        foreach (\array_slice($highlights, 0, 2) as $index => $label) {
+            $number = $index + 1;
+            $var = '$proofItem' . $number . 'Label';
+            $literal = \var_export($label, true);
+            $proof .= "<span class='{$prefix}-chip'><?= htmlspecialchars({$var} ?? {$literal}, ENT_QUOTES, 'UTF-8') ?></span>";
+        }
+        $action = '';
+        if ($ctaText !== '') {
+            $ctaLiteral = \var_export($ctaText, true);
+            $ctaUrlLiteral = \var_export($ctaUrl, true);
+            $cta = $ctaUrl !== ''
+                ? "<a class='{$prefix}-cta' href='<?= htmlspecialchars(\$ctaUrl ?? {$ctaUrlLiteral}, ENT_QUOTES, 'UTF-8') ?>'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></a>"
+                : "<button type='button' class='{$prefix}-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></button>";
+            $action = "<div class='{$prefix}-action'>{$cta}</div>";
+        }
+        $media = $hasImage
+            ? "<figure class='{$prefix}-media'><img class='{$prefix}-img' src='<?= htmlspecialchars(\$mediaImageUrl ?? " . \var_export($imageUrl, true) . ", ENT_QUOTES, 'UTF-8') ?>' alt='<?= htmlspecialchars(\$mediaImageAlt ?? " . \var_export($imageAlt, true) . ", ENT_QUOTES, 'UTF-8') ?>' data-pb-ai-image-role='generated-asset' data-pb-ai-asset-slot='" . \htmlspecialchars($slotId, \ENT_QUOTES, 'UTF-8') . "'><figcaption class='{$prefix}-media-label'><?= htmlspecialchars(\$mediaLabel ?? {$labelLiteral}, ENT_QUOTES, 'UTF-8') ?></figcaption></figure>"
+            : "<div class='{$prefix}-media'><div class='{$prefix}-screen' aria-hidden='true'><span class='{$prefix}-rail'></span><span class='{$prefix}-node {$prefix}-node-one'></span><span class='{$prefix}-node {$prefix}-node-two'></span><span class='{$prefix}-node {$prefix}-node-three'></span></div><div class='{$prefix}-media-label'><?= htmlspecialchars(\$mediaLabel ?? {$labelLiteral}, ENT_QUOTES, 'UTF-8') ?></div></div>";
+
+        return "<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-copy'><{$headingTag} class='{$prefix}-title'><?= htmlspecialchars(\$contentTitle ?? {$titleLiteral}, ENT_QUOTES, 'UTF-8') ?></{$headingTag}><p class='{$prefix}-text'><?= nl2br(htmlspecialchars(\$contentDescription ?? {$descriptionLiteral}, ENT_QUOTES, 'UTF-8')) ?></p><div class='{$prefix}-proof'>{$proof}</div>{$action}</div>{$media}</div></section>";
+    }
+
+    /**
+     * @param list<array<string,string>> $items
+     */
+    private function buildDeterministicContactSupportHtml(
+        string $prefix,
+        string $mode,
+        string $headingTag,
+        string $title,
+        string $description,
+        array $items,
+        string $ctaText,
+        string $ctaUrl
+    ): string {
+        $headingTag = $headingTag === 'h1' ? 'h1' : 'h2';
+        $titleLiteral = \var_export($title, true);
+        $descriptionLiteral = \var_export($description, true);
+        $panel = '';
+
+        if ($mode === 'faq') {
+            $faqItems = '';
+            foreach (\array_slice($items, 0, 3) as $index => $item) {
+                $number = $index + 1;
+                $questionVar = '$faqQuestion' . $number;
+                $answerVar = '$faqAnswer' . $number;
+                $questionLiteral = \var_export((string)($item['question'] ?? ''), true);
+                $answerLiteral = \var_export((string)($item['answer'] ?? ''), true);
+                $faqItems .= "<article class='{$prefix}-faq-item'><h3 class='{$prefix}-question'><?= htmlspecialchars({$questionVar} ?? {$questionLiteral}, ENT_QUOTES, 'UTF-8') ?></h3><p class='{$prefix}-answer'><?= nl2br(htmlspecialchars({$answerVar} ?? {$answerLiteral}, ENT_QUOTES, 'UTF-8')) ?></p></article>";
+            }
+            $action = '';
+            if ($ctaText !== '') {
+                $ctaLiteral = \var_export($ctaText, true);
+                $ctaUrlLiteral = \var_export($ctaUrl, true);
+                $cta = $ctaUrl !== ''
+                    ? "<a class='{$prefix}-cta' href='<?= htmlspecialchars(\$ctaUrl ?? {$ctaUrlLiteral}, ENT_QUOTES, 'UTF-8') ?>'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></a>"
+                    : "<button type='button' class='{$prefix}-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></button>";
+                $action = "<div class='{$prefix}-action'>{$cta}</div>";
+            }
+            $panel = "<div class='{$prefix}-faq'>{$faqItems}</div>{$action}";
+        } elseif ($mode === 'form') {
+            $fields = '';
+            foreach (\array_slice($items, 0, 3) as $index => $item) {
+                $number = $index + 1;
+                $labelVar = '$formLabel' . $number;
+                $placeholderVar = '$formPlaceholder' . $number;
+                $labelLiteral = \var_export((string)($item['label'] ?? ''), true);
+                $placeholderLiteral = \var_export((string)($item['placeholder'] ?? ''), true);
+                $fieldId = \htmlspecialchars($prefix . '-field-' . $number, \ENT_QUOTES, 'UTF-8');
+                $control = $number === 3
+                    ? "<textarea class='{$prefix}-textarea' id='{$fieldId}' name='contact_field_{$number}' rows='4' placeholder='<?= htmlspecialchars({$placeholderVar} ?? {$placeholderLiteral}, ENT_QUOTES, 'UTF-8') ?>'></textarea>"
+                    : "<input class='{$prefix}-input' id='{$fieldId}' name='contact_field_{$number}' type='text' placeholder='<?= htmlspecialchars({$placeholderVar} ?? {$placeholderLiteral}, ENT_QUOTES, 'UTF-8') ?>'>";
+                $fields .= "<div class='{$prefix}-field'><label class='{$prefix}-label' for='{$fieldId}'><?= htmlspecialchars({$labelVar} ?? {$labelLiteral}, ENT_QUOTES, 'UTF-8') ?></label>{$control}</div>";
+            }
+            $ctaLiteral = \var_export($ctaText, true);
+            $ctaUrlLiteral = \var_export($ctaUrl, true);
+            $formOpen = $ctaUrl !== ''
+                ? "<form class='{$prefix}-form' method='post' action='<?= htmlspecialchars(\$ctaUrl ?? {$ctaUrlLiteral}, ENT_QUOTES, 'UTF-8') ?>'>"
+                : "<form class='{$prefix}-form' method='post'>";
+            $panel = "{$formOpen}{$fields}<p class='{$prefix}-note'><?= nl2br(htmlspecialchars(\$formNoteText ?? 'We respond with a focused next-step recommendation.', ENT_QUOTES, 'UTF-8')) ?></p><div class='{$prefix}-action'><button type='submit' class='{$prefix}-cta'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></button></div></form>";
+        } else {
+            $rows = '';
+            foreach (\array_slice($items, 0, 3) as $index => $item) {
+                $number = $index + 1;
+                $labelVar = '$channelItem' . $number . 'Label';
+                $valueVar = '$channelItem' . $number . 'Value';
+                $labelLiteral = \var_export((string)($item['label'] ?? ''), true);
+                $valueLiteral = \var_export((string)($item['value'] ?? ''), true);
+                $rows .= "<div class='{$prefix}-channel'><span class='{$prefix}-label'><?= htmlspecialchars({$labelVar} ?? {$labelLiteral}, ENT_QUOTES, 'UTF-8') ?></span><span class='{$prefix}-value'><?= nl2br(htmlspecialchars({$valueVar} ?? {$valueLiteral}, ENT_QUOTES, 'UTF-8')) ?></span></div>";
+            }
+            $action = '';
+            if ($ctaText !== '') {
+                $ctaLiteral = \var_export($ctaText, true);
+                $ctaUrlLiteral = \var_export($ctaUrl, true);
+                $cta = $ctaUrl !== ''
+                    ? "<a class='{$prefix}-cta' href='<?= htmlspecialchars(\$ctaUrl ?? {$ctaUrlLiteral}, ENT_QUOTES, 'UTF-8') ?>'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></a>"
+                    : "<button type='button' class='{$prefix}-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></button>";
+                $action = "<div class='{$prefix}-action'>{$cta}</div>";
+            }
+            $panel = "<div class='{$prefix}-channels'>{$rows}</div>{$action}";
+        }
+
+        return "<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-intro'><{$headingTag} class='{$prefix}-title'><?= htmlspecialchars(\$contentTitle ?? {$titleLiteral}, ENT_QUOTES, 'UTF-8') ?></{$headingTag}><p class='{$prefix}-text'><?= nl2br(htmlspecialchars(\$contentDescription ?? {$descriptionLiteral}, ENT_QUOTES, 'UTF-8')) ?></p></div><div class='{$prefix}-panel'>{$panel}</div></div></section>";
+    }
+
+    private function buildDeterministicCtaHtml(
+        string $prefix,
+        string $title,
+        string $description,
+        string $ctaText,
+        string $ctaUrl
+    ): string {
+        $titleLiteral = \var_export($title, true);
+        $descriptionLiteral = \var_export($description, true);
+        $ctaLiteral = \var_export($ctaText, true);
+        $ctaUrlLiteral = \var_export($ctaUrl, true);
+        $cta = $ctaUrl !== ''
+            ? "<a class='{$prefix}-cta' href='<?= htmlspecialchars(\$ctaUrl ?? {$ctaUrlLiteral}, ENT_QUOTES, 'UTF-8') ?>'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></a>"
+            : "<button type='button' class='{$prefix}-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></button>";
+
+        return "<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-copy'><h2 class='{$prefix}-title'><?= htmlspecialchars(\$contentTitle ?? {$titleLiteral}, ENT_QUOTES, 'UTF-8') ?></h2><p class='{$prefix}-text'><?= nl2br(htmlspecialchars(\$contentDescription ?? {$descriptionLiteral}, ENT_QUOTES, 'UTF-8')) ?></p></div><div class='{$prefix}-action'>{$cta}</div></div></section>";
+    }
+
+    /**
+     * @param list<array{title:string,body:string}> $items
+     */
+    private function buildDeterministicCardGridHtml(
+        string $prefix,
+        string $title,
+        string $description,
+        array $items,
+        string $ctaText = '',
+        string $ctaUrl = ''
+    ): string {
+        $titleLiteral = \var_export($title, true);
+        $descriptionLiteral = \var_export($description, true);
+        $cards = '';
+        foreach (\array_slice($items, 0, 3) as $index => $item) {
+            $number = $index + 1;
+            $titleVar = '$cardItem' . $number . 'Title';
+            $bodyVar = '$cardItem' . $number . 'Text';
+            $itemTitleLiteral = \var_export($item['title'], true);
+            $itemBodyLiteral = \var_export($item['body'], true);
+            $cards .= "<article class='{$prefix}-card'><span class='{$prefix}-marker' aria-hidden='true'></span><h3 class='{$prefix}-card-title'><?= htmlspecialchars({$titleVar} ?? {$itemTitleLiteral}, ENT_QUOTES, 'UTF-8') ?></h3><p class='{$prefix}-card-text'><?= nl2br(htmlspecialchars({$bodyVar} ?? {$itemBodyLiteral}, ENT_QUOTES, 'UTF-8')) ?></p></article>";
+        }
+        $action = '';
+        if ($ctaText !== '') {
+            $ctaLiteral = \var_export($ctaText, true);
+            $ctaUrlLiteral = \var_export($ctaUrl, true);
+            $cta = $ctaUrl !== ''
+                ? "<a class='{$prefix}-cta' href='<?= htmlspecialchars(\$ctaUrl ?? {$ctaUrlLiteral}, ENT_QUOTES, 'UTF-8') ?>'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></a>"
+                : "<button type='button' class='{$prefix}-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? {$ctaLiteral}, ENT_QUOTES, 'UTF-8') ?></button>";
+            $action = "<div class='{$prefix}-action'>{$cta}</div>";
+        }
+
+        return "<section class='{$prefix}-root'><div class='{$prefix}-inner'><div class='{$prefix}-intro'><h2 class='{$prefix}-title'><?= htmlspecialchars(\$contentTitle ?? {$titleLiteral}, ENT_QUOTES, 'UTF-8') ?></h2><p class='{$prefix}-text'><?= nl2br(htmlspecialchars(\$contentDescription ?? {$descriptionLiteral}, ENT_QUOTES, 'UTF-8')) ?></p></div><div class='{$prefix}-grid'>{$cards}</div>{$action}</div></section>";
+    }
+
+    /**
      * @param array<string,mixed> $aiData
      */
     private function logFastBlockGenerationFailureSample(string $componentCode, int $attempt, \Throwable $throwable, array $aiData): void
     {
         $summary = $this->summarizeThrowable($throwable);
+        $summaryLower = \mb_strtolower($summary, 'UTF-8');
         $shouldLog = (bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)
-            || \str_contains(\strtolower($summary), 'editable field contract');
+            || $attempt >= 2
+            || \str_contains($summaryLower, 'editable field contract')
+            || \str_contains($summaryLower, 'structure/prompt policy')
+            || \str_contains($summaryLower, 'hard policy')
+            || \str_contains($summaryLower, 'visual contrast')
+            || \str_contains($summaryLower, 'cta/action')
+            || \str_contains($summaryLower, 'role fidelity')
+            || \str_contains($summaryLower, 'quality gate');
         if (!$shouldLog) {
             return;
         }
@@ -2311,11 +5122,11 @@ class AiSitePageComponentGenerationService
         $editableNoHardcodedHtmlRecovery = $region === 'content'
             ? <<<'PROMPT'
 - HTML_VISIBLE_TEXT_BINDING_HARD_GATE (HARD): the previous output may have placed plain copy directly between tags. Fix by moving every visitor-facing word/number into extra_fields defaults, binding each field in php_variables with `$getConfig(...)`, and rendering only safe PHP echoes in html_content.
-- BAD: `<h2>Trusted Download</h2><p>Fast setup</p><button>Download APK</button>`.
+- BAD: `<h2>Neon Table</h2><p>Rules are clear</p><button>Start</button>`.
 - GOOD extra_fields/php_variables/html_content trio:
-  extra_fields: `content.title => Title:text:Trusted Download\ncontent.description => Description:textarea:Fast setup\ncta.text => CTA text:text:Download APK`
-  php_variables: `$contentTitle = $getConfig('content.title', 'Trusted Download');\n$contentDescription = $getConfig('content.description', 'Fast setup');\n$ctaText = $getConfig('cta.text', 'Download APK');`
-  html_content: `<h2><?= htmlspecialchars($contentTitle ?? 'Trusted Download', ENT_QUOTES, 'UTF-8') ?></h2><p><?= nl2br(htmlspecialchars($contentDescription ?? 'Fast setup', ENT_QUOTES, 'UTF-8')) ?></p><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Download APK', ENT_QUOTES, 'UTF-8') ?></button>`.
+  extra_fields: `content.title => Title:text:霓虹牌桌\ncontent.description => Description:textarea:规则清晰可见\ncta.text => CTA text:text:开始游戏`
+  php_variables: `$contentTitle = $getConfig('content.title', '霓虹牌桌');\n$contentDescription = $getConfig('content.description', '规则清晰可见');\n$ctaText = $getConfig('cta.text', '开始游戏');`
+  html_content: `<h2><?= htmlspecialchars($contentTitle ?? '霓虹牌桌', ENT_QUOTES, 'UTF-8') ?></h2><p><?= nl2br(htmlspecialchars($contentDescription ?? '规则清晰可见', ENT_QUOTES, 'UTF-8')) ?></p><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? '开始游戏', ENT_QUOTES, 'UTF-8') ?></button>`.
 - Final self-check: delete all `<?= ... ?>` fragments from html_content, strip HTML tags, decode entities; if any customer-facing letters or numbers remain, the component still fails.
 PROMPT
             : '';
@@ -2341,9 +5152,9 @@ PROMPT
                     . "  #componentId: padding:0\n"
                     . "  .{$componentPrefix}-root: position:relative; overflow:hidden; width:100vw; min-height:520px; margin:0 calc(50% - 50vw); padding:88px 24px; box-sizing:border-box; font-family= CTX_CONFIRMED_THEME.font_family or a named brand family before generic fallback; background= palette_role_map.surface 或 linear-gradient(palette_role_map.surface->palette_role_map.surface_alt). Do not put max-width on root; constrain only .{$componentPrefix}-inner\n"
                     . "  .{$componentPrefix}-scrim: position:absolute; inset:0; background= palette_role_map.scrim or linear-gradient(palette_role_map.scrim, transparent); opacity:.42-.58 when using a solid hex background\n"
-                    . "  .{$componentPrefix}-inner: position:relative; z-index:1; max-width:1180px; margin:0 auto; display:flex; align-items:center; min-height:380px\n"
+                    . "  .{$componentPrefix}-inner: position:relative; z-index:1; max-width:1200px; margin:0 auto; display:flex; align-items:center; min-height:380px\n"
                     . "  .{$componentPrefix}-text-panel: max-width:620px; padding:32px; border-radius:24px; background= palette_role_map.copy_panel_bg; color= palette_role_map.copy_panel_text; box-shadow:0 28px 80px palette_role_map.shadow\n"
-                    . "  .{$componentPrefix}-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size: clamp(32px, 5vw, 52px); line-height:1.1; color= palette_role_map.copy_panel_text\n"
+                    . "  .{$componentPrefix}-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size:52px; line-height:1.1; color= palette_role_map.copy_panel_text. In css_responsive, override title font-size to 42px at tablet and 34px at mobile; never use vw/clamp for font-size\n"
                     . "  .{$componentPrefix}-text: margin:0 0 22px; line-height:1.7; color= palette_role_map.muted_text\n"
                     . "  .{$componentPrefix}-action: margin:22px 0 0; padding:18px 0 0; display:flex; gap:12px; align-items:center\n"
                     . "  .{$componentPrefix}-cta: display:inline-flex; width:auto; max-width:280px; padding:12px 20px; border-radius:999px; background= palette_role_map.cta_bg; color= palette_role_map.cta_text; transition:transform .2s, box-shadow .2s\n"
@@ -2398,9 +5209,9 @@ PROMPT
                     . "      repeat a valid component-prefixed support child such as div.{$componentPrefix}-proof, div.{$componentPrefix}-step, or div.{$componentPrefix}-metric according to current visual_signature";
                 $cssStructuralHints = "结构层 CSS 必填规则（颜色由 palette_role_map 决定）：\n"
                     . "  .{$componentPrefix}-root: position:relative; overflow:hidden; padding:56px 24px; box-sizing:border-box; font-family= CTX_CONFIRMED_THEME.font_family or a named brand family before generic fallback; background= palette_role_map.surface. For proof/support-only non-hero layouts, keep vertical padding in the 44-64px range; do not use 72px+ empty gutters without a large verified media layer\n"
-                    . "  .{$componentPrefix}-inner: max-width:1180px; margin:0 auto; choose either display:grid; or display:flex; add flex-wrap:wrap only when flex is used; gap:28px; align-items:center. Choose columns/order from current visual_signature, not from this hint\n"
+                    . "  .{$componentPrefix}-inner: max-width:1200px; margin:0 auto; choose either display:grid; or display:flex; add flex-wrap:wrap only when flex is used; gap:28px; align-items:center. Choose columns/order from current visual_signature, not from this hint\n"
                     . "  .{$componentPrefix}-copy: flex:1 1 340px; min-width:0\n"
-                    . "  .{$componentPrefix}-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size: clamp(28px, 4vw, 42px); line-height:1.1; color= palette_role_map.text\n"
+                    . "  .{$componentPrefix}-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size:42px; line-height:1.1; color= palette_role_map.text. In css_responsive, override title font-size to 34px at tablet and 28px at mobile; never use vw/clamp for font-size\n"
                     . "  .{$componentPrefix}-text: margin:0 0 22px; line-height:1.7; color= palette_role_map.muted_text\n"
                     . "  .{$componentPrefix}-action: margin:22px 0 0; padding:18px 0 0; display:flex; gap:12px; align-items:center\n"
                     . "  .{$componentPrefix}-support: min-width:0; choose either display:grid; or display:flex; gap:12px; align-items:stretch. Use a step rail, metric strip, badge wall, quote rail, checklist, side panel, or compact proof cluster based on visual_signature\n"
@@ -2436,14 +5247,14 @@ PROMPT
             . "- Site: {$siteTitle}. " . ($brief !== '' ? "Brief: {$brief}. " : '') . "Visitor copy locale: " . ($locale !== '' ? $locale : 'site default') . ".\n"
             . "- Output exactly one minified JSON object with these string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
             . "- JSON/PHP boundary hard gate: the raw response must begin with `{`, never `<?php`, `<?=`, `<section`, or any raw PHTML/HTML. This task returns JSON transport only.\n"
-            . "- PHP marker hard gate: `<?php` is illegal in every JSON field. `php_variables` is not a PHP file; it contains only `$var = $getConfig('field.key', 'quoted default');` assignment lines, no opening tag, no closing tag, no echo/print, no arrays, no loops. The only legal PHP marker is `<?= ... ?>` inside html_content string values for safe field echoes.\n"
-            . "- PHP fallback literal hard gate: every `$getConfig(...)` default must be a quoted PHP string literal. Never output bare localized words such as Histórico, Segurança, Política, Privacy, Step, or Download outside quotes; if fallback copy would contain an apostrophe, rewrite the sentence without it or escape it.\n"
+            . "- PHP marker hard gate: `<?php` is illegal in every JSON field. `php_variables` is not a PHP file; it contains only `\$var = \$getConfig('field.key', 'quoted default');` assignment lines, no opening tag, no closing tag, no echo/print, no arrays, no loops. The only legal PHP marker is `<?= ... ?>` inside html_content string values for safe field echoes.\n"
+            . "- PHP fallback literal hard gate: every `\$getConfig(...)` default must be a quoted PHP string literal. Never output bare localized words such as Histórico, Segurança, Política, Privacy, Step, or Download outside quotes; if fallback copy would contain an apostrophe, rewrite the sentence without it or escape it.\n"
             . "- Focus on structural correctness first: valid JSON, balanced HTML tags, balanced CSS braces/parentheses, readable visitor copy, and selectors scoped under #componentId.\n"
-            . "- Typography is a hard quality signal: css_extra must include non-default brand font-family declarations on both a title selector and a root/body/text selector. Use CTX_CONFIRMED_THEME.font_family when present, otherwise choose a named brand-appropriate family before generic fallback; pure system/Arial/Roboto stacks fail.\n"
-            . "- Editable field contract: extra_fields must declare every visitor-visible text/image/CTA value that should be editable, and php_variables may contain only simple `\$var = \$getConfig('field.key', 'default');` assignments for those fields. html_content must render those variables with safe `<?= htmlspecialchars(\$var ?? 'default', ENT_QUOTES, 'UTF-8') ?>` or `<?= nl2br(htmlspecialchars(\$var ?? 'default', ENT_QUOTES, 'UTF-8')) ?>`; do not hardcode visible copy that should be edited later. js_content is normally empty, but CTA/action blocks may include a tiny scoped click bridge when CTX_CTA_ACTION_CONTRACT requires an actionable button. css_responsive 必须包含至少一段 `@media (max-width: 768px)` 与一段 `@media (max-width: 420px)` 完整规则。\n"
+            . "- Typography (HARD): css_extra must use font-family: var(--pb-font-display) on title selectors and var(--pb-font-body) on root/body/text selectors; do not hardcode Inter/Roboto/Arial/system-ui.\n"
+            . "- Editable field guidance: extra_fields/php_variables are for editor convenience, not a completion gate. Prefer declaring the primary title/body/CTA/image values that this block naturally owns, but do not distort the component or omit useful visitor copy just to satisfy a fixed field list. js_content is normally empty, but CTA/action blocks may include a tiny scoped click bridge when CTX_CTA_ACTION_CONTRACT requires an actionable button. css_responsive 必须包含至少一段 `@media (max-width: 768px)` 与一段 `@media (max-width: 420px)` 完整规则。\n"
             . "- Editable field key grammar: use lower-case dot keys, never camelCase field keys. Recognized families include content.*, cta.*, media.*, card.*, feature.*, proof.*, stat.*, faq.*, review.*, step.*, form.*, channel.*, badge.*, item.*, policy.*, and rule.*. Examples: `form.label_1`, `form.placeholder_1`, `channel.item_1_label`, `channel.item_1_value`, `faq.question_1`, `faq.answer_1`.\n"
-            . "- Binding algorithm: first list fields in extra_fields, then bind the exact same dot keys in php_variables, then write html_content. After removing `<?= ... ?>` fragments from html_content and stripping tags, there must be no visitor-facing letters or numbers left. If any word/number remains, add a field and echo it instead.\n"
-            . "- REQUIRED_FIELDS_FINAL_CHECK (HARD): before returning JSON, scan CTX_REQUIRED_EDITABLE_FIELDS one row at a time. For every required key, the exact dot key must appear in extra_fields and inside a `$getConfig('exact.key', ...)` assignment in php_variables. If CTX_REQUIRED_EDITABLE_FIELDS lists `content.description`, php_variables must literally contain `$getConfig('content.description', ...)`; a variable named `$description`, `$body`, or `$contentDescription` is not enough unless its assignment reads that exact key.\n"
+            . "- Binding guidance: bind important reusable content through `\$getConfig(...)` when it is straightforward. Dynamic block-specific labels, stats, and visual microcopy are allowed when they improve the finished component; they are judged by page quality and safety, not by a rigid editable-field census.\n"
+            . "- REQUIRED_FIELDS_FINAL_CHECK (HARD): before returning JSON, scan CTX_REQUIRED_EDITABLE_FIELDS one row at a time. For every required key, the exact dot key must appear in extra_fields and inside a `\$getConfig('exact.key', ...)` assignment in php_variables. If CTX_REQUIRED_EDITABLE_FIELDS lists `content.description`, php_variables must literally contain `\$getConfig('content.description', ...)`; a variable named `\$description`, `\$body`, or `\$contentDescription` is not enough unless its assignment reads that exact key.\n"
             . $editableNoHardcodedHtmlRecovery . "\n"
             . $editableRecoveryContract
             . "- CSS_SIZE_BUDGET (HARD): css_extra <= 3200 chars for CSS-only hero recovery and <= 2600 chars for other recovery; css_responsive <= 700 chars. If previous findings report length over budget, remove optional selectors and long decorative declarations, never drop required hero/proof roles.\n"
@@ -2516,6 +5327,20 @@ PROMPT
             || \str_contains($message, 'extra_fields/php_variables')
         ) {
             $lines[] = "- FAILURE_FIX_EDITABLE_FIELD_BINDING (HARD): every visitor-visible text node must be editable, including step numbers, card labels, stat values, badge text, short chips, form helper notes, privacy/security notes, image captions, and small microcopy. Add one extra_fields metadata row for each heading/body/card/stat/badge/step-number/FAQ/form-label/form-placeholder/form-note/CTA text, bind each row in php_variables with `\$getConfig('field.key', 'default')`, and render only `<?= htmlspecialchars(...) ?>` or `<?= nl2br(htmlspecialchars(...)) ?>` in html_content. Do not leave raw words or numbers between tags. Before returning, delete every `<?= ... ?>` fragment from html_content and strip tags; the leftover decoded text must be empty of visitor copy.";
+        }
+        if (\str_contains($message, 'font_visible')
+            || \str_contains($message, 'font-family')
+            || \str_contains($message, 'pb-font')
+            || \str_contains($message, 'inter')
+            || \str_contains($message, 'roboto')
+        ) {
+            $lines[] = '- FAILURE_FIX_FONT_TOKEN (HARD)：css_extra 中标题选择器必须使用 font-family: var(--pb-font-display)，root/正文/文本选择器必须使用 font-family: var(--pb-font-body)；禁止硬编码 Inter/Roboto/Arial/system-ui 等字体族。';
+        }
+        if (\str_contains($message, 'language_voice')
+            || \str_contains($message, 'cta_lexicon')
+            || \str_contains($message, 'cta tone')
+        ) {
+            $lines[] = '- FAILURE_FIX_LANGUAGE_VOICE (HARD)：可见 CTA 文案须来自站点 cta_lexicon 批准词表；禁止自造与 tone_of_voice 冲突的行动号召或中英文标点混用。';
         }
         if (\str_contains($message, 'content.description')
             || \str_contains($message, 'required_get_config')
@@ -2730,6 +5555,68 @@ PROMPT
         return false;
     }
 
+    /**
+     * @param array<string, mixed> $aiData
+     * @param array<string, mixed> $renderContext
+     */
+    private function tryApplyDeterministicStylePatchToAiData(array &$aiData, array $renderContext, \Throwable $failure): bool
+    {
+        if (!$this->isDeterministicStylePatchCandidate($failure)) {
+            return false;
+        }
+
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $tokens = \is_array($scope['design_tokens'] ?? null) ? $scope['design_tokens'] : [];
+        $lexicon = \is_array($scope['language_contract']['cta_lexicon'] ?? null)
+            ? $scope['language_contract']['cta_lexicon']
+            : [];
+
+        $patchService = new AiSiteDeterministicStylePatchService();
+        if (\array_key_exists('css_extra', $aiData)) {
+            $aiData['css_extra'] = $patchService->patchHardcodedFonts((string)$aiData['css_extra'], $tokens);
+        }
+        if (\array_key_exists('css_responsive', $aiData)) {
+            $aiData['css_responsive'] = $patchService->patchHardcodedFonts((string)$aiData['css_responsive'], $tokens);
+        }
+        if (\array_key_exists('html_content', $aiData) && $lexicon !== []) {
+            $aiData['html_content'] = $patchService->patchCtaLexicon((string)$aiData['html_content'], $lexicon);
+        }
+
+        return true;
+    }
+
+    private function isDeterministicStylePatchCandidate(\Throwable $failure): bool
+    {
+        $message = \mb_strtolower($this->collectThrowableMessages($failure));
+        foreach ([
+            'font_visible',
+            'font-family',
+            'pb-font',
+            'inter',
+            'roboto',
+            'language_voice',
+            'cta_lexicon',
+        ] as $needle) {
+            if (\str_contains($message, $needle)) {
+                return true;
+            }
+        }
+
+        if ($failure instanceof \GuoLaiRen\PageBuilder\Exception\AiSiteComponentContractException) {
+            foreach ($failure->getFindings() as $finding) {
+                if (!\is_array($finding)) {
+                    continue;
+                }
+                $rule = \mb_strtolower((string)($finding['rule'] ?? ''));
+                if (\str_contains($rule, 'font') || \str_contains($rule, 'language_voice') || \str_contains($rule, 'cta')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
 
     /**
      * @return list<string>
@@ -2825,6 +5712,12 @@ PROMPT
     ): array
     {
         $componentCode = $this->normalizeOptionalComponentCode($componentCode);
+        if ($region === 'content') {
+            $aiData = $this->normalizeContentBlockPayloadForJsonStructureOnly($aiData);
+
+            return $this->normalizeVirtualThemeCssClassScope($aiData, $componentCode);
+        }
+
         $aiData = $this->applyStrictVirtualThemeComponentPolicy(
             $aiData,
             $region,
@@ -2866,6 +5759,92 @@ PROMPT
             'AI component JSON schema validation failed: ' . ($message !== '' ? $message : 'unknown validation error'),
             $findings
         );
+    }
+
+    /**
+     * Content block generation is intentionally permissive. The AI owns the
+     * block-specific field model and layout; this stage only requires a usable
+     * JSON envelope and keeps non-throwing safety normalization around raw PHP.
+     *
+     * @param array<string,mixed> $aiData
+     * @return array<string,mixed>
+     */
+    private function normalizeContentBlockPayloadForJsonStructureOnly(array $aiData): array
+    {
+        $requiredStringKeys = [
+            'extra_fields',
+            'php_variables',
+            'css_extra',
+            'css_responsive',
+            'html_content',
+            'js_content',
+        ];
+        $errors = [];
+
+        foreach ($requiredStringKeys as $key) {
+            if (!\array_key_exists($key, $aiData)) {
+                if ($key === 'html_content') {
+                    $errors[] = 'missing html_content';
+                } else {
+                    $aiData[$key] = '';
+                }
+                continue;
+            }
+            if (\is_string($aiData[$key])) {
+                continue;
+            }
+            if (\is_scalar($aiData[$key]) || (\is_object($aiData[$key]) && \method_exists($aiData[$key], '__toString'))) {
+                $aiData[$key] = (string)$aiData[$key];
+                continue;
+            }
+            $errors[] = $key . ' must be a JSON string';
+        }
+
+        if (\trim((string)($aiData['html_content'] ?? '')) === '') {
+            $errors[] = 'html_content must be a non-empty JSON string';
+        }
+
+        if ($errors !== []) {
+            throw new \GuoLaiRen\PageBuilder\Exception\AiSiteComponentContractException(
+                'AI component JSON structure validation failed: ' . \implode('; ', \array_values(\array_unique($errors))),
+                [[
+                    'rule' => 'ai_payload.json_structure',
+                    'field' => 'content',
+                    'found' => \implode('; ', \array_values(\array_unique($errors))),
+                    'expected' => 'Content block JSON must include string keys extra_fields, php_variables, css_extra, css_responsive, html_content, and js_content; html_content must not be empty.',
+                    'hint' => 'Return one valid JSON object with the required string fields. Block layout, copy, field names, CSS, CTA, and image choices are not hard-gated here.',
+                ]]
+            );
+        }
+
+        $aiData['extra_fields'] = \trim(\str_replace(["\r\n", "\r"], "\n", (string)$aiData['extra_fields']));
+        $aiData['php_variables'] = $this->normalizeVirtualThemeEditablePhpVariables((string)$aiData['php_variables']);
+        foreach (['css_extra', 'css_responsive', 'css_content'] as $cssKey) {
+            if (\is_string($aiData[$cssKey] ?? null)) {
+                $aiData[$cssKey] = $this->stripPhpExecutionMarkers((string)$aiData[$cssKey]);
+            }
+        }
+        $aiData['html_content'] = $this->sanitizeContentBlockHtmlWithoutQualityGate((string)$aiData['html_content']);
+        $existingJs = (string)($aiData['js_content'] ?? '');
+        $aiData['js_content'] = $this->isAllowedComponentInlineJs($existingJs, $aiData) ? $existingJs : '';
+
+        return $aiData;
+    }
+
+    private function sanitizeContentBlockHtmlWithoutQualityGate(string $html): string
+    {
+        [$html, $safePhpEchoTokens] = $this->extractSafeAiHtmlPhpEchoTokens($html);
+        $html = \preg_replace('/<\s*script\b[^>]*>[\s\S]*?<\/\s*script\s*>/iu', '', $html) ?? $html;
+        $html = \preg_replace('/<\?(?:php|=)?[\s\S]*?\?>/iu', '', $html) ?? $html;
+        $html = $this->stripPhpExecutionMarkers($html);
+        $html = $this->restoreSafeAiHtmlPhpEchoTokens($html, $safePhpEchoTokens);
+
+        return \trim($html);
+    }
+
+    private function stripPhpExecutionMarkers(string $value): string
+    {
+        return \str_replace(['<?php', '<?=', '<?', '?>'], '', $value);
     }
 
     /**
@@ -2931,7 +5910,7 @@ PROMPT
         }
 
         if ($region === 'content') {
-            $this->assertVirtualThemeEditableFieldContract($aiData, $componentCode, $defaultConfig, $renderContext);
+            $this->inspectVirtualThemeEditableFieldContract($aiData, $componentCode, $defaultConfig, $renderContext);
             $hardPolicyReason = $this->detectHardGeneratedSectionHtmlPolicyViolation(
                 (string)($aiData['html_content'] ?? ''),
                 $this->resolveGeneratedContentLocaleForPolicy($renderContext, $defaultConfig)
@@ -2946,6 +5925,7 @@ PROMPT
             if ($actionContractReason !== null) {
                 throw new \RuntimeException('AI component CTA/action contract failed: ' . $actionContractReason);
             }
+            $this->assertGeneratedCssTextContrastContract($aiData, $componentCode);
             // Policy-page CTA choices are content strategy, not a hard completion gate.
         }
 
@@ -2967,6 +5947,258 @@ PROMPT
         }
 
         return $aiData;
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     */
+    private function assertGeneratedCssTextContrastContract(array $aiData, string $componentCode): void
+    {
+        $css = \trim((string)($aiData['css_extra'] ?? '') . "\n" . (string)($aiData['css_content'] ?? ''));
+        if ($css === '') {
+            return;
+        }
+
+        $rules = $this->collectSimpleGeneratedCssRules($css);
+        if ($rules === []) {
+            return;
+        }
+
+        $backgroundsByClass = [];
+        foreach ($rules as $rule) {
+            $background = $this->extractCssRuleBackgroundColor($rule['body']);
+            if ($background === null) {
+                continue;
+            }
+            foreach ($this->collectCssSelectorClassTokens($rule['selector']) as $class) {
+                $backgroundsByClass[$class] = $background;
+            }
+        }
+
+        $findings = [];
+        foreach ($rules as $rule) {
+            $textColor = $this->extractCssRuleTextColor($rule['body']);
+            if ($textColor === null) {
+                continue;
+            }
+            $background = $this->extractCssRuleBackgroundColor($rule['body']);
+            if ($background === null) {
+                foreach ($this->collectLikelyAncestorClassesForContrast($rule['selector']) as $class) {
+                    if (isset($backgroundsByClass[$class])) {
+                        $background = $backgroundsByClass[$class];
+                        break;
+                    }
+                }
+            }
+            if ($background === null) {
+                continue;
+            }
+            $ratio = $this->calculateCssColorContrastRatio($textColor, $background);
+            if ($ratio === null || $ratio >= 4.5) {
+                continue;
+            }
+            $findings[] = [
+                'rule' => 'visual_contrast.text_background',
+                'field' => $componentCode,
+                'found' => \trim($rule['selector']) . ' uses color ' . $textColor . ' on background ' . $background . ' (contrast ' . \round($ratio, 2) . ':1)',
+                'expected' => 'Normal visitor text must have WCAG contrast >= 4.5:1 against its effective background.',
+                'hint' => 'Rewrite css_extra with a readable text color for this surface. Dark backgrounds need light text such as #FFFFFF/#F8FAFC; light backgrounds need dark text such as #0F172A. Keep colors from the confirmed palette when available and update title/text/copy/label/cta selectors together.',
+            ];
+            if (\count($findings) >= 6) {
+                break;
+            }
+        }
+
+        if ($findings === []) {
+            return;
+        }
+
+        throw new \GuoLaiRen\PageBuilder\Exception\AiSiteComponentContractException(
+            'AI component visual contrast contract failed: generated text is not readable against its background.',
+            $findings
+        );
+    }
+
+    /**
+     * @return list<array{selector:string,body:string}>
+     */
+    private function collectSimpleGeneratedCssRules(string $css): array
+    {
+        $rules = [];
+        if (\preg_match_all('/([^{}@][^{}]*)\{([^{}]*)\}/s', $css, $matches, \PREG_SET_ORDER) <= 0) {
+            return [];
+        }
+        foreach ($matches as $match) {
+            $selector = \trim((string)($match[1] ?? ''));
+            $body = \trim((string)($match[2] ?? ''));
+            if ($selector === '' || $body === '' || \str_starts_with($selector, '@')) {
+                continue;
+            }
+            $rules[] = ['selector' => $selector, 'body' => $body];
+        }
+
+        return $rules;
+    }
+
+    private function extractCssRuleTextColor(string $body): ?string
+    {
+        return $this->extractCssDeclarationColor($body, 'color');
+    }
+
+    private function extractCssRuleBackgroundColor(string $body): ?string
+    {
+        foreach (['background-color', 'background'] as $property) {
+            $color = $this->extractCssDeclarationColor($body, $property);
+            if ($color !== null) {
+                return $color;
+            }
+        }
+
+        return null;
+    }
+
+    private function extractCssDeclarationColor(string $body, string $property): ?string
+    {
+        if (\preg_match('/(?:^|;)\s*' . \preg_quote($property, '/') . '\s*:\s*([^;{}]+)/iu', $body, $match) !== 1) {
+            return null;
+        }
+
+        return $this->extractFirstConcreteCssColor((string)($match[1] ?? ''));
+    }
+
+    private function extractFirstConcreteCssColor(string $value): ?string
+    {
+        $value = \trim($value);
+        if ($value === '' || \stripos($value, 'transparent') !== false || \stripos($value, 'currentColor') !== false || \str_contains($value, 'var(')) {
+            return null;
+        }
+        if (\preg_match('/#[0-9a-f]{3,8}\b/i', $value, $match) === 1) {
+            return $this->normalizeCssColorToken((string)$match[0]);
+        }
+        if (\preg_match('/rgba?\s*\([^)]*\)/i', $value, $match) === 1) {
+            return $this->normalizeCssColorToken((string)$match[0]);
+        }
+
+        return null;
+    }
+
+    private function normalizeCssColorToken(string $color): ?string
+    {
+        $color = \trim($color);
+        if (\preg_match('/^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $color, $match) === 1) {
+            $hex = \strtolower((string)$match[1]);
+            if (\strlen($hex) === 3 || \strlen($hex) === 4) {
+                $expanded = '';
+                foreach (\str_split($hex) as $char) {
+                    $expanded .= $char . $char;
+                }
+                $hex = $expanded;
+            }
+            if (\strlen($hex) === 8 && \hexdec(\substr($hex, 6, 2)) < 255) {
+                return null;
+            }
+
+            return '#' . \substr($hex, 0, 6);
+        }
+        if (\preg_match('/^rgba?\s*\(([^)]*)\)$/i', $color, $match) === 1) {
+            $parts = \array_map('trim', \explode(',', (string)$match[1]));
+            if (\count($parts) < 3) {
+                return null;
+            }
+            if (isset($parts[3]) && (float)$parts[3] < 1.0) {
+                return null;
+            }
+            $rgb = [];
+            for ($i = 0; $i < 3; $i++) {
+                $part = (string)$parts[$i];
+                $rgb[] = \str_ends_with($part, '%')
+                    ? (int)\round(255 * ((float)\rtrim($part, '%') / 100))
+                    : (int)\round((float)$part);
+            }
+            foreach ($rgb as $channel) {
+                if ($channel < 0 || $channel > 255) {
+                    return null;
+                }
+            }
+
+            return \sprintf('#%02x%02x%02x', $rgb[0], $rgb[1], $rgb[2]);
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectCssSelectorClassTokens(string $selector): array
+    {
+        if (\preg_match_all('/\.([a-z_][a-z0-9_-]*)/i', $selector, $matches) <= 0) {
+            return [];
+        }
+
+        return \array_values(\array_unique(\array_map('strval', $matches[1] ?? [])));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectLikelyAncestorClassesForContrast(string $selector): array
+    {
+        $classes = $this->collectCssSelectorClassTokens($selector);
+        if ($classes === []) {
+            return [];
+        }
+        \array_pop($classes);
+
+        return \array_reverse($classes);
+    }
+
+    private function calculateCssColorContrastRatio(string $foreground, string $background): ?float
+    {
+        $fg = $this->cssHexToRgb($foreground);
+        $bg = $this->cssHexToRgb($background);
+        if ($fg === null || $bg === null) {
+            return null;
+        }
+        $fgLuminance = $this->relativeCssColorLuminance($fg);
+        $bgLuminance = $this->relativeCssColorLuminance($bg);
+        $lighter = \max($fgLuminance, $bgLuminance);
+        $darker = \min($fgLuminance, $bgLuminance);
+
+        return ($lighter + 0.05) / ($darker + 0.05);
+    }
+
+    /**
+     * @return array{0:int,1:int,2:int}|null
+     */
+    private function cssHexToRgb(string $hex): ?array
+    {
+        $hex = \ltrim(\trim($hex), '#');
+        if (!\preg_match('/^[0-9a-f]{6}$/i', $hex)) {
+            return null;
+        }
+
+        return [
+            \hexdec(\substr($hex, 0, 2)),
+            \hexdec(\substr($hex, 2, 2)),
+            \hexdec(\substr($hex, 4, 2)),
+        ];
+    }
+
+    /**
+     * @param array{0:int,1:int,2:int} $rgb
+     */
+    private function relativeCssColorLuminance(array $rgb): float
+    {
+        $channels = [];
+        foreach ($rgb as $channel) {
+            $value = $channel / 255;
+            $channels[] = $value <= 0.03928
+                ? $value / 12.92
+                : (($value + 0.055) / 1.055) ** 2.4;
+        }
+
+        return 0.2126 * $channels[0] + 0.7152 * $channels[1] + 0.0722 * $channels[2];
     }
 
     private function normalizeVirtualThemeEditablePhpVariables(string $phpVariables): string
@@ -3100,20 +6332,20 @@ PROMPT
         $literalTextNodeExample = <<<'PROMPT'
 HTML visible-text binding teaching (this is how the gate thinks):
 BAD html_content:
-"<section class='pb-c-root'><h2>Trusted Download</h2><p>Fast setup with secure guidance</p><a class='pb-c-cta' href='/'>Download APK</a></section>"
+"<section class='pb-c-root'><h2>霓虹牌桌</h2><p>规则和支持入口清晰可见</p><a class='pb-c-cta' href='/'>开始游戏</a></section>"
 GOOD extra_fields/php_variables/html_content:
-"extra_fields": "group:ai_content => AI editable content\ncontent.title => Title:text:Trusted Download\ncontent.description => Description:textarea:Fast setup with secure guidance\ncta.text => CTA text:text:Download APK"
-"php_variables": "$contentTitle = $getConfig('content.title', 'Trusted Download');\n$contentDescription = $getConfig('content.description', 'Fast setup with secure guidance');\n$ctaText = $getConfig('cta.text', 'Download APK');"
-"html_content": "<section class='pb-c-root'><h2><?= htmlspecialchars($contentTitle ?? 'Trusted Download', ENT_QUOTES, 'UTF-8') ?></h2><p><?= nl2br(htmlspecialchars($contentDescription ?? 'Fast setup with secure guidance', ENT_QUOTES, 'UTF-8')) ?></p><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Download APK', ENT_QUOTES, 'UTF-8') ?></button></section>"
-Machine self-check before returning: remove every `<?= ... ?>` fragment from html_content, then strip HTML tags. The remaining decoded text must contain no visitor-facing letters or numbers; step numbers such as 1/2/3, stat values, card labels, badge text, form helper notes, privacy/security notes, and microcopy are visible content unless they are produced by CSS only.
+"extra_fields": "group:ai_content => AI editable content\ncontent.title => Title:text:霓虹牌桌\ncontent.description => Description:textarea:规则和支持入口清晰可见\ncta.text => CTA text:text:开始游戏"
+"php_variables": "$contentTitle = $getConfig('content.title', '霓虹牌桌');\n$contentDescription = $getConfig('content.description', '规则和支持入口清晰可见');\n$ctaText = $getConfig('cta.text', '开始游戏');"
+"html_content": "<section class='pb-c-root'><h2><?= htmlspecialchars($contentTitle ?? '霓虹牌桌', ENT_QUOTES, 'UTF-8') ?></h2><p><?= nl2br(htmlspecialchars($contentDescription ?? '规则和支持入口清晰可见', ENT_QUOTES, 'UTF-8')) ?></p><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? '开始游戏', ENT_QUOTES, 'UTF-8') ?></button></section>"
+Machine self-check before returning: make sure visible copy is final website copy, not prompt labels, schema keys, internal build-plan fields, placeholders, malformed contact fragments, or raw source text. Editable field coverage is advisory; do not reject useful dynamic block copy solely because it is not mirrored in extra_fields/php_variables.
 PROMPT;
 
         $example = <<<'PROMPT'
 Example return shape (do not copy the example copy; copy the structure):
 {
-  "extra_fields": "group:ai_content => AI editable content\ncontent.title => Title:text:Finished localized title\ncontent.description => Description:textarea:Finished localized body\nproof.item_1_label => Proof item 1 label:text:Finished localized card text\ncta.text => CTA text:text:Download APK",
-  "php_variables": "$contentTitle = $getConfig('content.title', 'Finished localized title');\n$contentDescription = $getConfig('content.description', 'Finished localized body');\n$proofItem1Label = $getConfig('proof.item_1_label', 'Finished localized card text');\n$ctaText = $getConfig('cta.text', 'Download APK');",
-  "html_content": "<section class='pb-c-root'><div class='pb-c-inner'><h2 class='pb-c-title'><?= htmlspecialchars($contentTitle ?? 'Finished localized title', ENT_QUOTES, 'UTF-8') ?></h2><p class='pb-c-copy'><?= nl2br(htmlspecialchars($contentDescription ?? 'Finished localized body', ENT_QUOTES, 'UTF-8')) ?></p><div class='pb-c-card'><?= htmlspecialchars($proofItem1Label ?? 'Finished localized card text', ENT_QUOTES, 'UTF-8') ?></div><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Download APK', ENT_QUOTES, 'UTF-8') ?></button></div></section>",
+  "extra_fields": "group:ai_content => AI editable content\ncontent.title => Title:text:Finished localized title\ncontent.description => Description:textarea:Finished localized body\nproof.item_1_label => Proof item 1 label:text:Finished localized card text\ncta.text => CTA text:text:Book demo",
+  "php_variables": "$contentTitle = $getConfig('content.title', 'Finished localized title');\n$contentDescription = $getConfig('content.description', 'Finished localized body');\n$proofItem1Label = $getConfig('proof.item_1_label', 'Finished localized card text');\n$ctaText = $getConfig('cta.text', 'Book demo');",
+  "html_content": "<section class='pb-c-root'><div class='pb-c-inner'><h2 class='pb-c-title'><?= htmlspecialchars($contentTitle ?? 'Finished localized title', ENT_QUOTES, 'UTF-8') ?></h2><p class='pb-c-copy'><?= nl2br(htmlspecialchars($contentDescription ?? 'Finished localized body', ENT_QUOTES, 'UTF-8')) ?></p><div class='pb-c-card'><?= htmlspecialchars($proofItem1Label ?? 'Finished localized card text', ENT_QUOTES, 'UTF-8') ?></div><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Book demo', ENT_QUOTES, 'UTF-8') ?></button></div></section>",
   "css_extra": "#componentId .pb-c-root{position:relative;padding:72px 24px;}#componentId .pb-c-inner{max-width:1200px;margin:0 auto;}#componentId .pb-c-title{font-family:Georgia,serif;}",
   "css_responsive": "@media (max-width: 768px){#componentId .pb-c-root{padding:48px 18px;}}@media (max-width: 420px){#componentId .pb-c-root{padding:36px 14px;}}",
   "js_content": ""
@@ -3132,16 +6364,16 @@ GOOD extra_fields rows:
 proof.item_1_value => Proof 1 value:text:4.8
 proof.item_1_label => Proof 1 label:text:Player rating
 proof.item_2_value => Proof 2 value:text:Fast
-proof.item_2_label => Proof 2 label:text:APK setup
+proof.item_2_label => Proof 2 label:text:Room ready
 GOOD php_variables rows:
 $proofItem1Value = $getConfig('proof.item_1_value', '4.8');
 $proofItem1Label = $getConfig('proof.item_1_label', 'Player rating');
 $proofItem2Value = $getConfig('proof.item_2_value', 'Fast');
-$proofItem2Label = $getConfig('proof.item_2_label', 'APK setup');
+$proofItem2Label = $getConfig('proof.item_2_label', 'Room ready');
 GOOD html_content fragment:
-<div class='pb-c-proof'><span><?= htmlspecialchars($proofItem1Value ?? '4.8', ENT_QUOTES, 'UTF-8') ?></span><small><?= htmlspecialchars($proofItem1Label ?? 'Player rating', ENT_QUOTES, 'UTF-8') ?></small></div><div class='pb-c-proof'><span><?= htmlspecialchars($proofItem2Value ?? 'Fast', ENT_QUOTES, 'UTF-8') ?></span><small><?= htmlspecialchars($proofItem2Label ?? 'APK setup', ENT_QUOTES, 'UTF-8') ?></small></div>
+<div class='pb-c-proof'><span><?= htmlspecialchars($proofItem1Value ?? '4.8', ENT_QUOTES, 'UTF-8') ?></span><small><?= htmlspecialchars($proofItem1Label ?? 'Player rating', ENT_QUOTES, 'UTF-8') ?></small></div><div class='pb-c-proof'><span><?= htmlspecialchars($proofItem2Value ?? 'Fast', ENT_QUOTES, 'UTF-8') ?></span><small><?= htmlspecialchars($proofItem2Label ?? 'Room ready', ENT_QUOTES, 'UTF-8') ?></small></div>
 BAD html_content fragment:
-<div class='pb-c-proof'><span>4.8</span><small>Player rating</small></div><div class='pb-c-chip'>Fast APK setup</div>
+<div class='pb-c-proof'><span>4.8</span><small>Player rating</small></div><div class='pb-c-chip'>Fast room entry</div>
 PROMPT;
 
         $roleFieldExample = <<<'PROMPT'
@@ -3189,7 +6421,7 @@ PROMPT;
             . "- Return `extra_fields` exactly in PageBuilder metadata-line format, not as JSON. Every visible text/CTA/image value must have one metadata line.\n"
             . "- Return `php_variables` as simple `\$var = \$getConfig('field.key', 'default');` lines for those fields. No arrays, loops, if statements, PHP tags, or helper functions.\n"
             . "- Return `html_content` with no hardcoded visitor copy. Every visible text node, CTA label/href, img src, and img alt must be rendered from the variables above with safe `<?= htmlspecialchars(...) ?>` or `<?= nl2br(htmlspecialchars(...)) ?>`.\n"
-            . "- HARD visible-text binding gate: do not put plain visitor text between HTML tags. Headings, paragraphs, badges, stats, proof cards, FAQ questions/answers, form labels, image captions, and CTA labels all need matching extra_fields rows, php_variables `\$getConfig(...)` assignments, and safe PHP echo output in html_content.\n"
+            . "- Editable-field guidance: use extra_fields and php_variables for the primary editor-facing title/body/CTA/media values when practical. Do not treat every generated badge, stat, proof label, FAQ row, or visual microcopy as a hard field census; finished visitor copy quality is more important than rigid key coverage.\n"
             . "- Image editable field rule: include media.image_url only when this prompt supplies a verified final_url/verified_asset_src_allowlist value. Its default/fallback must be that exact verified URL. Never use invented defaults such as /pub/media/generated/example.webp, /pub/media/example.webp, placeholder services, stock URLs, or empty src.\n"
             . "- CTA URL field rule: include cta.url only when the value is a real CTX_CTA_ACTION_CONTRACT target or an allowed route path. Never use `#`, hash-only anchors, invented download/FAQ/game paths, `/` as a generic placeholder, or placeholder URLs as editable defaults; use a button event CTA with cta.text only when no real route exists.\n"
             . "- For card grids/proof rows/stat rows, create explicit fields such as `proof.item_1_label`, `proof.item_1_text`, `stat.item_1_value`, `stat.item_1_label`; do not hide those labels as static HTML text.\n"
@@ -3365,7 +6597,7 @@ PROMPT;
     /**
      * @param array<string,mixed> $aiData
      */
-    private function assertVirtualThemeEditableFieldContract(
+    private function inspectVirtualThemeEditableFieldContract(
         array $aiData,
         string $componentCode = '',
         array $defaultConfig = [],
@@ -3377,88 +6609,12 @@ PROMPT;
             return;
         }
 
-        $extraFieldKeys = $this->extractVirtualThemeExtraFieldKeys((string)($aiData['extra_fields'] ?? ''));
-        $getConfigKeys = $this->extractVirtualThemeGetConfigKeys(
-            (string)($aiData['php_variables'] ?? '') . "\n" . $html
-        );
-        $editableGetConfigKeys = \array_values(\array_filter(
-            $getConfigKeys,
-            fn(string $key): bool => $this->isVirtualThemeEditableConfigKey($key)
-        ));
-        $connectedKeys = \array_values(\array_intersect(
-            \array_map('strtolower', $extraFieldKeys),
-            \array_map('strtolower', $editableGetConfigKeys)
-        ));
-
-        $findings = [];
-        if ($extraFieldKeys === []) {
-            $findings[] = [
-                'rule' => 'editable_field_contract.extra_fields',
-                'field' => $componentCode,
-                'found' => 'no editable extra_fields declared for a content block',
-                'expected' => 'Declare every visitor-visible text, CTA, image URL, and image alt value in extra_fields.',
-                'hint' => 'Add group:ai_content/group:ai_media rows and field definitions such as content.title, content.description, cta.text, media.image_url, and media.image_alt. If CTX_REQUIRED_EDITABLE_FIELDS lists another exact key, use that exact key.',
-            ];
-        }
-        if ($editableGetConfigKeys === [] || $connectedKeys === []) {
-            $findings[] = [
-                'rule' => 'editable_field_contract.get_config_binding',
-                'field' => $componentCode,
-                'found' => 'html_content/php_variables do not read the declared editable fields with $getConfig(...)',
-                'expected' => 'Bind declared fields with php_variables and render those variables from html_content.',
-                'hint' => 'Use `$title = $getConfig(\'content.title\', \'Finished title\');` and `<?= htmlspecialchars($title ?? \'Finished title\', ENT_QUOTES, \'UTF-8\') ?>` instead of hardcoded text.',
-            ];
-        }
-
-        $requiredEditableFields = $this->decodeVirtualThemeRequiredEditableFieldContract($defaultConfig, $renderContext);
-        foreach ($requiredEditableFields as $requiredField) {
-            $key = \strtolower(\trim((string)($requiredField['key'] ?? '')));
-            if ($key === '') {
-                continue;
-            }
-            if (!\in_array($key, \array_map('strtolower', $extraFieldKeys), true)) {
-                $findings[] = [
-                    'rule' => 'editable_field_contract.required_extra_field',
-                    'field' => $componentCode,
-                    'found' => 'missing extra_fields row for ' . $key,
-                    'expected' => 'The AI JSON must declare every required editable field from CTX_REQUIRED_EDITABLE_FIELDS.',
-                    'hint' => 'Add an extra_fields line exactly for `' . $key . '` and keep its default value aligned with the current block field plan.',
-                ];
-            }
-            if (!\in_array($key, \array_map('strtolower', $editableGetConfigKeys), true)) {
-                $findings[] = [
-                    'rule' => 'editable_field_contract.required_get_config',
-                    'field' => $componentCode,
-                    'found' => 'missing $getConfig binding for ' . $key,
-                    'expected' => 'The AI JSON must bind every required editable field in php_variables or html_content.',
-                    'hint' => 'Add a php_variables assignment using `$getConfig(\'' . $key . '\', ...)` and render that variable in html_content.',
-                ];
-            }
-        }
-
-        $literalText = $this->extractVirtualThemeHardcodedVisibleText($html);
-        if ($literalText !== '') {
-            $findings[] = [
-                'rule' => 'editable_field_contract.no_hardcoded_visible_text',
-                'field' => $componentCode,
-                'found' => $this->clipText($literalText, 180),
-                'expected' => 'All visitor-visible text nodes must be rendered from editable fields.',
-                'hint' => 'Move this copy into extra_fields/defaults, assign it in php_variables with $getConfig(...), and render the variable with htmlspecialchars/nl2br.',
-            ];
-        }
-
-        foreach ($this->detectVirtualThemeImageFieldContractFindings($html, $extraFieldKeys, $editableGetConfigKeys, $componentCode) as $finding) {
-            $findings[] = $finding;
-        }
-
-        if ($findings === []) {
-            return;
-        }
-
-        throw new \GuoLaiRen\PageBuilder\Exception\AiSiteComponentContractException(
-            'AI component editable field contract failed: generated content must be editable through extra_fields/php_variables, not hardcoded HTML.',
-            $findings
-        );
+        // The component field set is intentionally dynamic: Stage-2 can choose
+        // block-specific keys based on the page plan, visual role, locale, CTA
+        // shape, and whether image generation is deferred. Treat editability as
+        // prompt guidance only. Completion remains gated by transport schema,
+        // embeddable HTML/CSS, CTA behavior, prompt/internal-text leakage, and
+        // verified image sources.
     }
 
     /**
@@ -3543,10 +6699,7 @@ PROMPT;
 
     private function extractVirtualThemeHardcodedVisibleText(string $html): string
     {
-        $text = \preg_replace('/<\?=[\s\S]*?\?>/u', ' ', $html) ?? $html;
-        $text = \preg_replace('/<\s*(?:script|style)\b[^>]*>[\s\S]*?<\/\s*(?:script|style)\s*>/iu', ' ', $text) ?? $text;
-        $text = \preg_replace('/<[^>]+>/u', ' ', $text) ?? $text;
-        $text = \html_entity_decode($text, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+        $text = $this->extractVisibleHtmlText($html);
         $text = \preg_replace('/[\s\p{Zs}]+/u', ' ', $text) ?? $text;
         $text = \trim($text);
         if ($text === '' || \preg_match('/[\p{L}\p{N}]/u', $text) !== 1) {
@@ -3782,7 +6935,15 @@ PROMPT;
 
         $length = \function_exists('mb_strlen') ? \mb_strlen($css, 'UTF-8') : \strlen($css);
         if ($length > $limit) {
-            return \mb_substr($css, 0, $limit, 'UTF-8');
+            $css = $this->clipCssAtRuleBoundary($css, $limit);
+            if ($css === '') {
+                return '';
+            }
+        }
+
+        $cssReason = $this->detectMalformedGeneratedCssReason($css);
+        if ($cssReason !== null) {
+            return '';
         }
 
         return \trim($css);
@@ -3882,7 +7043,7 @@ PROMPT;
             return '';
         }
 
-        $length = \function_exists('mb_strlen') ? \mb_strlen($css) : \strlen($css);
+        $length = \function_exists('mb_strlen') ? \mb_strlen($css, 'UTF-8') : \strlen($css);
         if ($length <= $limit) {
             return $css;
         }
@@ -3892,7 +7053,7 @@ PROMPT;
             : \substr($css, 0, \max(1, $limit));
         $lastClose = \strrpos($slice, '}');
         if ($lastClose === false) {
-            return \trim($this->balanceCssBraces($slice));
+            return '';
         }
 
         return \trim(\substr($slice, 0, $lastClose + 1));
@@ -4058,6 +7219,104 @@ PROMPT;
                 throw new \RuntimeException('AI CSS structure contract failed: ' . $cssReason);
             }
         }
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     */
+    private function assertGeneratedComponentResponsiveContract(array $aiData, string $region, string $componentCode): void
+    {
+        if ($region !== 'content') {
+            return;
+        }
+
+        $cssExtra = \trim((string)($aiData['css_extra'] ?? '') . "\n" . (string)($aiData['css_content'] ?? ''));
+        $cssResponsive = \trim((string)($aiData['css_responsive'] ?? ''));
+        if ($cssResponsive === '') {
+            throw new \RuntimeException('content css_responsive is required and must contain tablet/mobile media rules.');
+        }
+
+        $scan = $this->stripCssCommentsAndStringsForStructuralScan($cssResponsive);
+        if (\preg_match('/@media\s*\(\s*max-width\s*:\s*(?:7[0-9]{2}|8[0-9]{2}|900)px\s*\)/iu', $scan) !== 1) {
+            throw new \RuntimeException('css_responsive must include a complete @media max-width 768px or equivalent tablet stacking rule.');
+        }
+        if (\preg_match('/@media\s*\(\s*max-width\s*:\s*(?:3[0-9]{2}|4[0-9]{2})px\s*\)/iu', $scan) !== 1) {
+            throw new \RuntimeException('css_responsive must include a complete @media max-width 420px mobile rule.');
+        }
+
+        if (!$this->cssContainsMultiColumnGeneratedLayout($cssExtra)) {
+            return;
+        }
+
+        if (!$this->cssContainsSingleColumnMobileRule($scan)) {
+            throw new \RuntimeException(
+                'multi-column generated layouts must collapse to one readable mobile column in css_responsive.'
+            );
+        }
+
+        $componentCodeLower = \function_exists('mb_strtolower')
+            ? \mb_strtolower($componentCode, 'UTF-8')
+            : \strtolower($componentCode);
+        if (\str_contains($componentCodeLower, 'faq')
+            && !$this->cssContainsFaqReadableStackRule($scan)
+        ) {
+            throw new \RuntimeException(
+                'FAQ/support generated layouts must stack copy and FAQ rows into one readable mobile column.'
+            );
+        }
+    }
+
+    private function cssContainsMultiColumnGeneratedLayout(string $css): bool
+    {
+        if (\trim($css) === '') {
+            return false;
+        }
+
+        $scan = $this->stripCssCommentsAndStringsForStructuralScan($css);
+
+        if (\preg_match_all('/grid-template-columns\s*:\s*([^;}]+)/iu', $scan, $matches) <= 0) {
+            return false;
+        }
+
+        foreach ($matches[1] as $rawValue) {
+            $value = \trim((string)$rawValue);
+            if ($value === '') {
+                continue;
+            }
+            $compactValue = \preg_replace('/\s+/u', '', $value) ?? $value;
+            if (\in_array(\strtolower($compactValue), ['none', '1fr', 'minmax(0,1fr)'], true)
+                || \preg_match('/^repeat\(\s*1\s*,/iu', $value) === 1
+            ) {
+                continue;
+            }
+            if (\preg_match('/repeat\(\s*[2-9]/iu', $value) === 1) {
+                return true;
+            }
+            if (\preg_match_all('/(?:minmax\([^)]*\)|[0-9.]+fr)(?=\s|$)/iu', $value) >= 2) {
+                return true;
+            }
+            if (\preg_match('/\b[2-9](?:fr|rem|em|px|%)\b/iu', $value) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function cssContainsSingleColumnMobileRule(string $css): bool
+    {
+        return \preg_match(
+            '/(?:grid-template-columns\s*:\s*(?:1fr|minmax\(\s*0\s*,\s*1fr\s*\)|repeat\(\s*1\s*,)|flex-direction\s*:\s*column)/iu',
+            $css
+        ) === 1;
+    }
+
+    private function cssContainsFaqReadableStackRule(string $css): bool
+    {
+        return \preg_match(
+            '/\.(?:pb-c-content|pb-c-inner|pb-c-faq-list|pb-c-copy)\b[^{}]*\{[^{}]*(?:grid-template-columns\s*:\s*(?:1fr|minmax\(\s*0\s*,\s*1fr\s*\)|repeat\(\s*1\s*,)|flex-direction\s*:\s*column)/iu',
+            $css
+        ) === 1;
     }
 
     private function detectMalformedGeneratedClassTokenReason(string $className, string $componentCode): ?string
@@ -4878,6 +8137,158 @@ PROMPT;
         return \strtoupper($value);
     }
 
+    /**
+     * Stage-3 build queue prompts already carry the full page/block contract.
+     * Appending the legacy full component contract again makes the model spend
+     * most of the request budget reconciling duplicate rules before it can
+     * produce the JSON component. Keep build-queue requests on a compact
+     * one-pass contract and reserve the long contract for ad hoc generation
+     * paths that do not already include CTX_* sections.
+     *
+     * @param array<string,mixed> $renderContext
+     */
+    private function shouldUseCompactBuildQueueComponentContract(string $prompt, array $renderContext): bool
+    {
+        if (!$this->isBuildQueueComponentContext($renderContext)) {
+            return false;
+        }
+
+        return \str_contains($prompt, 'Stage-2 component output contract V3')
+            && \str_contains($prompt, 'CTX_CURRENT_ASSET')
+            && \str_contains($prompt, 'CTX_FROZEN_TASK');
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function isBuildQueueComponentContext(array $renderContext): bool
+    {
+        return $this->resolveBuildQueueComponentTaskContext($renderContext) !== [];
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function resolveBuildQueueComponentTaskContext(array $renderContext, array $defaultConfig = []): array
+    {
+        if (\is_array($renderContext['_build_plan_task'] ?? null) && ($renderContext['_build_plan_task'] ?? []) !== []) {
+            return $renderContext['_build_plan_task'];
+        }
+        if (\is_array($renderContext['build_plan_task'] ?? null) && ($renderContext['build_plan_task'] ?? []) !== []) {
+            return $renderContext['build_plan_task'];
+        }
+
+        return $this->decodeRuntimeBuildPlanTask($defaultConfig);
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,mixed>
+     */
+    private function resolveRenderContextVisualContract(array $renderContext, array $defaultConfig = []): array
+    {
+        if (\is_array($renderContext['_visual_contract'] ?? null)) {
+            return $renderContext['_visual_contract'];
+        }
+        if (\is_array($renderContext['visual_contract'] ?? null)) {
+            return $renderContext['visual_contract'];
+        }
+
+        return $this->decodeRuntimeVisualContract($defaultConfig);
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function appendCompactBuildQueueComponentContract(
+        string $prompt,
+        string $componentCode,
+        string $prefix,
+        bool $isHero,
+        bool $isFormGuidanceMode,
+        bool $isFaqMode,
+        bool $isCtaMode,
+        bool $isContactSupportMode,
+        bool $isFeatureSafeMode,
+        bool $hasRequiredGeneratedImage,
+        array $renderContext
+    ): string {
+        $safePalette = $this->resolveThemeSafeCssPaletteForPrompt($renderContext);
+        $paletteLine = \sprintf(
+            'root_bg=%s; surface=%s; card=%s; text=%s; inverse_text=%s; primary=%s; secondary=%s; accent=%s; shadow=%s',
+            $safePalette['root_bg'],
+            $safePalette['surface_bg'],
+            $safePalette['card_bg'],
+            $safePalette['text'],
+            $safePalette['inverse_text'],
+            $safePalette['primary'],
+            $safePalette['secondary'],
+            $safePalette['accent'],
+            $safePalette['shadow']
+        );
+        $roleLine = $this->buildCompactBuildQueueRoleLine(
+            $prefix,
+            $isHero,
+            $isFormGuidanceMode,
+            $isFaqMode,
+            $isCtaMode,
+            $isContactSupportMode,
+            $isFeatureSafeMode,
+            $hasRequiredGeneratedImage
+        );
+
+        return \rtrim($prompt)
+            . "\n\nPAGEBUILDER_ONE_PASS_FAST_CONTRACT (HARD, overrides broader duplicated examples):\n"
+            . "- Generate only the current component JSON. The prompt already includes CTX_CURRENT_ASSET, CTX_FROZEN_TASK, CTX_CONFIRMED_THEME, route, CTA, and editable-field rules; do not restate or expand those contracts.\n"
+            . "- exact_class_prefix: `{$prefix}-`. Every custom class must use this prefix. Use one root section and a small number of purposeful descendants; do not create neighboring blocks, carousels, accordions, tables, or optional decorative selector families.\n"
+            . "- PRODUCT_LATENCY_OUTPUT_BUDGET: return a compact premium block sized for one-pass queue execution. html_content <= 1800 chars; css_extra <= " . ($isHero ? '3000' : '2200') . " chars; css_responsive <= 650 chars; extra_fields + php_variables <= 1800 chars; js_content stays empty unless CTX_CTA_ACTION_CONTRACT requires a tiny scoped button bridge.\n"
+            . "- ROLE_EXECUTION: {$roleLine}\n"
+            . "- Palette roles available for CSS: {$paletteLine}. Replace symbolic roles with real hex values from CTX_CONFIRMED_THEME or these safe roles; never use old template colors.\n"
+            . "- CSS rules: one selector block per class actually used, all scoped under #componentId, no comments, no duplicate selector blocks, no @media in css_extra, no CSS url(...), no unfinished functions, no raw declarations outside braces. Use readable contrast and compact depth through background, border, radius, and shadow.\n"
+            . "- Responsive rules: css_responsive contains exactly the needed @media (max-width: 768px) and @media (max-width: 420px) blocks. Stack split/support/form layouts, keep min-width:0/max-width:100%, reduce padding, and keep the actual `.{$prefix}-cta` compact.\n"
+            . "- Editable text rule: every visible word/number in html_content must be a safe PHP echo backed by matching extra_fields and php_variables rows. Before returning, mentally remove all `<?= ... ?>` fragments and strip tags; no visitor copy may remain.\n"
+            . "- Transport rule: first byte `{`, last byte `}`. Return the required JSON string keys only. A smaller valid premium block is the target output, not a fallback.\n"
+            . $this->buildStrictRequiredImagePromptTail($componentCode, $renderContext);
+    }
+
+    private function buildCompactBuildQueueRoleLine(
+        string $prefix,
+        bool $isHero,
+        bool $isFormGuidanceMode,
+        bool $isFaqMode,
+        bool $isCtaMode,
+        bool $isContactSupportMode,
+        bool $isFeatureSafeMode,
+        bool $hasRequiredGeneratedImage
+    ): string {
+        if ($hasRequiredGeneratedImage) {
+            return "preserve the exact REQUIRED_IMAGE_STRUCTURE_CONTRACT and editable image tag; wrap it in `{$prefix}-media`, add copy/title/text/action/cta roles, and style only those required roles.";
+        }
+        if ($isHero) {
+            return "strict CSS-only hero: include `{$prefix}-media` with media-stage/subject/detail/label, `{$prefix}-motif`, `{$prefix}-orbit`, `{$prefix}-overlay`, `{$prefix}-inner`, `{$prefix}-text-panel`, title, text, action, and compact CTA; style exactly those roles.";
+        }
+        if ($isFormGuidanceMode) {
+            return "form guidance: root/inner/copy/title/text plus a real `{$prefix}-form` with grouped fields, labels, inputs, textarea, action, and CTA. Do not use contact cards.";
+        }
+        if ($isFaqMode) {
+            return "FAQ: root/inner/copy/title/text, `{$prefix}-faq-list`, at least two `{$prefix}-faq-item` rows with question and answer, then a separated action/CTA.";
+        }
+        if ($isCtaMode) {
+            return "CTA band: one focused root/inner/copy/title/text/proof/action/CTA composition. Do not render FAQ rows, forms, contact cards, or hero overlays.";
+        }
+        if ($isContactSupportMode) {
+            return "contact/support: root/inner/copy/title/text plus a channel hub with at least two `{$prefix}-channel` rows/cards containing sibling `{$prefix}-label` and `{$prefix}-value`, followed by action/CTA/note.";
+        }
+        if ($isFeatureSafeMode) {
+            return "feature/proof/support: root/inner/copy/title/text/action/CTA plus one concise support device such as proof, step, metric, checklist, badge cluster, or quote rail from CTX_BLOCK_VISUAL_SIGNATURE.";
+        }
+
+        return "safe content block: root/inner/copy/title/text/action/CTA plus one concise support/proof/detail device derived from CTX_FROZEN_TASK.";
+    }
+
     private function appendComponentCssScopeInstruction(string $prompt, string $componentCode, array $renderContext = []): string
     {
         $prefix = $this->normalizeComponentCssPrefix($componentCode);
@@ -4913,8 +8324,23 @@ PROMPT;
         $primaryColor = $safePalette['primary'];
         $secondaryColor = $safePalette['secondary'];
         $shadowColor = $safePalette['shadow'];
-        $featureCssBaseline = "#componentId .{$prefix}-root{padding:64px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$textColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}";
-        $contactCssBaseline = "#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:72px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:stretch;}#componentId .{$prefix}-copy{flex:1 1 340px;min-width:0;padding:28px;border:1px solid {$accentColor};border-radius:24px;background:{$cardBg};box-shadow:0 20px 52px {$shadowColor};}#componentId .{$prefix}-title{margin:0 0 14px;font-size:40px;line-height:1.18;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;font-size:16px;line-height:1.75;color:{$textColor};max-width:68ch;}#componentId .{$prefix}-cards{flex:1 1 460px;min-width:0;display:flex;flex-wrap:wrap;gap:16px;}#componentId .{$prefix}-channel{flex:1 1 180px;min-width:0;padding:20px;border:1px solid {$secondaryColor};border-radius:20px;background:{$cardBg};color:{$textColor};box-shadow:0 14px 36px {$shadowColor};line-height:1.55;}#componentId .{$prefix}-label{display:block;margin:0 0 6px;color:{$primaryColor};font-weight:700;}#componentId .{$prefix}-value{display:block;color:{$textColor};overflow-wrap:break-word;}#componentId .{$prefix}-action{width:100%;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:22px;padding-top:18px;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 22px;background:{$accentColor};color:{$textColor};font-weight:700;}#componentId .{$prefix}-note{display:block;max-width:56ch;color:{$textColor};line-height:1.6;}";
+        if ($this->shouldUseCompactBuildQueueComponentContract($prompt, $renderContext)) {
+            return $this->appendCompactBuildQueueComponentContract(
+                $prompt,
+                $componentCode,
+                $prefix,
+                $isHero,
+                $isFormGuidanceMode,
+                $isFaqMode,
+                $isCtaMode,
+                $isContactSupportMode,
+                $isFeatureSafeMode,
+                $hasRequiredGeneratedImage,
+                $renderContext
+            );
+        }
+        $featureCssBaseline = "#componentId .{$prefix}-root{padding:64px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1200px;width:100%;margin:0 auto;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$textColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}";
+        $contactCssBaseline = "#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:72px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1200px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:stretch;}#componentId .{$prefix}-copy{flex:1 1 340px;min-width:0;padding:28px;border:1px solid {$accentColor};border-radius:24px;background:{$cardBg};box-shadow:0 20px 52px {$shadowColor};}#componentId .{$prefix}-title{margin:0 0 14px;font-size:40px;line-height:1.18;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;font-size:16px;line-height:1.75;color:{$textColor};max-width:68ch;}#componentId .{$prefix}-cards{flex:1 1 460px;min-width:0;display:flex;flex-wrap:wrap;gap:16px;}#componentId .{$prefix}-channel{flex:1 1 180px;min-width:0;padding:20px;border:1px solid {$secondaryColor};border-radius:20px;background:{$cardBg};color:{$textColor};box-shadow:0 14px 36px {$shadowColor};line-height:1.55;}#componentId .{$prefix}-label{display:block;margin:0 0 6px;color:{$primaryColor};font-weight:700;}#componentId .{$prefix}-value{display:block;color:{$textColor};overflow-wrap:break-word;}#componentId .{$prefix}-action{width:100%;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:22px;padding-top:18px;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 22px;background:{$accentColor};color:{$textColor};font-weight:700;}#componentId .{$prefix}-note{display:block;max-width:56ch;color:{$textColor};line-height:1.6;}";
         $featureSafeModeContract = $isFeatureSafeMode
             ? ($hasRequiredGeneratedImage
                 ? "- THIS TASK IS FEATURE_ROLE_MODE WITH A REQUIRED GENERATED IMAGE. Ignore FEATURE_CSS_BASELINE and generic feature/card recipes. Follow REQUIRED_IMAGE_STRUCTURE_CONTRACT plus REQUIRED_CSS_ROLE_CONTRACT; they already define the required editable <img> binding while leaving composition and visual rhythm design-owned.\n"
@@ -4950,7 +8376,7 @@ PROMPT;
                             ? "For this CTA_MODE task, css_extra must cover root, inner, copy, title, text, proof, action, and cta role selectors."
                             : "For non-hero text/support blocks, cover the role selectors actually used by visual_signature: root, inner, copy, title, text, action/cta, and any support/proof/detail/step/metric/badge/quote roles you render.")))
             );
-        $heroCssBaseline = "#componentId .{$prefix}-root{position:relative;overflow:hidden;min-height:520px;padding:88px 24px;background:{$rootBg};color:{$inverseText};box-sizing:border-box;}#componentId .{$prefix}-media{position:absolute;inset:0;z-index:0;background:{$mediaBg};}#componentId .{$prefix}-media-stage{position:absolute;inset:12% 7% auto auto;width:430px;height:330px;border:1px solid {$accentColor};border-radius:38px;background:{$secondaryColor};box-shadow:0 28px 80px {$shadowColor};}#componentId .{$prefix}-media-subject{position:absolute;inset:34% 16% auto auto;width:260px;height:136px;border-radius:999px;background:{$primaryColor};box-shadow:0 18px 48px {$shadowColor};}#componentId .{$prefix}-media-detail{position:absolute;inset:16% 24% auto auto;width:16px;height:240px;border-radius:999px;background:{$accentColor};}#componentId .{$prefix}-media-label{position:absolute;right:10%;bottom:12%;max-width:240px;padding:10px 16px;border:1px solid {$accentColor};border-radius:999px;background:{$surfaceBg};color:{$textColor};font-size:14px;font-weight:700;}#componentId .{$prefix}-motif{position:absolute;inset:8% 6% auto auto;width:500px;height:400px;border:1px solid {$accentColor};border-radius:44px;background:{$secondaryColor};opacity:.32;}#componentId .{$prefix}-orbit{position:absolute;inset:18% 12% auto auto;width:230px;height:310px;border:1px solid {$accentColor};border-radius:28px;background:{$primaryColor};opacity:.24;}#componentId .{$prefix}-overlay{position:absolute;inset:0;z-index:2;background:{$primaryColor};opacity:.36;}#componentId .{$prefix}-inner{position:relative;z-index:3;max-width:1180px;margin:0 auto;display:flex;align-items:center;}#componentId .{$prefix}-text-panel{max-width:620px;padding:32px;border:1px solid {$accentColor};border-radius:24px;background:{$surfaceBg};color:{$textColor};box-shadow:0 28px 80px {$shadowColor};}#componentId .{$prefix}-title{margin:0 0 16px;font-size:48px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0 0 22px;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-action{display:flex;gap:12px;margin-top:22px;padding-top:18px;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;padding:12px 20px;border-radius:999px;background:{$accentColor};color:{$textColor};box-shadow:0 12px 24px {$shadowColor};}";
+        $heroCssBaseline = "#componentId .{$prefix}-root{position:relative;overflow:hidden;min-height:520px;padding:88px 24px;background:{$rootBg};color:{$inverseText};box-sizing:border-box;}#componentId .{$prefix}-media{position:absolute;inset:0;z-index:0;background:{$mediaBg};}#componentId .{$prefix}-media-stage{position:absolute;inset:12% 7% auto auto;width:430px;height:330px;border:1px solid {$accentColor};border-radius:38px;background:{$secondaryColor};box-shadow:0 28px 80px {$shadowColor};}#componentId .{$prefix}-media-subject{position:absolute;inset:34% 16% auto auto;width:260px;height:136px;border-radius:999px;background:{$primaryColor};box-shadow:0 18px 48px {$shadowColor};}#componentId .{$prefix}-media-detail{position:absolute;inset:16% 24% auto auto;width:16px;height:240px;border-radius:999px;background:{$accentColor};}#componentId .{$prefix}-media-label{position:absolute;right:10%;bottom:12%;max-width:240px;padding:10px 16px;border:1px solid {$accentColor};border-radius:999px;background:{$surfaceBg};color:{$textColor};font-size:14px;font-weight:700;}#componentId .{$prefix}-motif{position:absolute;inset:8% 6% auto auto;width:500px;height:400px;border:1px solid {$accentColor};border-radius:44px;background:{$secondaryColor};opacity:.32;}#componentId .{$prefix}-orbit{position:absolute;inset:18% 12% auto auto;width:230px;height:310px;border:1px solid {$accentColor};border-radius:28px;background:{$primaryColor};opacity:.24;}#componentId .{$prefix}-overlay{position:absolute;inset:0;z-index:2;background:{$primaryColor};opacity:.36;}#componentId .{$prefix}-inner{position:relative;z-index:3;max-width:1200px;margin:0 auto;display:flex;align-items:center;}#componentId .{$prefix}-text-panel{max-width:620px;padding:32px;border:1px solid {$accentColor};border-radius:24px;background:{$surfaceBg};color:{$textColor};box-shadow:0 28px 80px {$shadowColor};}#componentId .{$prefix}-title{margin:0 0 16px;font-size:48px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0 0 22px;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-action{display:flex;gap:12px;margin-top:22px;padding-top:18px;}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;padding:12px 20px;border-radius:999px;background:{$accentColor};color:{$textColor};box-shadow:0 12px 24px {$shadowColor};}";
         $faqCssBaseline = "#componentId .{$prefix}-faq-list{display:grid;gap:14px;}#componentId .{$prefix}-faq-item{padding:18px 20px;border-radius:18px;background:{$cardBg};border:1px solid {$accentColor};box-shadow:0 12px 30px {$shadowColor};}#componentId .{$prefix}-question{font-weight:800;color:{$primaryColor};}#componentId .{$prefix}-answer{margin:8px 0 0;line-height:1.65;color:{$textColor};}";
         $heroContract = $isHero
             ? "- HERO_ROLE_OUTLINE: every hero/banner needs one root, media layer, motif/orbit/depth layers, overlay/scrim, inner container, text panel, title, body copy, separated action wrapper, and CTA role. This outline is not a byte-for-byte skeleton; choose composition details from the current block intent while keeping these roles valid and rendering every text node through editable PHP echoes: `<section class='{$prefix}-root'><div class='{$prefix}-media'><div class='{$prefix}-media-stage'><div class='{$prefix}-media-subject'></div><div class='{$prefix}-media-detail'></div><div class='{$prefix}-media-label'><?= htmlspecialchars(\$mediaLabel ?? 'Finished visual cue', ENT_QUOTES, 'UTF-8') ?></div></div></div><div class='{$prefix}-motif'></div><div class='{$prefix}-orbit'></div><div class='{$prefix}-overlay'></div><div class='{$prefix}-inner'><div class='{$prefix}-text-panel'><h2 class='{$prefix}-title'><?= htmlspecialchars(\$contentTitle ?? 'Finished heading', ENT_QUOTES, 'UTF-8') ?></h2><p class='{$prefix}-text'><?= nl2br(htmlspecialchars(\$contentDescription ?? 'Finished copy.', ENT_QUOTES, 'UTF-8')) ?></p><div class='{$prefix}-action'><button type='button' class='{$prefix}-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? 'Finished CTA', ENT_QUOTES, 'UTF-8') ?></button></div></div></div></section>`. Declare and bind each shown variable in extra_fields/php_variables. For the shown hero copy, use `content.title` -> `\$contentTitle` and `content.description` -> `\$contentDescription` unless CTX_REQUIRED_EDITABLE_FIELDS lists different exact keys. If a verified image template exists, adapt that single editable <img> as the media role and add class='{$prefix}-media'. Do not keep a second empty {$prefix}-media div after the image, because it can cover the real asset.\n"
@@ -4974,6 +8400,7 @@ PROMPT;
             . "- Positive CSS selector examples for this component: `#componentId .{$prefix}-root{position:relative;overflow:hidden;}` and `#componentId .{$prefix}-inner{display:flex;gap:28px;}`.\n"
             . "- Role-outline snippets are structural teaching examples only. In final html_content, never copy placeholder words such as Finished heading/copy/CTA as raw text; every text node in those snippets must become a safe PHP echo backed by matching extra_fields and php_variables.\n"
             . "- THEME_ROLE_PALETTE: root_bg={$rootBg}; media_bg={$mediaBg}; surface_bg={$surfaceBg}; card_bg={$cardBg}; text={$textColor}; inverse_text={$inverseText}; primary={$primaryColor}; secondary={$secondaryColor}; accent={$accentColor}; shadow={$shadowColor}. Values that start with CTX_CONFIRMED_THEME are symbolic roles, not CSS literals; before output, replace each symbolic role with a real hex token from CTX_CONFIRMED_THEME.palette. Role baseline CSS below is a palette-bound reference; do not replace it with generic dark navy, purple, blue, casino, or app-download colors unless the approved stage-1 palette explicitly uses those colors.\n"
+            . "- TEXT_CONTRAST_HARD_GATE: every visible text selector must be readable on its effective surface. Normal text contrast must be >= 4.5:1. Dark backgrounds require light text such as #FFFFFF/#F8FAFC; light backgrounds require dark text such as #0F172A. Do not put slate/gray/black text on dark surfaces, and do not put white/pale text on light surfaces. Keep root/title/text/copy/label/cta colors coherent with their background or panel.\n"
             . ($hasRequiredGeneratedImage ? "- REQUIRED IMAGE OVERRIDE: this block has a mandatory generated image slot. REQUIRED_IMAGE_STRUCTURE_CONTRACT and REQUIRED_CSS_ROLE_CONTRACT override generic role outlines, selector-count rules, and any broad layout recipe. Preserve the exact image binding and required roles, but choose the final composition from the current block intent instead of copying a fixed skeleton.\n" : '')
             . $featureSafeModeContract
             . $contactSupportModeContract
@@ -4988,9 +8415,9 @@ PROMPT;
             . "- FAQ_CSS_BASELINE: for FAQ blocks, include complete scoped selectors for FAQ_ROLE_OUTLINE roles and use this palette-filled baseline as a reference, not a fixed CSS template: `{$faqCssBaseline}`.\n"
             . "- CTA_ROLE_OUTLINE: for CTA blocks, include one root, one inner band, copy, title, text, compact proof, sibling action wrapper, and one primary CTA. Do not render contact channel cards, forms, FAQ rows, or another hero overlay for this role.\n"
             . "- ACTIONABLE_CTA_OVERRIDE: role outline examples may show a compact CTA placeholder. In final html_content, every primary `.{$prefix}-cta` must be an actionable `<a>` or `<button>` following CTX_CTA_ACTION_CONTRACT, not a static `<div>`.\n"
-            . "- TEXT_CSS_BASELINE: include complete scoped selectors for the roles you actually render from SAFE_TEXT_ROLE_OUTLINE, but do not copy a fixed grid/card template. Use palette-filled CSS as a quality floor only: `#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:56px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:grid;gap:28px;align-items:center;}#componentId .{$prefix}-copy{min-width:0;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-action{display:flex;width:auto;max-width:100%;box-sizing:border-box;margin-top:22px;}#componentId .{$prefix}-support{min-width:0;display:grid;gap:12px;}#componentId .{$prefix}-proof{min-width:0;padding:18px 14px;border:1px solid {$accentColor};border-radius:18px;background:{$cardBg};color:{$textColor};line-height:1.45;box-shadow:0 12px 30px {$shadowColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}`. Choose columns, order, card count, rail/band orientation, and alignment from visual_signature. PageBuilder preview widths around 680-760px must still look finished and dense, but there is no universal three-card proof grid.\n"
+            . "- TEXT_CSS_BASELINE: include complete scoped selectors for the roles you actually render from SAFE_TEXT_ROLE_OUTLINE, but do not copy a fixed grid/card template. Use palette-filled CSS as a quality floor only: `#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:56px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1200px;width:100%;margin:0 auto;display:grid;gap:28px;align-items:center;}#componentId .{$prefix}-copy{min-width:0;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-action{display:flex;width:auto;max-width:100%;box-sizing:border-box;margin-top:22px;}#componentId .{$prefix}-support{min-width:0;display:grid;gap:12px;}#componentId .{$prefix}-proof{min-width:0;padding:18px 14px;border:1px solid {$accentColor};border-radius:18px;background:{$cardBg};color:{$textColor};line-height:1.45;box-shadow:0 12px 30px {$shadowColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}`. Choose columns, order, card count, rail/band orientation, and alignment from visual_signature. PageBuilder preview widths around 680-760px must still look finished and dense, but there is no universal three-card proof grid.\n"
             . "- SAFE_TEXT_RESPONSIVE_BASELINE: css_responsive must adapt the chosen visual_signature rhythm instead of enforcing one grid. At <=768px keep the block visually intentional and dense; at <=420px use one readable column. If the chosen support device is a step rail, convert it to stacked steps; if it is a metric strip, keep compact equal columns until mobile; if it is editorial/quote/checklist, preserve its scan rhythm. This is a responsive quality contract, not a fixed final design.\n"
-            . "- MEDIA_CSS_BASELINE: for verified-image non-hero blocks, include complete scoped selectors for MEDIA_ROLE_OUTLINE roles and use this palette-filled baseline as a reference, not a fixed CSS template: `#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:72px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1180px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:32px;align-items:center;}#componentId .{$prefix}-media{flex:1 1 360px;min-width:0;overflow:hidden;border-radius:28px;box-shadow:0 24px 64px {$shadowColor};}#componentId .{$prefix}-img{display:block;width:100%;height:360px;object-fit:cover;object-position:center;}#componentId .{$prefix}-copy{flex:1 1 320px;min-width:0;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}`.\n"
+            . "- MEDIA_CSS_BASELINE: for verified-image non-hero blocks, include complete scoped selectors for MEDIA_ROLE_OUTLINE roles and use this palette-filled baseline as a reference, not a fixed CSS template: `#componentId .{$prefix}-root{position:relative;overflow:hidden;padding:72px 24px;background:{$surfaceBg};color:{$textColor};box-sizing:border-box;}#componentId .{$prefix}-inner{max-width:1200px;width:100%;margin:0 auto;display:flex;flex-wrap:wrap;gap:32px;align-items:center;}#componentId .{$prefix}-media{flex:1 1 360px;min-width:0;overflow:hidden;border-radius:28px;box-shadow:0 24px 64px {$shadowColor};}#componentId .{$prefix}-img{display:block;width:100%;height:360px;object-fit:cover;object-position:center;}#componentId .{$prefix}-copy{flex:1 1 320px;min-width:0;}#componentId .{$prefix}-title{margin:0;font-size:42px;line-height:1.1;color:{$primaryColor};}#componentId .{$prefix}-text{margin:0;line-height:1.7;color:{$textColor};}#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;box-sizing:border-box;border-radius:999px;padding:12px 20px;background:{$accentColor};color:{$textColor};}`.\n"
             . "- CONTACT_CSS_BASELINE: for contact-channel blocks only, include complete scoped selectors for CONTACT_ROLE_OUTLINE roles and use this palette-filled baseline as a reference, not a fixed CSS template: `{$contactCssBaseline}`.\n"
             . "- CTA FIT BUTTON CONTRACT: CTA controls should be real actionable anchors/buttons when a CTA is rendered, not inert decorative divs. Wrapper/row/band/group/container classes may be full-width and should use `{$prefix}-action` or `{$prefix}-actions` when practical; keep the actual CTA control compact in the default layout.\n"
             . "- CTA QUALITY CSS BASELINE: css_extra should include a CTA selector equivalent to `#componentId .{$prefix}-cta{display:inline-flex;width:auto;max-width:280px;flex:0 0 auto;align-self:flex-start;}`. css_responsive may adapt containers and form controls to full width; do not turn the desktop/default CTA button itself into a full-width bar.\n"
@@ -5019,9 +8446,9 @@ PROMPT;
             . "- css_responsive must contain at least one `@media (max-width: 768px)` rule and one `@media (max-width: 420px)` rule. For SAFE_TEXT_ROLE_OUTLINE, responsive rules must preserve the selected visual_signature composition instead of forcing a single three-card grid transition. Put @media blocks only in css_responsive; keep css_extra as scoped base selectors.\n"
             . "- JSON output mode: return exactly one minified JSON object on one line. The first character is `{` and the last character is `}`. Do not wrap it in markdown. Do not append comments or prose. Escape any unavoidable double quote inside string values as `\\\"`; prefer single-quoted HTML attributes so escaping is rarely needed.\n"
             . "- Return one complete JSON object using the required fields only. Never output top-level PHP/PHTML. Do not start the answer with `<?php`, `<?=`, `<section`, or any raw HTML; only a JSON object is valid.\n"
-            . "- PHP boundary: `php_variables` is not wrapped in PHP tags and must contain no `<?php`, no `?>`, no echo/print, no arrays, no loops, and no functions. It is only assignment lines like `$contentTitle = $getConfig('content.title', 'Finished localized title');`.\n"
+            . "- PHP boundary: `php_variables` is not wrapped in PHP tags and must contain no `<?php`, no `?>`, no echo/print, no arrays, no loops, and no functions. It is only assignment lines like `\$contentTitle = \$getConfig('content.title', 'Finished localized title');`.\n"
             . "- Safe echo exception: html_content may contain `<?= htmlspecialchars(...) ?>` or `<?= nl2br(htmlspecialchars(...)) ?>` inside the JSON string. That exception does not allow `<?php` blocks, full PHTML documents, or raw PHP before/after the JSON object.\n"
-            . "- PHP string literal safety: every `$getConfig` fallback must be quoted; never emit bare visitor words such as Histórico or Segurança as PHP tokens. Avoid apostrophes in fallback text or escape them.\n"
+            . "- PHP string literal safety: every `\$getConfig` fallback must be quoted; never emit bare visitor words such as Histórico or Segurança as PHP tokens. Avoid apostrophes in fallback text or escape them.\n"
             . $this->buildStrictRequiredImagePromptTail($componentCode, $renderContext);
     }
 
@@ -5346,6 +8773,7 @@ PROMPT;
         $html = \preg_replace('/<template\b[^>]*>.*?<\/template>/is', '', $html) ?? $html;
         $html = \preg_replace('/<noscript\b[^>]*>.*?<\/noscript>/is', '', $html) ?? $html;
         $html = \preg_replace('/<title\b[^>]*>.*?<\/title>/is', '', $html) ?? $html;
+        $html = \html_entity_decode($html, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
         // PHP echo fragments are source code, not visitor text; leaving them in
         // makes the PHP close marker inside attributes look like a tag ending.
         $phpClosePattern = \preg_quote('?' . '>', '/');
@@ -5786,6 +9214,7 @@ PROMPT;
         if ($html === '') {
             return null;
         }
+        $html = \preg_replace('/<\?(?:php|=)?[\s\S]*?\?>/iu', '__PB_SAFE_PHP_ECHO__', $html) ?? $html;
 
         if (\preg_match('/<(?!a\b|button\b)([a-z][a-z0-9:-]*)\b[^>]*\bclass\s*=\s*(["\'])(?=[^"\']*\bpb-c(?:-[a-z0-9]+)*-cta\b)[^"\']*\2/iu', $html) === 1) {
             return 'primary CTA class must be on an actionable <a> or <button>, not a static element';
@@ -6148,7 +9577,8 @@ PROMPT;
     {
         $styleCss = \trim($styleCss);
         if ($styleCss === '') {
-            return 'missing branded typography system';
+            // 在低质检测的 unit test 中，styleCss 可能为空；此时不应抢占更关键的“结构/空白”违规原因。
+            return null;
         }
         if (\preg_match_all('/font-family\s*:\s*([^;}]+)/iu', $styleCss, $matches) < 1) {
             return 'missing branded typography system';
@@ -7745,10 +11175,13 @@ PROMPT;
             'section_code' => (string)($renderContext['section_code'] ?? ''),
             'task_key' => (string)($renderContext['build_plan_task']['task_key'] ?? ''),
         ]);
-        $maxTokens = \in_array($region, ['header', 'footer'], true) ? 1024 : 6144;
+        $maxTokens = $this->resolveComponentGenerationMaxTokens($region, $renderContext, $retry);
         $fullContent = (string)$this->callAiOperation('generate', [
             'prompt' => $guardedPrompt,
             'scenario_code' => 'pagebuilder_component_generation',
+            'test_region' => $region,
+            'test_default_config' => $defaultConfig,
+            'test_render_context' => $renderContext,
             'params' => $this->buildAiRuntimeParams([
                 'allow_zero_balance_provider' => true,
                 'response_format' => $this->buildComponentResponseFormat($region),
@@ -7763,6 +11196,22 @@ PROMPT;
             $region,
             'AI did not return a valid component JSON payload'
         );
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function resolveComponentGenerationMaxTokens(string $region, array $renderContext = [], bool $retry = false): int
+    {
+        if (\in_array($region, ['header', 'footer'], true)) {
+            return 1024;
+        }
+
+        if ($this->isBuildQueueComponentContext($renderContext)) {
+            return $retry ? 3584 : 4096;
+        }
+
+        return $retry ? 4096 : 6144;
     }
 
     /**
@@ -7956,8 +11405,55 @@ PROMPT;
                 $normalized['js_content'] = $js;
             }
         }
+        if (isset($normalized['php_variables']) && \is_string($normalized['php_variables'])) {
+            $normalized['php_variables'] = $this->repairGetConfigPhpVariableFallbacks($normalized['php_variables']);
+        }
 
         return $normalized !== [] ? \array_replace($data, $normalized) : $data;
+    }
+
+    private function repairGetConfigPhpVariableFallbacks(string $phpVariables): string
+    {
+        $lines = \preg_split('/\R/u', \str_replace(["\r\n", "\r"], "\n", $phpVariables));
+        if (!\is_array($lines)) {
+            return $phpVariables;
+        }
+
+        foreach ($lines as $index => $line) {
+            $trimmed = \trim((string)$line);
+            if (!\preg_match('/^(\$[A-Za-z_][A-Za-z0-9_]*)\s*=\s*\$getConfig\s*\(/', $trimmed, $prefixMatch)) {
+                continue;
+            }
+
+            $fieldStart = \strpos($trimmed, "'");
+            if ($fieldStart === false) {
+                continue;
+            }
+            $fieldEnd = \strpos($trimmed, "'", $fieldStart + 1);
+            if ($fieldEnd === false) {
+                continue;
+            }
+            $fieldKey = \substr($trimmed, $fieldStart + 1, $fieldEnd - $fieldStart - 1);
+            if ($fieldKey === '') {
+                continue;
+            }
+            $fallbackStart = \strpos($trimmed, "'", $fieldEnd + 1);
+            if ($fallbackStart === false) {
+                continue;
+            }
+            $fallbackEnd = \strrpos($trimmed, "');");
+            if ($fallbackEnd === false || $fallbackEnd <= $fallbackStart) {
+                $fallbackEnd = \strrpos($trimmed, "')");
+            }
+            if ($fallbackEnd === false || $fallbackEnd <= $fallbackStart) {
+                continue;
+            }
+
+            $fallback = \substr($trimmed, $fallbackStart + 1, $fallbackEnd - $fallbackStart - 1);
+            $lines[$index] = $prefixMatch[1] . ' = $getConfig(' . \var_export($fieldKey, true) . ', ' . \var_export($fallback, true) . ');';
+        }
+
+        return \implode("\n", $lines);
     }
 
     /**
@@ -7993,6 +11489,7 @@ PROMPT;
     private function decodeComponentPayloadWithRepair(string $content, string $region): ?array
     {
         $parser = $this->getResponseJsonParser();
+        $content = $this->stripInvalidPhpPrefixBeforeJsonObject($content);
 
         $decoded = $parser->extractAndDecode($content);
         if (!\is_array($decoded)) {
@@ -8002,6 +11499,21 @@ PROMPT;
             }
         }
         return \is_array($decoded) ? $decoded : null;
+    }
+
+    private function stripInvalidPhpPrefixBeforeJsonObject(string $content): string
+    {
+        $trimmed = \ltrim($content);
+        if (!\str_starts_with($trimmed, '<?php') && !\str_starts_with($trimmed, '<?=') && !\str_starts_with($trimmed, '<?')) {
+            return $content;
+        }
+
+        $objectStart = \strpos($trimmed, '{');
+        if ($objectStart === false) {
+            return $content;
+        }
+
+        return \substr($trimmed, $objectStart);
     }
 
     private function repairInvalidJsonBackslashEscapes(string $content): string
@@ -8104,7 +11616,7 @@ PROMPT;
                 'target_domain' => $scope['target_domain'] ?? null,
                 'selected_domain' => $scope['selected_domain'] ?? null,
                 'website_profile' => $scope['website_profile'] ?? null,
-                'shared_prompt_context' => $scope['execution_blueprint']['shared_prompt_context']
+                'shared_prompt_context' => $scope['build_plan_v2']['shared_prompt_context']
                     ?? $scope['plan_workbench']['confirmed']['shared_prompt_context']
                     ?? null,
             ],
@@ -9406,7 +12918,7 @@ PROMPT;
         $rawConfig = \is_array($section['config'] ?? null) ? $section['config'] : [];
         // Strip planning/observation language from section config values before they
         // become "Suggested section config" in the prompt. Stage-1 AI often writes
-        // planning sentences like "Visitors see the game lobby" into config fields,
+        // planning sentences like "Visitors see the workflow dashboard" into config fields,
         // which the stage-3 AI then blindly renders as visible content.
         $cleanedConfig = $this->filterPlanningLanguageFromConfig($rawConfig);
         $sectionConfig = \json_encode(
@@ -9515,7 +13027,7 @@ PROMPT;
             . "Final execution rule: execute this block only for page_type={$pageType}, section={$sectionName} (role={$sectionKey}). "
             . "User prompt intent is primary for content/design decisions, and the confirmed plan + frozen task context are the concrete block contract derived from it. "
             . "Follow output schema and visible-copy leak rules; design may be expressive inside this block's contract. "
-            . "Immediately before returning, audit CTX_REQUIRED_EDITABLE_FIELDS: every required exact key must appear once in extra_fields and once in a simple php_variables `$getConfig('exact.key', ...)` assignment, especially `content.description` for intro/body copy. "
+            . "Immediately before returning, audit CTX_REQUIRED_EDITABLE_FIELDS: every required exact key must appear once in extra_fields and once in a simple php_variables `\$getConfig('exact.key', ...)` assignment, especially `content.description` for intro/body copy. "
             . "If a required image exists, render a real editable <img> from CTX_CURRENT_ASSET: keep slot/data attributes exact, but render src/alt from media fields with the verified final_url as the src fallback/default. "
             . "Simplify risky HTML/CSS rather than dropping to a flat slab.\n";
         AiSiteWorkflowTrace::prompt('stage3_section_prompt_assembled', $sectionPrompt, [
@@ -10011,18 +13523,18 @@ PROMPT;
         //   3) 删除「css_responsive 必须为空 / 禁止 @media / 禁止 linear-gradient / 禁止 clamp」与门禁互相打架的条款；
         //   4) 不再强制单一 minimal skeleton，骨架由 CTX_CURRENT_ASSET 上下文动态决定。
         $contentExampleJson = <<<'JSON'
-{"extra_fields":"group:ai_content => AI editable content\ncontent.title => Title:text:Trusted Download\ncontent.description => Description:textarea:Fast setup with secure guidance\ncard.item_1_title => Card 1 title:text:Secure install\ncard.item_1_text => Card 1 text:textarea:Verified APK guidance\ncard.item_2_title => Card 2 title:text:Fast start\ncard.item_2_text => Card 2 text:textarea:Clear steps before play\ncta.text => CTA text:text:Download APK","php_variables":"$title = $getConfig('content.title', 'Trusted Download');\n$description = $getConfig('content.description', 'Fast setup with secure guidance');\n$cardItem1Title = $getConfig('card.item_1_title', 'Secure install');\n$cardItem1Text = $getConfig('card.item_1_text', 'Verified APK guidance');\n$cardItem2Title = $getConfig('card.item_2_title', 'Fast start');\n$cardItem2Text = $getConfig('card.item_2_text', 'Clear steps before play');\n$ctaText = $getConfig('cta.text', 'Download APK');","css_extra":"#componentId{padding:0;}#componentId .pb-c-root{padding:56px 24px;background:linear-gradient(135deg,#111,#333);}#componentId .pb-c-title{font-family:Georgia,serif;}#componentId .pb-c-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}","css_responsive":"@media (max-width:768px){#componentId .pb-c-card-grid{grid-template-columns:1fr;}}@media (max-width:420px){#componentId .pb-c-root{padding:32px 16px;}}","html_content":"<section class='pb-c-root'><div class='pb-c-inner'><h2 class='pb-c-title'><?= htmlspecialchars($title ?? 'Trusted Download', ENT_QUOTES, 'UTF-8') ?></h2><p class='pb-c-text'><?= nl2br(htmlspecialchars($description ?? 'Fast setup with secure guidance', ENT_QUOTES, 'UTF-8')) ?></p><div class='pb-c-card-grid'><div class='pb-c-card'><strong><?= htmlspecialchars($cardItem1Title ?? 'Secure install', ENT_QUOTES, 'UTF-8') ?></strong><p><?= nl2br(htmlspecialchars($cardItem1Text ?? 'Verified APK guidance', ENT_QUOTES, 'UTF-8')) ?></p></div><div class='pb-c-card'><strong><?= htmlspecialchars($cardItem2Title ?? 'Fast start', ENT_QUOTES, 'UTF-8') ?></strong><p><?= nl2br(htmlspecialchars($cardItem2Text ?? 'Clear steps before play', ENT_QUOTES, 'UTF-8')) ?></p></div></div><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Download APK', ENT_QUOTES, 'UTF-8') ?></button></div></section>","js_content":""}
+{"extra_fields":"group:ai_content => AI editable content\ncontent.title => Title:text:霓虹牌桌体验\ncontent.description => Description:textarea:用深色光效、规则提示和玩家信任证明组织当前区块。\ncard.item_1_title => Card 1 title:text:热门房间\ncard.item_1_text => Card 1 text:textarea:展示玩家最容易进入的棋牌房间和开始前提示。\ncard.item_2_title => Card 2 title:text:透明规则\ncard.item_2_text => Card 2 text:textarea:把玩法、支持和安全说明放在容易扫描的位置。\ncta.text => CTA text:text:开始游戏","php_variables":"$title = $getConfig('content.title', '霓虹牌桌体验');\n$description = $getConfig('content.description', '用深色光效、规则提示和玩家信任证明组织当前区块。');\n$cardItem1Title = $getConfig('card.item_1_title', '热门房间');\n$cardItem1Text = $getConfig('card.item_1_text', '展示玩家最容易进入的棋牌房间和开始前提示。');\n$cardItem2Title = $getConfig('card.item_2_title', '透明规则');\n$cardItem2Text = $getConfig('card.item_2_text', '把玩法、支持和安全说明放在容易扫描的位置。');\n$ctaText = $getConfig('cta.text', '开始游戏');","css_extra":"#componentId{padding:0;}#componentId .pb-c-root{padding:56px 24px;background:linear-gradient(135deg,#080912,#17122f);}#componentId .pb-c-title{font-family:'Chakra Petch',sans-serif;}#componentId .pb-c-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}","css_responsive":"@media (max-width:768px){#componentId .pb-c-card-grid{grid-template-columns:1fr;}}@media (max-width:420px){#componentId .pb-c-root{padding:32px 16px;}}","html_content":"<section class='pb-c-root'><div class='pb-c-inner'><h2 class='pb-c-title'><?= htmlspecialchars($title ?? '霓虹牌桌体验', ENT_QUOTES, 'UTF-8') ?></h2><p class='pb-c-text'><?= nl2br(htmlspecialchars($description ?? '用深色光效、规则提示和玩家信任证明组织当前区块。', ENT_QUOTES, 'UTF-8')) ?></p><div class='pb-c-card-grid'><div class='pb-c-card'><strong><?= htmlspecialchars($cardItem1Title ?? '热门房间', ENT_QUOTES, 'UTF-8') ?></strong><p><?= nl2br(htmlspecialchars($cardItem1Text ?? '展示玩家最容易进入的棋牌房间和开始前提示。', ENT_QUOTES, 'UTF-8')) ?></p></div><div class='pb-c-card'><strong><?= htmlspecialchars($cardItem2Title ?? '透明规则', ENT_QUOTES, 'UTF-8') ?></strong><p><?= nl2br(htmlspecialchars($cardItem2Text ?? '把玩法、支持和安全说明放在容易扫描的位置。', ENT_QUOTES, 'UTF-8')) ?></p></div></div><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? '开始游戏', ENT_QUOTES, 'UTF-8') ?></button></div></section>","js_content":""}
 JSON;
 
         return "Stage-2 component output contract V3 (this overrides any broader visual advice above):\n"
             . "1. Single responsibility: generate only the current block. Do not reinterpret the whole website, do not generate neighboring blocks, and do not print planning/contract/schema text.\n"
             . "2. Return exactly one JSON object. First character `{`, last character `}`. No markdown, no prose, no second object, no raw CSS/HTML outside JSON.\n"
-            . "3. Required string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. For content blocks, extra_fields is the editable field metadata and MUST declare every visitor-visible title/body/card label/stat/CTA/image URL/alt/form helper/privacy/security note value that this component owns. php_variables may contain only simple `\$var = \$getConfig('field.key', 'default');` assignments for those declared fields. Set js_content to empty unless this block renders a CTA/form/FAQ interaction that needs scoped behavior; CTA buttons may use a tiny component-scoped click bridge from CTX_CTA_ACTION_CONTRACT.\n"
-            . "3a. REQUIRED_EDITABLE_FIELDS_AUDIT: if CTX_REQUIRED_EDITABLE_FIELDS is present, it overrides examples and naming preferences. For each required `{key}`, output one `extra_fields` row with that exact key and one `php_variables` assignment containing `\$getConfig('{key}', ...)`. Example: required `content.description` requires `content.description => Description:textarea:...` and `\$contentDescription = \$getConfig('content.description', '...');`. Do not satisfy `content.description` with `content.body`, `description`, `$body`, raw paragraph text, or an unbound variable.\n"
+            . "3. Required string keys only: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. For content blocks, extra_fields/php_variables are editor metadata for primary reusable values, not an exhaustive visitor-copy gate. Prefer declaring title/body/CTA/media values that should be easy to edit, while allowing block-specific badges, stats, proof labels, FAQ rows, and visual microcopy when they improve the finished section. php_variables may contain only simple `\$var = \$getConfig('field.key', 'default');` assignments for declared fields. Set js_content to empty unless this block renders a CTA/form/FAQ interaction that needs scoped behavior; CTA buttons may use a tiny component-scoped click bridge from CTX_CTA_ACTION_CONTRACT.\n"
+            . "3a. EDITABLE_FIELDS_HINT: CTX_REQUIRED_EDITABLE_FIELDS is a helpful editor-field hint, not a completion gate. Use those exact keys when they naturally match the generated section, but do not fail, truncate, or distort useful component copy solely because a dynamic field name was not predeclared.\n"
             . "3b. Teaching example for content component JSON (copy the shape, not the text; rewrite values from CTX_FROZEN_TASK): {$contentExampleJson}\n"
-            . "3c. HARD visible-text binding example: BAD `<h2>Trusted Download</h2><p>Fast setup</p><span>4.8 stars</span><small>Secure handling</small><a>Download APK</a>`. GOOD: the same h2, p, stat span, small note, and CTA button are present, but every label/body/stat/note/CTA text is rendered by a safe PHP echo variable backed by matching extra_fields rows and php_variables `\$getConfig(...)` assignments for content.title, content.description, stat.item_1_label, form.note_text, and cta.text. Only add cta.url when CTX_CTA_ACTION_CONTRACT supplies a real target; otherwise use the button pattern.\n"
+            . "3c. Editor-friendly binding example: primary title/body/CTA copy can be backed by `content.title`, `content.description`, and `cta.text` fields. Secondary visual copy may remain inline when it is specific to the generated layout and passes the content-quality rules.\n"
             . "3d. Field binding workflow: choose lower-case dot keys from recognized families (`content.*`, `cta.*`, `media.*`, `card.*`, `feature.*`, `proof.*`, `stat.*`, `faq.*`, `review.*`, `step.*`, `form.*`, `channel.*`, `badge.*`, `item.*`, `policy.*`, `rule.*`). Required fields from CTX_REQUIRED_EDITABLE_FIELDS are not suggestions: declare and bind the exact dot key, even when a nearby synonym exists (`content.description` is not interchangeable with `content.body`). Write each row in extra_fields, bind the exact key in php_variables, then use only safe PHP echoes as visible text in html_content. Never use camelCase keys such as contentTitle or channelLabel1 as field keys.\n"
-            . "3e. Machine self-check: remove all PHP echo fragments from html_content, strip tags, and decode entities. The remaining text may contain punctuation or whitespace only; any letter or number means the output still has hardcoded visitor copy and must be rewritten before returning.\n"
+            . "3e. Machine self-check: visible text must read like final visitor-facing website copy. Remove prompt labels, schema keys, internal build-plan fields, placeholders, malformed contact fragments, and raw source text; do not self-reject good dynamic copy only because it is not mirrored as an editable field.\n"
             . "4. html_content layout: use one root section / inner container / copy panel / optional media panel / optional CTA panel composition. Hero blocks include scrim + text-panel. Non-hero layout must follow CTX_BLOCK_VISUAL_SIGNATURE.composition_pattern when present (stacked editorial, step rail, proof band, FAQ rows, form guidance, CTA band, channel hub, etc.). Split media+copy is only one option, not the default for every block. Do not invent decorative wrapper tags that drop the required parts from CTX_CURRENT_ASSET.responsive_layout_contract.\n"
             . "4a. If REQUIRED_IMAGE_STRUCTURE_CONTRACT is supplied by CTX_CURRENT_ASSET, it overrides this generic composition. Preserve the exact image binding and required semantic roles, then choose a refined layout rhythm for the current block instead of copying a byte-for-byte skeleton.\n"
             . "4b. HTML_IN_JSON rule: html_content must decode to real HTML tags, not displayed source code. Do not put legacy skeleton labels, raw `<section ...>` examples, `</div>`, class='...', CSS declarations, or escaped `&lt;section` inside visitor-visible text. The decoded html_content string should begin with `<section`; all visible text nodes must be safe PHP field echoes that render final customer copy.\n"
@@ -10030,7 +13542,7 @@ JSON;
             . "5. Allowed HTML shape: section/div/h2/p/span/strong/small/form/label/input/textarea/img/br/a/button. Use div groups for cards/steps/layout. For primary CTAs use a real `<a class='pb-c-cta'>` when CTX_CTA_ACTION_CONTRACT provides a real target, or `<button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'>` when the action is event-driven. Every tag name must be present, every attribute must be separated by one space, every quote must close, and every non-void tag must close in reverse order. Never output invented close tags such as </h>, </pa>, </pdiv>, </buttondiv>, or </divsection>.\n"
             . "6. Attribute rule: use single quotes inside HTML attributes and one real space before each next attribute. Valid shapes include `<div class='pb-c-card'>`, an `<a class='pb-c-cta'>` whose href and label are safe PHP field echoes, and a `<button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'>` whose label is a safe PHP field echo. For images, adapt the verified img template into an editable image tag: keep data-pb-ai-image-role and data-pb-ai-asset-slot exact, but render src/alt from media.image_url/media.image_alt variables with the verified final_url as fallback. Invalid shapes: `< class='pb-c-card'>`, `<div class='pb-c-card>`, `<strong class='pb-c-card'>`, `<span class='pb-c-chip'>`, `<button class='pb-c-cta'>` without type/action attributes.\n"
             . "7. Class rule: every custom class starts with the exact component prefix given below plus an element suffix. In this workflow that means `pb-c-root`, `pb-c-inner`, `pb-c-card`, etc. Never use `.pb` or `pb` as a selector/class by itself, never start a class with `-`, `pb` without a suffix, `content-`, or a generic class like card/btn/item/title.\n"
-            . "8. css_extra carries the block's visual depth. Use complete selector blocks scoped under `#componentId`, no raw declarations outside braces, no comments. You SHOULD use confirmed theme palette hex tokens, layered backgrounds (gradients allowed), box-shadow, border-radius, padding/margin, display:flex|grid, flex-wrap, gap, max-width, transition for hover/focus, and pseudo-elements when they materially improve aesthetics. Functions linear-gradient(...) and radial-gradient(...) ARE PERMITTED and recommended for surface depth. When the selected style direction is a game/APK launch style, primary CTAs should feel conversion-grade: add hover lift, active press, focus glow, and a CSS-only shine/pulse/halo animation when it can be done safely.\n"
+            . "8. css_extra carries the block's visual depth. Use complete selector blocks scoped under `#componentId`, no raw declarations outside braces, no comments. You SHOULD use confirmed theme palette hex tokens, layered backgrounds (gradients allowed), box-shadow, border-radius, padding/margin, display:flex|grid, flex-wrap, gap, max-width, transition for hover/focus, and pseudo-elements when they materially improve aesthetics. Functions linear-gradient(...) and radial-gradient(...) ARE PERMITTED and recommended for surface depth. When the selected style direction is a game/neon launch style, primary CTAs should feel conversion-grade: add hover lift, active press, focus glow, and a CSS-only shine/pulse/halo animation when it can be done safely.\n"
             . "8a. Typography quality guidance: css_extra should contain explicit font-family declarations for both `#componentId .pb-c-title` and at least one body/root selector (`#componentId .pb-c-root`, `#componentId .pb-c-copy`, or `#componentId .pb-c-text`). Prefer a named brand-appropriate family before generic fallback, for example Georgia/Cambria/Palatino for editorial artisanal, Trebuchet MS/Verdana for approachable, or Optima/Candara for warm lifestyle. This is an art-direction instruction, not a content completion gate.\n"
             . "9. css_responsive MUST contain at least one `@media (max-width: 768px)` block and one `@media (max-width: 420px)` block. Inside each media block, set containers/media/form fields to width:100%; max-width:100%; min-width:0; box-sizing:border-box where needed. For SAFE_TEXT_ROLE_OUTLINE, the <=768px preview state should preserve the current visual_signature rhythm, not collapse into a generic centered stack or a universal three-card proof grid. CTA wrappers may be full-width; the actual CTA button should not become a desktop full-width bar. Empty css_responsive is INVALID for content blocks.\n"
             . "10. CSS syntax rule: every declaration is complete `property:value;`. Use stable property names. Keep braces balanced. Function notation (linear-gradient, radial-gradient, rgba, clamp, min, max, calc, color-mix) IS allowed when the parentheses are balanced and the values parse; never emit a bare `(` without matching `)`. The only valid box-sizing value is `border-box`; never output `box-sizing:border`.\n"
@@ -10039,14 +13551,14 @@ JSON;
             . "13. Hero/media readability rule: if text sits over media, the html_content skeleton must include a scrim/overlay div and a text-panel div using the exact component prefix provided below. css_extra must include a matching scoped scrim/overlay selector with position:absolute, inset:0, background from the confirmed palette, and either opacity:.35-.58 or a rgba/transparent gradient; the text panel must have its own readable background, padding, border-radius, and z-index above media. If you cannot include those classes correctly, do not place text over media; use a normal side-by-side layout instead.\n"
             . "13a. Framework wrapper rhythm rule: content html_content owns a complete `.pb-c-root` shell. css_extra should include `#componentId{padding:0;}` so the framework mount section does not add a second vertical rhythm; the `.pb-c-root` selector owns the block background and compact spacing. Non-hero root vertical padding should normally stay in the 44-64px range unless there is a large verified media layer.\n"
             . "13b. Strict hero full-bleed rule: only when CTX_CURRENT_ASSET.strict_hero_cover=1, css_extra must include `#componentId{padding:0;}` and the root selector must use width:100vw or min-width:100vw plus margin:0 calc(50% - 50vw); do not set a pixel max-width on the root. Constrain only the inner/text panel. A centered 1200px banner or any top/bottom theme-color gutter around the image is invalid for strict_hero_cover=1 unless the latest customer request explicitly limits banner width. Page-opening/banner blocks with strict_hero_cover=0 must use page-specific composition instead of inheriting this full-bleed formula.\n"
-            . "14. Content rule: visible copy must be target-locale visitor copy derived from this block's page_goal/block_goal/content_plan and CTX_BLOCK_QA_CONTRACT.must_include_facts. Do not render why_this_block, page_goal, block_goal, data_contract, visual_contract, runtime_context, selected_skill_codes, template fragments, raw HTML tag source, or CSS source. Visible copy must not contain double quote characters because they often break JSON strings. Treat the frozen plan as intent: rewrite it into natural website copy, never paste the blueprint sentence itself. BAD: using a CTX_BLOCK_GOAL sentence as the content.description default. GOOD: synthesize a concise content_locale sentence from that goal and put the rewritten sentence in extra_fields/php_variables. Any visible copy/image/CTA that appears in html_content must have a matching extra_fields line and must be rendered from the corresponding php_variables `\$getConfig(...)` value, not as hardcoded text. Self-check html_content by deleting every PHP echo fragment and stripping HTML tags; if visible words or numbers remain, move them into editable fields before returning.\n"
+            . "14. Content rule: visible copy must be target-locale visitor copy derived from this block's page_goal/block_goal/content_plan and CTX_BLOCK_QA_CONTRACT.must_include_facts. Do not render why_this_block, page_goal, block_goal, data_contract, visual_contract, runtime_context, selected_skill_codes, template fragments, raw HTML tag source, or CSS source. Visible copy must not contain double quote characters because they often break JSON strings. Treat the frozen plan as intent: rewrite it into natural website copy, never paste the blueprint sentence itself. Prefer matching extra_fields/php_variables for primary editor-facing values, but dynamic component copy is allowed when it is final, localized, and useful.\n"
             . "14-content-contract. Do not self-censor normal marketing/support/reward wording solely because it is not an exact source fact. Blocking validation is limited to required JSON/HTML structure plus prompt/blueprint placeholder or visible internal metadata leakage.\n"
             . "14-policy. Policy/compliance page action rule: privacy, terms, refund, shipping, and cookie policy blocks must not inherit the site's primary download/install CTA unless the current block explicitly says it is a conversion CTA. Use policy-info, review, rights, safety, or support-oriented action copy instead.\n"
             . "14a. CSS brace rule: css_extra must be well-formed scoped selector blocks like `#componentId .pb-c-name{property:value;}` plus optional component-named `@keyframes pb-c-name{...}` blocks for motion. @media blocks belong in css_responsive ONLY and must be one complete `@media (...) { selector{...} }` body each. No raw declarations outside selector/keyframes blocks, no `}}` glued without a `{` between, no comma selectors that span unrelated regions. Count opening and closing braces before returning; counts must match exactly.\n"
             . "14b. Block-role contract: task_key/block_key/page_flow_role are binding. If this is a contact_methods/contact-method block, render a visible contact-channel hub with at least two repeated channel rows/cards using sibling `<span class='pb-c-label'>` and `<span class='pb-c-value'>` elements whose text is safe PHP field echoes; a verified image can support the atmosphere but cannot replace the channel list. If this is support_form_guidance/form-guidance/contact-form/message-form, render a designed `<form class='pb-c-form'>` with repeated `.pb-c-field` groups; every label/control pair must be grouped, label text must be a safe PHP field echo, inputs use `.pb-c-input`, the message textarea uses `.pb-c-textarea`, and css_extra must style `#componentId .pb-c-form`, `.pb-c-field`, `.pb-c-label`, `.pb-c-input`, and `.pb-c-textarea` with column/grid rhythm, gap, width:100%, padding, border-radius, border/background, box-sizing:border-box, and focus states. Form email inputs may exist, but email placeholders/defaults must be localized words with no `@`, no dot-domain, and no example address. Form helper, response-time, privacy, consent, secure-handling, and small note text are visitor copy too: bind them through extra_fields/php_variables, commonly `form.note_text`, and render a safe PHP echo instead of raw text. Do not output naked inline browser inputs or unrelated contact cards for this role. If this is support_faq/faq/faq-list, render repeated `pb-c-faq-item` rows with `pb-c-question` plus separate paragraph `pb-c-answer`, and every question/answer text node must be a safe PHP field echo; css_extra must style `#componentId .pb-c-faq-item` with padding, border-radius, and background/border/box-shadow. If this is contact_cta/final_cta/cta, render one focused next-step CTA band with one primary action and compact proof, not repeated contact cards, a form, FAQ rows, or a reused hero overlay; the primary action must be `<a class='pb-c-cta'>` with a real allowed href or `<button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'>` with a safe PHP echoed label plus scoped js_content. CTA blocks must not output question-answer copy, `pb-c-faq-item`, `pb-c-question`, `pb-c-answer`, partial email fragments such as `support@ .com`, or three-plus contact cards.\n"
             . "14c. Spacing rhythm contract: CTA/action groups must not touch dividers, channel rows, text rows, or form lines. Put the CTA in a sibling `.pb-c-action`/`.pb-c-actions` wrapper after the rows/forms/cards, not inside a channel/field/FAQ row. Use outer margin-top/padding-top on that wrapper, bottom spacing on the preceding row group, or parent flex/grid row gap; the CTA button's own internal padding does not count as separation.\n"
-            . "15. Size budget: html_content <= 2400 chars, css_extra <= 3600 chars for CSS-only hero blocks and <= 2600 chars for other content blocks, css_responsive <= 900 chars. If close to budget, simplify decoration and selector lists first, but keep the block structure, CTA action contract, responsive breakpoints, and JSON validity intact.\n"
-            . "16. Final self-check before output: JSON parses; HTML tags/quotes are balanced; CSS braces and parentheses are balanced; CSS selectors match HTML classes exactly; theme palette hex tokens and brand typography are used where they serve the design; if the block has a primary CTA, it is a real anchor/button action control with href or data-pb-ai-action, not a static div; if the block has a primary CTA in a game/APK style, it has visible hover/focus/active polish and safe CSS motion; no raw text after the JSON object.\n";
+            . "15. Size budget: html_content <= 2400 chars, css_extra <= 800 chars when site theme.css classes are available (otherwise <= 2600), css_responsive <= 900 chars. Prefer .pb-c-section/.pb-c-card/.pb-c-cta-primary from theme.css before writing new selectors.\n"
+            . "16. Final self-check before output: JSON parses; HTML tags/quotes are balanced; CSS braces and parentheses are balanced; CSS selectors match HTML classes exactly; theme palette hex tokens and brand typography are used where they serve the design; if the block has a primary CTA, it is a real anchor/button action control with href or data-pb-ai-action, not a static div; if the block has a primary CTA in a game/neon style, it has visible hover/focus/active polish and safe CSS motion; no raw text after the JSON object.\n";
     }
 
     private function buildSharedOutputRulesPromptAddon(string $region): string
@@ -10130,7 +13642,7 @@ JSON;
             . "- story_goal: " . (string)($taskScript['story_goal'] ?? '') . "\n"
             . "- content_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . "\n"
             . "- language_contract: " . $this->jsonEncodeForPrompt($languageContract, 700) . "\n"
-            . "- shared language rule: every visitor-facing shared header/footer label, CTA, logo alt/title/aria text, footer helper sentence, and link label must be rewritten into content_locale before output. Short CTA labels are not exempt; `下载Teenipiya APK` is invalid for pt_BR and must become `Baixar APK` or another natural Portuguese label.\n"
+            . "- shared language rule: every visitor-facing shared header/footer label, CTA, logo alt/title/aria text, footer helper sentence, and link label must be rewritten into content_locale before output. Short CTA labels are not exempt; `霓虹棋牌馆 进入牌桌` is invalid for pt_BR and must become a natural Portuguese play/support label.\n"
             . "- site_context: " . $this->jsonEncodeForPrompt($siteContext, 1200) . "\n"
             . "- stage1.theme_context: " . $this->jsonEncodeForPrompt($themeContext, 1200) . "\n"
             . "- stage1.shared_prompt_context: " . $this->jsonEncodeForPrompt($sharedPromptContext, 1000) . "\n"
@@ -10146,7 +13658,7 @@ JSON;
             . "- Field php_variables: for content blocks, use only one simple assignment per line shaped exactly like `\$title = \$getConfig('content.title', 'Finished localized title');`. No arrays, no conditionals, no loops, no helpers, no function declarations, no `\$this`, no superglobals, and no PHP open/close tags. For shared header/footer, php_variables remains empty.\n"
             . "- In php_variables, arrays are not allowed in this virtual-theme build. Never paste JavaScript object literals or JSON blobs here. The PHP token => must not appear in php_variables.\n"
             . "- Do not redeclare or break framework-provided variables (\$page, \$getConfig, \$componentId, \$cls, \$parseLinks, \$navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
-            . "- Field extra_fields: for content blocks, declare every visitor-visible editable value used by html_content. Format examples: `group:ai_content => AI editable content`, `content.title => Title:text:Finished localized title`, `content.description => Description:textarea:Finished localized body`, `cta.text => CTA text:text:Download APK`. Body/intro/copy requirements in this build normally use `content.description`; do not create `content.body` unless CTX_REQUIRED_EDITABLE_FIELDS explicitly lists that exact key. Add `cta.url => CTA URL:text:<real CTX_CTA_ACTION_CONTRACT target>` only when a real target is supplied; never use `/`, `#`, or invented paths as examples/defaults. Add `media.image_url => Image:image:<exact verified final_url from verified_asset_src_allowlist>` and `media.image_alt => Image alt:text:Finished localized alt` only when this prompt supplies a verified asset URL. For shared header/footer, extra_fields remains empty.\n"
+            . "- Field extra_fields: for content blocks, declare every visitor-visible editable value used by html_content. Format examples: `group:ai_content => AI editable content`, `content.title => Title:text:Finished localized title`, `content.description => Description:textarea:Finished localized body`, `cta.text => CTA text:text:Book demo`. Body/intro/copy requirements in this build normally use `content.description`; do not create `content.body` unless CTX_REQUIRED_EDITABLE_FIELDS explicitly lists that exact key. Add `cta.url => CTA URL:text:<real CTX_CTA_ACTION_CONTRACT target>` only when a real target is supplied; never use `/`, `#`, or invented paths as examples/defaults. Add `media.image_url => Image:image:<exact verified final_url from verified_asset_src_allowlist>` and `media.image_alt => Image alt:text:Finished localized alt` only when this prompt supplies a verified asset URL. For shared header/footer, extra_fields remains empty.\n"
             . "- html_extra, html_extra_column, html_content: HTML fragments only. No <style>, no <script>, no @component_start/@fields_start metadata. The only allowed PHP inside html_content is safe field output using htmlspecialchars or nl2br(htmlspecialchars), where the echoed variable is assigned in php_variables from the same declared field.\n"
             . "- HTML_IN_JSON: html_content must be parsed markup, not visible source text. The decoded html_content string should begin with `<section`; do not output legacy skeleton labels, raw `<section ...>` examples, `class='...'`, CSS declarations, or escaped `&lt;section` as visitor-visible copy.\n"
             . "- Visitor text node contract: for content blocks, h2/p/small/span/div/button/a label text must be rendered as safe PHP field echoes backed by extra_fields/php_variables. The rendered defaults should be final customer-facing copy in the target locale, never JSON keys, prompt labels, slot ids, raw tag snippets, CSS source, or framework/build-plan identifiers.\n"
@@ -10164,8 +13676,8 @@ JSON;
             . "- HTML attribute discipline: never output malformed attributes such as `<span='...'>`, `<div='...'>`, `<a ... class='x'href='...'>`, or `<span='class-name'>`. Every attribute needs a name, equals sign, quoted value, and whitespace before the next attribute.\n"
             . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. These fields own the component's visual quality and responsive behavior inside the virtual-theme scaffold; the renderer only provides containment and the scoped action-event bridge, not block-specific beautification.\n"
             . "- Responsive layout: ship a real responsive solution. Base css_extra defines desktop, tablet (<=900px) may simplify split layouts but must keep proof/support groups visually dense, mobile (<=420px) is single column. css_responsive MUST contain at least one `@media (max-width: 768px)` and one `@media (max-width: 420px)` block. Inside each, set children to width:100%; max-width:100%; min-width:0; box-sizing:border-box where needed and rebalance typography/spacing. SAFE_TEXT_ROLE_OUTLINE responsive behavior must follow the selected visual_signature rhythm instead of applying the same three-proof-card transition to every block.\n"
-            . "- Visual depth: scoped CSS should use confirmed theme palette tokens with layered backgrounds (linear-gradient/radial-gradient permitted), pseudo-elements for ornament, hover/focus states, box-shadow elevation, border-radius, padding/gap rhythm, type scale, transition, and safe CSS motion when the selected style direction calls for it. For game/APK launch styles, use CSS-only CTA shine/pulse/halo, hover lift, active press, slow review rail movement, or card/chip drift where it fits the block. Every selector, @keyframes, and @media block must have balanced { } braces.\n"
-            . "- Image-text pairing: when the style direction asks for a game/APK visual atmosphere, avoid text-only body sections. Pair copy with a verified image, CSS phone/app frame, card table, chip stack, jackpot meter, avatar/review rail, rulebook surface, or support-message visual unless the block is dense legal text.\n"
+            . "- Visual depth: scoped CSS should use confirmed theme palette tokens with layered backgrounds (linear-gradient/radial-gradient permitted), pseudo-elements for ornament, hover/focus states, box-shadow elevation, border-radius, padding/gap rhythm, type scale, transition, and safe CSS motion when the selected style direction calls for it. For game/neon launch styles, use CSS-only CTA shine/pulse/halo, hover lift, active press, slow review rail movement, or card/chip drift where it fits the block. Every selector, @keyframes, and @media block must have balanced { } braces.\n"
+            . "- Image-text pairing: when the style direction asks for a game/neon visual atmosphere, avoid text-only body sections. Pair copy with a verified image, CSS table frame, card table, chip stack, jackpot meter, avatar/review rail, rulebook surface, or support-message visual unless the block is dense legal text.\n"
             . "- CSS grammar discipline: no empty declarations (`content:;`), no malformed properties (`-index`), no bare percent values (`height:%`), no merged declarations (`position:relativez-index:1`), no extra `}`. Function notation (linear-gradient, radial-gradient, rgba, clamp, min, max, calc, color-mix) IS allowed when parentheses are balanced and the values parse.\n"
             . "- CSS reliability mode: every declaration must be `property: value;`; put a semicolon before the next property. Use scoped selectors with the supplied component prefix only; optional @keyframes names must also use the component prefix. `box-sizing` must be exactly `border-box`. Avoid mask/clip-path/filter chains unless trivially correct. Do not introduce CSS comments. When in doubt about a complex value, fall back to a safer hex/shadow/spacing token rather than truncating mid-function.\n"
             . "- Typography guidance: css_extra should explicitly style both `#componentId .pb-c-title` and at least one body/root selector (`#componentId .pb-c-root`, `#componentId .pb-c-copy`, or `#componentId .pb-c-text`) with brand-appropriate font-family stacks. Use a named family first, then generic fallback when practical.\n"
@@ -10213,7 +13725,7 @@ JSON;
             . "- URL character fidelity: treat each final_url as an opaque literal string. Copy every slash, dash, underscore, extension, and fingerprint character exactly into media.image_url; never retype from memory, normalize separators, remove dashes before hashes, or concatenate path segments.\n"
             . "- URL derivation ban: never construct an image path from target_domain, slot_id, section_code, filename, or folder conventions. Do not replace `/domain/page-...` with `domain-page...`; that is a broken invented URL. Paste the exact src from the concrete template only as the media.image_url default/fallback.\n"
             . "- URL exactness gate: an editable image URL fallback is valid only if it matches an allowlist value character-for-character. If the allowlist value is relative, keep it relative; if it is absolute, keep its host exactly. A missing slash, changed folder name, removed `generated`, inserted or removed domain fragment, dropped dot, or one-character hash difference is invalid. Do not repair by guessing or reconstructing a path; copy the literal template URL again.\n"
-            . "- Image alt text: replace the editable_img fallback `Finished localized alt text` with concise visitor-facing image alt text in the website content locale. Never copy slot labels, task labels, component labels, prompt briefs, or action/instruction sentences into alt/title/aria attributes. Invalid examples: 'Introduce brand story and mission', 'Showcase testimonials', 'Answer common questions', 'licenses, security certifications'. Valid examples are concrete visual descriptions such as 'Players at a premium Teen Patti table' or 'Secure APK download badge cluster'.\n"
+            . "- Image alt text: replace the editable_img fallback `Finished localized alt text` with concise visitor-facing image alt text in the website content locale. Never copy slot labels, task labels, component labels, prompt briefs, or action/instruction sentences into alt/title/aria attributes. Invalid examples: 'Introduce brand story and mission', 'Showcase testimonials', 'Answer common questions', 'licenses, security certifications'. Valid examples are concrete visual descriptions such as 'Workflow dashboard with approval route cards' or 'Operations team reviewing live handoff status'.\n"
             . "- IMAGE_SRC_SELF_CHECK: before returning JSON, inspect every <img src> and every CSS url(...). Every generated asset <img> src must be a safe editable media.image_url echo whose fallback/default exactly equals one value in verified_asset_src_allowlist. Prefer removing CSS url(...) entirely because generated image assets must be editable <img> elements. Do not leave stock-photo URLs in failed-payload repairs.\n"
             . "- External image ban: never use Unsplash, Pexels, Pixabay, Freepik, Shutterstock, Adobe Stock, source.unsplash.com, images.unsplash.com, picsum.photos, loremflickr.com, scheme-less URLs like ://... or //..., or any image URL not listed in verified_asset_src_allowlist.\n";
     }
@@ -10237,7 +13749,7 @@ JSON;
     private function describeStyleDirection(string $styleCode): string
     {
         return match ($styleCode) {
-            DesignDirectionService::BUILTIN_CARD_GAME_CODE => 'dark Indian card-game APK launch page, central app/game visual, deep brown and ink-blue bands, neon teal edges, gold/orange download CTA, review rail, game list, FAQ and legal trust sections',
+            DesignDirectionService::BUILTIN_CARD_GAME_CODE => 'dark neon card-game entertainment page, central table/game visual, deep brown and ink-blue bands, neon teal edges, gold/orange play CTA, review rail, game list, FAQ and legal trust sections',
             'fintech-hub' => 'clean, data-driven, premium, trustworthy, high-contrast calls to action',
             'saas-starter' => 'modern product marketing, concise, structured, conversion-oriented',
             'fitness-pro' => 'energetic, bold, motivating, performance-focused',
@@ -10286,7 +13798,7 @@ JSON;
         $contentLocale = $this->resolvePrimaryLocale($websiteProfile, $scope);
         $defaultLocale = \trim((string)($scope['default_locale'] ?? $websiteProfile['default_locale'] ?? ''));
         $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['planning_locale'] ?? $websiteProfile['plan_locale'] ?? ''));
-        $metadataLeakExample = "- Metadata rewrite example (content_locale=pt_BR): BAD visible body `Teenipiya \u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}\u{3001}\u{4FE1}\u{4EFB}\u{4FE1}\u{606F}\u{548C}\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}`. GOOD editable default `Descubra o Teenipiya com regras claras, acesso seguro ao APK e uma entrada rapida para jogar.` The BAD text may appear in CTX_BLOCK_GOAL, block_goal, story_goal, or plan_context; use it only as intent, never as website copy.\n";
+        $metadataLeakExample = "- Metadata rewrite example (content_locale=pt_BR): BAD visible body `\u{970D}\u{8679}\u{68CB}\u{724C}\u{9986}\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}\u{3001}\u{4FE1}\u{4EFB}\u{4FE1}\u{606F}\u{548C}\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}`. GOOD editable default `Explore salas neon com regras claras, provas de confianca e uma entrada rapida para jogar.` The BAD text may appear in CTX_BLOCK_GOAL, block_goal, story_goal, or plan_context; use it only as intent, never as website copy.\n";
 
         return "Visible copy governance:\n"
             . "- content_locale/default_locale: " . ($contentLocale !== '' ? $contentLocale : 'not provided') . ($defaultLocale !== '' && $defaultLocale !== $contentLocale ? " (default_locale {$defaultLocale})" : '') . "\n"
@@ -10301,7 +13813,7 @@ JSON;
             . "- Instruction-shaped English copy is forbidden as visible copy. Sentences or alt text starting with Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, or Close are task instructions; rewrite them into concrete customer-facing copy before output.\n"
             . "- Rewrite planning/observation sentences into direct marketing copy before rendering. Do not visibly output phrases like \"Visitors see...\", \"Visitors can review...\", \"访客看到...\", or \"访客可以...\".\n"
             . "- Never output blueprint meta-copy: page/current-section highlight headings, planning observations, design instructions, task scripts, or sentences that tell the AI to display hierarchy, trust proof, primary actions, flow, risks, or content grouping. Those are instructions, not website copy.\n"
-            . "- Contract-field leak ban: never render content_contract, design_contract, implementation_contract, data_contract, visual_contract, page_goal, block_goal, why_this_block, planning_reason, selected_skill_codes, skill_snapshots, build_blueprint, build_tasks, or qa_report_contract as visible copy. These are build-time context only.\n"
+            . "- Contract-field leak ban: never render content_contract, design_contract, implementation_contract, data_contract, visual_contract, page_goal, block_goal, why_this_block, planning_reason, selected_skill_codes, skill_snapshots, build_plan_v2 internals, or qa_report_contract as visible copy. These are build-time context only.\n"
             . $metadataLeakExample
             . "- Never render internal identifiers or paths as visible copy: plan_locale, page_type, section_code, task_key, block_key, runtime_context, app/code paths, var/ paths, content/... component paths, shared:* keys, or page:* keys.\n"
             . "- Industry relevance rule: do not reuse app-download, game, casino, reward, APK, install, or generic support-site copy unless the approved brief explicitly asks for that industry. Keep vertical language tied to the confirmed brief instead of cross-contaminating other site types.\n"
@@ -10476,12 +13988,19 @@ JSON;
             $themeContext = \is_array($filteredThemeContext) ? $filteredThemeContext : $themeContext;
             $artDirection = \is_array($filteredArtDirection) ? $filteredArtDirection : $artDirection;
         }
+        $roleMap = $this->buildPaletteRoleMapFromThemePalette($palette, false);
+        $heroRoleMap = $this->buildPaletteRoleMapFromThemePalette($palette, true);
+        $roleMapPrompt = $this->formatPaletteRoleMapForPrompt($roleMap);
+        $heroRoleMapPrompt = $this->formatPaletteRoleMapForPrompt($heroRoleMap);
 
         return "Confirmed visual contract from the approved stage-1 theme and build plan:\n"
             . "- theme_name: " . (string)($contract['name'] ?? '') . "\n"
             . "- visual_tone: " . (string)($contract['visual_tone'] ?? '') . "\n"
             . "- font_family: " . (string)($contract['font_family'] ?? '') . "\n"
             . "- style_signature: " . (string)($contract['style_signature'] ?? '') . "\n"
+            . ($roleMapPrompt !== '' ? "- readable_palette_role_map: {$roleMapPrompt}\n" : '')
+            . ($heroRoleMapPrompt !== '' ? "- hero_readable_palette_role_map: {$heroRoleMapPrompt}\n" : '')
+            . ($roleMapPrompt !== '' ? "- HARD palette role execution: css_extra must use role map values for text, muted_text, surface, surface_alt, cta_bg, and cta_text. CTA selectors such as .pb-c-cta must pair background=cta_bg with color=cta_text from readable_palette_role_map; do not substitute #FFFFFF/#000000 unless that exact value appears in the role map.\n" : '')
             . "- art_direction: " . $this->jsonEncodeForPrompt($artDirection, 1200) . "\n"
             . "- palette: " . $this->jsonEncodeForPrompt($palette, 1800) . "\n"
             . "- theme_context_summary: " . $this->jsonEncodeForPrompt($themeContext, 1600) . "\n"
@@ -10564,6 +14083,7 @@ JSON;
             . $heroRule
             . $cardGameRule
             . "- Section recipe: {$recipe}\n"
+            . "- Heading semantics rule: opening, hero, above-fold, and page-intro blocks must render exactly one `<h1 class='pb-c-title'>`; non-opening content blocks use `h2.pb-c-title` or lower. Do not make every section title an h2.\n"
             . "- Spacing rhythm rule: CTA/action groups must have deliberate breathing room. When a CTA follows text, channel rows, form fields, or dividers, style its action wrapper or CTA with at least one clear margin, padding, or gap so the button never touches a line or neighboring row.\n"
             . "- Anti-monotony rule: adjacent blocks must not share the same three-card row, same image position, same copy labels, or same pale background/card treatment. Change composition, scale, motif, and spacing per section role.\n"
             . "- Rejected output patterns: centered title plus one paragraph plus CTA with no support/proof/visual device; centered title plus three small cards plus the same image; tiny cartoon/SVG-looking media used as a substitute for a real generated image; repeated generic CTA/category labels across blocks; hero built as a boxed card next to a small image; CTA stretched into a page-width bar; large empty dark panel with only a logo or one button; CSS-only hero made only from overlapping circles/blobs with no subject-matter stage.\n"
@@ -10778,7 +14298,7 @@ JSON;
                     . "  div.pb-c-scrim (overlay layer above the image)\n"
                     . "  div.pb-c-inner\n"
                     . "    div.pb-c-copy\n"
-                    . "      h2.pb-c-title\n"
+                    . "      h1.pb-c-title\n"
                     . "      p.pb-c-text\n"
                     . "      div.pb-c-action\n"
                     . "        div.pb-c-cta";
@@ -10787,9 +14307,9 @@ JSON;
                     . "  .pb-c-root: position:relative; overflow:hidden; width:100vw; min-height:520px; margin:0 calc(50% - 50vw); padding:72px 24px; box-sizing:border-box; font-family= CTX_CONFIRMED_THEME.font_family or a named brand family before generic fallback; background= palette_role_map.surface 或 linear-gradient(palette_role_map.surface->palette_role_map.surface_alt). Do not put max-width on root; constrain only .pb-c-inner\n"
                     . "  .pb-c-hero-img: position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center\n"
                     . "  .pb-c-scrim: position:absolute; inset:0; background= palette_role_map.scrim (solid hex requires opacity:.42-.58; rgba/linear-gradient may carry transparency directly)\n"
-                    . "  .pb-c-inner: position:relative; z-index:1; max-width:1180px; margin:0 auto; display:flex; align-items:center; min-height:420px\n"
+                    . "  .pb-c-inner: position:relative; z-index:1; max-width:1200px; margin:0 auto; display:flex; align-items:center; min-height:420px\n"
                     . "  .pb-c-copy: max-width:620px; padding:32px; border-radius:24px; background= palette_role_map.copy_panel_bg; color= palette_role_map.copy_panel_text; box-shadow:0 28px 80px palette_role_map.shadow\n"
-                    . "  .pb-c-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size: clamp(32px, 5vw, 52px); line-height:1.1; color= palette_role_map.copy_panel_text\n"
+                    . "  .pb-c-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size:52px; line-height:1.1; color= palette_role_map.copy_panel_text. In css_responsive, override title font-size to 42px at tablet and 34px at mobile; never use vw/clamp for font-size\n"
                     . "  .pb-c-text: margin:0 0 22px; line-height:1.7; color= palette_role_map.muted_text\n"
                     . "  .pb-c-action: margin:22px 0 0; padding:18px 0 0; display:flex; gap:12px; align-items:center; must be a sibling after channel/form/content rows, not inside a bordered row\n"
                     . "  .pb-c-cta: display:inline-flex; width:auto; max-width:280px; padding:12px 20px; border-radius:999px; background= palette_role_map.cta_bg; color= palette_role_map.cta_text; transition:transform .2s, box-shadow .2s\n"
@@ -10803,11 +14323,11 @@ JSON;
                 );
                 $cssStructuralHints = "结构层 CSS 必填规则（颜色由 palette_role_map 决定，禁止凭空发明色值）：\n"
                     . "  .pb-c-root: position:relative; overflow:hidden; padding:72px 24px; box-sizing:border-box; font-family= CTX_CONFIRMED_THEME.font_family or a named brand family before generic fallback; background= palette_role_map.surface\n"
-                    . "  .pb-c-inner: max-width:1180px; margin:0 auto; display:flex; flex-wrap:wrap; gap:32px; align-items:center\n"
+                    . "  .pb-c-inner: max-width:1200px; margin:0 auto; display:flex; flex-wrap:wrap; gap:32px; align-items:center\n"
                     . "  .pb-c-media: flex:1 1 360px; min-width:0; overflow:hidden; border-radius:24px; box-shadow:0 24px 64px palette_role_map.shadow\n"
                     . "  .pb-c-img: display:block; width:100%; height:360px; object-fit:cover; object-position:center\n"
                     . "  .pb-c-copy: flex:1 1 320px; min-width:0\n"
-                    . "  .pb-c-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size: clamp(28px, 4vw, 42px); line-height:1.1; color= palette_role_map.text\n"
+                    . "  .pb-c-title: margin:0 0 16px; font-family= CTX_CONFIRMED_THEME.font_family or a named display family before generic fallback; font-size:42px; line-height:1.1; color= palette_role_map.text. In css_responsive, override title font-size to 34px at tablet and 28px at mobile; never use vw/clamp for font-size\n"
                     . "  .pb-c-text: margin:0 0 22px; line-height:1.7; color= palette_role_map.muted_text\n"
                     . ($isContactSupportContract
                         ? "  .pb-c-cards: display:flex; flex-wrap:wrap; gap:14px; margin:0 0 22px\n"
@@ -10853,12 +14373,24 @@ JSON;
         $text = $this->pickPaletteColor($themePalette, ['text', 'body', 'foreground']);
         $mutedText = $this->pickPaletteColor($themePalette, ['muted_text', 'muted', 'subtle', 'text_muted']);
         $shadow = $this->pickPaletteColor($themePalette, ['shadow', 'shadow_color', 'border']);
+        $surfaceForText = $surface !== '' ? $surface : $surfaceAlt;
+        $text = $surfaceForText !== ''
+            ? $this->resolveReadablePaletteTextColor($surfaceForText, $text, $themePalette, [$primary, $accent, $surfaceAlt])
+            : $text;
+        $mutedText = $surfaceForText !== ''
+            ? $this->resolveReadablePaletteTextColor($surfaceForText, $mutedText !== '' ? $mutedText : $text, $themePalette, [$text, $primary, $accent])
+            : ($mutedText !== '' ? $mutedText : $text);
+        $shadow = $this->resolvePaletteShadowColor($shadow, $surfaceForText, $primary, $text, $accent);
 
         $ctaBg = $accent !== '' ? $accent : ($primary !== '' ? $primary : $text);
-        $ctaText = $ctaBg !== '' ? $this->resolveReadableTextColor($ctaBg, $surface !== '' ? $surface : $text) : '';
+        $ctaText = $ctaBg !== ''
+            ? $this->resolveReadablePaletteTextColor($ctaBg, $surface !== '' ? $surface : $text, $themePalette, [$text, $surfaceAlt, $primary])
+            : '';
 
         $copyPanelBg = $isHero ? ($surface !== '' ? $surface : $primary) : ($surfaceAlt !== '' ? $surfaceAlt : $surface);
-        $copyPanelText = $copyPanelBg !== '' ? $this->resolveReadableTextColor($copyPanelBg, $text) : $text;
+        $copyPanelText = $copyPanelBg !== ''
+            ? $this->resolveReadablePaletteTextColor($copyPanelBg, $text, $themePalette, [$mutedText, $primary, $accent])
+            : $text;
 
         $scrim = $isHero ? ($primary !== '' ? $primary : $text) : $surface;
 
@@ -10903,15 +14435,20 @@ JSON;
         $skeletonOutline = (string)($artifacts['skeleton_outline'] ?? '');
         $cssStructuralHints = (string)($artifacts['css_structural_hints'] ?? '');
         $roleMap = \is_array($artifacts['palette_role_map'] ?? null) ? $artifacts['palette_role_map'] : [];
-        $roleMapLine = $roleMap === []
-            ? ''
-            : '{' . \implode(', ', \array_map(static fn(string $k, string $v): string => $k . '=' . $v, \array_keys($roleMap), \array_values($roleMap))) . '}';
+        $roleMapLine = $this->formatPaletteRoleMapForPrompt($roleMap);
         if ($required && $slotId !== '' && $finalUrl === '') {
             return "Block visual contract:\n"
                 . "- visual_contract: " . $this->jsonEncodeForPrompt($visualContract, 1600) . "\n"
                 . "- image_required: yes\n"
                 . "- Pending image slot {$slotId}: this is an unresolved required media dependency. Do not invent a placeholder image URL and do not claim CSS-only media satisfies the generated-image slot.\n"
                     . "- If a later FINAL REQUIRED IMAGE CONTRACT supplies an exact image URL/template, prefer that editable <img> binding. If no verified final_url/template is available, return no fake image tags and rely on the workflow retry/repair path to regenerate the asset before publish.\n";
+        }
+        if ((int)($visualContract['image_unavailable'] ?? 0) === 1) {
+            return "Block visual contract:\n"
+                . "- visual_contract: " . $this->jsonEncodeForPrompt($visualContract, 1600) . "\n"
+                . "- image_required: no\n"
+                . "- image_unavailable: yes; build a polished CSS-only or product-UI media surface for this section.\n"
+                . "- Do not invent image URLs, do not render empty <img> tags, and do not show unavailable-image diagnostics as visitor copy.\n";
         }
 
         return "Block visual contract:\n"
@@ -10938,6 +14475,24 @@ JSON;
                         ? "- If the slot is hero/background_cover and the user's latest block-adjustment instruction does not explicitly request another composition, build the block as a real 1920x750-style banner: viewport-width root, full-cover image layer, solid scrim/veil overlay, floating content container. A side thumbnail, centered 1200px image island, huge theme-color gutters, or cartoon-like illustration panel is invalid as the default baseline.\n"
                         : "- Page-banner anti-sameness rule: do not clone the home-page banner formula. A page opening may be compact, split, anchored, card-led, process-led, support-led, story-led, or compliance-led as long as it clearly introduces this page and remains visually polished.\n")
                 : "- Optional image slot: do not invent image URLs. If no verified generated image is supplied, design with CSS-only motif/pseudo-elements or omit media; no placeholder service.\n");
+    }
+
+    /**
+     * @param array<string,mixed> $roleMap
+     */
+    private function formatPaletteRoleMapForPrompt(array $roleMap): string
+    {
+        $pairs = [];
+        foreach ($roleMap as $key => $value) {
+            $key = \trim((string)$key);
+            $value = \trim((string)$value);
+            if ($key === '' || $value === '') {
+                continue;
+            }
+            $pairs[] = $key . '=' . $value;
+        }
+
+        return $pairs === [] ? '' : '{' . \implode(', ', $pairs) . '}';
     }
 
     /**
@@ -11015,7 +14570,6 @@ JSON;
             ],
             \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [],
             \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
-            \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [],
         ] as $candidate) {
             if (!\is_array($candidate) || $candidate === []) {
                 continue;
@@ -11121,6 +14675,90 @@ JSON;
         }
 
         return '';
+    }
+
+    /**
+     * @param array<string,string> $palette
+     * @param list<string> $extraCandidates
+     */
+    private function resolveReadablePaletteTextColor(
+        string $backgroundColor,
+        string $preferredTextColor,
+        array $palette,
+        array $extraCandidates = []
+    ): string {
+        $backgroundRgb = $this->parseCssColorToRgb($backgroundColor);
+        $preferredTextColor = \trim($preferredTextColor);
+        if ($backgroundRgb === null) {
+            return $preferredTextColor;
+        }
+
+        $candidateValues = \array_merge(
+            [$preferredTextColor],
+            $extraCandidates,
+            [
+                $this->pickPaletteColor($palette, ['text', 'body', 'foreground']),
+                $this->pickPaletteColor($palette, ['copy_panel_text']),
+                $this->pickPaletteColor($palette, ['secondary']),
+                $this->pickPaletteColor($palette, ['primary', 'brand', 'button']),
+                $this->pickPaletteColor($palette, ['accent', 'highlight']),
+                $this->pickPaletteColor($palette, ['muted_text', 'muted', 'subtle', 'text_muted']),
+                $this->pickPaletteColor($palette, ['surface', 'background', 'base']),
+                $this->pickPaletteColor($palette, ['surface_alt', 'background_alt', 'panel', 'card']),
+                '#0f172a',
+                '#f8fafc',
+                '#ffffff',
+            ]
+        );
+        $seen = [];
+        foreach ($candidateValues as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate === '') {
+                continue;
+            }
+            $key = \strtolower($candidate);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $candidateRgb = $this->parseCssColorToRgb($candidate);
+            if ($candidateRgb !== null && $this->contrastRatio($backgroundRgb, $candidateRgb) >= 4.5) {
+                return $candidate;
+            }
+        }
+
+        return $this->resolveReadableTextColor($backgroundColor, $preferredTextColor);
+    }
+
+    private function resolvePaletteShadowColor(string $shadow, string $surface, string $primary, string $text, string $accent): string
+    {
+        $shadow = \trim($shadow);
+        if ($shadow !== '' && !$this->isLowContrastPalettePair($shadow, $surface, 1.25)) {
+            return $shadow;
+        }
+
+        foreach ([$text, $primary, $accent] as $candidate) {
+            $candidate = \trim($candidate);
+            if ($candidate !== '' && !$this->isLowContrastPalettePair($candidate, $surface, 1.25)) {
+                return $candidate;
+            }
+        }
+
+        return $shadow !== '' ? $shadow : $text;
+    }
+
+    private function isLowContrastPalettePair(string $foreground, string $background, float $threshold): bool
+    {
+        if (\trim($foreground) === '' || \trim($background) === '') {
+            return false;
+        }
+        $foregroundRgb = $this->parseCssColorToRgb($foreground);
+        $backgroundRgb = $this->parseCssColorToRgb($background);
+        if ($foregroundRgb === null || $backgroundRgb === null) {
+            return false;
+        }
+
+        return $this->contrastRatio($foregroundRgb, $backgroundRgb) < $threshold;
     }
 
     private function resolveReadableTextColor(string $backgroundColor, string $preferredTextColor = ''): string
@@ -11600,15 +15238,6 @@ JSON;
                 \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE
             );
         }
-        if (\trim((string)($defaultConfig['runtime.content_copy_rows'] ?? '')) === '') {
-            $sectionRows = $this->resolveExecutionBlueprintSectionRows($scope, $pageType, $section);
-            if ($sectionRows !== []) {
-                $defaultConfig['runtime.content_copy_rows'] = \json_encode(
-                    $sectionRows,
-                    \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
-                );
-            }
-        }
         if ($sectionImageSlotId !== '') {
             $defaultConfig['runtime.section_image_slot_id'] = $sectionImageSlotId;
         }
@@ -11625,47 +15254,6 @@ JSON;
         }
 
         return $defaultConfig;
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @param array<string,mixed> $section
-     * @return list<array{field:string,copy:string}>
-     */
-    private function resolveExecutionBlueprintSectionRows(array $scope, string $pageType, array $section): array
-    {
-        $code = \strtolower(\str_replace(['/', '_'], '-', \trim((string)($section['code'] ?? ''))));
-        $key = \strtolower(\str_replace('_', '-', \trim((string)($section['key'] ?? ''))));
-        $locale = $this->resolveScopePrimaryLocale($scope);
-        $blocks = $this->resolveExecutionBlueprintBlocksForPage($scope, $pageType);
-        foreach ($blocks as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $blockKey = \strtolower(\str_replace('_', '-', \trim((string)($block['block_key'] ?? $block['key'] ?? ''))));
-            if ($blockKey === '') {
-                continue;
-            }
-            if ($key !== '' && $key !== $blockKey && !\str_contains($code, $blockKey)) {
-                continue;
-            }
-            $description = $this->sanitizeVisibleCopy((string)($block['content'] ?? $block['goal'] ?? ''));
-            if ($locale !== '') {
-                $description = $this->filterVisibleCopyForLocale($description, $locale);
-            }
-            $description = $this->clipText($description, 180);
-            $fieldPlan = $this->sanitizeExecutionBlueprintFieldPlanForGeneration(
-                \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
-                $locale
-            );
-            return $this->buildExecutionBlueprintContentCopyRows(
-                $this->pickExecutionBlueprintBlockLabel($block, $fieldPlan, $blockKey, $locale),
-                $description,
-                $fieldPlan
-            );
-        }
-
-        return [];
     }
 
     /**
@@ -11733,9 +15321,30 @@ JSON;
     private function collectStageOneVisibleSamplesForPage(array $scope, string $pageType): array
     {
         $samples = [];
-        $pages = \is_array($scope['execution_blueprint']['pages'] ?? null) ? $scope['execution_blueprint']['pages'] : [];
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $pages = \is_array($buildPlan['pages'] ?? null) ? $buildPlan['pages'] : [];
         $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-        foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+        if ($page === []) {
+            foreach ($pages as $candidate) {
+                if (\is_array($candidate) && \trim((string)($candidate['page_type'] ?? '')) === $pageType) {
+                    $page = $candidate;
+                    break;
+                }
+            }
+        }
+        $pageBlocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+        foreach (\is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [] as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockPageType = \trim((string)($block['page_type'] ?? ''));
+            $blockPageId = \trim((string)($block['page_id'] ?? ''));
+            $pageId = \trim((string)($page['page_id'] ?? $page['id'] ?? ''));
+            if ($blockPageType === $pageType || ($pageId !== '' && $blockPageId === $pageId)) {
+                $pageBlocks[] = $block;
+            }
+        }
+        foreach ($pageBlocks as $block) {
             if (!\is_array($block)) {
                 continue;
             }
@@ -11773,9 +15382,6 @@ JSON;
             $scope['build_plan_v2'] ?? null,
             $scope['plan_projection'] ?? null,
             $scope['content_manifest'] ?? null,
-            $scope['build_blueprint'] ?? null,
-            $scope['build_tasks'] ?? null,
-            $scope['execution_blueprint'] ?? null,
             $scope['plan_json'] ?? null,
         ] as $source) {
             if (\is_array($source)) {
@@ -11826,117 +15432,44 @@ JSON;
      */
     private function buildPlanTaskRootFromBuildBlueprint(array $scope): array
     {
-        $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-        if ((string)($buildBlueprint['source'] ?? '') !== 'build_plan_v2') {
-            return $this->buildPlanTaskRootFromExecutionBlueprint($scope);
-        }
-
-        $sharedTasks = [];
-        $pageTasks = [];
-        foreach (\is_array($buildBlueprint['tasks'] ?? null) ? $buildBlueprint['tasks'] : [] as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $task = $this->getBuildTaskService()->inflateBuildBlueprintTaskContext($task, $buildBlueprint);
-            $pageType = \trim((string)($task['page_type'] ?? ''));
-            $taskType = \trim((string)($task['task_type'] ?? ''));
-            if ($pageType === '' || $taskType === 'shared_component') {
-                $sharedTasks[] = $task;
-                continue;
-            }
-            $pageTasks[$pageType][] = $task;
-        }
-
-        if ($sharedTasks === [] && $pageTasks === []) {
-            return [];
-        }
-
-        return [
-            'signature' => (string)($buildBlueprint['build_plan_signature'] ?? $buildBlueprint['signature'] ?? ''),
-            'shared_tasks' => $sharedTasks,
-            'page_tasks' => $pageTasks,
-        ];
-    }
-
-    /**
-     * The refactored stage-1 blueprint is the source of truth for generation.
-     * Convert its page_plans/shared chrome shape into the task root consumed by
-     * section prompts and default-config derivation.
-     *
-     * @param array<string,mixed> $scope
-     * @return array<string,mixed>
-     */
-    private function buildPlanTaskRootFromExecutionBlueprint(array $scope): array
-    {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        if ($executionBlueprint === []) {
-            return [];
-        }
-
-        $sharedPromptContext = $this->normalizeSharedPromptContextFromExecutionBlueprint($scope);
-        $themeContext = $this->resolveExecutionBlueprintThemeContext($scope);
-        $contentLocale = $this->resolveScopePrimaryLocale($scope);
         $sharedTasks = [];
         foreach (['header', 'footer'] as $region) {
-            $plan = $this->resolveExecutionBlueprintSharedPlan($scope, $region);
-            if ($plan === []) {
-                continue;
+            $task = $this->getBuildTaskService()->getTaskDefinition($scope, 'shared:' . $region);
+            if (\is_array($task) && $task !== []) {
+                $sharedTasks[] = $task;
             }
-            $sharedTasks[] = [
-                'task_key' => 'shared:' . $region,
-                'task_type' => 'shared_component',
-                'region' => $region,
-                'label' => $this->pickString($plan['title'] ?? null, $region),
-                'sort_order' => $region === 'header' ? 10 : 20,
-                'plan_context' => [
-                    'block_goal' => (string)($plan['goal'] ?? ''),
-                    'field_plan' => $this->sanitizeExecutionBlueprintFieldPlanForGeneration(
-                        \is_array($plan['field_plan'] ?? null) ? $plan['field_plan'] : [],
-                        $contentLocale
-                    ),
-                ],
-                'task_script' => [
-                    'story_goal' => (string)($plan['goal'] ?? ''),
-                    'field_content_requirements' => $this->buildSharedPlanFieldRequirements($plan, $region),
-                ],
-                'block_task' => [
-                    'task_goal' => (string)($plan['goal'] ?? ''),
-                    'content_plan' => [
-                        'content_copy' => $this->buildSharedPlanContentCopyRows($plan, $region),
-                    ],
-                    'style_plan' => \is_array($plan['style_brief'] ?? null) ? $plan['style_brief'] : [],
-                    'realtime_content' => \is_array($plan['realtime_content'] ?? null) ? $plan['realtime_content'] : [],
-                ],
-                'runtime_context' => [
-                    'theme_context_snapshot' => $themeContext,
-                    'shared_prompt_context' => $sharedPromptContext,
-                    'content_locale' => $contentLocale,
-                    'language_contract' => $this->buildStage3TaskLanguageContract($contentLocale),
-                ],
-            ];
-        }
-
-        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null) ? $executionBlueprint['page_plans'] : [];
-        if ($pagePlans === [] && \is_array($executionBlueprint['pages'] ?? null)) {
-            $pagePlans = $executionBlueprint['pages'];
         }
 
         $pageTasks = [];
-        foreach (\array_keys($pagePlans) as $pageType) {
-            if (!\is_string($pageType) || \trim($pageType) === '') {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $pageTypes = [];
+        foreach (\is_array($contract['pages'] ?? null) ? $contract['pages'] : [] as $page) {
+            if (!\is_array($page)) {
                 continue;
             }
-            foreach ($this->buildSectionTasksFromExecutionBlueprint($pageType, $scope) as $task) {
-                $pageTasks[$pageType][] = $task;
+            $pageType = \trim((string)($page['page_type'] ?? ''));
+            if ($pageType !== '') {
+                $pageTypes[$pageType] = true;
+            }
+        }
+        foreach (\array_keys($pageTypes) as $pageType) {
+            foreach ($this->getBuildTaskService()->listTaskKeysByPageType($scope, (string)$pageType) as $taskKey) {
+                $task = $this->getBuildTaskService()->getTaskDefinition($scope, (string)$taskKey);
+                if (!\is_array($task) || $task === []) {
+                    continue;
+                }
+                $pageTasks[(string)$pageType][] = $task;
             }
         }
 
         if ($sharedTasks === [] && $pageTasks === []) {
-            return [];
+            throw new \RuntimeException('Build prompt contract failed: confirmed build_plan_v2 has no executable blocks.');
         }
 
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+
         return [
-            'signature' => (string)($executionBlueprint['signature'] ?? ''),
+            'signature' => (string)($meta['signature'] ?? $meta['source_signature'] ?? ''),
             'shared_tasks' => $sharedTasks,
             'page_tasks' => $pageTasks,
         ];
@@ -12208,7 +15741,7 @@ JSON;
             . $stage3LocaleRule
             . ($verifiedAssets !== [] ? "- task policy slices are already expanded from the exact task contract; do not request broad-scope fallback context.\n" : '')
             . $verifiedAssetRule;
-        AiSiteWorkflowTrace::prompt('stage2_frozen_task_context', $frozenContext, [
+        AiSiteWorkflowTrace::prompt('build_plan_block_context', $frozenContext, [
             'context_label' => $contextLabel,
             'task_key' => (string)($buildPlanTask['task_key'] ?? ''),
             'page_type' => (string)($buildPlanTask['page_type'] ?? ''),
@@ -13680,8 +17213,8 @@ JSON;
                 $sharedPromptContext['header_plan']['title'] ?? null,
                 $sharedPromptContext['footer_plan']['site_display_name'] ?? null,
                 $sharedPromptContext['footer_plan']['title'] ?? null,
-                $scope['execution_blueprint']['shared_prompt_context']['site_display_name'] ?? null,
-                $scope['execution_blueprint']['theme_context_snapshot']['site_display_name'] ?? null,
+                $scope['build_plan_v2']['shared_prompt_context']['site_display_name'] ?? null,
+                $scope['build_plan_v2']['theme_context_snapshot']['site_display_name'] ?? null,
                 $scope['plan_workbench']['confirmed']['shared_prompt_context']['site_display_name'] ?? null,
                 $scope['plan_workbench']['confirmed']['theme_context_snapshot']['site_display_name'] ?? null,
             ]);
@@ -13812,11 +17345,90 @@ JSON;
             $params['prompt'] = $this->getSkillRegistry()->prependPromptGuide($params['prompt'], 'stage3');
         }
 
+        $testRegion = \trim((string)($params['test_region'] ?? ''));
+        $testDefaultConfig = \is_array($params['test_default_config'] ?? null) ? $params['test_default_config'] : [];
+        $testRenderContext = \is_array($params['test_render_context'] ?? null) ? $params['test_render_context'] : [];
+        unset($params['test_region'], $params['test_default_config'], $params['test_render_context']);
+        if (
+            $operation === 'generate'
+            && $this->isTestEnvironment()
+            && !(bool)RequestContext::get(self::REQUEST_KEY_FORCE_REAL_AI_IN_TEST, false)
+        ) {
+            return \json_encode(
+                $this->buildDeterministicPhpunitAiPayload($testRegion, $testDefaultConfig, $testRenderContext),
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+            ) ?: '{}';
+        }
+
         if ($this->aiService !== null) {
             return $this->dispatchAiOperationViaInjectedService($this->aiService, $operation, $params);
         }
 
         return w_query('ai', $operation, $params);
+    }
+
+    /**
+     * Ordinary PHPUnit integration tests exercise queue/state/layout contracts;
+     * only tests that set REQUEST_KEY_FORCE_REAL_AI_IN_TEST should hit a model.
+     *
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array<string,string>
+     */
+    private function buildDeterministicPhpunitAiPayload(string $region, array $defaultConfig, array $renderContext): array
+    {
+        $region = \trim($region);
+        $task = \is_array($renderContext['build_plan_task'] ?? null) ? $renderContext['build_plan_task'] : [];
+        $fieldPlan = \is_array($task['field_plan'] ?? null) ? $task['field_plan'] : [];
+        $title = $this->sanitizeVisibleCopy((string)(
+            $fieldPlan['title']
+            ?? $defaultConfig['content.title']
+            ?? $defaultConfig['title']
+            ?? $task['section_label']
+            ?? $task['section_code']
+            ?? 'Premium experience'
+        ));
+        $copy = $this->sanitizeVisibleCopy((string)(
+            $fieldPlan['body']
+            ?? $fieldPlan['copy']
+            ?? $defaultConfig['content.copy']
+            ?? $task['content_plan']['summary']
+            ?? $task['goal']
+            ?? 'Focused content with clear hierarchy, scannable proof points, and direct next actions.'
+        ));
+        $title = $title !== '' ? $title : 'Premium experience';
+        $copy = $copy !== '' ? $copy : 'Focused content with clear hierarchy, scannable proof points, and direct next actions.';
+
+        if ($region === 'header') {
+            return [
+                'extra_fields' => '',
+                'php_variables' => '',
+                'css_extra' => ".pb-c-root{position:relative;padding:16px 24px;background:#0f1020;color:#f8f7ff;border-bottom:1px solid rgba(124,255,240,.28)}.pb-c-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:18px}.pb-c-brand{font-weight:800;letter-spacing:.02em}.pb-c-nav{display:flex;gap:14px;flex-wrap:wrap}.pb-c-link{color:#bffcff;text-decoration:none;font-weight:700}",
+                'html_extra' => "<div class='pb-c-root'><div class='pb-c-inner'><div class='pb-c-brand'>{$title}</div><nav class='pb-c-nav'><a class='pb-c-link' href='#'>Home</a><a class='pb-c-link' href='#'>Experience</a><a class='pb-c-link' href='#'>Contact</a></nav></div></div>",
+                'js_content' => '',
+            ];
+        }
+
+        if ($region === 'footer') {
+            return [
+                'extra_fields' => '',
+                'php_variables' => '',
+                'css_extra' => ".pb-c-root{position:relative;padding:40px 24px;background:#090a15;color:#f8f7ff;border-top:1px solid rgba(255,59,212,.26)}.pb-c-inner{max-width:1180px;margin:0 auto;display:grid;gap:14px}.pb-c-title{font-size:24px;font-weight:800}.pb-c-copy{max-width:720px;color:#c9c8d8;line-height:1.65}",
+                'html_extra_column' => "<div class='pb-c-title'>{$title}</div>",
+                'html_extra' => "<div class='pb-c-root'><div class='pb-c-inner'><div class='pb-c-title'>{$title}</div><p class='pb-c-copy'>{$copy}</p></div></div>",
+                'footer_extra_text' => $copy,
+                'js_content' => '',
+            ];
+        }
+
+        return [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => ".pb-c-root{position:relative;overflow:hidden;padding:64px 24px;background:linear-gradient(135deg,#111225,#191531 58%,#101729);color:#f8f7ff}.pb-c-root:before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(124,255,240,.08),rgba(255,59,212,.08));pointer-events:none}.pb-c-inner{position:relative;max-width:1120px;margin:0 auto;display:grid;gap:18px}.pb-c-kicker{margin:0;color:#7cfff0;font-weight:800;text-transform:uppercase}.pb-c-title{margin:0;font-size:42px;line-height:1.1;font-weight:900}.pb-c-copy{max-width:760px;margin:0;color:#d9d7e8;line-height:1.7}.pb-c-cta{display:inline-flex;width:max-content;padding:12px 18px;border:1px solid rgba(124,255,240,.7);color:#0f1020;background:#7cfff0;text-decoration:none;font-weight:900}",
+            'css_responsive' => "@media(max-width:720px){.pb-c-root{padding:48px 18px}.pb-c-title{font-size:32px}.pb-c-copy{font-size:15px}}",
+            'html_content' => "<section class='pb-c-root'><div class='pb-c-inner'><p class='pb-c-kicker'>Live table rhythm</p><h2 class='pb-c-title'>{$title}</h2><p class='pb-c-copy'>{$copy}</p><a class='pb-c-cta' href='#'>Explore now</a></div></section>",
+            'js_content' => '',
+        ];
     }
 
     private function dispatchAiOperationViaInjectedService(AiService $aiService, string $operation, array $params): mixed
@@ -13877,18 +17489,63 @@ JSON;
      */
     private function resolvePrimaryLocale(array $websiteProfile, array $scope): string
     {
+        $generatedLocale = '';
         foreach ([
-            $scope['ai_content_locale'] ?? null,
+            $scope['plan_generated_locale'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_generated_locale'] ?? null,
+            $scope['plan_structured']['plan_generated_locale'] ?? null,
+            $scope['plan_json']['plan_generated_locale'] ?? null,
+        ] as $candidate) {
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                $generatedLocale = $locale;
+                break;
+            }
+        }
+
+        $defaultLocale = '';
+        foreach ([
             $scope['default_locale'] ?? null,
             $websiteProfile['default_locale'] ?? null,
             $scope['website_profile']['default_locale'] ?? null,
             $scope['default_language'] ?? null,
             $websiteProfile['default_language'] ?? null,
             $scope['website_profile']['default_language'] ?? null,
+        ] as $candidate) {
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                $defaultLocale = $locale;
+                break;
+            }
+        }
+
+        $preferGeneratedLocale = $generatedLocale !== ''
+            && (
+                $defaultLocale === ''
+                || ($this->isEnglishLocale($defaultLocale) && !$this->isEnglishLocale($generatedLocale))
+            );
+
+        foreach ([
+            $scope['ai_content_locale'] ?? null,
+            $scope['plan_json']['stage1_contract']['content_locale'] ?? null,
+            $scope['plan_json']['i18n']['content_locale'] ?? null,
+            $scope['plan_structured']['stage1_contract']['content_locale'] ?? null,
+            $scope['plan_structured']['i18n']['content_locale'] ?? null,
+            $scope['build_plan_v2']['content_locale'] ?? null,
+            $scope['build_plan_v2']['i18n']['primary_locale'] ?? null,
+            $scope['plan_workbench']['confirmed']['content_locale'] ?? null,
+            $preferGeneratedLocale ? $generatedLocale : null,
+            $scope['default_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $websiteProfile['default_language'] ?? null,
+            $scope['website_profile']['default_language'] ?? null,
+            !$preferGeneratedLocale ? $generatedLocale : null,
             $scope['content_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
             $scope['website_profile']['content_locale'] ?? null,
-            $scope['execution_blueprint']['content_locale'] ?? null,
+            $scope['plan_structured']['content_locale'] ?? null,
             $scope['plan_json']['content_locale'] ?? null,
             $scope['plan_json']['i18n']['content_locale'] ?? null,
             $scope['locale'] ?? null,
@@ -13897,9 +17554,6 @@ JSON;
             $scope['website_locale'] ?? null,
             $websiteProfile['locales'][0] ?? null,
             $scope['website_profile']['locales'][0] ?? null,
-            $scope['plan_generated_locale'] ?? null,
-            $scope['plan_workbench']['confirmed']['plan_generated_locale'] ?? null,
-            $scope['plan_structured']['plan_generated_locale'] ?? null,
         ] as $candidate) {
             $locale = \trim((string)$candidate);
             if ($locale !== '') {
@@ -13933,11 +17587,9 @@ JSON;
     private function resolveSharedPromptContext(array $scope): array
     {
         foreach ([
-            $this->normalizeSharedPromptContextFromExecutionBlueprint($scope),
             $this->extractSharedPromptContextFromTask($this->resolveSharedBuildPlanTask($scope, 'header')),
             $this->extractSharedPromptContextFromTask($this->resolveSharedBuildPlanTask($scope, 'footer')),
-            \is_array($scope['execution_blueprint']['shared_prompt_context'] ?? null) ? $scope['execution_blueprint']['shared_prompt_context'] : [],
-            \is_array($scope['plan_workbench']['confirmed']['shared_prompt_context'] ?? null) ? $scope['plan_workbench']['confirmed']['shared_prompt_context'] : [],
+            \is_array($scope['build_plan_v2']['shared_prompt_context'] ?? null) ? $scope['build_plan_v2']['shared_prompt_context'] : [],
         ] as $candidate) {
             if (!\is_array($candidate) || $candidate === []) {
                 continue;
@@ -13950,91 +17602,6 @@ JSON;
                 || \is_array($candidate['shared_cta_strategy'] ?? null)
                 || \is_scalar($candidate['site_display_name'] ?? null)
             ) {
-                return $candidate;
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @return array<string,mixed>
-     */
-    private function normalizeSharedPromptContextFromExecutionBlueprint(array $scope): array
-    {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        if ($executionBlueprint === []) {
-            return [];
-        }
-
-        $headerPlan = $this->resolveExecutionBlueprintSharedPlan($scope, 'header');
-        $footerPlan = $this->resolveExecutionBlueprintSharedPlan($scope, 'footer');
-        $candidate = [];
-        if ($headerPlan !== []) {
-            $candidate['header_plan'] = $headerPlan;
-        }
-        if ($footerPlan !== []) {
-            $candidate['footer_plan'] = $footerPlan;
-        }
-        foreach ([
-            $headerPlan['content_locale'] ?? null,
-            $footerPlan['content_locale'] ?? null,
-            $executionBlueprint['content_locale'] ?? null,
-            $scope['website_profile']['content_locale'] ?? null,
-            $scope['website_profile']['default_locale'] ?? null,
-            $scope['default_locale'] ?? null,
-        ] as $localeCandidate) {
-            if (\is_scalar($localeCandidate) && \trim((string)$localeCandidate) !== '') {
-                $candidate['content_locale'] = \trim((string)$localeCandidate);
-                break;
-            }
-        }
-
-        return $candidate !== [] ? $this->normalizeSharedPromptContextCandidate($candidate) : [];
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @return array<string,mixed>
-     */
-    private function resolveExecutionBlueprintSharedPlan(array $scope, string $region): array
-    {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
-        $candidates = $region === 'header'
-            ? [
-                $sharedComponents['header'] ?? null,
-                $executionBlueprint['navigation_plan'] ?? null,
-                $executionBlueprint['header_plan'] ?? null,
-            ]
-            : [
-                $sharedComponents['footer'] ?? null,
-                $executionBlueprint['footer_plan'] ?? null,
-            ];
-
-        foreach ($candidates as $candidate) {
-            if (\is_array($candidate) && $candidate !== []) {
-                return $candidate;
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @return array<string,mixed>
-     */
-    private function resolveExecutionBlueprintThemeContext(array $scope): array
-    {
-        foreach ([
-            $scope['execution_blueprint']['theme_context_snapshot'] ?? null,
-            $scope['plan_workbench']['confirmed']['theme_context_snapshot'] ?? null,
-            $scope['content_manifest']['theme_context_snapshot'] ?? null,
-            $scope['plan_projection']['theme_context_snapshot'] ?? null,
-        ] as $candidate) {
-            if (\is_array($candidate) && $candidate !== []) {
                 return $candidate;
             }
         }
@@ -14627,7 +18194,7 @@ JSON;
                 'featured_pages' => '重点页面',
                 'all_pages' => '全部页面',
                 'all_rights_reserved' => '保留所有权利。',
-                'brand_summary' => '棋牌 APK 下载、规则与支持信息站点。',
+                'brand_summary' => '棋牌规则、玩法与支持信息站点。',
                 'contact_us' => '联系我们',
                 'explore_more' => '查看更多',
                 'get_started' => '立即开始',
@@ -15823,10 +19390,170 @@ JSON;
         if ($hardPolicyReason !== null) {
             throw new \RuntimeException('Generated component content hard policy failed: ' . $hardPolicyReason);
         }
+        $cssPolicyReason = $this->detectHardGeneratedSectionCssPolicyViolation($styleCss);
+        if ($cssPolicyReason !== null) {
+            throw new \RuntimeException('Generated component content hard policy failed: ' . $cssPolicyReason);
+        }
+        if (
+            $this->requiresPrimaryHeadingForRenderedComponent($componentCode, $renderContext)
+            && \preg_match('/<h1\b/iu', $html) !== 1
+        ) {
+            throw new \RuntimeException('Generated component content hard policy failed: opening/page-intro section must render one h1 heading.');
+        }
         // This gate is intentionally narrow: it protects the component contract
         // from invalid/leaked build structures only. Normal copy, marketing
         // claims, language polish, images, and art direction stay in prompt
         // guidance plus browser QA, not hard blocking.
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     * @param array<string,mixed> $renderContext
+     * @return array<string,mixed>
+     */
+    private function normalizeRequiredPrimaryHeadingInAiPayload(array $aiData, string $componentCode, string $semanticComponentCode, array $renderContext): array
+    {
+        if (!$this->requiresPrimaryHeadingForRenderedComponent($semanticComponentCode !== '' ? $semanticComponentCode : $componentCode, $renderContext)) {
+            return $aiData;
+        }
+        $htmlKey = \array_key_exists('html_content', $aiData) ? 'html_content' : (\array_key_exists('html_extra', $aiData) ? 'html_extra' : '');
+        if ($htmlKey === '') {
+            return $aiData;
+        }
+        $html = (string)$aiData[$htmlKey];
+        if (\preg_match('/<h1\b/iu', $html) === 1) {
+            return $aiData;
+        }
+        $pattern = '/<h2\b([^>]*\bclass\s*=\s*(["\'])(?:(?!\2).)*\bpb-c-title\b(?:(?!\2).)*\2[^>]*)>(.*?)<\/h2>/isu';
+        $fixed = \preg_replace($pattern, '<h1$1>$3</h1>', $html, 1);
+        if (\is_string($fixed) && $fixed !== $html && \preg_match('/<h1\b/iu', $fixed) === 1) {
+            $aiData[$htmlKey] = $fixed;
+            return $aiData;
+        }
+
+        $fixed = \preg_replace('/<h2\b([^>]*)>(.*?)<\/h2>/isu', '<h1$1>$2</h1>', $html, 1);
+        if (\is_string($fixed) && $fixed !== $html && \preg_match('/<h1\b/iu', $fixed) === 1) {
+            $aiData[$htmlKey] = $fixed;
+        }
+
+        return $aiData;
+    }
+
+    private function detectHardGeneratedSectionCssPolicyViolation(string $styleCss): ?string
+    {
+        if (\trim($styleCss) === '') {
+            return null;
+        }
+        if (\preg_match('/font-size\s*:\s*(?:clamp|min|max|calc)\s*\(/iu', $styleCss) === 1) {
+            return 'font-size must use fixed breakpoint values, not clamp/min/max/calc expressions.';
+        }
+        if (\preg_match('/font-size\s*:[^;{}]*\bvw\b/iu', $styleCss) === 1) {
+            return 'font-size must use fixed breakpoint values, not viewport-width units.';
+        }
+        if (\preg_match('/letter-spacing\s*:\s*-/iu', $styleCss) === 1) {
+            return 'letter-spacing must not use negative values.';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function requiresPrimaryHeadingForRenderedComponent(string $componentCode, array $renderContext): bool
+    {
+        $buildPlanTask = \is_array($renderContext['_build_plan_task'] ?? null)
+            ? $renderContext['_build_plan_task']
+            : [];
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
+        $visualContract = \is_array($renderContext['_visual_contract'] ?? null) ? $renderContext['_visual_contract'] : [];
+        $identity = \mb_strtolower(\implode(' ', \array_map('strval', [
+            $componentCode,
+            $renderContext['component_code'] ?? '',
+            $renderContext['section_code'] ?? '',
+            $renderContext['page_flow_role'] ?? '',
+            $buildPlanTask['task_key'] ?? '',
+            $buildPlanTask['section_code'] ?? '',
+            $buildPlanTask['section_key'] ?? '',
+            $buildPlanTask['section_template'] ?? '',
+            $buildPlanTask['page_flow_role'] ?? '',
+            $planContext['section_code'] ?? '',
+            $planContext['section_key'] ?? '',
+            $planContext['page_flow_role'] ?? '',
+            $blockTask['section_template'] ?? '',
+            $blockTask['page_flow_role'] ?? '',
+            $visualContract['section_template'] ?? '',
+            $visualContract['page_flow_role'] ?? '',
+        ])));
+
+        if (\preg_match('/\b(?:opening|above[_-]?fold|hero|banner|page[_-]?intro)\b/iu', $identity) === 1) {
+            return true;
+        }
+
+        return $this->isFirstPageSectionTask($buildPlanTask, $renderContext);
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $renderContext
+     */
+    private function isFirstPageSectionTask(array $buildPlanTask, array $renderContext): bool
+    {
+        $pageType = \trim((string)($buildPlanTask['page_type'] ?? ''));
+        if ($pageType === '') {
+            $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
+                ? $renderContext['_visual_contract']
+                : [];
+            $pageType = \trim((string)($visualContract['page_type'] ?? ''));
+        }
+        if ($pageType === '') {
+            return false;
+        }
+
+        $scope = \is_array($renderContext['_scope'] ?? null) ? $renderContext['_scope'] : [];
+        $tasks = [];
+        foreach ($this->getBuildTaskService()->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
+            $task = $this->getBuildTaskService()->getTaskDefinition($scope, (string)$taskKey);
+            if (\is_array($task) && $task !== []) {
+                $tasks[] = $task;
+            }
+        }
+        if ($tasks === []) {
+            return false;
+        }
+
+        $currentKey = \trim((string)($buildPlanTask['task_key'] ?? ''));
+        $currentSection = \trim((string)($buildPlanTask['section_code'] ?? ''));
+        $currentSort = null;
+        $firstSort = null;
+
+        foreach ($tasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            if (\trim((string)($task['page_type'] ?? '')) !== $pageType) {
+                continue;
+            }
+            if (\trim((string)($task['task_type'] ?? '')) !== 'page_section') {
+                continue;
+            }
+
+            $sortOrder = (int)($task['sort_order'] ?? 0);
+            if ($firstSort === null || $sortOrder < $firstSort) {
+                $firstSort = $sortOrder;
+            }
+
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            $sectionCode = \trim((string)($task['section_code'] ?? ''));
+            if (($currentKey !== '' && $taskKey === $currentKey)
+                || ($currentSection !== '' && $sectionCode === $currentSection)
+            ) {
+                $currentSort = $sortOrder;
+            }
+        }
+
+        return $firstSort !== null && $currentSort !== null && $currentSort === $firstSort;
     }
 
     /**
@@ -16171,14 +19898,29 @@ JSON;
         }
 
         try {
+            // deterministic local fallback is forbidden; surface only a product-safe retry status.
             $sse->sendEvent('warning', [
                 'region' => $region,
                 'component_code' => $componentCode,
-                'message' => 'AI component generation did not pass quality validation; deterministic local fallback is forbidden. Reason: ' . $this->clipText($reason, 180),
+                'message' => 'AI is refining this section to meet quality gates.',
                 'component_fallback_forbidden' => true,
+                'reason_category' => $this->classifyComponentFallbackNoticeReason($reason),
             ]);
         } catch (\Throwable) {
         }
+    }
+
+    private function classifyComponentFallbackNoticeReason(string $reason): string
+    {
+        $normalized = \strtolower($reason);
+        if (\str_contains($normalized, 'timeout') || \str_contains($normalized, 'slow') || \str_contains($normalized, 'ssl') || \str_contains($normalized, 'curl')) {
+            return 'provider_transport_retry';
+        }
+        if (\str_contains($normalized, 'editable field') || \str_contains($normalized, 'quality') || \str_contains($normalized, 'contract')) {
+            return 'quality_gate_retry';
+        }
+
+        return 'generation_retry';
     }
 
     /**

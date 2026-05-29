@@ -353,7 +353,7 @@ if ($previewPageType !== '' && \is_array($virtualPagesByType[$previewPageType] ?
 }
 $workspaceTrack = (string)($state['workspace_track'] ?? \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME);
 $isVirtualThemeTrack = $workspaceTrack === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
-$buildTaskSummary = \is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : [];
+$buildTaskSummary = \is_array($state['build_plan_execution_summary'] ?? null) ? $state['build_plan_execution_summary'] : [];
 $buildTaskGroups = \is_array($buildTaskSummary['groups'] ?? null) ? $buildTaskSummary['groups'] : [];
 
 /** 常用页面类型（快速模式默认勾选） */

@@ -265,7 +265,9 @@ class QueueQueryProvider implements QueryProviderInterface
 
         $eventData = ['queue' => $queue];
         $this->eventsManager->dispatch('Weline_Queue::add', $eventData);
-        $this->wakeSystemScheduler($queue);
+        if ($this->shouldWakeScheduler($params)) {
+            $this->wakeSystemScheduler($queue);
+        }
 
         return [
             'success' => true,
@@ -413,7 +415,9 @@ class QueueQueryProvider implements QueryProviderInterface
         $eventData = ['queue' => $queue];
         $this->eventsManager->dispatch('Weline_Queue::takeover', $eventData);
         $this->eventsManager->dispatch('Weline_Queue::edit', $eventData);
-        $this->wakeSystemScheduler($queue);
+        if ($this->shouldWakeScheduler($params)) {
+            $this->wakeSystemScheduler($queue);
+        }
 
         return [
             'success' => true,
@@ -431,6 +435,30 @@ class QueueQueryProvider implements QueryProviderInterface
             $queue->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . 'Queue scheduler wake failed: ' . $e->getMessage()))
                 ->save();
         }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function shouldWakeScheduler(array $params): bool
+    {
+        foreach (['wake_scheduler', 'dispatch', 'auto_dispatch'] as $key) {
+            if (!\array_key_exists($key, $params)) {
+                continue;
+            }
+            $value = $params[$key];
+            if (\is_bool($value)) {
+                return $value;
+            }
+            if (\is_int($value) || \is_float($value)) {
+                return (int)$value !== 0;
+            }
+            if (\is_string($value)) {
+                return !\in_array(\strtolower(\trim($value)), ['0', 'false', 'no', 'off'], true);
+            }
+        }
+
+        return true;
     }
 
     private function deleteQueue(array $params): array

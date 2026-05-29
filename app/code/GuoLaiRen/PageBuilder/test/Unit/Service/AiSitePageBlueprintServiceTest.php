@@ -87,6 +87,51 @@ class AiSitePageBlueprintServiceTest extends TestCase
         self::assertSame('', $service->resolveSiteDisplayName($websiteProfile, $scope));
     }
 
+    public function testAnalyzeBriefDoesNotTreatNegatedGamingOrApprovalAppSubstringAsAppDownload(): void
+    {
+        $service = new AiSitePageBlueprintService();
+        $method = new \ReflectionMethod($service, 'analyzeBrief');
+        $method->setAccessible(true);
+
+        $signals = $method->invoke(
+            $service,
+            'Workflow automation SaaS for operations approval flows. Avoid gaming, casino, APK, reward, card, neon, and gambling visual language. Book a product demo.'
+        );
+        $joined = \implode(' ', \array_map('strval', \is_array($signals) ? $signals : []));
+
+        self::assertStringNotContainsString('棋牌', $joined);
+        self::assertStringNotContainsString('下载', $joined);
+        self::assertStringNotContainsString('上手指引', $joined);
+    }
+
+    public function testBuildHomeBlueprintDoesNotLetAvoidedGamingTermsCreateDownloadBlocks(): void
+    {
+        $service = new AiSitePageBlueprintService();
+        $brief = 'Build a polished AI workflow automation SaaS website for operations teams. The service helps teams design approval flows, automate task handoffs, monitor status, and book a product demo. Avoid gaming, casino, APK, reward, card, neon, and gambling visual language.';
+        $blueprint = $service->buildPageBlueprint(Page::TYPE_HOME, [
+            'brief_description' => $brief,
+            'user_description' => $brief,
+        ], [
+            'site_title' => 'OpsFlow AI',
+            'site_tagline' => 'Workflow automation for teams that move fast',
+            'brief_description' => $brief,
+        ]);
+
+        $keys = \array_values(\array_map(
+            static fn(array $section): string => (string)($section['key'] ?? ''),
+            \is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []
+        ));
+        $joinedConfig = \json_encode($blueprint['sections'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+
+        self::assertNotContains('hero_download', $keys);
+        self::assertNotContains('game_showcase_or_features', $keys);
+        self::assertNotContains('player_reviews', $keys);
+        self::assertNotContains('faq_or_rules', $keys);
+        self::assertNotContains('final_download_cta', $keys);
+        self::assertIsString($joinedConfig);
+        self::assertStringNotContainsString('下载入口', $joinedConfig);
+    }
+
     public function testBuildPageBlueprintCarriesSectionRefinementIntoResult(): void
     {
         $service = new AiSitePageBlueprintService();
@@ -182,7 +227,7 @@ class AiSitePageBlueprintServiceTest extends TestCase
             \is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []
         ));
 
-        self::assertSame(['hero_download', 'game_showcase_or_features', 'seo_faq', 'final_download_cta'], $keys);
+        self::assertSame(['hero_download', 'game_showcase_or_features', 'trust_security', 'seo_faq', 'final_download_cta'], $keys);
     }
 
     public function testBuildPageBlueprintDoesNotLeakInternalBriefOrPromptMarkers(): void

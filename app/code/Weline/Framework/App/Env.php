@@ -1383,6 +1383,33 @@ class Env extends DataObject
     {
         return self::getAreaByRoutePrefix($prefix) !== null;
     }
+
+    /**
+     * 判断 URL 路径段是否为区域路由前缀（大小写不敏感）。
+     *
+     * 用于避免将 /api/CNY/... 中的 api 识别为 ISO 4217 货币码 API，导致价格显示为「109.00 API」。
+     */
+    public static function isAreaRoutePathSegment(string $segment): bool
+    {
+        $normalized = strtolower(trim($segment));
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach (self::getAreaRoutes() as $areaConfig) {
+            $prefix = strtolower(trim((string)($areaConfig['prefix'] ?? '')));
+            if ($prefix !== '' && $prefix === $normalized) {
+                return true;
+            }
+        }
+
+        // 前台 REST 常用语义前缀 api；即 area_routes 配置为 api123，裸 /api/ 也不应被当作货币码
+        if ($normalized === 'api' && self::getAreaRoutePrefix('rest_frontend') !== null) {
+            return true;
+        }
+
+        return false;
+    }
     
     // ==================== 其他工具方法 ====================
     

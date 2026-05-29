@@ -1640,6 +1640,8 @@ class Start extends CommandAbstract
             $this->printer->note(__('请执行以下命令检查状态：'));
             $this->printer->note(__('  php bin/w server:status'));
             $this->printer->note(__('  php bin/w server:status --all'));
+            $this->printer->note(__('The instance may still be inside an Orchestrator bootstrap or full-restart cycle; avoid repeating server:start based only on this warning.'));
+            $this->printer->note(__('Set wls.orchestrator.background_master_confirm_wait_sec to extend the Master control-plane confirmation window.'));
 
             // 输出日志文件路径便于排查
             $logDir = WlsLogService::getLogDir($instanceName);
@@ -1746,18 +1748,23 @@ class Start extends CommandAbstract
     {
         $configuredSec = (float) ($this->getEnvironmentValue('wls.orchestrator.background_master_confirm_wait_sec', 0.0) ?? 0.0);
         if ($configuredSec > 0.0) {
-            return (int) \round(\max(0.5, \min(60.0, $configuredSec)) * 1000);
+            return (int) \round(\max(0.5, \min(900.0, $configuredSec)) * 1000);
+        }
+
+        $configuredStartupSec = (float) ($this->getEnvironmentValue('wls.orchestrator.startup_timeout_sec', 0.0) ?? 0.0);
+        if ($configuredStartupSec > 0.0) {
+            return (int) \round(\max(30.0, \min(900.0, $configuredStartupSec)) * 1000);
         }
 
         // Windows can create the PHP process several seconds before the Master control
         // plane writes instance metadata. Do not use tasklist/PID probing here; wait only
-        // for the control-plane report, with a bounded Windows window to avoid false
-        // "not ready" warnings on cold starts.
+        // for the control-plane report. The window must cover cold framework boot and
+        // orchestrator recovery cycles; 18s is too short for real WLS startup on Windows.
         if (IS_WIN) {
-            return 18000;
+            return 120000;
         }
 
-        return $spawnedMasterPid > 0 ? 8000 : 5000;
+        return $spawnedMasterPid > 0 ? 60000 : 30000;
     }
 
     /**
@@ -1823,9 +1830,9 @@ class Start extends CommandAbstract
         if ($configuredReadySec <= 0.0 && $configuredStartupSec <= 0.0) {
             // 硬超时必须 >= 软超时；并发启动时子进程 READY 可能长时间停在同一 phase，
             // 仅靠「有进展则续期」不够，需要绝对上限覆盖整批子服务拉起。
-            $hardWaitSec = \max($idleWaitSec * 2.5, 30.0 + \max(0, $workerCount - 1) * 4.0);
+            $hardWaitSec = \max(600.0, $idleWaitSec * 2.5, 30.0 + \max(0, $workerCount - 1) * 4.0);
 
-            return (int) \round(\min(180.0, $hardWaitSec) * 1000);
+            return (int) \round(\min(600.0, $hardWaitSec) * 1000);
         }
 
         $hardWaitSec = \max(

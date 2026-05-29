@@ -19,7 +19,11 @@ class Delete extends BaseController
     #[Acl('WeShop_Affiliate::affiliate_management_delete_get', 'Open affiliate delete route', 'mdi mdi-account-remove-outline', 'Open affiliate delete route')]
     public function get(): string
     {
-        return $this->post();
+        $backUrl = (string) $this->request->getParam('back_url', $this->_url->getBackendUrl('*/backend/affiliate'));
+
+        $this->getMessageManager()->addError((string) __('删除分销记录必须使用 POST 请求。'));
+        $this->redirect($backUrl);
+        return '';
     }
 
     #[Acl('WeShop_Affiliate::affiliate_management_delete_post', 'Delete affiliate', 'mdi mdi-delete-outline', 'Delete affiliate data')]
@@ -42,6 +46,7 @@ class Delete extends BaseController
                 return '';
             }
 
+            // Compatibility path: this remains the existing hard delete action for POST only.
             $affiliate->delete();
             $this->getMessageManager()->addSuccess((string) __('Affiliate deleted successfully.'));
         } catch (\Throwable $throwable) {

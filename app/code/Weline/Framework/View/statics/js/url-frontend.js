@@ -80,6 +80,32 @@
         document.cookie = cookieString;
     }
 
+    function writeCanonicalLocalStorage(canonicalKey, legacyKeys, value) {
+        try {
+            if (!window.localStorage) {
+                return;
+            }
+            localStorage.setItem(canonicalKey, value);
+            legacyKeys.forEach((key) => {
+                if (key && key !== canonicalKey) {
+                    localStorage.removeItem(key);
+                }
+            });
+        } catch (error) {
+            // localStorage can be unavailable in privacy modes.
+        }
+    }
+
+    function persistLangPreference(lang) {
+        writeCanonicalLocalStorage('weline_user_lang', ['weline_user_lang', 'api_doc_locale', 'WELINE_USER_LANG'], lang);
+        setCookie('WELINE_USER_LANG', lang, 7, { path: '/' });
+    }
+
+    function persistCurrencyPreference(currencyCode) {
+        writeCanonicalLocalStorage('weline_user_currency', ['weline_user_currency', 'api_doc_currency', 'WELINE_USER_CURRENCY'], currencyCode);
+        setCookie('WELINE_USER_CURRENCY', currencyCode, 7, { path: '/' });
+    }
+
     /**
      * 字符串工具函数（如果不存在则定义）
      */
@@ -225,6 +251,25 @@
         return window.site.computePath[originPath];
     }
 
+    function normalizeWebsiteBaseUrl(url, config) {
+        const rawUrl = String(url || '').trim();
+        if (!rawUrl) {
+            return '';
+        }
+
+        try {
+            const parsed = new URL(rawUrl, window.location.origin);
+            const firstSegment = parsed.pathname.split('/').filter(Boolean)[0] || '';
+            const apiArea = String(config.apiArea || 'api').toLowerCase();
+            if (firstSegment && (firstSegment.toLowerCase() === apiArea || firstSegment.toLowerCase() === 'api')) {
+                return parsed.origin;
+            }
+            return parsed.href.replace(/\/$/, '');
+        } catch (e) {
+            return rawUrl;
+        }
+    }
+
     /**
      * 路径注入：将 website/area/currency/lang 注入到路径中
      * 参考 Frontend 模块的 inject_path 函数
@@ -239,14 +284,14 @@
             path = '/' + path;
         }
 
-        let prePath = getCookie('WELINE_WEBSITE_URL') || '';
         const config = getConfig();
+        let prePath = normalizeWebsiteBaseUrl(getCookie('WELINE_WEBSITE_URL') || '', config);
         const currentLang = getCookie('WELINE_USER_LANG') || config.currentLang || '';
         const currentCurrency = getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '';
 
         // 网站
-        if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL') || '')) {
-            path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL') || '', '');
+        if (prePath && WelineString.startsWith(path, prePath)) {
+            path = WelineString.replaceStartsWith(path, prePath, '');
         } else {
             path = WelineString.replaceStartsWith(path, config.baseRouter, '');
         }
@@ -437,7 +482,7 @@
      */
     window.select_language = function (lang) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_LANG', lang, 7, { path: '/' });
+        persistLangPreference(lang);
         window.location.href = inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || '');
     };
 
@@ -446,7 +491,7 @@
      */
     window.select_currency = function (currencyCode) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_CURRENCY', currencyCode, 7, { path: '/' });
+        persistCurrencyPreference(currencyCode);
         window.location.href = inject_path(window.location.pathname, currencyCode, 'currency') + sanitizeSwitchSearch(window.location.search || '');
     };
 

@@ -166,9 +166,7 @@ Acl角色添加,"Acl role addition"
 删除,Delete
 正在创建...,Creating...
 正在创建角色...,"Creating role..."
-错误,Error
 角色创建失败，请检查输入后重试,"Role creation failed. Please check your input and try again."
-请求失败：,"Request failed:"
 添加IP,"Add IP"
 关键词,Keywords
 重置,Reset

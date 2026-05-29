@@ -5,7 +5,9 @@ namespace WeShop\Compare\Extends\Module\Weline_Framework\Query;
 
 use WeShop\Compare\Service\CompareService;
 use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Customer\Session\CustomerSession;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class CompareQueryProvider implements QueryProviderInterface
@@ -15,7 +17,8 @@ class CompareQueryProvider implements QueryProviderInterface
     public function __construct(
         private readonly CustomerContextInterface $customerContext,
         private readonly CompareService $compareService,
-        private readonly Url $url
+        private readonly Url $url,
+        private readonly ?CustomerSession $customerSession = null
     ) {
     }
 
@@ -113,7 +116,21 @@ class CompareQueryProvider implements QueryProviderInterface
 
     private function getCustomerId(): int
     {
-        return (int)($this->customerContext->getUserId() ?? 0);
+        $customerId = (int)($this->customerContext->getUserId() ?? 0);
+        if ($customerId > 0) {
+            return $customerId;
+        }
+
+        try {
+            return (int)($this->getCustomerSession()->getUserId() ?? 0);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    private function getCustomerSession(): CustomerSession
+    {
+        return $this->customerSession ?? ObjectManager::getInstance(CustomerSession::class);
     }
 
     private function loginRequired(): array

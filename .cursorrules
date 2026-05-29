@@ -15,6 +15,8 @@
 - **Efficiency Rules**: `dev/ai/rules/efficiency_rules.md`
 
 ## Critical Constraints
+- EVERY request must follow `dev/ai/global-constraints.md` §0: product-manager requirement decomposition → architect atomic task splitting → senior full-stack implementation → product acceptance loop until the visible/product problem is actually solved.
+- The current AI receiving the user request is the final requirement owner: monitor subtasks, review evidence, and accept/reject completion against the original user input before reporting done.
 - NEVER batch-replace or run one-off scripts to mechanically rewrite multiple source files; edit file-by-file with context review (see `dev/ai/global-constraints.md` §5.1)
 - NEVER edit `generated/` directory
 - NEVER use `routes.xml` (routing is auto-discovered)

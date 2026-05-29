@@ -32,6 +32,7 @@ This skill owns task intake, scope clarification, work decomposition, sequencing
 - Identify dependencies, ordering constraints, and parallelizable tracks.
 - Route each work package to the correct specialist skill.
 - Define what evidence each specialist must return.
+- Keep incomplete, failed, or missing-evidence work as an internal scheduling state; reassign or request corrections instead of reporting it to the user or Technical Director as a delivery update.
 
 # Workflow
 
@@ -42,6 +43,7 @@ This skill owns task intake, scope clarification, work decomposition, sequencing
 5. Define required validation for each task, such as unit tests, HTTP checks, E2E checks, WLS verification, or documentation updates.
 6. Record progress checkpoints and first-level acceptance gates for the implementation phase.
 7. Handoff execution to specialists and keep routing decisions aligned with repository rules.
+8. When a subtask is incomplete, blocked, or returned without evidence, update the lead ledger and send it back with precise correction criteria. Escalate to a human only for scope, safety, irreversible, credential, or conflict decisions.
 
 # Weline Rules
 
@@ -78,6 +80,7 @@ This skill owns task intake, scope clarification, work decomposition, sequencing
 - Do not act as the Technical Director.
 - Do not implement specialist production changes under this skill.
 - Do not assign vague tasks without inputs, outputs, and evidence requirements.
+- Do not turn incomplete specialist work into a progress report to the user or Technical Director.
 - Do not skip repository reading order in order to move faster.
 
 # Shared Collaboration Contract

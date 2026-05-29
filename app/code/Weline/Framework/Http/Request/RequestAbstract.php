@@ -10,6 +10,7 @@
 namespace Weline\Framework\Http\Request;
 
 use Weline\Framework\App\Debug;
+use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Controller\Data\DataInterface;
@@ -634,6 +635,37 @@ abstract class RequestAbstract extends RequestFilter
         return self::detectScheme() === 'https';
     }
 
+    /**
+     * 净化 website_url 中的 path，避免 REST 区域前缀或跨请求路由残留进入 getBaseHost()。
+     *
+     * 若 path 被污染（例如 /api/CNY/zh_Hans_CN），window.url / getFrontendUrl 会在所有前台链接前带上 /api/。
+     */
+    protected function sanitizeWebsiteUrlPathForBaseHost(string $pathPart): string
+    {
+        if ($pathPart === '' || $pathPart === '/') {
+            return '';
+        }
+
+        $normalizedPath = rtrim($pathPart, '/');
+        if ($normalizedPath === '') {
+            return '';
+        }
+
+        if (str_contains($normalizedPath, '/')) {
+            $currentUri = rtrim((string)($this->getUri() ?? '/'), '/') ?: '/';
+            if (!str_starts_with($currentUri, $normalizedPath)) {
+                return '';
+            }
+        }
+
+        $firstSegment = strtok(ltrim($normalizedPath, '/'), '/');
+        if ($firstSegment !== false && $firstSegment !== '' && Env::isAreaRoutePathSegment((string)$firstSegment)) {
+            return '';
+        }
+
+        return $pathPart;
+    }
+
     public function getBaseHost(): string
     {
         $currentScheme = $this->getSsl();
@@ -653,7 +685,7 @@ abstract class RequestAbstract extends RequestFilter
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             $hostPart = $parsed['host'] ?? 'localhost';
-            $pathPart = $parsed['path'] ?? '';
+            $pathPart = $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''));
             if ($currentPort === '' && isset($parsed['port'])) {
                 $currentPort = (string)$parsed['port'];
             }

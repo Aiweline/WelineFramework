@@ -28,6 +28,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $this->setProperty($dispatcher, 'ipcReceivedShutdown', false);
         $this->setProperty($dispatcher, 'lastWorkerProbeTime', 0.0);
         $this->setProperty($dispatcher, 'workerProbeInterval', 0.0);
+        $this->setProperty($dispatcher, 'workerHealthAuditEnabled', true);
         $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
         $this->setProperty($dispatcher, 'deferredWorkerPoolFiber', null);
 
@@ -201,19 +202,19 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['getMaintenanceWorkerPorts', 'removeMaintenanceWorkerPort', 'addMaintenanceWorkerPort'])
+            ->onlyMethods(['getMaintenanceWorkerPorts', 'setMaintenanceWorkerPortsFromMasterReady', 'setMaintenanceRoutingActive'])
             ->getMock();
 
-        $core->expects(self::once())
+        $core->expects(self::never())
             ->method('getMaintenanceWorkerPorts')
-            ->willReturn([16999, 17000]);
+            ->willReturn([16999]);
         $core->expects(self::once())
-            ->method('removeMaintenanceWorkerPort')
-            ->with(17000);
-        $core->expects(self::once())
-            ->method('addMaintenanceWorkerPort')
-            ->with(16999)
-            ->willReturn(['success' => true]);
+            ->method('setMaintenanceWorkerPortsFromMasterReady')
+            ->with([16999])
+            ->willReturn(['accepted' => [16999], 'rejected' => []]);
+        $core->expects(self::atLeastOnce())
+            ->method('setMaintenanceRoutingActive')
+            ->with(true);
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
@@ -235,16 +236,16 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->getMockBuilder(PassthroughCore::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['getMaintenanceWorkerPorts', 'addMaintenanceWorkerPort'])
+            ->onlyMethods(['getMaintenanceWorkerPorts', 'setMaintenanceWorkerPortsFromMasterReady'])
             ->getMock();
 
-        $core->expects(self::exactly(2))
+        $core->expects(self::atLeastOnce())
             ->method('getMaintenanceWorkerPorts')
-            ->willReturnOnConsecutiveCalls([], [16999]);
+            ->willReturn([16999]);
         $core->expects(self::once())
-            ->method('addMaintenanceWorkerPort')
-            ->with(16999)
-            ->willReturn(['success' => true]);
+            ->method('setMaintenanceWorkerPortsFromMasterReady')
+            ->with([16999])
+            ->willReturn(['accepted' => [16999], 'rejected' => []]);
 
         $client = new class implements ChildControlClientInterface {
             public array $sent = [];
@@ -296,6 +297,39 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertSame(ControlMessage::ROLE_MAINTENANCE, $ack['role'] ?? null);
         self::assertSame(16999, $ack['port'] ?? null);
         self::assertTrue((bool) ($ack['in_pool'] ?? false));
+    }
+
+    public function testEmptyMaintenanceRouteTableEnablesDispatcherFallback(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getMaintenanceWorkerPorts', 'setMaintenanceWorkerPortsFromMasterReady', 'setMaintenanceRoutingActive'])
+            ->getMock();
+
+        $core->expects(self::never())
+            ->method('getMaintenanceWorkerPorts');
+        $core->expects(self::once())
+            ->method('setMaintenanceWorkerPortsFromMasterReady')
+            ->with([])
+            ->willReturn(['accepted' => [], 'rejected' => []]);
+        $core->expects(self::atLeastOnce())
+            ->method('setMaintenanceRoutingActive')
+            ->with(true);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, [
+            'type' => ControlMessage::TYPE_SET_ROUTE_TABLE,
+            'role' => ControlMessage::ROLE_MAINTENANCE,
+            'ports' => [],
+            'route_version' => 1,
+        ]);
+
+        self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
     }
 
     public function testBusinessRouteTableTrustsMasterReadyAndAcknowledgesImmediately(): void

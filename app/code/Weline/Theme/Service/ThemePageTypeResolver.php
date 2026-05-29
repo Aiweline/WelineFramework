@@ -103,7 +103,7 @@ final class ThemePageTypeResolver
             return ThemeLayout::PAGE_TYPE_DEFAULT;
         }
 
-        return self::LAYOUT_TO_PAGE_TYPE[$baseLayoutType] ?? ThemeLayout::PAGE_TYPE_DEFAULT;
+        return self::LAYOUT_TO_PAGE_TYPE[$baseLayoutType] ?? $baseLayoutType;
     }
 
     public function getPreviewRouteByPageType(?string $pageType): string

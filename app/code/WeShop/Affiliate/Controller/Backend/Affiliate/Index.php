@@ -38,6 +38,6 @@ class Index extends BaseController
             $this->affiliateAdminPageDataService->getPageData($page, $pageSize, $filters, $editingId)
         ));
 
-        return (string) $this->fetchBase('WeShop_Affiliate::backend/templates/affiliate/index.phtml');
+        return (string) $this->fetchBase();
     }
 }

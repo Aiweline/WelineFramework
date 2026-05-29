@@ -134,6 +134,7 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         // 空 body，由前端 fetchInstalledLocales() 后动态填充
         $html .= '<div class="' . $p . 'i18n-body"></div>';
         $html .= '<div class="' . $p . 'i18n-footer">';
+        $html .= '<button type="button" class="' . $p . 'btn ' . $p . 'btn-outline-secondary ' . $p . 'btn-sm btn-ai-i18n" data-ai-i18n ' . $dataAttrs . '>' . __('AI翻译') . '</button>';
         $html .= '<button type="button" class="' . $p . 'btn ' . $p . 'btn-primary ' . $p . 'btn-sm" data-save-i18n ' . $dataAttrs . '>' . __('保存多语言') . '</button>';
         $html .= '</div></div>';
         return $html;

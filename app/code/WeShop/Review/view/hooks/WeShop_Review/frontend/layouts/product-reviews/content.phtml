@@ -7,8 +7,62 @@
  * @hook-solo false
  */
 $product = (array) ($this->getData('product') ?? []);
+$reviewsPayload = $this->getData('reviews') ?? [];
+$reviewsPayload = is_array($reviewsPayload) ? $reviewsPayload : [];
+$pageData = \Weline\Framework\Runtime\RequestContext::get('weshop.product.view.page_data');
+if (is_array($pageData)) {
+    $pageProduct = is_array($pageData['product'] ?? null) ? $pageData['product'] : [];
+    if ((int) ($product['product_id'] ?? 0) <= 0 && $pageProduct !== []) {
+        $product = $pageProduct;
+    } elseif ($pageProduct !== []) {
+        foreach (['rating', 'review_count', 'rating_distribution'] as $productReviewKey) {
+            if (($product[$productReviewKey] ?? null) === null && array_key_exists($productReviewKey, $pageProduct)) {
+                $product[$productReviewKey] = $pageProduct[$productReviewKey];
+            }
+        }
+    }
+    if ($reviewsPayload === [] && is_array($pageData['reviews'] ?? null)) {
+        $reviewsPayload = $pageData['reviews'];
+    }
+}
 $productId = (int) ($product['product_id'] ?? 0);
-$reviews = (array) ($this->getData('reviews') ?? []);
+$reviews = isset($reviewsPayload['items']) && is_array($reviewsPayload['items'])
+    ? $reviewsPayload['items']
+    : (array_is_list($reviewsPayload) ? $reviewsPayload : []);
+$rating = (float) ($product['rating'] ?? $reviewsPayload['average'] ?? 0);
+$reviewCount = (int) ($product['review_count'] ?? $reviewsPayload['total'] ?? count($reviews));
+$ratingDistribution = is_array($product['rating_distribution'] ?? null) ? $product['rating_distribution'] : [];
+if (($rating <= 0.0 || $reviewCount <= count($reviews) || $ratingDistribution === []) && $productId > 0) {
+    try {
+        $reviewService = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Review\Service\ReviewService::class);
+        if ($rating <= 0.0) {
+            $rating = (float) $reviewService->getAverageRating($productId);
+        }
+        if ($reviewCount <= count($reviews) || $ratingDistribution === []) {
+            $reviewResult = $reviewService->getProductReviews($productId, 1, max(20, count($reviews)));
+            if (is_array($reviewResult['items'] ?? null)) {
+                $reviews = $reviewResult['items'];
+            }
+            $reviewCount = max($reviewCount, (int) ($reviewResult['total'] ?? 0), count($reviews));
+        }
+    } catch (\Throwable) {
+        // Keep the already assigned product data when the optional review module is unavailable.
+    }
+}
+if ($ratingDistribution === [] && $reviews !== []) {
+    $ratingBuckets = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0];
+    foreach ($reviews as $reviewItem) {
+        if (!is_array($reviewItem)) {
+            continue;
+        }
+        $reviewRating = max(1, min(5, (int) round((float) ($reviewItem['rating'] ?? 0))));
+        ++$ratingBuckets[$reviewRating];
+    }
+    $distributionBase = max(1, $reviewCount);
+    foreach ($ratingBuckets as $ratingValue => $ratingCount) {
+        $ratingDistribution[$ratingValue] = (int) round(($ratingCount / $distributionBase) * 100);
+    }
+}
 $createUrl = (string) ($this->getData('create_url') ?? $this->getUrl('review/create'));
 $ratingOptions = is_array($this->getData('rating_options') ?? null) ? $this->getData('rating_options') : [];
 $ratingOptions = array_values(array_map(static function (array $option): array {
@@ -56,19 +110,29 @@ $reviewUiTextJson = json_encode([
     'loginFailed' => (string) __('登录失败，请检查用户名和密码。'),
     'loginUsernameRequired' => (string) __('请输入用户名或邮箱。'),
     'loginPasswordRequired' => (string) __('请输入密码。'),
-    'translate' => (string) __('Translate'),
-    'translating' => (string) __('Translating...'),
-    'showOriginal' => (string) __('Show original'),
-    'showTranslation' => (string) __('Show translation'),
-    'translateUnavailable' => (string) __('Browser translation is unavailable in this Chrome session.'),
-    'translateSameLanguage' => (string) __('This comment already matches the current language.'),
+    'translate' => (string) __('翻译'),
+    'translating' => (string) __('翻译中...'),
+    'showOriginal' => (string) __('显示原文'),
+    'showTranslation' => (string) __('显示译文'),
+    'translateUnavailable' => (string) __('当前 Chrome 无法使用浏览器翻译。'),
+    'translateSameLanguage' => (string) __('这条评论已经是当前语言。'),
+    'reply' => (string) __('回复'),
+    'replyTo' => (string) __('回复给'),
+    'replyPlaceholder' => (string) __('写回复，可用 @customer:123 提及客户。'),
+    'replySubmit' => (string) __('发送回复'),
+    'replySubmitted' => (string) __('回复已提交。'),
+    'replyUnable' => (string) __('暂时无法提交回复。'),
+    'replyContentRequired' => (string) __('回复内容不能为空。'),
+    'mentionHint' => (string) __('本次回复会通知 %{1}。', ['__REVIEW_MENTION__']),
+    'loginToReply' => (string) __('请先登录再回复。'),
+    'customer' => (string) __('客户'),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
 ?>
-<section class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark" data-review-write-widget="product-<?= $productId ?>">
+<section id="product-reviews" class="space-y-6" data-review-write-widget="product-<?= $productId ?>" data-review-surface="product-detail">
     <div class="flex items-center justify-between gap-4">
         <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Customer Voices') ?></p>
-            <h3 class="mt-2 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Latest Reviews') ?></h3>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('评价与回复') ?></p>
+            <h3 class="mt-2 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('商品评价') ?></h3>
         </div>
         <div class="flex flex-wrap items-center justify-end gap-2">
             <?php if ($productId > 0): ?>
@@ -76,10 +140,30 @@ $reviewUiTextJson = json_encode([
                     <span class="material-symbols-outlined text-base">rate_review</span>
                     <?= __('我要评论') ?>
                 </button>
-                <a href="<?= $this->getUrl('review', ['product_id' => $productId]) ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('View All Reviews') ?></a>
             <?php endif; ?>
         </div>
     </div>
+
+    <?php if ($reviewCount > 0): ?>
+        <div class="motor-review-summary" data-review-summary>
+            <div class="motor-review-summary__score">
+                <strong><?= number_format($rating, 1) ?></strong>
+                <span><?= __('基于 %{1} 条评价', number_format($reviewCount)) ?></span>
+            </div>
+            <div class="motor-review-summary__bars">
+                <?php for ($i = 5; $i >= 1; $i--): ?>
+                    <?php $percent = max(0, min(100, (int) ($ratingDistribution[$i] ?? 0))); ?>
+                    <div class="motor-review-summary__bar-row">
+                        <span><?= $i ?></span>
+                        <div class="motor-review-summary__bar-track">
+                            <div class="motor-review-summary__bar-value" style="width: <?= $percent ?>%;"></div>
+                        </div>
+                        <span><?= $percent ?>%</span>
+                    </div>
+                <?php endfor; ?>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <?php if ($productId > 0): ?>
         <div class="mt-5 hidden rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark" data-review-write-panel hidden>
@@ -98,10 +182,10 @@ $reviewUiTextJson = json_encode([
                 <input type="hidden" name="product_id" value="<?= htmlspecialchars((string) $productId, ENT_QUOTES) ?>">
                 <input type="hidden" name="review_mode" value="<?= htmlspecialchars($reviewMode, ENT_QUOTES) ?>" data-review-mode-input>
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Rating') ?>
+                    <?= __('评分') ?>
                     <select name="rating" class="form-select rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
                         <?php for ($i = 5; $i >= 1; $i--): ?>
-                            <option value="<?= $i ?>"><?= $i ?> <?= __('star', $i) ?></option>
+                            <option value="<?= $i ?>"><?= __('%{1}星', $i) ?></option>
                         <?php endfor; ?>
                     </select>
                 </label>
@@ -115,7 +199,7 @@ $reviewUiTextJson = json_encode([
                                 <select name="rating_scores[<?= htmlspecialchars($optionCode, ENT_QUOTES) ?>]" class="form-select rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
                                     <option value=""><?= __('不评分') ?></option>
                                     <?php for ($i = 5; $i >= 1; $i--): ?>
-                                        <option value="<?= $i ?>"><?= $i ?> <?= __('star', $i) ?></option>
+                                        <option value="<?= $i ?>"><?= __('%{1}星', $i) ?></option>
                                     <?php endfor; ?>
                                 </select>
                             </label>
@@ -123,12 +207,12 @@ $reviewUiTextJson = json_encode([
                     </div>
                 <?php endif; ?>
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Title') ?>
-                    <input type="text" name="title" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= htmlspecialchars((string) __('Write a headline for your review'), ENT_QUOTES) ?>">
+                    <?= __('标题') ?>
+                    <input type="text" name="title" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= htmlspecialchars((string) __('写一个简短的评价标题'), ENT_QUOTES) ?>">
                 </label>
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Review') ?>
-                    <textarea name="content" rows="4" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= htmlspecialchars((string) __('Describe your experience with this product'), ENT_QUOTES) ?>"></textarea>
+                    <?= __('评价内容') ?>
+                    <textarea name="content" rows="4" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= htmlspecialchars((string) __('描述你使用这件商品的体验'), ENT_QUOTES) ?>"></textarea>
                 </label>
                 <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
                     <?= __('图片链接') ?>
@@ -139,7 +223,7 @@ $reviewUiTextJson = json_encode([
                     <textarea name="video_urls" rows="2" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= htmlspecialchars((string) __('每行一个视频链接'), ENT_QUOTES) ?>"></textarea>
                 </label>
                 <button type="button" class="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90" data-review-submit>
-                    <?= __('Submit review') ?>
+                    <?= __('提交评价') ?>
                 </button>
                 <div class="text-sm text-text-secondary-light dark:text-text-secondary-dark" data-review-feedback></div>
             </form>
@@ -147,25 +231,36 @@ $reviewUiTextJson = json_encode([
     <?php endif; ?>
 
     <?php if ($reviews): ?>
-        <div class="mt-5 space-y-3" data-review-inline-list>
-            <?php foreach (array_slice($reviews, 0, 3) as $review): ?>
-                <?php $reviewId = (int) ($review['review_id'] ?? $review['id'] ?? 0); ?>
-                <article class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
+        <div class="space-y-4" data-review-inline-list>
+            <?php foreach ($reviews as $review): ?>
+                <?php
+                $reviewId = (int) ($review['review_id'] ?? $review['id'] ?? 0);
+                $reviewCustomerId = (int) ($review['customer_id'] ?? 0);
+                $reviewCreatedAt = (string) ($review['created_at'] ?? '');
+                $reviewCustomerName = (string) ($review['customer_name'] ?? __('匿名用户'));
+                $reviewInitial = trim($reviewCustomerName) !== ''
+                    ? (function_exists('mb_substr') ? mb_substr($reviewCustomerName, 0, 1, 'UTF-8') : substr($reviewCustomerName, 0, 1))
+                    : 'U';
+                $replies = is_array($review['replies'] ?? null) ? $review['replies'] : [];
+                ?>
+                <article id="review-<?= $reviewId ?>" class="scroll-mt-24 rounded-2xl border border-border-light bg-background-light p-4 shadow-sm dark:border-border-dark dark:bg-background-dark" data-review-id="review-<?= $reviewId ?>" data-review-author-id="<?= $reviewCustomerId ?>" data-review-author-name="<?= htmlspecialchars($reviewCustomerName, ENT_QUOTES) ?>" data-review-initial="<?= htmlspecialchars($reviewInitial, ENT_QUOTES) ?>">
                     <div class="flex items-center justify-between gap-3">
-                        <p class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($review['title'] ?? __('Rating')), ENT_QUOTES) ?></p>
-                        <span class="text-sm font-semibold text-primary"><?= number_format((float) ($review['rating'] ?? 0), 1) ?></span>
+                        <p class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($review['title'] ?? __('评分')), ENT_QUOTES) ?></p>
+                        <span class="inline-flex items-center gap-1 text-sm font-semibold text-primary" data-review-rating-badge>
+                            <?= number_format((float) ($review['rating'] ?? 0), 1) ?>
+                        </span>
                     </div>
                     <p id="product-review-body-<?= $productId ?>-<?= $reviewId ?>" class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-source><?= htmlspecialchars((string) ($review['content'] ?? ''), ENT_QUOTES) ?></p>
-                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs" data-review-actions>
                         <button type="button" class="inline-flex items-center gap-1 font-semibold text-primary hover:underline" data-review-translate data-review-translate-source="#product-review-body-<?= $productId ?>-<?= $reviewId ?>" data-review-translate-status="#product-review-translate-status-<?= $productId ?>-<?= $reviewId ?>">
                             <span class="material-symbols-outlined text-sm">translate</span>
-                            <span data-review-translate-label><?= __('Translate') ?></span>
+                            <span data-review-translate-label><?= __('翻译') ?></span>
                         </button>
                         <span id="product-review-translate-status-<?= $productId ?>-<?= $reviewId ?>" class="text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-status></span>
                     </div>
                     <?php $ratingScores = is_array($review['rating_scores'] ?? null) ? $review['rating_scores'] : []; ?>
                     <?php if ($ratingScores && $ratingOptions): ?>
-                        <div class="mt-3 flex flex-wrap gap-2">
+                        <div class="mt-3 flex flex-wrap gap-2" data-review-score-pills>
                             <?php foreach ($ratingOptions as $option): ?>
                                 <?php
                                 $optionCode = (string) ($option['code'] ?? '');
@@ -179,9 +274,13 @@ $reviewUiTextJson = json_encode([
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
+                    <div class="mt-3 flex items-center justify-between text-xs text-text-secondary-light dark:text-text-secondary-dark" data-review-meta>
+                        <span><?= htmlspecialchars($reviewCustomerName, ENT_QUOTES) ?></span>
+                        <span><?= htmlspecialchars((string) ($review['created_at'] ?? ''), ENT_QUOTES) ?></span>
+                    </div>
                     <?php $mediaItems = is_array($review['media_items'] ?? null) ? $review['media_items'] : []; ?>
                     <?php if ($mediaItems): ?>
-                        <div class="mt-3 grid grid-cols-3 gap-2">
+                        <div class="mt-3 grid grid-cols-3 gap-2" data-review-media-grid>
                             <?php foreach (array_slice($mediaItems, 0, 3) as $media): ?>
                                 <?php
                                 $mediaType = (string) ($media['type'] ?? '');
@@ -198,41 +297,124 @@ $reviewUiTextJson = json_encode([
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
+                    <div class="mt-4 border-t border-border-light pt-3 dark:border-border-dark" data-review-thread>
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-xs font-semibold uppercase tracking-[0.2em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('回复列表') ?></span>
+                            <?php if ($reviewId > 0): ?>
+                                <button type="button" class="inline-flex items-center gap-1 rounded-full border border-border-light px-3 py-1 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark" data-review-reply-toggle data-review-id-value="<?= $reviewId ?>" data-parent-reply-id="0" data-mention-customer-id="<?= $reviewCustomerId ?>" data-mention-label="<?= htmlspecialchars($reviewCustomerName, ENT_QUOTES) ?>">
+                                    <span class="material-symbols-outlined text-sm">reply</span>
+                                    <?= __('回复') ?>
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                        <div class="mt-3 space-y-3" data-review-replies>
+                            <?php foreach ($replies as $reply): ?>
+                                <?php
+                                $replyId = (int) ($reply['reply_id'] ?? 0);
+                                $parentReplyId = (int) ($reply['parent_reply_id'] ?? 0);
+                                $replyCustomerId = (int) ($reply['customer_id'] ?? 0);
+                                $replyCustomerName = (string) ($reply['customer_name'] ?? __('客户'));
+                                $replyInitial = trim($replyCustomerName) !== ''
+                                    ? (function_exists('mb_substr') ? mb_substr($replyCustomerName, 0, 1, 'UTF-8') : substr($replyCustomerName, 0, 1))
+                                    : 'C';
+                                ?>
+                                <div id="review-reply-<?= $replyId ?>" class="scroll-mt-24 rounded-2xl bg-surface-light p-3 text-sm dark:bg-surface-dark" data-review-reply-id="<?= $replyId ?>" data-review-reply-author-id="<?= $replyCustomerId ?>" data-review-reply-author-name="<?= htmlspecialchars($replyCustomerName, ENT_QUOTES) ?>" data-review-reply-initial="<?= htmlspecialchars($replyInitial, ENT_QUOTES) ?>">
+                                    <div class="flex items-center justify-between gap-3 text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                        <span class="font-semibold text-text-primary-light dark:text-text-primary-dark">
+                                            <?= htmlspecialchars($replyCustomerName, ENT_QUOTES) ?>
+                                            <?php if ($parentReplyId > 0): ?>
+                                                <span class="ml-2 font-normal text-text-secondary-light dark:text-text-secondary-dark"><?= __('回复给') ?> #<?= $parentReplyId ?></span>
+                                            <?php endif; ?>
+                                        </span>
+                                        <span><?= htmlspecialchars((string) ($reply['created_at'] ?? ''), ENT_QUOTES) ?></span>
+                                    </div>
+                                    <p id="review-reply-body-<?= $replyId ?>" class="mt-2 text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-source><?= nl2br(htmlspecialchars((string) ($reply['content'] ?? ''), ENT_QUOTES)) ?></p>
+                                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                        <button type="button" class="inline-flex items-center gap-1 font-semibold text-primary hover:underline" data-review-translate data-review-translate-source="#review-reply-body-<?= $replyId ?>" data-review-translate-status="#review-reply-translate-status-<?= $replyId ?>">
+                                            <span class="material-symbols-outlined text-sm">translate</span>
+                                            <span data-review-translate-label><?= __('翻译') ?></span>
+                                        </button>
+                                        <span id="review-reply-translate-status-<?= $replyId ?>" class="text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-status></span>
+                                    </div>
+                                    <?php if ($reviewId > 0 && $replyId > 0): ?>
+                                        <button type="button" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary" data-review-reply-toggle data-review-id-value="<?= $reviewId ?>" data-parent-reply-id="<?= $replyId ?>" data-mention-customer-id="<?= $replyCustomerId ?>" data-mention-label="<?= htmlspecialchars($replyCustomerName, ENT_QUOTES) ?>">
+                                            <span class="material-symbols-outlined text-sm">reply</span>
+                                            <?= __('回复') ?>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php if ($reviewId > 0): ?>
+                            <form class="mt-3 hidden space-y-2" data-review-reply-form data-review-id-value="<?= $reviewId ?>">
+                                <input type="hidden" name="parent_reply_id" value="0">
+                                <input type="hidden" name="mentioned_customer_ids" value="">
+                                <textarea name="content" rows="3" class="form-textarea w-full rounded-lg border-border-light bg-surface-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary dark:bg-surface-dark" placeholder="<?= htmlspecialchars((string) __('写回复，可用 @customer:123 提及客户。'), ENT_QUOTES) ?>"></textarea>
+                                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div class="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                        <div data-review-reply-mention-hint></div>
+                                        <div data-review-reply-feedback></div>
+                                    </div>
+                                    <button type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary/90" data-review-reply-submit>
+                                        <span class="material-symbols-outlined text-sm">send</span>
+                                        <?= __('发送回复') ?>
+                                    </button>
+                                </div>
+                            </form>
+                        <?php endif; ?>
+                    </div>
                 </article>
             <?php endforeach; ?>
         </div>
     <?php else: ?>
         <div class="mt-5 rounded-2xl border border-dashed border-border-light bg-background-light px-5 py-8 text-sm leading-6 text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark" data-review-empty-state>
-            <?= __('No product reviews yet. Be the first to share your experience.') ?>
+            <?= __('暂无商品评价，欢迎分享你的使用体验。') ?>
         </div>
     <?php endif; ?>
 
     <?php if ($productId > 0): ?>
-        <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4" data-review-auth-modal hidden aria-hidden="true">
-            <div class="w-full max-w-md rounded-3xl border border-border-light bg-surface-light p-6 shadow-xl dark:border-border-dark dark:bg-surface-dark">
-                <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('登录后评论') ?></h2>
-                        <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('登录成功后会自动刷新评价资格。') ?></p>
+        <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4" data-review-auth-modal hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="product-review-auth-title-<?= $productId ?>" aria-describedby="product-review-auth-description-<?= $productId ?>">
+            <div class="review-auth-dialog w-full max-w-md rounded-3xl border border-border-light bg-surface-light shadow-xl dark:border-border-dark dark:bg-surface-dark">
+                <div class="review-auth-header">
+                    <div class="review-auth-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a4 4 0 0 1-4 4H8l-5 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>
+                            <path d="M8 8h8"/>
+                            <path d="M8 12h5"/>
+                        </svg>
                     </div>
-                    <button type="button" class="rounded-full p-1 text-text-secondary-light hover:text-primary dark:text-text-secondary-dark" data-review-auth-close aria-label="<?= htmlspecialchars((string) __('关闭'), ENT_QUOTES) ?>">
-                        <span class="material-symbols-outlined text-xl">close</span>
+                    <div>
+                        <h2 id="product-review-auth-title-<?= $productId ?>" class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('登录后评论') ?></h2>
+                        <p id="product-review-auth-description-<?= $productId ?>" class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('登录成功后会自动刷新评价资格。') ?></p>
+                    </div>
+                    <button type="button" class="review-auth-close rounded-full p-1 text-text-secondary-light hover:text-primary dark:text-text-secondary-dark" data-review-auth-close aria-label="<?= htmlspecialchars((string) __('关闭'), ENT_QUOTES) ?>">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M18 6 6 18"/>
+                            <path d="m6 6 12 12"/>
+                        </svg>
                     </button>
                 </div>
-                <form class="mt-5 space-y-4" data-review-auth-form>
-                    <div class="text-sm text-red-500" data-review-auth-alert></div>
-                    <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                <form class="review-auth-form mt-5 space-y-4" data-review-auth-form>
+                    <div class="review-auth-alert text-sm text-red-500" data-review-auth-alert role="alert" aria-live="polite"></div>
+                    <label class="review-auth-field flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
                         <?= __('用户名或邮箱') ?>
-                        <input type="text" name="username" autocomplete="username" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
+                        <input type="text" name="username" autocomplete="username" class="review-auth-input form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
                     </label>
-                    <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <label class="review-auth-field flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
                         <?= __('密码') ?>
-                        <input type="password" name="password" autocomplete="current-password" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
+                        <input type="password" name="password" autocomplete="current-password" class="review-auth-input form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
                     </label>
                     <input type="hidden" name="remember_duration" value="604800">
-                    <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                        <button type="button" class="rounded-full border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light dark:border-border-dark dark:text-text-primary-dark" data-review-auth-close><?= __('取消') ?></button>
-                        <button type="submit" class="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary/90" data-review-auth-submit><?= __('登录并继续') ?></button>
+                    <div class="review-auth-actions flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        <button type="button" class="review-auth-secondary rounded-full border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light dark:border-border-dark dark:text-text-primary-dark" data-review-auth-close><?= __('取消') ?></button>
+                        <button type="submit" class="review-auth-primary rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition hover:bg-primary/90" data-review-auth-submit>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                                <path d="m10 17 5-5-5-5"/>
+                                <path d="M15 12H3"/>
+                            </svg>
+                            <span class="review-auth-primary-label"><?= __('登录并继续') ?></span>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -284,6 +466,7 @@ $reviewUiTextJson = json_encode([
                 var translatorAvailabilityTimeout = 3000;
                 var translatorCreateTimeout = 15000;
                 var translatorTranslateTimeout = 20000;
+                var afterLoginCallback = null;
                 window.__weshopReviewTranslatorSupported = browserTranslatorSupported;
 
                 window.setTimeout(function () {
@@ -516,26 +699,67 @@ $reviewUiTextJson = json_encode([
                         });
                 }
 
+                function resolveThemeApiResource(provider) {
+                    if (window.WelineApiModule && window.WelineApiModule.__full === true && typeof window.WelineApiModule.resource === 'function') {
+                        return Promise.resolve(window.WelineApiModule.resource(provider));
+                    }
+                    if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                        return Promise.resolve(window.Weline.Api.resource(provider));
+                    }
+                    if (window.Weline && typeof window.Weline.use === 'function') {
+                        return Promise.resolve(window.Weline.use('api')).then(function () {
+                            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                                return window.Weline.Api.resource(provider);
+                            }
+                            if (window.WelineApiModule && typeof window.WelineApiModule.resource === 'function') {
+                                return window.WelineApiModule.resource(provider);
+                            }
+                            throw new Error('Weline.Api.resource is not available.');
+                        });
+                    }
+
+                    return Promise.reject(new Error('Weline.Api.resource is not available.'));
+                }
+
                 function getReviewApi() {
                     if (!apiPromise) {
-                        apiPromise = window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function'
-                            ? Promise.resolve(window.Weline.Api.resource('review'))
-                            : Promise.reject(new Error('Weline.Api is unavailable.'));
+                        apiPromise = resolveThemeApiResource('review').catch(function (error) {
+                            apiPromise = null;
+                            throw error;
+                        });
                     }
                     return apiPromise;
                 }
 
                 function getAccountApi() {
                     if (!accountApiPromise) {
-                        accountApiPromise = window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function'
-                            ? Promise.resolve(window.Weline.Api.resource('account'))
-                            : Promise.reject(new Error('Weline.Api is unavailable.'));
+                        accountApiPromise = resolveThemeApiResource('account').catch(function (error) {
+                            accountApiPromise = null;
+                            throw error;
+                        });
                     }
                     return accountApiPromise;
                 }
 
+                function ensureAccountObject() {
+                    var account = window.account || window.Account || window.WelineAccountModule || null;
+                    if (account && typeof account === 'object') {
+                        return account;
+                    }
+
+                    account = {
+                        isLogin: Boolean(isCustomerLoggedIn),
+                        logged_in: Boolean(isCustomerLoggedIn),
+                        isLoggedIn: function () {
+                            return Boolean(this.isLogin || this.logged_in);
+                        }
+                    };
+                    window.account = account;
+                    return account;
+                }
+
                 function getAccountObject() {
-                    return window.account || window.Account || window.WelineAccountModule || null;
+                    return ensureAccountObject();
                 }
 
                 function isAccountLoggedInSync() {
@@ -670,8 +894,120 @@ $reviewUiTextJson = json_encode([
                         writeTrigger.hidden = true;
                         writeTrigger.classList.add('hidden');
                     }
-                    ensureFormToken();
-                    return resolveModeForIntent();
+                    return resolveModeForIntent().then(function () {
+                        return ensureFormToken();
+                    });
+                }
+
+                function handleReviewWriteIntent(event) {
+                    if (event) {
+                        event.preventDefault();
+                    }
+                    if (!isAccountLoggedInSync()) {
+                        openAuthModal(function () {
+                            showPanel();
+                        });
+                        return;
+                    }
+                    showPanel();
+                }
+
+                function activateProductDetailTab(tabName) {
+                    var targetContent = document.getElementById(tabName + '-content');
+                    if (!targetContent) {
+                        return false;
+                    }
+
+                    document.querySelectorAll('.product-tab').forEach(function (tab) {
+                        tab.classList.remove('text-primary', 'border-primary');
+                        tab.classList.add('text-text-secondary-light', 'dark:text-text-secondary-dark', 'border-transparent');
+                        if (tab.dataset.tab === tabName) {
+                            tab.classList.add('text-primary', 'border-primary');
+                            tab.classList.remove('text-text-secondary-light', 'dark:text-text-secondary-dark', 'border-transparent');
+                        }
+                    });
+
+                    document.querySelectorAll('.tab-content').forEach(function (content) {
+                        content.classList.add('hidden');
+                    });
+                    targetContent.classList.remove('hidden');
+
+                    return true;
+                }
+
+                function bindProductDetailTabs() {
+                    if (window.__weshopProductTabsBound) {
+                        return;
+                    }
+
+                    window.__weshopProductTabsBound = true;
+                    document.querySelectorAll('.product-tab').forEach(function (tab) {
+                        tab.addEventListener('click', function (event) {
+                            event.preventDefault();
+                            activateProductDetailTab(this.dataset.tab);
+                        });
+                    });
+                    window.WeShopProductTabs = {
+                        activate: activateProductDetailTab,
+                        focusReviewDeepLink: focusDeepLinkedReviewNode
+                    };
+                }
+
+                function findDeepLinkedReviewNode() {
+                    var hash = window.location.hash ? decodeURIComponent(window.location.hash.substring(1)) : '';
+                    if (hash) {
+                        var hashNode = document.getElementById(hash);
+                        if (hashNode) {
+                            return hashNode;
+                        }
+                    }
+
+                    var params = new URLSearchParams(window.location.search || '');
+                    var replyId = Number(params.get('reply_id') || 0);
+                    if (replyId > 0) {
+                        var replyNode = document.getElementById('review-reply-' + replyId);
+                        if (replyNode) {
+                            return replyNode;
+                        }
+                    }
+
+                    var reviewId = Number(params.get('review_id') || 0);
+                    return reviewId > 0 ? document.getElementById('review-' + reviewId) : null;
+                }
+
+                function applyDeepLinkedReviewFocus() {
+                    activateProductDetailTab('reviews');
+                    var node = findDeepLinkedReviewNode();
+                    if (!node) {
+                        return;
+                    }
+
+                    root.querySelectorAll('[data-review-deep-link-target="1"]').forEach(function (item) {
+                        item.removeAttribute('data-review-deep-link-target');
+                        item.classList.remove('ring-2', 'ring-primary/30', 'border-primary');
+                    });
+                    node.classList.add('ring-2', 'ring-primary/30', 'border-primary');
+                    node.setAttribute('data-review-deep-link-target', '1');
+                    if (!node.hasAttribute('tabindex')) {
+                        node.setAttribute('tabindex', '-1');
+                    }
+                    node.scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});
+                    try {
+                        node.focus({preventScroll: true});
+                    } catch (error) {
+                        node.focus();
+                    }
+                }
+
+                function focusDeepLinkedReviewNode() {
+                    activateProductDetailTab('reviews');
+                    if (!findDeepLinkedReviewNode()) {
+                        return;
+                    }
+
+                    [120, 360, 900, 1600].forEach(function (delay) {
+                        window.setTimeout(applyDeepLinkedReviewFocus, delay);
+                    });
                 }
 
                 function setFeedback(message, success) {
@@ -736,7 +1072,7 @@ $reviewUiTextJson = json_encode([
                         html += '<span class="rounded-full border border-border-light px-3 py-1 text-xs font-semibold text-text-secondary-light dark:border-border-dark dark:text-text-secondary-dark">'
                             + escapeHtml(option.label || code) + ' ' + escapeHtml(scores[code]) + '/5</span>';
                     });
-                    return html ? '<div class="mt-3 flex flex-wrap gap-2">' + html + '</div>' : '';
+                    return html ? '<div class="mt-3 flex flex-wrap gap-2" data-review-score-pills>' + html + '</div>' : '';
                 }
 
                 function buildMediaHtml(review) {
@@ -753,7 +1089,7 @@ $reviewUiTextJson = json_encode([
                         }
                         html += '<img class="aspect-square w-full rounded-xl border border-border-light object-cover dark:border-border-dark" src="' + escapeHtml(url) + '" alt="">';
                     });
-                    return html ? '<div class="mt-3 grid grid-cols-3 gap-2">' + html + '</div>' : '';
+                    return html ? '<div class="mt-3 grid grid-cols-3 gap-2" data-review-media-grid>' + html + '</div>' : '';
                 }
 
                 function renderReview(review) {
@@ -762,10 +1098,12 @@ $reviewUiTextJson = json_encode([
                     if (!Number.isFinite(rating)) {
                         rating = 0;
                     }
-                    return '<article id="' + escapeHtml(key) + '" class="rounded-2xl border border-border-light bg-background-light p-4 ring-1 ring-amber-200/60 dark:border-border-dark dark:bg-background-dark dark:ring-amber-500/20" data-review-id="' + escapeHtml(key) + '">'
+                    var customerName = review.customer_name || texts.anonymous;
+                    var initial = customerName ? String(customerName).trim().charAt(0) : 'U';
+                    return '<article id="' + escapeHtml(key) + '" class="rounded-2xl border border-border-light bg-background-light p-4 ring-1 ring-amber-200/60 dark:border-border-dark dark:bg-background-dark dark:ring-amber-500/20" data-review-id="' + escapeHtml(key) + '" data-review-author-name="' + escapeHtml(customerName) + '" data-review-initial="' + escapeHtml(initial || 'U') + '">'
                         + '<div class="flex items-center justify-between gap-3">'
                         + '<p class="font-semibold text-text-primary-light dark:text-text-primary-dark">' + escapeHtml(review.title || texts.rating) + '</p>'
-                        + '<span class="text-sm font-semibold text-primary">' + rating.toFixed(1) + '</span>'
+                        + '<span class="text-sm font-semibold text-primary" data-review-rating-badge>' + rating.toFixed(1) + '</span>'
                         + '</div>'
                         + '<p id="' + escapeHtml(key) + '-body" class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-source>' + escapeHtml(review.content || '') + '</p>'
                         + '<div class="mt-2 flex flex-wrap items-center gap-2 text-xs">'
@@ -775,12 +1113,217 @@ $reviewUiTextJson = json_encode([
                         + '</div>'
                         + buildRatingScoreHtml(review)
                         + buildMediaHtml(review)
-                        + '<div class="mt-3 flex items-center justify-between text-xs text-text-secondary-light dark:text-text-secondary-dark">'
-                        + '<span>' + escapeHtml(review.customer_name || texts.anonymous) + '</span>'
+                        + '<div class="mt-3 flex items-center justify-between text-xs text-text-secondary-light dark:text-text-secondary-dark" data-review-meta>'
+                        + '<span>' + escapeHtml(customerName) + '</span>'
                         + '<span>' + escapeHtml(review.created_at || '') + '</span>'
                         + '</div>'
                         + '<div class="mt-2 text-xs font-semibold text-amber-600 dark:text-amber-400">' + escapeHtml(texts.pending) + ' · ' + escapeHtml(texts.visibleToYou) + '</div>'
                         + '</article>';
+                }
+
+                function findReviewArticle(reviewId) {
+                    if (!reviewList) {
+                        return null;
+                    }
+
+                    return reviewList.querySelector('[data-review-id="review-' + Number(reviewId) + '"]');
+                }
+
+                function buildReplyHtml(reply) {
+                    var replyId = Number(reply.reply_id || 0);
+                    var parentReplyId = Number(reply.parent_reply_id || 0);
+                    var createdAt = reply.created_at || new Date().toLocaleString();
+                    var customerName = reply.customer_name || texts.customer || '客户';
+                    var replyInitial = customerName ? String(customerName).trim().charAt(0) : 'C';
+                    var parentHtml = parentReplyId > 0
+                        ? '<span class="ml-2 font-normal text-text-secondary-light dark:text-text-secondary-dark">' + escapeHtml(texts.replyTo) + ' #' + parentReplyId + '</span>'
+                        : '';
+
+                    return '<div id="review-reply-' + replyId + '" class="scroll-mt-24 rounded-2xl bg-surface-light p-3 text-sm dark:bg-surface-dark" data-review-reply-id="' + replyId + '" data-review-reply-author-id="' + Number(reply.customer_id || 0) + '" data-review-reply-author-name="' + escapeHtml(customerName) + '" data-review-reply-initial="' + escapeHtml(replyInitial || 'C') + '">'
+                        + '<div class="flex items-center justify-between gap-3 text-xs text-text-secondary-light dark:text-text-secondary-dark">'
+                        + '<span class="font-semibold text-text-primary-light dark:text-text-primary-dark">' + escapeHtml(customerName) + parentHtml + '</span>'
+                        + '<span>' + escapeHtml(createdAt) + '</span>'
+                        + '</div>'
+                        + '<p id="review-reply-body-' + replyId + '" class="mt-2 text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-source>' + escapeHtml(reply.content || '') + '</p>'
+                        + '<div class="mt-2 flex flex-wrap items-center gap-2 text-xs">'
+                        + '<button type="button" class="inline-flex items-center gap-1 font-semibold text-primary hover:underline" data-review-translate data-review-translate-source="#review-reply-body-' + replyId + '" data-review-translate-status="#review-reply-translate-status-' + replyId + '">'
+                        + '<span class="material-symbols-outlined text-sm">translate</span><span data-review-translate-label>' + escapeHtml(texts.translate) + '</span></button>'
+                        + '<span id="review-reply-translate-status-' + replyId + '" class="text-text-secondary-light dark:text-text-secondary-dark" data-review-translate-status></span>'
+                        + '</div>'
+                        + '<button type="button" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary" data-review-reply-toggle data-review-id-value="' + Number(reply.review_id || 0) + '" data-parent-reply-id="' + replyId + '" data-mention-customer-id="' + Number(reply.customer_id || 0) + '" data-mention-label="' + escapeHtml(customerName) + '">'
+                        + '<span class="material-symbols-outlined text-sm">reply</span>'
+                        + escapeHtml(texts.reply) + '</button>'
+                        + '</div>';
+                }
+
+                function appendReply(reply) {
+                    var article = findReviewArticle(Number(reply.review_id || 0));
+                    var replyList = article ? article.querySelector('[data-review-replies]') : null;
+                    if (!replyList) {
+                        return;
+                    }
+
+                    replyList.insertAdjacentHTML('beforeend', buildReplyHtml(reply));
+                }
+
+                function setReplyFeedback(formNode, message, isSuccess) {
+                    var feedbackNode = formNode ? formNode.querySelector('[data-review-reply-feedback]') : null;
+                    if (!feedbackNode) {
+                        return;
+                    }
+
+                    feedbackNode.textContent = message || '';
+                    feedbackNode.classList.toggle('text-emerald-500', Boolean(isSuccess));
+                    feedbackNode.classList.toggle('text-red-500', !isSuccess && Boolean(message));
+                }
+
+                function extractMentionedCustomerIds(content) {
+                    var ids = [];
+                    String(content || '').replace(/@(?:customer:|客户|用户|#)?(\d{1,10})/ig, function (_, id) {
+                        id = Number(id || 0);
+                        if (id > 0 && ids.indexOf(id) === -1) {
+                            ids.push(id);
+                        }
+                        return _;
+                    });
+
+                    return ids.slice(0, 20);
+                }
+
+                function resolveMentionTarget(button) {
+                    var customerId = Number(button.getAttribute('data-mention-customer-id') || 0);
+                    if (customerId <= 0) {
+                        return null;
+                    }
+
+                    return {
+                        customerId: customerId,
+                        label: button.getAttribute('data-mention-label') || ('#' + customerId)
+                    };
+                }
+
+                function updateMentionHint(formNode, target) {
+                    var hintNode = formNode ? formNode.querySelector('[data-review-reply-mention-hint]') : null;
+                    if (!hintNode) {
+                        return;
+                    }
+                    if (!target) {
+                        hintNode.textContent = '';
+                        return;
+                    }
+                    var mentionLabel = '@' + target.label;
+                    var template = String(texts.mentionHint || '');
+                    hintNode.textContent = template.indexOf('__REVIEW_MENTION__') !== -1
+                        ? template.replace('__REVIEW_MENTION__', mentionLabel)
+                        : template.replace('%{1}', mentionLabel);
+                }
+
+                function insertMentionToken(textarea, target) {
+                    if (!textarea || !target) {
+                        return;
+                    }
+                    var token = '@customer:' + target.customerId;
+                    var value = textarea.value || '';
+                    if (value.indexOf(token) !== -1) {
+                        return;
+                    }
+                    textarea.value = token + (value.trim() ? ' ' + value.trim() : ' ');
+                }
+
+                function toggleReplyForm(button) {
+                    if (!isAccountLoggedInSync()) {
+                        openAuthModal(function () {
+                            toggleReplyForm(button);
+                        });
+                        return;
+                    }
+
+                    var reviewId = Number(button.getAttribute('data-review-id-value') || 0);
+                    var parentReplyId = Number(button.getAttribute('data-parent-reply-id') || 0);
+                    var article = findReviewArticle(reviewId);
+                    var formNode = article ? article.querySelector('[data-review-reply-form]') : null;
+                    if (!formNode) {
+                        return;
+                    }
+
+                    var mentionTarget = resolveMentionTarget(button);
+                    formNode.classList.remove('hidden');
+                    formNode.setAttribute('data-review-id-value', String(reviewId));
+                    var parentInput = formNode.querySelector('[name="parent_reply_id"]');
+                    var mentionInput = formNode.querySelector('[name="mentioned_customer_ids"]');
+                    var textarea = formNode.querySelector('[name="content"]');
+                    if (parentInput) {
+                        parentInput.value = String(parentReplyId);
+                    }
+                    if (mentionInput) {
+                        mentionInput.value = mentionTarget ? String(mentionTarget.customerId) : '';
+                    }
+                    if (textarea) {
+                        textarea.placeholder = parentReplyId > 0
+                            ? texts.replyTo + ' #' + parentReplyId + '. ' + texts.replyPlaceholder
+                            : texts.replyPlaceholder;
+                        insertMentionToken(textarea, mentionTarget);
+                        textarea.focus();
+                    }
+                    updateMentionHint(formNode, mentionTarget);
+                    setReplyFeedback(formNode, '', true);
+                }
+
+                function submitReply(formNode, button) {
+                    var textarea = formNode.querySelector('[name="content"]');
+                    var content = textarea ? textarea.value.trim() : '';
+                    if (!content) {
+                        setReplyFeedback(formNode, texts.replyContentRequired, false);
+                        return;
+                    }
+
+                    var payload = {
+                        review_id: Number(formNode.getAttribute('data-review-id-value') || 0),
+                        parent_reply_id: Number((formNode.querySelector('[name="parent_reply_id"]') || {}).value || 0),
+                        content: content,
+                        mentioned_customer_ids: extractMentionedCustomerIds(content)
+                    };
+                    var mentionInput = formNode.querySelector('[name="mentioned_customer_ids"]');
+                    if (mentionInput && mentionInput.value) {
+                        String(mentionInput.value).split(/\s*,\s*/).forEach(function (id) {
+                            id = Number(id || 0);
+                            if (id > 0 && payload.mentioned_customer_ids.indexOf(id) === -1) {
+                                payload.mentioned_customer_ids.push(id);
+                            }
+                        });
+                    }
+
+                    button.disabled = true;
+                    button.classList.add('opacity-60');
+                    getReviewApi().then(function (ReviewApi) {
+                        return ReviewApi.reply(payload, {silent: true});
+                    }).then(function (result) {
+                        if (result && result.success) {
+                            var reply = result.data && result.data.reply ? result.data.reply : payload;
+                            reply.reply_id = Number(reply.reply_id || (result.data && result.data.reply_id) || 0);
+                            reply.review_id = Number(reply.review_id || payload.review_id);
+                            reply.parent_reply_id = Number(reply.parent_reply_id || payload.parent_reply_id || 0);
+                            reply.content = reply.content || payload.content;
+                            appendReply(reply);
+                            if (textarea) {
+                                textarea.value = '';
+                            }
+                            setReplyFeedback(formNode, result.message || texts.replySubmitted, true);
+                            return;
+                        }
+                        if (result && result.data && result.data.redirect_url) {
+                            openAuthModal(function () {
+                                toggleReplyForm(button);
+                            });
+                            return;
+                        }
+                        setReplyFeedback(formNode, (result && result.message) || texts.replyUnable, false);
+                    }).catch(function () {
+                        setReplyFeedback(formNode, texts.replyUnable, false);
+                    }).finally(function () {
+                        button.disabled = false;
+                        button.classList.remove('opacity-60');
+                    });
                 }
 
                 function prependReview(review) {
@@ -920,10 +1463,11 @@ $reviewUiTextJson = json_encode([
                     }
                 }
 
-                function openAuthModal() {
+                function openAuthModal(callback) {
                     if (!authModal) {
                         return;
                     }
+                    afterLoginCallback = typeof callback === 'function' ? callback : null;
                     authModal.hidden = false;
                     authModal.classList.remove('hidden');
                     authModal.classList.add('flex');
@@ -986,8 +1530,14 @@ $reviewUiTextJson = json_encode([
                             throw new Error((data && data.message) || texts.loginFailed);
                         }
                         markLoggedIn(data.user || null);
+                        var callback = afterLoginCallback;
+                        afterLoginCallback = null;
                         closeAuthModal();
-                        showPanel();
+                        if (typeof callback === 'function') {
+                            callback();
+                        } else {
+                            showPanel();
+                        }
                     }).catch(function (error) {
                         showAuthAlert((error && error.message) || texts.loginFailed);
                     }).finally(function () {
@@ -1041,10 +1591,12 @@ $reviewUiTextJson = json_encode([
                 updateEmptyState();
 
                 if (writeTrigger) {
-                    writeTrigger.addEventListener('click', showPanel);
+                    writeTrigger.addEventListener('click', handleReviewWriteIntent);
                 }
                 if (loginTrigger) {
-                    loginTrigger.addEventListener('click', openAuthModal);
+                    loginTrigger.addEventListener('click', function () {
+                        openAuthModal();
+                    });
                 }
                 if (authForm) {
                     authForm.addEventListener('submit', submitAuth);
@@ -1062,9 +1614,28 @@ $reviewUiTextJson = json_encode([
                     if (translateButton && root.contains(translateButton)) {
                         event.preventDefault();
                         translateReviewNode(translateButton);
+                        return;
+                    }
+                    var toggleButton = event.target.closest('[data-review-reply-toggle]');
+                    if (toggleButton && root.contains(toggleButton)) {
+                        event.preventDefault();
+                        toggleReplyForm(toggleButton);
+                        return;
+                    }
+                    var submitButton = event.target.closest('[data-review-reply-submit]');
+                    if (submitButton && root.contains(submitButton)) {
+                        event.preventDefault();
+                        var replyForm = submitButton.closest('[data-review-reply-form]');
+                        if (replyForm) {
+                            submitReply(replyForm, submitButton);
+                        }
                     }
                 });
                 submit.addEventListener('click', submitReview);
+                bindProductDetailTabs();
+                focusDeepLinkedReviewNode();
+                window.addEventListener('load', focusDeepLinkedReviewNode);
+                window.addEventListener('hashchange', focusDeepLinkedReviewNode);
             })();
         </script>
     <?php endif; ?>

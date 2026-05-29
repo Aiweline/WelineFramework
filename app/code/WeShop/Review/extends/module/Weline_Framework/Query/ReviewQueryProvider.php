@@ -104,7 +104,11 @@ class ReviewQueryProvider implements QueryProviderInterface
                 'rating_scores' => $this->extractStructuredParam($params, 'rating_scores'),
                 'media_items' => $this->extractStructuredParam($params, 'media_items'),
             ]);
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            if (\function_exists('w_log')) {
+                w_log('error', 'Review create failed.', ['_exception' => $exception], 'review');
+            }
+
             return [
                 'success' => false,
                 'message' => (string)__('暂时无法提交评价。'),
@@ -128,7 +132,7 @@ class ReviewQueryProvider implements QueryProviderInterface
         if ($customerId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Please sign in before replying.'),
+                'message' => (string)__('请先登录再回复。'),
                 'data' => ['redirect_url' => $this->url->getUrl(self::LOGIN_ROUTE)],
             ];
         }
@@ -138,7 +142,7 @@ class ReviewQueryProvider implements QueryProviderInterface
         if ($reviewId <= 0 || $content === '') {
             return [
                 'success' => false,
-                'message' => (string)__('Review and reply content are required.'),
+                'message' => (string)__('评论和回复内容不能为空。'),
             ];
         }
 
@@ -158,13 +162,13 @@ class ReviewQueryProvider implements QueryProviderInterface
         } catch (\Throwable) {
             return [
                 'success' => false,
-                'message' => (string)__('Unable to submit reply right now.'),
+                'message' => (string)__('暂时无法提交回复。'),
             ];
         }
 
         return [
             'success' => true,
-            'message' => (string)__('Reply submitted.'),
+            'message' => (string)__('回复已提交。'),
             'data' => [
                 'reply_id' => (int)($reply->getId() ?? 0),
                 'reply' => $this->getReviewReplyService()->buildClientReplyPayload($reply),

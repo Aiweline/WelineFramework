@@ -251,7 +251,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'start_at' => '2026-04-21 02:15:53',
             'end_at' => '2026-04-21 02:16:04',
             'process' => 'AI 流式生成中... (+33 B)',
-            'result' => "QUEUE 开始执行\nLOG AI 生成中\n",
+            'result' => "[02:16:04] INFO checkpoint saved\n",
             'content' => \json_encode([
                 'job_key' => 'glr_aisite:session:987:job:stage1.requirement_expand',
                 'job_type' => 'stage1.requirement_expand',
@@ -275,7 +275,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(340, $payload['snapshot']['token_usage']['output_tokens']);
         self::assertSame(1540, $payload['snapshot']['token_usage']['total_tokens']);
         self::assertSame('AI 流式生成中... (+33 B)', $payload['process']);
-        self::assertStringContainsString('已省略 2 行 AI 正文输出', $payload['result_log']);
+        self::assertSame("[02:16:04] INFO checkpoint saved", $payload['result_log']);
     }
 
     public function testStageOneRequirementExpandQueueEnvelopeUsesJobFields(): void
@@ -315,7 +315,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'type_id' => 6,
                 'finished' => 0,
                 'process' => 'AI 流式生成中... (+33 B)',
-                'result' => "QUEUE 开始执行\nLOG AI 生成中\n",
+                'result' => "[02:16:04] INFO checkpoint saved\n",
                 'content' => \json_encode([
                     'operation' => 'plan',
                     'token_usage' => [
@@ -356,7 +356,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame('AI 流式生成中... (+33 B)', $panelUpdateEvents[0]['data']['queue_process']);
 
         self::assertSame([], $chunkEvents, '规划类队列不再把 queue.result 作为 chunk SSE 回放');
-        self::assertStringContainsString('已省略 2 行 AI 正文输出', (string)$panelUpdateEvents[0]['data']['queue_info']['result_log']);
+        self::assertArrayNotHasKey('queue_result_delta', $panelUpdateEvents[0]['data']);
+        self::assertSame("[02:16:04] INFO checkpoint saved", (string)$panelUpdateEvents[0]['data']['queue_info']['result_log']);
         self::assertSame(780, $panelUpdateEvents[0]['data']['token_usage']['total_tokens']);
         self::assertSame(780, $panelUpdateEvents[0]['data']['queue_info']['snapshot']['token_usage']['total_tokens']);
     }
@@ -422,8 +423,90 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('total_tokens', $phaseScript);
         self::assertStringContainsString('prompt_tokens', $phaseScript);
         self::assertStringContainsString('completion_tokens', $phaseScript);
-        self::assertStringContainsString('queue_result_delta', $phaseScript);
+        self::assertStringContainsString('function appendLiveQueueLog(delta)', $phaseScript);
+        self::assertStringContainsString('resEl.appendChild(node)', $phaseScript);
+        self::assertStringContainsString('while (resEl.childNodes.length > LIVE_LOG_MAX_LINES)', $phaseScript);
+        self::assertStringContainsString('state.plan_queue_info = sanitizeQueueInfoForMemory(info);', $phaseScript);
+        self::assertStringContainsString("'result_log', 'queue_result_delta', 'chunk', 'content', 'events', 'top_logs'", $phaseScript);
+        self::assertStringContainsString("'events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'", $phaseScript);
+        self::assertStringNotContainsString('state.queue_result_delta =', $phaseScript);
+        self::assertStringNotContainsString('state.plan_queue_info = info;', $phaseScript);
         self::assertStringContainsString('__pbPhase1TaskProgress.syncFromSsePayload(operation, payload || {}, eventKind)', $runtimeScript);
+    }
+
+    public function testWorkspaceStreamingUiUsesBoundedDomBuffersInsteadOfAccumulatingLogs(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $appCodeRoot = \dirname(__DIR__, 5);
+        $mainScript = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $runtimeScript = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        $buildScript = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-build-queue-progress.phtml');
+        $phaseScript = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml');
+        $guidedStyles = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/styles-guided.phtml');
+        $terminalSource = (string)\file_get_contents($appCodeRoot . '/Weline/Theme/Taglib/SseTerminal.php');
+
+        self::assertStringContainsString('function appendPlanStreamChunk(chunk, payload)', $mainScript);
+        self::assertStringContainsString('var PLAN_STREAM_PREVIEW_MAX_CHARS = 60000;', $mainScript);
+        self::assertStringContainsString('var PLAN_STREAM_PREVIEW_MAX_LINES = 600;', $mainScript);
+        self::assertStringContainsString('function appendBoundedPlanStreamMarkdown(current, piece)', $mainScript);
+        self::assertStringContainsString('currentPlanStreamMarkdown = appendBoundedPlanStreamMarkdown(currentPlanStreamMarkdown, piece);', $mainScript);
+        self::assertStringContainsString('currentPlanPayload.markdown_stream_preview = true;', $mainScript);
+        self::assertStringContainsString('function releasePlanStreamBuffer(options)', $mainScript);
+        self::assertStringContainsString('releasePlanStreamBuffer({ clearPreviewPayload: true });', $mainScript);
+        self::assertStringNotContainsString('currentPlanStreamMarkdown = String(currentPlanStreamMarkdown || \'\') + piece;', $mainScript);
+        self::assertStringContainsString('requestAnimationFrame(function ()', $mainScript);
+        self::assertStringNotContainsString('textContent + chunk', $mainScript);
+        self::assertStringContainsString('var INLINE_STREAM_MAX_CHARS = 24000;', $mainScript);
+        self::assertStringContainsString('var INLINE_STREAM_MAX_TEXT_LINES = 200;', $mainScript);
+        self::assertStringContainsString('function appendSseParserBuffer(current, piece)', $mainScript);
+        self::assertStringContainsString('INLINE_STREAM_EVENT_BUFFER_MAX_CHARS', $mainScript);
+        self::assertStringContainsString('function abortComponentConfigModalStream(modalElement)', $mainScript);
+        self::assertStringContainsString('__pbComponentConfigStreamReader.cancel()', $mainScript);
+        self::assertStringContainsString('function abortBlockEditorAiStream()', $mainScript);
+        self::assertStringContainsString('abortCurrentStream();', $mainScript);
+        self::assertStringContainsString('clearStreamRefs();', $mainScript);
+        self::assertStringContainsString("if (isPlainWorkspaceObject(safe.snapshot))", $mainScript);
+        self::assertStringContainsString("if (isPlainWorkspaceObject(safe.scope.snapshot))", $mainScript);
+        self::assertStringContainsString("safe.scope[key] = sanitizeQueueInfoForMemory(safe.scope[key]);", $mainScript);
+        self::assertStringContainsString("['page_type_layouts', 'pagebuilder_pages_by_type', 'virtual_pages_by_type']", $mainScript);
+        self::assertStringContainsString('function sanitizeWorkspaceStateCollectionForMemory(collection)', $mainScript);
+
+        self::assertStringContainsString('writeChunk: function(text)', $terminalSource);
+        self::assertStringContainsString('function pruneTerminalLines()', $terminalSource);
+        self::assertStringContainsString('while (content.children.length > maxDomLines)', $terminalSource);
+        self::assertStringContainsString('max-dom-lines', $terminalSource);
+        self::assertStringContainsString('workspaceTerminal.writeChunk(message);', $runtimeScript);
+        self::assertStringContainsString('function disposeOperationLiveStream(operation, summary)', $runtimeScript);
+        self::assertStringContainsString('window.__pbPhase1TaskProgress.disposeLiveStream(finalSummary);', $runtimeScript);
+        self::assertStringContainsString('window.__pbBuildQueueProgress.disposeLiveStream(normalized || \'build\', finalSummary);', $runtimeScript);
+        self::assertStringContainsString('disposeOperationLiveStream(targetOperation, \'\');', $runtimeScript);
+        self::assertStringContainsString('function compactOperationFailurePayload(operation, payload, fallbackMessage)', $runtimeScript);
+        self::assertStringContainsString('lastFailurePayloadByOperation[op] = nextPayload;', $runtimeScript);
+        self::assertStringNotContainsString('lastFailurePayloadByOperation[op] = Object.assign({}, payload);', $runtimeScript);
+        self::assertStringContainsString('@media (max-width: 575.98px)', $guidedStyles);
+        self::assertStringContainsString('.pb-guided-steps {', $guidedStyles);
+        self::assertStringContainsString('flex-direction: column;', $guidedStyles);
+        self::assertStringContainsString('.pb-guided-step .step-label', $guidedStyles);
+        self::assertStringContainsString('white-space: normal;', $guidedStyles);
+
+        foreach ([$buildScript, $phaseScript] as $script) {
+            self::assertStringContainsString('var LIVE_LOG_MAX_LINES = 200;', $script);
+            self::assertStringContainsString('while (resEl.childNodes.length > LIVE_LOG_MAX_LINES)', $script);
+            self::assertStringContainsString('function disposeLiveStream', $script);
+            self::assertTrue(
+                \str_contains($script, "disposeLiveStream('');")
+                || \str_contains($script, "disposeLiveStream(key, '');"),
+                'details close should clear the bounded live log DOM'
+            );
+            self::assertStringContainsString('if (panelEl && !panelEl.open)', $script);
+            self::assertStringContainsString('state.snapshot = Object.assign({}, state.snapshot);', $script);
+            self::assertStringContainsString('state.scope.snapshot = Object.assign({}, state.scope.snapshot);', $script);
+            self::assertStringContainsString('state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);', $script);
+            self::assertStringContainsString('state.plan_queue_info = sanitizeQueueInfoForMemory(state.plan_queue_info);', $script);
+            self::assertStringContainsString('state.build_queue_info = sanitizeQueueInfoForMemory(state.build_queue_info);', $script);
+            self::assertStringContainsString("'result_log', 'queue_result_delta', 'chunk', 'content', 'events', 'top_logs'", $script);
+            self::assertStringContainsString("'events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'", $script);
+        }
     }
 
     public function testRuntimeStagePresentationLetsDoneQueueOverrideStaleActiveFailure(): void

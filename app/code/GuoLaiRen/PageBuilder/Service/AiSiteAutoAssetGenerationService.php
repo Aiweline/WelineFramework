@@ -6,20 +6,23 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 class AiSiteAutoAssetGenerationService
 {
     private const DEFAULT_LIMIT = 4;
     private const FAILURE_TRAIL_MAX_ITEMS = 80;
     private const FAILURE_TRAIL_MESSAGE_MAX_LEN = 800;
-    private const IMAGE_GENERATION_TIMEOUT_SECONDS = 180;
-    private const IMAGE_GENERATION_MAX_ATTEMPTS = 2;
+    private const IMAGE_GENERATION_TIMEOUT_SECONDS = 20;
+    private const IMAGE_GENERATION_MAX_ATTEMPTS = 1;
+    private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';
+    private const INLINE_IMAGE_GENERATION_DISABLED_REASON = 'disabled_by_test_switch';
 
     public function __construct(
         private readonly AiSiteAssetManifestService $manifestService,
         private readonly ?AiSiteReferenceImageInsightService $referenceImageInsightService = null,
         private readonly mixed $imageGenerator = null,
-        private readonly mixed $contentGateInspector = null,
+        private readonly mixed $buildReadinessInspector = null,
     ) {
     }
 
@@ -62,10 +65,17 @@ class AiSiteAutoAssetGenerationService
                 'failed_slots' => [],
             ];
         }
+        if ($this->isInlineImageGenerationDisabledForCurrentRequest()) {
+            return [
+                'scope' => $this->markImageGenerationDeferredInScope($scope, self::INLINE_IMAGE_GENERATION_DISABLED_REASON),
+                'generated_slots' => [],
+                'failed_slots' => [],
+            ];
+        }
         $prioritizeIdentityAssets = (int)($scope['auto_generate_identity_assets_first'] ?? 0) === 1;
         $identityOnly = (int)($scope['auto_asset_prebuild_identity_only'] ?? 0) === 1;
         if (!$identityOnly) {
-            $this->assertContentGatePassedBeforeImageGeneration($scope);
+            $this->assertBuildReadinessBeforeImageGeneration($scope);
         }
 
         $generatedSlots = [];
@@ -259,6 +269,14 @@ class AiSiteAutoAssetGenerationService
 
         $scope['asset_manifest'] = $manifest;
         $scope['verified_assets'] = $this->manifestService->extractVerifiedAssets($manifest);
+        if ($this->isInlineImageGenerationDisabledForCurrentRequest()) {
+            return [
+                'scope' => $this->markImageGenerationDeferredInScope($scope, self::INLINE_IMAGE_GENERATION_DISABLED_REASON, $slotId),
+                'slot_id' => $slotId,
+                'final_url' => '',
+                'generated' => false,
+            ];
+        }
         if ($this->shouldUsePlaceholderFallback($scope)) {
             return [
                 'scope' => $scope,
@@ -547,13 +565,13 @@ class AiSiteAutoAssetGenerationService
      *
      * @param array<string,mixed> $scope
      */
-    private function assertContentGatePassedBeforeImageGeneration(array $scope): void
+    private function assertBuildReadinessBeforeImageGeneration(array $scope): void
     {
-        if (!$this->shouldRequireContentGateBeforeImages($scope)) {
+        if (!$this->shouldRequireBuildReadinessBeforeImages($scope)) {
             return;
         }
 
-        $report = $this->inspectContentGate($scope);
+        $report = $this->inspectBuildReadinessGate($scope);
         if (!empty($report['passed'])) {
             return;
         }
@@ -569,25 +587,25 @@ class AiSiteAutoAssetGenerationService
         }
 
         throw new \RuntimeException(
-            'Content quality gate must pass before image generation: '
-            . ($failures !== [] ? \implode('; ', \array_slice($failures, 0, 6)) : 'unknown content failure')
+            'Build structure gate must pass before image generation: '
+            . ($failures !== [] ? \implode('; ', \array_slice($failures, 0, 6)) : 'unknown build-structure failure')
         );
     }
 
     /**
      * @param array<string,mixed> $scope
      */
-    private function shouldRequireContentGateBeforeImages(array $scope): bool
+    private function shouldRequireBuildReadinessBeforeImages(array $scope): bool
     {
-        if ((int)($scope['content_generation_gate_required'] ?? 0) === 1) {
+        if ((int)($scope['image_generation_requires_build_ready'] ?? 0) === 1) {
             return true;
         }
-        if ((int)($scope['content_generation_gate_skip'] ?? 0) === 1) {
+        if ((int)($scope['image_generation_build_ready_check_skip'] ?? 0) === 1) {
             return false;
         }
 
-        $summary = \is_array($scope['build_task_summary'] ?? null)
-            ? $scope['build_task_summary']
+        $summary = \is_array($scope['build_plan_execution_summary'] ?? null)
+            ? $scope['build_plan_execution_summary']
             : [];
 
         if ($summary === [] || (int)($summary['total'] ?? 0) <= 0) {
@@ -603,16 +621,16 @@ class AiSiteAutoAssetGenerationService
      * @param array<string,mixed> $scope
      * @return array<string,mixed>
      */
-    private function inspectContentGate(array $scope): array
+    private function inspectBuildReadinessGate(array $scope): array
     {
-        if (\is_callable($this->contentGateInspector)) {
-            $report = ($this->contentGateInspector)($scope);
+        if (\is_callable($this->buildReadinessInspector)) {
+            $report = ($this->buildReadinessInspector)($scope);
             return \is_array($report) ? $report : ['passed' => false, 'items' => []];
         }
 
         /** @var AiSiteQualityGateService $qualityGateService */
         $qualityGateService = ObjectManager::getInstance(AiSiteQualityGateService::class);
-        return $qualityGateService->inspectContentGate($scope);
+        return $qualityGateService->inspectBuildReadinessGate($scope);
     }
 
     /**
@@ -686,6 +704,9 @@ class AiSiteAutoAssetGenerationService
      */
     private function generateImage(string $prompt, int $adminId, array $slot): array
     {
+        if ($this->isInlineImageGenerationDisabledForCurrentRequest()) {
+            throw new \RuntimeException('Image generation disabled by test switch.');
+        }
         $slotId = (string)($slot['slot_id'] ?? '');
         $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
         $usage = \strtolower(\trim((string)($slot['usage'] ?? $slot['kind'] ?? '')));
@@ -815,6 +836,50 @@ class AiSiteAutoAssetGenerationService
     private function getReferenceImageInsightService(): AiSiteReferenceImageInsightService
     {
         return $this->referenceImageInsightService ?? new AiSiteReferenceImageInsightService();
+    }
+
+    private function isInlineImageGenerationDisabledForCurrentRequest(): bool
+    {
+        if ($this->isTruthyRuntimeSwitchValue(RequestContext::get(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED, false))) {
+            return true;
+        }
+
+        return $this->isTruthyRuntimeSwitchValue(\getenv('PAGEBUILDER_AI_SITE_SKIP_INLINE_IMAGES') ?: null);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function markImageGenerationDeferredInScope(array $scope, string $reason, string $slotId = ''): array
+    {
+        $scope['asset_image_generation_deferred'] = [
+            'reason' => $reason,
+            'slot_id' => \trim($slotId),
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+
+        return $scope;
+    }
+
+    private function isTruthyRuntimeSwitchValue(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return $value !== 0 && $value !== 0.0;
+        }
+        if (!\is_scalar($value)) {
+            return false;
+        }
+
+        $normalized = \strtolower(\trim((string)$value));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return !\in_array($normalized, ['0', 'false', 'no', 'off', 'disable', 'disabled'], true);
     }
 
     /**
@@ -1399,13 +1464,15 @@ class AiSiteAutoAssetGenerationService
         if ($required && $slotType === 'hero_image' && $this->slotPagePriority((string)($slot['page_type'] ?? '')) === 0) {
             return 1;
         }
+        if ($slotType === 'hero_image') {
+            return $required ? 1 : 10;
+        }
         if ($required) {
-            return 2;
+            return $slotType === 'logo_icon' ? 50 : 2;
         }
 
         return match ($slotType) {
-            'hero_image' => 10,
-            'logo_icon' => $prioritizeIdentityAssets ? 20 : 15,
+            'logo_icon' => $prioritizeIdentityAssets ? 20 : 50,
             'trust_brand_image' => 30,
             'section_image' => 40,
             default => 999,

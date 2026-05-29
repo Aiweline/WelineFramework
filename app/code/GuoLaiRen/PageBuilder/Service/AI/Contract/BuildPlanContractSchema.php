@@ -29,44 +29,12 @@ final class BuildPlanContractSchema
             'content_manifest',
             'pages',
             'blocks',
-            'tasks',
-            'build_order',
             'permission_matrix',
             'frozen_fields',
             'mutable_fields',
             'source_contracts',
             'qa_gates',
             'presentation_projection',
-        ];
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function allowedTaskKinds(): array
-    {
-        return [
-            'asset_generate',
-            'block_build',
-            'page_assemble',
-            'i18n_generate',
-            'seo_generate',
-            'qa_run',
-            'repair_patch',
-            'publish_prepare',
-        ];
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function allowedExecutors(): array
-    {
-        return [
-            'AiSiteAssetQueue',
-            'AiSiteBuildQueue',
-            'AiSiteQualityGateService',
-            'ContractRepairExecutor',
         ];
     }
 
@@ -133,27 +101,20 @@ final class BuildPlanContractSchema
             'page_id',
             'block_type',
             'content_keys',
-            'task_ids',
         ];
     }
 
     /**
      * @return list<string>
      */
-    public function requiredTaskFields(): array
+    public function forbiddenTopLevelFields(): array
     {
         return [
-            'task_id',
-            'task_kind',
-            'executor',
-            'input_scope',
-            'runtime_context',
-            'output_contract',
-            'policy_slices',
-            'context_budget',
-            'acceptance',
-            'acceptance_rule_ids',
-            'depends_on',
+            'tasks',
+            'build_order',
+            'task_plan',
+            'build_blueprint',
+            'execution_blueprint',
         ];
     }
 }

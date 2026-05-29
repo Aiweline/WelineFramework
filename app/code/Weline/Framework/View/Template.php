@@ -471,8 +471,9 @@ class Template extends DataObject
      */
     public function convertFetchFileName(string $fileName): array
     {
-        $comFileName_cache_key = $this->view_dir . $fileName . '_comFileName' . Cookie::getLangLocal();
-        $tplFile_cache_key = $this->view_dir . $fileName . '_tplFile' . Cookie::getLangLocal();
+        $templateContextKey = KeyBuilder::environmentHash(['scope' => 'template-file-map']);
+        $comFileName_cache_key = $this->view_dir . $fileName . '_comFileName|' . $templateContextKey;
+        $tplFile_cache_key = $this->view_dir . $fileName . '_tplFile|' . $templateContextKey;
         $comFileName = '';
         $tplFile = '';
         # 让非生产环境实时读取文件
@@ -523,7 +524,7 @@ class Template extends DataObject
             }
 
             // 检测目录是否存在,不存在则建立
-            $baseComFileDir = $compile_dir . DS . Cookie::getLang() . DS . ($file_dir ?: '');
+            $baseComFileDir = $compile_dir . DS . $this->templateCompileContextDir() . DS . ($file_dir ?: '');
             if (!is_dir($baseComFileDir) && !@mkdir($baseComFileDir, 0770, true) && !is_dir($baseComFileDir)) {
                 throw new Exception('Failed to create template compile directory: ' . $baseComFileDir);
             }
@@ -552,6 +553,21 @@ class Template extends DataObject
             $comFileName = str_replace('//', DS, $comFileName);
         }
         return [$comFileName, $tplFile];
+    }
+
+    private function templateCompileContextDir(): string
+    {
+        $lang = $this->sanitizeCompileContextSegment((string)State::getLang());
+        $currency = $this->sanitizeCompileContextSegment((string)State::getCurrency());
+
+        return $lang . DS . $currency;
+    }
+
+    private function sanitizeCompileContextSegment(string $segment): string
+    {
+        $segment = preg_replace('/[^A-Za-z0-9_-]+/', '_', trim($segment));
+
+        return $segment === '' ? 'default' : $segment;
     }
 
 
@@ -863,6 +879,7 @@ class Template extends DataObject
 
         $ttl = $this->staticHookOutputCacheTtl();
         $cacheKey = 'hook.output.' . \sha1($hookFile . '|' . $compiledFile . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . KeyBuilder::environmentHash([
+            'cache_version' => '20260528-template-manifest-tempfile',
             'base_url' => $baseUrl,
             'hook_context' => $cacheContext,
         ]));
@@ -1322,6 +1339,7 @@ class Template extends DataObject
 
         return 'template.output.header.default.' . KeyBuilder::environmentHash([
             'scope' => 'frontend-header-default',
+            'cache_version' => '20260528-template-manifest-tempfile',
             'file' => $path,
             'file_mtime' => (int)$stat['mtime'],
             'file_size' => (int)$stat['size'],
@@ -2237,6 +2255,7 @@ class Template extends DataObject
         try {
             return 'account-sidebar:' . KeyBuilder::environmentHash([
                 'base_url' => $this->baseUrlCacheContext(),
+                'cache_version' => '20260528-hook-i18n-context',
                 'scope' => 'account-sidebar',
             ]);
         } catch (\Throwable) {

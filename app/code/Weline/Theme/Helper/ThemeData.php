@@ -962,7 +962,23 @@ class ThemeData
     {
         MetaData::clearCache();
         self::$runtimeCache = [];
+        self::clearSharedRuntimeCache();
         self::resetCurrentState();
+    }
+
+    private static function clearSharedRuntimeCache(): void
+    {
+        $cache = self::sharedRuntimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->clearNamespace(self::SHARED_CACHE_NAMESPACE);
+        } catch (\Throwable) {
+            self::$sharedRuntimeCache = null;
+            self::$sharedRuntimeCacheResolved = true;
+        }
     }
 
     /**

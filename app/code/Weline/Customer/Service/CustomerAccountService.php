@@ -6,6 +6,7 @@ namespace Weline\Customer\Service;
 
 use Weline\Customer\Model\Customer;
 use Weline\Framework\App\Env;
+use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
@@ -20,7 +21,8 @@ class CustomerAccountService
     public function __construct(
         private readonly Customer $customerModel,
         private readonly SessionFactory $sessionFactory,
-        private readonly Request $request
+        private readonly Request $request,
+        private readonly ?EventsManager $eventsManager = null
     ) {
     }
 
@@ -56,7 +58,6 @@ class CustomerAccountService
      */
     public function register(string $email, string $password, array $profileData = []): array
     {
-        unset($profileData);
         $email = $this->normalizeEmail($email);
         $this->validatePasswordStrength($password);
 
@@ -64,8 +65,28 @@ class CustomerAccountService
             throw new \RuntimeException((string) __('该邮箱已存在，请使用其他邮箱注册.'));
         }
 
+        $beforePayload = new DataObject([
+            'email' => $email,
+            'profile_data' => $profileData,
+            'referral_code' => (string) ($profileData['referral_code'] ?? $profileData['ref'] ?? ''),
+            'request' => $this->request,
+        ]);
+        $this->eventsManager()->dispatch('Weline_Frontend_Account_Register::register_before', $beforePayload);
+
         $customer = $this->customerModel->reset()->clearData();
         $customer->setEmail($email)->setUsername($email)->setPassword($password)->save();
+
+        $afterPayload = new DataObject([
+            'user' => $customer,
+            'customer' => $customer,
+            'customer_id' => (int) ($customer->getId() ?? 0),
+            'email' => $email,
+            'profile_data' => $profileData,
+            'referral_code' => (string) ($profileData['referral_code'] ?? $profileData['ref'] ?? ''),
+            'request' => $this->request,
+            'created_at' => date('Y-m-d H:i:s'),
+        ]);
+        $this->eventsManager()->dispatch('Weline_Frontend_Account_Register::register_after', $afterPayload);
 
         return ['customer' => $customer];
     }
@@ -100,5 +121,10 @@ class CustomerAccountService
         if ($adminPath !== '') {
             Cookie::set('w_sandbox', $enabled ? '1' : '', $lifetime, ['path' => '/' . ltrim($adminPath, '/')]);
         }
+    }
+
+    private function eventsManager(): EventsManager
+    {
+        return $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
     }
 }

@@ -3533,6 +3533,7 @@ class Stop extends CommandAbstract
 
         if ($success) {
             $this->printer->successIcon(__('Weline Server 已停止！'));
+            $this->printer->note('  ' . __('server:stop only stops WLS-managed processes; independent bin/w commands such as setup:upgrade or cron:task:run must be handled separately.'));
         } else {
             $this->printer->errorIcon(__('Weline Server 停止失败'));
         }

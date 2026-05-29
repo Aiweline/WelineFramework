@@ -59,6 +59,10 @@ final class AiSiteDesignDirectorServiceTest extends TestCase
         self::assertNotEmpty($system['tokens']['container'] ?? null);
         self::assertNotEmpty($system['tokens']['radius_scale'] ?? null);
         self::assertGreaterThanOrEqual(6, \count($system['morphology_pool'] ?? []));
+        self::assertStringNotContainsString('clamp(', \json_encode($system['tokens']['type_scale'] ?? [], \JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString('vw', \json_encode($system['tokens']['type_scale'] ?? [], \JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString('clamp(', \json_encode($system['tokens']['typography'] ?? [], \JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString('vw', \json_encode($system['tokens']['typography'] ?? [], \JSON_THROW_ON_ERROR));
 
         $registryIds = \array_keys((new AiSiteBlockMorphologyRegistry())->all());
         self::assertNotSame([], \array_intersect($registryIds, $system['morphology_pool']));
@@ -111,5 +115,36 @@ final class AiSiteDesignDirectorServiceTest extends TestCase
         self::assertSame('low', $system['media_strategy']['page_asset_density'] ?? null);
         self::assertSame('airy', $system['style_axis']['density'] ?? null);
         self::assertStringContainsString('CSS motif', (string)($system['media_strategy']['hero_image_rule'] ?? ''));
+    }
+
+    public function testNeonCardBriefMaterializesGamingDesignDefaults(): void
+    {
+        $system = (new AiSiteDesignDirectorService())->materialize(
+            [
+                'site_title' => '霓虹棋牌馆',
+                'brief_description' => '打造一个霓虹棋牌风格的线上娱乐网站，包含玩家证明、玩法亮点、攻略内容和客服支持。',
+                'page_types' => ['home_page', 'about_page', 'contact_page', 'blog_list'],
+            ],
+            [],
+            [],
+            [
+                'home_page' => [
+                    'blocks' => [
+                        ['page_flow_role' => 'opening'],
+                        ['page_flow_role' => 'proof'],
+                        ['page_flow_role' => 'details'],
+                    ],
+                ],
+            ]
+        );
+
+        self::assertSame('#070A18', $system['tokens']['color_roles']['background'] ?? null);
+        self::assertSame('#00F5FF', $system['tokens']['color_roles']['accent'] ?? null);
+        self::assertSame('high', $system['media_strategy']['page_asset_density'] ?? null);
+        self::assertSame('immersive', $system['style_axis']['density'] ?? null);
+        self::assertSame('neon gaming', $system['style_axis']['mood'] ?? null);
+        self::assertStringContainsString('Chakra Petch', (string)($system['tokens']['typography']['font_family'] ?? ''));
+        self::assertStringContainsString('neon card-room', (string)($system['media_strategy']['hero_image_rule'] ?? ''));
+        self::assertStringContainsString('block-specific real images', (string)($system['media_strategy']['non_hero_image_rule'] ?? ''));
     }
 }

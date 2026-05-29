@@ -17,7 +17,7 @@ $class = $this->getData('class') ?? '';
 $id = $this->getData('id') ?? '';
 
 // 构建CSS类
-$badgeClass = 'badge badge-' . htmlspecialchars($type);
+$badgeClass = 'w-badge w-badge-' . htmlspecialchars($type);
 if ($class) {
     $badgeClass .= ' ' . htmlspecialchars($class);
 }

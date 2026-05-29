@@ -24,7 +24,8 @@ namespace GuoLaiRen\PageBuilder\Service;
  */
 class AiSiteAgentQueueObserverHelperService
 {
-    private const MAX_CONTENT_JSON_DECODE_BYTES = 262144;
+    private const QUEUE_RESULT_TAIL_BYTES = 4096;
+    private const QUEUE_RESULT_TAIL_LINES = 50;
 
     /**
      * 对 plan 这类"自带 SSE 事件流"的 operation，抑制 queue process 镜像转发；
@@ -65,8 +66,8 @@ class AiSiteAgentQueueObserverHelperService
 
     /**
      * 根据 queueRow 解析"结束文案"：
-     *  1) 优先使用 `process` 字段（非空）；
-     *  2) 否则取 `result` 最后一个非空行；
+     *  1) 优先使用结构化 `process` / `message` / `terminal_summary` 字段；
+     *  2) 历史 `result` 仅作为先按字节裁剪后的兼容尾部摘要；
      *  3) 最终兜底 i18n 文案（成功 / 失败）。
      *
      * @param array<string, mixed>|null $queueRow `weline_queue` 一行原始数据；null 直接走 i18n 兜底
@@ -74,36 +75,14 @@ class AiSiteAgentQueueObserverHelperService
     public function resolveMessage(?array $queueRow, bool $success): string
     {
         if (\is_array($queueRow)) {
-            $status = \trim((string)($queueRow['status'] ?? ''));
-            $process = \trim((string)($queueRow['process'] ?? ''));
-            $result = \trim($this->sanitizePlanningQueueResultLog($queueRow));
-            if ($result !== '') {
-                $lines = \preg_split("/\\r\\n|\\n|\\r/", $result) ?: [];
-                $lines = \array_values(\array_filter(\array_map('trim', $lines), static fn(string $line): bool => $line !== ''));
-                if ($lines !== []) {
-                    $resultTail = (string)\end($lines);
-                    if (\in_array($status, ['done', 'error', 'stop', 'cancelled'], true)) {
-                        if ($status === 'error') {
-                            for ($i = \count($lines) - 1; $i >= 0; $i--) {
-                                $line = (string)$lines[$i];
-                                if ($this->isTerminalErrorMessageLine($line)) {
-                                    return $this->normalizeTerminalErrorMessageLine($line);
-                                }
-                            }
-                        }
-                        return $resultTail;
-                    }
-                }
+            $message = $this->firstNonEmptyQueueText($queueRow, ['process', 'message', 'terminal_summary']);
+            if ($message !== '' && ($success || !$this->isQueueStreamOmittedMessage($message))) {
+                return $message;
             }
-            if ($process !== '') {
-                return $process;
-            }
-            if ($result !== '') {
-                $lines = \preg_split("/\\r\\n|\\n|\\r/", $result) ?: [];
-                $lines = \array_values(\array_filter(\array_map('trim', $lines), static fn(string $line): bool => $line !== ''));
-                if ($lines !== []) {
-                    return (string)\end($lines);
-                }
+
+            $legacyResultMessage = $this->resolveLegacyResultMessage($queueRow);
+            if ($legacyResultMessage !== '') {
+                return $legacyResultMessage;
             }
         }
 
@@ -116,8 +95,7 @@ class AiSiteAgentQueueObserverHelperService
      * 约定：调用方（控制器）先通过 `AiSiteQueueSnapshotService` 计算 snapshot，
      * 再把 snapshot 传进来；这样 Helper 不用引入新依赖。
      *
-     * 截断规则：`result_log` 超过 24000 字符时，仅保留末尾 24000 字符，并在开头
-     * 附 i18n 提示；保持与原 `AiSiteAgent::buildQueueObserverPanelPayload` 一致。
+     * 截断规则：`result_log` 只作为当前短消息/终态摘要，不再承载历史日志；超过 4096 字节时只保留尾部。
      *
      * @param array<string, mixed> $queueRow
      * @param array<string, mixed> $snapshot
@@ -131,11 +109,7 @@ class AiSiteAgentQueueObserverHelperService
         if (\strlen($process) > $processMax) {
             $process = '...(showing last ' . $processMax . ' chars)' . "\n" . \substr($process, -$processMax);
         }
-        $result = $this->sanitizePlanningQueueResultLog($queueRow);
-        $max = 24000;
-        if (\strlen($result) > $max) {
-            $result = (string)__('…（以下仅显示末尾约 %{n} 字符）', ['n' => (string)$max]) . "\n" . \substr($result, -$max);
-        }
+        $result = $this->resolveResultLogForPanel($queueRow);
 
         // panel payload 只输出权威 4 字段（queue_id / snapshot / process / result_log）。
         // queue 状态/状态别名（status / queue_status / job_status）由 AiSiteSsePayloadNormalizer
@@ -170,10 +144,9 @@ class AiSiteAgentQueueObserverHelperService
             'ai_chunk' => 'progress',
             'shared_component_generated' => 'shared_component_generated',
             'page_generated' => 'page_generated',
-            'task_completed' => 'task_completed',
-            // build_task_failed 是构建阶段单任务硬失败的 workspace event_type。映射到 SSE task_failed 让前端
-            // 与直接 sse->sendEvent('task_failed', ...) 同走一个监听器，消除"信号双路径但前端只收一路"的隐患。
-            'task_failed', 'build_task_failed' => 'task_failed',
+            'build_plan_block_completed' => 'build_plan_block_completed',
+            // Build-plan block lifecycle events are forwarded with the same public SSE names.
+            'build_plan_block_failed' => 'build_plan_block_failed',
             'operation_failed' => 'error',
             default => '',
         };
@@ -205,11 +178,10 @@ class AiSiteAgentQueueObserverHelperService
             'ai_chunk',
             'shared_component_generated',
             'page_generated',
-            'task_completed',
-            // build_task_failed / task_failed 必须能被 forwardObservedOperationEvents 转发，
+            'build_plan_block_completed',
+            // build_plan_block_failed must be forwardable by forwardObservedOperationEvents.
             // 否则 mapOperationEventName 即便有映射也会被 isOperationEventRelevant 的白名单挡掉。
-            'task_failed',
-            'build_task_failed',
+            'build_plan_block_failed',
             'operation_failed',
         ], true)) {
             return false;
@@ -385,125 +357,131 @@ class AiSiteAgentQueueObserverHelperService
     /**
      * @param array<string, mixed> $queueRow
      */
-    private function sanitizePlanningQueueResultLog(array $queueRow): string
+    private function resolveResultLogForPanel(array $queueRow): string
     {
-        $result = (string)($queueRow['result'] ?? '');
-        $operation = $this->resolveQueueRowOperation($queueRow);
-        if ($operation !== 'plan' || \trim($result) === '') {
-            return $result;
+        $structured = $this->firstNonEmptyQueueText($queueRow, ['message', 'terminal_summary']);
+        if ($structured !== '') {
+            return $this->trimQueueResultCompatibilityTail($structured);
         }
 
-        $kept = [];
-        $suppressed = 0;
-        $lines = \preg_split("/\\r\\n|\\n|\\r/", $result) ?: [];
-        foreach ($lines as $line) {
-            $line = \trim((string)$line);
-            if ($line === '') {
-                continue;
-            }
-            if ($this->isSafePlanningQueueLogLine($line)) {
-                $kept[] = $line;
-            } else {
-                $suppressed++;
-            }
-        }
-        if ($suppressed > 0) {
-            \array_unshift($kept, (string)__('已省略 %{n} 行 AI 正文输出。', ['n' => (string)$suppressed]));
-        }
-
-        return \implode("\n", $kept);
-    }
-
-    private function isSafePlanningQueueLogLine(string $line): bool
-    {
-        if ((bool)\preg_match(
-            '/^\[\d{2}:\d{2}:\d{2}\]\s+(?:START|INFO|WARNING|PROGRESS|ERROR|AI_PROGRESS|TOKEN_USAGE)\b/u',
-            $line
-        )) {
-            return true;
-        }
-
-        return \str_contains($line, '正文流不写入队列日志')
-            || \str_contains($line, '正文流已从队列 SSE 中省略');
-    }
-
-    private function isTerminalErrorMessageLine(string $line): bool
-    {
-        return (bool)\preg_match('/^\[\d{2}:\d{2}:\d{2}\]\s+(?:ERROR|WARNING)\b/u', $line)
-            || \str_contains($line, '失败')
-            || \str_contains($line, '异常')
-            || \stripos($line, 'error') !== false
-            || \stripos($line, 'failed') !== false
-            || \stripos($line, 'exception') !== false;
-    }
-
-    private function normalizeTerminalErrorMessageLine(string $line): string
-    {
-        $normalized = \preg_replace('/^\[\d{2}:\d{2}:\d{2}\]\s+(?:ERROR|WARNING)\s+/u', '', $line);
-        return \trim(\is_string($normalized) ? $normalized : $line);
+        return $this->trimQueueResultCompatibilityTail((string)($queueRow['result'] ?? ''));
     }
 
     /**
      * @param array<string, mixed> $queueRow
      */
-    private function resolveQueueRowOperation(array $queueRow): string
+    private function resolveLegacyResultMessage(array $queueRow): string
     {
-        $operationFromBizKey = $this->resolveQueueRowOperationFromBizKey($queueRow);
-        if ($operationFromBizKey !== '') {
-            return $operationFromBizKey;
+        $result = $this->trimQueueResultCompatibilityTail((string)($queueRow['result'] ?? ''));
+        if ($result === '') {
+            return '';
         }
-        $content = $queueRow['content'] ?? null;
-        if (\is_string($content) && \trim($content) !== '') {
-            if (\strlen($content) > self::MAX_CONTENT_JSON_DECODE_BYTES) {
-                return $this->normalizeQueueOperationHint(
-                    $this->extractJsonStringValue($content, 'operation')
-                    ?: $this->extractJsonStringValue($content, 'job_type')
-                );
-            }
-            $decoded = \json_decode($content, true);
-            if (\is_array($decoded)) {
-                return $this->normalizeQueueOperationHint(\trim((string)($decoded['operation'] ?? $decoded['job_type'] ?? '')));
-            }
+
+        $lines = $this->extractNonEmptyTailLines($result, 0, self::QUEUE_RESULT_TAIL_LINES);
+        if ($lines === []) {
+            return '';
         }
-        if (\is_array($content)) {
-            return $this->normalizeQueueOperationHint(\trim((string)($content['operation'] ?? $content['job_type'] ?? '')));
+
+        return (string)\end($lines);
+    }
+
+    /**
+     * @param array<string, mixed> $queueRow
+     * @param list<string> $keys
+     */
+    private function firstNonEmptyQueueText(array $queueRow, array $keys): string
+    {
+        foreach ($keys as $key) {
+            $value = \trim((string)($queueRow[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
         }
 
         return '';
     }
 
-    private function resolveQueueRowOperationFromBizKey(array $queueRow): string
+    private function trimQueueResultCompatibilityTail(string $result): string
     {
-        $bizKey = \trim((string)($queueRow['biz_key'] ?? ''));
-        if ($bizKey === '') {
+        $result = \trim($result);
+        if ($result === '') {
             return '';
         }
-        if (\preg_match('/(?:^|:)queue_slot:([^:]+)/', $bizKey, $slotMatch) === 1) {
-            $slot = \trim((string)($slotMatch[1] ?? ''));
-            return $slot === 'planning' ? 'plan' : $slot;
-        }
-        if (\preg_match('/(?:^|:)operation:([^:]+)/', $bizKey, $operationMatch) === 1) {
-            return \trim((string)($operationMatch[1] ?? ''));
+
+        if (\strlen($result) <= self::QUEUE_RESULT_TAIL_BYTES) {
+            return $result;
         }
 
-        return '';
+        return (string)__('...(仅显示末尾约 %{n} 字节)', ['n' => (string)self::QUEUE_RESULT_TAIL_BYTES])
+            . "\n"
+            . $this->strcutTail($result, self::QUEUE_RESULT_TAIL_BYTES);
     }
 
-    private function extractJsonStringValue(string $json, string $key): string
+    /**
+     * @return list<string>
+     */
+    private function extractNonEmptyTailLines(
+        string $text,
+        int $maxBytes = self::QUEUE_RESULT_TAIL_BYTES,
+        int $maxLines = self::QUEUE_RESULT_TAIL_LINES
+    ): array {
+        $text = \trim($text);
+        if ($text === '') {
+            return [];
+        }
+        if ($maxBytes > 0 && \strlen($text) > $maxBytes) {
+            $text = \substr($text, -$maxBytes);
+            $firstLineBreak = \strpos($text, "\n");
+            if ($firstLineBreak !== false) {
+                $text = \substr($text, $firstLineBreak + 1);
+            }
+        }
+        $text = \str_replace(["\r\n", "\r"], "\n", $text);
+        $lines = [];
+        foreach (\explode("\n", $text) as $line) {
+            $line = \trim((string)$line);
+            if ($line === '') {
+                continue;
+            }
+            $lines[] = $line;
+            if ($maxLines > 0 && \count($lines) > $maxLines) {
+                \array_shift($lines);
+            }
+        }
+
+        return $lines;
+    }
+
+    private function isQueueStreamOmittedMessage(string $message): bool
     {
-        if (\preg_match('/"' . \preg_quote($key, '/') . '"\s*:\s*"((?:\\\\.|[^"\\\\])*)"/', $json, $match) !== 1) {
+        $message = \trim($message);
+        if ($message === '') {
+            return false;
+        }
+
+        return \str_contains($message, 'AI body stream is intentionally omitted from queue logs')
+            || \str_contains($message, '正文流不写入队列日志')
+            || \str_contains($message, '正文流已从队列 SSE 中省略');
+    }
+
+    private function strcutTail(string $text, int $maxBytes): string
+    {
+        if ($maxBytes <= 0) {
             return '';
         }
-        $decoded = \json_decode('"' . $match[1] . '"');
-
-        return \is_string($decoded) ? \trim($decoded) : '';
-    }
-
-    private function normalizeQueueOperationHint(string $value): string
-    {
-        if ($value === 'plan' || \str_starts_with($value, 'stage1.')) {
-            return 'plan';
+        if (\strlen($text) <= $maxBytes) {
+            return $text;
         }
-        return $value;
+        if (\function_exists('mb_strcut')) {
+            return (string)\mb_strcut($text, -$maxBytes, null, 'UTF-8');
+        }
+
+        $tail = (string)\substr($text, -$maxBytes);
+        while ($tail !== '' && !\preg_match('//u', $tail)) {
+            $tail = (string)\substr($tail, 1);
+        }
+
+        return $tail;
     }
+
 }

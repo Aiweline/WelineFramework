@@ -31,13 +31,29 @@ $meta = $this->getData('meta') ?? [];
         <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::rma::content-before</w:hook>
         <main class="rma-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="rma-main" data-layout="rma">
-            <if condition="meta.content">
-                {{meta.content}}
-                <elseif condition="content"/>
-                {{content}}
-                <elseif condition="meta.contentTemplate"/>
-                <?php echo $this->getChildHtml('content'); ?>
-            </if>
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-rma-content,layout-account-content,layout-default-content,content,rma-content,account-content"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="rma-main__content-root-slot">
+                <w:slot id="rma-content"
+                    name="售后服务内容"
+                    accept="layout-rma-content,rma-content,account-content,content"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="rma-main__content-slot">
+                <if condition="meta.content">
+                    {{meta.content}}
+                    <elseif condition="content"/>
+                    {{content}}
+                    <elseif condition="meta.contentTemplate"/>
+                    <?php echo $this->getChildHtml('content'); ?>
+                </if>
+                </w:slot>
+            </w:slot>
         </main>
         <w:hook>Weline_Theme::frontend::layouts::rma::content-after</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>

@@ -41,7 +41,21 @@ $meta = $this->getData('meta') ?? [];
         <div class="weline-main-content">
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
 
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-policy-disclaimer-content,layout-policy-content,layout-default-content,content,policy-content,disclaimer,cms-content,faq"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="policy-disclaimer__content-root-slot">
             <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> disclaimer" id="disclaimer-main" data-layout="policy-disclaimer">
+                <w:slot id="policy-disclaimer-content"
+                        name="免责声明正文"
+                        accept="layout-policy-disclaimer-content,layout-policy-content,disclaimer,policy-content,content,faq"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="policy-main__content-slot">
                 <if condition="meta.content">
                     {{meta.content}}
                 <else/>
@@ -151,7 +165,9 @@ $meta = $this->getData('meta') ?? [];
                         </div>
                     </div>
                 </if>
+                </w:slot>
             </main>
+            </w:slot>
 
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>

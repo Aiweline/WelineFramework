@@ -29,7 +29,7 @@ This skill performs first-level acceptance for work returned by specialists. It 
 - Review whether the reported evidence actually proves the change.
 - Track remaining gaps, blockers, regressions, and cross-role dependencies.
 - Reject incomplete work and send it back with precise correction criteria.
-- Package accepted work for final Technical Director review.
+- Package only accepted or conditionally accepted work for final Technical Director review.
 
 # Workflow
 
@@ -38,8 +38,9 @@ This skill performs first-level acceptance for work returned by specialists. It 
 3. Compare claimed completion against actual changed areas and reported commands.
 4. Confirm that required module README, architecture docs, and API docs were updated when relevant.
 5. Mark each item as accepted, partially accepted, or returned for correction.
-6. Summarize open risks, deferred items, and missing evidence.
-7. Prepare a concise handoff note for second-level acceptance.
+6. For returned, failed, or missing-evidence items, send exact correction criteria back to the responsible specialist and keep them in the lead ledger instead of preparing an upward report.
+7. Summarize open risks, deferred items, and missing evidence only after deciding whether they are acceptable conditions or returned work.
+8. Prepare a concise handoff note for second-level acceptance only for PASS or CONDITIONAL results.
 
 # Weline Rules
 
@@ -61,7 +62,7 @@ This skill performs first-level acceptance for work returned by specialists. It 
 - A first-level acceptance decision for each returned work item.
 - A progress summary with accepted work, returned work, and blockers.
 - A list of missing evidence or missing updates.
-- A handoff note for Technical Director final review.
+- A handoff note for Technical Director final review only when the result is PASS or CONDITIONAL.
 
 # Validation
 
@@ -75,6 +76,7 @@ This skill performs first-level acceptance for work returned by specialists. It 
 - Do not perform final second-level acceptance.
 - Do not accept work with missing evidence on critical paths.
 - Do not hide partial completion behind a generic “done” status.
+- Do not report FAIL, incomplete, or missing-evidence work to the user or Technical Director as a delivery update; return it to the responsible owner unless a human-only decision is required.
 - Do not rewrite specialist outputs without preserving their original evidence.
 
 # Shared Collaboration Contract

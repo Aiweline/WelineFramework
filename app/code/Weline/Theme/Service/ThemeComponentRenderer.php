@@ -23,6 +23,7 @@ class ThemeComponentRenderer
     {
         $area = $definition->area ?: ((string)($context['area'] ?? 'frontend'));
         $config = $this->mergeConfig($definition, $instanceConfig, $theme, $area);
+        $config = $this->exposeThemeComponentConfigAsMeta($definition, $config);
         if (!empty($context['preview_mode'])) {
             $config['preview_mode'] = true;
         }
@@ -94,6 +95,55 @@ class ThemeComponentRenderer
         }
 
         return $defaults;
+    }
+
+    private function exposeThemeComponentConfigAsMeta(ThemeComponentDefinition $definition, array $config): array
+    {
+        if ($definition->module !== 'Weline_Theme' || $definition->type !== 'theme_component') {
+            return $config;
+        }
+
+        $meta = is_array($config['meta'] ?? null) ? $config['meta'] : [];
+        foreach ($config as $key => $value) {
+            if (!is_string($key) || !str_starts_with($key, 'meta.') || $key === 'meta.') {
+                continue;
+            }
+            $this->setNestedMetaValue($meta, substr($key, 5), $value);
+        }
+
+        $paramKeys = array_unique(array_merge(
+            array_keys($definition->params),
+            array_keys($definition->defaultConfig),
+            array_keys($definition->configSchema)
+        ));
+
+        foreach ($paramKeys as $key) {
+            if (is_string($key) && array_key_exists($key, $config)) {
+                $meta[$key] = $config[$key];
+            }
+        }
+
+        $config['meta'] = $meta;
+        return $config;
+    }
+
+    private function setNestedMetaValue(array &$meta, string $path, mixed $value): void
+    {
+        $parts = array_values(array_filter(explode('.', $path), static fn(string $part): bool => $part !== ''));
+        if ($parts === []) {
+            return;
+        }
+
+        $cursor = &$meta;
+        $last = array_pop($parts);
+        foreach ($parts as $part) {
+            if (!isset($cursor[$part]) || !is_array($cursor[$part])) {
+                $cursor[$part] = [];
+            }
+            $cursor = &$cursor[$part];
+        }
+
+        $cursor[$last] = $value;
     }
 
     private function renderBlock(?string $blockClass, array $config): string

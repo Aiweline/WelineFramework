@@ -27,7 +27,22 @@ $hasDocumentShell = preg_match('/^\s*(?:<!doctype\s+html[^>]*>\s*)?<html\b/i', $
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::blank::body-start</w:hook>
     <main class="blank-full-content" id="blank-full-content" data-layout="blank_full">
-        <?php echo $contentHtml; ?>
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-blank-full-content,layout-default-content,content,container"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="blank-full__content-root-slot">
+            <w:slot id="blank-full-content"
+                name="空白全屏内容"
+                accept="layout-blank-full-content,layout-default-content,content,container"
+                reject="header,footer"
+                multiple="true"
+                position="content">
+            <?php echo $contentHtml; ?>
+            </w:slot>
+        </w:slot>
     </main>
     <w:hook>Weline_Theme::frontend::layouts::blank::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>

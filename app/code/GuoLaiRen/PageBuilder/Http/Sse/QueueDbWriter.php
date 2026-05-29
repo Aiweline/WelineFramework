@@ -46,11 +46,44 @@ class QueueDbWriter extends SseWriter
 
     private const AI_STREAM_NOTICE_MIN_BYTES = 65536;
 
-    private const QUEUE_RESULT_MAX_BYTES = 262144;
+    private const QUEUE_RESULT_MAX_BYTES = 4096;
+
+    private const QUEUE_PROCESS_MAX_BYTES = 1024;
+
+    private const QUEUE_EVENT_PAYLOAD_MAX_BYTES = 4096;
+
+    private const QUEUE_EVENT_TEXT_MAX_BYTES = 512;
 
     private const QUEUE_RESULT_TRUNCATION_MARKER = '[... queue log truncated ...]';
 
     private const TELEMETRY_DUPLICATE_SUPPRESSION_SECONDS = 5;
+
+    private const HEAVY_QUEUE_EVENT_FIELDS = [
+        'state',
+        'workspace_state',
+        'scope',
+        'snapshot',
+        'events',
+        'top_logs',
+        'result_log',
+        'queue_result_delta',
+        'queue_result',
+        'plan_workbench',
+        'build_plan_v2',
+        'task_results',
+        'pagebuilder_pages_by_type',
+        'virtual_pages_by_type',
+        'page_type_layouts',
+        'blocks',
+        'component',
+        'html',
+        'css',
+        'content',
+        'raw',
+        'delta',
+        'text',
+        'chunk',
+    ];
 
     public function __construct(
         private readonly int $sessionId,
@@ -121,19 +154,23 @@ class QueueDbWriter extends SseWriter
             if (!$this->appendQueueLog($event, $payload, $message)) {
                 return $this;
             }
-            [$sessionEventType, $sessionEventPayload, $sessionEventLevel] = $this->resolveWorkspaceEventEnvelope($event, $payload);
-            $sessionEventPayload = $this->sanitizePayloadForQueueEvent($sessionEventType, $sessionEventPayload);
+            if ($this->shouldPersistSessionEvent($event, $payload)) {
+                [$sessionEventType, $sessionEventPayload, $sessionEventLevel] = $this->resolveWorkspaceEventEnvelope($event, $payload);
+                $sessionEventPayload = $this->sanitizePayloadForQueueEvent($sessionEventType, $sessionEventPayload);
 
-            /** @var AiSiteAgentSessionService $sessionService */
-            $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
-            $sessionService->appendEvent(
-                $this->sessionId,
-                $this->adminId,
-                $sessionEventType,
-                $sessionEventPayload,
-                $this->stage,
-                $sessionEventLevel
-            );
+                /** @var AiSiteAgentSessionService $sessionService */
+                $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
+                $sessionService->appendEvent(
+                    $this->sessionId,
+                    $this->adminId,
+                    $sessionEventType,
+                    $sessionEventPayload,
+                    $this->stage,
+                    $sessionEventLevel
+                );
+            }
+
+            unset($payload, $sessionEventPayload);
         } catch (\Throwable) {
             // Ignore writer side-effects so queue execution keeps running.
         }
@@ -329,7 +366,7 @@ class QueueDbWriter extends SseWriter
 
             $summary = $this->formatTokenUsageSummary($increment, $merged);
             $line = '[' . \date('H:i:s') . '] TOKEN_USAGE ' . $summary;
-            $patch = $this->buildQueueResultPatch($line, $summary);
+            $patch = $this->buildQueueResultPatch('', $summary);
             $patch['content'] = \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
 
             w_query('queue', 'update', [
@@ -337,27 +374,6 @@ class QueueDbWriter extends SseWriter
                 'patch' => $patch,
             ]);
             $this->mirrorToCli($line);
-
-            try {
-                /** @var AiSiteAgentSessionService $sessionService */
-                $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
-                $eventPayload = $this->enrichOperationCorrelationPayload([
-                    'operation' => $this->operation,
-                    'stage' => $this->stage,
-                    'token_usage' => $merged,
-                    'token_usage_delta' => $increment,
-                ]);
-                $sessionService->appendEvent(
-                    $this->sessionId,
-                    $this->adminId,
-                    'token_usage',
-                    $eventPayload,
-                    $this->stage,
-                    'info'
-                );
-            } catch (\Throwable) {
-                // Token accounting should never fail the queue job.
-            }
         } catch (\Throwable) {
             // Token accounting is diagnostic/audit data and must not interrupt queue execution.
         }
@@ -396,37 +412,13 @@ class QueueDbWriter extends SseWriter
             'bytes' => (string)$this->suppressedAiStreamBytes,
         ]);
         $line = '[' . \date('H:i:s') . '] AI_PROGRESS ' . $message;
-        $patch = $this->buildQueueResultPatch($line, $message);
+        $patch = $this->buildQueueResultPatch('', $message);
 
         w_query('queue', 'update', [
             'queue_id' => $this->queueId,
             'patch' => $patch,
         ]);
         $this->mirrorToCli($line);
-
-        try {
-            /** @var AiSiteAgentSessionService $sessionService */
-            $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
-            $eventPayload = $this->enrichOperationCorrelationPayload([
-                'message' => $message,
-                'operation' => $this->operation,
-                'stage' => $this->stage,
-                'stream_stage' => 'ai_stream_progress',
-                'suppressed_content' => true,
-                'ai_stream_chunks' => $this->suppressedAiStreamChunks,
-                'ai_stream_bytes' => $this->suppressedAiStreamBytes,
-            ]);
-            $sessionService->appendEvent(
-                $this->sessionId,
-                $this->adminId,
-                'operation_progress',
-                $eventPayload,
-                $this->stage,
-                'info'
-            );
-        } catch (\Throwable) {
-            // Ignore session-event side effects so queue execution keeps running.
-        }
 
         $this->lastAiStreamNoticeChunks = $this->suppressedAiStreamChunks;
         $this->lastAiStreamNoticeBytes = $this->suppressedAiStreamBytes;
@@ -730,7 +722,7 @@ class QueueDbWriter extends SseWriter
     private function sanitizePayloadForQueueEvent(string $event, array $payload): array
     {
         if (!$this->isContentBearingStreamPayload($event, $payload)) {
-            return $payload;
+            return $this->capQueueEventPayloadBytes($this->pruneHeavyQueuePayloadFields($payload));
         }
 
         $suppressedBytes = 0;
@@ -763,7 +755,147 @@ class QueueDbWriter extends SseWriter
             $payload['stream_stage'] = 'content_suppressed';
         }
 
+        return $this->capQueueEventPayloadBytes($this->pruneHeavyQueuePayloadFields($payload));
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function pruneHeavyQueuePayloadFields(array $payload): array
+    {
+        foreach (self::HEAVY_QUEUE_EVENT_FIELDS as $field) {
+            if (!\array_key_exists($field, $payload) || !$this->isHeavyQueuePayloadValue($payload[$field])) {
+                continue;
+            }
+            $this->replaceHeavyPayloadValueWithRef($payload, $field, $payload[$field]);
+        }
+
+        foreach (['payload', 'details', 'checkpoint', 'terminal_summary'] as $nestedField) {
+            if (!\is_array($payload[$nestedField] ?? null)) {
+                continue;
+            }
+            $nested = $payload[$nestedField];
+            foreach (self::HEAVY_QUEUE_EVENT_FIELDS as $field) {
+                if (\array_key_exists($field, $nested) && $this->isHeavyQueuePayloadValue($nested[$field])) {
+                    $this->replaceHeavyPayloadValueWithRef($nested, $field, $nested[$field]);
+                }
+            }
+            $payload[$nestedField] = $nested;
+        }
+
+        foreach (['message', 'failure_reason', 'error_message'] as $textField) {
+            if (\is_string($payload[$textField] ?? null)) {
+                $payload[$textField] = $this->strcutQueueTail($payload[$textField], self::QUEUE_EVENT_TEXT_MAX_BYTES);
+            }
+        }
+
         return $payload;
+    }
+
+    private function isHeavyQueuePayloadValue(mixed $value): bool
+    {
+        if (\is_array($value)) {
+            return $value !== [];
+        }
+        if (\is_string($value)) {
+            return \strlen($value) > self::QUEUE_EVENT_TEXT_MAX_BYTES;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function replaceHeavyPayloadValueWithRef(array &$payload, string $field, mixed $value): void
+    {
+        $encoded = $this->encodePayloadForSize($value);
+        unset($payload[$field]);
+        $payload[$field . '_loaded'] = false;
+        $payload[$field . '_ref'] = $field;
+        $payload[$field . '_bytes'] = \strlen($encoded);
+        $payload[$field . '_hash'] = \sha1($encoded);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function capQueueEventPayloadBytes(array $payload): array
+    {
+        if ($this->payloadBytes($payload) <= self::QUEUE_EVENT_PAYLOAD_MAX_BYTES) {
+            return $payload;
+        }
+
+        foreach (['details', 'payload', 'checkpoint', 'task_runtime_context', 'queue_snapshot', 'token_cost_meta'] as $field) {
+            if (!\array_key_exists($field, $payload)) {
+                continue;
+            }
+            $this->replaceHeavyPayloadValueWithRef($payload, $field, $payload[$field]);
+            if ($this->payloadBytes($payload) <= self::QUEUE_EVENT_PAYLOAD_MAX_BYTES) {
+                return $payload;
+            }
+        }
+
+        $compact = [];
+        foreach ([
+            'message',
+            'operation',
+            'stage',
+            'page_type',
+            'progress_percent',
+            'queue_id',
+            'execution_token',
+            'job_key',
+            'job_type',
+            'queue_status',
+            'status',
+            'task_key',
+            'task_type',
+            'shared_region',
+            'region',
+            'section_code',
+            'task_session_id',
+            'task_sse_channel',
+            'terminal',
+            'terminal_summary',
+            'token_usage',
+        ] as $field) {
+            if (\array_key_exists($field, $payload)) {
+                $compact[$field] = $payload[$field];
+            }
+        }
+        foreach ($payload as $field => $value) {
+            $field = (string)$field;
+            if (\str_ends_with($field, '_loaded')
+                || \str_ends_with($field, '_ref')
+                || \str_ends_with($field, '_bytes')
+                || \str_ends_with($field, '_hash')
+            ) {
+                $compact[$field] = $value;
+            }
+        }
+        $compact['payload_compacted'] = true;
+
+        return $compact;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function payloadBytes(array $payload): int
+    {
+        return \strlen($this->encodePayloadForSize($payload));
+    }
+
+    private function encodePayloadForSize(mixed $value): string
+    {
+        try {
+            return \json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return (string)\serialize($value);
+        }
     }
 
     /**
@@ -798,7 +930,7 @@ class QueueDbWriter extends SseWriter
         }
 
         $format = \strtolower(\trim((string)($payload['format'] ?? '')));
-        if ($format === 'markdown_stream' || $format === 'reasoning_stream') {
+        if (\in_array($format, ['markdown_stream', 'markdown_block', 'reasoning_stream'], true)) {
             return true;
         }
 
@@ -806,6 +938,7 @@ class QueueDbWriter extends SseWriter
         $nestedFormat = \strtolower(\trim((string)($nestedPayload['format'] ?? '')));
         $nestedStreamStage = \strtolower(\trim((string)($nestedPayload['stream_stage'] ?? '')));
         return $nestedFormat === 'markdown_stream'
+            || $nestedFormat === 'markdown_block'
             || $nestedFormat === 'reasoning_stream'
             || \in_array($nestedStreamStage, [
                 'ai_raw_chunk',
@@ -832,7 +965,8 @@ class QueueDbWriter extends SseWriter
             return false;
         }
         $line = $this->formatLogLine($event, $summary);
-        $patch = $this->buildQueueResultPatch($line, $summary);
+        $resultLine = $this->shouldPersistQueueResultLine($event, $payload) ? $line : '';
+        $patch = $this->buildQueueResultPatch($resultLine, $summary);
         if ($patch === []) {
             return true;
         }
@@ -847,6 +981,71 @@ class QueueDbWriter extends SseWriter
         }
 
         return true;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function shouldPersistSessionEvent(string $event, array $payload): bool
+    {
+        return $this->shouldPersistQueueResultLine($event, $payload);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function shouldPersistQueueResultLine(string $event, array $payload): bool
+    {
+        $eventType = \strtolower(\trim((string)($payload['event_type'] ?? $event)));
+        if (\in_array($eventType, [
+            'start',
+            'started',
+            'status',
+            'status_transition',
+            'build_plan_block_completed',
+            'build_plan_block_failed',
+            'complete',
+            'completed',
+            'done',
+            'success',
+            'error',
+            'failed',
+            'failure',
+            'stop',
+            'stopped',
+            'cancelled',
+            'canceled',
+        ], true)) {
+            return true;
+        }
+        if (\str_ends_with($eventType, '_saved') || \str_ends_with($eventType, '_persisted')) {
+            return true;
+        }
+
+        if (!empty($payload['checkpoint']) || !empty($payload['terminal']) || !empty($payload['terminal_summary'])) {
+            return true;
+        }
+
+        foreach (['queue_status', 'status', 'job_status', 'task_status', 'semantic_status'] as $statusKey) {
+            $status = \strtolower(\trim((string)($payload[$statusKey] ?? '')));
+            if (\in_array($status, [
+                'done',
+                'complete',
+                'completed',
+                'success',
+                'error',
+                'failed',
+                'failure',
+                'stop',
+                'stopped',
+                'cancelled',
+                'canceled',
+            ], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -888,14 +1087,11 @@ class QueueDbWriter extends SseWriter
     {
         $patch = [];
         if ($process !== '') {
-            $patch['process'] = $this->normalizeUtf8QueueText($process);
+            $patch['process'] = $this->trimQueueProcess($process);
         }
         if ($line !== '') {
-            $this->ensureQueueResultCacheLoaded();
-            $this->queueResultCache = $this->appendLineToQueueResultCache(
-                $this->queueResultCache,
-                $this->normalizeUtf8QueueText($line)
-            );
+            $this->queueResultCache = $this->trimQueueResultCache($this->normalizeUtf8QueueText($line));
+            $this->queueResultCacheLoaded = true;
             $patch['result'] = $this->queueResultCache;
         }
 
@@ -919,9 +1115,12 @@ class QueueDbWriter extends SseWriter
             return $this->trimQueueResultCache($existing);
         }
 
-        $next = $existing === '' ? $line : $existing . \PHP_EOL . $line;
+        return $this->trimQueueResultCache($line);
+    }
 
-        return $this->trimQueueResultCache($next);
+    private function trimQueueProcess(string $process): string
+    {
+        return $this->strcutQueueTail($this->normalizeUtf8QueueText($process), self::QUEUE_PROCESS_MAX_BYTES);
     }
 
     private function trimQueueResultCache(string $result): string

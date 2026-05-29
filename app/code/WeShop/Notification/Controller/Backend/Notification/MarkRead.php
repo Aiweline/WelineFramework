@@ -20,15 +20,15 @@ class MarkRead extends BaseController
         $backUrl = (string) ($this->request->getParam('back_url') ?? $this->getBackendUrl('*/backend/notification'));
 
         if ($notificationId <= 0) {
-            $this->getMessageManager()->addError(__('Notification ID is required.'));
+            $this->getMessageManager()->addError(__('通知ID不能为空。'));
             $this->redirect($backUrl);
             return '';
         }
 
         if ($this->notificationService->markAsRead($notificationId)) {
-            $this->getMessageManager()->addSuccess(__('Notification marked as read.'));
+            $this->getMessageManager()->addSuccess(__('通知已标记为已读。'));
         } else {
-            $this->getMessageManager()->addError(__('Notification could not be marked as read.'));
+            $this->getMessageManager()->addError(__('通知标记已读失败。'));
         }
 
         $this->redirect($backUrl);

@@ -72,13 +72,14 @@ final class AiSiteAgentPublishContractTest extends TestCase
         self::assertStringContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'supportsBackgroundOperation'));
     }
 
-    public function testOperationSseRecreatesMissingQueueRecordInsteadOfDeadEnding(): void
+    public function testOperationSseDoesNotRecreateMissingQueueRecord(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
         $methodSource = $this->extractMethodSource($source, 'handleOperationSse');
 
-        self::assertStringContainsString('$newQueueId = $this->enqueueOperationQueueTask($session, $adminId, $operation, $executionToken);', $methodSource);
-        self::assertStringNotContainsString('Queue record not found. Start the operation again so the controller can create one queue row.', $methodSource);
+        self::assertStringNotContainsString('enqueueOperationQueueTask(', $methodSource);
+        self::assertStringContainsString("'OPERATION_QUEUE_NOT_FOUND'", $methodSource);
+        self::assertStringContainsString('operation_sse_missing_queue_record', $methodSource);
     }
 
     public function testWorkspaceSnapshotHandlerRemainsReadOnlyForWorkbenchStepStatus(): void
@@ -89,7 +90,73 @@ final class AiSiteAgentPublishContractTest extends TestCase
         self::assertStringNotContainsString('workbench_step_status', $methodSource);
         self::assertStringNotContainsString('mergeScope(', $methodSource);
         self::assertStringNotContainsString('replaceScope(', $methodSource);
+        self::assertStringNotContainsString('appendWorkspaceEvent(', $methodSource);
+        self::assertStringNotContainsString('autoResumeBuildQueueWhenTasksIncomplete(', $methodSource);
         self::assertStringContainsString('buildWorkspaceState($fresh, $adminId, 12, false)', $methodSource);
+    }
+
+    public function testWorkspaceGetDoesNotCreateSyncOrWriteLinkedScope(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractMethodSource($source, 'workspace');
+
+        self::assertStringContainsString('buildWorkspaceFastViewState($session, $adminId)', $methodSource);
+        self::assertStringContainsString('loadExistingLinkedWebsitesMirrorSessionFromScope(', $methodSource);
+        self::assertStringNotContainsString('ensureLinkedWebsitesMirrorSession(', $methodSource);
+        self::assertStringNotContainsString('syncPageBuilderScopeFromLinkedWebsitesSession(', $methodSource);
+        self::assertStringNotContainsString('mergeScope(', $methodSource);
+        self::assertStringNotContainsString('replaceScope(', $methodSource);
+        self::assertStringNotContainsString('appendWorkspaceEvent(', $methodSource);
+    }
+
+    public function testWorkspacePollStateIsLightweightAndReadOnly(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractMethodSource($source, 'buildWorkspaceQueuePollState');
+
+        foreach ([
+            'mergeScope(',
+            'replaceScope(',
+            'appendWorkspaceEvent(',
+            'persistRecoveredQueueOperationState(',
+            'autoResumeBuildQueueWhenTasksIncomplete(',
+            'buildWorkspaceState(',
+            'buildWorkspaceFastViewState(',
+            'listRecentEvents(',
+            'buildVirtualPagesByType(',
+            'syncFromBuildPlan(',
+            'profileGenerationService->generate(',
+        ] as $forbiddenCall) {
+            self::assertStringNotContainsString($forbiddenCall, $methodSource);
+        }
+
+        self::assertStringContainsString('loadScopeFragment(', $methodSource);
+        self::assertStringContainsString("'response_mode' => 'queue_poll'", $methodSource);
+    }
+
+    public function testWorkspaceFastViewDoesNotWriteOrAutoResume(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractMethodSource($source, 'buildWorkspaceFastViewState');
+
+        self::assertStringContainsString('buildWorkspaceQueuePollState(', $methodSource);
+        self::assertStringNotContainsString('mergeScope(', $methodSource);
+        self::assertStringNotContainsString('replaceScope(', $methodSource);
+        self::assertStringNotContainsString('appendWorkspaceEvent(', $methodSource);
+        self::assertStringNotContainsString('autoResumeBuildQueueWhenTasksIncomplete(', $methodSource);
+        self::assertStringNotContainsString('buildWorkspaceState(', $methodSource);
+    }
+
+    public function testAutoResumeBuildQueueIsPersistPathOnly(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractMethodSource($source, 'buildWorkspaceState');
+        $persistGuardOffset = \strpos($methodSource, 'if ($persist) {');
+        $autoResumeOffset = \strpos($methodSource, 'autoResumeBuildQueueWhenTasksIncomplete(');
+
+        self::assertIsInt($persistGuardOffset);
+        self::assertIsInt($autoResumeOffset);
+        self::assertLessThan($autoResumeOffset, $persistGuardOffset);
     }
 
     private function extractMethodSource(string $source, string $methodName): string
@@ -97,9 +164,19 @@ final class AiSiteAgentPublishContractTest extends TestCase
         $start = \strpos($source, 'function ' . $methodName . '(');
         self::assertIsInt($start, $methodName . ' missing');
 
-        $next = \strpos($source, "\n    private function ", $start + 1);
-        if ($next === false) {
-            $next = \strpos($source, "\n    public function ", $start + 1);
+        $next = false;
+        foreach ([
+            "\n    private function ",
+            "\n    protected function ",
+            "\n    public function ",
+            "\n    private static function ",
+            "\n    protected static function ",
+            "\n    public static function ",
+        ] as $pattern) {
+            $candidate = \strpos($source, $pattern, $start + 1);
+            if ($candidate !== false && ($next === false || $candidate < $next)) {
+                $next = $candidate;
+            }
         }
 
         return $next === false ? \substr($source, $start) : \substr($source, $start, $next - $start);

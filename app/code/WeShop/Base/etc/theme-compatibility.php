@@ -32,6 +32,13 @@ $accountCompatibility = [
             ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::orders::cards'],
         ],
     ],
+    'WeShop_Affiliate' => [
+        'description' => 'Affiliate account modules depend on customer account hooks instead of a standalone storefront page.',
+        'hosts' => [
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::discovery::cards'],
+            ['type' => 'hook', 'name' => 'WeShop_Affiliate::frontend::account::index::affiliate'],
+        ],
+    ],
 ];
 
 return [

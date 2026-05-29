@@ -11,6 +11,7 @@ use WeShop\Notification\Service\NotificationPageDataService;
 class Index extends BaseController
 {
     private const LOGIN_ROUTE = 'customer/account/login';
+    private const ACCOUNT_NOTIFICATION_ROUTE = 'customer/account/index#notification-preferences';
 
     protected ?string $layoutType = 'account';
 
@@ -24,15 +25,12 @@ class Index extends BaseController
     {
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
         if ($customerId <= 0) {
-            $this->getMessageManager()->addError(__('Please log in to continue.'));
+            $this->getMessageManager()->addError(__('请先登录后再继续。'));
             $this->redirect(self::LOGIN_ROUTE);
             return '';
         }
 
-        foreach ($this->notificationPageDataService->build($customerId) as $key => $value) {
-            $this->assign($key, $value);
-        }
-
-        return $this->fetch();
+        $this->redirect(self::ACCOUNT_NOTIFICATION_ROUTE);
+        return '';
     }
 }

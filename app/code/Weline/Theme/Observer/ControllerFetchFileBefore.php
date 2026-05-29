@@ -86,6 +86,12 @@ class ControllerFetchFileBefore implements ObserverInterface
         self::resetCurrentRequestCacheState();
     }
 
+    public static function clearRuntimeCache(): void
+    {
+        self::$runtimeCache = [];
+        self::resetCurrentRequestCacheState();
+    }
+
     private function resolveFastAccountAuthLayout(DataObject $eventData, Template $template, string $contentTemplateFileName): void
     {
         $layoutTemplate = 'Weline_Theme::theme/frontend/layouts/account/auth.phtml';

@@ -9,7 +9,11 @@ use WeShop\Product\Helper\HanfuDemoOptionImageProvider;
 use WeShop\Product\Model\Product;
 use WeShop\QA\Service\QAService;
 use WeShop\Review\Service\ReviewRatingOptionService;
+use WeShop\Review\Service\ReviewReplyService;
 use WeShop\Review\Service\ReviewService;
+use Weline\Eav\Model\EavAttribute\LocalDescription as AttributeLocalDescription;
+use Weline\Eav\Model\EavAttribute\Option\LocalDescription as OptionLocalDescription;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 
 class ProductViewPageDataService
@@ -18,6 +22,7 @@ class ProductViewPageDataService
 
     private ?ConfigurableProductService $configurableProductService;
     private ?ReviewRatingOptionService $ratingOptionService;
+    private ?ReviewReplyService $reviewReplyService;
 
     public function __construct(
         private readonly ProductService $productService,
@@ -27,12 +32,14 @@ class ProductViewPageDataService
         private readonly ReviewService $reviewService,
         private readonly QAService $qaService,
         mixed $configurableProductService = null,
-        ?ReviewRatingOptionService $ratingOptionService = null
+        ?ReviewRatingOptionService $ratingOptionService = null,
+        ?ReviewReplyService $reviewReplyService = null
     ) {
         $this->configurableProductService = $configurableProductService instanceof ConfigurableProductService
             ? $configurableProductService
             : null;
         $this->ratingOptionService = $ratingOptionService;
+        $this->reviewReplyService = $reviewReplyService;
     }
 
     /**
@@ -154,7 +161,7 @@ class ProductViewPageDataService
             $total = (int) ($reviews['total'] ?? count($items));
 
             return [
-                'items' => $this->mapReviews($items),
+                'items' => $this->mapReviews($items, $this->getReviewReplyMap($items)),
                 'total' => $total,
                 'average' => $this->reviewService->getAverageRating($productId),
             ];
@@ -228,9 +235,39 @@ class ProductViewPageDataService
 
     /**
      * @param array<int, array<string, mixed>> $reviews
+     * @return array<int, array<int, array<string, mixed>>>
+     */
+    private function getReviewReplyMap(array $reviews): array
+    {
+        $reviewIds = [];
+        foreach ($reviews as $review) {
+            if (!is_array($review)) {
+                continue;
+            }
+
+            $reviewId = (int) ($review['review_id'] ?? $review['id'] ?? 0);
+            if ($reviewId > 0) {
+                $reviewIds[] = $reviewId;
+            }
+        }
+
+        if ($reviewIds === []) {
+            return [];
+        }
+
+        try {
+            return $this->getReviewReplyService()->getRepliesForReviews($reviewIds);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $reviews
+     * @param array<int, array<int, array<string, mixed>>> $replyMap
      * @return array<int, array<string, mixed>>
      */
-    protected function mapReviews(array $reviews): array
+    protected function mapReviews(array $reviews, array $replyMap = []): array
     {
         $mapped = [];
         foreach ($reviews as $review) {
@@ -240,10 +277,17 @@ class ProductViewPageDataService
 
             $review['media_items'] = $this->reviewService->decodeMediaItems($review['media_items'] ?? '');
             $review['rating_scores'] = $this->reviewService->decodeRatingScores($review['rating_scores'] ?? '');
+            $reviewId = (int) ($review['review_id'] ?? $review['id'] ?? 0);
+            $review['replies'] = $reviewId > 0 ? ($replyMap[$reviewId] ?? []) : [];
             $mapped[] = $review;
         }
 
         return $mapped;
+    }
+
+    private function getReviewReplyService(): ReviewReplyService
+    {
+        return $this->reviewReplyService ?? ObjectManager::getInstance(ReviewReplyService::class);
     }
 
     private function getRatingOptionService(): ReviewRatingOptionService
@@ -279,7 +323,7 @@ class ProductViewPageDataService
     {
         try {
             $service = $this->configurableProductService ?? ObjectManager::getInstance(ConfigurableProductService::class);
-            $options = $service->getConfigurableOptions($productId);
+            $options = $service->getConfigurableOptions($productId, $this->currentLocaleCode());
             return [
                 'attributes' => is_array($options['attributes'] ?? null) ? $options['attributes'] : [],
                 'variants' => is_array($options['variants'] ?? null) ? $options['variants'] : [],
@@ -326,6 +370,16 @@ class ProductViewPageDataService
                 return ['attributes' => [], 'variants' => []];
             }
 
+            $localeCode = $this->currentLocaleCode();
+            $localizedAttributeNames = $this->loadLocalizedAttributeNames(
+                array_values(array_unique(array_map(static fn(array $row): int => (int)$row['attribute_id'], $optionRows))),
+                $localeCode
+            );
+            $localizedOptionValues = $this->loadLocalizedOptionValues(
+                array_values(array_unique(array_map(static fn(array $row): int => (int)$row['option_id'], $optionRows))),
+                $localeCode
+            );
+
             $childrenById = [];
             foreach ($children as $child) {
                 $childrenById[(int)$child['product_id']] = $child;
@@ -337,18 +391,20 @@ class ProductViewPageDataService
                 $attributeId = (int)$row['attribute_id'];
                 $optionId = (int)$row['option_id'];
                 $childId = (int)$row['product_id'];
+                $attributeName = (string)($localizedAttributeNames[$attributeId] ?? $row['attribute_name']);
+                $optionValue = (string)($localizedOptionValues[$optionId] ?? $row['option_value']);
                 $variantOptionIds[$childId][] = $optionId;
                 $attributes[$attributeId] ??= [
                     'attribute_id' => $attributeId,
                     'code' => (string)$row['attribute_code'],
-                    'name' => (string)$row['attribute_name'],
+                    'name' => $attributeName,
                     'origin_name' => (string)$row['attribute_name'],
                     'options' => [],
                 ];
                 $attributes[$attributeId]['options'][$optionId] ??= [
                     'option_id' => $optionId,
                     'code' => (string)$row['option_code'],
-                    'value' => (string)$row['option_value'],
+                    'value' => $optionValue,
                     'origin_value' => (string)$row['option_value'],
                     'swatch_type' => $row['swatch_image'] !== '' ? 'image' : ($row['swatch_color'] !== '' ? 'color' : ($row['swatch_text'] !== '' ? 'text' : null)),
                     'swatch_value' => (string)($row['swatch_image'] ?: ($row['swatch_color'] ?: $row['swatch_text'])),
@@ -381,6 +437,83 @@ class ProductViewPageDataService
         } catch (\Throwable) {
             return ['attributes' => [], 'variants' => []];
         }
+    }
+
+    private function currentLocaleCode(): string
+    {
+        try {
+            return trim((string)State::getLangLocal());
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * @param list<int> $attributeIds
+     * @return array<int, string>
+     */
+    private function loadLocalizedAttributeNames(array $attributeIds, string $localeCode): array
+    {
+        $attributeIds = array_values(array_unique(array_filter(array_map('intval', $attributeIds), static fn(int $id): bool => $id > 0)));
+        if ($attributeIds === [] || $localeCode === '') {
+            return [];
+        }
+
+        try {
+            $localDescription = ObjectManager::getInstance(AttributeLocalDescription::class);
+            $rows = $localDescription->reset()->clearData()
+                ->where(AttributeLocalDescription::fields_ID, $attributeIds, 'in')
+                ->where(AttributeLocalDescription::schema_fields_local_code, $localeCode)
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($rows as $row) {
+            $attributeId = (int)($row[AttributeLocalDescription::fields_ID] ?? 0);
+            $name = trim((string)($row[AttributeLocalDescription::schema_fields_name] ?? ''));
+            if ($attributeId > 0 && $name !== '') {
+                $names[$attributeId] = $name;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * @param list<int> $optionIds
+     * @return array<int, string>
+     */
+    private function loadLocalizedOptionValues(array $optionIds, string $localeCode): array
+    {
+        $optionIds = array_values(array_unique(array_filter(array_map('intval', $optionIds), static fn(int $id): bool => $id > 0)));
+        if ($optionIds === [] || $localeCode === '') {
+            return [];
+        }
+
+        try {
+            $localDescription = ObjectManager::getInstance(OptionLocalDescription::class);
+            $rows = $localDescription->reset()->clearData()
+                ->where(OptionLocalDescription::fields_ID, $optionIds, 'in')
+                ->where(OptionLocalDescription::schema_fields_local_code, $localeCode)
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($rows as $row) {
+            $optionId = (int)($row[OptionLocalDescription::fields_ID] ?? 0);
+            $value = trim((string)($row[OptionLocalDescription::schema_fields_value] ?? ''));
+            if ($optionId > 0 && $value !== '') {
+                $values[$optionId] = $value;
+            }
+        }
+
+        return $values;
     }
 
     /**

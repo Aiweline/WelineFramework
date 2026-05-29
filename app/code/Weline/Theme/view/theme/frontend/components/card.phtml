@@ -19,7 +19,9 @@
 // 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
 $metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('components.card');
 foreach ($metaParams as $key => $value) {
-    $this->setData("meta.{$key}", $value);
+    if ($this->getData("meta.{$key}") === null) {
+        $this->setData("meta.{$key}", $value);
+    }
 }
 
 $title = $this->getData("meta.title") ?? '';
@@ -33,7 +35,7 @@ $image = $this->getData("meta.image") ?? '';
 $imageAlt = $this->getData("meta.imageAlt") ?? '';
 
 // 构建CSS类
-$cardClass = 'card';
+$cardClass = 'w-card';
 if ($class) {
     $cardClass .= ' ' . htmlspecialchars($class);
 }
@@ -42,19 +44,19 @@ if ($class) {
     <?php if ($image): ?>
         <img src="<?= htmlspecialchars($image) ?>" 
              alt="<?= htmlspecialchars($imageAlt) ?>" 
-             class="card-image">
+             class="w-card-image">
     <?php endif; ?>
     
     <?php if ($title || $subtitle || !empty($headerActions)): ?>
-        <div class="card-header">
+        <div class="w-card-header">
             <?php if ($title): ?>
-                <h3 class="card-title"><?= htmlspecialchars($title) ?></h3>
+                <h3 class="w-card-title"><?= htmlspecialchars($title) ?></h3>
             <?php endif; ?>
             <?php if ($subtitle): ?>
-                <p class="card-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+                <p class="w-card-subtitle"><?= htmlspecialchars($subtitle) ?></p>
             <?php endif; ?>
             <?php if (!empty($headerActions)): ?>
-                <div class="card-actions">
+                <div class="w-card-actions">
                     <?php foreach ($headerActions as $action): ?>
                         {{action}}
                     <?php endforeach; ?>
@@ -63,12 +65,12 @@ if ($class) {
         </div>
     <?php endif; ?>
     
-    <div class="card-body">
+    <div class="w-card-body">
         {{content}}
     </div>
     
     <?php if ($footer): ?>
-        <div class="card-footer">
+        <div class="w-card-footer">
             {{footer}}
         </div>
     <?php endif; ?>

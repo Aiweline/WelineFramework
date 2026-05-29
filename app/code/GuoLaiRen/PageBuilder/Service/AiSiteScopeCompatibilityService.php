@@ -75,7 +75,6 @@ class AiSiteScopeCompatibilityService
         if (!\is_array($normalized['build_summary'] ?? null)) {
             $normalized['build_summary'] = [];
         }
-        unset($normalized['build_summary']['task_summary']);
 
         $selection = $this->resolvePreviewSelection(
             $normalized['pagebuilder_pages_by_type'],
@@ -100,17 +99,17 @@ class AiSiteScopeCompatibilityService
                 $normalized['website_profile'],
                 $explicitContentLocale
             );
-            if (\is_array($normalized['execution_blueprint'] ?? null)) {
-                $normalized['execution_blueprint']['content_locale'] = $explicitContentLocale;
-                if (\is_array($normalized['execution_blueprint']['shared_prompt_context'] ?? null)) {
-                    $normalized['execution_blueprint']['shared_prompt_context']['content_locale'] = $explicitContentLocale;
-                }
-            }
             if (\is_array($normalized['plan_json'] ?? null)) {
                 $normalized['plan_json']['content_locale'] = $explicitContentLocale;
                 if (\is_array($normalized['plan_json']['i18n'] ?? null)) {
                     $normalized['plan_json']['i18n']['content_locale'] = $explicitContentLocale;
                 }
+            }
+            if (\is_array($normalized['build_plan_v2'] ?? null)) {
+                if (!\is_array($normalized['build_plan_v2']['i18n'] ?? null)) {
+                    $normalized['build_plan_v2']['i18n'] = [];
+                }
+                $normalized['build_plan_v2']['i18n']['primary_locale'] = $explicitContentLocale;
             }
             if (\is_array($normalized['stage1_contract'] ?? null)) {
                 $normalized['stage1_contract']['content_locale'] = $explicitContentLocale;
@@ -158,8 +157,41 @@ class AiSiteScopeCompatibilityService
 
         $normalized['workspace_track'] = $this->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         $normalized['extra_page_types_panel_open'] = ((int)($scope['extra_page_types_panel_open'] ?? 0) === 1) ? 1 : 0;
+        $normalized = $this->ensureManifestFields($normalized);
 
         return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function ensureManifestFields(array $scope): array
+    {
+        $manifestSource = $this->buildPlanManifestSource($scope);
+        if (!\is_array($scope['design_tokens'] ?? null) || $scope['design_tokens'] === []) {
+            $scope['design_tokens'] = (new AiSiteDesignTokenResolver())->resolveFromBlueprint($manifestSource);
+        }
+
+        if (!\is_array($scope['language_contract'] ?? null) || $scope['language_contract'] === []) {
+            $locale = $this->resolveContentLocale($scope, \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : []);
+            $scope['language_contract'] = (new AiSiteLanguageVoiceResolver())->buildLanguageContractExtension($manifestSource, $locale);
+            $scope['language_contract']['source_of_truth_locale'] = $locale;
+        }
+
+        if (!\is_array($scope['theme_css_ref'] ?? null) || (string)($scope['theme_css_ref']['hash'] ?? '') === '') {
+            $themeCssService = new AiSiteVirtualThemeCssService();
+            $generated = $themeCssService->generateThemeCss($manifestSource);
+            $scope['theme_css'] = (string)($generated['css'] ?? '');
+            $scope['theme_css_ref'] = $themeCssService->buildManifestRef($generated);
+        }
+
+        $policy = new AiSiteScopeManifestPolicy();
+        $scope['virtual_page_index'] = $policy->buildVirtualPageIndex(
+            \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : []
+        );
+
+        return $scope;
     }
 
     /**
@@ -167,27 +199,19 @@ class AiSiteScopeCompatibilityService
      */
     public function hasConfirmedStageOnePlanForBuildPlan(array $scope): bool
     {
-        $confirmedBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        if ($confirmedBlueprint === []) {
-            return false;
-        }
-
-        $confirmedSignature = \trim((string)($scope['execution_blueprint_confirmed_signature'] ?? ''));
-        if ($confirmedSignature === '') {
-            $confirmedSignature = \trim((string)($confirmedBlueprint['signature'] ?? ''));
-        }
-
-        if ((int)($scope['plan_confirmed'] ?? 0) === 1) {
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $buildPlanMeta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
+        if ((int)($scope['build_plan_confirmed'] ?? 0) === 1
+            || \strtolower(\trim((string)($buildPlanMeta['status'] ?? ''))) === 'confirmed'
+        ) {
             return true;
         }
 
-        $confirmedAt = \trim((string)($scope['execution_blueprint_confirmed_at'] ?? $scope['plan_confirmed_at'] ?? ''));
-        if ($confirmedAt === '' && $confirmedSignature === '') {
-            return false;
+        if ((int)($scope['plan_confirmed'] ?? 0) === 1 && $this->hasPersistedStageOnePlan($scope)) {
+            return true;
         }
 
-        $draftBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
-        return $this->stageOneDraftMatchesConfirmedBlueprint($draftBlueprint, $confirmedBlueprint, $confirmedSignature);
+        return false;
     }
 
     /**
@@ -198,12 +222,10 @@ class AiSiteScopeCompatibilityService
     public function hasPersistedStageOnePlan(array $scope): bool
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
+        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
 
         return $this->isUsableStageOnePlanJson($planJson)
-            || $executionBlueprintDraft !== []
-            || $executionBlueprint !== [];
+            || $this->isUsableStageOnePlanJson($planStructured);
     }
 
     /**
@@ -217,6 +239,9 @@ class AiSiteScopeCompatibilityService
     {
         if ($planJson === []) {
             return false;
+        }
+        if ($this->isUsableStageOneContractPlanJson($planJson)) {
+            return true;
         }
 
         $expansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
@@ -265,6 +290,68 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
+     * Newer stage-one artifacts are validated by the contract validator and may
+     * intentionally omit legacy requirement_expansion/theme_detail fields. Treat
+     * a passed contract report plus concrete page/block plans as reusable while
+     * still rejecting light manifests such as {"content_locale":"en_US"}.
+     *
+     * @param array<string, mixed> $planJson
+     */
+    private function isUsableStageOneContractPlanJson(array $planJson): bool
+    {
+        $report = \is_array($planJson['stage1_validation_report'] ?? null)
+            ? $planJson['stage1_validation_report']
+            : [];
+        if (!$this->stageOneValidationReportPassed($report)) {
+            return false;
+        }
+
+        foreach (['pages', 'page_plans'] as $key) {
+            $pages = \is_array($planJson[$key] ?? null) ? $planJson[$key] : [];
+            if ($this->stageOnePlanPagesContainBlocks($pages)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $report
+     */
+    private function stageOneValidationReportPassed(array $report): bool
+    {
+        $passed = $report['passed'] ?? false;
+        if ($passed === true || $passed === 1 || $passed === '1') {
+            return true;
+        }
+
+        return \is_string($passed) && \strtolower(\trim($passed)) === 'true';
+    }
+
+    /**
+     * @param array<mixed> $pages
+     */
+    private function stageOnePlanPagesContainBlocks(array $pages): bool
+    {
+        foreach ($pages as $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            foreach (['blocks', 'block_blueprints', 'ordered_block_keys'] as $key) {
+                if (\is_array($page[$key] ?? null) && $page[$key] !== []) {
+                    return true;
+                }
+            }
+            if (\is_array($page['page'] ?? null) && $this->stageOnePlanPagesContainBlocks([$page['page']])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
@@ -272,34 +359,13 @@ class AiSiteScopeCompatibilityService
     {
         if ($this->hasConfirmedStageOnePlanForBuildPlan($scope)) {
             $scope['plan_confirmed'] = 1;
-            $confirmedAt = \trim((string)($scope['execution_blueprint_confirmed_at'] ?? ''));
+            $confirmedAt = \trim((string)($scope['build_plan_confirmed_at'] ?? ''));
             if ($confirmedAt !== '' && \trim((string)($scope['plan_confirmed_at'] ?? '')) === '') {
                 $scope['plan_confirmed_at'] = $confirmedAt;
             }
         }
 
         return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $draftBlueprint
-     * @param array<string, mixed> $confirmedBlueprint
-     */
-    private function stageOneDraftMatchesConfirmedBlueprint(
-        array $draftBlueprint,
-        array $confirmedBlueprint,
-        string $confirmedSignature
-    ): bool {
-        if ($draftBlueprint === []) {
-            return true;
-        }
-
-        $draftSignature = \trim((string)($draftBlueprint['signature'] ?? ''));
-        if ($draftSignature !== '' && $confirmedSignature !== '') {
-            return $draftSignature === $confirmedSignature;
-        }
-
-        return $draftBlueprint == $confirmedBlueprint;
     }
 
     public const WORKSPACE_TRACK_VIRTUAL_THEME = 'virtual_theme';
@@ -1565,6 +1631,130 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
+     * Preview rendering must follow the locale that actually produced the AI
+     * output. Older sessions can keep an English default locale while the
+     * generated plan is Chinese; using that stale default re-localizes shared
+     * header/footer back to English during preview.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function normalizePreviewContentLocale(array $scope, string $requestedLocale = ''): array
+    {
+        $locale = $this->resolvePreviewContentLocale($scope, $requestedLocale);
+        if ($locale === '') {
+            return $scope;
+        }
+
+        $scope['content_locale'] = $locale;
+        $scope['ai_content_locale'] = $locale;
+        if (!\is_array($scope['website_profile'] ?? null)) {
+            $scope['website_profile'] = [];
+        }
+        $scope['website_profile']['content_locale'] = $locale;
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildPlanManifestSource(array $scope): array
+    {
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if ($buildPlan !== []) {
+            $designManifest = \is_array($buildPlan['design_manifest'] ?? null) ? $buildPlan['design_manifest'] : [];
+            $sourceTruth = \is_array($buildPlan['source_of_truth'] ?? null) ? $buildPlan['source_of_truth'] : [];
+            $requirements = \is_array($sourceTruth['user_requirements'] ?? null) ? $sourceTruth['user_requirements'] : [];
+
+            return [
+                'theme_design' => \is_array($designManifest['visual_contract'] ?? null)
+                    ? $designManifest['visual_contract']
+                    : (\is_array($designManifest['theme_design'] ?? null) ? $designManifest['theme_design'] : []),
+                'theme_style' => \is_array($designManifest['theme_style'] ?? null) ? $designManifest['theme_style'] : [],
+                'palette' => \is_array($designManifest['palette'] ?? null) ? $designManifest['palette'] : [],
+                'site_strategy' => $requirements,
+            ];
+        }
+
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        return [
+            'theme_design' => \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [],
+            'theme_style' => \is_array($planJson['theme_style'] ?? null) ? $planJson['theme_style'] : [],
+            'site_strategy' => \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [],
+            'palette' => \is_array($planJson['palette'] ?? null) ? $planJson['palette'] : [],
+            'plan_json' => $planJson,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    public function resolvePreviewContentLocale(array $scope, string $requestedLocale = ''): string
+    {
+        $requestedLocale = \trim($requestedLocale);
+        $generated = $this->resolveGeneratedContentLocale($scope);
+        if ($requestedLocale !== '') {
+            if ($this->isEnglishLocale($requestedLocale) && $generated !== '' && !$this->isEnglishLocale($generated)) {
+                return $generated;
+            }
+
+            return $requestedLocale;
+        }
+
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
+        $current = \trim((string)(
+            $scope['content_locale']
+                ?? $websiteProfile['content_locale']
+                ?? $scope['default_locale']
+                ?? $scope['default_language']
+                ?? $websiteProfile['default_locale']
+                ?? $websiteProfile['default_language']
+                ?? ''
+        ));
+        if (
+            $generated !== ''
+            && (
+                $current === ''
+                || ($this->isEnglishLocale($current) && !$this->isEnglishLocale($generated))
+            )
+        ) {
+            return $generated;
+        }
+
+        return $current !== '' ? $current : $generated;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveGeneratedContentLocale(array $scope): string
+    {
+        foreach ([
+            $scope['plan_generated_locale'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_generated_locale'] ?? null,
+            $scope['plan_structured']['plan_generated_locale'] ?? null,
+            $scope['plan_json']['plan_generated_locale'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
+    private function isEnglishLocale(string $locale): bool
+    {
+        return \preg_match('/^en(?:[_-]|$)/i', \trim($locale)) === 1;
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
      */
@@ -1621,8 +1811,8 @@ class AiSiteScopeCompatibilityService
             $scope['site_description'] ?? null,
             $scope['source_brief'] ?? null,
             $scope['requirements']['expanded_brief'] ?? null,
-            $scope['execution_blueprint']['site_brief']['summary'] ?? null,
-            $scope['execution_blueprint']['content_locale'] ?? null,
+            $scope['build_plan_v2']['site_brief']['summary'] ?? null,
+            $scope['build_plan_v2']['i18n']['primary_locale'] ?? null,
             $scope['plan_json']['content_locale'] ?? null,
             $scope['plan_json']['i18n']['content_locale'] ?? null,
             $websiteProfile['brief_description'] ?? null,

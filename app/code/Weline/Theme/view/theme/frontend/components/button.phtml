@@ -24,7 +24,9 @@
 // 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
 $metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('components.button');
 foreach ($metaParams as $key => $value) {
-    $this->setData("meta.{$key}", $value);
+    if ($this->getData("meta.{$key}") === null) {
+        $this->setData("meta.{$key}", $value);
+    }
 }
 
 $text = $this->getData("meta.text") ?? '';
@@ -42,12 +44,12 @@ $data = $this->getData("meta.data") ?? [];
 $attributes = $this->getData("meta.attributes") ?? '';
 
 // 构建CSS类
-$btnClass = 'btn btn-' . htmlspecialchars($type) . ' btn-' . htmlspecialchars($size);
+$btnClass = 'w-btn w-btn-' . htmlspecialchars($type) . ' w-btn-' . htmlspecialchars($size);
 if ($class) {
     $btnClass .= ' ' . htmlspecialchars($class);
 }
 if ($loading) {
-    $btnClass .= ' btn-loading';
+    $btnClass .= ' w-btn-loading';
 }
 
 // 构建属性

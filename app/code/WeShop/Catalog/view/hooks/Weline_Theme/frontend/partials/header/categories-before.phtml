@@ -52,6 +52,14 @@ $categoryLabel = static function ($value) use ($categoryService): string {
     if ($translated !== $key) {
         return $translated;
     }
+    $widgetLabel = \Weline\Theme\Helper\WidgetI18n::label($key);
+    if ($widgetLabel !== $key) {
+        $widgetTranslated = (string)__($widgetLabel);
+        if ($widgetTranslated !== $widgetLabel) {
+            return $widgetTranslated;
+        }
+        $key = $widgetLabel;
+    }
     return $categoryService->localizeCategoryDisplayName($key);
 };
 $categoryEsc = static function ($value) use ($categoryLabel): string {

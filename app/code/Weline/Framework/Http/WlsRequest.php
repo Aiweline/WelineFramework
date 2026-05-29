@@ -832,20 +832,7 @@ class WlsRequest extends Request
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             $wHost = $parsed['host'] ?? 'localhost';
-            $wPath = $parsed['path'] ?? '';
-
-            // 防御：检测 website_url 是否被上一次请求的路由路径污染。
-            // 正常 website 的 path 应为空、"/" 或类似 "/default" 的单段路径；
-            // 如果 path 包含多段且与当前请求 URI 不匹配，说明是上一请求的残留值。
-            if ($wPath !== '' && $wPath !== '/') {
-                $currentUri = (string)($this->getUri() ?? '/');
-                $normalizedWPath = rtrim($wPath, '/');
-                // 多段路径且不是当前 URI 的前缀 → 污染
-                if (str_contains($normalizedWPath, '/')
-                    && !str_starts_with(rtrim($currentUri, '/'), $normalizedWPath)) {
-                    $websiteUrl = '';
-                }
-            }
+            $wPath = $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''));
 
             if ($websiteUrl !== '') {
                 if (isset($parsed['port'])) {

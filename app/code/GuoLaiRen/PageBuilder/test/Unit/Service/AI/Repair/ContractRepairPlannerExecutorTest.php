@@ -24,13 +24,13 @@ final class ContractRepairPlannerExecutorTest extends TestCase
                 'status' => ContractType::STATUS_PENDING,
             ],
             'payload' => [
-                'content_quality' => [
+                'structure_quality' => [
                     'findings' => [
                         [
                             'severity' => 'warning',
-                            'category' => 'copy',
-                            'rule' => 'copy.generic_or_placeholder',
-                            'message' => 'Section copy looks generic.',
+                            'category' => 'structure',
+                            'rule' => 'structure.missing_section_identity',
+                            'message' => 'Section code is missing.',
                             'target_path' => 'payload.page_type_layouts.home_page.content.0',
                         ],
                     ],
@@ -45,7 +45,7 @@ final class ContractRepairPlannerExecutorTest extends TestCase
         self::assertCount(1, $result['applied']);
         self::assertSame([], $result['blocked']);
         self::assertSame(
-            'copy.generic_or_placeholder',
+            'structure.missing_section_identity',
             $result['contract']['payload']['human_notes']['repair_suggestions'][0]['rule'] ?? null
         );
         self::assertSame(

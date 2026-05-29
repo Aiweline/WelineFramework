@@ -1,15 +1,15 @@
 ﻿"Notification Management","Notification Management"
-"Notification ID is required.","Notification ID is required."
-"Notification marked as read.","Notification marked as read."
-"Notification could not be marked as read.","Notification could not be marked as read."
-"Notification Detail","Notification Detail"
-"Please log in to continue.","Please log in to continue."
+通知ID不能为空。,"Notification ID is required."
+通知已标记为已读。,"Notification marked as read."
+通知标记已读失败。,"Notification could not be marked as read."
+通知详情,"Notification Detail"
+请先登录后再继续。,"Please log in to continue."
 请先登录后再配置通知渠道。,"Please sign in before configuring notification channels."
 通知渠道配置已保存。,"Notification channel settings saved."
-"Unsupported notification provider operation: %{1}","Unsupported notification provider operation: %{1}"
-"Notification Query","Notification Query"
-"Provides frontend notification operations through the worker API.","Provides frontend notification operations through the worker API."
-"Mark a notification owned by the current customer as read.","Mark a notification owned by the current customer as read."
+不支持的通知接口操作：%{1},"Unsupported notification provider operation: %{1}"
+通知接口,"Notification Query"
+通过前端 worker API 提供通知操作。,"Provides frontend notification operations through the worker API."
+将当前客户的通知标记为已读。,"Mark a notification owned by the current customer as read."
 "订单 {1} 已提交","Order {1} submitted"
 订单已提交,"Order submitted"
 我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。,"We have received your order. Payment, shipping, and after-sales status will be synced through your selected notification channels."
@@ -23,14 +23,14 @@
 Unread,Unread
 Read,Read
 "Notification not found.","Notification not found."
-"Customer ID is required.","Customer ID is required."
-Info,Info
-Order,Order
-Payment,Payment
-Membership,Membership
-Promotion,Promotion
+客户ID不能为空。,"Customer ID is required."
+信息,Info
+订单,Order
+支付,Payment
+会员,Membership
+促销,Promotion
 商品问答提及,"Product Q&A Mention"
-商品评价回复,商品评价回复
+商品评价回复,"Product Review Reply"
 "Manage customer notifications, read status, and delivery visibility for support teams.","Manage customer notifications, read status, and delivery visibility for support teams."
 "Total Notifications","Total Notifications"
 "Unread Notifications","Unread Notifications"
@@ -62,6 +62,7 @@ Content,Content
 "Already marked as read.","Already marked as read."
 消息通知,Notifications
 订单进度、支付结果、售后提醒和账户消息都会出现在这里。,"Order updates, payment results, after-sales reminders, and account messages will appear here."
+评价回复、订单进度、支付结果、售后提醒和账户消息都会出现在这里。,"Review replies, order updates, payment results, after-sales reminders, and account messages will appear here."
 全部消息,"All Messages"
 未读,Unread
 标记已读,"Mark as Read"
@@ -88,6 +89,7 @@ Content,Content
 已保存联系人,"Saved Contacts"
 通知设置,"Notification Settings"
 管理订单、支付与售后消息提醒,"Manage order, payment, and after-sales notifications"
+评价回复、订单与账户提醒,"Review replies, orders, and account alerts"
 订单通知渠道,"Order notification channels"
 已选通知渠道,"Selected notification channels"
 未选择,"Not selected"
@@ -95,8 +97,22 @@ Content,Content
 请先在个人中心配置该渠道。,"Configure this channel in your account center first."
 去个人中心管理通知渠道,"Manage notification channels in account center"
 访客结账仅使用邮箱接收本次订单通知，登录后可以保存更多通知渠道。,"Guest checkout uses email for this order notification only. Sign in to save more notification channels."
-"Stay Updated","Stay Updated"
-"Notification Center","Notification Center"
-"Open Center","Open Center"
-"Alerts and updates in one place","Alerts and updates in one place"
-"Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center.","Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center."
+消息集中在个人中心,"Messages in Account Center"
+进入消息,"Open Messages"
+提醒和更新集中在一处,"Alerts and updates in one place"
+评价回复、订单状态和会员消息都在个人中心统一查看。,"Review replies, order status, and membership messages are all managed in the account center."
+立即返回,"Open Now"
+消息同步,"Stay In Sync"
+通知中心,"Notification Center"
+订单进度、账户提醒和重要商城事件会集中出现在这里。,"Track order progress, account reminders, and important storefront events in one timeline."
+返回个人中心,"Back to Account"
+继续购物,"Continue Shopping"
+全部通知,"All Notifications"
+当前时间线中的全部消息。,"Events currently available in your timeline."
+仍待查看的新提醒。,"New updates still waiting for your review."
+时间线,Timeline
+最新动态,"Latest Updates"
+创建时间,Created
+标记为已读,"Mark as Read"
+暂无通知,"No notifications yet"
+账户产生事件后会自动显示在这里。,"Once events are generated for your account, they will appear here automatically."

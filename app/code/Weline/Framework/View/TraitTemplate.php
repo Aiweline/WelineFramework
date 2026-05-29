@@ -14,10 +14,9 @@ namespace Weline\Framework\View;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
-use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Exception\Core;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Data\HtmlInterface;
@@ -176,7 +175,7 @@ trait TraitTemplate
     public function fetchTagSourceFile(string $type, string $source)
     {
         $source = trim($source);
-        $cache_key = $type . '_' . $source . Cookie::getLangLocal();
+        $cache_key = $type . '_' . $source . '|' . $this->viewEnvironmentCacheSuffix('tag-source-file');
         $data = '';
         switch ($type) {
             case DataInterface::dir_type_TEMPLATE:
@@ -256,7 +255,7 @@ trait TraitTemplate
     {
         $source = trim($source);
         $source = trim($source, DS);
-        $cache_key = $type . '_' . $source . Cookie::getLangLocal();
+        $cache_key = $type . '_' . $source . '|' . $this->viewEnvironmentCacheSuffix('tag-source');
         switch ($type) {
             case DataInterface::dir_type_STATICS:
                 list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
@@ -669,7 +668,7 @@ trait TraitTemplate
      */
     protected function fetchFile(string $filename): mixed
     {
-        $cache_key = $filename . State::getLangLocal() . '|' . $this->resolveThemeCacheKeyForFetchFile($filename);
+        $cache_key = $filename . '|' . $this->viewEnvironmentCacheSuffix('fetch-file') . '|' . $this->resolveThemeCacheKeyForFetchFile($filename);
         $skipCache = isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache');
         if (!$skipCache) {
             $cache_filename = $this->viewCache->get($cache_key);
@@ -704,5 +703,10 @@ trait TraitTemplate
         $suffix = trim((string)$eventData->getData('suffix'));
 
         return $suffix === '' ? $baseKey : ($baseKey . '|' . $suffix);
+    }
+
+    private function viewEnvironmentCacheSuffix(string $scope): string
+    {
+        return KeyBuilder::environmentHash(['scope' => $scope]);
     }
 }

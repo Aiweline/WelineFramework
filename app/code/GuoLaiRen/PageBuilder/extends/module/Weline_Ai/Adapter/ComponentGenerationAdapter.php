@@ -41,7 +41,7 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface, AdapterSki
 
     public function getDefaultStyleCodes(): array
     {
-        return ['india-card-game-apk-dark-neon'];
+        return [];
     }
 
     /**

@@ -47,6 +47,42 @@ HTML;
         self::assertStringContainsString('data-pb-ai-bound', $result);
     }
 
+    public function testRuntimeFrameworkAddsCompactMobileHeaderGuardForAiHeader(): void
+    {
+        $service = new PageRenderService(
+            $this->createStub(LayoutAssembler::class),
+            $this->createStub(LayoutOwnerResolver::class),
+            $this->createStub(Page::class),
+            $this->createStub(Style::class),
+            $this->createStub(LocalDescription::class),
+        );
+
+        $apply = new \ReflectionMethod($service, 'applyVirtualThemeGeneratedComponentRuntimeFramework');
+        $apply->setAccessible(true);
+
+        $html = <<<'HTML'
+<style>
+@media (max-width: 992px) {
+    #header-demo .header-demo-nav {
+        position: fixed;
+        bottom: 0;
+        transform: translateX(100%);
+    }
+}
+</style>
+<header id="header-demo"><nav class="header-demo-nav">首页</nav></header>
+HTML;
+
+        $result = (string)$apply->invoke($service, $html, 'header/ai-site-header');
+
+        self::assertStringContainsString('data-pb-ai-header-mobile-compact="1"', $result);
+        self::assertStringContainsString('bottom: auto !important;', $result);
+        self::assertStringContainsString('max-height: min(70vh, 360px) !important;', $result);
+
+        $contentResult = (string)$apply->invoke($service, $html, 'content/hero');
+        self::assertStringNotContainsString('data-pb-ai-header-mobile-compact="1"', $contentResult);
+    }
+
     public function testVisualModeDocumentLanguageUsesRenderLocale(): void
     {
         $layoutOwnerResolver = $this->createMock(LayoutOwnerResolver::class);

@@ -1717,6 +1717,57 @@ class PassthroughCore
         ];
     }
 
+    /**
+     * Master has already received READY from these maintenance workers.
+     * Do not repeat a startup probe here; a transient early probe failure can
+     * prevent the maintenance pool from ever being published.
+     *
+     * @return array{accepted: int[], rejected: array<int, string>}
+     */
+    public function setMaintenanceWorkerPortsFromMasterReady(array $ports): array
+    {
+        $candidatePorts = \array_values(\array_filter(
+            \array_unique(\array_map('intval', $ports)),
+            static fn(int $port): bool => $port > 0
+        ));
+
+        foreach ($this->maintenanceWorkerPorts as $oldPort) {
+            if (!\in_array((int) $oldPort, $candidatePorts, true)) {
+                $this->closeIdleSocketsByPort((int) $oldPort);
+                if (!\in_array((int) $oldPort, $this->workerPorts, true)) {
+                    unset($this->workerHealth[(int) $oldPort]);
+                }
+            }
+        }
+
+        $now = \microtime(true);
+        foreach ($candidatePorts as $port) {
+            $this->workerHealth[$port] = [
+                'failures' => 0,
+                'blacklisted_at' => 0.0,
+                'last_success' => $now,
+                'total_failures' => (int)($this->workerHealth[$port]['total_failures'] ?? 0),
+            ];
+        }
+
+        $this->maintenanceWorkerPorts = $candidatePorts;
+        $this->writeStderr(
+            '[PassthroughCore] SET_ROUTE_TABLE trust Master READY maintenance candidates: '
+            . (\implode(',', $this->maintenanceWorkerPorts) ?: '(none)') . "\n"
+        );
+        $this->logMaintenanceDecision(
+            'maintenance_pool_master_ready:' . \implode(',', $this->maintenanceWorkerPorts),
+            'Maintenance worker pool accepted from Master READY, ' . $this->formatMaintenanceLogContext(),
+            'INFO',
+            0.0
+        );
+
+        return [
+            'accepted' => $candidatePorts,
+            'rejected' => [],
+        ];
+    }
+
     public function setWarmupCooperativeYield(?\Closure $yield): void
     {
         $this->warmupCooperativeYield = $yield;

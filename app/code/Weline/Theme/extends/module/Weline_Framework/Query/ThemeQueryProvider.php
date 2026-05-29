@@ -235,8 +235,7 @@ class ThemeQueryProvider implements QueryProviderInterface
             curl_setopt($curl, CURLOPT_POSTFIELDS, $body);
         }
 
-        $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
-        if (in_array($host, ['127.0.0.1', 'localhost', '::1'], true)) {
+        if ($this->shouldSkipEditorRequestSslVerification($url, $request)) {
             curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
         }
@@ -295,9 +294,37 @@ class ThemeQueryProvider implements QueryProviderInterface
 
         try {
             $response = match ($path) {
+                '/theme/backend/theme-editor/widgets' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgets(),
+                '/theme/backend/theme-editor/widget-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetConfig(),
+                '/theme/backend/theme-editor/widget-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetPreview(),
+                '/theme/backend/theme-editor/layout-options' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutOptionsPayload(),
                 '/theme/backend/theme-editor/layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutConfigPayload(),
+                '/theme/backend/theme-editor/save-layout-selection' => ($themeEditor ??= $this->createDirectThemeEditor())->saveLayoutSelectionPayload(),
                 '/theme/backend/theme-editor/save-layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->saveLayoutConfigPayload(),
+                '/theme/backend/theme-editor/ai-translate-config' => ($themeEditor ??= $this->createDirectThemeEditor())->postAiTranslateConfig(),
                 '/theme/backend/theme-editor/compile-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->getCompileLayoutPayload(),
+                '/theme/backend/theme-editor/installed-locales' => ($themeEditor ??= $this->createDirectThemeEditor())->getInstalledLocales(),
+                '/theme/backend/theme-editor/save-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveWidget(),
+                '/theme/backend/theme-editor/update-config' => ($themeEditor ??= $this->createDirectThemeEditor())->postUpdateConfig(),
+                '/theme/backend/theme-editor/remove-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postRemoveWidget(),
+                '/theme/backend/theme-editor/save-widget-config' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveWidgetConfig(),
+                '/theme/backend/theme-editor/update-sort' => ($themeEditor ??= $this->createDirectThemeEditor())->postUpdateSort(),
+                '/theme/backend/theme-editor/swap-widget-order' => ($themeEditor ??= $this->createDirectThemeEditor())->postSwapWidgetOrder(),
+                '/theme/backend/theme-editor/remove-orphan-widgets' => ($themeEditor ??= $this->createDirectThemeEditor())->postRemoveOrphanWidgets(),
+                '/theme/backend/theme-editor/move-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postMoveWidget(),
+                '/theme/backend/theme-editor/save-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveLayout(),
+                '/theme/backend/theme-editor/publish' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublish(),
+                '/theme/backend/theme-editor/render-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postRenderWidget(),
+                '/theme/backend/theme-editor/save-compiled-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveCompiledLayout(),
+                '/theme/backend/theme-editor/start-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postStartPreview(),
+                '/theme/backend/theme-editor/exit-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postExitPreview(),
+                '/theme/backend/theme-editor/publish-and-exit' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublishAndExit(),
+                '/theme/backend/theme-editor/check-lock' => ($themeEditor ??= $this->createDirectThemeEditor())->getCheckLock(),
+                '/theme/backend/theme-editor/release-lock' => ($themeEditor ??= $this->createDirectThemeEditor())->postReleaseLock(),
+                '/theme/backend/theme-editor/update-activity' => ($themeEditor ??= $this->createDirectThemeEditor())->postUpdateActivity(),
+                '/theme/backend/theme-editor/request-takeover' => ($themeEditor ??= $this->createDirectThemeEditor())->postRequestTakeover(),
+                '/theme/backend/theme-editor/check-takeover-request' => ($themeEditor ??= $this->createDirectThemeEditor())->getCheckTakeoverRequest(),
+                '/theme/backend/theme-editor/force-takeover' => ($themeEditor ??= $this->createDirectThemeEditor())->postForceTakeover(),
                 '/theme/backend/theme-editor/versions' => ($themeEditor ??= $this->createDirectThemeEditor())->getVersionsPayload(),
                 '/theme/backend/theme-editor/save-version' => ($themeEditor ??= $this->createDirectThemeEditor())->saveVersionPayload(),
                 '/theme/backend/theme-editor/switch-version' => ($themeEditor ??= $this->createDirectThemeEditor())->switchVersionPayload(),
@@ -357,8 +384,15 @@ class ThemeQueryProvider implements QueryProviderInterface
 
     private function injectRequestIntoController(object $controller): void
     {
+        $session = \Weline\Framework\Session\SessionFactory::getInstance()->createBackendSession();
+        if (method_exists($session, 'start')) {
+            $session->start(null);
+        }
+
         $this->setControllerProperty($controller, 'request', ObjectManager::getInstance(\Weline\Framework\Http\Request::class));
         $this->setControllerProperty($controller, '_objectManager', ObjectManager::getInstance());
+        $this->setControllerProperty($controller, '_url', ObjectManager::getInstance(\Weline\Framework\Http\Url::class));
+        $this->setControllerProperty($controller, 'session', $session);
     }
 
     private function setControllerProperty(object $controller, string $propertyName, mixed $value): void
@@ -445,6 +479,33 @@ class ThemeQueryProvider implements QueryProviderInterface
         }
 
         return $scheme . '://' . $host . (str_starts_with($url, '/') ? $url : '/' . $url);
+    }
+
+    private function shouldSkipEditorRequestSslVerification(string $url, \Weline\Framework\Http\Request $request): bool
+    {
+        if (strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?: '')) !== 'https') {
+            return false;
+        }
+
+        $targetHost = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+        if ($targetHost === '') {
+            return false;
+        }
+
+        if (in_array($targetHost, ['127.0.0.1', 'localhost', '::1'], true)) {
+            return true;
+        }
+
+        $requestHost = strtolower((string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: ''));
+        $requestHostName = strtolower((string)(parse_url('//' . $requestHost, PHP_URL_HOST) ?: $requestHost));
+        if ($requestHostName === '' || $targetHost !== $requestHostName) {
+            return false;
+        }
+
+        // WLS local domains use self-signed certificates. The request has already passed the editor path and same-host whitelist.
+        return str_ends_with($targetHost, '.weline.test')
+            || str_ends_with($targetHost, '.weline.localhost')
+            || str_ends_with($targetHost, '.local.test');
     }
 
     private function assertAllowedEditorRequestUrl(string $url): void

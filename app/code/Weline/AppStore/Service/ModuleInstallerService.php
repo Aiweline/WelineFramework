@@ -4,11 +4,13 @@ declare(strict_types=1);
 namespace Weline\AppStore\Service;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\File\Compress;
 use Weline\AppStore\Model\AppStoreDownloadLog;
+use Weline\AppStore\Model\AppStoreAccount;
 use Weline\AppStore\Model\AppStoreInstalledModule;
 
 /**
@@ -54,7 +56,7 @@ class ModuleInstallerService
 
     public function __construct()
     {
-        $platformUrl = $this->resolvePlatformUrl();
+        $platformUrl = self::normalizePlatformApiBaseUrl($this->resolvePlatformUrl());
         // Env::get 如果配置项存在但显式为 null，会直接返回 null（不会走 default），因此这里做非空兜底。
         $this->platformApiUrl = $platformUrl;
         $this->httpClient = new Client([
@@ -74,6 +76,16 @@ class ModuleInstallerService
      */
     public function download(string $licenseKey, ?int $moduleId = null, ?string $version = null, ?string $downloadIp = null): array
     {
+        return $this->downloadWithDomain('', $licenseKey, $moduleId, $version, $downloadIp);
+    }
+
+    public function downloadForDomain(string $domain, string $licenseKey, ?int $moduleId = null, ?string $version = null, ?string $downloadIp = null): array
+    {
+        return $this->downloadWithDomain($domain, $licenseKey, $moduleId, $version, $downloadIp);
+    }
+
+    private function downloadWithDomain(string $domain, string $licenseKey, ?int $moduleId = null, ?string $version = null, ?string $downloadIp = null): array
+    {
         // 创建下载日志
         /** @var AppStoreDownloadLog $log */
         $log = ObjectManager::getInstance(AppStoreDownloadLog::class);
@@ -85,28 +97,16 @@ class ModuleInstallerService
         $log->setDownloadAt(date('Y-m-d H:i:s'));
 
         try {
-            // 调用平台 API 获取下载链接
-            $response = $this->httpClient->post($this->platformApiUrl . '/api/v1/platform/module/download', [
-                'json' => [
-                    'license_key' => $licenseKey,
-                    'module_id' => $moduleId,
-                    'version' => $version,
-                    'domain' => $this->getCurrentDomain(),
-                ],
-            ]);
-
-            $data = json_decode($response->getBody()->getContents(), true);
-            $payload = $this->normalizeApiPayload($data);
-
-            if (!($data['success'] ?? false)) {
-                throw new Exception($data['message'] ?? __('下载失败'));
-            }
+            $downloadDomain = $this->resolveDownloadDomain($domain);
+            $downloadMetadata = $this->loadDownloadMetadata($licenseKey, $moduleId, $version, $downloadDomain);
+            $payload = $downloadMetadata['payload'];
+            $downloadDomain = $downloadMetadata['domain'];
 
             // 下载模块文件
             $tempDir = $this->getTempDir();
             $moduleName = (string)($payload['module_name'] ?? '');
             $moduleVersion = (string)($payload['version'] ?? '');
-            $downloadUrl = (string)($payload['download_url'] ?? '');
+            $downloadUrl = $this->resolveDownloadUrl((string)($payload['download_url'] ?? ''));
             if ($moduleName === '' || $moduleVersion === '' || $downloadUrl === '') {
                 throw new Exception(__('下载响应数据不完整'));
             }
@@ -114,7 +114,6 @@ class ModuleInstallerService
 
             $log->setModuleName($moduleName);
             $log->setVersion($moduleVersion);
-            $log->save();
 
             $this->downloadFile($downloadUrl, $tempFile);
 
@@ -142,13 +141,88 @@ class ModuleInstallerService
                 'file_path' => $tempFile,
                 'file_size' => filesize($tempFile),
                 'file_hash' => $fileHash,
+                'download_domain' => $downloadDomain,
                 'module_info' => is_array($payload['module_info'] ?? null) ? $payload['module_info'] : [],
             ];
         } catch (\Throwable $e) {
-            $log->markAsFailed($e->getMessage());
-            $log->save();
+            $this->saveFailedDownloadLog($log, $e->getMessage());
             throw new Exception(__('模块下载失败：') . $e->getMessage());
         }
+    }
+
+    /**
+     * @return array{payload: array<string, mixed>, domain: string}
+     */
+    private function loadDownloadMetadata(string $licenseKey, ?int $moduleId, ?string $version, string $downloadDomain): array
+    {
+        try {
+            return [
+                'payload' => $this->requestDownloadMetadata($licenseKey, $moduleId, $version, $downloadDomain),
+                'domain' => $downloadDomain,
+            ];
+        } catch (\Throwable $e) {
+            $licenseDomain = $this->extractBoundLicenseDomain($e);
+            if ($licenseDomain === '' || $licenseDomain === $downloadDomain) {
+                throw $e;
+            }
+
+            return [
+                'payload' => $this->requestDownloadMetadata($licenseKey, $moduleId, $version, $licenseDomain),
+                'domain' => $licenseDomain,
+            ];
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function requestDownloadMetadata(string $licenseKey, ?int $moduleId, ?string $version, string $domain): array
+    {
+        $response = $this->httpClient->post($this->platformApiUrl . '/api/v1/platform/module/download', [
+            'form_params' => [
+                'license_key' => $licenseKey,
+                'module_id' => $moduleId,
+                'version' => $version,
+                'domain' => $domain,
+            ],
+        ]);
+
+        $data = json_decode($response->getBody()->getContents(), true);
+        if (!is_array($data)) {
+            throw new Exception(__('下载响应数据不完整'));
+        }
+
+        if (!($data['success'] ?? false)) {
+            throw new Exception((string)($data['message'] ?? __('下载失败')));
+        }
+
+        return $this->normalizeApiPayload($data);
+    }
+
+    private function extractBoundLicenseDomain(\Throwable $exception): string
+    {
+        $messages = [$exception->getMessage()];
+        if ($exception instanceof RequestException && $exception->hasResponse()) {
+            $body = (string)$exception->getResponse()->getBody();
+            $data = json_decode($body, true);
+            if (is_array($data)) {
+                foreach (['message', 'error'] as $key) {
+                    if (!empty($data[$key]) && is_string($data[$key])) {
+                        $messages[] = $data[$key];
+                    }
+                }
+            } elseif ($body !== '') {
+                $messages[] = $body;
+            }
+        }
+
+        foreach ($messages as $message) {
+            if (preg_match('/bound license domain:\s*([A-Za-z0-9.\-:\[\]]+)/i', $message, $matches)) {
+                return $this->normalizeDomain($matches[1]);
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -215,20 +289,39 @@ class ModuleInstallerService
             }
 
             // 更新已安装模块记录
+            $commandUpgradeResult = $this->executeCommandUpgrade();
+            if (!$commandUpgradeResult['success']) {
+                if ($backupDir) {
+                    $this->restoreBackup($backupDir, $targetDir);
+                } elseif (is_dir($targetDir)) {
+                    $this->recursiveDelete($targetDir);
+                }
+                throw new Exception(__('模块安装失败：') . $commandUpgradeResult['message']);
+            }
+
+            $action = (string)($options['action'] ?? 'install');
+            if (!in_array($action, ['install', 'upgrade'], true)) {
+                $action = 'install';
+            }
+
             $this->updateInstalledModule($moduleName, $moduleInfo, $options);
             $readmePath = $this->writeMarketplaceReadme($targetDir, $moduleName, $moduleInfo, $options);
             $installRecordPath = $this->appendInstallRecord([
+                'action' => $action,
                 'module_name' => $moduleName,
                 'version' => $moduleInfo['version'],
+                'previous_version' => (string)($options['previous_version'] ?? ''),
                 'display_name' => (string)($options['display_name'] ?? ($moduleInfo['display_name'] ?? $moduleName)),
                 'platform_module_id' => (int)($options['platform_module_id'] ?? 0),
                 'license_key_masked' => $this->maskSecret((string)($options['license_key'] ?? '')),
                 'target_dir' => $targetDir,
+                'backup_dir' => $backupDir ?? '',
                 'frontend_path' => $this->getInstalledFrontendPath($targetDir),
                 'readme_path' => $readmePath,
                 'download_log_id' => (int)($options['download_log_id'] ?? 0),
                 'download_file_hash' => (string)($options['download_file_hash'] ?? ''),
                 'download_file_size' => (int)($options['download_file_size'] ?? 0),
+                'bound_domain' => (string)($options['bound_domain'] ?? ''),
                 'platform_url' => $this->platformApiUrl,
             ]);
 
@@ -247,11 +340,13 @@ class ModuleInstallerService
                 'success' => true,
                 'module_name' => $moduleName,
                 'version' => $moduleInfo['version'],
+                'previous_version' => (string)($options['previous_version'] ?? ''),
                 'target_dir' => $targetDir,
+                'backup_dir' => $backupDir ?? '',
                 'frontend_path' => $this->getInstalledFrontendPath($targetDir),
                 'marketplace_readme' => $readmePath,
                 'install_record_path' => $installRecordPath,
-                'install_output' => $installResult['output'] ?? '',
+                'install_output' => trim(($installResult['output'] ?? '') . "\n" . ($commandUpgradeResult['output'] ?? '')),
             ];
         } catch (\Throwable $e) {
             // 清理临时文件
@@ -586,9 +681,16 @@ class ModuleInstallerService
             . '$modules = $env->getModuleList(true);'
             . 'if (isset($modules[$moduleName]) && is_array($modules[$moduleName])) {'
             . 'unset($modules[$moduleName]["installing"], $modules[$moduleName]["upgrading"]);'
+            . '$previousDeferRegistryUpdate = \Weline\Framework\Module\Handle::isDeferRegistryUpdate();'
+            . '\Weline\Framework\Module\Handle::setDeferRegistryUpdate(true);'
+            . 'try {'
             . '\Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class)->updateModules($modules);'
+            . '} finally {'
+            . '\Weline\Framework\Module\Handle::setDeferRegistryUpdate($previousDeferRegistryUpdate);'
+            . '}'
             . '$env->getModuleList(true);'
             . '}'
+            . '\Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Registry\Service\RegistryUpdateService::class)->updateAllRegistries(true, false, true);'
             . '$routeUpdateService = \Weline\Framework\Manager\ObjectManager::make(\Weline\Framework\Router\Service\RouteUpdateService::class, ['
             . '"moduleHandle" => \Weline\Framework\Manager\ObjectManager::make(\Weline\Framework\Module\Handle::class),'
             . ']);'
@@ -619,6 +721,29 @@ class ModuleInstallerService
             'return_code' => $returnCode,
             'message' => $returnCode === 0 ? '' : implode("\n", $output),
         ];
+    }
+
+    private function executeCommandUpgrade(): array
+    {
+        $output = [];
+        $returnCode = 0;
+        exec($this->buildCommandUpgradeCommand() . ' 2>&1', $output, $returnCode);
+
+        return [
+            'success' => $returnCode === 0,
+            'output' => implode("\n", $output),
+            'return_code' => $returnCode,
+            'message' => $returnCode === 0 ? '' : implode("\n", $output),
+        ];
+    }
+
+    protected function buildCommandUpgradeCommand(): string
+    {
+        return implode(' ', [
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(BP . 'bin' . DS . 'w'),
+            'command:upgrade',
+        ]);
     }
 
     private function restoreMaintenanceMode(bool $enabled): void
@@ -666,8 +791,15 @@ class ModuleInstallerService
         $installedModule->setDisplayName($options['display_name'] ?? ($moduleInfo['display_name'] ?? $moduleName));
         $installedModule->setDescription($options['description'] ?? ($moduleInfo['description'] ?? null));
         $installedModule->setLicenseKey($options['license_key'] ?? null);
+        if (!empty($options['bound_domain'])) {
+            $installedModule->setBoundDomain((string)$options['bound_domain']);
+        }
         $installedModule->setPlatformModuleId($options['platform_module_id'] ?? 0);
-        $installedModule->setInstalledAt(date('Y-m-d H:i:s'));
+        $now = date('Y-m-d H:i:s');
+        if (!$installedModule->getInstalledAt()) {
+            $installedModule->setInstalledAt($now);
+        }
+        $installedModule->setData(AppStoreInstalledModule::schema_fields_updated_at, $now);
         $installedModule->save();
     }
 
@@ -710,11 +842,12 @@ class ModuleInstallerService
 
     private function appendInstallRecord(array $record): string
     {
-        if (!is_dir(self::INSTALL_RECORD_DIR)) {
-            mkdir(self::INSTALL_RECORD_DIR, 0755, true);
+        $recordDir = $this->getInstallRecordDir();
+        if (!is_dir($recordDir)) {
+            mkdir($recordDir, 0755, true);
         }
 
-        $path = self::INSTALL_RECORD_DIR . DS . date('Y-m') . '.jsonl';
+        $path = $recordDir . DS . date('Y-m') . '.jsonl';
         $payload = array_merge([
             'action' => 'install',
             'recorded_at' => date('c'),
@@ -726,6 +859,39 @@ class ModuleInstallerService
         }
 
         return $path;
+    }
+
+    protected function getInstallRecordDir(): string
+    {
+        return self::INSTALL_RECORD_DIR;
+    }
+
+    private function resolveDownloadUrl(string $downloadUrl): string
+    {
+        $downloadUrl = trim($downloadUrl);
+        if ($downloadUrl === '') {
+            return '';
+        }
+
+        if (preg_match('#^https?://#i', $downloadUrl)) {
+            return $downloadUrl;
+        }
+
+        $platform = parse_url($this->platformApiUrl);
+        if (!is_array($platform) || empty($platform['scheme']) || empty($platform['host'])) {
+            return $downloadUrl;
+        }
+
+        $origin = $platform['scheme'] . '://' . $platform['host'] . (isset($platform['port']) ? ':' . $platform['port'] : '');
+        if (str_starts_with($downloadUrl, '/')) {
+            $platformPath = rtrim((string)($platform['path'] ?? ''), '/');
+            if ($platformPath !== '' && !str_starts_with($downloadUrl, $platformPath . '/')) {
+                return $origin . $platformPath . $downloadUrl;
+            }
+            return $origin . $downloadUrl;
+        }
+
+        return rtrim($this->platformApiUrl, '/') . '/' . ltrim($downloadUrl, '/');
     }
 
     private function maskSecret(string $value): string
@@ -750,12 +916,42 @@ class ModuleInstallerService
      */
     private function isWlsRunning(): bool
     {
+        $instanceName = $this->getCurrentWlsInstanceName();
+        if ($instanceName !== '') {
+            $pid = $this->readWlsInstanceMasterPid($instanceName);
+            return $pid > 0 && $this->isProcessRunning($pid);
+        }
+
         $pidFile = BP . 'var' . DS . 'wls' . DS . 'master.pid';
         if (!file_exists($pidFile)) {
             return false;
         }
 
         $pid = (int)file_get_contents($pidFile);
+        return $pid > 0 && $this->isProcessRunning($pid);
+    }
+
+    private function readWlsInstanceMasterPid(string $instanceName): int
+    {
+        if (!preg_match('/^[A-Za-z0-9_.-]+$/', $instanceName)) {
+            return 0;
+        }
+
+        $path = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        if (!is_file($path)) {
+            return 0;
+        }
+
+        $data = json_decode((string)file_get_contents($path), true);
+        if (!is_array($data)) {
+            return 0;
+        }
+
+        return (int)($data['master_pid'] ?? $data['pid'] ?? 0);
+    }
+
+    private function isProcessRunning(int $pid): bool
+    {
         if ($pid <= 0) {
             return false;
         }
@@ -797,8 +993,43 @@ class ModuleInstallerService
      */
     private function triggerWlsReload(): void
     {
-        $command = PHP_BINARY . ' ' . BP . 'bin' . DS . 'w server:reload -n 2>&1 &';
-        exec($command);
+        exec($this->buildWlsReloadCommand() . ' 2>&1');
+    }
+
+    protected function buildWlsReloadCommand(): string
+    {
+        $parts = [
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(BP . 'bin' . DS . 'w'),
+            'server:reload',
+        ];
+
+        $instanceName = $this->getCurrentWlsInstanceName();
+        if ($instanceName !== '') {
+            $parts[] = escapeshellarg($instanceName);
+        }
+
+        $parts[] = '-n';
+
+        return implode(' ', $parts);
+    }
+
+    private function getCurrentWlsInstanceName(): string
+    {
+        $candidates = [
+            getenv('WLS_INSTANCE') ?: '',
+            $_SERVER['WLS_INSTANCE'] ?? '',
+            $_ENV['WLS_INSTANCE'] ?? '',
+        ];
+
+        foreach ($candidates as $candidate) {
+            $candidate = trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -906,7 +1137,83 @@ class ModuleInstallerService
      */
     private function getCurrentDomain(): string
     {
-        return (string)\w_env('server.http_host', 'localhost');
+        $requestDomain = $this->getRequestDomain();
+        if ($requestDomain !== '') {
+            return $requestDomain;
+        }
+
+        $boundDomain = $this->getBoundAccountDomain();
+        if ($boundDomain !== '') {
+            return $boundDomain;
+        }
+
+        $serverDomain = $this->normalizeDomain((string)($_SERVER['HTTP_HOST'] ?? ''));
+        if ($serverDomain !== '') {
+            return $serverDomain;
+        }
+
+        $envDomain = $this->normalizeDomain((string)\w_env('server.http_host', ''));
+        return $envDomain !== '' ? $envDomain : 'localhost';
+    }
+
+    private function resolveDownloadDomain(string $domain): string
+    {
+        $domain = $this->normalizeDomain($domain);
+        return $domain !== '' ? $domain : $this->getCurrentDomain();
+    }
+
+    private function getRequestDomain(): string
+    {
+        try {
+            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+            if (!\is_object($request) || !\method_exists($request, 'getServer')) {
+                return '';
+            }
+
+            return $this->normalizeDomain((string)$request->getServer('HTTP_HOST'));
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function getBoundAccountDomain(): string
+    {
+        try {
+            /** @var AppStoreAccount $account */
+            $account = ObjectManager::getInstance(AppStoreAccount::class);
+            $account = $account->reset()
+                ->where(AppStoreAccount::schema_fields_status, AppStoreAccount::STATUS_ACTIVE)
+                ->limit(1)
+                ->find()
+                ->fetch();
+
+            return $this->normalizeDomain((string)($account->getBoundDomain() ?? ''));
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function normalizeDomain(string $domain): string
+    {
+        $domain = trim($domain);
+        if ($domain === '') {
+            return '';
+        }
+
+        if (preg_match('#^https?://#i', $domain)) {
+            $parts = parse_url($domain);
+            if (!\is_array($parts) || empty($parts['host'])) {
+                return '';
+            }
+
+            return (string)$parts['host'] . (!empty($parts['port']) ? ':' . (string)$parts['port'] : '');
+        }
+
+        if (str_contains($domain, '/')) {
+            $domain = (string)strstr($domain, '/', true);
+        }
+
+        return trim($domain);
     }
 
     /**
@@ -946,6 +1253,18 @@ class ModuleInstallerService
         $this->enableWlsReload = $enable;
     }
 
+    private function saveFailedDownloadLog(AppStoreDownloadLog $log, string $reason): void
+    {
+        try {
+            $log->markAsFailed($reason);
+            $log->save();
+        } catch (\Throwable $logException) {
+            throw new Exception(
+                __('Module download failed: ') . $reason . '; ' . __('failed to save failure log: ') . $logException->getMessage()
+            );
+        }
+    }
+
     private function resolvePlatformUrl(): string
     {
         $envPlatformUrl = getenv('WELINE_APPSTORE_PLATFORM_URL');
@@ -955,5 +1274,15 @@ class ModuleInstallerService
 
         $platformUrl = Env::get('appstore.platform_url');
         return (is_string($platformUrl) && $platformUrl !== '') ? rtrim($platformUrl, '/') : self::DEFAULT_PLATFORM_URL;
+    }
+
+    private static function normalizePlatformApiBaseUrl(string $platformUrl): string
+    {
+        $platformUrl = rtrim(trim($platformUrl), '/');
+        if ($platformUrl === '') {
+            return self::DEFAULT_PLATFORM_URL;
+        }
+
+        return preg_replace('#/([A-Za-z]{3})/([a-z]{2}(?:_[A-Za-z0-9]+){1,2})$#', '', $platformUrl) ?: $platformUrl;
     }
 }

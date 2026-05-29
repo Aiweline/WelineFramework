@@ -119,6 +119,13 @@ final class ThemePreviewEntryApplication
             'target_value' => $layoutType,
         ], false);
         $context = $previewContextService->ensureThemeIds($context);
+        $layoutOption = ConfigLoader::getLayoutConfigValue(
+            $theme,
+            $area,
+            $layoutType,
+            (string)($context['scope'] ?? PreviewContextService::DEFAULT_SCOPE)
+        );
+        $layoutOption = \trim($layoutOption) !== '' ? \trim($layoutOption) : 'default';
 
         if ($area === PreviewContextService::AREA_FRONTEND) {
             $tokenThemeId = $previewContextService->getThemeIdForArea(
@@ -151,7 +158,7 @@ final class ThemePreviewEntryApplication
                 true
             );
             $params['layout_type'] = $layoutType;
-            $params['layout_option'] = 'default';
+            $params['layout_option'] = $layoutOption;
             $params['editor_mode'] = '1';
             $params['status'] = $previewStatus;
             $params['editor_area'] = PreviewContextService::AREA_BACKEND;
@@ -170,7 +177,7 @@ final class ThemePreviewEntryApplication
         $params = $previewContextService->toQueryParams($context, $appendPreviewThemeQueryOnFrontendUrl);
         $params['page_type'] = $layoutType;
         $params['layout_type'] = $layoutType;
-        $params['layout_option'] = 'default';
+        $params['layout_option'] = $layoutOption;
         $params['_t'] = \time();
 
         return [

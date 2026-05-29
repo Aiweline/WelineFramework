@@ -32,12 +32,45 @@ class AffiliateQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'getProductShareLinks' => $this->getProductShareLinks($params),
+            'getShareLink' => $this->getShareLink($params),
             'recordOutboundShare' => $this->recordOutboundShare($params),
+            'requestWithdrawal' => $this->requestWithdrawal($params),
             'getMySummary' => $this->getMySummary(),
             default => throw new \InvalidArgumentException(
                 (string) __('分销查询器不支持该操作：%{1}', [$operation])
             ),
         };
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function getShareLink(array $params): array
+    {
+        $customerId = $this->getCustomerId();
+        if ($customerId <= 0) {
+            return $this->loginRequired();
+        }
+
+        try {
+            $data = $this->affiliateService->getShareLink(
+                $customerId,
+                (string) ($params['target_url'] ?? $params['target_path'] ?? ''),
+                (string) ($params['channel'] ?? '')
+            );
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => (string) __('推广链接已生成。'),
+            'data' => $data,
+        ];
     }
 
     /**
@@ -99,6 +132,42 @@ class AffiliateQueryProvider implements QueryProviderInterface
         return [
             'success' => true,
             'message' => (string) __('分享动作已记录。'),
+            'data' => $data,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function requestWithdrawal(array $params): array
+    {
+        $customerId = $this->getCustomerId();
+        if ($customerId <= 0) {
+            return $this->loginRequired();
+        }
+
+        try {
+            $data = $this->affiliateService->requestWithdrawal(
+                $customerId,
+                (float) ($params['amount'] ?? 0),
+                (string) ($params['method'] ?? 'manual'),
+                (string) ($params['account_label'] ?? ''),
+                [
+                    'source' => 'account_center',
+                    'note' => (string) ($params['note'] ?? ''),
+                ]
+            );
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => (string) __('提现申请已提交。'),
             'data' => $data,
         ];
     }
@@ -190,6 +259,20 @@ class AffiliateQueryProvider implements QueryProviderInterface
                     'summary' => 'Record affiliate outbound share',
                 ],
                 [
+                    'name' => 'getShareLink',
+                    'description' => __('为当前分销用户生成首页或自定义站内页面推广链接。'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        'target_url' => ['type' => 'string', 'required' => false, 'max_length' => 255],
+                        'channel' => ['type' => 'string', 'required' => false, 'max_length' => 32],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Get affiliate landing share link',
+                ],
+                [
                     'name' => 'getMySummary',
                     'description' => __('返回当前分销用户的分享、转化和佣金汇总。'),
                     'frontend' => true,
@@ -200,6 +283,22 @@ class AffiliateQueryProvider implements QueryProviderInterface
                     'params' => [],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Get current affiliate summary',
+                ],
+                [
+                    'name' => 'requestWithdrawal',
+                    'description' => __('提交当前分销用户的佣金提现申请，并保留提现记录。'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        'amount' => ['type' => 'number', 'required' => true, 'min' => 0.01],
+                        'method' => ['type' => 'string', 'required' => false, 'max_length' => 40],
+                        'account_label' => ['type' => 'string', 'required' => false, 'max_length' => 160],
+                        'note' => ['type' => 'string', 'required' => false, 'max_length' => 255],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Request affiliate commission withdrawal',
                 ],
             ],
         ];

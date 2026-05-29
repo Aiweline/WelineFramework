@@ -22,7 +22,7 @@
 
         try {
             const config = normalizeConfig(message.config || {});
-            const packetPayload = buildPayload(message);
+            const packetPayload = buildPayload(message, config);
             const capability = resolveCapability(packetPayload);
             await ensureSession(config);
             const result = await postSigned(config, packetPayload, capability);
@@ -62,30 +62,56 @@
             endpoint: config.endpoint || '/api/framework/query-bin',
             deployVersion: config.deployVersion || config.deploy_version || 'dev',
             workerBuildId: config.workerBuildId || config.worker_build_id || 'dev',
+            locale: normalizeLocale(config.locale || config.currentLang || config.current_lang || ''),
+            currency: normalizeCurrency(config.currency || config.currentCurrency || config.current_currency || ''),
         };
     }
 
-    function buildPayload(message) {
+    function normalizeLocale(value) {
+        const locale = String(value || '').trim();
+        return /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/.test(locale) ? locale : '';
+    }
+
+    function normalizeCurrency(value) {
+        const currency = String(value || '').trim().toUpperCase();
+        return /^[A-Z]{3}$/.test(currency) ? currency : '';
+    }
+
+    function withContext(payload, config) {
+        const context = {};
+        if (config.locale) {
+            context.locale = config.locale;
+        }
+        if (config.currency) {
+            context.currency = config.currency;
+        }
+        if (Object.keys(context).length > 0) {
+            payload.context = context;
+        }
+        return payload;
+    }
+
+    function buildPayload(message, config) {
         if (message.type === 'call') {
-            return {
+            return withContext({
                 type: 'call',
                 provider: String(message.provider || ''),
                 operation: String(message.operation || ''),
                 params: normalizeMap(message.params),
-            };
+            }, config);
         }
         if (message.type === 'graph') {
-            return {
+            return withContext({
                 type: 'graph',
                 graph: message.graph || message.operations || {},
-            };
+            }, config);
         }
         if (message.type === 'stream-ticket') {
-            return {
+            return withContext({
                 type: 'stream-ticket',
                 channel: String(message.channel || ''),
                 params: normalizeMap(message.params),
-            };
+            }, config);
         }
         throw Object.assign(new Error('Unsupported Weline worker request type.'), { code: 'protocol_error' });
     }

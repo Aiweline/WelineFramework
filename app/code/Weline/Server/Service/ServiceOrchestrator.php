@@ -1733,6 +1733,7 @@ class ServiceOrchestrator
         // 启动 IPC 控制服务器
         $this->controlServer = $this->createControlServer();
         $this->controlServer->setWindowsNativeSocketBridgeEnabled($windowsNativeSocketBridgeEnabled);
+        $this->controlServer->setExpectedInstanceCode($context->instanceName);
         $this->controlServer->setExpectedControlToken($context->controlToken);
         if (!$this->controlServer->start('127.0.0.1', $context->controlPort)) {
             $portInUseMsg = '';
@@ -1745,7 +1746,6 @@ class ServiceOrchestrator
                 "这是严重错误，会导致所有 Worker 无法连接到 Master，系统无法正常运行。"
             );
         }
-        $this->controlServer->setExpectedInstanceCode($context->instanceName);
         if ($context->controlPort !== $this->controlServer->getPort()) {
             $this->context = $context->withControlPort($this->controlServer->getPort());
             $context = $this->context;
@@ -7789,6 +7789,15 @@ class ServiceOrchestrator
             WlsLogger::warning_('[Orchestrator] reload（异步）发起端已断开，当前重载继续在 Master 内完成');
             return;
         }
+        if ($label === ControlMessage::ACTION_MAINTENANCE_ENABLE
+            || $label === ControlMessage::ACTION_MAINTENANCE_DISABLE
+        ) {
+            $this->ipcReleaseExclusive();
+            WlsLogger::warning_(
+                "[Orchestrator] {$label} client disconnected; continuing maintenance transition in Master"
+            );
+            return;
+        }
         if ($label === ControlMessage::ACTION_ROLLING_RESTART && $this->rollingRestartInProgress) {
             $this->rollingRestartClientId = null;
             WlsLogger::warning_('[Orchestrator] rolling_restart 发起端已断开，维护滚动重启继续在 Master 内完成');
@@ -10582,7 +10591,7 @@ class ServiceOrchestrator
                 $existingImperialOperation = $dispatcherOnlyMaintenance
                     ? null
                     : $this->findEquivalentQueuedOrActiveOperation($action);
-                if ($this->ipcExclusiveCommand === $action && $existingImperialOperation !== null) {
+                if ($existingImperialOperation !== null) {
                     WlsLogger::info_(
                         "[Orchestrator] 帝王指令复用已有控制操作 action={$action} client={$clientId} -> existing={$existingImperialOperation['id']}"
                     );
@@ -10638,6 +10647,24 @@ class ServiceOrchestrator
                     return;
                 }
 
+                if ($action === ControlMessage::ACTION_MAINTENANCE_ENABLE
+                    && !$dispatcherOnlyMaintenance
+                    && $this->maintenanceMode
+                    && !$this->maintenanceSticky
+                ) {
+                    $this->maintenanceSticky = true;
+                    if ($this->context !== null) {
+                        $this->persistServicesInfo($this->context);
+                    }
+                    $this->logMaintenanceOperation(
+                        '显式维护启用已接管启动期自动维护，等待队列执行，'
+                        . $this->formatMaintenanceOperationContext(),
+                        'INFO',
+                        'enable_maintenance:promote_sticky_on_queue:' . $this->formatMaintenanceOperationContext(),
+                        0.0
+                    );
+                }
+
                 $oppositeAction = $this->getOppositeMaintenanceAction($action);
                 if ($oppositeAction !== null) {
                     $removed = $this->dropQueuedControlOperationsByAction(
@@ -10654,6 +10681,12 @@ class ServiceOrchestrator
 
             $operation = $this->queueControlOperation($action, $msg, $clientId);
             $this->sendQueuedControlOperationAck($operation);
+            if ($this->isMaintenanceControlAction($action)
+                && !$dispatcherOnlyMaintenance
+                && $this->activeControlOperation === null
+            ) {
+                $this->processNextQueuedControlOperation();
+            }
 
             return;
         }
@@ -11737,6 +11770,32 @@ class ServiceOrchestrator
         }
 
         if (!$this->waitMaintenanceInstancesReady($nMaint, $readyTimeout)) {
+            if ($sticky && $hasDispatcher) {
+                $this->stopMaintenanceWorkers();
+                $maintenanceProvider->disable();
+                $this->pendingMaintenanceModeAck = null;
+                $this->routeTableVersion++;
+                $this->publishDispatcherRouteTableFromPorts([], ControlMessage::ROLE_MAINTENANCE, true);
+
+                $this->maintenanceMode = true;
+                $this->maintenanceSticky = true;
+                $this->desiredState[ControlMessage::ROLE_MAINTENANCE] = 0;
+                $this->persistServicesInfo($this->context);
+                $this->logMaintenanceOperation(
+                    'Maintenance worker did not become READY; explicit maintenance is using Dispatcher built-in 503 fallback page, '
+                    . $this->formatMaintenanceOperationContext(),
+                    'WARN',
+                    'enable_maintenance:dispatcher_fallback_no_ready:' . $this->formatMaintenanceOperationContext(),
+                    0.0
+                );
+
+                return [
+                    'success' => true,
+                    'message' => 'Maintenance mode enabled using Dispatcher fallback page',
+                    'maintenance_workers' => 0,
+                    'worker_ipc_acked' => 0,
+                ];
+            }
             $this->stopMaintenanceWorkers();
             $maintenanceProvider->disable();
 

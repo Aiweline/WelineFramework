@@ -150,38 +150,54 @@
             <main class="account-auth-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth-content" data-layout="account_auth_content">
                 <div class="auth-container">
                     <div class="account-auth-shell<?= $isLoginAuthPage ? ' auth-login-card' : '' ?>">
-                        <?php if ($isLoginAuthPage): ?>
-                            <div class="auth-login-toolbar" aria-label="<?= htmlspecialchars((string) __('登录页工具'), ENT_QUOTES) ?>">
-                                <div class="auth-login-language">
-                                    <w:i18n:language:switcher for="js" />
+                        <w:slot id="content"
+                                name="内容区"
+                                accept="layout-account-content,layout-account-auth-content,layout-default-content,content,account-auth,auth-form"
+                                reject="header,footer"
+                                multiple="true"
+                                position="content"
+                                class="account-auth__content-root-slot">
+                            <w:slot id="account-auth-content"
+                                name="账号认证内容"
+                                accept="layout-account-auth-content,account-auth,auth-form,content"
+                                reject="header,footer"
+                                multiple="true"
+                                position="content"
+                                class="account-auth__content-slot">
+                            <?php if ($isLoginAuthPage): ?>
+                                <div class="auth-login-toolbar" aria-label="<?= htmlspecialchars((string) __('登录页工具'), ENT_QUOTES) ?>">
+                                    <div class="auth-login-language">
+                                        <w:i18n:language:switcher for="js" />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        class="auth-login-theme-toggle"
+                                        data-auth-theme-toggle
+                                        data-title-dark="<?= htmlspecialchars((string) __('切换为暗色主题'), ENT_QUOTES) ?>"
+                                        data-title-light="<?= htmlspecialchars((string) __('切换为亮色主题'), ENT_QUOTES) ?>"
+                                        title="<?= htmlspecialchars((string) __('切换为暗色主题'), ENT_QUOTES) ?>"
+                                        aria-label="<?= htmlspecialchars((string) __('切换为暗色主题'), ENT_QUOTES) ?>"
+                                    >
+                                        <span class="auth-login-theme-icon" aria-hidden="true">
+                                            <svg class="auth-login-theme-svg auth-login-theme-svg--dark" data-auth-theme-icon-dark viewBox="0 0 24 24" focusable="false">
+                                                <path fill="currentColor" d="M20.742 13.045A8.088 8.088 0 0 1 10.955 3.258a.75.75 0 0 0-.935-.936A9.589 9.589 0 1 0 21.68 13.98a.75.75 0 0 0-.938-.935Z"/>
+                                            </svg>
+                                            <svg class="auth-login-theme-svg auth-login-theme-svg--light" data-auth-theme-icon-light viewBox="0 0 24 24" focusable="false" hidden>
+                                                <path fill="currentColor" d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm0 3a.75.75 0 0 1 .75.75V23a.75.75 0 0 1-1.5 0v-1.25A.75.75 0 0 1 12 21Zm0-18a.75.75 0 0 1-.75-.75V1a.75.75 0 0 1 1.5 0v1.25A.75.75 0 0 1 12 3ZM4.47 5.53a.75.75 0 0 1 1.06 0l.884.884a.75.75 0 0 1-1.06 1.06L4.47 6.59a.75.75 0 0 1 0-1.06Zm13.116 13.116a.75.75 0 0 1 1.06 0l.884.884a.75.75 0 0 1-1.06 1.06l-.884-.884a.75.75 0 0 1 0-1.06ZM3 12a.75.75 0 0 1-.75.75H1a.75.75 0 0 1 0-1.5h1.25A.75.75 0 0 1 3 12Zm20 0a.75.75 0 0 1-.75.75H21a.75.75 0 0 1 0-1.5h1.25A.75.75 0 0 1 23 12Zm-5.414-5.586a.75.75 0 0 1 1.06-1.06l.884.884a.75.75 0 0 1-1.06 1.06l-.884-.884ZM5.354 18.646a.75.75 0 1 1 1.06 1.06l-.884.884a.75.75 0 1 1-1.06-1.06l.884-.884Z"/>
+                                            </svg>
+                                        </span>
+                                    </button>
                                 </div>
-                                <button
-                                    type="button"
-                                    class="auth-login-theme-toggle"
-                                    data-auth-theme-toggle
-                                    data-title-dark="<?= htmlspecialchars((string) __('切换为暗色主题'), ENT_QUOTES) ?>"
-                                    data-title-light="<?= htmlspecialchars((string) __('切换为亮色主题'), ENT_QUOTES) ?>"
-                                    title="<?= htmlspecialchars((string) __('切换为暗色主题'), ENT_QUOTES) ?>"
-                                    aria-label="<?= htmlspecialchars((string) __('切换为暗色主题'), ENT_QUOTES) ?>"
-                                >
-                                    <span class="auth-login-theme-icon" aria-hidden="true">
-                                        <svg class="auth-login-theme-svg auth-login-theme-svg--dark" data-auth-theme-icon-dark viewBox="0 0 24 24" focusable="false">
-                                            <path fill="currentColor" d="M20.742 13.045A8.088 8.088 0 0 1 10.955 3.258a.75.75 0 0 0-.935-.936A9.589 9.589 0 1 0 21.68 13.98a.75.75 0 0 0-.938-.935Z"/>
-                                        </svg>
-                                        <svg class="auth-login-theme-svg auth-login-theme-svg--light" data-auth-theme-icon-light viewBox="0 0 24 24" focusable="false" hidden>
-                                            <path fill="currentColor" d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Zm0 3a.75.75 0 0 1 .75.75V23a.75.75 0 0 1-1.5 0v-1.25A.75.75 0 0 1 12 21Zm0-18a.75.75 0 0 1-.75-.75V1a.75.75 0 0 1 1.5 0v1.25A.75.75 0 0 1 12 3ZM4.47 5.53a.75.75 0 0 1 1.06 0l.884.884a.75.75 0 0 1-1.06 1.06L4.47 6.59a.75.75 0 0 1 0-1.06Zm13.116 13.116a.75.75 0 0 1 1.06 0l.884.884a.75.75 0 0 1-1.06 1.06l-.884-.884a.75.75 0 0 1 0-1.06ZM3 12a.75.75 0 0 1-.75.75H1a.75.75 0 0 1 0-1.5h1.25A.75.75 0 0 1 3 12Zm20 0a.75.75 0 0 1-.75.75H21a.75.75 0 0 1 0-1.5h1.25A.75.75 0 0 1 23 12Zm-5.414-5.586a.75.75 0 0 1 1.06-1.06l.884.884a.75.75 0 0 1-1.06 1.06l-.884-.884ZM5.354 18.646a.75.75 0 1 1 1.06 1.06l-.884.884a.75.75 0 1 1-1.06-1.06l.884-.884Z"/>
-                                        </svg>
-                                    </span>
-                                </button>
-                            </div>
-                        <?php endif; ?>
-                        <if condition="meta.content">
-                            {{meta.content}}
-                            <elseif condition="content"/>
-                            {{content}}
-                            <elseif condition="meta.contentTemplate"/>
-                            <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
-                        </if>
+                            <?php endif; ?>
+                            <if condition="meta.content">
+                                {{meta.content}}
+                                <elseif condition="content"/>
+                                {{content}}
+                                <elseif condition="meta.contentTemplate"/>
+                                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                            </if>
+                            </w:slot>
+                        </w:slot>
                     </div>
                 </div>
             </main>

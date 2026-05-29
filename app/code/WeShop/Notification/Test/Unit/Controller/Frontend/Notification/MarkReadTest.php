@@ -37,6 +37,7 @@ class MarkReadTest extends TestCase
             ->method('fetchJson')
             ->with($this->callback(static function (array $payload): bool {
                 return ($payload['success'] ?? true) === false
+                    && (string) ($payload['message'] ?? '') === (string) __('请先登录后再继续。')
                     && ($payload['data']['redirect_url'] ?? null) === 'https://example.com/customer/account/login';
             }))
             ->willReturn('json');

@@ -197,7 +197,7 @@ class WlsRuntime implements RuntimeInterface
     private function shouldRunWorkerBootstrapWarmup(): bool
     {
         $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
-        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor'], true)) {
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
             return false;
         }
 
@@ -1657,7 +1657,7 @@ class WlsRuntime implements RuntimeInterface
     private function shouldRunDeferredWorkerBootstrapObserverWarmup(): bool
     {
         $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
-        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor'], true)) {
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
             return false;
         }
 
@@ -1677,7 +1677,7 @@ class WlsRuntime implements RuntimeInterface
     private function shouldRunDeferredWorkerBootstrapUrlMetadataWarmup(): bool
     {
         $role = \strtolower(\trim((string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker')));
-        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor'], true)) {
+        if (\in_array($role, ['dispatcher', 'master', 'session', 'memory', 'supervisor', 'maintenance'], true)) {
             return false;
         }
 
@@ -1791,7 +1791,7 @@ class WlsRuntime implements RuntimeInterface
     {
         $configured = Env::get('wls.worker.fpc_buildahead_roles', null);
         if ($configured === null || $configured === '') {
-            $configured = ['maintenance'];
+            $configured = [];
         }
         if (\is_string($configured)) {
             $decoded = \json_decode($configured, true);

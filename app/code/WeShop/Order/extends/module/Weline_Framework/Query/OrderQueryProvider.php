@@ -49,6 +49,8 @@ class OrderQueryProvider implements QueryProviderInterface
             'unpaidSummary' => $this->getFrontendUnpaidSummary(),
             'cancel' => $this->cancel($params),
             'accountListFragment' => $this->getFrontendAccountListFragment($params),
+            'getOrdersInfo' => $this->getOrdersInfo($params),
+            'getCustomersOrderStats' => $this->getCustomersOrderStats($params),
             default => throw new \InvalidArgumentException((string) __('订单查询器不支持的操作：%{1}', [$operation])),
         };
     }
@@ -379,6 +381,127 @@ class OrderQueryProvider implements QueryProviderInterface
         return (int)($context->getUserId() ?? 0);
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getOrdersInfo(array $params): array
+    {
+        $ids = $params['order_ids'] ?? [];
+        if (!\is_array($ids) || $ids === []) {
+            return [];
+        }
+
+        $ids = \array_values(\array_unique(\array_filter(\array_map('intval', $ids))));
+        if ($ids === []) {
+            return [];
+        }
+
+        $rows = ObjectManager::getInstance(Order::class)
+            ->clear()
+            ->where(Order::schema_fields_ID, $ids, 'in')
+            ->select()
+            ->fetchArray();
+
+        $result = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $orderId = (int) ($row[Order::schema_fields_ID] ?? 0);
+            if ($orderId <= 0) {
+                continue;
+            }
+            $result[] = [
+                'order_id' => $orderId,
+                'increment_id' => (string) ($row[Order::schema_fields_increment_id] ?? ''),
+                'customer_id' => (int) ($row[Order::schema_fields_customer_id] ?? 0),
+                'status' => (string) ($row[Order::schema_fields_status] ?? ''),
+                'payment_status' => (string) ($row[Order::schema_fields_payment_status] ?? ''),
+                'fulfillment_status' => (string) ($row[Order::schema_fields_fulfillment_status] ?? ''),
+                'currency_code' => $this->normalizeCurrencyCode((string) ($row[Order::schema_fields_currency_code] ?? '')),
+                'total' => (float) ($row[Order::schema_fields_total] ?? 0),
+                'subtotal' => (float) ($row[Order::schema_fields_subtotal] ?? 0),
+                'discount_amount' => (float) ($row[Order::schema_fields_discount_amount] ?? 0),
+                'created_at' => (string) ($row[Order::schema_fields_created_at] ?? ''),
+                'updated_at' => (string) ($row[Order::schema_fields_updated_at] ?? ''),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getCustomersOrderStats(array $params): array
+    {
+        $ids = $params['customer_ids'] ?? [];
+        if (!\is_array($ids) || $ids === []) {
+            return [];
+        }
+
+        $ids = \array_values(\array_unique(\array_filter(\array_map('intval', $ids))));
+        if ($ids === []) {
+            return [];
+        }
+
+        $stats = [];
+        foreach ($ids as $customerId) {
+            $stats[$customerId] = [
+                'customer_id' => $customerId,
+                'order_count' => 0,
+                'paid_order_count' => 0,
+                'total_amount' => 0.0,
+                'paid_amount' => 0.0,
+                'last_order_at' => '',
+                'currency_code' => '',
+                'currency_codes' => [],
+            ];
+        }
+
+        $rows = ObjectManager::getInstance(Order::class)
+            ->clear()
+            ->where(Order::schema_fields_customer_id, $ids, 'in')
+            ->select()
+            ->fetchArray();
+
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $customerId = (int) ($row[Order::schema_fields_customer_id] ?? 0);
+            if (!isset($stats[$customerId])) {
+                continue;
+            }
+
+            $amount = (float) ($row[Order::schema_fields_total] ?? 0);
+            $currencyCode = $this->normalizeCurrencyCode((string) ($row[Order::schema_fields_currency_code] ?? ''));
+            $paymentStatus = strtolower((string) ($row[Order::schema_fields_payment_status] ?? ''));
+            $createdAt = (string) ($row[Order::schema_fields_created_at] ?? '');
+
+            ++$stats[$customerId]['order_count'];
+            $stats[$customerId]['total_amount'] = round((float) $stats[$customerId]['total_amount'] + $amount, 2);
+            $stats[$customerId]['currency_codes'][$currencyCode] = true;
+            if ($paymentStatus === 'paid') {
+                ++$stats[$customerId]['paid_order_count'];
+                $stats[$customerId]['paid_amount'] = round((float) $stats[$customerId]['paid_amount'] + $amount, 2);
+            }
+            if ($createdAt !== '' && ($stats[$customerId]['last_order_at'] === '' || strcmp($createdAt, (string) $stats[$customerId]['last_order_at']) > 0)) {
+                $stats[$customerId]['last_order_at'] = $createdAt;
+            }
+        }
+
+        foreach ($stats as &$row) {
+            $codes = array_keys(array_filter($row['currency_codes'] ?? []));
+            sort($codes);
+            $row['currency_code'] = count($codes) === 1 ? $codes[0] : ($codes === [] ? '' : 'MIXED');
+            $row['currency_codes'] = $codes;
+        }
+        unset($row);
+
+        return array_values($stats);
+    }
+
     private function getUrl(): Url
     {
         return $this->url ?? ObjectManager::getInstance(Url::class);
@@ -414,12 +537,19 @@ class OrderQueryProvider implements QueryProviderInterface
             'status' => (string) ($order->getData(Order::schema_fields_status) ?? ''),
             'payment_status' => (string) ($order->getData(Order::schema_fields_payment_status) ?? ''),
             'fulfillment_status' => (string) ($order->getData(Order::schema_fields_fulfillment_status) ?? ''),
+            'currency_code' => $this->normalizeCurrencyCode((string) ($order->getData(Order::schema_fields_currency_code) ?? '')),
             'shipping_method' => (string) ($order->getData(Order::schema_fields_shipping_method) ?? ''),
             'payment_method' => (string) ($order->getData(Order::schema_fields_payment_method) ?? ''),
             'total' => (float) ($order->getData(Order::schema_fields_total) ?? 0),
             'created_at' => (string) ($order->getData(Order::schema_fields_created_at) ?? ''),
             'updated_at' => (string) ($order->getData(Order::schema_fields_updated_at) ?? ''),
         ];
+    }
+
+    private function normalizeCurrencyCode(string $currency): string
+    {
+        $currency = strtoupper(trim($currency));
+        return preg_match('/^[A-Z]{3}$/', $currency) ? $currency : 'USD';
     }
 
     public function getDescriptor(): array
@@ -450,6 +580,20 @@ class OrderQueryProvider implements QueryProviderInterface
                         ['name' => 'customer_id', 'type' => 'int', 'required' => true],
                         ['name' => 'page', 'type' => 'int', 'required' => false],
                         ['name' => 'page_size', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'getOrdersInfo',
+                    'description' => __('批量返回订单基础信息，供跨模块报表聚合使用。'),
+                    'params' => [
+                        ['name' => 'order_ids', 'type' => 'array', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'getCustomersOrderStats',
+                    'description' => __('批量返回客户订单数、成交金额和最近下单时间。'),
+                    'params' => [
+                        ['name' => 'customer_ids', 'type' => 'array', 'required' => true],
                     ],
                 ],
                 [

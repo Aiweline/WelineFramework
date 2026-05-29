@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\RouterInterface;
+use Weline\Server\Service\LocalDomainPolicy;
 
 /**
  * PageBuilder 路由重写器
@@ -48,17 +49,7 @@ class Router implements RouterInterface
         
         // 3. 处理空路径：域名根直接显示当前站点首页，或预览时用 query 的 handle
         if ($isRootPath) {
-            $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? self::getCurrentWebsiteId();
-            // 无站点时按请求 host 解析站点，便于直接用域名访问首页
-            if ($websiteId <= 0) {
-                foreach (self::currentHostCandidates() as $host) {
-                    $websiteId = self::findWebsiteIdByHost($host) ?? 0;
-                    if ($websiteId > 0) {
-                        WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'PageBuilder router host website');
-                        break;
-                    }
-                }
-            }
+            $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? 0;
             // 预览模式：优先用 query 的 handle + website_id 配合 URL 解码
             $isPreview = (string)WelineEnv::getGet('preview', '') === '1';
             $queryHandleValue = WelineEnv::getGet('handle');
@@ -96,8 +87,18 @@ class Router implements RouterInterface
         }
         
         // 5. 检查当前站点下 handle 是否存在；同站可省略前缀，如 /about 匹配 handle about 或 home-about
-        $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? self::getCurrentWebsiteId();
+        $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? 0;
         $isPreview = (string)WelineEnv::getGet('preview', '') === '1';
+        if ($websiteId <= 0 && $isPreview) {
+            $websiteIdParam = (int)WelineEnv::getGet('website_id', 0);
+            if ($websiteIdParam > 0) {
+                WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteIdParam, 'PageBuilder preview website');
+                $websiteId = $websiteIdParam;
+            }
+        }
+        if ($websiteId <= 0) {
+            return;
+        }
         if (!self::handleExists($handle, $websiteId, $isPreview)) {
             // 同站短路径：先试 path 作为 handle，再试「首页handle- path」
             if ($websiteId > 0) {
@@ -109,14 +110,6 @@ class Router implements RouterInterface
                     } else {
                         return;
                     }
-                } else {
-                    return;
-                }
-            } else {
-                $resolvedWebsiteId = self::findWebsiteIdByHandle($handle, $isPreview);
-                if ($resolvedWebsiteId !== null) {
-                    WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$resolvedWebsiteId, 'PageBuilder handle website');
-                    $websiteId = $resolvedWebsiteId;
                 } else {
                     return;
                 }
@@ -303,35 +296,6 @@ class Router implements RouterInterface
     }
     
     /**
-     * 按 handle 查找任意站点下的页面，返回其 website_id（用于当前无站点ID时的兼容解析）
-     *
-     * @param string $handle 页面句柄
-     * @param bool $isPreview 是否预览模式
-     * @return int|null 站点ID，未找到返回 null
-     */
-    private static function findWebsiteIdByHandle(string $handle, bool $isPreview = false): ?int
-    {
-        try {
-            /** @var Page $pageModel */
-            $pageModel = ObjectManager::getInstance(Page::class);
-            $page = clone $pageModel;
-            $page->clear()
-                ->where(Page::schema_fields_HANDLE, $handle);
-            if (!$isPreview) {
-                $page->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED);
-            }
-            $page->find()->fetch();
-            if ($page->getId()) {
-                $wid = (int)$page->getData(Page::schema_fields_WEBSITE_ID);
-                return $wid;
-            }
-            return null;
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
-    /**
      * 按请求 host 解析站点 ID（用于域名根访问首页时无站点上下文的情况）
      * host 可能带端口，匹配时去掉端口以便与站点 url 对齐
      */
@@ -363,9 +327,7 @@ class Router implements RouterInterface
             WelineEnv::server('HTTP_WELINE_ORIGINAL_HOST', ''),
             WelineEnv::server('HTTP_X_FORWARDED_HOST', ''),
             WelineEnv::server('SERVER_NAME', ''),
-            WelineEnv::server('WELINE_WEBSITE_URL', ''),
             WelineEnv::server('WELINE_FULL_REQUEST_URI', ''),
-            WelineEnv::get('website_url', ''),
             WelineEnv::get('full_request_uri', ''),
         ];
 
@@ -423,6 +385,9 @@ class Router implements RouterInterface
         if ($hostNoPort === '') {
             return null;
         }
+        if (self::isReservedProjectHost($hostNoPort)) {
+            return null;
+        }
         try {
             $domainModel = ObjectManager::getInstance(\Weline\Websites\Model\WebsiteDomain::class);
             $domain = clone $domainModel;
@@ -439,42 +404,20 @@ class Router implements RouterInterface
                     return $websiteId;
                 }
             }
-
-            $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-            $website = clone $websiteModel;
-            $website->clear()
-                ->where(\Weline\Websites\Model\Website::schema_fields_URL, "%{$hostNoPort}%", 'like')
-                ->find()
-                ->fetch();
-            if ($website->getId()) {
-                return (int)$website->getData(\Weline\Websites\Model\Website::schema_fields_ID);
-            }
             return null;
         } catch (\Throwable $e) {
             return null;
         }
     }
 
-    /**
-     * 获取当前站点ID
-     * 
-     * @return int
-     */
-    private static function getCurrentWebsiteId(): int
+    private static function isReservedProjectHost(string $host): bool
     {
-        try {
-            $websiteData = \Weline\Websites\Data\WebsiteData::getWebsiteId();
-            if ($websiteData !== null) {
-                return (int)$websiteData;
-            }
-            $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
-            if ($websiteId > 0) {
-                return $websiteId;
-            }
-            return (int)(WelineEnv::getWebsiteId() ?? 0);
-        } catch (\Exception $e) {
-            return 0;
+        $host = \strtolower(\trim($host));
+        if (\str_starts_with($host, 'www.')) {
+            $host = (string)\substr($host, 4);
         }
+
+        return LocalDomainPolicy::isStandardProjectHost($host);
     }
 
     /**
@@ -498,18 +441,6 @@ class Router implements RouterInterface
             if ($page->getId()) {
                 $h = $page->getData(Page::schema_fields_HANDLE);
                 return $h !== null && $h !== '' ? (string)$h : '';
-            }
-            if ($websiteId !== 0) {
-                $page->clear()
-                    ->where(Page::schema_fields_WEBSITE_ID, 0)
-                    ->where(Page::schema_fields_TYPE, Page::TYPE_HOME)
-                    ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
-                    ->find()
-                    ->fetch();
-                if ($page->getId()) {
-                    $h = $page->getData(Page::schema_fields_HANDLE);
-                    return $h !== null && $h !== '' ? (string)$h : '';
-                }
             }
             return null;
         } catch (\Exception $e) {

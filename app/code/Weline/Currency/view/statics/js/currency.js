@@ -75,6 +75,19 @@
         document.cookie = cookieString;
     }
 
+    function writeCurrencyPreference(currency) {
+        try {
+            if (window.localStorage) {
+                localStorage.setItem('weline_user_currency', currency);
+                localStorage.removeItem('api_doc_currency');
+                localStorage.removeItem('WELINE_USER_CURRENCY');
+            }
+        } catch (error) {
+            // localStorage can be unavailable in privacy modes.
+        }
+        writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+    }
+
     /**
      * 获取当前货币代码
      */
@@ -232,10 +245,9 @@
             const currencyUrl = window.urlWithCurrency(currentPath, currency);
 
             // 保存货币偏好到 localStorage
-            localStorage.setItem('weline_user_currency', currency);
+            writeCurrencyPreference(currency);
 
             // 保存货币偏好到 Cookie（如果 getCookie/setCookie 函数存在）
-            writeCookieValue('WELINE_USER_CURRENCY', currency, 365); // 保存365天
 
             // 立即跳转到新 URL
             window.location.href = currencyUrl;
@@ -247,8 +259,7 @@
             const currencyUrl = window.inject_path(window.location.pathname, currency, 'currency') + sanitizeSwitchSearch(window.location.search || '');
 
             // 保存货币偏好
-            localStorage.setItem('weline_user_currency', currency);
-            writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+            writeCurrencyPreference(currency);
 
             // 立即跳转到新 URL
             window.location.href = currencyUrl;
@@ -282,8 +293,7 @@
         const currencyUrl = '/' + currency + '/' + currentLang + cleanPath + sanitizeSwitchSearch(window.location.search || '');
 
         // 保存货币偏好
-        localStorage.setItem('weline_user_currency', currency);
-        writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+        writeCurrencyPreference(currency);
 
         // 立即跳转到新 URL
         window.location.href = currencyUrl;

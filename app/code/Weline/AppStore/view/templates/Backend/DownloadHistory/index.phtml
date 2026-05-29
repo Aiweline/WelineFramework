@@ -1,7 +1,123 @@
-<div class="container-fluid py-3">
-    <h1 class="h4 mb-3"><?= __('下载历史') ?></h1>
+<?php
+$logs = is_iterable($logs ?? null) ? $logs : [];
 
-    <div class="alert alert-info" role="alert">
-        <?= __('下载历史数据已加载，可继续扩展为列表展示。') ?>
+$rows = [];
+foreach ($logs as $log) {
+    $data = is_object($log) && method_exists($log, 'getData') ? $log->getData() : (array)$log;
+    $rows[] = [
+        'log_id' => (int)($data['log_id'] ?? 0),
+        'module_name' => (string)($data['module_name'] ?? ''),
+        'version' => (string)($data['version'] ?? ''),
+        'license_key' => (string)($data['license_key'] ?? ''),
+        'status' => (string)($data['status'] ?? ''),
+        'file_path' => (string)($data['file_path'] ?? ''),
+        'file_size' => (int)($data['file_size'] ?? 0),
+        'file_hash' => (string)($data['file_hash'] ?? ''),
+        'error_message' => (string)($data['error_message'] ?? ''),
+        'download_ip' => (string)($data['download_ip'] ?? ''),
+        'download_at' => (string)($data['download_at'] ?? ''),
+        'completed_at' => (string)($data['completed_at'] ?? ''),
+    ];
+}
+
+$formatSize = static function (int $bytes): string {
+    if ($bytes <= 0) {
+        return '-';
+    }
+    if ($bytes >= 1048576) {
+        return number_format($bytes / 1048576, 2) . ' MB';
+    }
+
+    return number_format($bytes / 1024, 2) . ' KB';
+};
+
+$maskSecret = static function (string $value): string {
+    if ($value === '') {
+        return '-';
+    }
+    if (strlen($value) <= 8) {
+        return str_repeat('*', strlen($value));
+    }
+
+    return substr($value, 0, 4) . str_repeat('*', max(0, strlen($value) - 8)) . substr($value, -4);
+};
+
+$statusClass = static function (string $status): string {
+    return match ($status) {
+        'success' => 'bg-success',
+        'failed' => 'bg-danger',
+        'pending' => 'bg-warning text-dark',
+        default => 'bg-secondary',
+    };
+};
+?>
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="h4 mb-1"><?= __('下载历史') ?></h1>
+            <div class="text-muted small"><?= __('每次从官方 App 商店下载都会记录当时下载的模块版本、文件哈希和许可证，便于追踪安装来源。') ?></div>
+        </div>
+        <span class="badge bg-light text-dark border"><?= __('最近 50 条') ?></span>
     </div>
+
+    <?php if ($rows): ?>
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                <tr>
+                    <th><?= __('时间') ?></th>
+                    <th><?= __('模块') ?></th>
+                    <th><?= __('下载版本') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th><?= __('文件') ?></th>
+                    <th><?= __('许可证') ?></th>
+                    <th><?= __('来源') ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($rows as $row): ?>
+                    <tr>
+                        <td>
+                            <div class="fw-semibold"><?= htmlspecialchars($row['download_at'] ?: '-', ENT_QUOTES, 'UTF-8') ?></div>
+                            <?php if ($row['completed_at'] !== ''): ?>
+                                <div class="text-muted small"><?= __('完成：') ?><?= htmlspecialchars($row['completed_at'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <div class="fw-semibold"><?= htmlspecialchars($row['module_name'] ?: '-', ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-muted small">#<?= (int)$row['log_id'] ?></div>
+                        </td>
+                        <td>
+                            <span class="badge bg-primary-subtle text-primary-emphasis border"><?= htmlspecialchars($row['version'] ?: '-', ENT_QUOTES, 'UTF-8') ?></span>
+                        </td>
+                        <td>
+                            <span class="badge <?= $statusClass($row['status']) ?>"><?= htmlspecialchars($row['status'] ?: '-', ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php if ($row['error_message'] !== ''): ?>
+                                <div class="text-danger small mt-1"><?= htmlspecialchars($row['error_message'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <div><?= $formatSize($row['file_size']) ?></div>
+                            <?php if ($row['file_hash'] !== ''): ?>
+                                <div class="text-muted small"><?= __('哈希：') ?><code><?= htmlspecialchars(substr($row['file_hash'], 0, 12), ENT_QUOTES, 'UTF-8') ?></code></div>
+                            <?php endif; ?>
+                            <?php if ($row['file_path'] !== ''): ?>
+                                <div class="text-muted small text-break"><code><?= htmlspecialchars($row['file_path'], ENT_QUOTES, 'UTF-8') ?></code></div>
+                            <?php endif; ?>
+                        </td>
+                        <td><code><?= htmlspecialchars($maskSecret($row['license_key']), ENT_QUOTES, 'UTF-8') ?></code></td>
+                        <td>
+                            <div><?= htmlspecialchars($row['download_ip'] ?: '-', ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-muted small"><?= __('官方 App 商店') ?></div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php else: ?>
+        <div class="alert alert-info" role="alert">
+            <?= __('暂无下载历史。完成一次 App 商店下载后，这里会显示实际下载版本。') ?>
+        </div>
+    <?php endif; ?>
 </div>

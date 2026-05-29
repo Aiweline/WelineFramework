@@ -9,9 +9,32 @@ use GuoLaiRen\PageBuilder\Service\AiSiteAssetManifestService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAutoAssetGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Runtime\RequestContext;
 
 final class AiSiteAutoAssetGenerationServiceTest extends TestCase
 {
+    private ?string $previousSkipInlineImagesEnv = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $previous = \getenv('PAGEBUILDER_AI_SITE_SKIP_INLINE_IMAGES');
+        $this->previousSkipInlineImagesEnv = $previous === false ? null : (string)$previous;
+        \putenv('PAGEBUILDER_AI_SITE_SKIP_INLINE_IMAGES');
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.disabled');
+    }
+
+    protected function tearDown(): void
+    {
+        RequestContext::remove('pagebuilder.ai.inline_image_generation.disabled');
+        if ($this->previousSkipInlineImagesEnv === null) {
+            \putenv('PAGEBUILDER_AI_SITE_SKIP_INLINE_IMAGES');
+        } else {
+            \putenv('PAGEBUILDER_AI_SITE_SKIP_INLINE_IMAGES=' . $this->previousSkipInlineImagesEnv);
+        }
+        parent::tearDown();
+    }
+
     public function testPrepareBuildAssetsUsesRealImageGenerationByDefault(): void
     {
         $publicId = 'asset-real-' . \bin2hex(\random_bytes(4));
@@ -121,6 +144,84 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         self::assertSame($finalUrl, (string)($slot['final_url'] ?? ''));
         self::assertSame($finalUrl, (string)($resultScope['verified_assets'][$slotId] ?? ''));
         self::assertSame([], $resultScope['asset_image_generation_failures'] ?? []);
+    }
+
+    public function testPrepareBuildAssetsSkipsImageProviderWhenRequestContextDisablesImages(): void
+    {
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, 'asset-skip-build');
+        $called = false;
+        RequestContext::set('pagebuilder.ai.inline_image_generation.disabled', true);
+
+        try {
+            $service = new AiSiteAutoAssetGenerationService(
+                new AiSiteAssetManifestService(),
+                null,
+                static function () use (&$called): array {
+                    $called = true;
+                    throw new \RuntimeException('Image provider must not be called.');
+                }
+            );
+            $result = $service->prepareBuildAssets($session, 2, [
+                'site_title' => 'Asset Skip Test',
+                'asset_manifest' => [
+                    'slots' => [
+                        'home:hero' => [
+                            'slot_id' => 'home:hero',
+                            'slot_type' => 'hero_image',
+                            'brief' => 'Hero image should be deferred.',
+                        ],
+                    ],
+                ],
+            ], 1);
+
+            self::assertFalse($called);
+            self::assertSame([], $result['generated_slots']);
+            self::assertSame([], $result['failed_slots']);
+            self::assertSame('disabled_by_test_switch', $result['scope']['asset_image_generation_deferred']['reason'] ?? null);
+        } finally {
+            RequestContext::remove('pagebuilder.ai.inline_image_generation.disabled');
+        }
+    }
+
+    public function testGenerateSlotAssetSkipsImageProviderWhenRequestContextDisablesImages(): void
+    {
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, 'asset-slot-skip');
+        $called = false;
+        RequestContext::set('pagebuilder.ai.inline_image_generation.disabled', true);
+
+        try {
+            $service = new AiSiteAutoAssetGenerationService(
+                new AiSiteAssetManifestService(),
+                null,
+                static function () use (&$called): array {
+                    $called = true;
+                    throw new \RuntimeException('Image provider must not be called.');
+                }
+            );
+            $result = $service->generateSlotAsset($session, 2, [
+                'site_title' => 'Slot Skip Test',
+                'asset_manifest' => [
+                    'slots' => [
+                        'home:hero' => [
+                            'slot_id' => 'home:hero',
+                            'slot_type' => 'hero_image',
+                            'brief' => 'Hero image should be deferred.',
+                        ],
+                    ],
+                ],
+            ], 'home:hero');
+
+            self::assertFalse($called);
+            self::assertFalse($result['generated']);
+            self::assertSame('', $result['final_url']);
+            self::assertArrayNotHasKey('failed_slot', $result);
+            self::assertSame('disabled_by_test_switch', $result['scope']['asset_image_generation_deferred']['reason'] ?? null);
+            self::assertSame('home:hero', $result['scope']['asset_image_generation_deferred']['slot_id'] ?? null);
+        } finally {
+            RequestContext::remove('pagebuilder.ai.inline_image_generation.disabled');
+        }
     }
 
     public function testGenerateSlotAssetHonorsSlotImageAttemptLimit(): void
@@ -265,7 +366,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
-    public function testPrepareBuildAssetsStopsBeforeImagesWhenContentGateFails(): void
+    public function testPrepareBuildAssetsStopsBeforeImagesWhenBuildStructureGateFails(): void
     {
         $session = new AiSiteAgentSession();
         $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, 'asset-content-gate');
@@ -281,8 +382,8 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             static fn(): array => [
                 'passed' => false,
                 'items' => [[
-                    'key' => 'content_quality',
-                    'label' => 'content copy has duplicated plan text',
+                    'key' => 'render_data_quality',
+                    'label' => 'render data has missing sections',
                     'ok' => false,
                     'blocking' => true,
                 ]],
@@ -290,12 +391,12 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         );
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Content quality gate must pass before image generation');
+        $this->expectExceptionMessage('Build structure gate must pass before image generation');
 
         try {
             $service->prepareBuildAssets($session, 2, [
                 'site_title' => 'Content Gate Test',
-                'content_generation_gate_required' => 1,
+                'image_generation_requires_build_ready' => 1,
                 'asset_manifest' => [
                     'slots' => [
                         'home:hero' => [

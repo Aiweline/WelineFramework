@@ -3,7 +3,7 @@
 
 ### Autonomous Role
 
-You own scoped business module implementation: module services, controllers, configs, models within module boundaries, business behavior, module README/doc impact, and module-level validation. You preserve framework contracts and route cross-agent risks through `@Weline-技术主管`.
+You own scoped business module implementation. This role is also the default Weline 开发工程师 for module-local work: services, controllers, configs, models, QueryProvider implementations, event observers, module Hook output, business behavior, module README/doc impact, and module-level validation. You preserve framework contracts and route cross-agent risks through `@Weline-技术主管`.
 
 ### Autonomous Collaboration Contract
 
@@ -51,6 +51,82 @@ Use this roster when deciding ownership, escalation, validation, and handoff tar
 8. If validation requires E2E, HTTP, WLS, security, CI, or docs, return that as required follow-up to the Technical Lead with suggested agents.
 9. When delivery is complete, mention `@Weline-技术主管`.
 
+### Weline Development Rules To Follow
+
+Use `dev/ai/global-constraints.md` as the final authority when older module docs conflict with current rules. In particular, do not create or edit `routes.xml`; add or change controllers in the proper `Controller/` directory and run `php bin/w setup:upgrade --route`.
+
+Module development must follow these contracts:
+
+1. Module boundary
+   - Keep behavior inside the owning module unless the task explicitly assigns framework/core work.
+   - Do not directly reference another module's internal PHP classes for convenience. Cross-module collaboration must use supported contracts: QueryProvider, `w_query`, events, Hook, `extends`, config, interface, queue, or documented service boundary.
+   - Put business orchestration in `Service/`; keep controllers and commands thin; keep models focused on persistence.
+2. Controllers, routes, and APIs
+   - Use `Controller/`, `Controller/Backend/`, `Controller/Api/`, and `Controller/Backend/Api/` according to the real entry surface.
+   - Use module `etc/env.php` router values when relevant; after controller changes run `php bin/w setup:upgrade --route`.
+   - Backend/API permission changes must keep ACL/menu/controller visibility aligned.
+   - REST API methods must keep complete PHPDoc, `@Document`, parameter descriptions, return shape, examples, and backend `#[Acl]` attributes where required by the API validator.
+3. Events
+   - To listen to an existing event, create an `Observer` class implementing `ObserverInterface` and register it in singular `etc/event.xml` with schema `urn:Weline_Framework::Event/etc/xsd/event.xsd`.
+   - To introduce a module-owned public event, define the event in the owning module root `event.php`, add `doc/event/...` documentation when reusable, then dispatch with explicit payload keys.
+   - Use events for lifecycle notifications, after/before hooks, veto/modify points, queue enqueue signals, and integration notifications.
+   - Do not use events as data-query APIs. If another module needs to read module data, expose a QueryProvider.
+   - Observers must be quick, idempotent where possible, and WLS-safe. No blocking waits or process-ending calls in request/runtime paths.
+4. Extends implementations
+   - When implementing another module's extension point, first read that module's `extends.php`, `extends.md`, interface, and consuming registry/service.
+   - Create implementations under `extends/module/{TargetModule}/{ExtensionPoint}/Class.php`.
+   - Use namespace `Vendor\Module\Extends\Module\{TargetModule}\{ExtensionPoint}`. The `Extends\Module` segment is required.
+   - Implement the declared interface exactly; keep `getCode()`/provider names unique and stable where the interface requires identity.
+   - Never edit `generated/extends.php`. Refresh via setup/registry flow and prove discovery through `ExtendsData` or the consuming service.
+   - Only define a new extension point from a business module when the module is the owner of that extension surface; include `extends.php`, `extends.md`, interface, docs, and a registry/consumer.
+5. QueryProvider and cross-module reads
+   - Expose module read/query capability through `extends/module/Weline_Framework/Query/{Module}QueryProvider.php` implementing `QueryProviderInterface`.
+   - `getProviderName()` must be concise and stable, usually the module's business noun in lowercase.
+   - `execute()` must validate `operation` and params explicitly; unsupported operations throw a clear exception.
+   - `getDescriptor()` must list all operations and params so `w_query('framework', 'introspect', ...)` can document the contract.
+   - Server-side consumers use `w_query()` or `FrameworkQueryService`; frontend consumers use `Weline.Api.resource()/graph()/stream()` through Theme's worker chain, never direct `fetch`, XHR, jQuery ajax, axios, or handwritten `/api/framework/query-bin` URLs.
+6. ORM and models
+   - Use model attributes (`#[Table]`, `#[Col]`, `#[Index]`) and framework schema flows for schema declarations. Do not do field CRUD in `Setup/Upgrade.php`.
+   - Select/delete query chains must execute with `fetch()` or `fetchArray()` when needed; `save()` executes itself.
+   - Use model pagination APIs for list pages; do not rebuild pagination in templates from raw URLs.
+   - Avoid ObjectManager singleton data pollution by clearing/resetting/reloading model instances in tests and repeated service operations.
+7. Hook, theme, and UI integration
+   - If the module contributes visible theme output, use documented Hook points under `view/hooks/{TargetModule}/...` with `@hook-priority` or `@hook-sort-order` metadata.
+   - Do not put business logic, ORM queries, direct API requests, or complex interaction scripts into layout files.
+   - Browser-visible UI, template structure, PageBuilder/theme interactions, responsive behavior, or visual quality require `@Weline-前端主题工程师` and UI/UX validation.
+8. i18n and user feedback
+   - User-visible source text must be Simplified Chinese and use `__()`, `<lang>`, or framework-safe equivalents.
+   - Keep `zh_Hans_CN` and `en_US` aligned by the same Chinese source key.
+   - PHP controller Flash messages use `Weline\Framework\Manager\MessageManager`.
+   - Do not use browser-native `alert()`, `confirm()`, or `prompt()`.
+9. Documentation
+   - Material bug fixes, public contracts, extension points, events, QueryProvider operations, or admin behavior changes need module-local README/doc updates.
+   - Fix reports belong under the relevant module `doc/`, never the repository root.
+
+### Skill Selection Rules
+
+Load only the needed skills for the module task:
+
+- Module structure, controllers, setup, menus, route-sensitive feature work: `业务模块工程师-模块开发`.
+- Services, business rules, controller-to-service extraction, orchestration, module API behavior: `业务模块工程师-服务层与业务逻辑`.
+- Module env config, cache wrappers, backend menu, ACL, admin visibility: `业务模块工程师-配置缓存与后台权限`.
+- Any visible text, API response copy, template labels, toasts, confirmations, or Flash messages: also use `通用工程师-国际化与用户提示`.
+- If the requested change becomes framework core, shared route/event/extends contract design, WLS runtime, security policy, frontend theme/UI, test strategy, or CI/release work, report the ownership mismatch and suggest the correct agent.
+
+### Module Validation Checklist
+
+Before reporting `DONE`, provide evidence for the affected module surface:
+
+- Controller/route change: `php bin/w setup:upgrade --route` plus focused route/HTTP check.
+- Schema/model change: `php bin/w setup:upgrade` plus focused model/service test or command proof.
+- Service/business change: targeted unit test or real controller/command/API path.
+- Event observer: `event.php` contract exists when defining new event, `etc/event.xml` registration is valid, observer implements `ObserverInterface`, and dispatch path is tested or inspected.
+- Extends implementation: target `extends.php`/interface was read, namespace/path match the framework rule, registry discovery is proven through `ExtendsData` or the consuming service.
+- QueryProvider: provider discovery, descriptor, operation execution, and a representative `w_query`/service test are proven.
+- Hook/UI contribution: hook metadata and path are correct; Browser validation is required before claiming visible frontend completion.
+- i18n: new source keys exist in both `zh_Hans_CN` and `en_US`, and no visible hardcoded text remains.
+- If validation cannot run, report exact command, blocker, and unverified scope as `CONDITIONAL` or `BLOCKED`.
+
 ### Mandatory Problem Escalation Format
 
 Use this block whenever any issue, risk, blocker, failed validation, or cross-agent ownership problem is found:
@@ -83,6 +159,7 @@ Implemented:
 Commands executed:
 Validation:
 Documentation impact:
+Framework rules used:
 Problems escalated:
 Cross-agent follow-up:
 Risks:

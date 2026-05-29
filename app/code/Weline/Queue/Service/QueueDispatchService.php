@@ -6,16 +6,18 @@ namespace Weline\Queue\Service;
 
 use Weline\Cron\Helper\Process;
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
+use Weline\Queue\DeadWorkerRecoverableQueueInterface;
 use Weline\Queue\Model\Queue;
 
 class QueueDispatchService
 {
     private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
     private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [
-        \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class => '1G',
-        \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class => '1G',
-        \GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue::class => '1G',
+        \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class => '512M',
+        \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class => '512M',
+        \GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue::class => '512M',
     ];
 
     public function __construct(
@@ -127,6 +129,19 @@ class QueueDispatchService
                 $message = $pidAlive
                     ? (string)__('队列记录的 PID %{1} 仍存在，但已不匹配当前队列执行进程，已标记为异常。', [$queuePid])
                     : (string)__('队列记录的 PID %{1} 已不存在，已标记为异常。', [$queuePid]);
+                if ($this->shouldRecoverDeadWorker($queue, $queuePid, $output)) {
+                    $message = $this->deadWorkerRecoveryMessage($queue, $queuePid, $output);
+                    $queue->setStatus($queue::status_pending)
+                        ->setFinished(false)
+                        ->setPid(0)
+                        ->setAuto(true)
+                        ->setData(Queue::schema_fields_start_at, null)
+                        ->setData(Queue::schema_fields_end_at, null)
+                        ->setResult($message)
+                        ->setProcess($this->appendProcessMessage($queue->getProcess(), $message))
+                        ->save();
+                    continue;
+                }
                 $queue->setStatus($queue::status_error)
                     ->setResult($this->prependResultMessage($queue->getResult(), $output, $message))
                     ->setProcess($this->appendProcessMessage($queue->getProcess(), $message))
@@ -287,6 +302,55 @@ class QueueDispatchService
         } catch (\Throwable) {
             return '';
         }
+    }
+
+    private function shouldRecoverDeadWorker(Queue $queue, int $deadPid, string $workerOutput): bool
+    {
+        $recoverableQueue = $this->resolveDeadWorkerRecoverableQueue($queue);
+
+        return $recoverableQueue instanceof DeadWorkerRecoverableQueueInterface
+            && $recoverableQueue->shouldRecoverDeadWorker($queue, $deadPid, $workerOutput);
+    }
+
+    private function deadWorkerRecoveryMessage(Queue $queue, int $deadPid, string $workerOutput): string
+    {
+        $recoverableQueue = $this->resolveDeadWorkerRecoverableQueue($queue);
+        if ($recoverableQueue instanceof DeadWorkerRecoverableQueueInterface) {
+            $message = $this->compactOperatorMessage(
+                $recoverableQueue->deadWorkerRecoveryMessage($queue, $deadPid, $workerOutput)
+            );
+            if ($message !== '') {
+                return $message;
+            }
+        }
+
+        return 'Queue worker exited before terminal state; queue reset to pending for scheduler resume.';
+    }
+
+    private function resolveDeadWorkerRecoverableQueue(Queue $queue): ?DeadWorkerRecoverableQueueInterface
+    {
+        $queueClass = $this->resolveQueueClass($queue);
+        if ($queueClass === '' || !\class_exists($queueClass)) {
+            return null;
+        }
+
+        try {
+            $queueInstance = ObjectManager::getInstance($queueClass);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $queueInstance instanceof DeadWorkerRecoverableQueueInterface ? $queueInstance : null;
+    }
+
+    private function compactOperatorMessage(string $message, int $limit = 512): string
+    {
+        $message = \trim((string)\preg_replace('/\s+/u', ' ', $message));
+        if ($message === '' || \strlen($message) <= $limit) {
+            return $message;
+        }
+
+        return \rtrim(\substr($message, 0, $limit - 3)) . '...';
     }
 
     private function normalizeMemoryLimit(mixed $value, string $default): string

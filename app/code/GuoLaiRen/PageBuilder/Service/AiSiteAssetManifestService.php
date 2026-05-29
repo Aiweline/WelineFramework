@@ -445,6 +445,11 @@ final class AiSiteAssetManifestService
         if ($confirmedThemePalettePrompt !== '') {
             $parts[] = $confirmedThemePalettePrompt;
         }
+        if ($this->isNeonCardDomainText($primarySubject . ' ' . $businessContext . ' ' . $rawBrief . ' ' . $siteTagline)) {
+            $parts[] = $isLogoSlot || $isFaviconLikeSlot
+                ? 'Neon card-game identity style lock: use dark premium card-room energy, electric cyan/magenta/violet accents, restrained gold highlights, and a business-relevant card/mahjong/table glyph. Keep transparency for identity assets.'
+                : 'Neon card-game image style lock: use a premium dark card-room atmosphere, electric cyan/magenta/violet glow, restrained gold highlights, green felt or glass table texture, and props such as playing cards, mahjong tiles, poker chips, live table UI, guide cards, or support console details only when they match this exact block. Each image MUST express its own block role; do not reuse the same hero lobby scene for proof, feature, article, about, or support sections.';
+        }
 
         $kind = $this->firstString([$slot['kind'] ?? null, $slot['slot_type'] ?? null]);
         if ($kind !== '') {
@@ -505,6 +510,16 @@ final class AiSiteAssetManifestService
         return 'Teaching examples: GOOD section image prompt shape - concrete editorial/product/interface subject, supporting props, crop, lighting, and how it fits the block narrative. BAD - isolated icon, generic decorative pattern, dummy placeholder, fake screenshot, unrelated mascot, or CSS-only motif described as an image.';
     }
 
+    private function isNeonCardDomainText(string $text): bool
+    {
+        $text = \mb_strtolower($text, 'UTF-8');
+        if ($text === '') {
+            return false;
+        }
+
+        return \preg_match('/(?:neon|casino|card\s*game|poker|mahjong|rummy|teen\s*patti|game\s*lobby|gaming|棋牌|棋牌游戏|霓虹|牌桌|牌局|扑克|麻将|电玩城|线上娱乐|游戏房间|赛事房间)/iu', $text) === 1;
+    }
+
     /**
      * @param array<string, mixed> $slot
      */
@@ -563,6 +578,11 @@ final class AiSiteAssetManifestService
             return '';
         }
 
+        $isIdentitySlot = $this->isLogoAssetSlot($slot) || $this->isFaviconLikeSlot($slot);
+        if (!$isIdentitySlot && $this->isConcreteBlockVisualSubjectCandidate($slotBrief)) {
+            return $this->clipText($slotBrief, 240);
+        }
+
         // 优先 business context；缺省退到 tagline；再退到 slot.brief。
         if ($businessContext !== '') {
             return $this->clipText($businessContext, 240);
@@ -577,6 +597,41 @@ final class AiSiteAssetManifestService
     /**
      * 把 slot.brief 中"Generate the official website logo for X"这类把 brand 当主体的写法
      * 替换成中性 "Logo output for X"，避免 AI 出现主体冲突（PRIMARY SUBJECT vs slot.brief）。
+     */
+    /**
+     * True only when slot.brief already carries a concrete block-level generated-image subject.
+     */
+    private function isConcreteBlockVisualSubjectCandidate(string $slotBrief): bool
+    {
+        $slotBrief = \trim($slotBrief);
+        if ($slotBrief === '') {
+            return false;
+        }
+
+        $normalized = \mb_strtolower($slotBrief, 'UTF-8');
+        $compact = \trim((string)\preg_replace('/[\s\p{P}]+/u', ' ', $normalized));
+        if (\mb_strlen($compact, 'UTF-8') < 32) {
+            return false;
+        }
+        if (\preg_match('/^(?:home\s+)?(?:hero|section|block|banner)?\s*(?:visual|image|picture|background|photo)(?:\s+that\s+illustrates\s+the\s+block\s+promise)?$/iu', $compact) === 1) {
+            return false;
+        }
+        if (\preg_match('/^(?:generated\s+)?(?:hero|section|block|banner)\s+(?:visual|image)$/iu', $compact) === 1) {
+            return false;
+        }
+
+        if (\preg_match('/(?:block visual|stage-1 image intent|block contract media strategy|image intent|media strategy):/iu', $slotBrief) === 1) {
+            return true;
+        }
+
+        return \preg_match(
+            '/(?:scene|photograph|photo|editorial|environment|interface|mockup|room|lobby|table|poker|mahjong|cards|card-game|chips|support desk|guide|players|tournament|neon|cinematic|product visual|service environment)/iu',
+            $slotBrief
+        ) === 1;
+    }
+
+    /**
+     * Rewrite logo/favicon briefs that put brand text before the actual visual subject.
      */
     private function sanitizeSlotBriefForPrompt(string $brief, string $siteTitle): string
     {
@@ -855,7 +910,6 @@ final class AiSiteAssetManifestService
             : [
                 $scope['plan_json'] ?? [],
                 $scope['plan_structured'] ?? [],
-                $scope['execution_blueprint'] ?? [],
                 $scope['plan_projection'] ?? [],
                 $scope['content_manifest'] ?? [],
             ];
@@ -1289,8 +1343,7 @@ final class AiSiteAssetManifestService
                 'page_type' => $pageType,
                 'block_key' => $blockKey,
                 'field' => 'image',
-                'task_key' => $this->firstString([\is_array($block['task_ids'] ?? null) ? ($block['task_ids'][0] ?? null) : null])
-                    ?: ('page:' . $pageType . ':' . $blockKey),
+                'task_key' => 'page:' . $pageType . ':' . $blockKey,
                 'section_code' => $sectionCode,
                 'label' => $this->firstString([$titleCopy, $block['goal'] ?? null, $blockKey]),
                 'brief' => $brief,
@@ -1560,83 +1613,46 @@ final class AiSiteAssetManifestService
             ];
         };
 
-        $pageBlueprints = \is_array($scope['build_blueprint']['page_blueprints'] ?? null)
-            ? $scope['build_blueprint']['page_blueprints']
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $pageTypesById = [];
+        foreach (\is_array($buildPlan['pages'] ?? null) ? $buildPlan['pages'] : [] as $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageId = \trim((string)($page['page_id'] ?? $page['id'] ?? ''));
+            $pageType = \trim((string)($page['page_type'] ?? ''));
+            if ($pageId !== '' && $pageType !== '') {
+                $pageTypesById[$pageId] = $pageType;
+            }
+        }
+        $contentItems = \is_array($buildPlan['content_manifest']['items'] ?? null)
+            ? $buildPlan['content_manifest']['items']
             : [];
-        foreach ($pageBlueprints as $pageType => $pb) {
-            if (!\is_scalar($pageType) || !\is_array($pb)) {
+        foreach (\is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [] as $block) {
+            if (!\is_array($block)) {
                 continue;
             }
-            $pageTypeString = \trim((string)$pageType);
-            if ($pageTypeString !== 'home_page') {
+            $pageType = \trim((string)($block['page_type'] ?? ''));
+            if ($pageType === '') {
+                $pageId = \trim((string)($block['page_id'] ?? ''));
+                $pageType = $pageId !== '' ? (string)($pageTypesById[$pageId] ?? '') : '';
+            }
+            if ($pageType !== 'home_page') {
                 continue;
             }
-            foreach (\is_array($pb['sections'] ?? null) ? $pb['sections'] : [] as $section) {
-                if (!\is_array($section)) {
-                    continue;
-                }
-                $template = \strtolower(\trim((string)($section['template'] ?? '')));
-                if (!\in_array($template, ['hero', 'banner'], true)) {
-                    continue;
-                }
-                $sectionCode = \trim((string)($section['code'] ?? ''));
-                $title = $this->firstString([
-                    $section['name'] ?? null,
-                    \is_array($section['config'] ?? null) ? ($section['config']['section_title'] ?? null) : null,
-                ]);
-                $append($pageTypeString, $sectionCode, $title);
-            }
-        }
-
-        if ($out !== []) {
-            return $out;
-        }
-
-        $pages = [];
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        if (\is_array($executionBlueprint['pages'] ?? null)) {
-            $pages = $executionBlueprint['pages'];
-        }
-
-        foreach ($pages as $pageType => $page) {
-            if (!\is_scalar($pageType) || !\is_array($page)) {
+            $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+            $isHero = \in_array(\strtolower(\trim((string)($imageIntent['image_role'] ?? ''))), ['hero_image', 'hero_banner'], true)
+                || \strtolower(\trim((string)($block['page_flow_role'] ?? ''))) === 'opening'
+                || (int)($block['visual']['strict_hero_cover'] ?? $block['strict_hero_cover'] ?? 0) === 1;
+            if (!$isHero) {
                 continue;
             }
-            if (\trim((string)$pageType) !== 'home_page') {
+            $blockKey = \trim((string)($block['section_key'] ?? $block['block_key'] ?? $block['block_id'] ?? $block['id'] ?? ''));
+            if ($blockKey === '') {
                 continue;
             }
-            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
-            if ($blocks === []) {
-                continue;
-            }
-            foreach ($blocks as $blockIndex => $block) {
-                if (!\is_array($block) || !$this->blockDeclaresStrictHeroSlot((string)$pageType, $block)) {
-                    continue;
-                }
-                $blockKey = \trim((string)($block['block_key'] ?? $block['source_block_key'] ?? $block['key'] ?? ''));
-                if ($blockKey === '') {
-                    $blockKey = 'block_' . ((int)$blockIndex + 1);
-                }
-                $sectionSlug = $this->slugifySectionToken($blockKey);
-                $sectionCode = 'content/' . $this->slugifySectionToken((string)$pageType) . '-' . $sectionSlug;
-
-                $title = '';
-                foreach (\is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [] as $field) {
-                    if (!\is_array($field)) {
-                        continue;
-                    }
-                    $fieldKey = \strtolower(\trim((string)($field['field'] ?? '')));
-                    if (\str_contains($fieldKey, 'title') || \str_contains($fieldKey, 'headline')) {
-                        $title = \trim((string)($field['sample'] ?? ''));
-                        break;
-                    }
-                }
-                if ($title === '') {
-                    $title = \trim((string)($block['title'] ?? $block['goal'] ?? $block['content'] ?? ''));
-                }
-
-                $append(\trim((string)$pageType), $sectionCode, $title);
-            }
+            $sectionCode = $this->buildSectionCodeFromBlockKey($pageType, $blockKey);
+            $append($pageType, $sectionCode, $this->extractBuildPlanBlockContentText($block, $contentItems));
         }
 
         return $out;
@@ -2352,8 +2368,6 @@ final class AiSiteAssetManifestService
         foreach ([
             $scope['plan_json'] ?? null,
             $scope['plan_structured'] ?? null,
-            $scope['execution_blueprint'] ?? null,
-            $scope['execution_blueprint_draft'] ?? null,
             $scope['theme_context_snapshot'] ?? null,
             $scope['plan_workbench']['confirmed'] ?? null,
             $scope['plan_workbench']['draft'] ?? null,

@@ -25,6 +25,7 @@ class OrderAdminPageDataService
             'pagination' => $result['pagination'] ?? [],
             'filters' => $sanitizedFilters,
             'statusOptions' => $this->orderService->getAvailableStatuses(),
+            'paymentStatusOptions' => $this->orderService->getAvailablePaymentStatuses(),
         ];
     }
 
@@ -39,6 +40,7 @@ class OrderAdminPageDataService
             'order' => $this->normalizeOrderModel($order),
             'items' => array_map(fn (array $item): array => $this->normalizeItemRow($item), $this->orderService->getOrderItems($orderId)),
             'statusOptions' => $this->orderService->getAvailableStatuses(),
+            'paymentStatusOptions' => $this->orderService->getAvailablePaymentStatuses(),
         ];
     }
 
@@ -86,7 +88,7 @@ class OrderAdminPageDataService
             'total' => (float) $order->getData(Order::schema_fields_total),
             'created_at' => (string) $order->getData(Order::schema_fields_created_at),
             'updated_at' => (string) $order->getData(Order::schema_fields_updated_at),
-            'payment_status' => (string) ($order->hasField('payment_status') ? $order->getData('payment_status') : OrderService::PAYMENT_STATUS_PENDING),
+            'payment_status' => (string) ($order->getData(Order::schema_fields_payment_status) ?? OrderService::PAYMENT_STATUS_PENDING),
             'fulfillment_status' => (string) ($order->hasField(Order::schema_fields_fulfillment_status) ? $order->getData(Order::schema_fields_fulfillment_status) : OrderService::FULFILLMENT_STATUS_PENDING),
             'shipping_method' => (string) ($order->hasField(Order::schema_fields_shipping_method) ? $order->getData(Order::schema_fields_shipping_method) : ''),
             'payment_method' => (string) ($order->hasField(Order::schema_fields_payment_method) ? $order->getData(Order::schema_fields_payment_method) : ''),

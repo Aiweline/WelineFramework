@@ -42,6 +42,21 @@ This skill owns post-session knowledge extraction for WelineFramework work. It t
 - Preserve the evidence chain: what was assumed first, what later proved correct, and why the corrected rule is reusable.
 - Land the result in an AI-facing skill or knowledge file instead of leaving it only in a final report.
 
+# Execution Ledger Requirement
+
+Every session-review or self-learning run must maintain an internal Execution Ledger. Keep it concise and auditable; do not expose private chain-of-thought.
+
+The ledger must include:
+
+- `User Goal`: the visible request and the hidden acceptance boundary, especially when the user is asking for long-term self-correction rather than a one-off answer.
+- `Constraints`: explicit user constraints, repo rules, tool limits, known memory, output-format requirements, and information that must not be asked again.
+- `Actions Taken`: files read or edited, tools called, rules updated, verification performed, and decisions made during the run.
+- `Key Decisions`: why a lesson was routed to memory, this skill, a specialist skill, or global constraints; why duplicate rules were merged instead of copied.
+- `Verification`: static checks, tests, builds, browser checks, or documentation coverage checks actually performed.
+- `Remaining Risks`: missing runtime validation, user confirmation still pending, candidate-rule uncertainty, or environment limits.
+
+If the run modifies code, files, rules, skills, prompts, automation memory, or task records, the final response must summarize this ledger under `## 本次做了什么`.
+
 # Extraction Standard
 
 Only promote a lesson into self-learning knowledge when all three conditions hold:
@@ -119,7 +134,46 @@ When both a user-explicit correction and a wrong-first-then-fixed handling path 
    - update the session-review/self-learning skill when the lesson is about how to extract, remember, or route corrections,
    - skip file edits when the rule already exists and the session only reconfirmed it with no newly exposed wording gap.
 13. Write or update the AI-facing skill or knowledge file so future agents can load the rule set directly.
-14. Before finishing, update automation memory with what was learned, what file changed, and whether the run only reconfirmed existing rules or introduced a new wording requirement.
+14. When the user correction exposes a workflow failure, run the correction-closure protocol:
+   - identify the correction signal type,
+   - state the problem phenomenon,
+   - analyze the mechanism-level root cause,
+   - fix the current issue,
+   - verify the fix through the strongest available check,
+   - decide whether the lesson is promotable,
+   - serialize it as a rule, skill step, SOP, checklist, preference, or anti-pattern.
+15. Before finishing, update automation memory with what was learned, what file changed, and whether the run only reconfirmed existing rules or introduced a new wording requirement.
+
+# Delivery Report Contract
+
+Emit a `## 本次做了什么` report whenever the user asks for auditability, or whenever the run includes edits, bug fixes, root-cause analysis, long-term rule extraction, multi-step execution, tool usage, verification, unfinished work, or risk.
+
+Use these sections when the full report is required:
+
+1. `### 1. 理解到的目标`
+2. `### 2. 实际执行`
+3. `### 3. 关键变更`
+4. `### 4. 验证结果`
+5. `### 5. 根因提取`
+6. `### 6. 已沉淀的规则 / 技能`
+7. `### 7. 未完成或风险`
+
+For simple answers with no durable work, a compact response is acceptable. For automation-5 runs, assume the full report is required unless the run is strictly read-only and no learning signal exists.
+
+# Correction Promotion Rules
+
+Promote a corrected lesson into durable knowledge only when there is evidence: explicit user approval, passing tests or builds, successful verification, a clearly identified framework-level defect, or a direct user request to avoid recurrence or extract a rule.
+
+Convert root causes by category:
+
+- Tool problem -> tool choice, call order, result integration, or preflight checklist.
+- Context problem -> context reuse, memory scan, no-repeat-question, or history inheritance rule.
+- Workflow problem -> SOP, execution order, task closure, or verification checklist.
+- Output problem -> report template, readability constraint, or required summary format.
+- Reasoning problem -> hidden-goal detection, root-cause template, or framework-upgrade trigger.
+- Agent behavior problem -> ownership, proactivity, non-mechanical execution, or long-term consistency rule.
+
+If evidence is incomplete, record the lesson as `Candidate` rather than `Active`.
 
 # Session Interpretation Heuristics
 
@@ -144,6 +198,37 @@ Use one of these shapes when rewriting lessons:
 - Verification rule: `If signal M is missing, do not claim N; verify with P.`
 - Failure interpretation rule: `Error E is evidence of F first; do not immediately rewrite the feature.`
 - Framework-native refactor rule: `Replace rigid slot-specific logic with reusable mechanism Q when multiple independent instances must coexist.`
+
+When the user requests a formal Framework Rule, serialize it with these fields:
+
+```yaml
+Rule:
+  id: "framework_rule_short_name"
+  name: "Rule name"
+  category: "tool_usage | context_management | workflow | reasoning | output | verification | memory | agent_behavior"
+  priority: "Critical | High | Medium | Low"
+  status: "Active | Candidate | Deprecated | Merged"
+  trigger:
+    - "When this rule applies"
+  problem_pattern:
+    - "Wrong pattern this prevents"
+  detection_signal:
+    - "How to notice the issue"
+  root_cause:
+    - "Mechanism-level cause"
+  correct_framework:
+    - "Correct handling flow"
+  reusable_strategy:
+    - "Default future strategy"
+  anti_pattern:
+    - "Explicitly forbidden behavior"
+  verification:
+    - "How to confirm the rule was followed"
+  confidence: "High | Medium | Low"
+  evidence:
+    - "User correction, verification, test, or approval"
+  last_updated_reason: "Why this rule was added or changed now"
+```
 
 # Seed Patterns Already Confirmed
 
@@ -178,6 +263,9 @@ Use one of these shapes when rewriting lessons:
 - Treat "用户明确提到" and "处理过程先错后对" as separate mandatory extraction lanes; future runs should report both when both exist.
 - When the complaint or correction is about the handling workflow itself, promote the reusable process rule exactly the same way as a framework-code correction; do not limit learning extraction to product-code mistakes.
 - For these runs, the owning skill must preserve three things together: the initial mistake, the correction trigger, and the future default action that avoids repeating the mistake.
+- For every automation-5 run, keep an Execution Ledger and use it to produce the required "本次做了什么" report when files, rules, memory, verification, or risks are involved.
+- A correction is not closed by explaining the current fix; close it only after the root cause is converted into a reusable rule, SOP, checklist, skill step, user preference, or anti-pattern when evidence supports promotion.
+- If the user provides a required report or Framework Rule schema, treat that schema as the output contract for future self-learning runs and verify the final response covers each section.
 - Route each extracted lesson to the narrowest owning skill that can prevent recurrence, and use automation memory to record duplicate confirmations instead of scattering the same rule across many files.
 - If the only new lesson in the session is "remember user corrections and complaints systematically," update the session-review skill and automation memory instead of manufacturing unrelated framework rules.
 - If the user upgrades the extraction contract itself, also preserve the missing-step taxonomy and the structured lesson fields so future runs can detect omissions and emit stable skill/framework-rule shapes instead of loose notes.

@@ -43,6 +43,6 @@ class View extends BaseController
             'affiliateSaveUrl' => $this->_url->getBackendUrl('*/backend/affiliate/save'),
         ]);
 
-        return (string) $this->fetchBase('WeShop_Affiliate::backend/templates/affiliate/view.phtml');
+        return (string) $this->fetchBase();
     }
 }

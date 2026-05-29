@@ -1,4 +1,5 @@
-﻿"Invalid affiliate ID.","Invalid affiliate ID."
+﻿"删除分销记录必须使用 POST 请求。","删除分销记录必须使用 POST 请求。"
+"Invalid affiliate ID.","Invalid affiliate ID."
 "Affiliate not found.","Affiliate not found."
 "Affiliate deleted successfully.","Affiliate deleted successfully."
 "Failed to delete affiliate.","Failed to delete affiliate."
@@ -27,33 +28,57 @@
 分销奖励请求,"Affiliate reward requested"
 "预留给优惠券、积分、通知等模块监听的奖励扩展入口。Affiliate 第一版不内置默认奖励实现。","预留给优惠券、积分、通知等模块监听的奖励扩展入口。Affiliate 第一版不内置默认奖励实现。"
 分销查询器不支持该操作：%{1},"Affiliate query provider does not support this operation: %{1}"
+推广链接已生成。,"Promotion link generated."
 "缺少商品 ID。","Product ID is required."
 分享链接已生成。,"Share link generated."
 缺少分享码或分享平台。,"Share code or platform is required."
 分享动作已记录。,"Share action recorded."
+提现申请已提交。,提现申请已提交。
 分销数据已加载。,"Affiliate data loaded."
 请先登录。,"Please log in."
 分销查询,"Affiliate Query"
 提供商品分享链接、分享动作记录和分销数据汇总。,"Provides product share links, outbound share recording, and affiliate summaries."
 为当前分销用户生成或复用商品分享链接。,"Generate or reuse a product share link for the current affiliate user."
 记录复制链接、二维码或社交平台发出分享动作。,"Record outbound share actions such as copied links, QR codes, or social shares."
+为当前分销用户生成首页或自定义站内页面推广链接。,"Generate a homepage or custom on-site promotion link for the current affiliate user."
 返回当前分销用户的分享、转化和佣金汇总。,"Return share, conversion, and commission summary for the current affiliate user."
-"Affiliate page hooks","Affiliate page hooks"
-"Inject storefront content above the affiliate dashboard page.","Inject storefront content above the affiliate dashboard page."
-"Affiliate summary hooks","Affiliate summary hooks"
-"Inject storefront content below the affiliate summary card.","Inject storefront content below the affiliate summary card."
+提交当前分销用户的佣金提现申请，并保留提现记录。,提交当前分销用户的佣金提现申请，并保留提现记录。
+"Account affiliate section","Account affiliate section"
+"Inject affiliate summary and referral tools into the storefront customer account center.","Inject affiliate summary and referral tools into the storefront customer account center."
 "Customer ID is required.","Customer ID is required."
 请先登录后再生成分享链接。,"Log in before generating a share link."
 当前分销账户不可用。,"The affiliate account is unavailable."
+请先登录后再生成推广链接。,"Please sign in before generating a promotion link."
 缺少分享平台。,"Share platform is required."
+请先登录后再申请提现。,请先登录后再申请提现。
+"提现金额必须大于 0。","提现金额必须大于 0。"
+提现金额超过可提现余额。,提现金额超过可提现余额。
 Active,Active
 Disabled,Disabled
 "Unsupported affiliate status.","Unsupported affiliate status."
 "Commission rate must be between 0 and 1.","Commission rate must be between 0 and 1."
 "Affiliate record not found.","Affiliate record not found."
 "Customer ID or affiliate ID is required.","Customer ID or affiliate ID is required."
+商品不存在或已下架，无法生成分销分享链接。,"The product does not exist or is unavailable, so an affiliate share link cannot be generated."
 缺少分享码。,"Share code is required."
+商城首页,"Store homepage"
+邀请注册页,"Invite registration page"
+推广链接只能选择本站地址。,"Promotion links can only target this site."
+不能把分销跳转链接再次作为推广目标。,"An affiliate redirect link cannot be used as another promotion target."
 复制链接,"Copy link"
+我的分销,"My Affiliate"
+分享、转化与佣金,"Shares, conversions, and commission"
+分销分享,"Affiliate share"
+分销分享链接,"Affiliate share link"
+复制,Copy
+分享,Share
+"分销 API 未初始化","Affiliate API is not initialized"
+分销数据加载失败,"Affiliate data failed to load"
+已复制,Copied
+已分享,Shared
+加载中,Loading
+"分销 API 不支持分享链接操作","Affiliate API does not support share link operations"
+暂不可用,Unavailable
 "Review, filter, and adjust affiliate accounts created by marketing partners.","Review, filter, and adjust affiliate accounts created by marketing partners."
 "Page %d of %d, %d affiliates found","Page %d of %d, %d affiliates found"
 "Total Affiliates","Total Affiliates"
@@ -65,6 +90,7 @@ Disabled,Disabled
 "Referral Code","Referral Code"
 "Auto-generated referral code.","Auto-generated referral code."
 "Commission Rate","Commission Rate"
+decimal,decimal
 "Enter a decimal between 0 and 1 to represent the commission percentage.","Enter a decimal between 0 and 1 to represent the commission percentage."
 Status,Status
 "Paid Commission","Paid Commission"
@@ -89,31 +115,133 @@ Next,Next
 "Use the form to create the first affiliate or adjust filters to find existing accounts.","Use the form to create the first affiliate or adjust filters to find existing accounts."
 "View and manage affiliate account information.","View and manage affiliate account information."
 "Back to List","Back to List"
+"Commission Summary","Commission Summary"
+"Account Status","Account Status"
 "Affiliate Information","Affiliate Information"
 Copy,Copy
 "Share this code with partners to track referrals.","Share this code with partners to track referrals."
+"Use a decimal value. 0.10 equals 10%.","Use a decimal value. 0.10 equals 10%."
 "Save Changes","Save Changes"
 "Referral Link","Referral Link"
 "Copy Link","Copy Link"
-"Account Status","Account Status"
 "Updated At","Updated At"
-"Commission Summary","Commission Summary"
 "Payment Progress","Payment Progress"
-"Referral code copied!","Referral code copied!"
-"Referral link copied!","Referral link copied!"
-Growth,Growth
-"Affiliate Center","Affiliate Center"
-"Open Center","Open Center"
-"Share links and track commission","Share links and track commission"
-"Use your referral code to invite new customers and monitor earned, paid, and pending commissions.","Use your referral code to invite new customers and monitor earned, paid, and pending commissions."
-分销分享,"Affiliate share"
-分销分享链接,"Affiliate share link"
-复制,Copy
-分享,Share
-"分销 API 未初始化","Affiliate API is not initialized"
-分销数据加载失败,"Affiliate data failed to load"
-已复制,Copied
-已分享,Shared
-加载中,Loading
-"分销 API 不支持分享链接操作","Affiliate API does not support share link operations"
-暂不可用,Unavailable
+"Copied to clipboard.","Copied to clipboard."
+"Copy failed. Select the value and copy manually.","Copy failed. Select the value and copy manually."
+已申请,Requested
+处理中,Processing
+已驳回,Rejected
+待结算,Pending
+已确认,Approved
+已打款,Paid
+已取消,Cancelled
+已冲销,Reversed
+启用中,Active
+已停用,Disabled
+部分确认,"Partially confirmed"
+暂无数据,"No data yet"
+点击,Clicks
+收藏,Wishlist
+加购,"Add to cart"
+下单,Orders
+支付,Paid
+Affiliate,Affiliate
+分销中心,"Affiliate Center"
+累计佣金,"Total commission"
+分销转化漏斗,"Affiliate conversion funnel"
+分销邀请链接,"Affiliate invite link"
+去分享商品,"Share products"
+暂无可复制链接,"No link to copy"
+生成中,Generating
+"分销 API 不支持自定义链接","Affiliate API does not support custom links"
+生成失败,"Generation failed"
+推广链接已生成，刷新后可在链接维度表查看,"Promotion link generated. Refresh to view it in the link-level table."
+请输入有效提现金额。,"Enter a valid withdrawal amount."
+提现申请提交中...,"Submitting withdrawal request..."
+"分销 API 不支持提现申请","Affiliate API does not support withdrawal requests"
+提现申请失败,"Withdrawal request failed"
+提现申请已提交，正在刷新记录。,"Withdrawal request submitted. Refreshing records."
+推广链接管理,"Promotion link management"
+"默认推广首页，也可以生成任意本站页面的独立分销链接；点击后按 30 天末触归因记录后续注册、互动和订单。","The default target is the homepage. You can also generate a separate affiliate link for any page on this site. Clicks start a 30-day last-touch attribution window for registrations, engagement, and orders."
+默认首页推广链接,"Default homepage promotion link"
+自定义推广目标,"Custom promotion target"
+"输入本站页面地址，例如 /product/view?id=1075","Enter an on-site page URL, for example /product/view?id=1075"
+生成推广链接,"Generate promotion link"
+复制新链接,"Copy new link"
+提现记录,"Withdrawal records"
+可提现金额来自已确认且未申请/未打款佣金；提交申请后等待运营审核打款。,"Withdrawable amount comes from approved commission that has not been requested or paid. After submitting, wait for operations review and payout."
+条记录,records
+可提现金额,"Withdrawable amount"
+申请提现,"Request withdrawal"
+提现金额,"Withdrawal amount"
+收款账号或备注,"Payment account or note"
+提交提现,"Submit withdrawal"
+申请时间,"Requested at"
+金额,Amount
+方式,Method
+收款账户,"Payment account"
+状态,Status
+处理时间,"Processed at"
+打款时间,"Paid at"
+备注,Note
+链接维度表现,"Link-level performance"
+"每条推广链接独立统计发出、点击、注册、互动、订单和佣金，归因窗口为 30 天。","Each promotion link tracks outbound shares, clicks, registrations, engagement, orders, and commission separately, with a 30-day attribution window."
+条链接,links
+推广目标,"Promotion target"
+渠道,Channel
+注册,Registration
+收藏/加购,"Wishlist / add to cart"
+订单,Orders
+佣金,Commission
+创建时间,"Created at"
+分销后注册用户,"Referred registered customers"
+邮箱默认脱敏，保留注册时间、订单数、成交金额和最近下单时间。,"Emails are masked by default, with registration time, order count, GMV, and latest order time retained."
+位客户,customers
+客户,Customer
+来源,Source
+注册时间,"Registered at"
+订单数,"Order count"
+支付订单,"Paid orders"
+成交金额,"Transaction amount"
+最近下单,"Latest order"
+分销商品,"Promoted products"
+按商品汇总分享、点击、互动、订单和佣金。,"Summarize shares, clicks, engagement, orders, and commission by product."
+个商品,products
+商品,Product
+SKU,SKU
+分享/点击,"Shares / clicks"
+浏览/收藏/加购,"Views / wishlist / add to cart"
+净商品额,"Net item amount"
+分销订单,"Affiliate orders"
+按订单汇总买家、商品、订单金额、结算基数和佣金。,"Summarize buyer, product, order amount, settlement base, and commission by order."
+笔订单,orders
+买家,Buyer
+订单金额,"Order amount"
+结算基数,"Settlement base"
+下单时间,"Order time"
+璁㈠崟,璁㈠崟
+涔板,涔板
+鍟嗗搧,鍟嗗搧
+璁㈠崟閲戦,璁㈠崟閲戦
+缁撶畻鍩烘暟,缁撶畻鍩烘暟
+浣ｉ噾,浣ｉ噾
+涓嬪崟鏃堕棿,涓嬪崟鏃堕棿
+佣金流水,"Commission ledger"
+逐订单项记录佣金基数、比例、金额、状态和状态原因。,"Record commission base, rate, amount, status, and status reason per order item."
+条流水,"ledger entries"
+时间,Time
+基数,Base
+比例,Rate
+原因,Reason
+鏃堕棿,鏃堕棿
+鍩烘暟,鍩烘暟
+姣斾緥,姣斾緥
+鍘熷洜,鍘熷洜
+搜索,Search
+搜索当前报表,"Search this report"
+每页,"Rows per page"
+显示,Showing
+条,rows
+上一页,Previous
+下一页,Next
+没有匹配记录,"No matching records."

@@ -40,12 +40,12 @@ class LayoutPathResolver
     }
 
     /**
-     * 解析单层布局路径；主题链无可用文件时仍回退 Weline_Theme 模块下的默认文件，避免 layoutTemplate 为空导致整页不套布局。
+     * 解析单层布局路径；先允许当前主题/父主题提供布局，继承链无可用文件时再回退 Weline_Theme 模块默认文件。
      */
     private static function resolveLayoutTemplateOnce(string $layoutPath, WelineTheme $theme, string $area): ?string
     {
         $defaultPath = self::getDefaultLayoutPath($layoutPath, $area);
-        if (!$defaultPath || !is_file($defaultPath)) {
+        if (!$defaultPath) {
             return null;
         }
 

@@ -44,13 +44,29 @@
     <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::content-before</w:hook>
     <main class="main-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="main-content" data-layout="main_content">
-        <if condition="meta.content">
-            {{meta.content}}
-            <elseif condition="content"/>
-            {{content}}
-            <elseif condition="meta.contentTemplate"/>
-            <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
-        </if>
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-default-content,content,container,banner,carousel,product,category,faq,video"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="default-layout__content-root-slot">
+            <w:slot id="default-content"
+                name="默认内容区"
+                accept="layout-default-content,content,banner,carousel,product,category,faq,video"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="default-layout__content-slot">
+            <if condition="meta.content">
+                {{meta.content}}
+                <elseif condition="content"/>
+                {{content}}
+                <elseif condition="meta.contentTemplate"/>
+                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+            </if>
+            </w:slot>
+        </w:slot>
     </main>
     <w:hook>Weline_Theme::frontend::layouts::default::content-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -98,9 +114,10 @@ body {
 /* 亚马逊风格容器 */
 .main-content {
     width: 100%;
-    max-width: var(--weline-layout-content-max-width, 1400px);
+    max-width: var(--weline-layout-content-max-width, 1440px);
     margin: 0 auto;
-    padding: 0;
+    padding: 0 var(--weline-layout-content-padding-inline, 1rem);
+    box-sizing: border-box;
     background-color: transparent;
     flex: 1 0 auto; /* flex-grow: 1, flex-shrink: 0, flex-basis: auto - 占据剩余空间，但不会收缩 */
     min-height: 0; /* 允许flex子项收缩，但通过flex: 1确保占据剩余空间 */

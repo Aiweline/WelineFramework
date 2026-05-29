@@ -22,12 +22,12 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
         <span class="affiliate-share-status" data-affiliate-share-status aria-live="polite"></span>
     </div>
     <div class="affiliate-share-body">
-        <input class="affiliate-share-link"
-               type="text"
-               value=""
-               readonly
-               aria-label="<?= htmlspecialchars((string) __('分销分享链接'), ENT_QUOTES, 'UTF-8') ?>"
-               data-affiliate-share-link />
+        <textarea class="affiliate-share-link"
+                  rows="3"
+                  readonly
+                  spellcheck="false"
+                  aria-label="<?= htmlspecialchars((string) __('分销分享链接'), ENT_QUOTES, 'UTF-8') ?>"
+                  data-affiliate-share-link></textarea>
         <button type="button" class="affiliate-share-copy" data-affiliate-share-copy disabled><?= __('复制') ?></button>
         <button type="button" class="affiliate-share-native" data-affiliate-share-native disabled><?= __('分享') ?></button>
     </div>
@@ -36,12 +36,26 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
 
 <style>
 .affiliate-share-panel {
+    --affiliate-share-primary: var(--color-primary, var(--color-accent, var(--weline-theme-primary, #007185)));
+    --affiliate-share-primary-hover: var(--color-primary-hover, var(--color-accent-hover, var(--weline-theme-primary-hover, #005f6b)));
+    --affiliate-share-primary-soft: var(--color-primary-bg-subtle, color-mix(in srgb, var(--affiliate-share-primary) 12%, #fff));
+    --affiliate-share-primary-border: var(--color-primary-border-subtle, color-mix(in srgb, var(--affiliate-share-primary) 34%, #d5d9d9));
+    --affiliate-share-surface: var(--color-bg-primary, var(--weline-theme-surface, #fff));
+    --affiliate-share-surface-subtle: var(--color-bg-secondary, var(--weline-theme-surface-subtle, #f7fafa));
+    --affiliate-share-border: var(--color-border-light, var(--weline-theme-border-color, #d5d9d9));
+    --affiliate-share-text: var(--color-text-primary, var(--weline-theme-text, #0f1111));
+    --affiliate-share-muted: var(--color-text-secondary, var(--weline-theme-text-muted, #565959));
+    --affiliate-share-on-primary: var(--color-primary-contrast, var(--weline-theme-on-primary, #fff));
+    --affiliate-share-success: var(--color-success, var(--weline-theme-success, #0f5132));
+    --affiliate-share-success-soft: var(--color-success-bg-subtle, var(--weline-theme-success-subtle, #e7f4ea));
+    --affiliate-share-warning: var(--color-warning, var(--weline-theme-warning, #7a3e00));
+    --affiliate-share-warning-soft: var(--color-warning-bg-subtle, var(--weline-theme-warning-subtle, #fff4e5));
     margin-top: 1rem;
     padding: .9rem;
-    border: 1px solid #d5d9d9;
-    border-radius: 8px;
-    background: linear-gradient(180deg, #ffffff 0%, #f7fafa 100%);
-    box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
+    border-radius: var(--weline-theme-radius-lg, 8px);
+    background: var(--affiliate-share-surface);
+    box-shadow: var(--weline-theme-shadow-sm, 0 1px 2px rgba(15, 17, 17, .08));
 }
 .affiliate-share-head {
     display: flex;
@@ -51,7 +65,7 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     margin-bottom: .65rem;
 }
 .affiliate-share-title {
-    color: #0f1111;
+    color: var(--affiliate-share-text);
     font-size: .95rem;
     font-weight: 700;
     line-height: 1.25;
@@ -60,23 +74,23 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     min-height: 1.15rem;
     padding: .1rem .45rem;
     border-radius: 999px;
-    color: #565959;
+    color: var(--affiliate-share-muted);
     font-size: .78rem;
     line-height: 1.2;
     text-align: right;
     white-space: nowrap;
 }
 .affiliate-share-status.is-loading {
-    background: #f7fafa;
-    color: #565959;
+    background: var(--affiliate-share-surface-subtle);
+    color: var(--affiliate-share-muted);
 }
 .affiliate-share-status.is-success {
-    background: #e7f4ea;
-    color: #0f5132;
+    background: var(--affiliate-share-success-soft);
+    color: var(--affiliate-share-success);
 }
 .affiliate-share-status.is-error {
-    background: #fff4e5;
-    color: #7a3e00;
+    background: var(--affiliate-share-warning-soft);
+    color: var(--affiliate-share-warning);
 }
 .affiliate-share-body {
     display: grid;
@@ -86,14 +100,20 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
 .affiliate-share-link {
     grid-column: 1 / -1;
     min-width: 0;
-    height: 2.35rem;
-    padding: 0 .65rem;
-    border: 1px solid #888c8c;
-    border-radius: 6px;
-    background: #fff;
-    color: #0f1111;
-    font-size: .85rem;
-    line-height: 1.2;
+    width: 100%;
+    min-height: 4.6rem;
+    padding: .55rem .65rem;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-border);
+    border-radius: var(--weline-theme-radius-md, 6px);
+    background: var(--affiliate-share-surface);
+    color: var(--affiliate-share-text);
+    font-size: .78rem;
+    line-height: 1.35;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    resize: none;
+    white-space: normal;
+    word-break: break-all;
 }
 .affiliate-share-copy,
 .affiliate-share-native,
@@ -103,10 +123,10 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
     justify-content: center;
     min-height: 2.35rem;
     padding: 0 .7rem;
-    border: 1px solid #007185;
-    border-radius: 6px;
-    background: #fff;
-    color: #007185;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--affiliate-share-primary);
+    border-radius: var(--weline-theme-radius-md, 6px);
+    background: var(--affiliate-share-surface);
+    color: var(--affiliate-share-primary);
     cursor: pointer;
     font-size: .85rem;
     font-weight: 700;
@@ -117,17 +137,27 @@ $rootId = 'affiliate-share-' . $productId . '-' . substr(sha1((string) $productI
 .affiliate-share-copy:hover:not(:disabled),
 .affiliate-share-native:hover:not(:disabled),
 .affiliate-share-platform:hover {
-    border-color: #004f5f;
-    background: #e6f2f4;
-    color: #004f5f;
+    border-color: var(--affiliate-share-primary);
+    background: var(--affiliate-share-primary-soft);
+    color: var(--affiliate-share-primary-hover);
     text-decoration: none;
     box-shadow: 0 1px 2px rgba(15, 17, 17, .12);
+}
+.affiliate-share-copy {
+    border-color: var(--affiliate-share-primary);
+    background: var(--affiliate-share-primary);
+    color: var(--affiliate-share-on-primary);
+}
+.affiliate-share-copy:hover:not(:disabled) {
+    background: var(--affiliate-share-primary-hover);
+    color: var(--affiliate-share-on-primary);
 }
 .affiliate-share-copy:disabled,
 .affiliate-share-native:disabled,
 .affiliate-share-platform:disabled {
-    border-color: #d5d9d9;
-    color: #888c8c;
+    border-color: var(--affiliate-share-border);
+    background: var(--affiliate-share-surface-subtle);
+    color: var(--affiliate-share-muted);
     cursor: not-allowed;
 }
 .affiliate-share-platforms {

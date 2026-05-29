@@ -92,6 +92,7 @@
 .account-index__user-info {
     flex: 1;
     min-width: 0;
+    max-width: 100%;
 }
 
 .account-index__username {
@@ -99,6 +100,9 @@
     font-weight: 700;
     color: var(--color-text-dark);
     margin: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .account-index__email {
@@ -109,6 +113,9 @@
     font-size: 0.9375rem;
     color: var(--color-text-dark);
     opacity: 0.9;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .account-index__email i {

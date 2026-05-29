@@ -17,6 +17,7 @@ use Weline\Framework\Http\RedirectException;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locals;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteLanguage;
@@ -171,6 +172,9 @@ class WebsiteManagement extends BaseController
                 $poolIds = $data['pool_ids'] ?? '';
                 $subPath = $this->normalizeSubPath((string) ($data['sub_path'] ?? ''));
                 $addressList = $this->buildAddressListFromPoolSelection($poolIds, $subPath);
+                if (empty($addressList) && $postWebsiteId > 0) {
+                    $addressList = $this->getExistingAddressListForWebsite($postWebsiteId);
+                }
                 if (empty($addressList)) {
                     throw new \Exception(__('请至少选择一个域名'));
                 }
@@ -295,6 +299,7 @@ class WebsiteManagement extends BaseController
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);
         $this->assign('sub_path', '');
+        $this->assign('selected_legacy_domains', []);
         // 支持 URL 传入 pool_id 或 pool_ids，创建站点时预选域名并会在保存时自动绑定
         $poolIdParam = $this->request->getParam('pool_id');
         $poolIdsParam = $this->request->getParam('pool_ids');
@@ -304,7 +309,7 @@ class WebsiteManagement extends BaseController
         } elseif ($poolIdsParam !== null && $poolIdsParam !== '') {
             $selectedPoolIds = $this->parsePoolIds($poolIdsParam);
         }
-        $this->assign('selected_pool_ids', $selectedPoolIds);
+        $this->assign('selected_pool_ids', \array_values(\array_unique($selectedPoolIds)));
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -531,19 +536,35 @@ class WebsiteManagement extends BaseController
         
         // 获取网站已关联的域名（用于编辑时显示）
         $selectedPoolIds = [];
+        $selectedLegacyDomains = [];
         try {
             $websiteDomain = $this->objectManager->getInstance(WebsiteDomain::class);
             $domains = $websiteDomain->getWebsiteDomains($websiteId);
             foreach ($domains as $domain) {
                 $poolId = (int)($domain[WebsiteDomain::schema_fields_POOL_ID] ?? 0);
+                $domainName = \strtolower(\trim((string)($domain[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
+                if ($poolId <= 0) {
+                    if ($domainName !== '') {
+                        /** @var DomainPool $pool */
+                        $pool = $this->objectManager->getInstance(DomainPool::class, [], false);
+                        $pool->loadByDomain($domainName);
+                        $poolId = (int)$pool->getPoolId();
+                    }
+                }
                 if ($poolId > 0) {
                     $selectedPoolIds[] = $poolId;
+                } elseif ($domainName !== '') {
+                    $selectedLegacyDomains[] = $domainName;
                 }
             }
         } catch (\Exception $e) {
             $selectedPoolIds = [];
+            $selectedLegacyDomains = [];
         }
-        $this->assign('selected_pool_ids', $selectedPoolIds);
+        $selectedPoolIds = \is_array($selectedPoolIds) ? $selectedPoolIds : [];
+        $selectedLegacyDomains = \is_array($selectedLegacyDomains) ? $selectedLegacyDomains : [];
+        $this->assign('selected_pool_ids', \array_values(\array_unique($selectedPoolIds)));
+        $this->assign('selected_legacy_domains', \array_values(\array_unique($selectedLegacyDomains)));
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -782,6 +803,9 @@ class WebsiteManagement extends BaseController
             if ($domain === '') {
                 continue;
             }
+            if ($this->isReservedProjectHost($domain)) {
+                continue;
+            }
             $key = $domain . '|' . $subPath;
             if (isset($seen[$key])) {
                 continue;
@@ -825,6 +849,10 @@ class WebsiteManagement extends BaseController
 
         $isFirst = true;
         foreach ($addressList as $item) {
+            $domain = (string) ($item['domain'] ?? '');
+            if ($this->isReservedProjectHost($domain)) {
+                continue;
+            }
             /** @var WebsiteDomain $newDomain */
             $newDomain = $this->objectManager->getInstance(WebsiteDomain::class, [], false);
             $newDomain->setWebsiteId($websiteId);
@@ -844,6 +872,43 @@ class WebsiteManagement extends BaseController
 
         $pool = $this->objectManager->getInstance(DomainPool::class);
         $pool->syncSiteCreatedFromWebsiteDomainTable();
+    }
+
+    private function isReservedProjectHost(string $domain): bool
+    {
+        $host = LocalDomainPolicy::normalizeDomain($domain);
+        if (\str_starts_with($host, 'www.')) {
+            $host = (string)\substr($host, 4);
+        }
+
+        return LocalDomainPolicy::isStandardProjectHost($host);
+    }
+
+    private function getExistingAddressListForWebsite(int $websiteId): array
+    {
+        /** @var WebsiteDomain $model */
+        $model = $this->objectManager->getInstance(WebsiteDomain::class);
+        $rows = $model->getWebsiteDomains($websiteId);
+        $list = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            $domain = \strtolower(\trim((string)($row[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
+            if ($domain === '') {
+                continue;
+            }
+            $subPath = $this->normalizeSubPath((string)($row[WebsiteDomain::schema_fields_SUB_PATH] ?? ''));
+            $key = $domain . '|' . $subPath;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $list[] = [
+                'domain' => $domain,
+                'sub_path' => $subPath,
+                'pool_id' => (int)($row[WebsiteDomain::schema_fields_POOL_ID] ?? 0),
+            ];
+        }
+        return $list;
     }
 
     private function getPrimarySubPathForWebsite(int $websiteId): string

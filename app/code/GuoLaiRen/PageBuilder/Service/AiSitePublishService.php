@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Observer\DetectWebsite;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\WebsiteDomain;
@@ -193,7 +194,7 @@ class AiSitePublishService
      */
     private function ensureWebsiteDomainBinding(int $websiteId, array $websiteProfile): void
     {
-        $domain = \strtolower(\trim((string)($websiteProfile['target_domain'] ?? '')));
+        $domain = $this->normalizeTargetDomain($websiteProfile['target_domain'] ?? '');
         if ($websiteId <= 0 || $domain === '') {
             return;
         }
@@ -312,6 +313,21 @@ class AiSitePublishService
     {
         $normalized = \trim((string)$subPath);
         return $normalized === '' || $normalized === '/';
+    }
+
+    private function normalizeTargetDomain(mixed $targetDomain): string
+    {
+        $targetDomain = \strtolower(\trim((string)$targetDomain));
+        if ($targetDomain === '') {
+            return '';
+        }
+
+        $host = LocalDomainPolicy::normalizeDomain($targetDomain);
+        if (\str_starts_with($host, 'www.')) {
+            $host = (string)\substr($host, 4);
+        }
+
+        return LocalDomainPolicy::isStandardProjectHost($host) ? '' : $targetDomain;
     }
 
     private function refreshWebsiteDetectionCaches(): void

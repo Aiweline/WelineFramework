@@ -354,6 +354,22 @@ final class WlsRuntimeInternalWarmupInputTest extends TestCase
         });
     }
 
+    public function testMaintenanceRoleDoesNotRunWorkerBootstrapWarmups(): void
+    {
+        $this->withDynamicWarmupEnv([
+            'WLS_PROCESS_ROLE' => 'maintenance',
+            'WLS_WORKER_BOOTSTRAP_WARMUP' => null,
+            'WLS_WORKER_DEFERRED_BOOTSTRAP_WARMUP' => null,
+            'WLS_WORKER_DEFERRED_URL_METADATA_WARMUP' => '1',
+        ], function (): void {
+            $runtime = new WlsRuntime();
+
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunWorkerBootstrapWarmup'));
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredWorkerBootstrapObserverWarmup'));
+            self::assertFalse($this->invokePrivate($runtime, 'shouldRunDeferredWorkerBootstrapUrlMetadataWarmup'));
+        });
+    }
+
     public function testBackendWarmupPathsIncludePlainAndLocalizedAdminRoutes(): void
     {
         $runtime = new WlsRuntime();

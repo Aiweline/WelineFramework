@@ -108,8 +108,14 @@ final class StartBackgroundStartupReadyTest extends TestCase
             }
         };
 
-        self::assertSame(5000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
-        self::assertSame(8000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+        if (\defined('IS_WIN') && IS_WIN) {
+            self::assertSame(120000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
+            self::assertSame(120000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+            return;
+        }
+
+        self::assertSame(30000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 0));
+        self::assertSame(60000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
     }
 
     public function testResolveBackgroundMasterConfirmWaitHonorsEnvironmentOverride(): void
@@ -123,6 +129,51 @@ final class StartBackgroundStartupReadyTest extends TestCase
         };
 
         self::assertSame(2500, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+    }
+
+    public function testResolveBackgroundMasterConfirmWaitAllowsLongConfiguredWindow(): void
+    {
+        $start = new class extends Start {
+            protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+            {
+                unset($default);
+                return $path === 'wls.orchestrator.background_master_confirm_wait_sec' ? 300.0 : null;
+            }
+        };
+
+        self::assertSame(300000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+    }
+
+    public function testResolveBackgroundMasterConfirmWaitHonorsStartupTimeoutWhenConfigured(): void
+    {
+        $start = new class extends Start {
+            protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+            {
+                unset($default);
+                return $path === 'wls.orchestrator.startup_timeout_sec' ? 480.0 : null;
+            }
+        };
+
+        self::assertSame(480000, $this->invokeProtected($start, 'resolveBackgroundMasterConfirmWaitMs', 12345));
+    }
+
+    public function testResolveBackgroundStartupReadyHardWaitCoversSlowOrchestratorCycleByDefault(): void
+    {
+        $start = new class extends Start {
+            protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+            {
+                unset($path);
+                return $default;
+            }
+        };
+
+        $hardWaitMs = $this->invokeProtected($start, 'resolveBackgroundStartupReadyHardWaitMs', [
+            'count' => 8,
+            'dispatcher_enabled' => true,
+            'ssl_enabled' => true,
+        ]);
+
+        self::assertSame(600000, $hardWaitMs);
     }
 
     public function testStartupProgressSummaryIgnoresStoppedHistoricalServices(): void

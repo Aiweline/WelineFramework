@@ -113,6 +113,7 @@ content,content
 取消,Cancel
 确定,Confirm
 删除!,Delete!
+删除成功,"Deletion successful"
 知道了,"Got it"
 "Weline Admin 绠＄悊闈㈡澘","Weline Admin 绠＄悊汱㈡澘"
 角色归配,"Role Assignment"
@@ -163,7 +164,6 @@ content,content
 编辑管理员,"Edit Administrator"
 保存成功,"Saved successfully"
 确定要删除用户「%{1}」吗？此操作不可恢复。,"Are you sure you want to delete user ""%{1}""? This action cannot be undone."
-删除成功,"Deletion successful"
 确定要激活此用户吗？,"Are you sure you want to activate this user?"
 确定要禁用此用户吗？禁用后该用户将无法登录。,"Are you sure you want to disable this user? Once disabled, this user will not be able to log in."
 操作成功,"Operation successful"

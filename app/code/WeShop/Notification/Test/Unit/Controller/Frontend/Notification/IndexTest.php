@@ -37,7 +37,7 @@ class IndexTest extends TestCase
         $this->assertSame('', $controller->index());
     }
 
-    public function testIndexAssignsNotificationPageDataForLoggedInCustomer(): void
+    public function testIndexRedirectsLoggedInCustomerToAccountNotificationSection(): void
     {
         $customerContext = $this->createMock(CustomerContextInterface::class);
         $customerContext->expects($this->once())
@@ -45,25 +45,20 @@ class IndexTest extends TestCase
             ->willReturn(7);
 
         $pageDataService = $this->createMock(NotificationPageDataService::class);
-        $pageDataService->expects($this->once())
-            ->method('build')
-            ->with(7)
-            ->willReturn([
-                'notifications' => [['notification_id' => 11]],
-                'notification_count' => 1,
-                'notification_unread_count' => 1,
-            ]);
+        $pageDataService->expects($this->never())->method('build');
 
         $controller = $this->getMockBuilder(Index::class)
             ->setConstructorArgs([$customerContext, $pageDataService])
             ->onlyMethods(['assign', 'fetch', 'redirect'])
             ->getMock();
 
-        $controller->expects($this->never())->method('redirect');
-        $controller->expects($this->exactly(3))->method('assign');
-        $controller->expects($this->once())->method('fetch')->willReturn('page');
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('customer/account/index#notification-preferences');
+        $controller->expects($this->never())->method('assign');
+        $controller->expects($this->never())->method('fetch');
 
-        $this->assertSame('page', $controller->index());
+        $this->assertSame('', $controller->index());
     }
 
     private function setProtectedProperty(object $target, string $property, mixed $value): void

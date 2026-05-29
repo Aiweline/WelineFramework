@@ -138,7 +138,43 @@ final class ContractCoreServiceTest extends TestCase
         self::assertSame([], $contract['source_contracts']);
     }
 
-    public function testQaReportSeparatesContractViolationsFromContentQuality(): void
+    public function testSourceTruthContractTreatsAvoidedTermsAsForbiddenNotMustInclude(): void
+    {
+        $contract = (new SourceTruthContractBuilder())->build(
+            [
+                'site_title' => 'OpsFlow AI',
+                'brief_description' => 'Build a polished AI workflow automation SaaS website for operations teams. The service helps teams design approval flows, automate task handoffs, monitor status, and book a product demo. Keep the visual direction professional, clean, credible, and product-led. Avoid gaming, casino, APK, reward, card, neon, and gambling visual language.',
+            ],
+            ['site_title' => 'OpsFlow AI'],
+            [],
+            '',
+            ['home_page'],
+            'en_US'
+        );
+
+        $facts = \json_encode($contract['must_include_facts'], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        $forbidden = \json_encode($contract['must_not_do'], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+
+        self::assertIsString($facts);
+        self::assertStringNotContainsString('casino', $facts);
+        self::assertStringNotContainsString('APK', $facts);
+        self::assertStringNotContainsString('reward', $facts);
+        self::assertStringNotContainsString('neon', $facts);
+        self::assertStringContainsString('Build a polished AI workflow automation SaaS website for operations teams', $facts);
+        self::assertStringContainsString('design approval flows, automate task handoffs, monitor status, and book a product demo', $facts);
+        self::assertStringNotContainsString('"text":"automate task handoffs"', $facts);
+        self::assertStringNotContainsString('"text":"monitor status"', $facts);
+        self::assertStringNotContainsString('"text":"clean"', $facts);
+        self::assertStringNotContainsString('"text":"credible"', $facts);
+        self::assertStringNotContainsString('Keep the visual direction', $facts);
+        self::assertIsString($forbidden);
+        self::assertStringContainsString('casino', $forbidden);
+        self::assertStringContainsString('APK', $forbidden);
+        self::assertNotContains('hero_download', $contract['required_home_blocks']);
+        self::assertNotContains('Drive APK/app download click', $contract['conversion_goals']);
+    }
+
+    public function testQaReportSeparatesContractViolationsFromStructureQuality(): void
     {
         $report = (new ContractQaReportBuilder(
             new ContractMetaBuilder(
@@ -175,8 +211,8 @@ final class ContractCoreServiceTest extends TestCase
         self::assertSame(ContractType::STATUS_FAILED, $report['contract_meta']['status']);
         self::assertSame(QaGateHelper::STATUS_FAIL, $report['payload']['status']);
         self::assertSame(QaGateHelper::STATUS_FAIL, $report['qa_gates']['source_contracts']['status']);
-        self::assertSame(QaGateHelper::STATUS_PENDING, $report['qa_gates']['content_quality']['status']);
-        self::assertSame('not_evaluated', $report['payload']['content_quality']['status']);
+        self::assertSame(QaGateHelper::STATUS_PASS, $report['qa_gates']['structure_quality']['status']);
+        self::assertSame(QaGateHelper::STATUS_PASS, $report['payload']['structure_quality']['status']);
         self::assertSame('source_contracts', $report['payload']['findings'][0]['category']);
         self::assertStringContainsString(ContractType::TYPE_BLOCK_PLAN, $report['payload']['findings'][0]['message']);
     }
@@ -211,23 +247,23 @@ final class ContractCoreServiceTest extends TestCase
         self::assertStringContainsString('payload.page_type_layouts', $report['payload']['findings'][0]['message']);
     }
 
-    public function testQaReportCarriesContentQualityFindingsSeparately(): void
+    public function testQaReportCarriesStructureQualityFindingsSeparately(): void
     {
         $report = (new ContractQaReportBuilder())->build([], [], [], [
             [
                 'severity' => 'warning',
-                'category' => 'copy',
-                'rule' => 'copy.generic_or_placeholder',
-                'message' => 'Section copy looks generic.',
+                'category' => 'structure',
+                'rule' => 'structure.missing_section_identity',
+                'message' => 'Section code is missing.',
                 'target_path' => 'payload.page_type_layouts.home_page.content.0',
             ],
         ]);
 
         self::assertSame(QaGateHelper::STATUS_WARN, $report['payload']['status']);
         self::assertSame(QaGateHelper::STATUS_PASS, $report['payload']['contract_quality']['status']);
-        self::assertSame(QaGateHelper::STATUS_WARN, $report['payload']['content_quality']['status']);
+        self::assertSame(QaGateHelper::STATUS_WARN, $report['payload']['structure_quality']['status']);
         self::assertSame([], $report['payload']['findings']);
-        self::assertSame('copy', $report['payload']['content_quality']['findings'][0]['category']);
-        self::assertSame(QaGateHelper::STATUS_WARN, $report['qa_gates']['content_quality']['status']);
+        self::assertSame('structure', $report['payload']['structure_quality']['findings'][0]['category']);
+        self::assertSame(QaGateHelper::STATUS_WARN, $report['qa_gates']['structure_quality']['status']);
     }
 }

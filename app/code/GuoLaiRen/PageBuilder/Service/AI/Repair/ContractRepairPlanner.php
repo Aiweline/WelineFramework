@@ -97,8 +97,8 @@ final class ContractRepairPlanner
                 $findings[] = $finding;
             }
         }
-        $contentQuality = \is_array($payload['content_quality'] ?? null) ? $payload['content_quality'] : [];
-        foreach (\is_array($contentQuality['findings'] ?? null) ? $contentQuality['findings'] : [] as $finding) {
+        $structureQuality = \is_array($payload['structure_quality'] ?? null) ? $payload['structure_quality'] : [];
+        foreach (\is_array($structureQuality['findings'] ?? null) ? $structureQuality['findings'] : [] as $finding) {
             if (\is_array($finding)) {
                 $findings[] = $finding;
             }

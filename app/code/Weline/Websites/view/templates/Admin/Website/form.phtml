@@ -399,6 +399,137 @@ $websiteReadonlyLanguages = $websiteDefaultLanguage !== '' ? [$websiteDefaultLan
 (function() {
     'use strict';
 
+    function querySelectorSafe(selector) {
+        if (!selector) {
+            return null;
+        }
+
+        try {
+            return document.querySelector(selector);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getCollapseTarget(button) {
+        var selector = button.getAttribute('data-bs-target') || button.getAttribute('data-target') || button.getAttribute('href');
+        var target = querySelectorSafe(selector);
+
+        if (target) {
+            return target;
+        }
+
+        var controls = button.getAttribute('aria-controls');
+        return controls ? document.getElementById(controls) : null;
+    }
+
+    function getButtonForTarget(root, target) {
+        var buttons = root.querySelectorAll('.accordion-button[data-bs-toggle="collapse"], .accordion-button[data-toggle="collapse"]');
+
+        for (var i = 0; i < buttons.length; i++) {
+            if (getCollapseTarget(buttons[i]) === target) {
+                return buttons[i];
+            }
+        }
+
+        return null;
+    }
+
+    function setCollapseState(root, target, expanded) {
+        var button = getButtonForTarget(root, target);
+
+        target.classList.remove('collapsing');
+        target.classList.toggle('show', expanded);
+        target.style.height = '';
+
+        if (button) {
+            button.classList.toggle('collapsed', !expanded);
+            button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        }
+    }
+
+    function closeSiblingSections(root, target) {
+        var parent = querySelectorSafe(target.getAttribute('data-bs-parent')) || root;
+        var openTargets = parent.querySelectorAll('.accordion-collapse.show');
+
+        for (var i = 0; i < openTargets.length; i++) {
+            if (openTargets[i] !== target) {
+                setCollapseState(root, openTargets[i], false);
+            }
+        }
+    }
+
+    function toggleCollapse(root, button, target) {
+        var willExpand = !target.classList.contains('show');
+
+        if (willExpand) {
+            closeSiblingSections(root, target);
+        }
+
+        setCollapseState(root, target, willExpand);
+    }
+
+    function syncInitialState(root) {
+        var targets = root.querySelectorAll('.accordion-collapse');
+
+        for (var i = 0; i < targets.length; i++) {
+            setCollapseState(root, targets[i], targets[i].classList.contains('show'));
+        }
+    }
+
+    function bindAccordion(root) {
+        if (!root || root.getAttribute('data-weline-accordion-bound') === 'true') {
+            return;
+        }
+
+        root.setAttribute('data-weline-accordion-bound', 'true');
+        syncInitialState(root);
+
+        root.addEventListener('click', function(event) {
+            var eventTarget = event.target && event.target.nodeType === 1 ? event.target : event.target.parentElement;
+            var button = eventTarget ? eventTarget.closest('.accordion-button[data-bs-toggle="collapse"], .accordion-button[data-toggle="collapse"]') : null;
+
+            if (!button || !root.contains(button)) {
+                return;
+            }
+
+            var target = getCollapseTarget(button);
+
+            if (!target) {
+                return;
+            }
+
+            var targetClassBefore = target.className;
+            var buttonExpandedBefore = button.getAttribute('aria-expanded');
+
+            window.setTimeout(function() {
+                var nativeHandled = target.className !== targetClassBefore || button.getAttribute('aria-expanded') !== buttonExpandedBefore;
+
+                if (!nativeHandled) {
+                    toggleCollapse(root, button, target);
+                }
+            }, 50);
+        });
+    }
+
+    function initAccordions() {
+        var accordions = document.querySelectorAll('.website-form-accordion');
+
+        for (var i = 0; i < accordions.length; i++) {
+            bindAccordion(accordions[i]);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAccordions);
+    } else {
+        initAccordions();
+    }
+})();
+
+(function() {
+    'use strict';
+
     var utils = window.WelineLanguageSelectUtils;
     if (!utils || typeof utils.bindDefaultToMultiple !== 'function') {
         return;

@@ -81,6 +81,7 @@ endif;
         currency: '<?= \w_env_currency() ?>',
         lang: '<?= \w_env_lang() ?>',
         api_host: '{{api_host}}',
+        api_area: '{{api_area}}',
         base_router: '{{base_router}}',
         i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,
         themeConfig: <?=json_encode($themeConfig->getThemeConfig()) ?? '{}';?>,
@@ -177,6 +178,25 @@ endif;
 
     // path: 路径 url
     // code: 代码 如区域代码
+    function normalizeWebsiteBaseUrl(url) {
+        const rawUrl = String(url || '').trim();
+        if (!rawUrl) {
+            return '';
+        }
+
+        try {
+            const parsed = new URL(rawUrl, window.location.origin);
+            const firstSegment = parsed.pathname.split('/').filter(Boolean)[0] || '';
+            const apiArea = String(window.site.api_area || 'api').toLowerCase();
+            if (firstSegment && (firstSegment.toLowerCase() === apiArea || firstSegment.toLowerCase() === 'api')) {
+                return parsed.origin;
+            }
+            return parsed.href.replace(/\/$/, '');
+        } catch (e) {
+            return rawUrl;
+        }
+    }
+
     // type: 类型 website|area|currency|lang
     function inject_path(path, code = '', type = '') {
         if (!path) {
@@ -185,11 +205,11 @@ endif;
         if(!path.startsWith('/')) {
             path = '/' + path;
         }
-        let pre_path = getCookie('WELINE_WEBSITE_URL');
+        let pre_path = normalizeWebsiteBaseUrl(getCookie('WELINE_WEBSITE_URL'));
 
         // 网站
-        if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL'))) {
-            path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL'), '');
+        if (pre_path && WelineString.startsWith(path, pre_path)) {
+            path = WelineString.replaceStartsWith(path, pre_path, '');
         } else {
             path = WelineString.replaceStartsWith(path, window.site.base_router, '');
         }

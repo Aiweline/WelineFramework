@@ -14,6 +14,7 @@ use WeShop\Product\Service\ProductService;
 use WeShop\Product\Service\ProductViewPageDataService;
 use WeShop\QA\Service\QAService;
 use WeShop\Review\Service\ReviewRatingOptionService;
+use WeShop\Review\Service\ReviewReplyService;
 use WeShop\Review\Service\ReviewService;
 
 class ProductViewPageDataServiceTest extends TestCase
@@ -24,6 +25,7 @@ class ProductViewPageDataServiceTest extends TestCase
     private ProductRecommendationService $productRecommendationService;
     private ReviewService $reviewService;
     private ReviewRatingOptionService $ratingOptionService;
+    private ReviewReplyService $reviewReplyService;
     private QAService $qaService;
     private ProductViewPageDataService $service;
 
@@ -37,6 +39,7 @@ class ProductViewPageDataServiceTest extends TestCase
         $this->productRecommendationService = $this->createMock(ProductRecommendationService::class);
         $this->reviewService = $this->createMock(ReviewService::class);
         $this->ratingOptionService = $this->createMock(ReviewRatingOptionService::class);
+        $this->reviewReplyService = $this->createMock(ReviewReplyService::class);
         $this->qaService = $this->createMock(QAService::class);
 
         $this->service = new ProductViewPageDataService(
@@ -47,7 +50,8 @@ class ProductViewPageDataServiceTest extends TestCase
             $this->reviewService,
             $this->qaService,
             null,
-            $this->ratingOptionService
+            $this->ratingOptionService,
+            $this->reviewReplyService
         );
     }
 
@@ -151,11 +155,24 @@ class ProductViewPageDataServiceTest extends TestCase
             ->with(42, 1, 5)
             ->willReturn([
                 'items' => [
-                    ['rating' => 5],
-                    ['rating' => 5],
-                    ['rating' => 4],
+                    ['review_id' => 101, 'rating' => 5],
+                    ['review_id' => 102, 'rating' => 5],
+                    ['review_id' => 103, 'rating' => 4],
                 ],
                 'total' => 3,
+            ]);
+        $this->reviewReplyService->expects($this->once())
+            ->method('getRepliesForReviews')
+            ->with([101, 102, 103])
+            ->willReturn([
+                101 => [
+                    [
+                        'reply_id' => 501,
+                        'review_id' => 101,
+                        'customer_name' => 'Ada',
+                        'content' => 'Thanks @customer:7',
+                    ],
+                ],
             ]);
 
         $this->reviewService->expects($this->once())
@@ -190,6 +207,7 @@ class ProductViewPageDataServiceTest extends TestCase
         $this->assertSame(4.7, $result['product']['rating']);
         $this->assertSame(67, $result['product']['rating_distribution'][5]);
         $this->assertSame(33, $result['product']['rating_distribution'][4]);
+        $this->assertSame(501, $result['reviews'][0]['replies'][0]['reply_id']);
         $this->assertCount(2, $result['product_images']);
         $this->assertSame('catalog/category/view?id=7', $result['breadcrumbs'][0]['url']);
         $this->assertSame('Nylon', $result['product']['specifications'][0]['value']);
@@ -267,6 +285,7 @@ class ProductViewPageDataServiceTest extends TestCase
         $this->assertGreaterThan(12, count($colorCodes));
         $this->assertSame(['red', 'pink', 'green'], array_slice($colorCodes, 0, 3));
         $this->assertContains('navy', $colorCodes);
+        $this->assertSame('Red', $color['options'][0]['origin_value']);
         $this->assertSame('color', $color['options'][0]['swatch_type']);
         $this->assertSame(HanfuDemoOptionImageProvider::imageFor('red', 'classic'), $color['options'][0]['option_image']);
 
@@ -276,6 +295,7 @@ class ProductViewPageDataServiceTest extends TestCase
         ))[0] ?? null;
         $this->assertIsArray($style);
         $this->assertCount(3, $style['options']);
+        $this->assertSame('Classic', $style['options'][0]['origin_value']);
         $this->assertSame('image', $style['options'][0]['swatch_type']);
         $this->assertSame(HanfuDemoOptionImageProvider::imageFor('red', 'classic'), $style['options'][0]['swatch_value']);
         $this->assertSame(HanfuDemoOptionImageProvider::imageFor('red', 'lifestyle'), $style['options'][1]['option_image']);

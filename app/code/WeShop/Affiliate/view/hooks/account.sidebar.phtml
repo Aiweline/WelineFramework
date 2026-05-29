@@ -1,0 +1,39 @@
+<?php
+/**
+ * Account sidebar affiliate entry.
+ *
+ * Hook: account.sidebar
+ *
+ * @hook-priority 165
+ * @hook-sort-order 18
+ * @hook-solo false
+ */
+use Weline\Framework\Runtime\RequestContext;
+
+$renderKey = 'weshop_affiliate.account_sidebar.rendered';
+if (RequestContext::get($renderKey, false)) {
+    return;
+}
+
+RequestContext::set($renderKey, true);
+$accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
+if (!is_string($accountIndexPath) || $accountIndexPath === '') {
+    $accountIndexPath = '/customer/account/index';
+}
+$accountIndexPath = rtrim($accountIndexPath, '/');
+?>
+<a class="account-hook-nav-link motor-account-sidebar__link"
+   href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#affiliate"
+   data-section="affiliate"
+   data-account-nav-link="true">
+    <span class="account-hook-nav-link__label motor-account-sidebar__link-label">
+        <i class="ri-share-forward-line fa fa-share-alt" aria-hidden="true"></i>
+        <span class="account-hook-nav-link__text motor-account-sidebar__link-text">
+            <strong><?= __('我的分销') ?></strong>
+            <span><?= __('分享、转化与佣金') ?></span>
+        </span>
+    </span>
+    <span class="account-hook-nav-link__arrow motor-account-sidebar__link-arrow" aria-hidden="true">
+        <i class="fa fa-angle-right"></i>
+    </span>
+</a>

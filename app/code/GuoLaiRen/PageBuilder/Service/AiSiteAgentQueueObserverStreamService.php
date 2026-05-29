@@ -67,7 +67,7 @@ class AiSiteAgentQueueObserverStreamService
 
     /**
      * 通过 normalizer 归一化 payload 后再发 SSE。所有本服务对外发的 SSE 事件都应该走这里，
-     * 保证 queue_status / task_summary / status / job_status 等家族字段一致性。
+     * 保证 queue_status 等 canonical 字段一致性。
      *
      * @param array<string, mixed> $payload
      */
@@ -77,10 +77,10 @@ class AiSiteAgentQueueObserverStreamService
         $sse->sendEvent($event, $payload, $eventId);
     }
 
-    private function isQueueWaitingForSystemScheduler(string $queueStatus, int $_queuePid): bool
+    private function isQueueWaitingForSystemScheduler(string $queueStatus, int $queuePid): bool
     {
-        // 仅待调度：pending/queued。running 表示 worker 已执行，不再用「等定时任务/约 1 分钟」类提示打扰用户。
-        return \in_array($queueStatus, ['pending', 'queued'], true);
+        return \in_array($queueStatus, ['pending', 'queued'], true)
+            || (\in_array($queueStatus, ['running', 'processing'], true) && $queuePid <= 0);
     }
 
     private function isTerminalQueueFailureStatus(string $queueStatus): bool
@@ -467,28 +467,6 @@ class AiSiteAgentQueueObserverStreamService
             $lastQueueResultLength = 0;
         }
         if ($resultLength > $lastQueueResultLength) {
-            $delta = \substr($result, $lastQueueResultLength);
-            $lines = \preg_split("/\\r\\n|\\n|\\r/", $delta) ?: [];
-            foreach ($lines as $line) {
-                $line = \trim((string)$line);
-                if ($line === '' || $helperService->shouldSkipResultLine($operation, $line)) {
-                    continue;
-                }
-                $this->emitNormalizedSseEvent($sse, 'chunk', [
-                    'message' => $line,
-                    'operation' => $operation,
-                    'chunk' => $line . PHP_EOL,
-                    'content' => $line . PHP_EOL,
-                    'queue_id' => $queueId,
-                    'queue_status' => $queueStatus,
-                    'queue_snapshot' => $queueSnapshot,
-                    'queue_info' => $queuePanelInfo,
-                    'queue_process' => $process,
-                    'queue_result_delta' => $line . PHP_EOL,
-                    'token_usage' => $tokenUsage,
-                    'progress_kind' => 'queue_info',
-                ]);
-            }
             $lastQueueResultLength = $resultLength;
         }
 

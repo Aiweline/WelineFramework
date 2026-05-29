@@ -230,13 +230,13 @@ class AiSiteVirtualThemeService
     /**
      * @param array<string, mixed> $layout
      */
-    public function saveGeneratedPageLayout(int $themeId, string $pageType, array $layout): void
+    public function saveGeneratedPageLayout(int $themeId, string $pageType, array $layout): int
     {
         if ($themeId <= 0 || $pageType === '') {
             throw new \InvalidArgumentException((string)__('Invalid generated page layout payload'));
         }
 
-        $this->saveThemeLayout($themeId, $pageType, $this->sanitizeLayoutAssetUrls($layout));
+        return $this->saveThemeLayout($themeId, $pageType, $this->sanitizeLayoutAssetUrls($layout));
     }
 
     /**
@@ -641,12 +641,8 @@ class AiSiteVirtualThemeService
             $layout['footer'] = \is_array($layout['footer'] ?? null) ? $layout['footer'] : ['component' => '', 'config' => []];
             $layout['content'] = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
 
-            if ($regenerateSharedComponents || \trim((string)($layout['header']['component'] ?? '')) === '') {
-                $layout['header'] = ['component' => $headerCode, 'config' => $headerConfig];
-            }
-            if ($regenerateSharedComponents || \trim((string)($layout['footer']['component'] ?? '')) === '') {
-                $layout['footer'] = ['component' => $footerCode, 'config' => $footerConfig];
-            }
+            $layout['header'] = ['component' => $headerCode, 'config' => $headerConfig];
+            $layout['footer'] = ['component' => $footerCode, 'config' => $footerConfig];
             if ($generatedContent !== []) {
                 $layout['content'] = $generatedContent;
             }
@@ -673,6 +669,186 @@ class AiSiteVirtualThemeService
             'page_type_layouts' => $resolvedLayouts,
             'theme' => $theme,
         ];
+    }
+
+    /**
+     * Regenerate exactly one page inside an existing AI virtual theme.
+     *
+     * The full-site build loop owns initial generation and shared component
+     * creation. Page-level rebuilds must preserve other page layouts and only
+     * replace the target page content, otherwise a single tab action can become
+     * an expensive all-site rebuild.
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param list<string> $pageTypes
+     * @param array<string, array<string, mixed>>|int $pageTypeLayouts
+     * @return array{virtual_theme_id:int,page_type_layouts:array<string, array<string, mixed>>,theme:VirtualTheme,page_blueprint:array<string,mixed>,section_count:int}
+     */
+    public function regenerateAiGeneratedVirtualThemePage(
+        array $scope,
+        array $websiteProfile,
+        array $pageTypes,
+        array|int $pageTypeLayouts,
+        string $pageType,
+        int $sessionId = 0
+    ): array {
+        if (\is_int($pageTypeLayouts)) {
+            $sessionId = $pageTypeLayouts;
+            $pageTypeLayouts = [];
+        }
+
+        $pageType = \trim($pageType);
+        if ($pageType === '' || !\in_array($pageType, $pageTypes, true)) {
+            throw new \InvalidArgumentException((string)__('Invalid generated page type'));
+        }
+
+        $pageComponentGenerationService = $this->pageComponentGenerationService ?? ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
+        $theme = $this->loadOrCreateTheme((int)($scope['virtual_theme_id'] ?? 0), $websiteProfile, $sessionId);
+        if (!$theme->getId()) {
+            $theme->save();
+        }
+
+        $themeId = (int)$theme->getId();
+        $themeConfig = $theme->getConfig();
+        $storedLayouts = \is_array($themeConfig['virtual_page_layouts'] ?? null) ? $themeConfig['virtual_page_layouts'] : [];
+        $resolvedLayouts = \array_replace(
+            $this->normalizeLayoutMap($storedLayouts),
+            $this->normalizeLayoutMap(\is_array($pageTypeLayouts) ? $pageTypeLayouts : [])
+        );
+
+        $sharedComponents = $this->loadSharedComponents($themeId);
+        if (!\is_array($sharedComponents['header'] ?? null) || !\is_array($sharedComponents['footer'] ?? null)) {
+            $generatedShared = $pageComponentGenerationService->generateSharedComponents($websiteProfile, $scope);
+            foreach (['header', 'footer'] as $region) {
+                if (!\is_array($sharedComponents[$region] ?? null) && \is_array($generatedShared[$region] ?? null)) {
+                    $sharedComponents[$region] = $generatedShared[$region];
+                    $this->saveGeneratedSharedComponent($themeId, $generatedShared[$region]);
+                }
+            }
+        }
+
+        $headerCode = (string)($sharedComponents['header']['code'] ?? 'header/ai-site-header');
+        $footerCode = (string)($sharedComponents['footer']['code'] ?? 'footer/ai-site-footer');
+        $headerConfig = \is_array($sharedComponents['header']['default_config'] ?? null) ? $sharedComponents['header']['default_config'] : [];
+        $footerConfig = \is_array($sharedComponents['footer']['default_config'] ?? null) ? $sharedComponents['footer']['default_config'] : [];
+        $blueprint = [];
+        $sectionCount = 0;
+
+        if ($this->isBlogPageType($pageType)) {
+            $layout = $this->buildNativeBlogPageLayout(
+                $pageType,
+                $scope,
+                \is_array($resolvedLayouts[$pageType] ?? null) ? $resolvedLayouts[$pageType] : [],
+                $headerCode,
+                $headerConfig,
+                $footerCode,
+                $footerConfig,
+                true
+            );
+            $this->saveNativeBlogContentComponent($themeId, $pageType, $scope);
+            $resolvedLayouts[$pageType] = $layout;
+            $this->saveThemeLayout($themeId, $pageType, $layout);
+        } else {
+            $pageSections = $pageComponentGenerationService->generatePageSections($pageType, $websiteProfile, $scope);
+            $blueprint = \is_array($pageSections['blueprint'] ?? null) ? $pageSections['blueprint'] : [];
+            $generatedContent = [];
+            foreach (($pageSections['sections'] ?? []) as $section) {
+                if (!\is_array($section)) {
+                    continue;
+                }
+                $componentCode = \trim((string)($section['code'] ?? ''));
+                if ($componentCode === '') {
+                    continue;
+                }
+                $componentConfig = \is_array($section['default_config'] ?? null) ? $section['default_config'] : [];
+                $generatedContent[] = [
+                    'code' => $componentCode,
+                    'enabled' => true,
+                    'config' => $componentConfig,
+                    'instance_id' => '',
+                    'sort_order' => (int)($section['sort_order'] ?? 0),
+                ];
+                $this->saveThemeComponent(
+                    $themeId,
+                    $componentCode,
+                    VirtualThemeComponent::AREA_FRONTEND,
+                    VirtualThemeComponent::CATEGORY_CONTENT,
+                    (string)($section['name'] ?? ($blueprint['page_label'] ?? $componentCode)),
+                    (string)($section['phtml'] ?? ''),
+                    $componentConfig,
+                    [
+                        'position' => ['content'],
+                        'page_layouts' => [$pageType],
+                        'sort_order' => (int)($section['sort_order'] ?? 100),
+                        'section_key' => (string)($section['key'] ?? ''),
+                    ]
+                );
+            }
+            $sectionCount = \count($generatedContent);
+
+            $layout = \is_array($resolvedLayouts[$pageType] ?? null) ? $resolvedLayouts[$pageType] : [];
+            if ($layout === []) {
+                $layout = $this->loadGeneratedPageLayout($themeId, $pageType);
+            }
+            $layout['header'] = \is_array($layout['header'] ?? null) ? $layout['header'] : ['component' => '', 'config' => []];
+            $layout['footer'] = \is_array($layout['footer'] ?? null) ? $layout['footer'] : ['component' => '', 'config' => []];
+            if (\trim((string)($layout['header']['component'] ?? '')) === '') {
+                $layout['header'] = ['component' => $headerCode, 'config' => $headerConfig];
+            }
+            if (\trim((string)($layout['footer']['component'] ?? '')) === '') {
+                $layout['footer'] = ['component' => $footerCode, 'config' => $footerConfig];
+            }
+            if ($generatedContent !== []) {
+                $layout['content'] = $generatedContent;
+            } else {
+                $layout['content'] = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+            }
+            $layout['version'] = '1.0';
+            $layout['page_id'] = (int)($layout['page_id'] ?? 0);
+            $layout['use_original_template'] = false;
+            $resolvedLayouts[$pageType] = $layout;
+            $this->saveThemeLayout($themeId, $pageType, $layout);
+        }
+
+        $themeConfig = $theme->getConfig();
+        $themeConfig['source'] = VirtualTheme::SOURCE_PAGEBUILDER_AI;
+        $themeConfig['scope_session_id'] = $sessionId;
+        $themeConfig['website_profile'] = $websiteProfile;
+        $themeConfig['selected_page_types'] = $pageTypes;
+        $themeConfig['virtual_page_layouts'] = $resolvedLayouts;
+        $theme->setConfig($themeConfig);
+        $theme->save();
+
+        return [
+            'virtual_theme_id' => $themeId,
+            'page_type_layouts' => $resolvedLayouts,
+            'theme' => $theme,
+            'page_blueprint' => $blueprint,
+            'section_count' => $sectionCount,
+        ];
+    }
+
+    /**
+     * @param mixed $layouts
+     * @return array<string, array<string, mixed>>
+     */
+    private function normalizeLayoutMap(mixed $layouts): array
+    {
+        if (!\is_array($layouts)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($layouts as $pageType => $layout) {
+            $pageType = \trim((string)$pageType);
+            if ($pageType === '' || !\is_array($layout)) {
+                continue;
+            }
+            $normalized[$pageType] = $layout;
+        }
+
+        return $normalized;
     }
 
     private function isBlogPageType(string $pageType): bool
@@ -1356,7 +1532,7 @@ PHTML;
         return $result;
     }
 
-    private function saveThemeLayout(int $themeId, string $pageType, array $layout): void
+    private function saveThemeLayout(int $themeId, string $pageType, array $layout): int
     {
         /** @var VirtualThemeLayout $themeLayout */
         $themeLayout = clone ObjectManager::getInstance(VirtualThemeLayout::class);
@@ -1376,6 +1552,8 @@ PHTML;
             ->setUseOriginalTemplate((bool)($layout['use_original_template'] ?? false))
             ->setPageId((int)($layout['page_id'] ?? 0))
             ->save();
+
+        return (int)$themeLayout->getId();
     }
 
     /**
