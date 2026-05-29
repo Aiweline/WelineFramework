@@ -238,7 +238,8 @@ class Status extends CommandAbstract
         }
         
         $processInfoMap = $this->buildProcessInfoMap([$name => $info]);
-        $masterRunning = $this->isMasterRunning($info, $processInfoMap);
+        $masterRuntimeState = $this->resolveMasterRuntimeState($info, $processInfoMap);
+        $masterRunning = (bool) $masterRuntimeState['running'];
         
         $this->printer->setup(__('实例 [%{1}] 状态', [$name]));
         echo "\n";
@@ -258,6 +259,9 @@ class Status extends CommandAbstract
         $selfHealMode = $this->resolveSelfHealMode();
         $this->printer->note(\sprintf('║  ' . __('Master 自愈：') . '%-46s║', $selfHealMode));
         $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
+        if ((string) ($masterRuntimeState['message'] ?? '') !== '') {
+            $this->printer->warning((string) $masterRuntimeState['message']);
+        }
         $this->showStartupFailureSummary($info);
         echo "\n";
         
@@ -537,17 +541,63 @@ class Status extends CommandAbstract
      */
     protected function isMasterRunning(ServerInstanceInfo $info, array $processInfoMap): bool
     {
+        return (bool) $this->resolveMasterRuntimeState($info, $processInfoMap)['running'];
+    }
+
+    /**
+     * IPC is the primary health signal. If it times out, fall back to the
+     * managed Master PID check so a busy control plane is not reported as
+     * stopped while the process is still alive.
+     *
+     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
+     * @return array{running: bool, ipc_ok: bool, source: string, message: string}
+     */
+    protected function resolveMasterRuntimeState(ServerInstanceInfo $info, array $processInfoMap): array
+    {
         if ($info->masterPid <= 0) {
-            return false;
+            return [
+                'running' => false,
+                'ipc_ok' => false,
+                'source' => 'metadata',
+                'message' => '',
+            ];
         }
 
-        if ($info->controlPort <= 0) {
-            return false;
+        $pidRunning = (bool) ($processInfoMap[$info->masterPid]['exists'] ?? false);
+        if (!$pidRunning && $processInfoMap === []) {
+            $pidRunning = $info->isMasterRunning();
         }
 
-        $gateway = new IpcControlGateway();
-        $status = $gateway->getStatusBrief($info->name, 0.5);
-        return $status['success'] && (bool)($status['data']['running'] ?? false);
+        if ($info->controlPort > 0) {
+            $gateway = new IpcControlGateway();
+            $status = $gateway->getStatusBrief($info->name, 0.5);
+            if ($status['success'] && (bool)($status['data']['running'] ?? false)) {
+                return [
+                    'running' => true,
+                    'ipc_ok' => true,
+                    'source' => 'ipc',
+                    'message' => '',
+                ];
+            }
+        }
+
+        if ($pidRunning) {
+            return [
+                'running' => true,
+                'ipc_ok' => false,
+                'source' => 'pid',
+                'message' => __(
+                    'Master PID is running, but IPC status did not respond within 0.5s; the control plane may be busy or in an orchestrator full-restart cycle.'
+                ),
+            ];
+        }
+
+        return [
+            'running' => false,
+            'ipc_ok' => false,
+            'source' => 'pid',
+            'message' => '',
+        ];
     }
 
     /**

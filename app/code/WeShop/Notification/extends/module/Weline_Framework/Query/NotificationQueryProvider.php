@@ -29,7 +29,7 @@ class NotificationQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'markRead' => $this->markRead($params),
             default => throw new \InvalidArgumentException(
-                (string)__('Unsupported notification provider operation: %{1}', $operation)
+                (string)__('不支持的通知接口操作：%{1}', $operation)
             ),
         };
     }
@@ -40,7 +40,7 @@ class NotificationQueryProvider implements QueryProviderInterface
         if ($customerId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Please log in to continue.'),
+                'message' => (string)__('请先登录后再继续。'),
                 'data' => ['redirect_url' => $this->url->getUrl(self::LOGIN_ROUTE)],
             ];
         }
@@ -49,20 +49,20 @@ class NotificationQueryProvider implements QueryProviderInterface
         if ($notificationId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Notification ID is required.'),
+                'message' => (string)__('通知ID不能为空。'),
             ];
         }
 
         if (!$this->notificationService->markAsRead($notificationId, $customerId)) {
             return [
                 'success' => false,
-                'message' => (string)__('Notification could not be marked as read.'),
+                'message' => (string)__('通知标记已读失败。'),
             ];
         }
 
         return [
             'success' => true,
-            'message' => (string)__('Notification marked as read.'),
+            'message' => (string)__('通知已标记为已读。'),
             'data' => [
                 'notification_id' => $notificationId,
                 'unread_count' => $this->notificationService->getUnreadCount($customerId),
@@ -74,13 +74,13 @@ class NotificationQueryProvider implements QueryProviderInterface
     {
         return [
             'provider' => 'notification',
-            'name' => __('Notification Query'),
-            'description' => __('Provides frontend notification operations through the worker API.'),
+            'name' => __('通知接口'),
+            'description' => __('通过前端 worker API 提供通知操作。'),
             'module' => 'WeShop_Notification',
             'operations' => [
                 [
                     'name' => 'markRead',
-                    'description' => __('Mark a notification owned by the current customer as read.'),
+                    'description' => __('将当前客户的通知标记为已读。'),
                     'frontend' => true,
                     'mode' => 'write',
                     'graph' => false,

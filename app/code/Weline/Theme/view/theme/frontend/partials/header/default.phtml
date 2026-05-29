@@ -45,7 +45,14 @@ $headerLabel = static function ($value): string {
     if ($translated !== $key) {
         return $translated;
     }
-    return \Weline\Theme\Helper\WidgetI18n::label($key);
+    $widgetLabel = \Weline\Theme\Helper\WidgetI18n::label($key);
+    if ($widgetLabel !== $key) {
+        $widgetTranslated = (string)__($widgetLabel);
+        if ($widgetTranslated !== $widgetLabel) {
+            return $widgetTranslated;
+        }
+    }
+    return $widgetLabel;
 };
 $headerEsc = static function ($value) use ($headerLabel): string {
     return htmlspecialchars($headerLabel($value), ENT_QUOTES, 'UTF-8');
@@ -284,7 +291,7 @@ $defaultNavItemsFactory = static function (): array {
         role="banner"
         data-wslot="header"
         data-wslot-name="整体头部"
-        data-wslot-accept="header-container"
+        data-wslot-accept="layout-global-header,header-container"
         data-wslot-exclusive="true"
         data-wslot-position="header">
     <w:hook>Weline_Theme::frontend::partials::header::before</w:hook>
@@ -299,7 +306,7 @@ $defaultNavItemsFactory = static function (): array {
                     <div class="header-logo" 
                          data-wslot="logo" 
                          data-wslot-name="Logo"
-                         data-wslot-accept="logo"
+                         data-wslot-accept="layout-header-logo,layout-global-header-logo,logo"
                          data-wslot-exclusive="true"
                          data-wslot-position="header">
                             <a href="/" title="<lang>首页</lang>">
@@ -333,7 +340,7 @@ $defaultNavItemsFactory = static function (): array {
                     <div class="header-search-wrapper"
                          data-wslot="search"
                          data-wslot-name="搜索框"
-                         data-wslot-accept="header-search"
+                         data-wslot-accept="layout-header-search,layout-global-header-search,header-search,search"
                          data-wslot-exclusive="true"
                          data-wslot-position="header">
                         <form action="/search" method="get" class="header-search-form">
@@ -382,7 +389,7 @@ $defaultNavItemsFactory = static function (): array {
                 <div class="header-actions"
                      data-wslot="user-area"
                      data-wslot-name="用户区域"
-                     data-wslot-accept="account,mini-cart-icon,language-switcher,currency-switcher"
+                     data-wslot-accept="layout-header-actions,layout-global-header-actions,account,mini-cart-icon,language-switcher,currency-switcher"
                      data-wslot-multiple="true"
                      data-wslot-position="header">
                 <!-- 移动端"我的"下拉菜单（合并账户、订单等功能） -->
@@ -627,7 +634,7 @@ $defaultNavItemsFactory = static function (): array {
                                         </svg>
                                     </span>
                                     <p><lang>购物车是空的</lang></p>
-                                    <a href="/" class="btn btn-primary"><lang>继续购物</lang></a>
+                                    <a href="/" class="w-btn w-btn-primary"><lang>继续购物</lang></a>
                                 </div>
                                 <div class="mini-cart-items" id="mini-cart-items" style="display: none;">
                                     <ul class="mini-cart-list" role="list">
@@ -641,8 +648,8 @@ $defaultNavItemsFactory = static function (): array {
                                     <span class="total-amount" id="mini-cart-total">¥0.00</span>
                                 </div>
                                 <div class="mini-cart-actions">
-                                    <a href="/cart" class="btn btn-secondary"><lang>查看购物车</lang></a>
-                                    <a href="/checkout" class="btn btn-primary"><lang>去结算</lang></a>
+                                    <a href="/cart" class="w-btn w-btn-secondary"><lang>查看购物车</lang></a>
+                                    <a href="/checkout" class="w-btn w-btn-primary"><lang>去结算</lang></a>
                                 </div>
                             </div>
                         </div>
@@ -728,7 +735,7 @@ $defaultNavItemsFactory = static function (): array {
             <div class="header-nav-fill" id="header-nav-fill"
                  data-wslot="navigation"
                  data-wslot-name="导航菜单"
-                 data-wslot-accept="main-nav,category-menu"
+                 data-wslot-accept="layout-header-navigation,layout-global-header-navigation,main-nav,category-menu,navigation"
                  data-wslot-exclusive="true"
                  data-wslot-position="header">
                 <!-- 横向导航链接（今日特价、Prime Video等） -->
@@ -963,11 +970,12 @@ textarea::-webkit-scrollbar-thumb:hover,
 .header-container {
     width: 100%;
     /* 版心宽度：与全站统一，支持主题变量覆盖 */
-    max-width: var(--layout-max-width, 1600px);
+    max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
     margin: 0 auto;
-    padding: 0;
-    overflow: visible; 
-    position: relative; 
+    padding: 0 var(--weline-layout-content-padding-inline, 1rem);
+    overflow: visible;
+    position: relative;
+    box-sizing: border-box;
 }
 
 /* ========== 顶部栏（nav-belt）- 亚马逊风格 ========== */
@@ -1935,7 +1943,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     gap: 0.5rem;
 }
 
-.mini-cart-actions .btn {
+.mini-cart-actions .w-btn {
     flex: 1;
     padding: 0.75rem 1rem;
     border: none;
@@ -1946,22 +1954,22 @@ textarea::-webkit-scrollbar-thumb:hover,
     transition: background-color 0.2s ease;
 }
 
-.mini-cart-actions .btn-primary {
+.mini-cart-actions .w-btn-primary {
     background-color: <?= htmlspecialchars($colors['primary'] ?? '#ff9900') ?>;
     color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
 }
 
-.mini-cart-actions .btn-primary:hover {
+.mini-cart-actions .w-btn-primary:hover {
     background-color: <?= htmlspecialchars($colors['primaryDark'] ?? '#e68900') ?>;
 }
 
-.mini-cart-actions .btn-secondary {
+.mini-cart-actions .w-btn-secondary {
     background-color: <?= htmlspecialchars($colors['bgPrimary'] ?? '#fff') ?>;
     color: <?= htmlspecialchars($colors['textPrimary'] ?? '#111') ?>;
     border: 1px solid <?= htmlspecialchars($colors['borderDefault'] ?? '#ddd') ?>;
 }
 
-.mini-cart-actions .btn-secondary:hover {
+.mini-cart-actions .w-btn-secondary:hover {
     background-color: <?= htmlspecialchars($colors['bgSecondary'] ?? '#f3f3f3') ?>;
 }
 
@@ -2176,7 +2184,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     border-radius: 12px;
     box-shadow: none;
     min-width: 1100px;
-    max-width: 1400px;
+    max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
     width: auto;
     margin-top: 0.5rem;
     display: none;

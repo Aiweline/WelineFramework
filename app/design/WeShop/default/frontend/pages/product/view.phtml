@@ -204,39 +204,6 @@ $canonicalProductTabsContent = trim((string) $this->getHook('WeShop_Product::fro
             <w:hook name="WeShop_Product::detail::tabs_after"/>
         </div>
         
-        <!-- Customer Reviews Summary -->
-        <div class="mt-16 py-10 border-t border-border-light dark:border-border-dark">
-            <w:hook name="WeShop_Review::product::summary_before"/>
-            <h2 class="text-2xl font-bold mb-6"><?= __('Customer Reviews') ?></h2>
-            <div class="flex flex-wrap gap-x-8 gap-y-6 p-4 bg-background-light dark:bg-surface-dark rounded-lg">
-                <div class="flex flex-col gap-2">
-                    <p class="text-4xl font-black leading-tight tracking-[-0.033em]"><?= number_format($rating, 1) ?></p>
-                    <div class="flex gap-0.5 text-primary">
-                        <?php for ($i = 1; $i <= 5; $i++): ?>
-                            <?php if ($i <= $rating): ?>
-                                <span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">star</span>
-                            <?php elseif ($i - 0.5 <= $rating): ?>
-                                <span class="material-symbols-outlined text-lg">star_half</span>
-                            <?php else: ?>
-                                <span class="material-symbols-outlined text-lg">star</span>
-                            <?php endif; ?>
-                        <?php endfor; ?>
-                    </div>
-                    <p class="text-base font-normal leading-normal"><?= __('Based on %1 reviews', number_format($reviewCount)) ?></p>
-                </div>
-                <div class="grid min-w-[200px] max-w-[400px] flex-1 grid-cols-[20px_1fr_40px] items-center gap-x-4 gap-y-3">
-                    <?php $ratingDistribution = $product['rating_distribution'] ?? []; ?>
-                    <?php for ($i = 5; $i >= 1; $i--): ?>
-                        <?php $percent = $ratingDistribution[$i] ?? 0; ?>
-                        <p class="text-sm font-normal leading-normal"><?= $i ?></p>
-                        <div class="flex h-2 flex-1 overflow-hidden rounded-full bg-border-light dark:bg-border-dark"><div class="rounded-full bg-primary" style="width: <?= $percent ?>%;"></div></div>
-                        <p class="text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal text-right"><?= $percent ?>%</p>
-                    <?php endfor; ?>
-                </div>
-            </div>
-            <w:hook name="WeShop_Review::product::summary_after"/>
-        </div>
-        
         <!-- Related Products -->
         <?php if (!empty($relatedProducts)): ?>
             <div class="mt-16 py-10 border-t border-border-light dark:border-border-dark">
@@ -284,24 +251,80 @@ function changeMainImage(thumbnail) {
 }
 
 // Tabs
+function activateProductTab(tabName) {
+    var targetContent = document.getElementById(tabName + '-content');
+    if (!targetContent) {
+        return false;
+    }
+
+    document.querySelectorAll('.product-tab').forEach(function(t) {
+        var isActive = t.dataset.tab === tabName;
+        t.classList.toggle('is-active', isActive);
+        t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    document.querySelectorAll('.tab-content').forEach(function(content) {
+        content.setAttribute('hidden', 'hidden');
+    });
+    targetContent.removeAttribute('hidden');
+
+    return true;
+}
+
+function getProductReviewDeepLinkTargetId() {
+    var params = new URLSearchParams(window.location.search || '');
+    var replyId = Number(params.get('reply_id') || 0);
+    if (replyId > 0) {
+        return 'review-reply-' + replyId;
+    }
+
+    var reviewId = Number(params.get('review_id') || 0);
+    if (reviewId > 0) {
+        return 'review-' + reviewId;
+    }
+
+    var hash = window.location.hash ? decodeURIComponent(window.location.hash.substring(1)) : '';
+    return /^review(?:-reply)?-\d+$/.test(hash) ? hash : '';
+}
+
+function focusProductReviewDeepLink() {
+    var targetId = getProductReviewDeepLinkTargetId();
+    if (!targetId) {
+        return;
+    }
+
+    activateProductTab('reviews');
+    window.setTimeout(function() {
+        var node = document.getElementById(targetId);
+        if (!node) {
+            return;
+        }
+        document.querySelectorAll('[data-review-deep-link-target="1"]').forEach(function(item) {
+            item.removeAttribute('data-review-deep-link-target');
+            item.classList.remove('ring-2', 'ring-primary/30', 'border-primary');
+        });
+        node.classList.add('ring-2', 'ring-primary/30', 'border-primary');
+        node.setAttribute('data-review-deep-link-target', '1');
+        if (!node.hasAttribute('tabindex')) {
+            node.setAttribute('tabindex', '-1');
+        }
+        node.scrollIntoView({behavior: 'auto', block: 'center', inline: 'nearest'});
+        try {
+            node.focus({preventScroll: true});
+        } catch (error) {
+            node.focus();
+        }
+    }, 160);
+}
+
 document.querySelectorAll('.product-tab').forEach(function(tab) {
     tab.addEventListener('click', function(e) {
         e.preventDefault();
-        var tabName = this.dataset.tab;
-        
-        // Update tab styles
-        document.querySelectorAll('.product-tab').forEach(function(t) {
-            t.classList.remove('text-primary', 'border-primary');
-            t.classList.add('text-text-secondary-light', 'dark:text-text-secondary-dark', 'border-transparent');
-        });
-        this.classList.add('text-primary', 'border-primary');
-        this.classList.remove('text-text-secondary-light', 'dark:text-text-secondary-dark', 'border-transparent');
-        
-        // Show/hide content
-        document.querySelectorAll('.tab-content').forEach(function(content) {
-            content.classList.add('hidden');
-        });
-        document.getElementById(tabName + '-content').classList.remove('hidden');
+        activateProductTab(this.dataset.tab);
     });
 });
+
+focusProductReviewDeepLink();
+window.addEventListener('load', focusProductReviewDeepLink);
+window.addEventListener('hashchange', focusProductReviewDeepLink);
 </script>

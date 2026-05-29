@@ -91,9 +91,6 @@ class Router implements RouterInterface
         if ((string)($request?->getParam('layout_type', '') ?? '') === '') {
             $queryOverrides['layout_type'] = $layoutType;
         }
-        if ((string)($request?->getParam('layout_option', '') ?? '') === '') {
-            $queryOverrides['layout_option'] = 'default';
-        }
         if ((string)($request?->getParam('preview_mode', '') ?? '') === '') {
             $queryOverrides['preview_mode'] = PreviewContextService::DEFAULT_PREVIEW_MODE;
         }

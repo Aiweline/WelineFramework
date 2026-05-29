@@ -227,6 +227,12 @@ function renderAreaPlaceholder(string $area, string $label): string {
             outline: 2px solid #007bff;
             outline-offset: 2px;
         }
+
+        .preview-widget.selected {
+            outline: 2px solid #635bff;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 4px rgba(99, 91, 255, 0.18);
+        }
         
         .preview-widget::after {
             content: attr(data-widget-code);
@@ -243,7 +249,8 @@ function renderAreaPlaceholder(string $area, string $label): string {
             pointer-events: none;
         }
         
-        .preview-widget:hover::after {
+        .preview-widget:hover::after,
+        .preview-widget.selected::after {
             opacity: 1;
         }
         
@@ -450,6 +457,9 @@ function renderAreaPlaceholder(string $area, string $label): string {
             e.stopPropagation();
             const layoutId = this.dataset.layoutId;
             const widgetCode = this.dataset.widgetCode;
+            const widgetName = this.dataset.widgetName;
+            const widgetModule = this.dataset.widgetModule;
+            const widgetType = this.dataset.widgetType;
             const config = this.dataset.config;
             
             // 通知父窗口（编辑器）
@@ -458,6 +468,9 @@ function renderAreaPlaceholder(string $area, string $label): string {
                     type: 'widget-selected',
                     layoutId: layoutId,
                     widgetCode: widgetCode,
+                    widgetName: widgetName,
+                    widgetModule: widgetModule,
+                    widgetType: widgetType,
                     config: config
                 }, '*');
             }

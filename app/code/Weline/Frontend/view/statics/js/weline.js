@@ -53,6 +53,47 @@
         (window.Weline && window.Weline.config) || window.__WelineThemeConfig || window.WelineConfig || {}
     );
 
+    function writeCookieValue(key, value, expiry = 365, options = {}) {
+        const normalizedOptions = Object.assign({ path: '/' }, options || {});
+        if (typeof window.setCookie === 'function') {
+            window.setCookie(key, value, expiry, normalizedOptions);
+            return;
+        }
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
+        let cookieString = key + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
+        Object.keys(normalizedOptions).forEach((optionKey) => {
+            cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
+        });
+        document.cookie = cookieString;
+    }
+
+    function writeCanonicalLocalStorage(canonicalKey, legacyKeys, value) {
+        try {
+            if (!window.localStorage) {
+                return;
+            }
+            localStorage.setItem(canonicalKey, value);
+            legacyKeys.forEach((key) => {
+                if (key && key !== canonicalKey) {
+                    localStorage.removeItem(key);
+                }
+            });
+        } catch (error) {
+            // localStorage can be unavailable in privacy modes.
+        }
+    }
+
+    function persistLangPreference(lang) {
+        writeCanonicalLocalStorage('weline_user_lang', ['weline_user_lang', 'api_doc_locale', 'WELINE_USER_LANG'], lang);
+        writeCookieValue('WELINE_USER_LANG', lang, 365);
+    }
+
+    function persistCurrencyPreference(currency) {
+        writeCanonicalLocalStorage('weline_user_currency', ['weline_user_currency', 'api_doc_currency', 'WELINE_USER_CURRENCY'], currency);
+        writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+    }
+
     /**
      * 模块加载器
      */
@@ -363,7 +404,7 @@
              */
             switchLang: async (lang) => {
                 // 保存语言偏好
-                localStorage.setItem('weline_user_lang', lang);
+                persistLangPreference(lang);
                 // 重新加载页面
                 const url = new URL(window.location.href);
                 url.searchParams.set('lang', lang);
@@ -392,7 +433,7 @@
              */
             switchCurrency: async (currency) => {
                 // 保存货币偏好
-                localStorage.setItem('weline_user_currency', currency);
+                persistCurrencyPreference(currency);
                 // 重新加载页面
                 const url = new URL(window.location.href);
                 url.searchParams.set('currency', currency);

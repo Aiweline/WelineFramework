@@ -24,7 +24,7 @@ $unreadCount = (int) ($notificationData['notification_unread_count'] ?? 0);
 ?>
 <li role="none">
     <a href="@url{'customer/account/index'}#notification-preferences" role="menuitem" class="header-account-menu-link-with-badge">
-        <span><?= __('通知设置') ?></span>
+        <span><?= __('消息通知') ?></span>
         <?php if ($unreadCount > 0): ?>
             <span class="header-account-menu-badge" data-notification-unread-badge data-notification-unread-count><?= $unreadCount > 99 ? '99+' : $unreadCount ?></span>
         <?php endif; ?>

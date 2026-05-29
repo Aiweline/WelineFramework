@@ -195,7 +195,6 @@ class AiResponseJsonParser
             'markdown',
             'plan_json',
             'style_plan',
-            'task_plan',
         ];
         $keyPattern = implode('|', array_map(static fn(string $key): string => preg_quote($key, '/'), $knownKeys));
 

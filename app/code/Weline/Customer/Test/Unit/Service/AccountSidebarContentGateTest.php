@@ -11,13 +11,13 @@ final class AccountSidebarContentGateTest extends TestCase
 {
     protected function tearDown(): void
     {
-        unset($GLOBALS['__weline_account_sidebar_content_section']);
+        AccountSidebarContentGate::setRequestedSection(null);
         parent::tearDown();
     }
 
     public function testAcceptsMatchingSectionOnlyWhenRequested(): void
     {
-        $GLOBALS['__weline_account_sidebar_content_section'] = 'orders';
+        AccountSidebarContentGate::setRequestedSection('orders');
 
         $this->assertTrue(AccountSidebarContentGate::accepts('orders'));
         $this->assertFalse(AccountSidebarContentGate::accepts('returns'));
@@ -25,8 +25,6 @@ final class AccountSidebarContentGateTest extends TestCase
 
     public function testRejectsAllSectionsWhenRequestMissing(): void
     {
-        unset($GLOBALS['__weline_account_sidebar_content_section']);
-
         $this->assertSame('', AccountSidebarContentGate::requestedSection());
         $this->assertFalse(AccountSidebarContentGate::accepts('orders'));
     }

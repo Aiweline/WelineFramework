@@ -463,6 +463,33 @@
             // 清理视觉状态
             this.classList.remove('drag-over', 'drag-invalid');
             removeIframeInsertionIndicators(this);
+
+            const isExclusive = this.dataset.wslotExclusive === 'true';
+            const isMultiple = this.dataset.wslotMultiple !== 'false';
+            const maxAttr = this.dataset.wslotMax;
+            const maxWidgets = maxAttr ? parseInt(maxAttr, 10) : -1;
+            const currentWidgets = getSlotWidgetElements(this);
+            const currentCount = currentWidgets.length;
+
+            const slotData = {
+                id: this.dataset.wslot,
+                name: this.dataset.wslotName || this.dataset.wslot,
+                accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
+                exclusive: isExclusive,
+                multiple: isMultiple,
+                max: maxWidgets,
+                current_count: currentCount,
+                position: this.dataset.wslotPosition || ''
+            };
+
+            let sortOrder;
+            if (isExclusive) {
+                sortOrder = 0;
+            } else if (insertIndex != null) {
+                sortOrder = insertIndex;
+            } else {
+                sortOrder = currentCount;
+            }
             
             // 获取拖放的部件数据
             let widgetData;
@@ -478,24 +505,17 @@
             
             if (!widgetData) {
                 console.error('No widget data found in drop event');
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'widget-dropped',
+                        widget: null,
+                        slot: slotData,
+                        sort_order: sortOrder,
+                        missing_data: true
+                    }, '*');
+                }
                 return;
             }
-            
-            const isExclusive = this.dataset.wslotExclusive === 'true';
-            const isMultiple = this.dataset.wslotMultiple !== 'false';
-            const maxAttr = this.dataset.wslotMax;
-            const maxWidgets = maxAttr ? parseInt(maxAttr, 10) : -1;
-            const currentWidgets = getSlotWidgetElements(this);
-            const currentCount = currentWidgets.length;
-            
-            const slotData = {
-                id: this.dataset.wslot,
-                name: this.dataset.wslotName || this.dataset.wslot,
-                accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
-                exclusive: isExclusive,
-                multiple: isMultiple,
-                position: this.dataset.wslotPosition || ''
-            };
             
             // 检查部件是否被接受（accept 为空或包含 * 时允许所有）
             const acceptedCodes = slotData.accept;
@@ -532,16 +552,6 @@
                     }, '*');
                 }
                 return;
-            }
-            
-            // 计算 sort_order
-            let sortOrder;
-            if (isExclusive) {
-                sortOrder = 0;
-            } else if (insertIndex != null) {
-                sortOrder = insertIndex;
-            } else {
-                sortOrder = currentCount;
             }
             
             // 通知父窗口部件被放入插槽（附带 sort_order）

@@ -89,7 +89,8 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
     {
         $source = (string)\file_get_contents((new \ReflectionClass(AiSiteAgentSessionArtifactService::class))->getFileName());
 
-        self::assertStringContainsString('private const PAYLOAD_VALUE_CACHE_LIMIT = 2;', $source);
+        self::assertStringContainsString('private const PAYLOAD_VALUE_CACHE_LIMIT = 1;', $source);
+        self::assertStringContainsString('public function releasePayloadCache(): void', $source);
         self::assertStringContainsString('private const PAYLOAD_VALUE_CACHE_MAX_BYTES = 1048576;', $source);
         self::assertStringContainsString('shouldCachePayloadValue($artifact->getPayloadBytes())', $source);
         self::assertStringContainsString('shouldCachePayloadValue($payloadBytes)', $source);

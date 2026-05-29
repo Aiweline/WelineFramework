@@ -39,6 +39,7 @@ class View extends BaseController
                 'title' => (string) __('订单详情'),
                 'orderIndexUrl' => $this->getUrl('*/backend/order'),
                 'updateStatusUrl' => $this->getUrl('*/backend/order/update-status'),
+                'updatePaymentStatusUrl' => $this->getUrl('*/backend/order/update-payment-status'),
                 'createShipmentUrl' => $this->getUrl('*/backend/order/create-shipment'),
                 'markDeliveredUrl' => $this->getUrl('*/backend/order/mark-delivered'),
             ],

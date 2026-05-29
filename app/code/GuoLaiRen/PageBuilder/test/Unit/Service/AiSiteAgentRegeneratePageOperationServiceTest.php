@@ -197,7 +197,7 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
     {
         $state = [];
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('缺少要重建的页面类型');
+        $this->expectExceptionMessage((string)__('缺少要重建的页面类型'));
         $this->svc()->runRegeneratePageOperation(
             $this->sse(),
             $this->session(),
@@ -211,7 +211,7 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
     {
         $state = [];
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('页面类型不在当前工作区中');
+        $this->expectExceptionMessage((string)__('页面类型不在当前工作区中'));
         $this->svc()->runRegeneratePageOperation(
             $this->sse(),
             $this->session(),
@@ -251,7 +251,7 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
         );
 
         self::assertSame([
-            'message' => '页面重建完成',
+            'message' => (string)__('页面重建完成'),
             'page_type' => 'home',
             'virtual_theme_id' => 0,
         ], $result);
@@ -276,7 +276,7 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
         $replace = $state['calls']['replaceScope'][0];
         self::assertSame(AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH, $replace['workspace_status']);
         self::assertSame('done', $replace['active_operation']['status']);
-        self::assertSame('页面区块已重建', $replace['active_operation']['message']);
+        self::assertSame((string)__('页面区块已重建'), $replace['active_operation']['message']);
         self::assertSame('home', $replace['preview_page_type']);
     }
 
@@ -336,7 +336,7 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
         $result = $this->svc()->runRegeneratePageOperation($this->sse(), $this->session(), 42, 'home', $ports);
 
         self::assertSame([
-            'message' => '页面重建完成',
+            'message' => (string)__('页面重建完成'),
             'page_type' => 'home',
             'virtual_theme_id' => 777,
         ], $result);
@@ -358,7 +358,7 @@ final class AiSiteAgentRegeneratePageOperationServiceTest extends TestCase
 
         $replace = $state['calls']['replaceScope'][0];
         self::assertSame('done', $replace['active_operation']['status']);
-        self::assertSame('页面重建完成', $replace['active_operation']['message']);
+        self::assertSame((string)__('页面重建完成'), $replace['active_operation']['message']);
         self::assertSame(AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH, $replace['workspace_status']);
         self::assertCount(2, $state['calls']['sendOperationProgress']);
         self::assertSame(20, $state['calls']['sendOperationProgress'][0]['percent']);

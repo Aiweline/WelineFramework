@@ -8,8 +8,10 @@ use WeShop\Customer\Model\Customer as CustomerProfile;
 use WeShop\Customer\Session\CustomerSession;
 use Weline\Customer\Model\Customer as AuthCustomer;
 use Weline\Customer\Model\CustomerToken;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 
 class CustomerAccountService
 {
@@ -18,7 +20,8 @@ class CustomerAccountService
         private readonly CustomerProfileService $customerProfileService,
         private readonly CustomerSession $customerSession,
         private readonly Request $request,
-        private readonly CustomerToken $customerToken
+        private readonly CustomerToken $customerToken,
+        private readonly ?EventsManager $eventsManager = null
     ) {
     }
 
@@ -47,6 +50,13 @@ class CustomerAccountService
             throw new \RuntimeException((string) __('An account with this email already exists.'));
         }
 
+        $beforePayload = [
+            'email' => $email,
+            'profile_data' => $profileData,
+            'referral_code' => (string) ($profileData['referral_code'] ?? ''),
+        ];
+        $this->eventsManager()->dispatch('WeShop_Customer::register_before', $beforePayload);
+
         $authUser = $this->authCustomer->reset()
             ->clearData();
         $authUser->setEmail($email)
@@ -58,6 +68,17 @@ class CustomerAccountService
             'email' => $email,
             'status' => 'active',
         ]));
+
+        $afterPayload = [
+            'auth_user' => $authUser,
+            'profile' => $profile,
+            'customer_id' => (int) ($profile->getId() ?? $authUser->getId() ?? 0),
+            'email' => $email,
+            'profile_data' => $profileData,
+            'referral_code' => (string) ($profileData['referral_code'] ?? ''),
+            'created_at' => date('Y-m-d H:i:s'),
+        ];
+        $this->eventsManager()->dispatch('WeShop_Customer::register_after', $afterPayload);
 
         return [
             'auth_user' => $authUser,
@@ -164,5 +185,10 @@ class CustomerAccountService
         $authUser->load($userId);
 
         return $authUser->getId() ? $authUser : null;
+    }
+
+    private function eventsManager(): EventsManager
+    {
+        return $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
     }
 }

@@ -64,6 +64,7 @@ class CheckoutServiceTest extends TestCase
         $this->assertSame(5.0, $summary['discount']);
         $this->assertSame(5.63, $summary['tax']);
         $this->assertSame(63.13, $summary['grand_total']);
+        $this->assertSame('USD', $summary['currency']);
         $this->assertSame('cart', $queries[0][0]);
         $this->assertSame('getCartItems', $queries[0][1]);
         $this->assertSame(8, $queries[0][2]['customer_id']);
@@ -111,6 +112,7 @@ class CheckoutServiceTest extends TestCase
         $this->assertSame(59.5, $summary['subtotal']);
         $this->assertSame(0.0, $summary['shipping']);
         $this->assertSame(59.5, $summary['grand_total']);
+        $this->assertSame('USD', $summary['currency']);
     }
 
     public function testCreateOrderFromCartBuildsSummaryFromShippingAndTaxQueries(): void
@@ -215,6 +217,8 @@ class CheckoutServiceTest extends TestCase
         $this->assertSame(5.0, $summary['discount']);
         $this->assertSame(5.63, $summary['tax']);
         $this->assertSame(63.13, $summary['grand_total']);
+        $this->assertSame('USD', $summary['currency']);
+        $this->assertSame('USD', $queries[4][2]['order_data']['currency_code']);
 
         $shippingCall = $queries[2];
         $this->assertSame('shipping', $shippingCall[0]);

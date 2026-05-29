@@ -191,10 +191,10 @@ final class AiSitePageBlueprintService
         string $primaryCtaLabel = ''
     ): array {
         $combined = $brief . "\n" . $aiDescription;
-        $isDownload = \preg_match('/(?:APK|download|app|安装|下载|推广)/iu', $combined) === 1;
-        $isGame = \preg_match('/(?:游戏|game|棋牌|card|Teen\\s*Patti|rummy)/iu', $combined) === 1;
-        $isSeo = \preg_match('/(?:SEO|seo|关键词|keyword)/iu', $combined) === 1;
-        $isTrust = \preg_match('/(?:信任|trust|安全|secure|放心)/iu', $combined) === 1;
+        $isDownload = $this->containsAnyPositiveIntent($combined, ['APK', 'download', 'app', '安装', '下载', '推广']);
+        $isGame = $this->containsAnyPositiveIntent($combined, ['游戏', 'game', '棋牌', 'card', 'Teen Patti', 'rummy']);
+        $isSeo = $this->containsAnyPositiveIntent($combined, ['SEO', 'seo', '关键词', 'keyword']);
+        $isTrust = $this->containsAnyPositiveIntent($combined, ['信任', 'trust', '安全', 'secure', '放心']);
 
         $sections = [
             $this->buildHeroSection(
@@ -212,7 +212,7 @@ final class AiSitePageBlueprintService
                 $baseCode . '-highlights',
                 $isGame || $isDownload ? '热门内容与下载亮点' : '核心卖点',
                 $isGame || $isDownload ? '热门玩法、下载收益和上手路径清晰可见。' : '核心价值、适用场景和行动入口清晰可见。',
-                $isGame || $isDownload ? ['热门游戏', '下载亮点', '上手路径'] : ['核心卖点', '投放场景', '下载转化'],
+                $isGame || $isDownload ? ['热门游戏', '下载亮点', '上手路径'] : ['核心卖点', '适用场景', '转化路径'],
                 $promptPoints,
                 $middleRefinement,
                 20,
@@ -235,7 +235,7 @@ final class AiSitePageBlueprintService
         $sections[] = $this->buildChecklistSection(
             $baseCode . ($isSeo ? '-seo-faq' : '-details'),
             $isSeo ? '下载前常见问题' : '转化路径',
-            $isSeo ? '下载疑问、玩法入口和安全说明直接可读。' : '浏览重点、下载入口和支持信息清晰可见。',
+            $isSeo ? '下载疑问、玩法入口和安全说明直接可读。' : '浏览重点、预约入口和支持信息清晰可见。',
             $promptPoints,
             $detailRefinement,
             $isTrust ? 40 : 30,
@@ -1004,13 +1004,13 @@ final class AiSitePageBlueprintService
             default => '',
         };
 
-        $isGaming = \preg_match('/棋牌|游戏|扑克|德州|poker|rummy|ludo|casino/iu', $brief) === 1;
-        $isApp = \preg_match('/apk|app|应用|下载/iu', $brief) === 1;
-        $isFinance = \preg_match('/金融|支付|银行|wallet|pay|fintech/iu', $brief) === 1;
-        $isFitness = \preg_match('/健身|训练|课程|gym|fitness/iu', $brief) === 1;
-        $isSaas = \preg_match('/saas|软件|系统|平台|crm|erp/iu', $brief) === 1;
-        $isContent = \preg_match('/博客|blog|资讯|内容/iu', $brief) === 1;
-        $needsContact = \preg_match('/咨询|联系|留资|预约|线索|合作/iu', $brief) === 1;
+        $isGaming = $this->containsAnyPositiveIntent($brief, ['棋牌', '游戏', '扑克', '德州', 'poker', 'rummy', 'ludo', 'casino', 'gaming', 'gambling']);
+        $isApp = $this->containsAnyPositiveIntent($brief, ['apk', 'app', '应用', '下载', 'download', 'install']);
+        $isFinance = $this->containsAnyPositiveIntent($brief, ['金融', '支付', '银行', 'wallet', 'pay', 'fintech']);
+        $isFitness = $this->containsAnyPositiveIntent($brief, ['健身', '训练', '课程', 'gym', 'fitness']);
+        $isSaas = $this->containsAnyPositiveIntent($brief, ['saas', '软件', '系统', '平台', 'crm', 'erp', 'workflow', 'automation']);
+        $isContent = $this->containsAnyPositiveIntent($brief, ['博客', 'blog', '资讯', '内容']);
+        $needsContact = $this->containsAnyPositiveIntent($brief, ['咨询', '联系', '留资', '预约', '线索', '合作', 'demo', 'booking']);
 
         $offer = match (true) {
             $isGaming && $isApp => '移动棋牌内容与下载引导平台',
@@ -1045,6 +1045,61 @@ final class AiSitePageBlueprintService
             'goal' => $goal,
             'trust' => $trust,
         ];
+    }
+
+    /**
+     * @param list<string> $needles
+     */
+    private function containsAnyPositiveIntent(string $haystack, array $needles): bool
+    {
+        if (\trim($haystack) === '') {
+            return false;
+        }
+        foreach ($needles as $needle) {
+            if ($this->containsPositiveIntent($haystack, (string)$needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function containsPositiveIntent(string $haystack, string $needle): bool
+    {
+        $needle = \trim($needle);
+        if (\trim($haystack) === '' || $needle === '') {
+            return false;
+        }
+
+        $quoted = \preg_quote($needle, '/');
+        $pattern = \preg_match('/^[a-z0-9]+$/i', $needle) === 1
+            ? '/(?<![a-z0-9])' . $quoted . '(?![a-z0-9])/iu'
+            : '/' . $quoted . '/iu';
+
+        if (\preg_match_all($pattern, $haystack, $matches, \PREG_OFFSET_CAPTURE) < 1) {
+            return false;
+        }
+
+        foreach ($matches[0] as $match) {
+            $position = (int)($match[1] ?? 0);
+            if (!$this->isNegatedTermOccurrence($haystack, $position)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isNegatedTermOccurrence(string $haystack, int $bytePosition): bool
+    {
+        $start = \max(0, $bytePosition - 140);
+        $prefix = \substr($haystack, $start, $bytePosition - $start);
+        $prefix = (string)\preg_replace('/^.*[.;!?。！？\r\n]/u', '', $prefix);
+
+        return \preg_match(
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|不是|非|勿|请勿)[^.;!?。！？\r\n]{0,140}$/iu',
+            $prefix
+        ) === 1;
     }
 
     /**

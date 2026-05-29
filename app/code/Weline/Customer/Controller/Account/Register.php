@@ -30,6 +30,11 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
         $this->assign('login_url', '/customer/account/login');
         $this->assign('title', __('创建账户'));
 
+        $referralCode = $this->readReferralCode();
+        if ($referralCode !== '') {
+            $this->assign('referral_code', $referralCode);
+        }
+
         return (string) $this->fetch('Weline_Customer::templates/frontend/account/register.phtml');
     }
 
@@ -46,6 +51,7 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
         $password = (string) ($this->request->getPost('password') ?? '');
         $confirmPassword = (string) ($this->request->getPost('confirm_password') ?? '');
         $agreeTerms = (bool) ($this->request->getPost('agree_terms') ?? false);
+        $referralCode = $this->readReferralCode();
 
         if ($firstName === '' || $lastName === '') {
             MessageManager::error(__('请填写名和姓。'));
@@ -73,10 +79,14 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
         }
 
         try {
-            $result = $this->customerAccountService->register($email, $password, [
+            $profileData = [
                 'first_name' => $firstName,
                 'last_name' => $lastName,
-            ]);
+            ];
+            if ($referralCode !== '') {
+                $profileData['referral_code'] = $referralCode;
+            }
+            $result = $this->customerAccountService->register($email, $password, $profileData);
             $this->customerAccountService->loginCustomer($result['customer']);
             MessageManager::success(__('注册成功，欢迎加入。'));
             return (string) $this->redirect('/customer/account');
@@ -85,5 +95,20 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
         }
 
         return (string) $this->redirect('/customer/account/register');
+    }
+
+    private function readReferralCode(): string
+    {
+        if (!isset($this->request)) {
+            return '';
+        }
+
+        return trim((string) (
+            $this->request->getPost('ref')
+            ?? $this->request->getParam('ref')
+            ?? $this->request->getPost('referral_code')
+            ?? $this->request->getParam('referral_code')
+            ?? ''
+        ));
     }
 }

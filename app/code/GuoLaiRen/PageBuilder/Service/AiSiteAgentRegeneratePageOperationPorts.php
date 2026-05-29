@@ -29,6 +29,7 @@ final class AiSiteAgentRegeneratePageOperationPorts
      * @param \Closure(mixed,array<int,string>):array<string,mixed> $normalizePageTypeLayouts
      * @param \Closure(array,string):array<string,mixed> $normalizeLayoutConfig
      * @param \Closure(array,array,array,array,int,bool):array<string,mixed> $ensureAiGeneratedVirtualTheme
+     * @param null|\Closure(array,array,array,array,string,int):array<string,mixed> $regenerateAiGeneratedVirtualThemePage
      */
     public function __construct(
         public readonly \Closure $assertActiveStreamLeaseAlive,
@@ -53,6 +54,7 @@ final class AiSiteAgentRegeneratePageOperationPorts
         public readonly \Closure $normalizePageTypeLayouts,
         public readonly \Closure $normalizeLayoutConfig,
         public readonly \Closure $ensureAiGeneratedVirtualTheme,
+        public readonly ?\Closure $regenerateAiGeneratedVirtualThemePage = null,
     ) {
     }
 }

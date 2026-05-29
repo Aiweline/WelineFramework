@@ -61,8 +61,9 @@ class ThemeLayoutService
                 ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
                 ->where(ThemeLayout::schema_fields_IS_ACTIVE, 1)
                 ->where(ThemeLayout::schema_fields_STATUS, $status)
-                ->order(ThemeLayout::schema_fields_AREA)
-                ->order(ThemeLayout::schema_fields_SORT_ORDER)
+                ->order(ThemeLayout::schema_fields_AREA, 'ASC')
+                ->order(ThemeLayout::schema_fields_SORT_ORDER, 'ASC')
+                ->order(ThemeLayout::schema_fields_ID, 'ASC')
                 ->select()
                 ->fetchArray();
 
@@ -875,7 +876,7 @@ class ThemeLayoutService
      * @param string|null $pageType 页面类型
      * @return array 包含 exclusive_widgets 和 regular_widgets 两个数组
      */
-    public function getWidgetsForSlot(string $slotId, ?string $area = null, ?string $pageType = null): array
+    public function getWidgetsForSlot(string $slotId, ?string $area = null, ?string $pageType = null, array $acceptCodes = [], array $rejectCodes = []): array
     {
         // 判断是否是子 slot
         $isSubSlot = isset(self::SUB_SLOTS_MAP[$slotId]);
@@ -885,8 +886,13 @@ class ThemeLayoutService
         // 检查是否是独占区域
         $isExclusiveArea = in_array($effectiveArea, self::EXCLUSIVE_AREAS);
         
-        // 获取所有部件
-        $allWidgets = $this->getAvailableWidgets($pageType);
+        // 获取所有部件，支持 slot accept/reject 与部件 code/type/slot/position/slots 的协议交叉过滤
+        $allWidgets = $this->getAvailableWidgets($pageType, [
+            'slot_id' => $slotId,
+            'area' => $effectiveArea,
+            'accept' => $acceptCodes,
+            'reject' => $rejectCodes,
+        ]);
         
         $exclusiveWidgets = [];  // 独占大部件
         $regularWidgets = [];     // 普通小部件

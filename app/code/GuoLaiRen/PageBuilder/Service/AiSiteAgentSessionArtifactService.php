@@ -17,12 +17,12 @@ class AiSiteAgentSessionArtifactService
     private const STORAGE_EXTERNAL_FILE = 'session_artifact_file_v1';
     private const EXTERNAL_PAYLOAD_THRESHOLD_BYTES = 524288;
 
-    // build 流程中同一会话的 plan_workbench / build_blueprint 等 artifact 单文件可能达到 6-8MB JSON，
+    // build 流程中同一会话的 plan_workbench / build_plan_v2 等 artifact 单文件可能达到 6-8MB JSON，
     // 同进程内 hydrateScope 会被反复触发（loadScopeForStage 调用 50+ 次）。每次都做 file_get_contents +
     // json_decode 会让 worker 在 512MB memory_limit 下 OOM。这里按 payload_hash 做 LRU 缓存，
     // 命中时直接复用已解码的 array（PHP COW 不会立即翻倍内存），未命中再走 disk + decode。
     // 上限 6 控制最坏情况下缓存常驻内存，超出按 FIFO 淘汰。
-    private const PAYLOAD_VALUE_CACHE_LIMIT = 2;
+    private const PAYLOAD_VALUE_CACHE_LIMIT = 1;
     private const PAYLOAD_VALUE_CACHE_MAX_BYTES = 1048576;
 
     private bool $artifactTableEnsured = false;
@@ -67,19 +67,9 @@ class AiSiteAgentSessionArtifactService
             'path' => ['content_manifest'],
             'empty' => [],
         ],
-        'execution_blueprint' => [
-            'stage' => AiSiteAgentSession::STAGE_PLAN,
-            'path' => ['execution_blueprint'],
-            'empty' => [],
-        ],
         'plan_workbench' => [
             'stage' => AiSiteAgentSession::STAGE_PLAN,
             'path' => ['plan_workbench'],
-            'empty' => [],
-        ],
-        'build_blueprint' => [
-            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'path' => ['build_blueprint'],
             'empty' => [],
         ],
         'build_workbench' => [
@@ -112,6 +102,11 @@ class AiSiteAgentSessionArtifactService
             'path' => ['repair_patch'],
             'empty' => [],
         ],
+        'theme_css' => [
+            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'path' => ['theme_css'],
+            'empty' => '',
+        ],
     ];
 
     /**
@@ -125,7 +120,6 @@ class AiSiteAgentSessionArtifactService
             'build_plan_v2',
             'plan_projection',
             'content_manifest',
-            'execution_blueprint',
             'plan_workbench',
         ],
         AiSiteAgentSession::STAGE_VISUAL_EDIT => [
@@ -135,15 +129,14 @@ class AiSiteAgentSessionArtifactService
             'build_plan_v2',
             'plan_projection',
             'content_manifest',
-            'execution_blueprint',
             'plan_workbench',
-            'build_blueprint',
             'build_workbench',
             'build_contracts',
             'render_data_contract',
             'task_results',
             'qa_report',
             'repair_patch',
+            'theme_css',
         ],
         AiSiteAgentSession::STAGE_PUBLISH => [
             'plan_json',
@@ -152,9 +145,7 @@ class AiSiteAgentSessionArtifactService
             'build_plan_v2',
             'plan_projection',
             'content_manifest',
-            'execution_blueprint',
             'plan_workbench',
-            'build_blueprint',
             'build_workbench',
             'build_contracts',
             'render_data_contract',
@@ -284,136 +275,12 @@ class AiSiteAgentSessionArtifactService
             $scope['shared_prompt_context']
         );
 
-        foreach (['build_blueprint'] as $key) {
-            if (\is_array($scope[$key] ?? null)) {
-                $scope[$key] = $this->stripSnapshotBackupsFromTree($scope[$key]);
-            }
-        }
-
         return $scope;
     }
 
     private function compactArtifactPayloadForStorage(string $artifactKey, mixed $value): mixed
     {
-        if ($artifactKey === 'build_blueprint' && \is_array($value)) {
-            return $this->compactBuildBlueprintPayload($value);
-        }
-
         return $value;
-    }
-
-    /**
-     * @param array<string, mixed> $blueprint
-     * @return array<string, mixed>
-     */
-    private function compactBuildBlueprintPayload(array $blueprint): array
-    {
-        if (\is_array($blueprint['tasks'] ?? null)) {
-            foreach ($blueprint['tasks'] as $idx => $task) {
-                if (\is_array($task)) {
-                    $blueprint['tasks'][$idx] = $this->compactBuildBlueprintTask($task);
-                }
-            }
-        }
-
-        return $blueprint;
-    }
-
-    /**
-     * @param array<string, mixed> $task
-     * @return array<string, mixed>
-     */
-    private function compactBuildBlueprintTask(array $task): array
-    {
-        if (!\is_array($task['runtime_context'] ?? null)) {
-            return $task;
-        }
-
-        $runtimeContext = $task['runtime_context'];
-        if (\is_array($runtimeContext['asset_context'] ?? null)) {
-            $runtimeContext['asset_context'] = $this->summarizeArtifactAssetContext($runtimeContext['asset_context']);
-        }
-
-        $task['runtime_context'] = $runtimeContext;
-
-        return $task;
-    }
-
-    /**
-     * @param array<string, mixed> $assetContext
-     * @return array<string, mixed>
-     */
-    private function summarizeArtifactAssetContext(array $assetContext): array
-    {
-        $manifest = \is_array($assetContext['asset_manifest'] ?? null) ? $assetContext['asset_manifest'] : [];
-        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
-        $verifiedAssets = \is_array($assetContext['verified_assets'] ?? null) ? $assetContext['verified_assets'] : [];
-
-        return [
-            'asset_context_ref' => 'scope.asset_manifest',
-            'asset_manifest_hash' => \sha1($this->encodeValueDocument($manifest)),
-            'slot_count' => \count($slots),
-            'verified_asset_count' => \count($verifiedAssets),
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $tree
-     * @return array<string, mixed>
-     */
-    private function stripSnapshotBackupsFromTree(array $tree): array
-    {
-        unset(
-            $tree['confirmed_stage1_plan_book'],
-            $tree['theme_context_snapshot'],
-            $tree['shared_prompt_context']
-        );
-
-        if (\is_array($tree['runtime_context'] ?? null)) {
-            unset(
-                $tree['runtime_context']['theme_context_snapshot'],
-                $tree['runtime_context']['shared_prompt_context']
-            );
-            if ($tree['runtime_context'] === []) {
-                unset($tree['runtime_context']);
-            }
-        }
-
-        foreach (['tasks', 'shared_tasks'] as $listKey) {
-            if (!\is_array($tree[$listKey] ?? null)) {
-                continue;
-            }
-            foreach ($tree[$listKey] as $idx => $item) {
-                if (\is_array($item)) {
-                    $tree[$listKey][$idx] = $this->stripSnapshotBackupsFromTree($item);
-                }
-            }
-        }
-
-        foreach (['page_tasks', 'pages'] as $mapKey) {
-            if (!\is_array($tree[$mapKey] ?? null)) {
-                continue;
-            }
-            foreach ($tree[$mapKey] as $key => $value) {
-                if (\is_array($value)) {
-                    $tree[$mapKey][$key] = $this->stripSnapshotBackupsFromTree($value);
-                }
-            }
-        }
-
-        if (\is_array($tree['execution_blueprint']['tasks'] ?? null)) {
-            foreach ($tree['execution_blueprint']['tasks'] as $idx => $task) {
-                if (\is_array($task)) {
-                    $tree['execution_blueprint']['tasks'][$idx] = $this->stripSnapshotBackupsFromTree($task);
-                }
-            }
-        }
-
-        if (\is_array($tree['execution_blueprint']['task_groups'] ?? null)) {
-            $tree['execution_blueprint']['task_groups'] = $this->stripSnapshotBackupsFromTree($tree['execution_blueprint']['task_groups']);
-        }
-
-        return $tree;
     }
 
     /**
@@ -618,6 +485,12 @@ class AiSiteAgentSessionArtifactService
         return \is_array($definition) && \is_array($definition['path'] ?? null) ? $definition['path'] : [];
     }
 
+    public function releasePayloadCache(): void
+    {
+        $this->payloadValueCache = [];
+        $this->payloadValueCacheOrder = [];
+    }
+
     public function artifactStage(string $artifactKey): string
     {
         $definition = self::ARTIFACT_DEFINITIONS[$artifactKey] ?? null;
@@ -644,7 +517,6 @@ class AiSiteAgentSessionArtifactService
             'build_plan_v2',
             'plan_projection',
             'content_manifest',
-            'build_blueprint',
             'build_workbench',
             'build_contracts',
             'render_data_contract',
@@ -668,9 +540,6 @@ class AiSiteAgentSessionArtifactService
     {
         $expanded = $artifactKeys;
         foreach ($artifactKeys as $artifactKey) {
-            if (\in_array($artifactKey, ['build_blueprint'], true)) {
-                $expanded[] = 'build_blueprint';
-            }
             if (\in_array($artifactKey, ['build_plan_v2', 'plan_projection', 'content_manifest'], true)) {
                 $expanded[] = 'build_plan_v2';
                 $expanded[] = 'plan_projection';

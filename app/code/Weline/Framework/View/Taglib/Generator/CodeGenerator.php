@@ -332,6 +332,10 @@ final class CodeGenerator
             return $builtinResult;
         }
 
+        if ($this->isSlotTag($node)) {
+            $node = $node->withChildren($this->selectSlotElseFallbackNodes($node->children));
+        }
+
         $callback = $this->tagCallbacks[$node->name] ?? null;
 
         if ($callback !== null) {
@@ -383,6 +387,22 @@ final class CodeGenerator
      * 
      * @return string|null 返回 null 表示非内置标签
      */
+    private function isSlotTag(TagNode $node): bool
+    {
+        return $node->name === 'slot' || $node->name === 'w:slot';
+    }
+
+    private function selectSlotElseFallbackNodes(array $children): array
+    {
+        foreach ($children as $index => $child) {
+            if ($child instanceof TagNode && ($child->name === 'else' || $child->name === 'w:else')) {
+                return array_slice($children, $index + 1);
+            }
+        }
+
+        return $children;
+    }
+
     private function generateBuiltinTag(TagNode $node): ?string
     {
         // 检查是否是 @tag{...} 格式（内联格式）

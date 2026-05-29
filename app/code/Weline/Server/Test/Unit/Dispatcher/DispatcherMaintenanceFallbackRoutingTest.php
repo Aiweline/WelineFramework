@@ -217,6 +217,28 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         self::assertFalse($method->invoke($dispatcher));
     }
 
+    public function testImmediateStartup503ReturnsTrueWhenAllWorkerPoolsAreEmpty(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->createMock(PassthroughCore::class);
+
+        $core->expects(self::once())
+            ->method('lastNewConnectionEndedInAllWorkersDown')
+            ->willReturn(true);
+        $core->expects(self::once())
+            ->method('getMaintenanceWorkerPorts')
+            ->willReturn([]);
+        $core->expects(self::never())->method('getWorkerHealthSummary');
+        $core->expects(self::never())->method('getWorkerCount');
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'shouldReturnStartup503Immediately');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke($dispatcher));
+    }
+
     public function testTlsHandshakePeekIsDetectedAsTlsTraffic(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
@@ -237,8 +259,13 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $response = (string) $method->invoke($dispatcher);
 
         self::assertStringContainsString('HTTP/1.1 503 Service Unavailable', $response);
-        self::assertStringContainsString('WLS正在启动中', $response);
-        self::assertStringContainsString('业务 Worker 正在初始化', $response);
+        self::assertStringContainsString('Content-Length:', $response);
+        self::assertStringContainsString('Cache-Control: no-store, no-cache, must-revalidate', $response);
+        self::assertStringContainsString('Pragma: no-cache', $response);
+        self::assertStringContainsString('Retry-After: 5', $response);
+        self::assertStringContainsString('System upgrade in progress', $response);
+        self::assertStringContainsString('checking recovery automatically', $response);
+        self::assertStringContainsString('_maintenance_recovery_probe', $response);
     }
 
     public function testAllWorkersUnavailableFloatingAlertIsInjectedOnlyInDevMode(): void
@@ -257,13 +284,13 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $resolve->setAccessible(true);
         $nonDevPage = (string)$resolve->invoke($dispatcher, true);
         self::assertStringNotContainsString('wls-dev-alert', $nonDevPage);
-        self::assertStringNotContainsString('当前所有 Worker 不可用', $nonDevPage);
+        self::assertStringNotContainsString('wls-dev-alert', $nonDevPage);
 
         $this->setProperty($dispatcher, 'isDevMode', true);
         $devPage = (string)$resolve->invoke($dispatcher, true);
 
         self::assertStringContainsString('wls-dev-alert', $devPage);
-        self::assertStringContainsString('当前所有 Worker 不可用', $devPage);
+        self::assertStringContainsString('DEV: all workers are unavailable</strong>', $devPage);
         self::assertStringContainsString('#dc2626', $devPage);
     }
 
@@ -380,10 +407,10 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P1-4 修复验证：
-     * startupProtection 不再以「uptime <= startupProtectionWindowSec=45s」为硬闸；
-     * 只要从未观察过健康 Worker（hasEverObservedHealthyWorker=false），即视为"仍在启动中"，
-     * 即使 uptime 远超旧的 45 秒硬窗口也必须继续返回维护页判定（true）。
+     * P1-4 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺?
+     * startupProtection 婵炴垶鎸哥粔鎾疮閳ь剙霉閻橆喖鍔橀柍褜鍓欓惁鍧ime <= startupProtectionWindowSec=45s闂侀潧妫楃粔宕囨嫻閻旂儤鍏滄い鎺戝椤︹晠鏌?
+     * 闂佸憡鐟禍锝夈€呴敂鐣岊浄閹兼番鍨哄鎾绘偡濞嗗繐鈧悂鎯傞崒娑欎氦闁搞儜鍌涙▕闁?Worker闂佹寧绋戝婕歴EverObservedHealthyWorker=false闂佹寧绋戦¨鈧紒杈ㄧ箞瀹曪紕鈧湱濯鎺戔槈?婵炲濮寸粔鏉戯耿椤忓牆瑙︽い鏍ㄨ壘琚熸繛?闂?
+     * 闂佸憡顨呴崢鏍ㄧ箾?uptime 闁哄鏅滅划蹇曠矓閹绢喖绫嶇憸蹇撯枔?45 缂備礁顦扮敮鐐哄灳閺嶎偆鐜绘俊銈傚亾鐟滅増绋掔粙濠囨偄妞嬪海鐣辨俊鐐€涘畷鐢稿箣妞嬪海纾兼い鎿勭磿缁犳煡鏌涢妷褍浠ф繛锝庡櫍楠炲酣濡舵径鍫氬亾婢舵劕绀嗛柕鍫濇噽閺嗕即鏌ㄥ☉妯荤窡rue闂佹寧绋戦ˇ顓㈠焵?
      */
     public function testStartupProtectionKeepsActiveBeyondLegacy45sWindowWhenNoHealthyWorkerEverObserved(): void
     {
@@ -396,7 +423,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'startupProtectionEnabled', true);
         $this->setProperty($dispatcher, 'startupProtectionWindowSec', 45.0);
-        // 模拟 uptime = 300s，远超旧硬窗口
+        // 濠碘槅鍨崜婵堚偓?uptime = 300s闂佹寧绋戦惌浣烘崲濞嗘垶鎯ラ柛娑卞枟閿涘鐥褍澧伴柣娑栧劦瀹?
         $this->setProperty($dispatcher, 'startTime', \time() - 300);
         $this->setProperty($dispatcher, 'hasEverObservedHealthyWorker', false);
 
@@ -407,9 +434,9 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P1-4 修复验证：
-     * 一旦观察过健康 Worker（hasEverObservedHealthyWorker=true），shouldApplyStartupProtection
-     * 不再返回 true 除非实际 healthy 低于 required。healthy==1 且 expected==1 → 返回 false。
+     * P1-4 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺?
+     * 婵炴垶鎸撮崑鎾绘煛閸愯法鐣虫い顐㈡川閳ь剛鏁搁崰鏇犳崲閸愵喖纾婚柕澶堝劜閸?Worker闂佹寧绋戝婕歴EverObservedHealthyWorker=true闂佹寧绋戦¨鈧紒杈ㄥ珘houldApplyStartupProtection
+     * 婵炴垶鎸哥粔鎾疮閳ь剟寮堕埡鍌涚叆婵?true 闂傚倸瀚ㄩ崐婵嗩焽椤忓棌鍋撻崷顓炰槐婵?healthy 婵炶揪绲界花鑲╄姳?required闂侀潧妫斿Δ绌峚lthy==1 婵?expected==1 闂?闁哄鏅滈弻銊ッ?false闂?
      */
     public function testStartupProtectionReleasedOnceHealthyWorkerEverObservedAndRequirementMet(): void
     {
@@ -432,9 +459,9 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P1-5 修复验证：
-     * healthy==0 且 total>0（业务 Worker 已注册但全部异常）持续时长 >= healthyZeroMaintenanceThresholdSec
-     * 时，shouldServeMaintenanceFallback 必须返回 true，即便 maintenanceFallbackActive=false。
+     * P1-5 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺?
+     * healthy==0 婵?total>0闂佹寧绋戦悧鍛箔閻旂厧绀?Worker 閻庡湱顭堝鍫曞极閻愬搫绀冮悘鐐跺亹缁嬪鏌涜箛瀣闁稿孩娼欓锝夊磼濮樺崬鐓戦梺鎸庣☉椤︽壆鈧灚姊荤槐鎺楊敇閻斿壊妲梻鍌楀亾?>= healthyZeroMaintenanceThresholdSec
+     * 闂佸搫鍟抽鎰濠曠すouldServeMaintenanceFallback 闂婎偄娲ら幊姗€濡磋箛鏃€浜ら柡鍌涘缁€鈧?true闂佹寧绋戦懟顖氱暤閸℃鐟?maintenanceFallbackActive=false闂?
      */
     public function testMaintenanceFallbackTriggeredWhenAllWorkersUnhealthyLongerThanThreshold(): void
     {
@@ -448,7 +475,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $this->setProperty($dispatcher, 'maintenanceFallbackActive', false);
         $this->setProperty($dispatcher, 'startupProtectionEnabled', false);
         $this->setProperty($dispatcher, 'healthyZeroMaintenanceThresholdSec', 2.0);
-        // 模拟 2.5 秒前进入 healthy==0 状态，已超过阈值
+        // 濠碘槅鍨崜婵堚偓?2.5 缂備礁顦扮敮鎺撴櫠閻樿櫕浜ゆ繛鎴灻?healthy==0 闂佺粯顭堥崺鏍焵椤戣法绛忕紒杈ㄧ箓椤斿繘鎳犻崜浣囥垽寮堕埡浣瑰枠婵℃彃娲畷?
         $this->setProperty($dispatcher, 'healthyZeroSince', \microtime(true) - 2.5);
         $this->setProperty($dispatcher, 'hasEverObservedHealthyWorker', true);
 
@@ -459,8 +486,8 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P1-5 修复验证（反例）：
-     * healthy==0 但持续时长 < 阈值时，视为瞬时抖动，不触发维护页兜底。
+     * P1-5 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺鎸庣☉閻楀棗顕ｉ懞銉х懝閻庯絽澧庣粈鍡涙煥?
+     * healthy==0 婵炶揪绲藉Λ娆戔偓鍨⒒缁辨帡顢橀悢鍓叉Н闂傚倵鍋?< 闂傚倸鍟悧鍡涘焵椤掆偓閸氬顪冮崒鐐存櫖鐎光偓閸愮偓缍婃繛鎴炴崄濞咃綁鎮樺☉銏犵睄闁兼悂娼ч～宥夋煕閺冩垹鍘滅紒杈ㄧ箖缁嬪顓奸崺鎸庢礋瀹曪綁骞嬮悩铏枙闂佺缈伴崐婵嬪Υ婢舵劕绀傛繝濠傚暟娣囨椽鏌?
      */
     public function testMaintenanceFallbackNotTriggeredForShortUnhealthyBlip(): void
     {
@@ -480,15 +507,15 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $method = new \ReflectionMethod(Dispatcher::class, 'shouldServeMaintenanceFallback');
         $method->setAccessible(true);
 
-        // 首次调用会 latch healthyZeroSince=now，但此刻差值≈0 < 阈值
+        // 婵☆偓绲鹃悧妤咁敃閼测晜瀚柛鎰典簼閺嗗繐霉?latch healthyZeroSince=now闂佹寧绋戞總鏃傚緤閹屾桨闁靛牆鎳庨悡婵堚偓鐟板閸犳牠鍩€椤掆偓閻ㄩ攱鏅? < 闂傚倸鍟悧鍡涘焵?
         self::assertFalse((bool)$method->invoke($dispatcher));
         self::assertGreaterThan(0.0, (float)$this->getProperty($dispatcher, 'healthyZeroSince'));
     }
 
     /**
-     * P1-4 & P1-5 联动：
-     * healthy 从 0 跃迁到 >=1 时，latchHealthyObservation 应清零 healthyZeroSince 并置 latch=true，
-     * 之后即便再次全挂，healthyZeroSince 会重新从 0 起步。
+     * P1-4 & P1-5 闂佽壈椴搁弻銊︽叏閳哄懏鏅?
+     * healthy 婵?0 闁荤姴鎼崯宕囩紦婵傜绀?>=1 闂佸搫鍟抽鎰濠曨湩tchHealthyObservation 闁圭厧鐡ㄥ鍦博婵犳碍鈷?healthyZeroSince 濡ょ姷鍋涙晶搴ㄦ偪?latch=true闂?
+     * 婵炴垶鏌ㄩ鍛村箖濡ゅ懎纭€闁稿繐鎳愰埞鎺楁煕閹邦剛校妞ゆ劕銈稿畷妤呭Ω閿曗偓閻︻垶鏌ㄥ☉姗嗗悩ealthyZeroSince 婵炴潙鍚嬪畝鎼佸闯閹间礁妫樺Λ棰佽兌閻?0 闁荤姍鍥ㄦ暠妞ゆ帞鍋ゆ俊?
      */
     public function testLatchHealthyObservationResetsZeroSinceAndTurnsOnLatch(): void
     {
@@ -506,9 +533,9 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P0-5 修复验证（核心）：
-     * 新 accept 的 non-blocking socket 首字节未到时，tryRespondWithStartupProtection 不再立即关闭，
-     * 而是把连接放入 pendingMaintenancePageQueue，由主循环稍后 pump 推进。
+     * P0-5 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺鎸庣☉閻楀﹪鎮х€圭姷鐤€闁告劘娉曠粈鍡涙煥?
+     * 闂?accept 闂?non-blocking socket 婵☆偓绲鹃悧鏇㈡偤瑜旈幊鐐哄磼濞戞瑥绱﹂梺鍛婂笧婢ф顪冮崒鐐存櫖閻庡湱纾RespondWithStartupProtection 婵炴垶鎸哥粔鎾疮閳ь剛绱掗弬娆惧剰鐎规挸妫濆畷妤呭箮閼恒儻绱ㄩ梺?
+     * 闂佸吋婢橀張顒€危閹间礁绠┑鐘叉噽缁犻箖鏌熼幁鎺戝姕闁哄倷绶氬畷?pendingMaintenancePageQueue闂佹寧绋戦惉濂稿极鏉堛劎鈻旈悹鍥у级閸庢洟鏌ｅ搴＄仯闁崇鍨藉畷?pump 闂佽浜介崝蹇曟崲濮椻偓婵?
      */
     public function testTryRespondEnqueuesWhenFirstByteNotArrivedOnNonBlockingSocket(): void
     {
@@ -516,13 +543,13 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         [$server, $client] = $this->createLocalSocketPair();
         self::assertNotEmpty($server);
 
-        // 在没有写入任何数据的前提下，peek 应返回 false（EAGAIN）
+        // 闂侀潻璐熼崝宥夋儉閸涙潙瀚夊璺猴工閺呮悂鏌涜箛瀣姍闁瑰箍鍨洪幏鍛村即閻斿憡顔嶉梺纭咁嚃閸犳艾鈻撻幋锕€绀堢€广儱妫楃徊鐟扳槈閹炬剚鍎滅紒杈ㄥ強eek 闁圭厧鐡ㄥΛ浣烘崲閹达箑鐐?false闂佹寧绋戝﹢鏃矴AIN闂?
         $method = new \ReflectionMethod(Dispatcher::class, 'tryRespondWithStartupProtection');
         $method->setAccessible(true);
         $this->setProperty($dispatcher, 'fallbackMaintenancePage', "HTTP/1.1 503 Service Unavailable\r\n\r\nmaintenance");
 
         $ok = $method->invoke($dispatcher, $server, false, '127.0.0.1', 20001);
-        self::assertTrue($ok, '首字节未到时应返回 true 表示已接管（入队）');
+        self::assertTrue($ok);
 
         /** @var array<int, array> $queue */
         $queue = $this->getProperty($dispatcher, 'pendingMaintenancePageQueue');
@@ -534,8 +561,8 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P0-5 修复验证：
-     * 入队后首字节到达，主循环 pump 应写维护页并关闭 socket；客户端可以读到 HTTP/1.1 503 响应。
+     * P0-5 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺?
+     * 闂佺绻堥崕闈浳ｉ敃鍌氳Е閹兼惌鐓堝ù鏇㈡倵濞戞瑯娈欏┑鈽嗗弮瀹曟岸骞忕仦鎯ф锭闂佹寧绋戞總鏃傗偓闈涜嫰椤曘儵顢旈崱妤冪暰 pump 闁圭厧鐡ㄩ弻銊╁疮閹惧墎纾奸悗娑櫭婵＄偑鍊濆褔鎳熼悢鐓庣闁规儼濮ら敍?socket闂佹寧绋掔粙鎴︻敇瑜版帒绠ｅ瀣瘨娴煎倿鏌涘▎妯虹仧濞存粍甯為幏鐘垫嫚閹绘帞鍘?HTTP/1.1 503 闂佸憡绻傜粔瀵歌姳閺屻儱违?
      */
     public function testPumpPendingQueueWritesPageOncePeerSendsFirstByte(): void
     {
@@ -553,10 +580,10 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $enqueue->setAccessible(true);
         $enqueue->invoke($dispatcher, $server, false, '127.0.0.1', 20002);
 
-        // 客户端发送首字节（模拟 HTTP 请求）
+        // 闁诲骸绠嶉崹娲春濞戞氨鍗氭い鏍ㄨ壘缁叉椽姊洪锛勭獢妞も晞宕甸埀顒佺⊕椤ㄥ淇婇銏℃櫖闁割偆鍞芥笟鈧獮?HTTP 闁荤姴娲弨閬嶆儑娴煎瓨鏅?
         @\socket_write($client, "GET / HTTP/1.1\r\n\r\n");
 
-        // 给内核一点时间把字节搬进 server 侧缓冲区
+        // 缂傚倷鐒﹂悷銉╁船閹绢喖鍐€闂傗偓閹邦噮浼囬梺缁樺姌椤顪冮崒鐐粹拻閻庢稒锚鎯熼柣搴㈢⊕椤ㄥ淇婇銏犵妞ゆ帒鍟扮粻?server 婵炴挻鐨滈崨顖氼槱闂佸憡鍔栬ぐ鍐焊?
         $deadline = \microtime(true) + 1.5;
         do {
             $pump = new \ReflectionMethod(Dispatcher::class, 'pumpPendingMaintenancePageQueue');
@@ -579,8 +606,8 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P0-5 修复验证：
-     * 入队后首字节始终未到达，且超过 pendingMaintenanceWaitTimeoutSec 时，pump 应关闭 socket 并出队。
+     * P0-5 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺?
+     * 闂佺绻堥崕闈浳ｉ敃鍌氳Е閹兼惌鐓堝ù鏇㈡倵濞戞瑯娈欏┑鈽嗗幗閹便劎鈧綆鍓涢惌鎺楁煛閸偂绨婚柛鈺佹湰濞煎繘骞橀崨顖滎槷婵炴垶鎸诲Λ浣虹矓鐎涙ɑ浜?pendingMaintenanceWaitTimeoutSec 闂佸搫鍟抽鎰濠曠殟mp 闁圭厧鐡ㄩ弻銊╁矗瑜斿?socket 濡ょ姷鍋犲▔娑㈠吹椤撱垺鈷撻柣鏃傝ˉ閸?
      */
     public function testPumpPendingQueueTimesOutWhenFirstByteNeverArrives(): void
     {
@@ -593,7 +620,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $enqueue->setAccessible(true);
         $enqueue->invoke($dispatcher, $server, false, '127.0.0.1', 20003);
 
-        // 故意不向 client 写任何字节，等待超过阈值
+        // 闂佽桨绀侀幊蹇涘礈閻楀牏鈻旂€广儱鎳忛崐?client 闂佸憡鍔栭悷銈夊箲閵忊剝濯撮柡鍥╁仧閹界喖鏌ら崫鍕喊缂佽鲸绻勭划鍨緞婵犲嫮顎€闁烩剝甯掗幊鎾舵崲閸愵喗鈷撻柛顐ｇ妇閸?
         \usleep(80_000);
 
         $pump = new \ReflectionMethod(Dispatcher::class, 'pumpPendingMaintenancePageQueue');
@@ -606,8 +633,8 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P0-5 修复验证：
-     * pending 队列中 TLS 首字节（0x16）到达时，pump 应关闭 socket 并出队（不能写明文 503 去污染 TLS）。
+     * P0-5 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺?
+     * pending 闂傚倸鍟伴崰搴ㄥ垂椤忓懐鈻?TLS 婵☆偓绲鹃悧鏇㈡偤瑜旈幊鐐哄磼閿斿墽顦?x16闂佹寧绋戦ˇ顖炲春鐏炵偓缍囬柣鎰靛墯椤ρ囨煥濞戞﹩鍞箄mp 闁圭厧鐡ㄩ弻銊╁矗瑜斿?socket 濡ょ姷鍋犲▔娑㈠吹椤撱垺鈷撻柣鏇炲€荤粈鍕槈閹惧磭啸闁稿繑锕㈠畷妯衡枎閹邦収娼犻梺?503 闂佸憡顭囩划顖炴寘閸曨垰钃?TLS闂佹寧绋戦ˇ顓㈠焵?
      */
     public function testPumpPendingQueueClosesTlsTrafficWithoutWritingMaintenancePage(): void
     {
@@ -625,7 +652,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $enqueue->setAccessible(true);
         $enqueue->invoke($dispatcher, $server, false, '127.0.0.1', 20004);
 
-        // 客户端发 TLS ClientHello 首字节
+        // 闁诲骸绠嶉崹娲春濞戞氨鍗氭い鏍ㄨ壘缁?TLS ClientHello 婵☆偓绲鹃悧鏇㈡偤瑜旈幊?
         @\socket_write($client, "\x16\x03\x01\x00");
 
         $deadline = \microtime(true) + 1.0;
@@ -641,7 +668,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
 
         self::assertSame([], $this->getProperty($dispatcher, 'pendingMaintenancePageQueue'));
 
-        // 客户端不应读到 "HTTP/1.1 503"（服务端只应关闭，不回写明文）
+        // 闁诲骸绠嶉崹娲春濞戞氨鍗氭い鏍ㄧ懅閻熸繈骞栫€涙ɑ顥嗘い鏇氬嵆瀹?"HTTP/1.1 503"闂佹寧绋戦悧濠傦耿閸ヮ剙绀夐柨娑樺娴煎倿鏌涘▎妯圭盎缂併劍鐓″畷妤呭箮閼恒儻绱ㄩ梺鎸庣☉婵傛梻绮径鎰倞闁绘劖褰冮弲鎼佹煛閸曨偄顒㈤柡瀣暣閺?
         $received = $this->drainClientResponse($client, 0.3);
         self::assertStringNotContainsString('HTTP/1.1 503', $received);
 
@@ -649,8 +676,8 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P0-5 修复验证：
-     * 维护页直写路径（首字节已到、非 TLS）应仍然正常工作，不改变原有语义。
+     * P0-5 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺?
+     * 缂傚倷绀侀悺銊︽叏閵徛颁簻闁汇垹鐏氱痪顖炴煕閹邦厾鎳嗛柣顓熷劤椤曘儵宕熼崜浣侯槱婵☆偓绲鹃悧鏇㈡偤瑜旈幊鐐哄磼濮橆剙娈ラ梺鍛婂笩閸╁洭鍩€椤戣法绐旀繛?TLS闂佹寧绋戦ˇ顖滆姳閸欏顩风€广儱娲ゆ慨褎鎱ㄥ┑鎾跺埌闁绘牞娉涢蹇涘Ψ閵堝洨鈻曢梺鎸庣☉婵傛梻绮径鎰哗闁荤喐婢樼紞渚€鏌涘Ο鐓庢瀾婵犫偓娴ｇ儤瀚氭い鎾寸箘閻ゅ懘鏌?
      */
     public function testTryRespondWritesImmediatelyWhenFirstByteAlreadyBuffered(): void
     {
@@ -663,9 +690,9 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
             "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 11\r\n\r\nmaintenance"
         );
 
-        // 先让 client 写入 HTTP 首字节
+        // 闂佺绻愰悧鎰邦敊閳?client 闂佸憡鍔栭悷銉╁矗?HTTP 婵☆偓绲鹃悧鏇㈡偤瑜旈幊?
         @\socket_write($client, "GET / HTTP/1.1\r\n\r\n");
-        // 给内核一点时间搬到 server
+        // 缂傚倷鐒﹂悷銉╁船閹绢喖鍐€闂傗偓閹邦噮浼囬梺缁樺姌椤顪冮崒鐐粹拻閻庢稒蓱閸庢棃鏌?server
         \usleep(50_000);
 
         $method = new \ReflectionMethod(Dispatcher::class, 'tryRespondWithStartupProtection');
@@ -674,7 +701,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         self::assertTrue($ok);
 
         $queue = $this->getProperty($dispatcher, 'pendingMaintenancePageQueue');
-        self::assertSame([], $queue, '首字节已到时应直接写页关闭，不入队');
+        self::assertSame([], $queue);
 
         $received = $this->drainClientResponse($client, 0.5);
         self::assertStringContainsString('HTTP/1.1 503', $received);
@@ -684,14 +711,14 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * P0-5 修复验证：
-     * pendingMaintenancePageQueueMax 达到上限时，新入队尝试应返回 false，由调用方关闭。
+     * P0-5 婵烇絽娴傞崰鏍囬崣澶樻鐎光偓閸愵亝顫嶉梺?
+     * pendingMaintenancePageQueueMax 闁哄鐗婇崕鎶藉春鐏炲墽鈻斿┑鐘叉处椤庢瑩鏌￠崘顓у晣缂佽鲸绻堝顒勫级閸喖姹查梻鍌氬暟閸犲酣鎯冮崜褎瀚氶柡鍥╁仧鐎瑰寮堕埡鍌涚叆婵?false闂佹寧绋戦惉濂稿极鏉堚晜瀚柛鎰典簼閺嗗繘鏌￠崒婊勫殌闁告鍥ㄢ拻妞ゆ挻澹曢崑?
      */
     public function testEnqueuePendingQueueRejectsWhenAtCapacity(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $this->setProperty($dispatcher, 'pendingMaintenancePageQueueMax', 1);
-        // 先塞一个占位（socket 字段随意，避免真实 I/O）
+        // 闂佺绻愰悧鍡涖€侀敐鍡欌枖闁逞屽墯缁嬪顢旈崟顐ょ崶婵炶揪绲界粙鍕濡炬cket 闁诲孩绋掗〃鍡涱敊瀹€鍕挄闊洦鏌ㄦ竟鍫ユ煥濞戞鐒稿ù灏栨櫊瀹曟顓奸崶銊ョ劯闁?I/O闂?
         $this->setProperty($dispatcher, 'pendingMaintenancePageQueue', [
             99 => ['socket' => null, 'clientIp' => '1.2.3.4', 'acceptedAt' => \microtime(true), 'allWorkersUnavailable' => false],
         ]);
@@ -702,18 +729,18 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $enqueue->setAccessible(true);
         $ok = $enqueue->invoke($dispatcher, $server, false, '127.0.0.1', 20006);
 
-        self::assertFalse($ok, '队列已满时应返回 false 表示调用方需自行关闭');
+        self::assertFalse($ok);
 
         @\socket_close($server);
         @\socket_close($client);
     }
 
     /**
-     * 创建一对本地连通的 Socket：
-     *  - server 端设为 non-blocking（模拟 Dispatcher 刚 accept 的连接）
-     *  - client 端保持 blocking（方便测试断言客户端能读到响应）
+     * 闂佸憡甯楃粙鎴犵磽閹惧鈻旈柍褜鍓涢埀顑跨祷椤锕㈡导鏉戞嵍闁瑰嘲鐬肩粻楣冩⒑椤愶絾鐨戞繛?Socket闂?
+     *  - server 缂備焦妫忛崹鐢割敊閺囩喓鈻?non-blocking闂佹寧绋戦悧濠呭暞闂?Dispatcher 闂?accept 闂佹眹鍔岀€氼垳鎹㈠☉銏犵闁靛鍨崇粈?
+     *  - client 缂備焦妫忛崹顖滄崲濮樿泛绠?blocking闂佹寧绋戦悧濠囧蓟閻斿摜鐟归柟绋挎捣閵堟挳鎮归崶銊︾闁哄苯娲ㄩ幊娑㈠焵椤掑倵鍋撻獮鍨仾闁糕晜绋撶划鈺咁敍濠靛棗骞嬮柣鐘叉穿椤曆囧春瀹€鍕紶鐎广儱鎳愮€瑰鏌?
      *
-     * 在 Windows / Linux 均可用。
+     * 闂?Windows / Linux 闂佺鍐╂悙鐟滅増鐓￠幃浠嬪Ω閿濆倸浜?
      *
      * @return array{0: \Socket, 1: \Socket} [serverSocket, clientSocket]
      */
@@ -728,16 +755,16 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
 
         $client = \socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
         self::assertNotFalse($client);
-        // 阻塞式 connect，确保三次握手完成再进入测试逻辑
+        // 闂傚倸鍟抽褔銆侀敐鍜佸殨?connect闂佹寧绋戦惉濂稿灳濡崵鈹嶆繝闈涙噽閻熷繑绻涢崱蹇撳⒉鐟滅増鐟╅獮宥団偓锝庝簽閺嗘岸鏌熺€涙ê濮囬柛鐔插亾闁哄鏅滅粙鎴﹀矗閸℃鍦偓锝庡幘濡叉悂姊洪锝嗩潡缂?
         $connected = @\socket_connect($client, '127.0.0.1', $port);
         self::assertTrue($connected, 'failed to connect local socket pair');
 
         $server = @\socket_accept($listener);
         self::assertNotFalse($server, 'failed to accept local socket pair');
 
-        // server 侧模拟 Dispatcher 行为：非阻塞
+        // server 婵炴挻鐨滈崟鈧笟鈧獮?Dispatcher 闁荤偞绋戞總鏃傛嫻閻斿吋鏅慨妯垮煐婵粓姊婚崘顓у殭妞?
         \socket_set_nonblock($server);
-        // client 侧保持阻塞；给 recv 一个较短超时，避免测试被挂住
+        // client 婵炴挻鐨滈崒婊咁啍闂佸綊鏅茬欢姘熼崱妯肩畽闁绘垵娲ㄩ獮銏㈢磽?recv 婵炴垶鎸撮崑鎾斥槈閹垮啩娴风紒鑸电箞閹矂顢橀敍鍕戙垽鏌￠崘顓у晣缂佽鲸绻堥弻鍡涘垂椤旂厧璧嬪┑鐐存綑椤戝牓鎯侀婊勫仏妞ゆ劧绲介惁顖毭?
         \socket_set_option($client, SOL_SOCKET, SO_RCVTIMEO, ['sec' => 1, 'usec' => 0]);
         \socket_set_option($client, SOL_SOCKET, SO_SNDTIMEO, ['sec' => 1, 'usec' => 0]);
 
@@ -747,8 +774,8 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
     }
 
     /**
-     * 从阻塞式 client socket 读到一段响应（或超时返回 ''）。
-     * 使用轮询 socket_select 判断可读，避免 SO_RCVTIMEO 在不同平台的行为差异。
+     * 婵炲濮撮柊锝呂熼崱妯肩畽闁绘劘灏欑涵鈧?client socket 闁荤姴娲╅褔宕虹仦鍓р枖闁逞屽墮閳绘捇妫冨☉娆愬劌闁圭厧鐡ㄥΛ鎴犳濞嗘挸绠ｉ柡宥庡墰瀛濋梺鍝勫暞閸庤偐鎹㈤幋锕€鐐?''闂佹寧绋戦ˇ顓㈠焵?
+     * 婵炶揪缍€濞夋洟寮妶鍡樺妞ゆ梹顑欓崵?socket_select 闂佸憡甯囬崐鏍蓟閸ヮ剙鐭楁い鏍ㄧ箥閸ゃ垽鏌ㄥ☉妯肩劯濞村皷鏅犲畷?SO_RCVTIMEO 闂侀潻璐熼崝瀣箔婢舵劕瑙﹂悘鐐扮矙閹割剟鏌涘▎鎰棆婵炲牊鍨归幃鎵沪閼规壆顦伴悗鐟板閸犳牜妲愰幘璇参?
      */
     private function drainClientResponse(\Socket $client, float $deadlineSec = 1.0): string
     {
@@ -771,7 +798,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
                 break;
             }
             if ($n === 0) {
-                // 对端关闭
+                // 闁诲酣娼у﹢閬嶎敂椤掑嫬绀傞柟鎯板Г閿?
                 break;
             }
             $received .= $chunk;

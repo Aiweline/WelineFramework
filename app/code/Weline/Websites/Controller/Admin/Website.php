@@ -35,15 +35,11 @@ class Website extends BackendController
         }
         
         // 搜索功能
-        $search = $this->request->getGet('search', '');
-        if ($search) {
-            $searchPattern = '%' . $search . '%';
-            $this->website->where('name', $searchPattern, 'LIKE')
-                ->where('code', $searchPattern, 'LIKE', 'OR')
-                ->where('url', $searchPattern, 'LIKE', 'OR');
-        }
+        $search = trim((string)$this->request->getGet('search', ''));
+        $websiteModel = $this->createWebsiteListingModel();
+        $this->applyWebsiteSearch($websiteModel, $search);
         
-        $websites = $this->website->order()->pagination()->select()->fetch();
+        $websites = $websiteModel->order()->pagination()->select()->fetch();
         $items = $websites->getItems();
         
         // 获取每个网站的关联货币、语言、域名
@@ -74,23 +70,25 @@ class Website extends BackendController
     /**
      * AJAX 搜索接口
      */
-    private function searchAjax()
+    private function searchAjax(): string
     {
-        header('Content-Type: application/json; charset=utf-8');
-        
         try {
             // 搜索功能
-            $search = $this->request->getGet('search', '');
-            $websiteModel = clone $this->website;
-            
-            if ($search) {
-                $searchPattern = '%' . $search . '%';
-                $websiteModel->where('name', $searchPattern, 'LIKE')
-                    ->where('code', $searchPattern, 'LIKE', 'OR')
-                    ->where('url', $searchPattern, 'LIKE', 'OR');
+            $search = trim((string)$this->request->getGet('search', ''));
+            $pageSize = (int)$this->request->getGet('pageSize', 10);
+            if ($pageSize < 1) {
+                $pageSize = 10;
             }
-            
-            $websites = $websiteModel->order()->pagination()->select()->fetch();
+            $pageSize = min($pageSize, 1000);
+
+            $websiteModel = $this->createWebsiteListingModel();
+            $this->applyWebsiteSearch($websiteModel, $search);
+
+            $websites = $websiteModel->order()->pagination(1, $pageSize, [
+                'page' => 1,
+                'pageSize' => $pageSize,
+                'search' => $search,
+            ])->select()->fetch();
             $items = $websites->getItems();
             
             // 获取每个网站的关联货币、语言、域名
@@ -116,20 +114,43 @@ class Website extends BackendController
             $this->assign('websites', $items);
             $this->assign('pagination', $websites->getPagination());
             $this->assign('search', $search);
-            $tableHtml = $this->fetch('Weline_Websites::templates/Admin/Website/table.phtml');
-            
-            echo json_encode([
+            $tableHtml = $this->template('Weline_Websites::templates/Admin/Website/table.phtml');
+
+            $payload = [
                 'success' => true,
                 'html' => $tableHtml,
                 'count' => count($items)
-            ], JSON_UNESCAPED_UNICODE);
-        } catch (\Exception $e) {
-            echo json_encode([
+            ];
+        } catch (\Throwable $e) {
+            $payload = [
                 'success' => false,
                 'message' => $e->getMessage()
-            ], JSON_UNESCAPED_UNICODE);
+            ];
         }
-        exit;
+
+        return $this->fetchJson($payload);
+    }
+
+    private function createWebsiteListingModel(): \Weline\Websites\Model\Website
+    {
+        /** @var \Weline\Websites\Model\Website $websiteModel */
+        $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class, [], false);
+        $websiteModel->clearQuery();
+        return $websiteModel;
+    }
+
+    private function applyWebsiteSearch(\Weline\Websites\Model\Website $websiteModel, string $search): void
+    {
+        if ($search === '') {
+            return;
+        }
+
+        $searchPattern = '%' . $search . '%';
+        $websiteModel->where([
+            [\Weline\Websites\Model\Website::schema_fields_NAME, 'LIKE', $searchPattern, 'OR'],
+            [\Weline\Websites\Model\Website::schema_fields_CODE, 'LIKE', $searchPattern, 'OR'],
+            [\Weline\Websites\Model\Website::schema_fields_URL, 'LIKE', $searchPattern],
+        ]);
     }
 
     #[Acl('Weline_Websites::website_add', '添加网站', 'mdi mdi-plus', '网站管理')]
@@ -208,7 +229,7 @@ class Website extends BackendController
 
                 $this->dispatchWebsiteSaveAfter((int)$websiteId, 'add', $this->website->getData(), $postData, $addressList);
                 
-                $this->redirect('/component/offcanvas/success', [
+                $this->redirect('component/backend/offcanvas/getSuccess', [
                     'msg' => __('网站添加成功'),
                     'url' => '*/admin/website',
                     'reload' => '1',
@@ -220,7 +241,7 @@ class Website extends BackendController
                 if (DEV) {
                     $errorMsg .= "\n\n[File] " . $e->getFile() . ':' . $e->getLine();
                 }
-                $this->redirect('/component/offcanvas/error', [
+                $this->redirect('component/backend/offcanvas/getError', [
                     'msg' => __('网站添加失败: %{1}', [$errorMsg]),
                     'url' => '/',
                     'reload' => '0',
@@ -259,7 +280,7 @@ class Website extends BackendController
         $websiteId = $this->request->getParam('id');
         
         if (empty($websiteId)) {
-            $this->redirect('/component/offcanvas/error', [
+            $this->redirect('component/backend/offcanvas/getError', [
                 'msg' => __('网站ID不能为空'),
                 'reload' => '0',
                 'time' => '3',
@@ -274,7 +295,7 @@ class Website extends BackendController
         
         // 检查网站是否存在
         if (!$this->website->getWebsiteId()) {
-            $this->redirect('/component/offcanvas/error', [
+            $this->redirect('component/backend/offcanvas/getError', [
                 'msg' => __('网站不存在'),
                 'reload' => '0',
                 'time' => '3',
@@ -297,7 +318,7 @@ class Website extends BackendController
             
             // 如果还是没有，说明是新增，不是编辑
             if (empty($postWebsiteId)) {
-                $this->redirect('/component/offcanvas/error', [
+                $this->redirect('component/backend/offcanvas/getError', [
                     'msg' => __('网站ID不能为空'),
                     'reload' => '0',
                     'time' => '3',
@@ -368,14 +389,14 @@ class Website extends BackendController
                 
                 $this->dispatchWebsiteSaveAfter($postWebsiteId, 'edit', $this->website->getData(), $postData, $addressList);
                 
-                $this->redirect('/component/offcanvas/success', [
+                $this->redirect('component/backend/offcanvas/getSuccess', [
                     'msg' => __('网站更新成功'),
                     'url' => '*/admin/website',
                     'reload' => '1',
                     'time' => '3',
                 ]);
             } catch (\Exception $e) {
-                $this->redirect('/component/offcanvas/error', [
+                $this->redirect('component/backend/offcanvas/getError', [
                     'msg' => $e->getMessage(),
                     'reload' => '0',
                     'time' => '5',

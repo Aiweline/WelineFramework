@@ -15,10 +15,11 @@ use GuoLaiRen\PageBuilder\Service\AiSiteWorkflowTrace;
 use Weline\Ai\Service\AiRuntimeContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Queue\DeadWorkerRecoverableQueueInterface;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\QueueInterface;
 
-class AiSiteBuildQueue implements QueueInterface
+class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInterface
 {
     private const DEFAULT_MAX_ATTEMPTS = 3;
     private const CONTENT_ATTEMPT_KEY = 'attempt';
@@ -27,10 +28,8 @@ class AiSiteBuildQueue implements QueueInterface
     private const CONTENT_LAST_GATE_AT_KEY = 'last_gate_at';
     private const CONTENT_LAST_GATE_DECISION_KEY = 'completion_gate_decision';
     private const CONTENT_LAST_GATE_SNAPSHOT_KEY = 'completion_gate_snapshot';
+    private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';
     private const QUEUE_SCOPE_PATCH_REDUNDANT_KEYS = [
-        'build_blueprint' => true,
-        'build_tasks' => true,
-        'build_task_summary' => true,
         'build_plan_v2' => true,
         'plan_projection' => true,
         'content_manifest' => true,
@@ -47,8 +46,6 @@ class AiSiteBuildQueue implements QueueInterface
         'build_plan_v2',
         'plan_projection',
         'content_manifest',
-        'execution_blueprint',
-        'build_blueprint',
         'build_workbench',
         'build_contracts',
         'render_data_contract',
@@ -93,6 +90,33 @@ class AiSiteBuildQueue implements QueueInterface
         return $session instanceof AiSiteAgentSession;
     }
 
+    public function shouldRecoverDeadWorker(Queue $queue, int $deadPid, string $workerOutput): bool
+    {
+        unset($deadPid, $workerOutput);
+        $content = \json_decode((string)$queue->getContent(), true);
+        if (!\is_array($content)) {
+            return false;
+        }
+
+        $publicId = \trim((string)($content['public_id'] ?? ''));
+        $adminId = (int)($content['admin_id'] ?? 0);
+        $executionToken = \trim((string)($content['execution_token'] ?? ''));
+        if ($publicId === '' || $adminId <= 0 || $executionToken === '') {
+            return false;
+        }
+
+        $operation = $this->normalizeQueuedOperation((string)($content['operation'] ?? 'build'));
+
+        return \in_array($operation, ['build', 'regenerate_page', 'block_regenerate', 'block_partial_patch'], true);
+    }
+
+    public function deadWorkerRecoveryMessage(Queue $queue, int $deadPid, string $workerOutput): string
+    {
+        unset($queue, $deadPid, $workerOutput);
+
+        return 'PageBuilder build worker exited before terminal state; queue reset to pending for scheduler resume.';
+    }
+
     public function execute(Queue &$queue): string
     {
         $content = \json_decode((string)$queue->getContent(), true);
@@ -127,7 +151,17 @@ class AiSiteBuildQueue implements QueueInterface
         $previousAiRuntimeParamsExists = false;
         $previousAiRuntimeParams = [];
         $aiRuntimeParamsRegistered = false;
+        $previousInlineImageDisabledExists = false;
+        $previousInlineImageDisabled = null;
+        $inlineImageDisabledRegistered = false;
         try {
+            if ($this->queuedPayloadDisablesInlineImageGeneration($content, $scopePatch)) {
+                $previousInlineImageDisabledExists = RequestContext::has(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED);
+                $previousInlineImageDisabled = RequestContext::get(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED);
+                RequestContext::set(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED, true);
+                $inlineImageDisabledRegistered = true;
+                $this->appendQueueLifecycleLine($queue, 'Inline image generation disabled for this queue run; image slots will be deferred for later retry.');
+            }
             $this->appendQueueLifecycleLine($queue, '开始执行 queue_id=' . $queueId . ' public_id=' . $publicId . ' admin_id=' . $adminId);
 
             /** @var AiSiteAgentSessionService $sessionService */
@@ -253,7 +287,7 @@ class AiSiteBuildQueue implements QueueInterface
             AiRuntimeContext::setDefaultParams(AiRuntimeContext::thinkingModeParams());
             $aiRuntimeParamsRegistered = true;
             $this->queueTrace($sse, 'AI thinking mode enabled for queue execution; reasoning_content is kept separate from output content.');
-            $this->queueTrace($sse, 'QueueDbWriter 已创建，构建进度将写入队列 result');
+            $this->queueTrace($sse, 'QueueDbWriter created; build progress is streamed as lightweight SSE telemetry.');
 
             /** @var AiSiteAgent $controller */
             $controller = AiSiteAgentForQueue::create();
@@ -269,7 +303,7 @@ class AiSiteBuildQueue implements QueueInterface
             }
             $this->queueTrace($sse, '认领成功 claimActiveOperationExecution ok，进入队列操作执行 operation=' . $operation);
 
-            // mergeScope 只更新库内 scope；内存中的 $session 可能仍带旧 build_tasks，会导致 ensureTaskScope 继续合并为 done 从而秒结束。
+            // mergeScope 只更新库内 scope；内存中的 $session 可能仍带旧执行状态，会导致 ensureTaskScope 继续合并为 done 从而秒结束。
             $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
 
             // 断点续生成入口防御：build operation 进入控制器之前，先把上次硬崩（OOM/kill -9/Worker 死亡，
@@ -398,6 +432,18 @@ class AiSiteBuildQueue implements QueueInterface
             return $doneMessage;
         } catch (\Throwable $throwable) {
             $diagnostic = $this->formatThrowableDiagnostic($throwable);
+            $surfaceMessage = $this->summarizeThrowableForQueueSurface($throwable);
+            AiSiteWorkflowTrace::log('build_queue_exception', [
+                'queue_id' => $queueId,
+                'operation' => $operation,
+                'public_id' => $publicId,
+                'diagnostic' => $diagnostic,
+                'surface_message' => $surfaceMessage,
+            ]);
+            $this->logInternalBuildQueueDiagnostic($queueId, $operation, $publicId, $diagnostic, $surfaceMessage);
+            $this->mirrorToCli('[' . \date('H:i:s') . '] ERROR_DIAGNOSTIC ' . $diagnostic);
+            $throwable = new \RuntimeException($surfaceMessage, 0, $throwable);
+            $diagnostic = $surfaceMessage;
             if ($sse instanceof QueueDbWriter) {
                 $this->queueTrace($sse, '异常：' . $diagnostic);
             } else {
@@ -420,6 +466,13 @@ class AiSiteBuildQueue implements QueueInterface
                     RequestContext::remove(RequestContext::SSE_WRITER_KEY);
                 }
             }
+            if ($inlineImageDisabledRegistered) {
+                if ($previousInlineImageDisabledExists) {
+                    RequestContext::set(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED, $previousInlineImageDisabled);
+                } else {
+                    RequestContext::remove(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED);
+                }
+            }
             if ($sse instanceof QueueDbWriter) {
                 $sse->complete();
             }
@@ -427,9 +480,72 @@ class AiSiteBuildQueue implements QueueInterface
     }
 
     /**
-     * -f：换新 execution_token + 将 build_tasks 全部置回 pending，否则任务已 done 会秒结束且不调 AI。
+     * -f：换新 execution_token + 将 build_plan_v2 执行行全部置回 pending，否则已 done 会秒结束且不调 AI。
      * 页面重建也必须支持该语义，否则 regenerate_page 失败后会复用旧 token 并触发 duplicate_stream。
      */
+    /**
+     * @param array<string, mixed> $content
+     * @param array<string, mixed> $scopePatch
+     */
+    private function queuedPayloadDisablesInlineImageGeneration(array $content, array $scopePatch): bool
+    {
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $buildOptions = \is_array($scopePatch['ai_site_build_options'] ?? null)
+            ? $scopePatch['ai_site_build_options']
+            : [];
+        $runtimeOptions = \is_array($scopePatch['runtime'] ?? null) ? $scopePatch['runtime'] : [];
+
+        foreach ([
+            $content['disable_inline_image_generation'] ?? null,
+            $content['skip_inline_image_generation'] ?? null,
+            $content['ai_site_test_skip_images'] ?? null,
+            $content['pagebuilder_ai_skip_inline_images'] ?? null,
+            $details['disable_inline_image_generation'] ?? null,
+            $details['skip_inline_image_generation'] ?? null,
+            $details['test_skip_inline_images'] ?? null,
+            $details['ai_site_test_skip_images'] ?? null,
+            $scopePatch['_disable_inline_image_generation'] ?? null,
+            $scopePatch['_skip_inline_image_generation'] ?? null,
+            $scopePatch['disable_inline_image_generation'] ?? null,
+            $scopePatch['skip_inline_image_generation'] ?? null,
+            $scopePatch['test_skip_inline_images'] ?? null,
+            $scopePatch['ai_site_test_skip_images'] ?? null,
+            $scopePatch['pagebuilder_ai_skip_inline_images'] ?? null,
+            $buildOptions['disable_inline_image_generation'] ?? null,
+            $buildOptions['skip_inline_image_generation'] ?? null,
+            $buildOptions['test_skip_inline_images'] ?? null,
+            $runtimeOptions['disable_inline_image_generation'] ?? null,
+            $runtimeOptions['skip_inline_image_generation'] ?? null,
+            \getenv('PAGEBUILDER_AI_SITE_SKIP_INLINE_IMAGES') ?: null,
+        ] as $value) {
+            if ($this->isTruthyQueueSwitchValue($value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isTruthyQueueSwitchValue(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return $value !== 0 && $value !== 0.0;
+        }
+        if (!\is_scalar($value)) {
+            return false;
+        }
+
+        $normalized = \strtolower(\trim((string)$value));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return !\in_array($normalized, ['0', 'false', 'no', 'off', 'disable', 'disabled'], true);
+    }
+
     private function normalizeQueuedOperation(string $operation): string
     {
         $operation = \trim($operation);
@@ -835,15 +951,12 @@ class AiSiteBuildQueue implements QueueInterface
         $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
         $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope, false);
         $sessionService->mergeScope((int)$fresh->getId(), $adminId, \array_replace($buildTaskService->extractBuildPlanDerivedScopePatch($scope), [
-            'build_blueprint' => \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [],
-            'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],
             'virtual_pages_by_type' => [],
             'pagebuilder_pages_by_type' => [],
             'materialized_pages_by_type' => [],
             'page_type_layouts' => [],
             'pending_generation_page_types' => [],
             'build_summary' => [],
-            'build_task_summary' => [],
             'build_workbench' => [],
             'build_contracts' => [],
             'render_data_contract' => [],
@@ -892,22 +1005,18 @@ class AiSiteBuildQueue implements QueueInterface
         $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $fresh)
         );
-        $blueprintTasks = \is_array($scope['build_blueprint']['tasks'] ?? null) ? $scope['build_blueprint']['tasks'] : [];
-        if ($blueprintTasks === []) {
-            $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
-            $restoredScope = $buildTaskService->ensureTaskScope(
-                $scope,
-                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-                $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+        $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
+        $restoredScope = $buildTaskService->ensureTaskScope(
+            $scope,
+            \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+            $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+        );
+        if ($restoredScope !== $scope) {
+            $sessionService->replaceScope((int)$fresh->getId(), $adminId, $restoredScope);
+            $fresh = $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+            $scope = $scopeService->normalizeScope(
+                $this->loadBuildQueueScope($sessionService, $fresh)
             );
-            $restoredScope = $buildTaskService->resetBuildTasksToPendingForRebuild($restoredScope, true);
-            if ($restoredScope !== $scope) {
-                $sessionService->replaceScope((int)$fresh->getId(), $adminId, $restoredScope);
-                $fresh = $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
-                $scope = $scopeService->normalizeScope(
-                    $this->loadBuildQueueScope($sessionService, $fresh)
-                );
-            }
         }
         $finalizedScope = $buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
         if ($finalizedScope !== $scope) {
@@ -920,7 +1029,6 @@ class AiSiteBuildQueue implements QueueInterface
             $scope = $finalizedScope;
         }
         $gate = $buildTaskService->inspectBuildCompletionGate($scope);
-        $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
         $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
         $buildSummary['completion_gate'] = $this->stripGateSummary($gate);
         $buildSummary['last_gate_checked_at'] = \date('Y-m-d H:i:s');
@@ -1013,6 +1121,7 @@ class AiSiteBuildQueue implements QueueInterface
         $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $fresh)
         );
+        $scope = $buildTaskService->syncPageTypeLayoutsWithSharedComponents($scope);
         $gate = $buildTaskService->inspectBuildCompletionGate($scope);
         $fullBuildGatePassed = !empty($gate['passed']);
         $isScopedBuildOperation = \in_array($operation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true);
@@ -1034,6 +1143,8 @@ class AiSiteBuildQueue implements QueueInterface
             'failure_mode' => '',
             'retry_allowed' => 0,
             'retryable_ai_failure_count' => 0,
+            'last_gate_reason' => $fullBuildGatePassed ? '' : (string)($gate['reason'] ?? ''),
+            'completion_gate_snapshot' => $this->stripGateSummary($gate),
             'queue_waiting_for_scheduler' => false,
             'can_close_stream' => true,
             'continue_other_operations' => false,
@@ -1071,11 +1182,11 @@ class AiSiteBuildQueue implements QueueInterface
             $scope['publish_blocked_by_latest_ai_failure'] = 0;
             $scope['publish_blocked_reason'] = '';
             $scope['next_stage_blocked_by_ai_failures'] = 0;
-            $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
             $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
             $buildSummary['can_publish'] = true;
             $buildSummary['active_operation'] = $operation;
             $buildSummary['last_generated_at'] = $now;
+            $buildSummary['completion_gate'] = $this->stripGateSummary($gate);
             $scope['build_summary'] = $buildSummary;
         } elseif ($isScopedBuildOperation) {
             $scope = $this->clearResolvedScopedBuildOperationFailureState(
@@ -1084,7 +1195,6 @@ class AiSiteBuildQueue implements QueueInterface
                 $executionToken,
                 $buildTaskService
             );
-            $scope['build_task_summary'] = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
             $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
             $buildSummary['active_operation'] = $operation;
             $buildSummary['last_scoped_operation_at'] = $now;
@@ -1151,7 +1261,7 @@ class AiSiteBuildQueue implements QueueInterface
     private function shouldRetryBuildQueue(array $gate): bool
     {
         $reason = \trim((string)($gate['reason'] ?? ''));
-        if (!empty($gate['passed']) || $reason === 'cancelled_build_tasks') {
+        if (!empty($gate['passed']) || $reason === 'cancelled_build_plan_blocks') {
             return false;
         }
 
@@ -1160,11 +1270,11 @@ class AiSiteBuildQueue implements QueueInterface
         }
 
         return \in_array($reason, [
-            'missing_build_blueprint_tasks',
-            'failed_build_tasks',
+            'missing_build_plan_blocks',
+            'failed_build_plan_blocks',
             'invalid_generated_artifacts',
             'duplicate_generated_artifacts',
-            'unfinished_build_tasks',
+            'unfinished_build_plan_blocks',
         ], true);
     }
 
@@ -1296,7 +1406,7 @@ class AiSiteBuildQueue implements QueueInterface
     private function clearQueueForceBuildMarker(AiSiteAgentSessionService $sessionService, int $sessionId, int $adminId): void
     {
         try {
-            $sessionService->mergeScope($sessionId, $adminId, [
+            $sessionService->patchScopeManifest($sessionId, $adminId, [
                 '_queue_force_build' => [
                     'active' => 0,
                     'consumed_at' => \date('Y-m-d H:i:s'),
@@ -1597,12 +1707,11 @@ class AiSiteBuildQueue implements QueueInterface
         }
 
         $line = '[' . \date('H:i:s') . '] QUEUE ' . $message;
-        $existing = (string)($row['result'] ?? '');
         w_query('queue', 'update', [
             'queue_id' => $qid,
             'patch' => [
                 'process' => $message,
-                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+                'result' => $line,
             ],
         ]);
         $this->mirrorToCli($line);
@@ -1621,7 +1730,6 @@ class AiSiteBuildQueue implements QueueInterface
         }
 
         $line = '[' . \date('H:i:s') . '] QUEUE_DONE ' . $message;
-        $existing = (string)($row['result'] ?? '');
         w_query('queue', 'update', [
             'queue_id' => $qid,
             'patch' => [
@@ -1629,7 +1737,7 @@ class AiSiteBuildQueue implements QueueInterface
                 'pid' => 0,
                 'finished' => 1,
                 'process' => $message,
-                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+                'result' => $line,
             ],
         ]);
         $this->mirrorToCli($line);
@@ -1669,6 +1777,93 @@ class AiSiteBuildQueue implements QueueInterface
             (int)$throwable->getLine(),
             $frames !== [] ? ' | trace: ' . \implode(' <- ', $frames) : ''
         );
+    }
+
+    private function logInternalBuildQueueDiagnostic(
+        int $queueId,
+        string $operation,
+        string $publicId,
+        string $diagnostic,
+        string $surfaceMessage
+    ): void {
+        try {
+            \w_log_warning('[AI Site Build Queue Diagnostic] ' . \json_encode([
+                'queue_id' => $queueId,
+                'operation' => $operation,
+                'public_id' => $publicId,
+                'surface_message' => $surfaceMessage,
+                'diagnostic' => $this->clipInternalDiagnostic($diagnostic, 4096),
+            ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE));
+        } catch (\Throwable) {
+        }
+    }
+
+    private function clipInternalDiagnostic(string $value, int $limit): string
+    {
+        $value = \trim((string)(\preg_replace('/\s+/u', ' ', $value) ?? $value));
+        if ($limit <= 0 || \mb_strlen($value, 'UTF-8') <= $limit) {
+            return $value;
+        }
+
+        return \mb_substr($value, 0, $limit - 1, 'UTF-8') . '…';
+    }
+
+    private function summarizeThrowableForQueueSurface(\Throwable $throwable): string
+    {
+        $message = \trim($throwable->getMessage());
+        if ($message === '') {
+            $message = $throwable::class;
+        }
+
+        $lower = \mb_strtolower($message, 'UTF-8');
+        if (\str_contains($lower, 'required_image_asset_unresolved')
+            || \str_contains($lower, 'inline block image generation failed')
+            || \str_contains($lower, 'image generation failed')
+            || \str_contains($lower, 'vectorengine')
+            || \str_contains($lower, 'generatecontent')
+            || \str_contains($lower, 'chat pre-consumed quota')
+            || \str_contains($lower, 'user quota')
+            || \str_contains($lower, 'need quota')
+            || \str_contains($lower, 'quota')
+        ) {
+            return 'Image generation is temporarily unavailable. The section will need another generation attempt.';
+        }
+
+        if (\str_contains($lower, 'openssl')
+            || \str_contains($lower, 'ssl_read')
+            || \str_contains($lower, 'curl')
+            || \str_contains($lower, 'operation timed out')
+            || \str_contains($lower, 'operation too slow')
+            || \str_contains($lower, 'timed out after')
+        ) {
+            return 'AI generation timed out. The section will need another generation attempt.';
+        }
+
+        if (\str_contains($lower, 'contract findings')
+            || \str_contains($lower, 'hard policy')
+            || \str_contains($lower, 'quality gate failed')
+            || \str_contains($lower, 'quality gate did not')
+            || \str_contains($lower, 'component contract')
+            || \str_contains($lower, 'build prompt contract')
+            || \str_contains($lower, 'stage-2 build-plan task context')
+            || \str_contains($lower, 'scope-level prompt fallback')
+        ) {
+            return 'AI output did not pass the section quality gate. The section will need another generation attempt.';
+        }
+
+        if ((\preg_match('/https?:\\/\\//i', $message) === 1)
+            || (\preg_match('/\\brequest\\s*id\\b/i', $message) === 1)
+            || (\preg_match('/\\bHTTP\\s*:?\\s*\\d{3}\\b/i', $message) === 1)
+            || (\preg_match('/\\b[A-Za-z_]+Exception\\b/', $message) === 1)
+            || \str_contains($message, '\\')
+            || \str_contains($message, '::')
+            || \str_contains($message, ' in ')
+            || \str_contains($message, 'trace:')
+        ) {
+            return 'AI generation failed. The section will need another generation attempt.';
+        }
+
+        return \mb_substr((string)(\preg_replace('/\s+/u', ' ', $message) ?? $message), 0, 320, 'UTF-8');
     }
 
     private function mirrorToCli(string $line): void
@@ -1756,7 +1951,7 @@ class AiSiteBuildQueue implements QueueInterface
             ->setData(Queue::schema_fields_start_at, null)
             ->setData(Queue::schema_fields_end_at, null)
             ->setProcess($message)
-            ->setResult($this->appendQueueMessage((string)$queue->getResult(), $line))
+            ->setResult($line)
             ->save();
         $this->mirrorToCli($line);
     }
@@ -1774,12 +1969,6 @@ class AiSiteBuildQueue implements QueueInterface
         $scopePatch = $content['scope_patch'];
         foreach (self::QUEUE_SCOPE_PATCH_REDUNDANT_KEYS as $key => $_) {
             unset($scopePatch[$key]);
-        }
-        if (\is_array($scopePatch['build_summary'] ?? null)) {
-            unset($scopePatch['build_summary']['task_summary']);
-            if ($scopePatch['build_summary'] === []) {
-                unset($scopePatch['build_summary']);
-            }
         }
         $content['scope_patch'] = $scopePatch;
 
@@ -1815,17 +2004,4 @@ class AiSiteBuildQueue implements QueueInterface
         return \is_string($json) ? $json : '{}';
     }
 
-    private function appendQueueMessage(string $existing, string $line): string
-    {
-        $existing = \trim($existing);
-        $line = \trim($line);
-        if ($line === '') {
-            return $existing;
-        }
-        if ($existing === '') {
-            return $line;
-        }
-
-        return $existing . \PHP_EOL . $line;
-    }
 }

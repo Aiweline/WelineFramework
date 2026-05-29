@@ -14,6 +14,12 @@
     <event name="WeShop_Review::review_created">
         <observer name="weshop_affiliate_review_created" instance="WeShop\Affiliate\Observer\ReviewCreatedObserver" disabled="false" shared="true" sort="100"/>
     </event>
+    <event name="WeShop_Customer::register_after">
+        <observer name="weshop_affiliate_customer_registered" instance="WeShop\Affiliate\Observer\CustomerRegisteredObserver" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="Weline_Frontend_Account_Register::register_after">
+        <observer name="weshop_affiliate_frontend_customer_registered" instance="WeShop\Affiliate\Observer\CustomerRegisteredObserver" disabled="false" shared="true" sort="100"/>
+    </event>
     <event name="WeShop_Cart::add_to_cart_after">
         <observer name="weshop_affiliate_cart_add_after" instance="WeShop\Affiliate\Observer\CartAddAfterObserver" disabled="false" shared="true" sort="100"/>
     </event>

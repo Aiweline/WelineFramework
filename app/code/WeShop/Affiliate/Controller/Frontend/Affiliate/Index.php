@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace WeShop\Affiliate\Controller\Frontend\Affiliate;
 
-use WeShop\Affiliate\Service\AffiliatePageDataService;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Frontend\Controller\BaseController;
 
@@ -15,8 +14,7 @@ class Index extends BaseController
     protected ?string $layoutType = 'account';
 
     public function __construct(
-        private readonly CustomerContextInterface $customerContext,
-        private readonly AffiliatePageDataService $affiliatePageDataService
+        private readonly CustomerContextInterface $customerContext
     ) {
     }
 
@@ -29,10 +27,7 @@ class Index extends BaseController
             return '';
         }
 
-        foreach ($this->affiliatePageDataService->build($customerId) as $key => $value) {
-            $this->assign($key, $value);
-        }
-
-        return $this->fetch();
+        $this->redirect($this->getUrl('customer/account/index') . '#affiliate');
+        return '';
     }
 }

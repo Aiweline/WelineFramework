@@ -31,6 +31,17 @@ This skill owns theme-level template work, source-template editing, layout-aware
 - Keep styles and scripts scoped, reusable, and consistent with theme tokens.
 - Keep frontend request interactions routed through Theme `theme.js` and the built-in `weline-api` worker chain.
 
+# Default Theme CSS Contract
+
+- Shared default-theme classes MUST use the `w-` prefix. This prefix means the class is owned by the Weline default theme CSS contract, similar to utility-first systems that expose framework-owned classes through a predictable namespace.
+- Canonical default components are `w-btn`, `w-card`, `w-panel`, `w-widget`, `w-stat-card`, `w-total-card`, `w-metric-card`, `w-form-control`, `w-form-select`, `w-table`, `w-badge`, `w-alert`, `w-pagination`, `w-dropdown`, `w-modal`, `w-loading`, and `w-toolbar`, with modifier classes such as `w-btn-primary`, `w-btn-outline`, `w-badge-success`, `w-alert-danger`, `w-table-striped`, `w-modal-lg`, and size classes such as `w-btn-sm` / `w-btn-lg`.
+- Canonical default utilities are `w-text-*`, `w-bg-*`, `w-border*`, `w-rounded*`, `w-shadow*`, and `w-focus-ring`. Use these when the intent is theme-level styling rather than module-owned BEM styling.
+- Do not introduce new unprefixed global component classes for theme-owned defaults. Existing unprefixed classes such as `.btn`, `.card`, `.form-control`, `.table`, `.modal`, `.dropdown-menu`, and `.loading-component` may remain only as compatibility aliases or JS hooks for older templates and Bootstrap-style backend pages; new source templates must include the `w-*` class whenever they rely on default theme styling.
+- Theme CSS MUST define tokens before component rules. Frontend uses `--weline-theme-*`; backend uses `--backend-theme-*`. Component variables such as `--weline-component-*` / `--backend-component-*` must reference those theme tokens instead of becoming a second independent system.
+- Required token categories: brand/status color roles (`primary`, `on-primary`, `secondary`, `success`, `warning`, `danger`, `info`), subtle backgrounds, subtle borders, text roles, surface roles, border width/style/color, radius scale, shadow scale, focus ring, control heights, and transition timings.
+- Component rules must consume tokens for border width, border style, border color, radius, text color, surfaces, shadows, focus rings, and state colors. Avoid hardcoded `1px`, hex colors, radius values, or shadow values inside reusable components unless the value is first exposed as a theme token.
+- When adding markup in source templates, prefer `w-*` classes for default-theme primitives and use module-specific BEM classes only for business-specific structure or bespoke visuals.
+
 # Workflow
 
 1. Read `AI-ENTRY.md`, then theme-related docs, then inspect the owning source template path.

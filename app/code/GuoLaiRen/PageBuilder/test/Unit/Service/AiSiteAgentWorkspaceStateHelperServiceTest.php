@@ -230,6 +230,63 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertArrayNotHasKey('events', $pruned);
     }
 
+    public function testPruneStateForViewSanitizesRuntimeProviderDiagnostics(): void
+    {
+        $service = new AiSiteAgentWorkspaceStateHelperService();
+        $state = [
+            'build_task_summary' => [
+                'total' => 1,
+                'failed' => 1,
+                'groups' => [
+                    'home_page' => [
+                        'page_type' => 'home_page',
+                        'total' => 1,
+                        'failed' => 1,
+                        'tasks' => [
+                            [
+                                'task_key' => 'page:home_page:content/home-page-hero',
+                                'status' => 'failed',
+                                'message' => 'REQUIRED_IMAGE_ASSET_UNRESOLVED: VectorEngine API returned error (URL: https://api.vectorengine.cn, HTTP: 403): request id xyz',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'retryable_ai_failures' => [
+                [
+                    'operation' => 'build',
+                    'items' => [
+                        [
+                            'message' => 'OpenSSL SSL_read unexpected eof while reading',
+                            'error_message' => 'VectorEngine API returned error (URL: https://api.vectorengine.cn, HTTP: 403): request id xyz',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $pruned = $service->pruneStateForView($state);
+        $taskMessage = (string)($pruned['build_task_summary']['groups']['home_page']['tasks'][0]['message'] ?? '');
+        $retryMessage = (string)($pruned['retryable_ai_failures'][0]['items'][0]['message'] ?? '');
+        $retryErrorMessage = (string)($pruned['retryable_ai_failures'][0]['items'][0]['error_message'] ?? '');
+
+        self::assertSame(
+            'Image generation is temporarily unavailable. The section will need another generation attempt.',
+            $taskMessage
+        );
+        self::assertSame(
+            'AI generation timed out. The section will need another generation attempt.',
+            $retryMessage
+        );
+        self::assertSame(
+            'Image generation is temporarily unavailable. The section will need another generation attempt.',
+            $retryErrorMessage
+        );
+        foreach (['REQUIRED_IMAGE_ASSET_UNRESOLVED', 'VectorEngine', 'https://', 'HTTP: 403', 'request id', 'OpenSSL'] as $needle) {
+            self::assertStringNotContainsString($needle, $taskMessage . $retryMessage . $retryErrorMessage);
+        }
+    }
+
     public function testPruneStateForViewKeepsEditableVirtualThemeLayoutMetadata(): void
     {
         $service = new AiSiteAgentWorkspaceStateHelperService();

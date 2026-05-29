@@ -373,19 +373,18 @@ class Parser
 
     private static function getCurrentLayeredWords(): array
     {
+        $lang = State::getLangLocal();
+        $modules = self::resolveRequestModules();
+        $layeredCacheKey = self::buildLayeredWordsCacheKey($lang, $modules);
         $requestId = Runtime::isPersistent() ? RequestContext::getId() : null;
         if (
             $requestId !== null
             && self::$currentRequestLayeredWordsId === $requestId
-            && self::$currentRequestLayeredWordsKey !== null
+            && self::$currentRequestLayeredWordsKey === $layeredCacheKey
             && isset(self::$workerLayeredWordsCache[self::$currentRequestLayeredWordsKey])
         ) {
             return self::$workerLayeredWordsCache[self::$currentRequestLayeredWordsKey];
         }
-
-        $lang = State::getLangLocal();
-        $modules = self::resolveRequestModules();
-        $layeredCacheKey = self::buildLayeredWordsCacheKey($lang, $modules);
 
         $layers = self::getLayeredWords($lang, $modules);
         self::$currentRequestLayeredWordsId = $requestId;

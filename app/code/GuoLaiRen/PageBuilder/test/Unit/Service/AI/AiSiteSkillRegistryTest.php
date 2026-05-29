@@ -61,6 +61,9 @@ final class AiSiteSkillRegistryTest extends TestCase
         self::assertStringContainsString('Palette role discipline', $payload);
         self::assertStringContainsString('Contrast gate', $payload);
         self::assertStringContainsString('Code craft gate', $payload);
+        self::assertStringContainsString('FRONTEND-DESIGN COMPATIBILITY RULES', $payload);
+        self::assertStringContainsString('artifacts, posters, or applications', $payload);
+        self::assertStringContainsString('Visually striking and memorable', $payload);
     }
 
     public function testGetSkillReturnsFallbackForUnknownCode(): void

@@ -304,8 +304,9 @@ foreach ($languages as $lang) {
     </div>
 </div>
 <?php
-if (!defined('WELINE_I18N_HEADER_CHOICE_ASSETS_RENDERED')) {
-    define('WELINE_I18N_HEADER_CHOICE_ASSETS_RENDERED', true);
+$assetsFlagKey = '__weline_i18n_header_choice_assets_rendered';
+if (!$this->getData($assetsFlagKey)) {
+    $this->setData($assetsFlagKey, true);
     echo $this->fetch('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml');
 }
 ?>

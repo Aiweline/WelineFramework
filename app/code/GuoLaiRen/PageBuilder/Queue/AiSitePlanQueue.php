@@ -20,6 +20,10 @@ use Weline\Queue\QueueInterface;
 class AiSitePlanQueue implements QueueInterface
 {
     private const MAX_PLAN_QUEUE_ATTEMPTS = 3;
+    private const PLAN_COMPLETION_GATE_ARTIFACT_KEYS = [
+        'plan_json',
+        'plan_markdown',
+    ];
 
     public function name(): string
     {
@@ -259,7 +263,11 @@ class AiSitePlanQueue implements QueueInterface
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
         $scope = $scopeService->normalizeScope(
-            $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+            $sessionService->loadScopeForStage(
+                $fresh,
+                AiSiteAgentSession::STAGE_PLAN,
+                self::PLAN_COMPLETION_GATE_ARTIFACT_KEYS
+            )
         );
         $currentReq = \is_array($scope['_plan_sse_request'] ?? null) ? $scope['_plan_sse_request'] : [];
         $nextRound = \max(1, (int)($currentReq['round'] ?? 0) + 1);
@@ -849,7 +857,11 @@ class AiSitePlanQueue implements QueueInterface
         }
 
         $scope = $scopeService->normalizeScope(
-            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+            $sessionService->loadScopeForStage(
+                $session,
+                AiSiteAgentSession::STAGE_PLAN,
+                self::PLAN_COMPLETION_GATE_ARTIFACT_KEYS
+            )
         );
         if (!\is_array($scope['plan_json'] ?? null) || ($scope['plan_json'] ?? []) === []) {
             throw new \RuntimeException('Stage-one plan completion gate failed: plan_json is empty.');
@@ -875,6 +887,12 @@ class AiSitePlanQueue implements QueueInterface
         if ($contractHash === '' || $reportContractHash === '' || !\hash_equals($contractHash, $reportContractHash)) {
             throw new \RuntimeException('Stage-one plan completion gate failed: validation contract hash mismatch.');
         }
+        $missingPageTypes = $this->collectMissingSelectedPageTypes($scopeService, $scope, $planJson);
+        if ($missingPageTypes !== []) {
+            throw new \RuntimeException(
+                'Stage-one plan completion gate failed: plan_json.pages missing selected page_types: ' . \implode(', ', $missingPageTypes)
+            );
+        }
         $hasAiGeneratedEvidence = (int)($scope['plan_ai_generated'] ?? 0) === 1
             || (
                 \trim((string)($scope['plan_generated_at'] ?? '')) !== ''
@@ -891,6 +909,50 @@ class AiSitePlanQueue implements QueueInterface
         }
 
         return $retryablePlanMessages;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $planJson
+     * @return list<string>
+     */
+    private function collectMissingSelectedPageTypes(
+        AiSiteScopeCompatibilityService $scopeService,
+        array $scope,
+        array $planJson
+    ): array {
+        try {
+            $expected = $scopeService->resolveScopedPageTypes($scope);
+        } catch (\Throwable) {
+            $expected = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [];
+        }
+        $expected = \array_values(\array_filter(\array_map(
+            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+            $expected
+        ), static fn(string $value): bool => $value !== ''));
+        if ($expected === []) {
+            return [];
+        }
+
+        $actual = [];
+        foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($key) ? $key : '')));
+            if ($pageType !== '') {
+                $actual[$pageType] = true;
+            }
+        }
+
+        $missing = [];
+        foreach ($expected as $pageType) {
+            if (!isset($actual[$pageType])) {
+                $missing[] = $pageType;
+            }
+        }
+
+        return \array_values(\array_unique($missing));
     }
 
     /**

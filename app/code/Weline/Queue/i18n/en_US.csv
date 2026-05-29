@@ -1,4 +1,6 @@
-﻿请输入队列ID。,"Please enter the queue ID."
+﻿"队列并发数必须是大于 0 的整数。","队列并发数必须是大于 0 的整数。"
+"队列并发数已更新为 %{1}","队列并发数已更新为 %{1}"
+请输入队列ID。,"Please enter the queue ID."
 队列不存在。,"Queue does not exist."
 "队列 #%{1} 正在运行中，禁止重复运行（pid=%{2}）。","Queue #%{1} is currently running, duplicate execution is not allowed (pid=%{2})."
 "如需接管，请使用 --force；系统会先终止当前同 ID 任务后再启动新任务。","To take over, use --force; the system will first terminate the current task with the same ID before starting a new task."
@@ -138,6 +140,8 @@ biz_key,biz_key
 类型不存在:%{1},"Type does not exist: %{1}"
 "队列类：%{1} 属性错误。 队列属性必须继承自 %{2}","Queue class: %{1} attribute error. Queue attributes must inherit from %{2}"
 "请填写 %{1}","Fill in %{1}."
+队列类型收集完成。,队列类型收集完成。
+队列类型收集失败，已跳过，不影响本次系统更新。错误：%{1},队列类型收集失败，已跳过，不影响本次系统更新。错误：%{1}
 "%{1}(%{2}): %{3}","%{1}(%{2}): %{3}"
 队列数据总数：%{1},"Total queue data: %{1}"
 总计,Total
@@ -163,14 +167,11 @@ biz_key,biz_key
 附加错误,"Additional Error"
 测试队列提示,"Test Queue Prompt"
 测试队列,"Test Queue"
-"Queue finished...","Queue finished..."
-"Queue process ended unexpectedly...","Queue process ended unexpectedly..."
-"Detected running state without PID; reset to pending for rescheduling.","Detected running state without PID; reset to pending for rescheduling."
-"Failed to create queue process. Process name: %{1}","Failed to create queue process. Process name: %{1}"
 队列进程已结束，检测到完成标记，已同步为完成状态。,"Queue process ended and a completion marker was detected; status has been synchronized to done."
 "队列记录的 PID %{1} 仍存在，但已不匹配当前队列执行进程，已标记为异常。","The queue record PID %{1} still exists but no longer matches the current queue worker; the queue has been marked as error."
 "队列记录的 PID %{1} 已不存在，已标记为异常。","The queue record PID %{1} no longer exists; the queue has been marked as error."
 "运行中队列没有记录 PID，已重置为 pending 等待重新调度。","The running queue has no recorded PID; it has been reset to pending for rescheduling."
+"Failed to create queue process. Process name: %{1}","Failed to create queue process. Process name: %{1}"
 提交,Submit
 下一步,"Next step"
 温馨提示！,"Friendly Reminder!"

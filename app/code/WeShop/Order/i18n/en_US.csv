@@ -54,10 +54,14 @@
 在前台订单详情商品区块内注入扩展内容。,"Inject content inside the storefront order detail items section."
 订单详情页后置内容,"Order detail content after"
 在前台订单详情页正文后注入扩展内容。,"Inject content after the storefront order detail page body."
-订单已加载,订单已加载
+订单已加载,"Orders loaded"
 确定要取消此订单吗？取消后将自动退款。,"Are you sure you want to cancel this order? An automatic refund will be issued after cancellation."
 确定要取消此订单吗？,"Are you sure you want to cancel this order?"
-规格,规格
+规格,Specification
+尺寸,Size
+颜色,Color
+材质,Material
+品牌,Brand
 您还没有订单,"You have no orders yet"
 该状态下暂无订单,"No orders in this status"
 查看全部订单,"View all orders"
@@ -144,7 +148,7 @@ SKU,SKU
 正在取消订单...,"Cancelling order..."
 取消订单失败,"Failed to cancel order"
 订单列表加载失败，请稍后重试,"Failed to load orders. Please try again later."
-订单加载中...,订单加载中...
+订单加载中...,"Loading orders..."
 "您有 %{1} 个订单待支付","You have %{1} order(s) awaiting payment"
 请及时完成支付，避免订单自动取消。支付流程会在当前个人中心页面打开。,"Please complete payment promptly to avoid automatic order cancellation. The payment flow will open on the current account page."
 订单状态筛选,"Order status filter"

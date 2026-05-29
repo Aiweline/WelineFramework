@@ -16,6 +16,9 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
     <meta charset='utf-8'/>
     <title>@lang(网站维护中...)</title>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <meta http-equiv='Cache-Control' content='no-store, no-cache, must-revalidate'>
+    <meta http-equiv='Pragma' content='no-cache'>
+    <meta http-equiv='Expires' content='0'>
     <meta content='Premium Multipurpose Frontend & WelineFramework' name='description'/>
     <meta content='秋枫雁飞(aiweline)' name='author'/>
     <!-- App favicon -->
@@ -290,7 +293,10 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
             if (timer) {
                 window.clearTimeout(timer);
             }
-            timer = window.setTimeout(check, delay + Math.floor(Math.random() * jitter));
+            timer = window.setTimeout(function () {
+                timer = 0;
+                check();
+            }, delay + Math.floor(Math.random() * jitter));
         }
 
         function probe(method) {
@@ -316,7 +322,6 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
 
         function check() {
             if (document.hidden) {
-                schedule(initialDelay);
                 return;
             }
 
@@ -331,9 +336,14 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
         }
 
         document.addEventListener('visibilitychange', function () {
-            if (!document.hidden) {
-                schedule(0);
+            if (document.hidden) {
+                if (timer) {
+                    window.clearTimeout(timer);
+                    timer = 0;
+                }
+                return;
             }
+            schedule(0);
         });
         schedule(initialDelay);
     })();

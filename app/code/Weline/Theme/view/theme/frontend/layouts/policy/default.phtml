@@ -53,8 +53,22 @@ $meta = $this->getData('meta') ?? [];
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::policy::content-before</w:hook>
             
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-policy-content,layout-default-content,content,policy-content,cms-content,faq"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="policy-main__content-root-slot">
             <w:hook>Weline_Theme::frontend::layouts::policy::main-before</w:hook>
             <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> default" id="policy-main" data-layout="policy">
+                <w:slot id="policy-content"
+                        name="政策正文内容"
+                        accept="layout-policy-content,layout-cms-content,policy-content,content,faq"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="policy-main__content-slot">
                 <w:hook>Weline_Theme::frontend::layouts::policy::main-content-before</w:hook>
                 <w:hook>Weline_Theme::frontend::layouts::policy::main-content<else/>
                     <if condition="meta.content">
@@ -269,8 +283,10 @@ $meta = $this->getData('meta') ?? [];
                     </if>
                 </w:hook>
                 <w:hook>Weline_Theme::frontend::layouts::policy::main-content-after</w:hook>
+                </w:slot>
             </main>
             <w:hook>Weline_Theme::frontend::layouts::policy::main-after</w:hook>
+            </w:slot>
             
             <w:hook>Weline_Theme::frontend::layouts::policy::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
