@@ -14,8 +14,11 @@
         apiPublish: '',
         apiPreview: '',
         apiCompileLayout: '',
+        apiLayoutOptions: '',
         apiLayoutConfig: '',
+        apiSaveLayoutSelection: '',
         apiSaveLayoutConfig: '',
+        apiAiTranslateConfig: '',
         apiLayoutPreview: '',
         apiParamRenderForm: '',
         autoSaveDelay: 1000,
@@ -43,6 +46,9 @@
     const state = {
         themeId: 0,
         pageType: 'default',
+        layoutType: 'default',
+        layoutOption: 'default',
+        layoutOptionsByType: {},
         selectedWidget: null,
         configMode: 'layout',
         selectedArea: null, // 当前选中的区域代码
@@ -54,6 +60,7 @@
         originalGroupOrder: [], // 保存原始分组顺序
         previewRefreshInFlight: false,
         previewRefreshQueued: false,
+        previewArrayItemIndexByLayout: {},
         previewStatus: 'draft', // 预览版本状态：draft（草稿）/ published（已发布）
         saveInProgress: false,   // 防止拖入保存时重复提交导致保存两个部件
         // 版本控制状态
@@ -73,6 +80,95 @@
 
     // DOM 元素
     let elements = {};
+    let editorModalEventsBound = false;
+
+    function ensureEditorModalEvents() {
+        if (editorModalEventsBound) {
+            return;
+        }
+        editorModalEventsBound = true;
+
+        document.addEventListener('click', function(event) {
+            const dismissButton = event.target.closest('[data-bs-dismiss="modal"]');
+            if (!dismissButton) {
+                return;
+            }
+            const modal = dismissButton.closest('.modal');
+            if (modal) {
+                event.preventDefault();
+                hideEditorModal(modal);
+            }
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key !== 'Escape') {
+                return;
+            }
+            const openModals = Array.from(document.querySelectorAll('.modal.show'));
+            const modal = openModals[openModals.length - 1];
+            if (modal) {
+                hideEditorModal(modal);
+            }
+        });
+    }
+
+    function getEditorBackdrop() {
+        return document.querySelector('.modal-backdrop[data-theme-editor-backdrop="1"]');
+    }
+
+    function ensureEditorBackdrop() {
+        let backdrop = getEditorBackdrop();
+        if (backdrop) {
+            return backdrop;
+        }
+        backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop fade show';
+        backdrop.setAttribute('data-theme-editor-backdrop', '1');
+        backdrop.addEventListener('click', function() {
+            const openModals = Array.from(document.querySelectorAll('.modal.show'));
+            const modal = openModals[openModals.length - 1];
+            if (modal) {
+                hideEditorModal(modal);
+            }
+        });
+        document.body.appendChild(backdrop);
+        return backdrop;
+    }
+
+    function showEditorModal(modal) {
+        if (!modal) {
+            return;
+        }
+        ensureEditorModalEvents();
+        modal.style.display = 'block';
+        modal.removeAttribute('aria-hidden');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('role', 'dialog');
+        modal.classList.add('show');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+        ensureEditorBackdrop();
+    }
+
+    function hideEditorModal(modal) {
+        if (!modal) {
+            return;
+        }
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        modal.setAttribute('aria-hidden', 'true');
+        modal.removeAttribute('aria-modal');
+        modal.removeAttribute('role');
+
+        if (!document.querySelector('.modal.show')) {
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            const backdrop = getEditorBackdrop();
+            if (backdrop) {
+                backdrop.remove();
+            }
+        }
+    }
 
     /** 主题编辑器内联 SVG 图标（不依赖 Remix Icon 字体） */
     var TE_ICONS = {
@@ -106,6 +202,125 @@
         return state.pageType || state.layoutType || 'homepage';
     }
 
+    function normalizeLayoutOptionValue(value) {
+        return String(value || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim();
+    }
+
+    function normalizeLayoutOptionsByType(rawOptions) {
+        const result = {};
+        if (!rawOptions || typeof rawOptions !== 'object') {
+            return result;
+        }
+
+        Object.entries(rawOptions).forEach(([layoutType, options]) => {
+            const type = normalizeLayoutOptionValue(layoutType);
+            if (!type || !Array.isArray(options)) {
+                return;
+            }
+            result[type] = options
+                .map((option) => {
+                    if (typeof option === 'string') {
+                        return {
+                            value: normalizeLayoutOptionValue(option),
+                            label: option,
+                            description: '',
+                            file: ''
+                        };
+                    }
+                    if (!option || typeof option !== 'object') {
+                        return null;
+                    }
+                    const value = normalizeLayoutOptionValue(option.value);
+                    if (!value) {
+                        return null;
+                    }
+                    return {
+                        value,
+                        label: String(option.label || option.name || value),
+                        description: String(option.description || ''),
+                        file: String(option.file || '')
+                    };
+                })
+                .filter(Boolean);
+        });
+
+        return result;
+    }
+
+    function parseLayoutOptionsByType(value) {
+        if (!value) {
+            return {};
+        }
+        if (typeof value === 'object') {
+            return normalizeLayoutOptionsByType(value);
+        }
+        try {
+            return normalizeLayoutOptionsByType(JSON.parse(String(value)));
+        } catch (error) {
+            console.warn('[ThemeEditor] Invalid layout options payload:', error);
+            return {};
+        }
+    }
+
+    function getLayoutOptionsForType(layoutType) {
+        const type = normalizeLayoutOptionValue(layoutType || getCurrentPageType() || 'homepage');
+        return Array.isArray(state.layoutOptionsByType[type]) ? state.layoutOptionsByType[type] : [];
+    }
+
+    function getFallbackLayoutOption(layoutType) {
+        const options = getLayoutOptionsForType(layoutType);
+        const defaultOption = options.find(option => option.value === 'default');
+        return (defaultOption || options[0] || { value: 'default' }).value || 'default';
+    }
+
+    function resolveLayoutOptionForType(layoutType, requestedOption = '') {
+        const requested = normalizeLayoutOptionValue(requestedOption);
+        const options = getLayoutOptionsForType(layoutType);
+        if (requested && options.some(option => option.value === requested)) {
+            return requested;
+        }
+        return getFallbackLayoutOption(layoutType);
+    }
+
+    function renderLayoutOptionSelect(layoutType = state.layoutType, selectedOption = state.layoutOption) {
+        if (!elements.layoutOptionSelect) {
+            return;
+        }
+
+        const options = getLayoutOptionsForType(layoutType);
+        const selected = resolveLayoutOptionForType(layoutType, selectedOption);
+        const renderOptions = options.length > 0 ? options : [{
+            value: selected || 'default',
+            label: selected === 'default' ? 'Default' : selected,
+            description: '',
+            file: ''
+        }];
+
+        elements.layoutOptionSelect.innerHTML = renderOptions.map(option => {
+            const value = normalizeLayoutOptionValue(option.value);
+            const label = option.label || value;
+            const description = option.description ? ` title="${escapeHtml(option.description)}"` : '';
+            return `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}${description}>${escapeHtml(label)}</option>`;
+        }).join('');
+        elements.layoutOptionSelect.value = selected;
+        elements.layoutOptionSelect.disabled = false;
+        elements.layoutOptionSelect.dataset.singleOption = renderOptions.length <= 1 ? '1' : '0';
+        elements.layoutOptionSelect.title = renderOptions.length <= 1
+            ? translateUiText('当前布局类型只有一个布局选项')
+            : translateUiText('选择布局选项');
+    }
+
+    function setCurrentLayoutSelection(layoutType, layoutOption = '') {
+        const nextType = normalizeLayoutOptionValue(layoutType || getCurrentPageType() || 'homepage') || 'homepage';
+        state.pageType = nextType;
+        state.layoutType = nextType;
+        state.layoutOption = resolveLayoutOptionForType(nextType, layoutOption || state.layoutOption);
+        if (elements.pageTypeSelect && elements.pageTypeSelect.value !== nextType) {
+            elements.pageTypeSelect.value = nextType;
+        }
+        renderLayoutOptionSelect(nextType, state.layoutOption);
+    }
+
     function getCurrentWindowUrl() {
         return new URL(window.location.href);
     }
@@ -136,10 +351,37 @@
         return result;
     }
 
-    async function apiRequest(url, options = {}) {
-        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.call !== 'function') {
-            throw new Error('Weline.Api is not available');
+    function resolveEditorApi() {
+        // ThemeEditor uses provider calls; the backend direct-route API exposes request/get/post only.
+        const candidates = [
+            window.WelineApiModule,
+            window.Weline && window.Weline.Api
+        ];
+        let directRequestApi = null;
+        for (const api of candidates) {
+            if (!api) {
+                continue;
+            }
+            if (api.__backend !== true && typeof api.call === 'function') {
+                return {
+                    mode: 'provider',
+                    api
+                };
+            }
+            if (typeof api.request === 'function') {
+                directRequestApi = api;
+            }
         }
+        if (directRequestApi) {
+            return {
+                mode: 'direct',
+                api: directRequestApi
+            };
+        }
+        throw new Error('Weline frontend API is not available');
+    }
+
+    async function apiRequest(url, options = {}) {
         const headers = normalizeRequestHeaders(options.headers);
         let body = options.body ?? null;
         if (body instanceof URLSearchParams) {
@@ -157,7 +399,15 @@
         if (body !== null) {
             params.body = body;
         }
-        return window.Weline.Api.call('theme', 'editorRequest', params, { silent: options.silent === true });
+        const editorApi = resolveEditorApi();
+        if (editorApi.mode === 'direct') {
+            return editorApi.api.request(params.url, {
+                method: params.method,
+                headers: headers,
+                body: body,
+            });
+        }
+        return editorApi.api.call('theme', 'editorRequest', params, { silent: options.silent === true });
     }
 
     async function unwrapApiPayload(response) {
@@ -206,7 +456,6 @@
             url.searchParams.set(key, value);
         });
 
-        // Split editor shell area and preview area to avoid contaminating backend shell.
         const previewArea = (typeof overrides.preview_area === 'string' && overrides.preview_area)
             ? overrides.preview_area
             : (
@@ -218,9 +467,10 @@
         const params = Object.assign({
             theme_id: state.themeId || 0,
             page_type: getCurrentPageType(),
+            layout_option: state.layoutOption || 'default',
             status: state.previewStatus || 'draft',
         }, overrides || {});
-        params.editor_area = 'backend';
+        params.editor_area = previewArea;
         params.preview_area = previewArea;
 
         Object.entries(params).forEach(([key, value]) => {
@@ -324,8 +574,11 @@
         config.apiRenderWidget = container.dataset.apiRenderWidget || `${config.apiBase}/render-widget`;
         config.apiWidgetPreview = container.dataset.apiWidgetPreview || `${config.apiBase}/widget-preview`;
         config.apiCompileLayout = container.dataset.apiCompileLayout || `${config.apiBase}/compile-layout`;
+        config.apiLayoutOptions = container.dataset.apiLayoutOptions || `${config.apiBase}/layout-options`;
         config.apiLayoutConfig = container.dataset.apiLayoutConfig || `${config.apiBase}/layout-config`;
+        config.apiSaveLayoutSelection = container.dataset.apiSaveLayoutSelection || `${config.apiBase}/save-layout-selection`;
         config.apiSaveLayoutConfig = container.dataset.apiSaveLayoutConfig || `${config.apiBase}/save-layout-config`;
+        config.apiAiTranslateConfig = container.dataset.apiAiTranslateConfig || `${config.apiBase}/ai-translate-config`;
         config.apiLayoutPreview = container.dataset.apiLayoutPreview || `${config.apiBase}/layout-preview`;
         config.apiFrontendLayoutPreview = container.dataset.apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
@@ -362,12 +615,14 @@
         state.pageType = container.dataset.pageType || 'default';
         state.editorArea = container.dataset.editorArea || 'frontend';
         state.previewStatus = container.dataset.previewStatus || getCurrentWindowParam('status') || 'draft';
+        state.layoutOptionsByType = parseLayoutOptionsByType(container.dataset.layoutOptions || '{}');
 
         // 缓存 DOM 元素
         elements = {
             container: container,
             themeSelect: document.getElementById('themeSelect'),
             pageTypeSelect: document.getElementById('pageTypeSelect'),
+            layoutOptionSelect: document.getElementById('layoutOptionSelect'),
             editorAreaSelect: document.getElementById('editorAreaSelect'),
             configPanel: document.getElementById('configPanel'),
             configContent: document.getElementById('configContent'),
@@ -393,7 +648,11 @@
         // 当前布局信息
         // pageType 和 layoutType 现在是同一个概念，直接使用 pageType
         state.layoutType = state.pageType || 'homepage';
-        state.layoutOption = 'default';
+        state.layoutOption = resolveLayoutOptionForType(
+            state.layoutType,
+            container.dataset.layoutOption || getCurrentWindowParam('layout_option') || 'default'
+        );
+        renderLayoutOptionSelect(state.layoutType, state.layoutOption);
         state.slots = {}; // 页面插槽信息
         state.missingSlotWarnings = [];
 
@@ -456,14 +715,20 @@
         }
         // 主题选择（仅刷新预览，不整页跳转）
         if (elements.themeSelect) {
-            elements.themeSelect.addEventListener('change', function() {
+            elements.themeSelect.addEventListener('change', async function() {
                 const themeId = this.value;
                 if (themeId) {
                     showPreviewLoadingImmediate();
                     state.themeId = parseInt(themeId, 10) || 0;
+                    try {
+                        await refreshLayoutOptions({ layout_option: '', silent: true });
+                    } catch (error) {
+                        console.error('[ThemeEditor] refresh layout options error:', error);
+                    }
                     syncEditorUrlState({
                         theme_id: state.themeId,
                         page_type: getCurrentPageType(),
+                        layout_option: state.layoutOption || 'default',
                         preview_area: state.editorArea || 'frontend',
                     });
                     loadLayoutPreview();
@@ -475,14 +740,20 @@
 
         // 前端/后端区域切换（仅刷新预览，不整页跳转）
         if (elements.editorAreaSelect) {
-            elements.editorAreaSelect.addEventListener('change', function() {
+            elements.editorAreaSelect.addEventListener('change', async function() {
                 const area = this.value;
                 if (state.themeId && area) {
                     showPreviewLoadingImmediate();
                     state.editorArea = area;
+                    try {
+                        await refreshLayoutOptions({ editor_area: area, layout_option: '', silent: true });
+                    } catch (error) {
+                        console.error('[ThemeEditor] refresh layout options error:', error);
+                    }
                     syncEditorUrlState({
                         theme_id: state.themeId,
                         page_type: getCurrentPageType(),
+                        layout_option: state.layoutOption || 'default',
                         preview_area: area,
                     });
                     loadLayoutPreview();
@@ -493,21 +764,59 @@
 
         // 页面类型选择（AJAX 切换，不刷新页面）
         if (elements.pageTypeSelect) {
-            elements.pageTypeSelect.addEventListener('change', function() {
+            elements.pageTypeSelect.addEventListener('change', async function() {
                 const pageType = this.value;
                 if (state.themeId && pageType) {
                     showPreviewLoadingImmediate();
-                    state.pageType = pageType;
-                    state.layoutType = pageType; // pageType 和 layoutType 是同一个概念
+                    setCurrentLayoutSelection(pageType, '');
+                    try {
+                        await refreshLayoutOptions({ layout_type: pageType, layout_option: '', silent: true });
+                    } catch (error) {
+                        console.error('[ThemeEditor] refresh layout options error:', error);
+                    }
                     syncEditorUrlState({
                         theme_id: state.themeId,
                         page_type: pageType,
+                        layout_option: state.layoutOption || 'default',
                         version_id: null,
                     });
                     loadLayoutPreview();
                     loadLayoutConfig({ silent: true });
+                    loadVersions();
                     showToast(__('已切换到: ') + this.options[this.selectedIndex].text, 'info');
                 }
+            });
+        }
+
+        if (elements.layoutOptionSelect) {
+            elements.layoutOptionSelect.addEventListener('click', function() {
+                if (this.dataset.singleOption === '1') {
+                    showToast(translateUiText('当前布局类型只有一个布局选项'), 'info');
+                }
+            });
+
+            elements.layoutOptionSelect.addEventListener('change', async function() {
+                const layoutOption = normalizeLayoutOptionValue(this.value) || 'default';
+                if (!state.themeId || !layoutOption) {
+                    return;
+                }
+                showPreviewLoadingImmediate();
+                state.layoutOption = layoutOption;
+                renderLayoutOptionSelect(state.layoutType, state.layoutOption);
+                syncEditorUrlState({
+                    theme_id: state.themeId,
+                    page_type: getCurrentPageType(),
+                    layout_option: state.layoutOption,
+                    version_id: null,
+                });
+                try {
+                    await saveLayoutSelection();
+                } catch (error) {
+                    console.error('[ThemeEditor] save layout option error:', error);
+                    showToast(error.message || 'Save layout option failed', 'error');
+                }
+                loadLayoutPreview();
+                loadLayoutConfig({ silent: true });
             });
         }
 
@@ -553,6 +862,24 @@
 
         // 点击预览区的部件或区域
         document.addEventListener('click', function(e) {
+            if (e.target.closest('.btn-edit-widget')) {
+                e.stopPropagation();
+                const widget = e.target.closest('.preview-widget-item');
+                if (widget) {
+                    openConfigModal(widget);
+                }
+                return;
+            }
+
+            if (e.target.closest('.btn-delete-widget')) {
+                e.stopPropagation();
+                const widget = e.target.closest('.preview-widget-item');
+                if (widget) {
+                    deleteWidget(widget);
+                }
+                return;
+            }
+
             const widgetItem = e.target.closest('.preview-widget-item');
             if (widgetItem) {
                 selectWidget(widgetItem);
@@ -657,6 +984,18 @@
                         panel.style.display = 'none';
                         const fieldKey = closeBtn.dataset.field || panel.dataset.field;
                         elements.configContent.querySelector(`.w-param-btn-i18n[data-field="${fieldKey}"], .btn-i18n-edit[data-field="${fieldKey}"]`)?.classList.remove('active');
+                    }
+                    return;
+                }
+                const aiBtn = e.target.closest('[data-ai-i18n], .btn-ai-i18n');
+                if (aiBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
+                    const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
+                    const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId;
+                    if (panel && fieldKey && layoutId) {
+                        await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
                     }
                     return;
                 }
@@ -809,7 +1148,8 @@
         const params = Object.assign({
             theme_id: state.themeId || 0,
             page_type: getCurrentPageType(),
-            editor_area: 'backend',
+            layout_option: state.layoutOption || 'default',
+            editor_area: state.editorArea || 'frontend',
             preview_area: state.editorArea || 'frontend',
             status: state.previewStatus || 'draft',
         }, overrides || {});
@@ -1355,6 +1695,75 @@
         loadLayoutPreview();
     }
 
+    async function refreshLayoutOptions(options = {}) {
+        if (!state.themeId || !config.apiLayoutOptions) {
+            renderLayoutOptionSelect(state.layoutType, state.layoutOption);
+            return;
+        }
+
+        const layoutType = normalizeLayoutOptionValue(options.layout_type || state.layoutType || getCurrentPageType() || 'homepage') || 'homepage';
+        const requestedLayoutOption = normalizeLayoutOptionValue(
+            Object.prototype.hasOwnProperty.call(options, 'layout_option')
+                ? options.layout_option
+                : state.layoutOption
+        );
+        const editorArea = options.editor_area || state.editorArea || 'frontend';
+        const url = new URL(config.apiLayoutOptions, window.location.origin);
+        url.searchParams.set('theme_id', String(state.themeId || 0));
+        url.searchParams.set('layout_type', layoutType);
+        url.searchParams.set('page_type', layoutType);
+        url.searchParams.set('layout_option', requestedLayoutOption);
+        url.searchParams.set('editor_area', editorArea);
+        url.searchParams.set('preview_area', editorArea);
+        url.searchParams.set('scope', getCurrentWindowParam('scope') || 'default');
+        url.searchParams.set('_t', String(Date.now()));
+
+        const payload = await apiJson(url.toString(), { silent: options.silent === true });
+        if (!payload.success) {
+            throw new Error(payload.message || 'Load layout options failed');
+        }
+
+        const data = payload.data || {};
+        state.layoutOptionsByType = parseLayoutOptionsByType(data.layout_options_by_type || {});
+        state.layoutOption = resolveLayoutOptionForType(layoutType, data.layout_option || requestedLayoutOption);
+        renderLayoutOptionSelect(layoutType, state.layoutOption);
+    }
+
+    async function saveLayoutSelection(options = {}) {
+        if (!state.themeId || !config.apiSaveLayoutSelection) {
+            return;
+        }
+
+        const result = await apiJson(config.apiSaveLayoutSelection, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                theme_id: state.themeId || 0,
+                layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                page_type: getCurrentPageType() || 'homepage',
+                layout_option: state.layoutOption || 'default',
+                editor_area: state.editorArea || 'frontend',
+                preview_area: state.editorArea || 'frontend',
+                scope: getCurrentWindowParam('scope') || 'default'
+            }),
+            silent: options.silent === true
+        });
+
+        if (!result.success) {
+            throw new Error(result.message || 'Save layout option failed');
+        }
+
+        const data = result.data || {};
+        if (data.layout_options_by_type) {
+            state.layoutOptionsByType = parseLayoutOptionsByType(data.layout_options_by_type);
+        }
+        state.layoutOption = resolveLayoutOptionForType(state.layoutType, data.layout_option || state.layoutOption);
+        renderLayoutOptionSelect(state.layoutType, state.layoutOption);
+        if (!options.silent) {
+            showToast(result.message || 'Layout option saved.', 'success');
+        }
+    }
+
     async function loadWidgetConfigForAccordion(layoutId) {
         const configBody = document.querySelector(`.slot-widget-body[data-layout-id="${layoutId}"]`);
         if (!configBody) return;
@@ -1424,7 +1833,7 @@
                 return html;
             }
         } catch (err) {
-            console.warn('[ThemeEditor] Backend form render failed, using fallback:', err);
+            console.debug?.('[ThemeEditor] Backend form render failed, using fallback:', err);
         }
         
         // 回退到前端渲染
@@ -1451,10 +1860,174 @@
         }
         
         // 生成字段HTML的辅助函数
+        const normalizeArrayFieldValue = (value, fallback = []) => {
+            if (Array.isArray(value)) {
+                return value;
+            }
+
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (trimmed !== '') {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) {
+                            return parsed;
+                        }
+                    } catch (e) {
+                        // Keep non-JSON strings as scalar config values.
+                    }
+                }
+            }
+
+            return Array.isArray(fallback) ? fallback : [];
+        };
+
+        const normalizeArrayItemSchema = (param) => {
+            const candidates = [
+                param?.item_schema,
+                param?.itemSchema,
+                param?.schema?.fields,
+                param?.schema,
+                param?.fields
+            ];
+
+            for (const candidate of candidates) {
+                if (!candidate) {
+                    continue;
+                }
+
+                if (Array.isArray(candidate)) {
+                    const schema = {};
+                    candidate.forEach(field => {
+                        const fieldKey = field?.key || field?.name || field?.code;
+                        if (fieldKey) {
+                            schema[fieldKey] = field;
+                        }
+                    });
+                    if (Object.keys(schema).length > 0) {
+                        return schema;
+                    }
+                    continue;
+                }
+
+                if (typeof candidate === 'object') {
+                    return candidate;
+                }
+            }
+
+            return {};
+        };
+
+        const normalizeOptions = (options) => {
+            if (!options) {
+                return {};
+            }
+            if (Array.isArray(options)) {
+                return options.reduce((result, option) => {
+                    if (option && typeof option === 'object') {
+                        const value = option.value ?? option.key ?? option.code ?? option.id ?? '';
+                        if (value !== '') {
+                            result[value] = option.label ?? option.name ?? value;
+                        }
+                    } else if (option !== null && option !== undefined) {
+                        result[option] = option;
+                    }
+                    return result;
+                }, {});
+            }
+            return options;
+        };
+
+        const getArrayItemFieldValue = (item, fieldKey, fieldParam) => {
+            if (item && typeof item === 'object' && !Array.isArray(item)) {
+                return item[fieldKey] ?? fieldParam.default ?? '';
+            }
+            return fieldParam.default ?? '';
+        };
+
+        const renderFallbackArrayItemField = (fieldId, itemIndex, fieldKey, fieldParam, item) => {
+            fieldParam = fieldParam && typeof fieldParam === 'object' ? fieldParam : { type: fieldParam || 'string' };
+            const label = fieldParam.label || fieldKey;
+            const type = getParamUiType(fieldParam);
+            const value = getArrayItemFieldValue(item, fieldKey, fieldParam);
+            const inputId = `${fieldId}_${itemIndex}_${fieldKey}`;
+            const escapedValue = escapeHtml(value);
+            let html = `<div class="array-item-field" data-array-field="${escapeHtml(fieldKey)}">`;
+            html += `<label class="array-item-label" for="${escapeHtml(inputId)}">${escapeHtml(label)}</label>`;
+
+            if (isBooleanParamType(type)) {
+                const checked = value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
+                html += `<input type="checkbox" class="form-check-input" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" ${checked ? 'checked' : ''}>`;
+            } else if (type === 'select' && fieldParam.options) {
+                const options = normalizeOptions(fieldParam.options);
+                html += `<select class="form-select form-select-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}">`;
+                for (const [optVal, optLabel] of Object.entries(options)) {
+                    const selected = String(value) === String(optVal) ? ' selected' : '';
+                    html += `<option value="${escapeHtml(optVal)}"${selected}>${escapeHtml(optLabel)}</option>`;
+                }
+                html += `</select>`;
+            } else if (type === 'textarea' || type === 'html') {
+                html += `<textarea class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" rows="2">${escapedValue}</textarea>`;
+            } else if (type === 'number') {
+                html += `<input type="number" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" min="${escapeHtml(fieldParam.min || '')}" max="${escapeHtml(fieldParam.max || '')}" step="${escapeHtml(fieldParam.step || '')}">`;
+            } else if (type === 'url') {
+                html += `<input type="url" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" placeholder="https://">`;
+            } else if (type === 'image' || type === 'image_picker' || type === 'media_image') {
+                html += `<div class="array-image-field${value ? ' has-image' : ''}">
+                    <div class="array-image-preview">${value ? `<img src="${escapedValue}" alt="">` : iconSvg('image')}</div>
+                    <input type="text" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" placeholder="图片URL">
+                </div>`;
+            } else {
+                html += `<input type="text" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}">`;
+            }
+
+            html += `</div>`;
+            return html;
+        };
+
+        const renderFallbackArrayItem = (fieldId, key, item, itemIndex, itemSchema) => {
+            const schemaKeys = Object.keys(itemSchema);
+            const indexLabel = itemIndex === '__INDEX__' ? '' : Number(itemIndex) + 1;
+            let html = `<div class="array-item" data-index="${escapeHtml(itemIndex)}">`;
+            html += `<div class="array-item-handle">${iconSvg('drag')}</div>`;
+            html += `<div class="array-item-content">`;
+
+            if (schemaKeys.length === 0) {
+                const value = item === null || item === undefined || typeof item === 'object' ? '' : item;
+                html += `<input type="text" class="form-control array-item-input" value="${escapeHtml(value)}">`;
+            } else {
+                html += `<div class="array-item-title">${indexLabel ? `第 ${indexLabel} 项` : '新项目'}</div>`;
+                html += `<div class="array-item-fields">`;
+                schemaKeys.forEach(fieldKey => {
+                    html += renderFallbackArrayItemField(fieldId, itemIndex, fieldKey, itemSchema[fieldKey] || {}, item || {});
+                });
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+            html += `<div class="array-item-actions">
+                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-array-item" title="删除">
+                    ${iconSvg('delete')}
+                </button>
+            </div>`;
+            html += `</div>`;
+            return html;
+        };
+
         const renderField = (key, param, layoutId, config) => {
             const label = param.label || key;
-            const type = param.type || 'text';
+            const type = getParamUiType(param);
+            const semanticType = param.type || type;
             const value = config[key] ?? param.default ?? '';
+            const isArrayField = type === 'array'
+                || type === 'list'
+                || Array.isArray(value)
+                || Array.isArray(param.default)
+                || (param.item_schema && typeof param.item_schema === 'object')
+                || (typeof type === 'string' && type.endsWith('_items'));
+            const scalarValue = (value === null || value === undefined || typeof value === 'object') ? '' : value;
+            const arrayValue = normalizeArrayFieldValue(value, param.default);
+            const arrayItemSchema = normalizeArrayItemSchema(param);
             const description = param.description || '';
             const translatable = isFieldTranslatable(param);
             const fieldId = `config_${layoutId}_${key}`;
@@ -1473,11 +2046,8 @@
             
             // 输入控件
             fieldHtml += `<div class="config-field-input">`;
-            if (type === 'bool' || type === 'boolean') {
-                fieldHtml += `<div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="${fieldId}" name="${key}" ${value ? 'checked' : ''}>
-                    <label class="form-check-label" for="${fieldId}">启用</label>
-                </div>`;
+            if (isBooleanParamType(semanticType)) {
+                fieldHtml += renderBooleanSelect(fieldId, key, key, value, false, param);
             } else if (type === 'select' && param.options) {
                 fieldHtml += `<select class="form-select" id="${fieldId}" name="${key}">`;
                 for (const [optVal, optLabel] of Object.entries(param.options)) {
@@ -1530,17 +2100,22 @@
                     <span class="input-group-text">${iconSvg('calendar')}</span>
                     <input type="${inputType}" class="form-control" id="${fieldId}" name="${key}" value="${value || ''}">
                 </div>`;
-            } else if (type === 'array') {
-                fieldHtml += `<div class="array-editor-wrapper" data-field-id="${fieldId}">
+            } else if (isArrayField) {
+                const arrayItemsHtml = arrayValue.length > 0
+                    ? arrayValue.map((item, index) => renderFallbackArrayItem(fieldId, key, item, index, arrayItemSchema)).join('')
+                    : '<div class="array-empty-state"><i class="ri-list-check-2"></i><p>暂无项目</p></div>';
+                const templateHtml = renderFallbackArrayItem(fieldId, key, {}, '__INDEX__', arrayItemSchema);
+                fieldHtml += `<div class="array-editor-wrapper" data-field-id="${fieldId}" data-max-items="${escapeHtml(param.max_items || param.maxItems || '')}">
                     <div class="array-items-container" id="${fieldId}_items">
-                        <div class="array-empty-state"><i class="ri-list-check-2"></i><p>暂无项目</p></div>
+                        ${arrayItemsHtml}
                     </div>
                     <div class="array-actions">
                         <button type="button" class="btn btn-outline-primary btn-add-array-item" data-target="${fieldId}">
                             ${iconSvg('add')} 添加项目
                         </button>
                     </div>
-                    <input type="hidden" id="${fieldId}" name="${key}" value='${JSON.stringify(value || [])}'>
+                    <template>${templateHtml}</template>
+                    <input type="hidden" id="${fieldId}" name="${key}" value='${escapeHtml(JSON.stringify(arrayValue))}'>
                 </div>`;
             } else if (type === 'icon') {
                 fieldHtml += `<div class="icon-picker-wrapper">
@@ -1553,7 +2128,7 @@
                     <input type="hidden" id="${fieldId}" name="${key}" value="${value || ''}">
                 </div>`;
             } else {
-                fieldHtml += `<input type="text" class="form-control" id="${fieldId}" name="${key}" value="${value}">`;
+                fieldHtml += `<input type="text" class="form-control" id="${fieldId}" name="${key}" value="${scalarValue}">`;
             }
             fieldHtml += `</div>`;
             
@@ -1566,6 +2141,9 @@
                     </div>
                     <div class="w-param-i18n-body i18n-panel-body"></div>
                     <div class="w-param-i18n-footer i18n-panel-footer">
+                        <button type="button" class="btn btn-sm btn-outline-secondary btn-ai-i18n" data-ai-i18n data-field="${key}" data-layout-id="${layoutId}">
+                            AI翻译
+                        </button>
                         <button type="button" class="btn btn-sm btn-primary btn-save-i18n" data-save-i18n data-field="${key}" data-layout-id="${layoutId}">
                             ${iconSvg('save')} 保存多语言
                         </button>
@@ -1687,6 +2265,19 @@
                     panel.style.display = 'none';
                     const fieldKey = closeBtn.dataset.field || panel.dataset.field;
                     container.querySelector(`.w-param-btn-i18n[data-field="${fieldKey}"], .btn-i18n-edit[data-field="${fieldKey}"]`)?.classList.remove('active');
+                }
+                return;
+            }
+
+            const aiBtn = e.target.closest('[data-ai-i18n], .btn-ai-i18n');
+            if (aiBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
+                const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
+                const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId;
+                if (panel && fieldKey && layoutId) {
+                    await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
                 }
                 return;
             }
@@ -1926,6 +2517,8 @@
                     }
                 });
                 hiddenInput.value = JSON.stringify(items);
+                hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
             };
             
             // 添加项目
@@ -1967,6 +2560,7 @@
                     // 绑定新项的事件
                     const newItem = itemsContainer?.querySelector('.array-item:last-child');
                     if (newItem) {
+                        rememberWidgetPreviewArrayItem(newItem);
                         bindArrayItemEvents(newItem, updateHiddenValue);
                     }
                     
@@ -2251,15 +2845,78 @@
     /**
      * 绑定数组项事件
      */
+    function rememberWidgetPreviewArrayItem(item) {
+        const form = item.closest('form[data-layout-id]');
+        const layoutId = form?.dataset?.layoutId;
+        const itemsContainer = item.closest('.array-items-container') || item.closest('.w-param-array-items');
+        if (!form || !layoutId || !itemsContainer) {
+            return;
+        }
+
+        const itemSelector = item.classList.contains('w-param-array-item') ? '.w-param-array-item' : '.array-item';
+        const itemIndex = Array.from(itemsContainer.querySelectorAll(itemSelector)).indexOf(item);
+        if (itemIndex < 0) {
+            return;
+        }
+
+        const indexValue = String(itemIndex);
+        form.dataset.previewArrayItemIndex = indexValue;
+        state.previewArrayItemIndexByLayout[String(layoutId)] = indexValue;
+    }
+
+    function activateWidgetPreviewArrayItem(layoutId, itemIndex) {
+        const index = Number.parseInt(itemIndex, 10);
+        if (!Number.isFinite(index) || index < 0) {
+            return;
+        }
+
+        const iframe = elements.previewFrame;
+        const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+        if (!doc) {
+            return;
+        }
+
+        const widgetEl = doc.querySelector(dataLayoutIdSelector(layoutId));
+        if (!widgetEl) {
+            return;
+        }
+
+        const slides = Array.from(widgetEl.querySelectorAll('.widget-hero-slider .slide[data-index], .slider-wrapper .slide[data-index]'));
+        if (slides.length <= index) {
+            return;
+        }
+
+        slides.forEach((slide, position) => {
+            const slideIndex = Number.parseInt(slide.dataset.index || String(position), 10);
+            const active = slideIndex === index || position === index;
+            slide.classList.toggle('active', active);
+            if (!active) {
+                slide.classList.remove('prev');
+            }
+        });
+
+        const dots = Array.from(widgetEl.querySelectorAll('.widget-hero-slider .dot[data-index], .slider-dots .dot[data-index]'));
+        dots.forEach((dot, position) => {
+            const dotIndex = Number.parseInt(dot.dataset.index || String(position), 10);
+            dot.classList.toggle('active', dotIndex === index || position === index);
+        });
+    }
+
     function bindArrayItemEvents(item, updateCallback) {
         // 删除按钮
-        const removeBtn = item.querySelector('.w-param-array-remove');
+        const removeBtn = item.querySelector('.w-param-array-remove, .btn-remove-array-item');
         if (removeBtn) {
             removeBtn.addEventListener('click', function() {
-                const wrapper = item.closest('.w-param-array');
+                rememberWidgetPreviewArrayItem(item);
+                const wrapper = item.closest('.w-param-array') || item.closest('.array-editor-wrapper');
+                const isParamArray = wrapper?.classList.contains('w-param-array');
+                const itemSelector = isParamArray ? '.w-param-array-item' : '.array-item';
+                const emptyHtml = isParamArray
+                    ? '<div class="w-param-array-empty"><p>暂无项目</p></div>'
+                    : '<div class="array-empty-state"><i class="ri-list-check-2"></i><p>暂无项目</p></div>';
                 const minItems = parseInt(wrapper?.dataset?.minItems) || 0;
-                const itemsContainer = wrapper?.querySelector('.w-param-array-items');
-                const currentCount = itemsContainer?.querySelectorAll('.w-param-array-item').length || 0;
+                const itemsContainer = wrapper?.querySelector(isParamArray ? '.w-param-array-items' : '.array-items-container');
+                const currentCount = itemsContainer?.querySelectorAll(itemSelector).length || 0;
                 
                 if (currentCount <= minItems) {
                     showToast(`至少需要 ${minItems} 个项目`, 'warning');
@@ -2269,7 +2926,7 @@
                 item.remove();
                 
                 if (currentCount - 1 === 0 && itemsContainer) {
-                    itemsContainer.innerHTML = '<div class="w-param-array-empty"><p>暂无项目</p></div>';
+                    itemsContainer.innerHTML = emptyHtml;
                 }
                 
                 updateCallback?.();
@@ -2278,20 +2935,45 @@
         
         // 输入变化
         item.querySelectorAll('input, select, textarea').forEach(input => {
-            input.addEventListener('input', updateCallback);
-            input.addEventListener('change', updateCallback);
+            const handleArrayItemChange = () => {
+                rememberWidgetPreviewArrayItem(item);
+                updateCallback?.();
+            };
+            input.addEventListener('input', handleArrayItemChange);
+            input.addEventListener('change', handleArrayItemChange);
+        });
+
+        item.querySelectorAll('.array-image-field input[data-field]').forEach(input => {
+            input.addEventListener('input', function() {
+                const preview = this.closest('.array-image-field')?.querySelector('.array-image-preview');
+                if (!preview) {
+                    return;
+                }
+
+                const url = this.value.trim();
+                preview.innerHTML = '';
+                if (url) {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.alt = '';
+                    preview.appendChild(img);
+                } else {
+                    preview.innerHTML = iconSvg('image');
+                }
+            });
         });
         
         // 拖拽排序（简单实现）
-        const handle = item.querySelector('.array-item-handle');
+        const handle = item.querySelector('.array-item-handle, .w-param-array-handle');
         if (handle) {
             handle.style.cursor = 'grab';
             handle.addEventListener('mousedown', function(e) {
                 e.preventDefault();
-                const itemsContainer = item.closest('.array-items-container');
+                const itemsContainer = item.closest('.array-items-container') || item.closest('.w-param-array-items');
                 if (!itemsContainer) return;
                 
-                const items = Array.from(itemsContainer.querySelectorAll('.array-item'));
+                const itemSelector = item.classList.contains('w-param-array-item') ? '.w-param-array-item' : '.array-item';
+                const items = Array.from(itemsContainer.querySelectorAll(itemSelector));
                 const startIndex = items.indexOf(item);
                 let currentIndex = startIndex;
                 
@@ -2388,14 +3070,36 @@
 
     /**
      * 处理部件拖放到插槽（iframe 传入，委托 saveWidget）
-     * @param {object} widget - 部件数据
+     * @param {object|null} widget - 部件数据
      * @param {object} slot - 插槽数据 { id, position, name, exclusive }
      * @param {number|undefined} iframeSortOrder - iframe 计算的插入位置
      */
     async function handleWidgetDropped(widget, slot, iframeSortOrder) {
-        const area = slot.position || slot.id;
+        const widgetData = widget || state.draggingWidget;
+        if (!widgetData || !widgetData.code) {
+            showToast('无法获取拖拽部件数据，请重新拖拽', 'error');
+            return null;
+        }
+        if (!slot || !slot.id) {
+            showToast('无法识别目标插槽', 'error');
+            return null;
+        }
+
+        if (!isSlotDataAccepted(slot, widgetData)) {
+            showToast(`部件 "${widgetData.name || widgetData.code}" 不能放入插槽 "${slot.name || slot.id}"`, 'warning');
+            return null;
+        }
+
+        const area = slot.position || slot.area || slot.id;
         const slotId = slot.id;
-        const exclusive = slot.exclusive === true || isExclusiveSlot(slotId, widget.code);
+        const exclusive = slot.exclusive === true || widgetData.exclusive === true || isExclusiveSlot(slotId, widgetData.code);
+
+        const maxWidgets = Number.parseInt(slot.max, 10);
+        const currentCount = Number.parseInt(slot.current_count, 10);
+        if (!exclusive && Number.isFinite(maxWidgets) && maxWidgets > 0 && Number.isFinite(currentCount) && currentCount >= maxWidgets) {
+            showToast(`插槽 "${slot.name || slotId}" 已满（${currentCount}/${maxWidgets}），无法添加更多部件`, 'warning');
+            return null;
+        }
 
         // sort_order 优先级：独占=0 > iframe 传入 > 结构视图计算
         let sortOrder;
@@ -2403,25 +3107,211 @@
         else if (iframeSortOrder != null) sortOrder = iframeSortOrder;
         else sortOrder = getNextSlotSortOrder(slotId);
 
-        return saveWidget({ area, slotId, widgetData: widget, sortOrder, exclusive, switchToPreview: false });
+        return saveWidget({ area, slotId, widgetData, sortOrder, exclusive, switchToPreview: false });
+    }
+
+    function normalizeCode(code) {
+        return String(code || '').trim().toLowerCase();
+    }
+
+    function normalizeCodeList(value) {
+        if (value == null || value === false) {
+            return [];
+        }
+
+        let items = [];
+        if (Array.isArray(value)) {
+            value.forEach(item => {
+                if (Array.isArray(item)) {
+                    items = items.concat(item);
+                } else if (item && typeof item === 'object') {
+                    items = items.concat(Object.keys(item));
+                    Object.values(item).forEach(slotConfig => {
+                        if (slotConfig && typeof slotConfig === 'object') {
+                            items.push(slotConfig.id, slotConfig.code, slotConfig.slot);
+                        }
+                    });
+                } else {
+                    items.push(item);
+                }
+            });
+        } else if (typeof value === 'object') {
+            items = items.concat(Object.keys(value));
+            Object.values(value).forEach(item => {
+                if (item && typeof item === 'object') {
+                    items.push(item.id, item.code, item.slot);
+                }
+            });
+        } else {
+            const raw = String(value).trim();
+            if (raw.startsWith('[') || raw.startsWith('{')) {
+                try {
+                    return normalizeCodeList(JSON.parse(raw));
+                } catch (err) {
+                    // Fall through to comma parsing.
+                }
+            }
+            items = raw.split(',');
+        }
+
+        const seen = new Set();
+        items.forEach(item => {
+            const code = normalizeCode(item);
+            if (code) {
+                seen.add(code);
+            }
+        });
+        return Array.from(seen);
+    }
+
+    function normalizeAcceptCodes(accept) {
+        return normalizeCodeList(accept);
+    }
+
+    function collectWidgetSupportCodes(widgetData) {
+        const codes = [
+            widgetData?.code,
+            widgetData?.type,
+            widgetData?.slot,
+        ];
+
+        normalizeCodeList(widgetData?.position || []).forEach(code => codes.push(code));
+        normalizeCodeList(widgetData?.supports || []).forEach(code => codes.push(code));
+        normalizeCodeList(widgetData?.slots || []).forEach(code => codes.push(code));
+
+        return normalizeCodeList(codes);
+    }
+
+    function collectWidgetElementSupportCodes(widgetEl) {
+        return collectWidgetSupportCodes({
+            code: widgetEl.getAttribute('data-widget-code') || '',
+            type: widgetEl.getAttribute('data-widget-type') || '',
+            slot: widgetEl.getAttribute('data-widget-slot') || '',
+            position: widgetEl.getAttribute('data-widget-position') || '',
+            supports: widgetEl.getAttribute('data-widget-supports') || '',
+            slots: widgetEl.getAttribute('data-widget-slots') || '',
+        });
+    }
+
+    function slotAcceptsWidgetCodes(acceptCodes, rejectCodes, slotId, widgetCodes) {
+        const normalizedAccept = normalizeCodeList(acceptCodes);
+        const normalizedReject = normalizeCodeList(rejectCodes);
+        const normalizedWidgetCodes = normalizeCodeList(widgetCodes);
+        const normalizedSlotId = normalizeCode(slotId);
+
+        if (normalizedReject.some(code => normalizedWidgetCodes.includes(code))) {
+            return false;
+        }
+
+        if (normalizedSlotId && normalizedWidgetCodes.includes(normalizedSlotId)) {
+            return true;
+        }
+
+        return normalizedAccept.length === 0
+            || normalizedAccept.includes('*')
+            || normalizedAccept.some(code => normalizedWidgetCodes.includes(code));
+    }
+
+    function isSlotDataAccepted(slot, widgetData) {
+        return slotAcceptsWidgetCodes(
+            slot.accept,
+            slot.reject,
+            slot.id,
+            collectWidgetSupportCodes(widgetData)
+        );
+    }
+
+    function dataLayoutIdSelector(layoutId) {
+        const safeLayoutId = String(layoutId || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        return `[data-layout-id="${safeLayoutId}"]`;
+    }
+
+    function resolvePreviewWidgetElement(data) {
+        const layoutId = data.layoutId || '';
+        let widgetElement = null;
+
+        if (layoutId) {
+            const selector = dataLayoutIdSelector(layoutId);
+            try {
+                const iframeDoc = elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document;
+                widgetElement = iframeDoc?.querySelector(`.preview-widget${selector}, .widget-wrapper${selector}, [data-widget-code]${selector}`) || null;
+            } catch (err) {
+                console.warn('[ThemeEditor] Unable to read selected preview widget:', err);
+            }
+            if (!widgetElement) {
+                widgetElement = document.querySelector(`.preview-widget-item${selector}`);
+            }
+        }
+
+        if (!widgetElement) {
+            widgetElement = document.createElement('div');
+        }
+
+        widgetElement.dataset.layoutId = layoutId;
+        widgetElement.dataset.widgetCode = data.widgetCode || widgetElement.dataset.widgetCode || '';
+        widgetElement.dataset.widgetName = data.widgetName || widgetElement.dataset.widgetName || '';
+        widgetElement.dataset.widgetModule = data.widgetModule || widgetElement.dataset.widgetModule || '';
+        widgetElement.dataset.widgetType = data.widgetType || widgetElement.dataset.widgetType || '';
+        widgetElement.dataset.config = data.config || widgetElement.dataset.config || '{}';
+
+        return widgetElement;
+    }
+
+    function markPreviewWidgetSelected(layoutId) {
+        if (!layoutId) {
+            return;
+        }
+
+        const selector = dataLayoutIdSelector(layoutId);
+        document.querySelectorAll('.preview-widget-item.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+        document.querySelector(`.preview-widget-item${selector}`)?.classList.add('selected');
+
+        try {
+            const iframeDoc = elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document;
+            iframeDoc?.querySelectorAll('.preview-widget.selected, .widget-wrapper.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+            iframeDoc?.querySelector(`.preview-widget${selector}, .widget-wrapper${selector}, [data-widget-code]${selector}`)?.classList.add('selected');
+        } catch (err) {
+            console.warn('[ThemeEditor] Unable to mark selected preview widget:', err);
+        }
+    }
+
+    function handleIframeWidgetElementClick(target) {
+        const widgetWrapper = target?.closest?.('.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id]');
+        if (!widgetWrapper) {
+            return false;
+        }
+
+        const nestedSlot = target.closest('[data-wslot], [data-slot], .content-slot');
+        if (nestedSlot && nestedSlot.closest('.widget-wrapper[data-layout-id]') === widgetWrapper) {
+            return false;
+        }
+
+        handlePreviewWidgetSelected({
+            type: 'widget-selected',
+            layoutId: widgetWrapper.dataset.layoutId || widgetWrapper.getAttribute('data-layout-id') || '',
+            widgetCode: widgetWrapper.dataset.widgetCode || widgetWrapper.getAttribute('data-widget-code') || '',
+            widgetModule: widgetWrapper.dataset.widgetModule || widgetWrapper.getAttribute('data-widget-module') || '',
+            widgetType: widgetWrapper.dataset.widgetType || widgetWrapper.getAttribute('data-widget-type') || '',
+            widgetName: widgetWrapper.dataset.widgetName || widgetWrapper.getAttribute('data-widget-name') || '',
+            config: widgetWrapper.dataset.config || widgetWrapper.getAttribute('data-config') || '{}'
+        });
+        return true;
     }
 
     /**
      * 处理预览页面中选中部件
      */
     function handlePreviewWidgetSelected(data) {
-        const layoutId = data.layoutId;
-        const widgetCode = data.widgetCode;
-        let widgetConfig = {};
-        
-        try {
-            widgetConfig = JSON.parse(data.config || '{}');
-        } catch (e) {
-            widgetConfig = {};
-        }
-
-        // 打开配置模态框
-        openConfigModalForLayout(layoutId, widgetCode, widgetConfig);
+        const widgetElement = resolvePreviewWidgetElement(data);
+        state.selectedWidget = widgetElement;
+        state.selectedSlot = null;
+        setConfigMode('widget');
+        markPreviewWidgetSelected(widgetElement.dataset.layoutId);
+        loadWidgetConfig(widgetElement);
     }
 
     /**
@@ -2430,9 +3320,10 @@
     function handlePreviewSlotClicked(data) {
         const slot = data.slot;
         const accept = data.accept ? data.accept.split(',').map(s => s.trim()) : [];
+        const reject = data.reject ? data.reject.split(',').map(s => s.trim()) : [];
         
         // 保存当前选中的插槽
-        state.selectedSlot = { id: slot, accept: accept, name: slot };
+        state.selectedSlot = { id: slot, accept: accept, reject: reject, name: slot };
         
         // 高亮右侧部件列表中可放入该插槽的部件并排序
         highlightAcceptableWidgets(accept);
@@ -2447,13 +3338,17 @@
      * 高亮可接受的部件并排序
      */
     function highlightAcceptableWidgets(acceptCodes) {
-        if (!acceptCodes || acceptCodes.length === 0) {
+        const slot = state.selectedSlot || { id: '', accept: acceptCodes || [] };
+        const normalizedAccept = normalizeCodeList(slot.accept ?? acceptCodes ?? []);
+        const normalizedReject = normalizeCodeList(slot.reject ?? []);
+
+        if (!normalizedAccept || normalizedAccept.length === 0) {
             // 没有 accept 限制 → 保留区域过滤结果，不做进一步筛选
             return;
         }
 
         // accept 包含 * 表示接受所有部件，等同于无限制
-        if (acceptCodes.includes('*')) {
+        if (normalizedAccept.includes('*')) {
             return;
         }
 
@@ -2485,19 +3380,18 @@
 
             allWidgets.forEach(widget => {
                 totalChecked++;
-                const widgetCode = (widget.getAttribute('data-widget-code') || '').toLowerCase();
-                const widgetSlot = (widget.getAttribute('data-widget-slot') || '').toLowerCase();
                 // 已被区域过滤隐藏的，保持隐藏不参与
                 if (widget.style.display === 'none') {
                     totalHidden++;
                     return;
                 }
                 
-                // 简单精确匹配：code 或 slot 与 accept 码一致
-                const isMatch = acceptCodes.some(ac => {
-                    const code = ac.trim().toLowerCase();
-                    return widgetCode === code || (widgetSlot && widgetSlot === code);
-                });
+                const isMatch = slotAcceptsWidgetCodes(
+                    normalizedAccept,
+                    normalizedReject,
+                    slot.id || '',
+                    collectWidgetElementSupportCodes(widget)
+                );
 
                 if (isMatch) {
                     hasMatch = true;
@@ -2761,6 +3655,9 @@
                 const wName = (w.name ?? wCode ?? '').toString();
                 const wDesc = (w.description ?? '').toString();
                 const wSlot = (w.slot ?? '').toString();
+                const wSupports = normalizeCodeList(w.supports ?? []);
+                const wSlots = normalizeCodeList(w.slots ?? []);
+                const wSupportCodes = [...new Set([...wSupports, ...wSlots])].join(',');
                 const wPageLayouts = w.page_layouts ?? ['*'];
                 const wIsContainer = !!(w.is_container ?? false);
                 const wExclusive = !!(w.exclusive ?? false) || (wSlot && exclusiveSlots.indexOf(wSlot) !== -1);
@@ -2775,6 +3672,7 @@
                 html += ' data-widget-type="' + escapeHtml(wType) + '" data-widget-name="' + escapeHtml(wName) + '"';
                 html += ' data-widget-position="' + escapeHtml(posJson) + '" data-widget-compatible="' + (wCompatible ? '1' : '0') + '"';
                 html += ' data-widget-slot="' + escapeHtml(wSlot) + '" data-widget-exclusive="' + (wExclusive ? '1' : '0') + '"';
+                html += ' data-widget-supports="' + escapeHtml(wSupportCodes) + '" data-widget-slots="' + escapeHtml(wSlots.join(',')) + '"';
                 html += ' data-widget-page-layouts="' + escapeHtml(layoutJson) + '" data-widget-is-container="' + (wIsContainer ? '1' : '0') + '">';
                 html += '<div class="widget-preview"><div class="widget-preview-canvas">' + previewHtml + '</div>';
                 html += '<div class="widget-preview-overlay"><div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2">';
@@ -2860,7 +3758,8 @@
      * - radio: 单选按钮组
      */
     function renderFormField(key, param, value) {
-        const type = param.type || 'string';
+        const type = getParamUiType(param);
+        const semanticType = param.type || type;
         const label = param.label || key;
         const required = param.required || false;
         const description = param.description || '';
@@ -2881,11 +3780,8 @@
             const step = param.step !== undefined ? `step="${param.step}"` : '';
             html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
                      value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${min} ${max} ${step} ${required ? 'required' : ''}>`;
-        } else if (type === 'bool' || type === 'boolean') {
-            html += `<div class="form-check">
-                <input type="checkbox" class="form-check-input" id="config_${key}" name="${key}" value="1" ${value ? 'checked' : ''}>
-                <label class="form-check-label" for="config_${key}">${escapeHtml(param.checkbox_label || '启用')}</label>
-            </div>`;
+        } else if (isBooleanParamType(semanticType)) {
+            html += renderBooleanSelect(`config_${key}`, key, key, value, required, param);
         } else if (type === 'select') {
             html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
                 <option value="">-- 请选择 --</option>`;
@@ -3119,8 +4015,7 @@
             }
 
             // 显示模态框
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
+            showEditorModal(modal);
 
             // T012: 使用静态预览提示代替实时 API 请求
             const previewBox = document.getElementById('modalWidgetPreview');
@@ -3181,8 +4076,7 @@
                 }
                 
                 // 关闭模态框
-                const modal = bootstrap.Modal.getInstance(document.getElementById('widgetConfigModal'));
-                if (modal) modal.hide();
+                hideEditorModal(document.getElementById('widgetConfigModal'));
                 
                 // 注意：不再调用 refreshPreview()，已通过 preview_html 更新
             } else {
@@ -3256,6 +4150,7 @@
                         widgetEl.appendChild(contentEl);
                     }
                     contentEl.innerHTML = previewHtml;
+                    activateWidgetPreviewArrayItem(layoutId, state.previewArrayItemIndexByLayout[String(layoutId)]);
                     console.log(`[ThemeEditor] Widget ${layoutId} preview updated successfully`);
                     
                     // 高亮更新的部件（短暂视觉反馈）
@@ -3599,19 +4494,16 @@
      */
     function isSlotAccepted(slot, widgetData) {
         const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
-        const acceptCodes = acceptAttr ? acceptAttr.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const acceptCodes = normalizeCodeList(acceptAttr);
         const rejectAttr = slot.dataset.wslotReject || '';
-        const rejectCodes = rejectAttr ? rejectAttr.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const rejectCodes = normalizeCodeList(rejectAttr);
         const slotId = slot.dataset.wslot || slot.dataset.slot;
 
-        const rejected = rejectCodes.includes(widgetData.type) || rejectCodes.includes(widgetData.code);
-        if (rejected) return false;
-        // 通配：accept="*" 表示接受任意部件
-        if (acceptCodes.includes('*')) return true;
-        return (
-            (widgetData.slot && widgetData.slot === slotId) ||
-            acceptCodes.includes(widgetData.code) ||
-            acceptCodes.length === 0
+        return slotAcceptsWidgetCodes(
+            acceptCodes,
+            rejectCodes,
+            slotId,
+            collectWidgetSupportCodes(widgetData)
         );
     }
 
@@ -3732,6 +4624,8 @@
             compatible: this.dataset.widgetCompatible === '1',
             // 插槽相关属性
             slot: this.dataset.widgetSlot || null,
+            supports: normalizeCodeList(this.dataset.widgetSupports || ''),
+            slots: normalizeCodeList(this.dataset.widgetSlots || ''),
             exclusive: this.dataset.widgetExclusive === '1' || this.dataset.widgetExclusive === 'true',
             // 布局和容器属性
             pageLayouts: pageLayouts,
@@ -3739,7 +4633,7 @@
         };
 
         // 检查部件是否支持当前布局
-        if (!isWidgetAllowedForLayout(pageLayouts, state.layoutType)) {
+        if (!isWidgetAllowedForLayout(pageLayouts, state.layoutType, widgetData)) {
             showToast(`部件 "${widgetData.name}" 不支持当前布局 "${state.layoutType}"`, 'warning');
             e.preventDefault();
             return;
@@ -3750,7 +4644,10 @@
 
         console.log('Drag start - widget:', widgetData.name, 'position:', widgetData.position, 'slot:', widgetData.slot, 'exclusive:', widgetData.exclusive, 'pageLayouts:', widgetData.pageLayouts);
 
-        e.dataTransfer.setData('application/json', JSON.stringify(widgetData));
+        const dragPayload = JSON.stringify(widgetData);
+        e.dataTransfer.setData('application/json', dragPayload);
+        // Chromium can drop custom MIME payloads when dragging into an iframe; text/plain survives that boundary.
+        e.dataTransfer.setData('text/plain', dragPayload);
         e.dataTransfer.effectAllowed = 'copy';
 
         // 高亮可放置区域
@@ -3760,17 +4657,23 @@
     /**
      * 检查部件是否支持指定的布局
      */
-    function isWidgetAllowedForLayout(widgetPageLayouts, currentLayout) {
-        // * 表示所有布局都可用
-        if (widgetPageLayouts.includes('*')) {
+    function isWidgetAllowedForLayout(widgetPageLayouts, currentLayout, widgetData = null) {
+        const layouts = normalizeCodeList(widgetPageLayouts);
+        const layout = normalizeCode(currentLayout);
+
+        if (layouts.includes('*')) {
             return true;
         }
-        // 检查是否包含当前布局
-        if (widgetPageLayouts.includes(currentLayout)) {
+        if (layout && layouts.includes(layout)) {
             return true;
         }
-        // default 布局在所有页面都可用
-        if (widgetPageLayouts.includes('default')) {
+        if (layouts.includes('default')) {
+            return true;
+        }
+
+        const supportPrefix = layout ? `layout-${layout}-` : '';
+        const widgetCodes = collectWidgetSupportCodes(widgetData);
+        if (supportPrefix && widgetCodes.some(code => code === `layout-${layout}` || code.startsWith(supportPrefix))) {
             return true;
         }
         return false;
@@ -3781,9 +4684,13 @@
      */
     function handleDragEnd(e) {
         state.isDragging = false;
-        state.draggingWidget = null;
         state.dragInsertIndex = null;
         this.classList.remove('dragging');
+        setTimeout(() => {
+            if (!state.isDragging) {
+                state.draggingWidget = null;
+            }
+        }, 250);
 
         // 移除区域高亮
         document.querySelectorAll('.preview-area').forEach(area => {
@@ -4330,8 +5237,7 @@
 
         // 高亮匹配的容器内插槽（支持新旧两种属性标记）
         if (widgetData) {
-            const widgetCode = widgetData.code;
-            const widgetSlot = widgetData.slot;
+            const widgetCodes = collectWidgetSupportCodes(widgetData);
             
             // 查找所有插槽（包括新旧两种标记方式）
             document.querySelectorAll('.container-slot, [data-wslot]').forEach(slot => {
@@ -4339,12 +5245,10 @@
                 const slotId = slot.dataset.wslot || slot.dataset.slot;
                 // 获取接受的部件类型（兼容新旧属性）
                 const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
-                const acceptCodes = acceptAttr ? acceptAttr.split(',').map(s => s.trim()) : [];
+                const acceptCodes = normalizeCodeList(acceptAttr);
+                const rejectCodes = normalizeCodeList(slot.dataset.wslotReject || '');
                 
-                // 检查是否匹配
-                const matches = (widgetSlot && widgetSlot === slotId) || 
-                               acceptCodes.includes(widgetCode) ||
-                               acceptCodes.length === 0;
+                const matches = slotAcceptsWidgetCodes(acceptCodes, rejectCodes, slotId, widgetCodes);
                 
                 if (matches) {
                     slot.classList.add('drag-allowed');
@@ -4946,7 +5850,14 @@
                 e.stopImmediatePropagation();
             }
             
-            if (!button) return;
+            if (!button) {
+                if (handleIframeWidgetElementClick(e.target)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }
+                return;
+            }
             
             console.log('[ThemeEditor] Widget action button clicked:', button.dataset.action);
             
@@ -5054,6 +5965,7 @@
                             slotId;
             const acceptAttr = slotEl.getAttribute('data-accept') ||
                               slotEl.getAttribute('data-wslot-accept') || '*';
+            const rejectAttr = slotEl.getAttribute('data-wslot-reject') || '';
             
             if (!slotId) return;
             
@@ -5068,6 +5980,11 @@
                 id: slotId,
                 name: slotName,
                 accept: acceptAttr,
+                reject: rejectAttr,
+                max: slotEl.getAttribute('data-wslot-max') || '',
+                min: slotEl.getAttribute('data-wslot-min') || '',
+                exclusive: slotEl.getAttribute('data-wslot-exclusive') === 'true',
+                multiple: slotEl.getAttribute('data-wslot-multiple') !== 'false',
                 area: positionAttr || ''  // 使用 position 作为区域
             };
             
@@ -5108,6 +6025,7 @@
                 if (slotEl) {
                     slotInfo.accept = slotEl.getAttribute('data-wslot-accept') || 
                                       slotEl.getAttribute('data-accept') || '*';
+                    slotInfo.reject = slotEl.getAttribute('data-wslot-reject') || '';
                     slotInfo.name = slotEl.getAttribute('data-wslot-name') || 
                                     slotEl.getAttribute('data-name') || slotId;
                 }
@@ -5140,11 +6058,13 @@
         
         // 如果有选中的插槽信息
         if (state.selectedSlot && state.selectedSlot.accept) {
-            const acceptList = state.selectedSlot.accept.split(',').map(s => s.trim());
-            
             document.querySelectorAll('.widget-item').forEach(item => {
-                const widgetCode = item.dataset.widgetCode;
-                if (acceptList.includes('*') || acceptList.includes(widgetCode)) {
+                if (slotAcceptsWidgetCodes(
+                    state.selectedSlot.accept,
+                    state.selectedSlot.reject,
+                    state.selectedSlot.id || slotId,
+                    collectWidgetElementSupportCodes(item)
+                )) {
                     item.classList.add('highlight');
                 }
             });
@@ -5723,8 +6643,6 @@
     async function openConfigModal(widgetElement) {
         const modal = document.getElementById('widgetConfigModal');
         const modalBody = document.getElementById('widgetConfigModalBody');
-        const modalInstance = bootstrap.Modal.getOrCreateInstance(modal);
-        
         // 显示加载状态
         modalBody.innerHTML = `
             <div class="text-center py-4">
@@ -5735,7 +6653,7 @@
         `;
         
         // 打开模态框
-        modalInstance.show();
+        showEditorModal(modal);
         
         // 加载配置
         await loadWidgetConfigForModal(widgetElement, modalBody);
@@ -5759,8 +6677,7 @@
         loadingEl?.classList.add('visible');
         inners.forEach(el => { el.innerHTML = ''; });
 
-        const modalInstance = bootstrap.Modal.getOrCreateInstance(modal);
-        modalInstance.show();
+        showEditorModal(modal);
 
         try {
             const url = new URL(config.apiWidgetPreview, window.location.origin);
@@ -5789,6 +6706,75 @@
     /**
      * 加载部件配置（用于模态框）
      */
+    function buildSavedWidgetConfigUrl(layoutId, locale) {
+        const apiUrl = new URL(`${config.apiBase}/widget-config`, window.location.origin);
+        apiUrl.searchParams.set('layout_id', layoutId);
+        if (locale) {
+            apiUrl.searchParams.set('locale', locale);
+        }
+        return apiUrl.toString();
+    }
+
+    async function loadSavedWidgetConfig(layoutId, locale) {
+        const result = await apiJson(buildSavedWidgetConfigUrl(layoutId, locale));
+        if (!result || !result.success || !result.data) {
+            throw new Error((result && result.message) || 'Widget config load failed');
+        }
+        return result.data;
+    }
+
+    function getWidgetElementMeta(widgetElement, widgetCode, params) {
+        const name = widgetElement?.querySelector('.widget-name')?.textContent?.replace(/\s+/g, ' ').trim() || widgetCode || '';
+        const description = widgetElement?.querySelector('.widget-preview')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+        return { name, description, params: params || {} };
+    }
+
+    async function renderWidgetConfigModalWithMeta(layoutId, widgetMeta, widgetConfig, modalBody, widgetElement, widgetCode, widgetType, widgetModule) {
+        const params = (widgetMeta && widgetMeta.params && typeof widgetMeta.params === 'object') ? widgetMeta.params : {};
+        const formHtml = await generateWidgetConfigForm(layoutId, params, widgetConfig);
+        if (formHtml && formHtml.trim() && !formHtml.includes('alert-danger') && (formHtml.includes('w-param-form') || formHtml.includes('<form'))) {
+            const typeIcons = { 'header': 'ri-layout-top-line', 'footer': 'ri-layout-bottom-line', 'sidebar': 'ri-layout-left-line', 'banner': 'ri-image-line', 'carousel': 'ri-slideshow-line', 'product': 'ri-shopping-bag-line', 'category': 'ri-folder-line', 'navigation': 'ri-menu-line', 'search': 'ri-search-line', 'social': 'ri-share-line', 'newsletter': 'ri-mail-line', 'content': 'ri-file-text-line' };
+            const icon = typeIcons[widgetType] || 'ri-widgets-line';
+            const widgetName = escapeHtml(widgetMeta?.name || widgetCode || '');
+            const widgetDesc = escapeHtml((widgetMeta?.description || '') + '');
+            const headerHtml = `<div class="widget-config-panel"><div class="config-header"><div class="config-widget-info"><div class="widget-icon"><i class="${icon}"></i></div><div class="widget-meta"><h4 class="widget-name">${widgetName}</h4><p class="widget-desc">${widgetDesc}</p></div></div></div>`;
+            const searchWrap = '<div class="w-param-search-wrap mb-2"><input type="text" class="w-param-search form-control form-control-sm" placeholder="Search config" autocomplete="off"></div>';
+            modalBody.innerHTML = headerHtml + searchWrap + formHtml + '<div class="config-actions"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div></div>';
+            const form = modalBody.querySelector('.w-param-form');
+            if (form) {
+                form.id = 'widgetConfigFormModal';
+                form.setAttribute('data-layout-id', layoutId);
+                if (widgetElement) {
+                    form.setAttribute('data-widget-element-id', 'widget_' + layoutId);
+                }
+                const debounceMs = 400;
+                let autoSaveTimer = null;
+                function scheduleAutoSave() {
+                    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+                    autoSaveTimer = setTimeout(function() {
+                        autoSaveTimer = null;
+                        saveWidgetConfigFromModal(form, widgetElement, { autoSave: true });
+                    }, debounceMs);
+                }
+                form.addEventListener('input', scheduleAutoSave);
+                form.addEventListener('change', scheduleAutoSave);
+            }
+            if (typeof window.WidgetParamTypesInit === 'function') window.WidgetParamTypesInit(modalBody);
+            bindAccordionFormEvents(modalBody);
+            bindParamSearch(modalBody);
+            return;
+        }
+
+        renderConfigFormToModal({
+            layout_id: layoutId,
+            widget_code: widgetCode,
+            widget_module: widgetModule,
+            widget_type: widgetType,
+            config: widgetConfig,
+            meta: widgetMeta,
+        }, params, modalBody, widgetElement);
+    }
+
     async function loadWidgetConfigForModal(widgetElement, modalBody) {
         modalBody.setAttribute('data-theme-editor-config-modal', '1');
         const layoutId = widgetElement.dataset.layoutId;
@@ -5796,6 +6782,28 @@
         const widgetCode = widgetElement.dataset.widgetCode;
         const widgetType = widgetElement.dataset.widgetType;
         let widgetConfig = {};
+
+        if (layoutId) {
+            try {
+                const savedData = await loadSavedWidgetConfig(layoutId);
+                const params = (savedData.params && typeof savedData.params === 'object') ? savedData.params : {};
+                const savedConfig = (savedData.config && typeof savedData.config === 'object') ? savedData.config : {};
+                const meta = getWidgetElementMeta(widgetElement, savedData.widget_code || widgetCode, params);
+                await renderWidgetConfigModalWithMeta(
+                    layoutId,
+                    meta,
+                    savedConfig,
+                    modalBody,
+                    widgetElement,
+                    savedData.widget_code || widgetCode,
+                    savedData.widget_type || widgetType,
+                    savedData.widget_module || widgetModule
+                );
+                return;
+            } catch (err) {
+                console.warn('[ThemeEditor] saved widget config endpoint failed, try widget library:', err);
+            }
+        }
 
         try {
             widgetConfig = JSON.parse(widgetElement.dataset.config || '{}');
@@ -5880,6 +6888,26 @@
         const widgetType = widgetElement.dataset.widgetType;
         let widgetConfig = {};
 
+        if (layoutId) {
+            try {
+                const savedData = await loadSavedWidgetConfig(layoutId);
+                const params = (savedData.params && typeof savedData.params === 'object') ? savedData.params : {};
+                const savedConfig = (savedData.config && typeof savedData.config === 'object') ? savedData.config : {};
+                const meta = getWidgetElementMeta(widgetElement, savedData.widget_code || widgetCode, params);
+                await renderConfigFormWithBackend({
+                    layout_id: layoutId,
+                    widget_code: savedData.widget_code || widgetCode,
+                    widget_module: savedData.widget_module || widgetModule,
+                    widget_type: savedData.widget_type || widgetType,
+                    config: savedConfig,
+                    meta,
+                }, params);
+                return;
+            } catch (err) {
+                console.warn('[ThemeEditor] saved widget config endpoint failed, try widget library:', err);
+            }
+        }
+
         try {
             widgetConfig = JSON.parse(widgetElement.dataset.config || '{}');
         } catch (e) {
@@ -5905,7 +6933,7 @@
                 }
 
                 if (widgetMeta) {
-                    renderConfigForm({
+                    await renderConfigFormWithBackend({
                         layout_id: layoutId,
                         widget_code: widgetCode,
                         widget_module: widgetModule,
@@ -5971,7 +6999,8 @@
         } else {
             for (const key in params) {
                 const param = params[key];
-                const type = param.type || 'string';
+                const type = getParamUiType(param);
+                const semanticType = param.type || type;
                 const label = param.label || key;
                 const defaultVal = param.default || '';
                 const value = savedConfig[key] !== undefined ? savedConfig[key] : defaultVal;
@@ -5995,11 +7024,8 @@
                 } else if (type === 'number') {
                     html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
                              value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
-                } else if (type === 'boolean') {
-                    html += `<div class="form-check form-switch">
-                        <input type="checkbox" class="form-check-input" id="config_${key}" name="${key}" value="1" ${value ? 'checked' : ''}>
-                        <label class="form-check-label" for="config_${key}">启用</label>
-                    </div>`;
+                } else if (isBooleanParamType(semanticType)) {
+                    html += renderBooleanSelect(`config_${key}`, key, key, value, required, param);
                 } else if (type === 'select') {
                     html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
                         <option value="">-- 请选择 --</option>`;
@@ -6089,6 +7115,82 @@
     /**
      * 渲染配置表单（左侧面板，保留兼容性）
      */
+    async function renderConfigFormWithBackend(widget, params) {
+        const typeIcons = {
+            'header': 'ri-layout-top-line',
+            'footer': 'ri-layout-bottom-line',
+            'sidebar': 'ri-layout-left-line',
+            'banner': 'ri-image-line',
+            'carousel': 'ri-slideshow-line',
+            'product': 'ri-shopping-bag-line',
+            'category': 'ri-folder-line',
+            'navigation': 'ri-menu-line',
+            'search': 'ri-search-line',
+            'social': 'ri-share-line',
+            'newsletter': 'ri-mail-line',
+            'content': 'ri-file-text-line',
+        };
+        const icon = typeIcons[widget.widget_type] || 'ri-widgets-line';
+        const widgetName = widget.meta?.name || widget.widget_code;
+        const widgetDesc = widget.meta?.description || '';
+        const layoutId = widget.layout_id || '';
+        const formHtml = await generateWidgetConfigForm(layoutId, params, widget.config || {});
+        const searchPlaceholder = (typeof __ !== 'undefined' ? __('Search config') : 'Search config');
+
+        elements.configContent.innerHTML = `
+            <div class="widget-config-panel">
+                <div class="config-header">
+                    <div class="config-widget-info">
+                        <div class="widget-icon">
+                            <i class="${icon}"></i>
+                        </div>
+                        <div class="widget-meta">
+                            <h4 class="widget-name">${escapeHtml(widgetName)}</h4>
+                            <p class="widget-desc">${escapeHtml(widgetDesc)}</p>
+                        </div>
+                    </div>
+                    <div class="config-lang-switcher">
+                        <select class="form-select form-select-sm" id="configLangSwitcher" data-widget-layout-id="${layoutId}">
+                            <option value="">&#40664;&#35748;&#65288;&#20840;&#35821;&#35328;&#65289;</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="w-param-search-wrap mb-2">
+                    <input type="text" class="w-param-search form-control form-control-sm" placeholder="${searchPlaceholder}" autocomplete="off">
+                </div>
+                ${formHtml}
+            </div>
+        `;
+
+        const form = elements.configContent.querySelector('.w-param-form, .widget-accordion-config-form');
+        if (form) {
+            form.id = 'widgetConfigForm';
+            form.setAttribute('data-layout-id', layoutId);
+        }
+        if (typeof window.WidgetParamTypesInit === 'function') window.WidgetParamTypesInit(elements.configContent);
+        bindAccordionFormEvents(elements.configContent);
+        bindParamSearch(elements.configContent);
+        bindConfigLangSwitcher();
+    }
+
+    function bindConfigLangSwitcher() {
+        const langSwitcher = document.getElementById('configLangSwitcher');
+        if (!langSwitcher) return;
+        fetchInstalledLocales().then(locales => {
+            for (const loc of locales) {
+                const opt = document.createElement('option');
+                opt.value = loc.code;
+                opt.textContent = loc.name;
+                langSwitcher.appendChild(opt);
+            }
+        });
+        langSwitcher.addEventListener('change', async function() {
+            const locale = this.value || null;
+            const layoutId = this.dataset.widgetLayoutId;
+            await reloadWidgetConfigWithLocale(layoutId, locale);
+        });
+    }
+
     function renderConfigForm(widget, params) {
         const typeIcons = {
             'header': 'ri-layout-top-line',
@@ -6171,7 +7273,8 @@
                 
                 for (const field of groupFields) {
                     const key = field.key;
-                    const type = field.type || 'string';
+                    const type = getParamUiType(field);
+                    const semanticType = field.type || type;
                     const label = field.label || key;
                     const defaultVal = field.default || '';
                     const value = savedConfig[key] !== undefined ? savedConfig[key] : defaultVal;
@@ -6195,11 +7298,8 @@
                     } else if (type === 'number') {
                         html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
                                  value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
-                    } else if (type === 'boolean') {
-                        html += `<div class="form-check form-switch">
-                            <input type="checkbox" class="form-check-input" id="config_${key}" name="${key}" value="1" ${value ? 'checked' : ''}>
-                            <label class="form-check-label" for="config_${key}">启用</label>
-                        </div>`;
+                    } else if (isBooleanParamType(semanticType)) {
+                        html += renderBooleanSelect(`config_${key}`, key, key, value, required, field);
                     } else if (type === 'select') {
                         html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
                             <option value="">-- 请选择 --</option>`;
@@ -6379,6 +7479,149 @@
         }
     }
 
+    function translateUiText(text) {
+        return (typeof __ === 'function') ? __(text) : text;
+    }
+
+    function readI18nMainFieldValue(fieldKey, panel) {
+        const form = panel.closest('form') || panel.closest('.layout-config-panel, .slot-widget-body, .config-field') || elements.configContent;
+        if (!form) {
+            return '';
+        }
+
+        const controls = Array.from(form.querySelectorAll('[name]')).filter(control => control.getAttribute('name') === fieldKey);
+        for (const control of controls) {
+            const type = (control.getAttribute('type') || '').toLowerCase();
+            if (type === 'radio') {
+                if (control.checked) {
+                    return String(control.value || '');
+                }
+                continue;
+            }
+            if (type === 'checkbox') {
+                if (control.checked) {
+                    return String(control.value || '1');
+                }
+                continue;
+            }
+            if (typeof control.value !== 'undefined' && String(control.value).trim() !== '') {
+                return String(control.value);
+            }
+        }
+
+        return '';
+    }
+
+    function resolveI18nSourceValue(fieldKey, panel, inputs) {
+        const preferred = inputs.find(input => input.dataset.locale === 'zh_Hans_CN' && String(input.value || '').trim() !== '');
+        if (preferred) {
+            return {
+                sourceLocale: preferred.dataset.locale,
+                sourceText: String(preferred.value || ''),
+            };
+        }
+
+        const mainValue = readI18nMainFieldValue(fieldKey, panel);
+        if (String(mainValue).trim() !== '') {
+            return {
+                sourceLocale: 'zh_Hans_CN',
+                sourceText: String(mainValue),
+            };
+        }
+
+        const firstFilled = inputs.find(input => String(input.value || '').trim() !== '');
+        if (firstFilled) {
+            return {
+                sourceLocale: firstFilled.dataset.locale || 'zh_Hans_CN',
+                sourceText: String(firstFilled.value || ''),
+            };
+        }
+
+        return {
+            sourceLocale: 'zh_Hans_CN',
+            sourceText: '',
+        };
+    }
+
+    function setI18nAiButtonLoading(button, loading) {
+        if (!button) {
+            return;
+        }
+        if (loading) {
+            button.dataset.originalText = button.textContent || translateUiText('AI翻译');
+            button.disabled = true;
+            button.textContent = translateUiText('正在翻译...');
+            button.setAttribute('aria-busy', 'true');
+            return;
+        }
+
+        button.disabled = false;
+        button.textContent = button.dataset.originalText || translateUiText('AI翻译');
+        button.removeAttribute('aria-busy');
+        delete button.dataset.originalText;
+    }
+
+    async function translateI18nValues(layoutId, fieldKey, panel, button) {
+        await ensurePanelRendered(panel);
+        const inputs = Array.from(panel.querySelectorAll('.i18n-input'));
+        const { sourceLocale, sourceText } = resolveI18nSourceValue(fieldKey, panel, inputs);
+        if (String(sourceText).trim() === '') {
+            showToast(translateUiText('请先填写源文案'), 'warning');
+            return;
+        }
+
+        const targetInputs = inputs.filter(input => input.dataset.locale && input.dataset.locale !== sourceLocale);
+        const targetLocales = [...new Set(targetInputs.map(input => input.dataset.locale).filter(Boolean))];
+        if (targetLocales.length === 0) {
+            showToast(translateUiText('没有需要翻译的目标语言'), 'warning');
+            return;
+        }
+
+        setI18nAiButtonLoading(button, true);
+        try {
+            const result = await apiJson(config.apiAiTranslateConfig, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_text: sourceText,
+                    source_locale: sourceLocale,
+                    target_locales: targetLocales,
+                    field_key: fieldKey,
+                    layout_id: layoutId,
+                    layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                    layout_option: state.layoutOption || 'default',
+                    context: isLayoutConfigPanel(panel) ? 'layout_config' : 'widget_config'
+                })
+            });
+            if (!result.success) {
+                throw new Error(result.message || translateUiText('AI翻译失败'));
+            }
+
+            const translations = (result.data && result.data.translations) || result.translations || {};
+            let filledCount = 0;
+            for (const input of targetInputs) {
+                const locale = input.dataset.locale;
+                if (!Object.prototype.hasOwnProperty.call(translations, locale)) {
+                    continue;
+                }
+                input.value = String(translations[locale] ?? '');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                filledCount++;
+            }
+
+            if (filledCount > 0) {
+                showToast(result.message || translateUiText('AI翻译已回填'), 'success');
+            } else {
+                showToast(translateUiText('AI翻译未返回目标语言结果'), 'warning');
+            }
+        } catch (err) {
+            console.error('AI i18n translate error:', err);
+            showToast(err.message || translateUiText('AI翻译失败'), 'error');
+        } finally {
+            setI18nAiButtonLoading(button, false);
+        }
+    }
+
     /**
      * 保存面板内所有语言的值
      */
@@ -6546,6 +7789,31 @@
             }
         });
 
+        form.querySelectorAll('.array-editor-wrapper input[type="hidden"][name], .w-param-array input[type="hidden"][name]').forEach(input => {
+            let key = input.name;
+            if (!key) {
+                return;
+            }
+            if (key.endsWith('[]')) {
+                key = key.slice(0, -2);
+            }
+
+            const rawValue = String(input.value || '').trim();
+            if (rawValue === '') {
+                configData[key] = [];
+                return;
+            }
+
+            try {
+                const parsedValue = JSON.parse(rawValue);
+                if (Array.isArray(parsedValue)) {
+                    configData[key] = parsedValue;
+                }
+            } catch (e) {
+                // Keep the submitted value if it is not valid JSON.
+            }
+        });
+
         return configData;
     }
 
@@ -6582,8 +7850,7 @@
                     widgetElement.dataset.config = JSON.stringify(normalizedConfig);
                 }
                 if (!autoSave) {
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('widgetConfigModal'));
-                    if (modal) modal.hide();
+                    hideEditorModal(document.getElementById('widgetConfigModal'));
                 }
                 if (result.preview_html) {
                     updateWidgetPreviewInIframe(layoutId, result.preview_html);
@@ -6898,6 +8165,7 @@
                     backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
                     editor_area: 'frontend',
                     page_type: state.pageType,
+                    layout_option: state.layoutOption || 'default',
                     status: state.previewStatus || 'draft',
                 }),
             });
@@ -7476,8 +8744,52 @@
      */
     function isFieldTranslatable(param) {
         if (param.hasOwnProperty('i18n')) return !!param.i18n;
-        const type = param.type || 'string';
+        const type = getParamUiType(param);
         return TRANSLATABLE_TYPES.includes(type);
+    }
+
+    function getParamUiType(param) {
+        if (!param || typeof param !== 'object') {
+            return 'string';
+        }
+        return param.ui_type || param.input || param.type || 'string';
+    }
+
+    function isBooleanParamType(type) {
+        return type === 'bool' || type === 'boolean';
+    }
+
+    function normalizeBooleanSelectValue(value) {
+        if (value === true || value === 1 || value === '1' || value === 'true' || value === 'on') {
+            return '1';
+        }
+        if (value === false || value === 0 || value === '0' || value === 'false' || value === 'off') {
+            return '0';
+        }
+        return value ? '1' : '0';
+    }
+
+    function getBooleanSelectOptions(key, param) {
+        const explicitOptions = param && param.options && Object.keys(param.options).length > 0 ? param.options : null;
+        if (explicitOptions) {
+            return explicitOptions;
+        }
+        const normalizedKey = String(key || '').toLowerCase();
+        if (normalizedKey.startsWith('show') || normalizedKey.includes('visible')) {
+            return { '1': '显示', '0': '隐藏' };
+        }
+        return { '1': '是', '0': '否' };
+    }
+
+    function renderBooleanSelect(fieldId, name, key, value, required, param) {
+        const selectedValue = normalizeBooleanSelectValue(value);
+        const options = getBooleanSelectOptions(key, param);
+        let html = `<select class="form-select" id="${fieldId}" name="${name}" ${required ? 'required' : ''}>`;
+        for (const [optVal, optLabel] of Object.entries(options)) {
+            html += `<option value="${escapeHtml(optVal)}" ${String(optVal) === selectedValue ? 'selected' : ''}>${escapeHtml(optLabel)}</option>`;
+        }
+        html += `</select>`;
+        return html;
     }
 
     /**
@@ -7527,6 +8839,79 @@
         });
         
         return temp.innerHTML;
+    }
+
+    function buildStructurePlaceholderHtml(areaEl, areaCode) {
+        const defaults = {
+            header: {
+                icon: 'ri-layout-top-2-line',
+                title: 'Header Area',
+                text: 'Drag into header widget',
+                tips: [
+                    ['ri-image-line', 'Logo'],
+                    ['ri-menu-line', 'Navigation'],
+                    ['ri-search-line', 'Search'],
+                    ['ri-user-line', 'Account'],
+                    ['ri-shopping-cart-line', 'Shopping Cart'],
+                ],
+            },
+            content: {
+                icon: 'ri-layout-grid-line',
+                title: 'Content Area',
+                text: 'Drag widgets or containers here',
+                tips: [
+                    ['ri-layout-row-line', 'Row layout'],
+                    ['ri-layout-column-line', 'Column layout'],
+                    ['ri-image-line', 'Banner'],
+                    ['ri-slideshow-line', 'Carousel'],
+                    ['ri-shopping-bag-line', 'Product'],
+                ],
+            },
+            footer: {
+                icon: 'ri-layout-bottom-2-line',
+                title: 'Footer Area',
+                text: 'Drag in footer components',
+                tips: [
+                    ['ri-links-line', 'Links'],
+                    ['ri-mail-line', 'Subscribe'],
+                    ['ri-share-line', 'Social'],
+                    ['ri-copyright-line', 'Copyright'],
+                ],
+            },
+        };
+
+        const meta = defaults[areaCode] || defaults.content;
+        const title = areaEl?.dataset?.slotName || meta.title;
+        const tipsHtml = meta.tips
+            .map(([icon, label]) => `<span class="tip-item"><i class="${icon}"></i> ${escapeHtml(label)}</span>`)
+            .join('');
+
+        return `
+            <div class="slot-placeholder-large">
+                <div class="placeholder-icon">
+                    <i class="${meta.icon}"></i>
+                </div>
+                <div class="placeholder-title">${escapeHtml(title)}</div>
+                <div class="placeholder-text">${escapeHtml(meta.text)}</div>
+                <div class="placeholder-tips">
+                    ${tipsHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    function resetStructureViewToEmptySlots() {
+        document.querySelectorAll('#previewViewStructure .area-slot').forEach(areaEl => {
+            const areaCode = areaEl.dataset.area || areaEl.dataset.slot || 'content';
+            const widgetsContainer = areaEl.querySelector('.area-widgets');
+            if (!widgetsContainer) {
+                return;
+            }
+
+            widgetsContainer.querySelectorAll('.preview-widget-item').forEach(el => el.remove());
+            widgetsContainer.querySelectorAll('.slot-placeholder, .content-slot-placeholder, .slot-placeholder-large').forEach(el => el.remove());
+            widgetsContainer.insertAdjacentHTML('beforeend', buildStructurePlaceholderHtml(areaEl, areaCode));
+        });
     }
 
     // 添加 CSS 动画
@@ -7580,9 +8965,14 @@
 
             if (result.success) {
                 showToast(result.message || '已恢复到原始布局', 'success');
+                clearSlotSelection();
+                deselectArea();
+                deselectWidget();
+                resetStructureViewToEmptySlots();
                 
                 // 刷新版本列表
                 await loadVersions();
+                await fetchLayoutSlots();
                 
                 // 刷新预览
                 setTimeout(() => {
@@ -7767,6 +9157,7 @@
                 console.log('[ThemeEditor] Link intercepted:', href, '-> Editor page type:', pageType);
                 navigateEditorShell({
                     page_type: pageType,
+                    layout_option: resolveLayoutOptionForType(pageType, ''),
                 });
                 return;
 
@@ -7978,13 +9369,47 @@
 
     // ==================== 版本控制功能 ====================
 
+    function versionIdEquals(left, right) {
+        if (left === null || left === undefined || right === null || right === undefined) {
+            return false;
+        }
+        return String(left) === String(right);
+    }
+
+    function setVersionPanelStatus(message, options = {}) {
+        const versionList = document.getElementById('versionList');
+        const currentVersionDisplay = document.getElementById('currentVersionDisplay');
+        const text = message || '版本历史加载失败';
+
+        if (currentVersionDisplay && options.updateCurrent !== false) {
+            currentVersionDisplay.textContent = text;
+        }
+
+        if (versionList) {
+            const className = options.error ? 'version-item empty error' : 'version-item empty';
+            versionList.innerHTML = `<div class="${className}">${escapeHtml(text)}</div>`;
+        }
+    }
+
+    function resetVersionState() {
+        state.versions = [];
+        state.currentVersionId = null;
+        state.publishedVersionId = null;
+    }
+
     /**
      * 加载版本列表
      */
-    async function loadVersions() {
+    async function loadVersions(options = {}) {
+        const notifyOnError = options.notifyOnError === true;
+
         if (!state.themeId) {
+            resetVersionState();
+            setVersionPanelStatus('请选择主题后查看版本历史', { error: true });
             return;
         }
+
+        setVersionPanelStatus('加载中...', { updateCurrent: state.versions.length === 0 });
 
         try {
             const url = new URL(config.apiVersions, window.location.origin);
@@ -7994,16 +9419,32 @@
 
             const result = await apiJson(url.toString());
 
-            if (result.success && result.data) {
-                state.versions = result.data.versions || [];
-                state.currentVersionId = result.data.current_version_id;
-                state.publishedVersionId = result.data.published_version_id;
-
-                // 更新版本面板 UI
-                renderVersionPanel();
+            if (!result.success || !result.data) {
+                const message = result.message || '版本历史加载失败';
+                resetVersionState();
+                setVersionPanelStatus(message, { error: true });
+                if (notifyOnError) {
+                    showToast(message, 'error');
+                }
+                return;
             }
+
+            state.versions = Array.isArray(result.data.versions) ? result.data.versions : [];
+            state.currentVersionId = result.data.current_version_id;
+            state.publishedVersionId = result.data.published_version_id;
+
+            // 更新版本面板 UI
+            renderVersionPanel();
         } catch (error) {
             console.error('[ThemeEditor] Load versions error:', error);
+            const message = error && error.message
+                ? `版本历史加载失败：${error.message}`
+                : '版本历史加载失败';
+            resetVersionState();
+            setVersionPanelStatus(message, { error: true });
+            if (notifyOnError) {
+                showToast(message, 'error');
+            }
         }
     }
 
@@ -8020,7 +9461,7 @@
 
         // 更新当前版本显示
         if (currentVersionDisplay) {
-            const currentVersion = state.versions.find(v => v.version_id === state.currentVersionId);
+            const currentVersion = state.versions.find(v => versionIdEquals(v.version_id, state.currentVersionId));
             currentVersionDisplay.textContent = currentVersion ? currentVersion.display_name : '无版本';
         }
 
@@ -8032,8 +9473,8 @@
 
         let html = '';
         for (const version of state.versions) {
-            const isCurrent = version.version_id === state.currentVersionId;
-            const isPublished = version.version_id === state.publishedVersionId;
+            const isCurrent = versionIdEquals(version.version_id, state.currentVersionId);
+            const isPublished = versionIdEquals(version.version_id, state.publishedVersionId);
             const isAutoBackup = version.is_auto_backup;
 
             html += `
@@ -8206,7 +9647,7 @@
         if (state.versionPanelOpen) {
             panel.classList.add('open');
             // 加载版本列表
-            loadVersions();
+            loadVersions({ notifyOnError: true });
         } else {
             panel.classList.remove('open');
         }

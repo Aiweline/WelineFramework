@@ -11,6 +11,19 @@ use Weline\Framework\Http\Sse\SseWriter;
 
 class AiSiteAgentRegeneratePageOperationService
 {
+    private const REGENERATE_PAGE_SCOPE_ARTIFACT_KEYS = [
+        'plan_json',
+        'build_plan_v2',
+        'plan_projection',
+        'content_manifest',
+        'build_workbench',
+        'build_contracts',
+        'render_data_contract',
+        'task_results',
+        'qa_report',
+        'repair_patch',
+    ];
+
     /**
      * @return array<string, mixed>
      */
@@ -28,7 +41,11 @@ class AiSiteAgentRegeneratePageOperationService
         /** @var AiSiteAgentSessionService $sessionService */
         $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
         $scope = ($ports->normalizeScope)(
-            $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $sessionService->loadScopeForStage(
+                $session,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                self::REGENERATE_PAGE_SCOPE_ARTIFACT_KEYS
+            )
         );
         $pageTypes = ($ports->resolveScopedPageTypes)($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
@@ -81,10 +98,7 @@ class AiSiteAgentRegeneratePageOperationService
                 $virtualPages
             );
             $scope = ($ports->mergeMaterializedPagesIntoScope)($scope, $materialized);
-            $scope['build_summary'] = \array_replace(
-                \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-                ['task_summary' => ($ports->summarizeBuildTasks)($scope)]
-            );
+            $scope['build_plan_execution_summary'] = ($ports->summarizeBuildTasks)($scope);
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
             $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('页面区块已重建')]);
             ($ports->replaceScope)($session->getId(), $adminId, $scope);
@@ -112,12 +126,16 @@ class AiSiteAgentRegeneratePageOperationService
         $pageTypeLayouts = ($ports->normalizePageTypeLayouts)($scope['page_type_layouts'] ?? [], $pageTypes);
         $pageTypeLayouts[$pageType] = ($ports->normalizeLayoutConfig)([], $pageType);
 
-        $theme = ($ports->ensureAiGeneratedVirtualTheme)($scope, $scope['website_profile'], $pageTypes, $pageTypeLayouts, $session->getId(), false);
+        $theme = $ports->regenerateAiGeneratedVirtualThemePage instanceof \Closure
+            ? ($ports->regenerateAiGeneratedVirtualThemePage)($scope, $scope['website_profile'], $pageTypes, $pageTypeLayouts, $pageType, $session->getId())
+            : ($ports->ensureAiGeneratedVirtualTheme)($scope, $scope['website_profile'], $pageTypes, $pageTypeLayouts, $session->getId(), false);
         $scope['page_type_layouts'] = $theme['page_type_layouts'];
         $scope['virtual_theme_id'] = (int)$theme['virtual_theme_id'];
 
         $virtualPages = ($ports->buildVirtualPagesByType)($pageTypes, $scope);
-        $blueprint = ($ports->buildPageBlueprint)($pageType, $scope, $scope['website_profile']);
+        $blueprint = \is_array($theme['page_blueprint'] ?? null)
+            ? $theme['page_blueprint']
+            : ($ports->buildPageBlueprint)($pageType, $scope, $scope['website_profile']);
         $virtualPages[$pageType]['last_generated_at'] = \date('Y-m-d H:i:s');
         $virtualPages[$pageType]['title'] = (string)($blueprint['page_title'] ?? ($virtualPages[$pageType]['title'] ?? ''));
         $virtualPages[$pageType]['ai_description'] = (string)($blueprint['ai_description'] ?? ($virtualPages[$pageType]['ai_description'] ?? ''));
@@ -142,10 +160,7 @@ class AiSiteAgentRegeneratePageOperationService
         $scope['virtual_pages_by_type'] = $virtualPages;
         $scope['preview_page_type'] = $pageType;
         $scope = $this->dropPrePublishMaterializedPagesFromVirtualThemeScope($scope, $session);
-        $scope['build_summary'] = \array_replace(
-            \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
-            ['task_summary' => ($ports->summarizeBuildTasks)($scope)]
-        );
+        $scope['build_plan_execution_summary'] = ($ports->summarizeBuildTasks)($scope);
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('页面重建完成')]);
 

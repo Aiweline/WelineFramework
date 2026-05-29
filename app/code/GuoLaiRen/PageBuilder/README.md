@@ -1,5 +1,8 @@
 # GuoLaiRen PageBuilder 页面构建器模块
 
+> 文档入口：完整文档索引见 [doc/README.md](doc/README.md)，长期模板/组件规范见 [docs/README.md](docs/README.md)。
+> 当前 README 保留模块快速启动信息；AI 建站、SSE、BuildPlan、SEO、模板专题和历史修复记录统一从文档入口查找。
+
 ## 快速开始
 
 ### 1. 安装模块

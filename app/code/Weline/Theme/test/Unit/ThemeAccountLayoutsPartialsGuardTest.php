@@ -45,16 +45,17 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
         }
     }
 
-    public function testAccountAuthLayoutAllowsControllerToHideHeaderAndFooter(): void
+    public function testAccountAuthLayoutDoesNotForceHeaderAndFooterChrome(): void
     {
         $path = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account/auth.phtml';
 
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
-        $this->assertStringContainsString('<if condition="meta.showHeader">', $content);
-        $this->assertStringContainsString('<if condition="meta.showFooter">', $content);
+        $this->assertStringContainsString('body class="account-auth-layout"', $content);
         $this->assertStringNotContainsString('$meta[\'showHeader\'] = true;', $content);
         $this->assertStringNotContainsString('$meta[\'showFooter\'] = true;', $content);
+        $this->assertStringNotContainsString('Weline_Frontend::templates/public/header.phtml', $content);
+        $this->assertStringNotContainsString('Weline_Frontend::templates/public/footer.phtml', $content);
     }
 
     public function testAccountDashboardMainContentUsesPageWidthContainer(): void
@@ -64,10 +65,33 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
         $this->assertStringContainsString('.account-main-content {', $content);
-        $this->assertStringContainsString('max-width: var(--layout-max-width, 1600px);', $content);
+        $this->assertStringContainsString(
+            'max-width: var(--weline-layout-content-max-width, var(--layout-max-width, var(--container-max-width, 1440px)));',
+            $content
+        );
+        $this->assertStringNotContainsString('max-width: var(--layout-max-width, 1600px);', $content);
         $this->assertStringContainsString('margin: 0 auto;', $content);
         $this->assertStringContainsString('<main class="account-main-content', $content);
         $this->assertStringNotContainsString('.account-dashboard__body {', $content);
+    }
+
+    public function testAccountLayoutsDoNotRenderBreadcrumb(): void
+    {
+        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account';
+        $files = [
+            $base . '/default.phtml',
+            $base . '/dashboard.phtml',
+        ];
+
+        foreach ($files as $path) {
+            $this->assertFileExists($path);
+            $content = (string) file_get_contents($path);
+
+            $this->assertStringNotContainsString('account-dashboard__breadcrumb', $content);
+            $this->assertStringNotContainsString('type="breadcrumb"', $content);
+            $this->assertStringNotContainsString('Weline_Theme::frontend::layouts::account::breadcrumb-before', $content);
+            $this->assertStringNotContainsString('Weline_Theme::frontend::layouts::account::breadcrumb-after', $content);
+        }
     }
 
     public function testAccountLayoutsKeepContentFallbackHosts(): void

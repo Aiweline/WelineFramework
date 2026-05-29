@@ -16,6 +16,7 @@ $currencies = $currencies ?? [];
 $selected_currencies = $selected_currencies ?? [];
 $selected_languages = $selected_languages ?? [];
 $selected_pool_ids = $selected_pool_ids ?? [];
+$selected_legacy_domains = $selected_legacy_domains ?? [];
 $domain_options = $domain_options ?? [];
 $sub_path = $sub_path ?? '';
 $isEdit = isset($website['website_id']) && !empty($website['website_id']);
@@ -154,6 +155,8 @@ $isEdit = isset($website['website_id']) && !empty($website['website_id']);
                         $displayText = '';
                         if ($isEdit && !empty($selected_pool_ids)) {
                             $displayText = __('已选择 %{1} 个域名', [count($selected_pool_ids)]);
+                        } elseif ($isEdit && !empty($selected_legacy_domains)) {
+                            $displayText = implode(', ', $selected_legacy_domains);
                         } else {
                             $displayText = __('点击选择域名（可多选）');
                         }

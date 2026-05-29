@@ -3,7 +3,7 @@
 If you are an AI assistant (Claude, GPT, Gemini, Cursor, etc.) working on this codebase:
 
 1. Read `AI-ENTRY.md`.
-2. Read the single AI general rules file: `dev/ai/global-constraints.md`.
+2. Read the single AI general rules file: `dev/ai/global-constraints.md`, especially section 0: product-manager -> architect -> senior full-stack engineer delivery loop.
 3. Follow the matched diagrams, module docs, and skills from the indexes below.
 
 `AI-ENTRY.md` is only the universal entry index. It does not own rule content.

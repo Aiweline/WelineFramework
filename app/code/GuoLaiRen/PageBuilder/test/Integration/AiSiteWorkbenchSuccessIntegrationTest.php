@@ -103,7 +103,10 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         $generatedPageTypes = [];
         foreach ($buildWriter->eventsByName('page_generated') as $generatedEvent) {
             $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
-            self::assertGreaterThan(0, (int)($payload['page_id'] ?? 0));
+            $hasMaterializedPage = (int)($payload['page_id'] ?? 0) > 0;
+            $hasVirtualPageLayout = (int)($payload['virtual_theme_id'] ?? 0) > 0
+                && (int)($payload['virtual_layout_id'] ?? 0) > 0;
+            self::assertTrue($hasMaterializedPage || $hasVirtualPageLayout, \json_encode($payload, \JSON_UNESCAPED_UNICODE));
             $generatedPageTypes[] = (string)($payload['page_type'] ?? '');
         }
         $generatedPageTypes = \array_values(\array_unique(\array_filter($generatedPageTypes)));
@@ -127,9 +130,9 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertContains($previewPageType, $pageTypes);
         self::assertSame(AiSiteAgentSession::PUBLISH_STATUS_DRAFT, (string)($buildState['publish_status'] ?? ''));
         self::assertContains((string)($buildState['workspace_status'] ?? ''), ['building', 'can_publish']);
-        self::assertGreaterThanOrEqual(1, \count((array)($buildState['pagebuilder_pages_by_type'] ?? [])));
-        self::assertGreaterThan(0, (int)($envReadyData['page_id'] ?? 0));
         self::assertGreaterThanOrEqual(1, \count((array)($buildState['virtual_pages_by_type'] ?? [])));
+        self::assertGreaterThan(0, (int)($envReadyData['virtual_theme_id'] ?? 0));
+        self::assertGreaterThan(0, (int)($envReadyData['virtual_layout_id'] ?? 0));
         $virtualPages = (array)($buildState['virtual_pages_by_type'] ?? []);
         if (isset($virtualPages[Page::TYPE_HOME], $virtualPages[Page::TYPE_ABOUT])) {
             self::assertNotSame(
@@ -637,7 +640,10 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertSame(1, $buildWriter->countEvents('environment_ready'));
         foreach ($buildWriter->eventsByName('page_generated') as $generatedEvent) {
             $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
-            self::assertGreaterThan(0, (int)($payload['page_id'] ?? 0));
+            $hasMaterializedPage = (int)($payload['page_id'] ?? 0) > 0;
+            $hasVirtualPageLayout = (int)($payload['virtual_theme_id'] ?? 0) > 0
+                && (int)($payload['virtual_layout_id'] ?? 0) > 0;
+            self::assertTrue($hasMaterializedPage || $hasVirtualPageLayout, \json_encode($payload, \JSON_UNESCAPED_UNICODE));
         }
 
         $buildState = $this->fetchWorkspaceState($publicId);

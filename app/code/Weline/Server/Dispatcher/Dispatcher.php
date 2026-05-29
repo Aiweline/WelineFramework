@@ -1356,17 +1356,10 @@ class Dispatcher
 
         // 维护池只更新维护端口，不得覆盖业务 worker 池，
         // 否则会出现业务流量在「维护/正常」之间抖动。
-        $currentMaintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
-        foreach ($currentMaintenancePorts as $currentPort) {
-            if (!\in_array((int)$currentPort, $normalizedPorts, true)) {
-                $this->passthroughCore->removeMaintenanceWorkerPort((int)$currentPort);
-            }
-        }
-        foreach ($normalizedPorts as $port) {
-            $result = $this->passthroughCore->addMaintenanceWorkerPort((int)$port);
-            if (!$result['success']) {
-                $this->log("{$source} 维护端口注册失败: {$port} - {$result['error']}", 'WARN');
-            }
+        $result = $this->passthroughCore->setMaintenanceWorkerPortsFromMasterReady($normalizedPorts);
+        $rejectedPorts = \is_array($result['rejected'] ?? null) ? $result['rejected'] : [];
+        foreach ($rejectedPorts as $port => $reason) {
+            $this->log("{$source} 维护端口注册失败: {$port} - {$reason}", 'WARN');
         }
         if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
             $currentMaintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
@@ -1383,9 +1376,7 @@ class Dispatcher
             "{$source}（maintenance）: 维护端口已同步，端口数: " . \count($normalizedPorts),
             'INFO'
         );
-        $this->passthroughCore->setMaintenanceRoutingActive(
-            $this->passthroughCore->getMaintenanceWorkerPorts() !== []
-        );
+        $this->passthroughCore->setMaintenanceRoutingActive(true);
     }
 
     /**
@@ -1552,9 +1543,7 @@ class Dispatcher
             // Apply the authoritative table to the role-specific worker pool.
             if ($role === ControlMessage::ROLE_MAINTENANCE) {
                 $this->applyMaintenanceWorkerPoolSync($normalizedPorts, '收到 SET_ROUTE_TABLE');
-                $this->passthroughCore->setMaintenanceRoutingActive(
-                    $this->passthroughCore->getMaintenanceWorkerPorts() !== []
-                );
+                $this->passthroughCore->setMaintenanceRoutingActive(true);
             } else {
                 $this->passthroughCore->setMaintenanceRoutingActive(false);
                 $this->applyBusinessWorkerPoolSwitch(
@@ -2697,11 +2686,13 @@ class Dispatcher
     {
         $body = <<<'HTML'
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WLS正在启动中...</title>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <title>System upgrade in progress</title>
     <style>
         :root {
             color-scheme: light;
@@ -2777,12 +2768,84 @@ class Dispatcher
 </head>
 <body>
     <main class="panel">
-        <div class="badge"><span class="dot"></span><span>业务 Worker 启动中</span></div>
-        <h1>WLS正在启动中...</h1>
-        <p>业务 Worker 正在初始化，系统正在检测维护 Worker 并切换入口。</p>
-        <p>如果已有维护 Worker 就绪，请求会自动转接；否则请稍后刷新页面。</p>
-        <p class="hint">这是一个临时提示。系统启动完成后会自动恢复正常服务。</p>
+        <div class="badge"><span class="dot"></span><span>Maintenance mode</span></div>
+        <h1>System upgrade in progress</h1>
+        <p>The website is under maintenance. We are checking recovery automatically.</p>
+        <p>When the service returns a healthy 200 response, this page will refresh by itself.</p>
+        <p class="hint">No need to keep refreshing. The next check will run in a few seconds.</p>
     </main>
+    <script>
+    (function () {
+        var initialDelayMs = 5000;
+        var maxDelayMs = 30000;
+        var currentDelayMs = initialDelayMs;
+        var timer = null;
+        var probing = false;
+        var probeUrl = new URL(window.location.href);
+        probeUrl.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
+
+        function updateProbeNonce() {
+            probeUrl.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
+        }
+
+        function scheduleNext(delayMs) {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(runProbe, delayMs);
+        }
+
+        function retry() {
+            currentDelayMs = Math.min(maxDelayMs, Math.round(currentDelayMs * 1.5));
+            scheduleNext(currentDelayMs);
+        }
+
+        function probe(method) {
+            updateProbeNonce();
+            return window.fetch(probeUrl.toString(), {
+                method: method,
+                cache: 'no-store',
+                credentials: 'same-origin',
+                redirect: 'manual',
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+        }
+
+        function runProbe() {
+            if (probing || document.hidden) {
+                scheduleNext(initialDelayMs);
+                return;
+            }
+            probing = true;
+            probe('HEAD').then(function (response) {
+                if (response.status === 405 || response.status === 501) {
+                    return probe('GET');
+                }
+                return response;
+            }).then(function (response) {
+                probing = false;
+                if (response && response.status >= 200 && response.status < 300) {
+                    window.location.reload();
+                    return;
+                }
+                retry();
+            }).catch(function () {
+                probing = false;
+                retry();
+            });
+        }
+
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) {
+                currentDelayMs = initialDelayMs;
+                scheduleNext(250);
+            }
+        });
+
+        scheduleNext(initialDelayMs);
+    })();
+    </script>
 </body>
 </html>
 HTML;
@@ -2791,8 +2854,11 @@ HTML;
             $body = \str_replace('</body>', $this->buildAllWorkersUnavailableDevOverlay() . "\n</body>", $body);
         }
 
+        $contentLength = \strlen($body);
+
         return "HTTP/1.1 503 Service Unavailable\r\n"
             . "Content-Type: text/html; charset=UTF-8\r\n"
+            . "Content-Length: {$contentLength}\r\n"
             . "Cache-Control: no-store, no-cache, must-revalidate\r\n"
             . "Pragma: no-cache\r\n"
             . "Retry-After: 5\r\n"
@@ -2804,12 +2870,11 @@ HTML;
     {
         return <<<'HTML'
     <aside class="wls-dev-alert" role="status" aria-live="polite" style="position:fixed;right:18px;bottom:18px;z-index:2147483647;max-width:min(420px,calc(100vw - 36px));padding:14px 16px;border:1px solid #fca5a5;border-left:6px solid #dc2626;border-radius:10px;background:#fee2e2;color:#7f1d1d;box-shadow:0 18px 50px rgba(127,29,29,0.22);text-align:left;font-size:14px;line-height:1.55;">
-        <strong style="display:block;margin-bottom:4px;color:#991b1b;font-size:15px;">DEV: 当前所有 Worker 不可用</strong>
-        <span>Dispatcher 已进入维护页响应。请检查 Worker 自检、IPC 入池、端口占用和 Master 复活队列。</span>
+        <strong style="display:block;margin-bottom:4px;color:#991b1b;font-size:15px;">DEV: all workers are unavailable</strong>
+        <span>Dispatcher is serving the maintenance fallback page. Check worker readiness, IPC pool registration, port availability, and the Master recovery queue.</span>
     </aside>
 HTML;
     }
-
     private function resolveFallbackMaintenancePage(bool $allWorkersUnavailable = false): string
     {
         if (!$allWorkersUnavailable || !$this->isDevMode) {
@@ -2927,7 +2992,17 @@ HTML;
      */
     private function writeMaintenancePageAndClose($clientSocket, bool $allWorkersUnavailable): void
     {
-        @\socket_write($clientSocket, $this->resolveFallbackMaintenancePage($allWorkersUnavailable));
+        $response = $this->resolveFallbackMaintenancePage($allWorkersUnavailable);
+        $remaining = \strlen($response);
+        $offset = 0;
+        while ($remaining > 0) {
+            $written = @\socket_write($clientSocket, \substr($response, $offset), $remaining);
+            if ($written === false || $written === 0) {
+                break;
+            }
+            $offset += $written;
+            $remaining -= $written;
+        }
 
         // SHUT_WR = 1：发送 FIN 但保留读端继续抽干，避免 Windows 下 closesocket 发 RST
         @\socket_shutdown($clientSocket, 1);

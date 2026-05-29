@@ -22,16 +22,20 @@ use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
+use Weline\Theme\Service\ThemeResourceCatalog;
 use Weline\Theme\Service\ThemeSlotContractService;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
 use Weline\Widget\Service\ParamTypeRenderer;
 use Weline\Meta\Service\ParamDefinitionNormalizer;
+use Weline\Meta\Model\MetaConfig;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\ThemePathResolver;
 use Weline\Meta\Model\Meta;
+use Weline\Theme\Observer\ControllerFetchFileBefore;
+use Weline\Theme\Service\PreviewThemeScopeService;
 
 /**
  * 主题编辑器控制器
@@ -48,6 +52,22 @@ class ThemeEditor extends BackendController
     private Meta $meta;
     private PreviewTokenService $previewTokenService;
     private EditorLockService $editorLockService;
+
+    private function useFullscreenEditorLayout(): void
+    {
+        $this->layoutType = 'fullscreen.default';
+
+        $meta = $this->getTemplate()->getData('meta');
+        $meta = is_array($meta) ? $meta : [];
+        $meta['showHeader'] = false;
+        $meta['showSidebar'] = false;
+        $meta['showFooter'] = false;
+        $meta['showRightSidebar'] = false;
+        $meta['showPageHeader'] = false;
+
+        $this->assign('meta', $meta);
+        $this->assign('layoutShowPageHeader', false);
+    }
 
     public function __construct(
         WelineTheme $welineTheme,
@@ -114,6 +134,8 @@ class ThemeEditor extends BackendController
      */
     public function index()
     {
+        $this->useFullscreenEditorLayout();
+
         $previewContextService = $this->getPreviewContextService();
         $themeContextService = $this->getThemeContextService();
         $requestedThemeId = (int)$this->request->getParam('theme_id', 0);
@@ -188,6 +210,21 @@ class ThemeEditor extends BackendController
         $currentTheme = $editorArea === PreviewContextService::AREA_BACKEND
             ? ($backendTheme ?: $this->loadThemeModel($currentThemeId))
             : ($frontendTheme ?: $this->loadThemeModel($currentThemeId));
+        $layoutOptionsByType = $currentTheme?->getId()
+            ? $this->getEditorLayoutOptionsByType($currentTheme, $editorArea)
+            : [];
+        $requestedLayoutOption = (string)$this->request->getParam('layout_option', '');
+        $layoutOption = $currentTheme?->getId()
+            ? $this->resolveSelectedLayoutOption(
+                $currentTheme,
+                $editorArea,
+                $pageType,
+                $layoutOptionsByType,
+                $requestedLayoutOption,
+                (string)($context['scope'] ?? PreviewContextService::DEFAULT_SCOPE)
+            )
+            : ($requestedLayoutOption !== '' ? $requestedLayoutOption : 'default');
+        $pageTypes = $this->mergeLayoutTypesWithEditorOptions(ThemeLayout::getPageTypes(), $layoutOptionsByType, $pageType);
 
         $themesCollection = $this->welineTheme->reset()->select()->fetch()->getItems();
         $themesById = [];
@@ -206,7 +243,7 @@ class ThemeEditor extends BackendController
         $hasDraft = false;
         if ($currentThemeId) {
             $hasDraft = $this->layoutService->hasDraft($currentThemeId, $pageType);
-            if (!$hasDraft) {
+            if (!$hasDraft && !$this->hasEmptyCurrentRestoreVersion($currentThemeId, $pageType)) {
                 $this->layoutService->initDraftFromPublished($currentThemeId, $pageType);
             }
             $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType);
@@ -227,7 +264,9 @@ class ThemeEditor extends BackendController
         $this->assign('backend_theme_id', $backendThemeId);
         $this->assign('themes', $themes);
         $this->assign('page_type', $pageType);
-        $this->assign('page_types', ThemeLayout::getPageTypes());
+        $this->assign('layout_option', $layoutOption);
+        $this->assign('layout_options_by_type', $this->compactEditorLayoutOptions($layoutOptionsByType));
+        $this->assign('page_types', $pageTypes);
         $this->assign('areas', ThemeLayout::getAreas());
         $this->assign('editor_area', $editorArea);
         $this->assign('theme_has_backend', $frontendHasBackend || $backendThemeId > 0);
@@ -241,6 +280,8 @@ class ThemeEditor extends BackendController
 
     public function legacyIndex()
     {
+        $this->useFullscreenEditorLayout();
+
         $requestedThemeId = (int)$this->request->getParam('theme_id', 0);
         $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
         $editorArea = (string)$this->request->getParam('editor_area', 'frontend');
@@ -295,7 +336,7 @@ class ThemeEditor extends BackendController
         if ($themeId) {
             // 检查是否有草稿，如果没有则从已发布数据初始化草稿
             $hasDraft = $this->layoutService->hasDraft($themeId, $pageType);
-            if (!$hasDraft) {
+            if (!$hasDraft && !$this->hasEmptyCurrentRestoreVersion($themeId, $pageType)) {
                 // 首次编辑，从已发布数据初始化草稿
                 $this->layoutService->initDraftFromPublished($themeId, $pageType);
             }
@@ -360,7 +401,9 @@ class ThemeEditor extends BackendController
         }
 
         // 检查是否有草稿，如果没有则从已发布数据初始化
-        if (!$this->layoutService->hasDraft($themeId, $pageType)) {
+        if (!$this->layoutService->hasDraft($themeId, $pageType)
+            && !$this->hasEmptyCurrentRestoreVersion($themeId, $pageType)
+        ) {
             $this->layoutService->initDraftFromPublished($themeId, $pageType);
         }
 
@@ -412,6 +455,8 @@ class ThemeEditor extends BackendController
         $slotId = $this->request->getParam('slot_id', '');
         $area = $this->request->getParam('area', null);
         $pageType = $this->request->getParam('page_type', null);
+        $acceptCodes = $this->normalizeSlotCodeParam($this->request->getParam('accept', []));
+        $rejectCodes = $this->normalizeSlotCodeParam($this->request->getParam('reject', []));
         
         if (empty($slotId)) {
             return $this->fetchJson([
@@ -421,7 +466,7 @@ class ThemeEditor extends BackendController
         }
         
         // 获取精细筛选的部件
-        $result = $this->layoutService->getWidgetsForSlot($slotId, $area, $pageType);
+        $result = $this->layoutService->getWidgetsForSlot($slotId, $area, $pageType, $acceptCodes, $rejectCodes);
         
         // 预编译预览 HTML
         if (!empty($result['exclusive_widgets'])) {
@@ -694,6 +739,8 @@ class ThemeEditor extends BackendController
             }
             
             return $this->fetchJson($response);
+        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
@@ -1318,6 +1365,105 @@ class ThemeEditor extends BackendController
      * 
      * @return array JSON响应
      */
+    public function getLayoutOptions()
+    {
+        return $this->fetchJson($this->getLayoutOptionsPayload());
+    }
+
+    public function getLayoutOptionsPayload(): array
+    {
+        try {
+            $editorArea = $this->resolveRequestedEditorArea(PreviewContextService::AREA_FRONTEND);
+            $layoutType = $this->normalizeLayoutType((string)$this->request->getParam(
+                'layout_type',
+                $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME)
+            ));
+            $requestedLayoutOption = (string)$this->request->getParam('layout_option', '');
+            $scope = (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE);
+            $theme = $this->resolveEditorRequestTheme($editorArea);
+            $layoutOptionsByType = $this->getEditorLayoutOptionsByType($theme, $editorArea);
+            $layoutOption = $this->resolveSelectedLayoutOption(
+                $theme,
+                $editorArea,
+                $layoutType,
+                $layoutOptionsByType,
+                $requestedLayoutOption,
+                $scope
+            );
+
+            return [
+                'success' => true,
+                'data' => [
+                    'theme_id' => (int)$theme->getId(),
+                    'area' => $editorArea,
+                    'scope' => $scope,
+                    'layout_type' => $layoutType,
+                    'layout_option' => $layoutOption,
+                    'layout_options_by_type' => $this->compactEditorLayoutOptions($layoutOptionsByType),
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    public function postSaveLayoutSelection()
+    {
+        return $this->fetchJson($this->saveLayoutSelectionPayload());
+    }
+
+    public function saveLayoutSelectionPayload(): array
+    {
+        try {
+            $payload = $this->getEditorJsonPayload();
+            $editorArea = $this->getPreviewContextService()->normalizeArea(
+                (string)($payload['editor_area'] ?? $payload['preview_area'] ?? PreviewContextService::AREA_FRONTEND),
+                PreviewContextService::AREA_FRONTEND
+            );
+            $layoutType = $this->normalizeLayoutType((string)(
+                $payload['layout_type']
+                ?? $payload['page_type']
+                ?? $this->request->getParam('layout_type', ThemeLayout::PAGE_TYPE_HOME)
+            ));
+            $layoutOption = $this->normalizeLayoutOption((string)($payload['layout_option'] ?? 'default'));
+            $scope = (string)($payload['scope'] ?? $this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE));
+            $theme = $this->resolveEditorRequestTheme($editorArea, (int)($payload['theme_id'] ?? 0));
+            $layoutOptionsByType = $this->getEditorLayoutOptionsByType($theme, $editorArea);
+
+            if (!$this->editorLayoutOptionExists($layoutOptionsByType, $layoutType, $layoutOption)) {
+                throw new \RuntimeException((string)__('Selected layout option is unavailable.'));
+            }
+
+            $effectiveScope = $this->saveEditorLayoutOption($theme, $editorArea, $layoutType, $layoutOption, $scope);
+            ThemeData::clearCache();
+            ControllerFetchFileBefore::clearRuntimeCache();
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+            $this->cacheGenerator->clearCache((int)$theme->getId());
+
+            return [
+                'success' => true,
+                'message' => __('Layout option saved.'),
+                'data' => [
+                    'theme_id' => (int)$theme->getId(),
+                    'area' => $editorArea,
+                    'scope' => $scope,
+                    'effective_scope' => $effectiveScope,
+                    'layout_type' => $layoutType,
+                    'layout_option' => $layoutOption,
+                    'layout_options_by_type' => $this->compactEditorLayoutOptions($layoutOptionsByType),
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
     public function getLayoutConfig()
     {
         return $this->fetchJson($this->getLayoutConfigPayload());
@@ -1429,6 +1575,95 @@ class ThemeEditor extends BackendController
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    public function postAiTranslateConfig()
+    {
+        return $this->fetchJson($this->aiTranslateConfigPayload());
+    }
+
+    public function aiTranslateConfigPayload(): array
+    {
+        try {
+            $payload = $this->getThemeAiRequestPayload();
+            $sourceText = trim((string)($payload['source_text'] ?? ''));
+            if ($sourceText === '') {
+                return [
+                    'success' => false,
+                    'message' => __('缺少源文案。'),
+                ];
+            }
+
+            $sourceLocale = trim((string)($payload['source_locale'] ?? 'zh_Hans_CN')) ?: 'zh_Hans_CN';
+            $targetLocales = $this->normalizeThemeAiLocaleList($payload['target_locales'] ?? []);
+            $targetLocales = array_values(array_filter(
+                $targetLocales,
+                static fn(string $locale): bool => $locale !== '' && $locale !== $sourceLocale
+            ));
+            if ($targetLocales === []) {
+                return [
+                    'success' => false,
+                    'message' => __('缺少目标语言。'),
+                ];
+            }
+
+            if (!function_exists('w_query')) {
+                throw new \RuntimeException((string)__('AI 查询入口不可用。'));
+            }
+
+            $fieldKey = trim((string)($payload['field_key'] ?? ''));
+            $layoutType = trim((string)($payload['layout_type'] ?? ''));
+            $layoutOption = trim((string)($payload['layout_option'] ?? ''));
+            $context = trim((string)($payload['context'] ?? ''));
+            $prompt = $this->buildThemeConfigTranslationPrompt(
+                $sourceText,
+                $sourceLocale,
+                $targetLocales,
+                $fieldKey,
+                $layoutType,
+                $layoutOption,
+                $context
+            );
+
+            $response = w_query('ai', 'generate', [
+                'prompt' => $prompt,
+                'scenario_code' => 'theme',
+                'params' => [
+                    'operation' => 'config_i18n_translate',
+                    'source_locale' => $sourceLocale,
+                    'target_locales' => $targetLocales,
+                    'field_key' => $fieldKey,
+                    'layout_type' => $layoutType,
+                    'layout_option' => $layoutOption,
+                    'context' => $context,
+                    'disable_conversation_history' => true,
+                    'disable_conversation_persist' => true,
+                    'is_backend' => true,
+                ],
+                'is_backend' => true,
+            ]);
+
+            if (!is_string($response)) {
+                $response = json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+            }
+
+            $translations = $this->parseThemeConfigTranslationResponse($response, $targetLocales);
+
+            return [
+                'success' => true,
+                'message' => __('AI翻译已回填'),
+                'data' => [
+                    'source_locale' => $sourceLocale,
+                    'target_locales' => $targetLocales,
+                    'translations' => $translations,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => __('主题配置 AI 翻译失败：%{1}', [$e->getMessage()]),
             ];
         }
     }
@@ -1900,10 +2135,24 @@ class ThemeEditor extends BackendController
         }
 
         $widgetModule = $layoutData['widget_module'] ?? '';
+        $widgetType = (string)($layoutData['widget_type'] ?? '');
         $widgetCode = $layoutData['widget_code'] ?? '';
 
         if (!$widgetModule || !$widgetCode) {
             return null;
+        }
+
+        $previewConfig = array_merge($layoutData['config'] ?? [], $config);
+        $area = (string)($layoutData['area'] ?? 'frontend') ?: 'frontend';
+        if ($widgetModule === 'Weline_Theme' && ($widgetType === 'theme_component' || str_contains($widgetCode, '/'))) {
+            /** @var \Weline\Theme\Service\ThemePlaceableRegistry $placeableRegistry */
+            $placeableRegistry = ObjectManager::getInstance(\Weline\Theme\Service\ThemePlaceableRegistry::class);
+            $html = $placeableRegistry->renderPreview('Weline_Theme', 'theme_component', (string)$widgetCode, $previewConfig, null, $area);
+            if ($html !== '') {
+                return $this->sanitizeWidgetPreviewHtml($html);
+            }
+
+            return '<div class="widget-preview-placeholder">' . htmlspecialchars((string)$widgetCode) . '</div>';
         }
 
         $eventData = [
@@ -1912,8 +2161,8 @@ class ThemeEditor extends BackendController
                 'params' => [
                     'widget_module' => $widgetModule,
                     'widget_code' => $widgetCode,
-                    'config' => array_merge($layoutData['config'] ?? [], $config),
-                    'area' => 'frontend',
+                    'config' => $previewConfig,
+                    'area' => $area,
                 ],
             ],
         ];
@@ -2350,9 +2599,12 @@ class ThemeEditor extends BackendController
                 $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
                 $layoutRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . $layoutType . DS . $layoutOption . '.phtml';
                 $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
+                $templateContextKey = \Weline\Framework\Cache\KeyBuilder::environmentHash(['scope' => 'template-file-map']);
                 w_cache('view')->delete($viewDir . $layoutRel . $langLocal);
                 w_cache('view')->delete($viewDir . $templatePath . '_tplFile' . $langLocal);
                 w_cache('view')->delete($viewDir . $templatePath . '_comFileName' . $langLocal);
+                w_cache('view')->delete($viewDir . $templatePath . '_tplFile|' . $templateContextKey);
+                w_cache('view')->delete($viewDir . $templatePath . '_comFileName|' . $templateContextKey);
             }
         } catch (\Throwable $e) {
             // 忽略，继续 fetch
@@ -2369,9 +2621,12 @@ class ThemeEditor extends BackendController
                     $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
                     $baseRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . 'base.phtml';
                     $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
+                    $templateContextKey = \Weline\Framework\Cache\KeyBuilder::environmentHash(['scope' => 'template-file-map']);
                     w_cache('view')->delete($viewDir . $baseRel . $langLocal);
                     w_cache('view')->delete($viewDir . $basePath . '_tplFile' . $langLocal);
                     w_cache('view')->delete($viewDir . $basePath . '_comFileName' . $langLocal);
+                    w_cache('view')->delete($viewDir . $basePath . '_tplFile|' . $templateContextKey);
+                    w_cache('view')->delete($viewDir . $basePath . '_comFileName|' . $templateContextKey);
                 }
             } catch (\Throwable $e) {
                 // 忽略
@@ -2394,7 +2649,8 @@ class ThemeEditor extends BackendController
     {
         // 使用框架的静态资源获取方法
         $cssUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::css/editor-mode.css');
-        $jsUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
+        $jsSrc = $this->getTemplate()->fetchTagSource('statics', 'Weline_Theme::js/editor-mode.js');
+        $jsUrl = $jsSrc . '?v=20260529-dnd-fallback';
 
         // 编辑模式 CSS
         $editorCss = <<<HTML
@@ -2502,6 +2758,265 @@ HTML;
     /**
      * 判断当前预览主题下是否存在指定布局文件（用于两阶段渲染时是否套 base）
      */
+    private function getEditorJsonPayload(): array
+    {
+        $payload = [];
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams) && trim($bodyParams) !== '') {
+            $decoded = json_decode($bodyParams, true);
+            if (is_array($decoded)) {
+                $payload = $decoded;
+            }
+        } elseif (is_array($bodyParams)) {
+            $payload = $bodyParams;
+        }
+
+        foreach ($this->request->getParams() as $key => $value) {
+            if (!array_key_exists((string)$key, $payload)) {
+                $payload[(string)$key] = $value;
+            }
+        }
+
+        return $payload;
+    }
+
+    private function resolveEditorRequestTheme(string $editorArea, int $explicitThemeId = 0): WelineTheme
+    {
+        $context = $this->persistEditorContext([
+            'frontend_theme_id' => (int)$this->request->getParam('frontend_theme_id', 0),
+            'backend_theme_id' => (int)$this->request->getParam('backend_theme_id', 0),
+            'editor_area' => $editorArea,
+            'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+        ]);
+        $themeId = $explicitThemeId > 0 ? $explicitThemeId : (int)$this->request->getParam('theme_id', 0);
+        if (!$themeId) {
+            $themeId = $this->getPreviewContextService()->getThemeIdForArea($editorArea, $context, true);
+        }
+        if (!$themeId) {
+            throw new \RuntimeException((string)__('Missing theme ID'));
+        }
+
+        $theme = $this->loadThemeModel($themeId);
+        if (!$theme?->getId()) {
+            throw new \RuntimeException((string)__('Theme not found'));
+        }
+
+        return $theme;
+    }
+
+    private function getEditorLayoutOptionsByType(WelineTheme $theme, string $editorArea): array
+    {
+        /** @var ThemeResourceCatalog $catalog */
+        $catalog = ObjectManager::getInstance(ThemeResourceCatalog::class);
+        return $catalog->getLayouts($editorArea, $theme);
+    }
+
+    private function compactEditorLayoutOptions(array $layoutOptionsByType): array
+    {
+        $payload = [];
+        foreach ($layoutOptionsByType as $layoutType => $options) {
+            $layoutType = $this->normalizeLayoutType((string)$layoutType);
+            foreach ((array)$options as $option) {
+                if (!is_array($option)) {
+                    continue;
+                }
+                $value = $this->normalizeLayoutOption((string)($option['value'] ?? ''));
+                if ($value === '') {
+                    continue;
+                }
+                $meta = is_array($option['meta'] ?? null) ? $option['meta'] : [];
+                $label = trim((string)($meta['name'] ?? $meta['title'] ?? ''));
+                if ($label === '') {
+                    $label = $this->humanizeLayoutOption($value);
+                }
+                $description = trim((string)($meta['description'] ?? ''));
+                $payload[$layoutType][] = [
+                    'value' => $value,
+                    'label' => $label,
+                    'description' => $description,
+                    'file' => (string)($option['file'] ?? ''),
+                ];
+            }
+
+            if (!empty($payload[$layoutType])) {
+                usort($payload[$layoutType], static fn(array $left, array $right): int => strcmp(
+                    (string)($left['label'] ?? $left['value'] ?? ''),
+                    (string)($right['label'] ?? $right['value'] ?? '')
+                ));
+            }
+        }
+
+        return $payload;
+    }
+
+    private function mergeLayoutTypesWithEditorOptions(array $pageTypes, array $layoutOptionsByType, string $currentPageType): array
+    {
+        foreach ($layoutOptionsByType as $layoutType => $options) {
+            $layoutType = $this->normalizeLayoutType((string)$layoutType);
+            if ($layoutType === '' || isset($pageTypes[$layoutType])) {
+                continue;
+            }
+
+            $pageTypes[$layoutType] = $this->humanizeLayoutType($layoutType);
+        }
+
+        if (!isset($pageTypes[$currentPageType])) {
+            $pageTypes[$currentPageType] = $this->humanizeLayoutType($currentPageType);
+        }
+
+        return $pageTypes;
+    }
+
+    private function resolveSelectedLayoutOption(
+        WelineTheme $theme,
+        string $editorArea,
+        string $layoutType,
+        array $layoutOptionsByType,
+        string $requestedLayoutOption = '',
+        string $scope = PreviewContextService::DEFAULT_SCOPE
+    ): string {
+        $layoutType = $this->normalizeLayoutType($layoutType);
+        $requestedLayoutOption = $this->normalizeLayoutOption($requestedLayoutOption);
+        if ($requestedLayoutOption !== '' && $this->editorLayoutOptionExists($layoutOptionsByType, $layoutType, $requestedLayoutOption)) {
+            return $requestedLayoutOption;
+        }
+
+        $savedLayoutOption = $this->getSavedLayoutOption($theme, $editorArea, $layoutType, $scope);
+        if ($savedLayoutOption !== '' && $this->editorLayoutOptionExists($layoutOptionsByType, $layoutType, $savedLayoutOption)) {
+            return $savedLayoutOption;
+        }
+
+        if ($this->editorLayoutOptionExists($layoutOptionsByType, $layoutType, 'default')) {
+            return 'default';
+        }
+
+        $options = $layoutOptionsByType[$layoutType] ?? [];
+        foreach ($options as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $value = $this->normalizeLayoutOption((string)($option['value'] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return $requestedLayoutOption !== '' ? $requestedLayoutOption : 'default';
+    }
+
+    private function editorLayoutOptionExists(array $layoutOptionsByType, string $layoutType, string $layoutOption): bool
+    {
+        $layoutType = $this->normalizeLayoutType($layoutType);
+        $layoutOption = $this->normalizeLayoutOption($layoutOption);
+        if ($layoutType === '' || $layoutOption === '') {
+            return false;
+        }
+
+        foreach (($layoutOptionsByType[$layoutType] ?? []) as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            if ($this->normalizeLayoutOption((string)($option['value'] ?? '')) === $layoutOption) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function getSavedLayoutOption(WelineTheme $theme, string $editorArea, string $layoutType, string $scope): string
+    {
+        $value = $this->readEditorLayoutOption($theme, $editorArea, $layoutType, $scope);
+        return is_scalar($value) ? $this->normalizeLayoutOption((string)$value) : '';
+    }
+
+    private function saveEditorLayoutOption(
+        WelineTheme $theme,
+        string $editorArea,
+        string $layoutType,
+        string $layoutOption,
+        string $scope
+    ): string {
+        $editorArea = $this->getPreviewContextService()->normalizeArea($editorArea, PreviewContextService::AREA_FRONTEND);
+        $layoutType = $this->normalizeLayoutType($layoutType);
+        $layoutOption = $this->normalizeLayoutOption($layoutOption);
+        $effectiveScope = $this->resolveEditorEffectiveScope($theme, $editorArea, $scope);
+
+        /** @var MetaConfig $metaConfig */
+        $metaConfig = ObjectManager::getInstance(MetaConfig::class);
+        $metaConfig->clearData()->clearQuery()->setConfig(
+            (string)$theme->getId(),
+            'theme.' . $editorArea,
+            'layouts.' . $layoutType . '.value',
+            $layoutOption,
+            $effectiveScope,
+            null,
+            null,
+            'theme.' . $editorArea . '.layouts.' . $layoutType
+        );
+
+        return $effectiveScope;
+    }
+
+    private function readEditorLayoutOption(
+        WelineTheme $theme,
+        string $editorArea,
+        string $layoutType,
+        string $scope
+    ): ?string {
+        $editorArea = $this->getPreviewContextService()->normalizeArea($editorArea, PreviewContextService::AREA_FRONTEND);
+        $layoutType = $this->normalizeLayoutType($layoutType);
+        $effectiveScope = $this->resolveEditorEffectiveScope($theme, $editorArea, $scope);
+
+        /** @var MetaConfig $metaConfig */
+        $metaConfig = ObjectManager::getInstance(MetaConfig::class);
+        return $metaConfig->clearData()->clearQuery()->getConfig(
+            (string)$theme->getId(),
+            'theme.' . $editorArea,
+            'layouts.' . $layoutType . '.value',
+            $effectiveScope,
+            null
+        );
+    }
+
+    private function resolveEditorEffectiveScope(WelineTheme $theme, string $editorArea, string $scope): string
+    {
+        $scope = trim($scope) !== '' ? trim($scope) : PreviewContextService::DEFAULT_SCOPE;
+
+        try {
+            /** @var PreviewThemeScopeService $previewThemeScopeService */
+            $previewThemeScopeService = ObjectManager::getInstance(PreviewThemeScopeService::class);
+            return $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $editorArea, $scope);
+        } catch (\Throwable) {
+            return $scope;
+        }
+    }
+
+    private function normalizeLayoutType(string $layoutType): string
+    {
+        $layoutType = trim(str_replace('\\', '/', $layoutType), '/ ');
+        return $layoutType !== '' ? $layoutType : ThemeLayout::PAGE_TYPE_HOME;
+    }
+
+    private function normalizeLayoutOption(string $layoutOption): string
+    {
+        return trim(str_replace('\\', '/', $layoutOption), '/ ');
+    }
+
+    private function humanizeLayoutType(string $layoutType): string
+    {
+        return ucwords(str_replace(['_', '-', '/'], ' ', $layoutType));
+    }
+
+    private function humanizeLayoutOption(string $layoutOption): string
+    {
+        if ($layoutOption === 'default') {
+            return (string)__('Default');
+        }
+
+        return ucwords(str_replace(['_', '-', '/'], ' ', $layoutOption));
+    }
+
     private function resolveLayoutConfigContext(): array
     {
         $previewContextService = $this->getPreviewContextService();
@@ -2620,6 +3135,142 @@ HTML;
         $this->getEventManager()->dispatch('Weline_I18n::query', $eventData);
         $locales = $eventData['data']['result'] ?? [];
         return is_array($locales) ? $locales : [];
+    }
+
+    private function getThemeAiRequestPayload(): array
+    {
+        $keys = [
+            'source_text',
+            'source_locale',
+            'target_locales',
+            'field_key',
+            'layout_type',
+            'layout_option',
+            'context',
+        ];
+        $payload = [];
+        foreach ($keys as $key) {
+            $payload[$key] = $this->request->getParam($key, null);
+        }
+
+        $rawBody = file_get_contents('php://input');
+        if (is_string($rawBody) && trim($rawBody) !== '') {
+            $decoded = json_decode($rawBody, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $key => $value) {
+                    if (!array_key_exists((string)$key, $payload) || $payload[(string)$key] === null) {
+                        $payload[(string)$key] = $value;
+                    }
+                }
+            }
+        }
+
+        return $payload;
+    }
+
+    private function normalizeThemeAiLocaleList(mixed $value): array
+    {
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return [];
+            }
+            $decoded = json_decode($trimmed, true);
+            if (is_array($decoded)) {
+                $value = $decoded;
+            } else {
+                $value = preg_split('/\s*,\s*/', $trimmed) ?: [];
+            }
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $locales = [];
+        foreach ($value as $locale) {
+            if (!is_scalar($locale)) {
+                continue;
+            }
+            $locale = trim((string)$locale);
+            if ($locale !== '') {
+                $locales[$locale] = $locale;
+            }
+        }
+
+        return array_values($locales);
+    }
+
+    private function buildThemeConfigTranslationPrompt(
+        string $sourceText,
+        string $sourceLocale,
+        array $targetLocales,
+        string $fieldKey,
+        string $layoutType,
+        string $layoutOption,
+        string $context
+    ): string {
+        $targetJson = json_encode(array_values($targetLocales), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+        $fieldLine = $fieldKey !== '' ? "字段路径：{$fieldKey}\n" : '';
+        $layoutLine = $layoutType !== '' ? "布局类型：{$layoutType}\n" : '';
+        $optionLine = $layoutOption !== '' ? "布局选项：{$layoutOption}\n" : '';
+        $contextLine = $context !== '' ? "业务上下文：{$context}\n" : '';
+
+        return "你是 Weline 主题可视化编辑器的配置翻译助手。\n"
+            . "请把源文案翻译成目标语言，并且只返回一个 JSON 对象。\n"
+            . "源语言：{$sourceLocale}\n"
+            . "目标语言：{$targetJson}\n"
+            . $fieldLine
+            . $layoutLine
+            . $optionLine
+            . $contextLine
+            . "规则：\n"
+            . "1. JSON key 必须严格等于每个目标语言 code。\n"
+            . "2. JSON value 必须是翻译后的字符串。\n"
+            . "3. 保留 HTML 标签、属性、URL、id、class、数字、变量占位符、模板表达式和配置 token。\n"
+            . "4. 只翻译用户可读文本，不输出解释、Markdown 或代码块。\n"
+            . "源文案：\n<<<SOURCE\n{$sourceText}\nSOURCE\n";
+    }
+
+    private function parseThemeConfigTranslationResponse(string $response, array $targetLocales): array
+    {
+        $json = $this->extractThemeConfigTranslationJson($response);
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            throw new \RuntimeException((string)__('AI 翻译未返回有效 JSON。'));
+        }
+
+        $translations = [];
+        foreach ($targetLocales as $locale) {
+            if (!array_key_exists($locale, $decoded) || !is_scalar($decoded[$locale])) {
+                continue;
+            }
+            $translations[$locale] = (string)$decoded[$locale];
+        }
+
+        if ($translations === []) {
+            throw new \RuntimeException((string)__('AI 翻译未返回目标语言结果。'));
+        }
+
+        return $translations;
+    }
+
+    private function extractThemeConfigTranslationJson(string $response): string
+    {
+        $text = trim($response);
+        if (str_starts_with($text, '```')) {
+            $text = preg_replace('/^```[a-zA-Z0-9_-]*\s*/', '', $text) ?? $text;
+            $text = preg_replace('/\s*```$/', '', $text) ?? $text;
+            $text = trim($text);
+        }
+
+        $start = strpos($text, '{');
+        $end = strrpos($text, '}');
+        if ($start !== false && $end !== false && $end >= $start) {
+            return substr($text, $start, $end - $start + 1);
+        }
+
+        return $text;
     }
 
     private function resolveThemeLayoutFilePath(int $themeId, string $editorArea, string $layoutType, string $layoutOption = 'default'): string
@@ -2746,14 +3397,12 @@ HTML;
             }
 
             $this->clearVersionPreviewCaches($themeId);
-            $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType);
             $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType);
 
             return [
                 'success' => true,
                 'message' => __('Restored selected version'),
                 'data' => [
-                    'layout' => $layout,
                     'current_version_id' => $currentVersion?->getVersionId(),
                     'version' => $currentVersion?->toArray(),
                 ],
@@ -2800,6 +3449,27 @@ HTML;
                 'message' => $e->getMessage(),
             ];
         }
+    }
+
+    private function hasEmptyCurrentRestoreVersion(int $themeId, string $pageType): bool
+    {
+        $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType);
+        if (!$currentVersion?->isRestoreType()) {
+            return false;
+        }
+
+        return !$this->layoutSnapshotHasWidgets($currentVersion->getSnapshotData());
+    }
+
+    private function layoutSnapshotHasWidgets(array $layout): bool
+    {
+        foreach ($layout as $areaData) {
+            if (is_array($areaData) && !empty($areaData['widgets'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function publishVersionPayload(): array
@@ -3588,6 +4258,7 @@ HTML;
         }
 
         $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+        $layoutOption = (string)($data['layout_option'] ?? $this->request->getParam('layout_option', 'default'));
         $frontendThemeId = (int)($data['frontend_theme_id'] ?? $data['theme_id'] ?? $this->request->getParam('frontend_theme_id', $this->request->getParam('theme_id', 0)));
         if (!$frontendThemeId) {
             return $this->fetchJson([
@@ -3625,7 +4296,7 @@ HTML;
                 'message' => __('Preview started'),
                 'data' => [
                     'token' => $token,
-                    'preview_url' => $this->buildFrontendPreviewUrl($context, $pageType),
+                    'preview_url' => $this->buildFrontendPreviewUrl($context, $pageType, $layoutOption),
                     'context' => $context,
                     'expires_in' => 3600,
                 ],
@@ -4183,7 +4854,7 @@ HTML;
         return $this->getPreviewContextService()->normalizeArea($rawPreviewArea, $default);
     }
 
-    private function buildFrontendPreviewUrl(array $context, string $pageType): string
+    private function buildFrontendPreviewUrl(array $context, string $pageType, string $layoutOption = 'default'): string
     {
         $context = $this->getPreviewContextService()->buildContext(\array_replace($context, [
             'editor_area' => PreviewContextService::AREA_FRONTEND,
@@ -4194,7 +4865,7 @@ HTML;
         $params = $this->getPreviewContextService()->toQueryParams($context);
         $params['page_type'] = $pageType;
         $params['layout_type'] = $pageType;
-        $params['layout_option'] = 'default';
+        $params['layout_option'] = $this->normalizeLayoutOption($layoutOption) ?: 'default';
         $params['_t'] = \time();
 
         return $this->_url->getFrontendUrl(
@@ -4453,5 +5124,32 @@ HTML;
         $result = $this->editorLockService->forceTakeover($themeId, $pageType, $userId, $userName);
 
         return $this->fetchJson($result);
+    }
+
+    private function normalizeSlotCodeParam(mixed $value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                $value = $decoded;
+            } else {
+                $value = explode(',', $value);
+            }
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $codes = [];
+        foreach ($value as $item) {
+            $code = strtolower(trim((string)$item));
+            if ($code === '') {
+                continue;
+            }
+            $codes[$code] = $code;
+        }
+
+        return array_values($codes);
     }
 }

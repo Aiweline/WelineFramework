@@ -48,4 +48,14 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             $resolver->resolveLayoutTypeFromUri('/customer/account')
         );
     }
+
+    public function testUnknownLayoutTypeMapsToItselfForDynamicThemeLayouts(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+
+        $this->assertSame(
+            'e2e_custom_layout',
+            $resolver->mapLayoutTypeToPageType('e2e_custom_layout')
+        );
+    }
 }

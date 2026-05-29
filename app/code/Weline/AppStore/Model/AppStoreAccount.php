@@ -35,6 +35,7 @@ class AppStoreAccount extends Model
     #[Col(type: 'varchar', length: 100, nullable: true, comment: '平台用户名')]
     public const schema_fields_platform_username = 'platform_username';
 
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '绑定终端域名')]
     public const schema_fields_bound_domain = 'bound_domain';
 
     #[Col(type: 'varchar', length: 20, nullable: false, default: self::STATUS_ACTIVE, comment: '绑定状态')]

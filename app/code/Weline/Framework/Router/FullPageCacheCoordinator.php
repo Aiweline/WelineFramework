@@ -46,7 +46,7 @@ final class FullPageCacheCoordinator
     private const DEFAULT_LANG = 'zh_Hans_CN';
     private const DEFAULT_CURRENCY = 'CNY';
     private const VARIANT_PAYLOAD_KEY = 'fpc_variant';
-    private const FPC_CACHE_SCHEMA_VERSION = '20260524-mini-cart-state';
+    private const FPC_CACHE_SCHEMA_VERSION = '20260528-locale-currency-context-manifest-safe';
 
     /**
      * @var array<string, bool>
@@ -1633,6 +1633,8 @@ final class FullPageCacheCoordinator
             'router',
             self::SCHEMA_NEUTRAL_STALE_CACHE_PREFIX
             . $fullUri
+            . ':'
+            . self::FPC_CACHE_SCHEMA_VERSION
             . ':'
             . $this->variantSuffixWithoutSchema($variant)
             . ':'

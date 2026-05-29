@@ -822,9 +822,10 @@ class AiGenerate extends BackendController
      */
     private function resolveAiSiteContentLocale(array $scope, array $websiteProfile, array $componentConfig = [], string $pageType = ''): string
     {
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
         $planI18n = \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [];
+        $buildPlanI18n = \is_array($buildPlan['i18n'] ?? null) ? $buildPlan['i18n'] : [];
         $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
         $virtualPagesByType = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         $pagebuilderPagesByType = \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [];
@@ -843,7 +844,8 @@ class AiGenerate extends BackendController
             $pagebuilderPage['locale'] ?? null,
             $scope['content_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
-            $executionBlueprint['content_locale'] ?? null,
+            $buildPlan['content_locale'] ?? null,
+            $buildPlanI18n['primary_locale'] ?? null,
             $planJson['content_locale'] ?? null,
             $planI18n['content_locale'] ?? null,
             $planI18n['primary_locale'] ?? null,

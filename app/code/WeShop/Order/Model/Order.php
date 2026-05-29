@@ -29,6 +29,8 @@ class Order extends Model
     public const schema_fields_discount_amount = 'discount_amount';
     #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: 'Tax amount')]
     public const schema_fields_tax_amount = 'tax_amount';
+    #[Col(type: 'varchar', length: 8, nullable: true, default: '', comment: 'Order currency code at checkout')]
+    public const schema_fields_currency_code = 'currency_code';
     #[Col(type: 'varchar', length: 32, nullable: true, default: 'pending', comment: 'Payment status')]
     public const schema_fields_payment_status = 'payment_status';
     #[Col(type: 'varchar', length: 32, nullable: true, default: 'pending', comment: 'Fulfillment status')]
@@ -57,5 +59,5 @@ class Order extends Model
     public const schema_fields_updated_at = 'updated_at';
     public string $indexer = 'order_indexer';
     public array $_unit_primary_keys = ['order_id'];
-    public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'payment_status', 'fulfillment_status', 'total', 'subtotal', 'created_at'];
+    public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'payment_status', 'fulfillment_status', 'currency_code', 'total', 'subtotal', 'created_at'];
 }

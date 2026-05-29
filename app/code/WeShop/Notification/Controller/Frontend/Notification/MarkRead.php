@@ -26,7 +26,7 @@ class MarkRead extends FrontendController
         if ($customerId <= 0) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Please log in to continue.'),
+                'message' => __('请先登录后再继续。'),
                 'data' => [
                     'redirect_url' => $this->url->getUrl(self::LOGIN_ROUTE),
                 ],
@@ -37,7 +37,7 @@ class MarkRead extends FrontendController
         if ($notificationId <= 0) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Notification ID is required.'),
+                'message' => __('通知ID不能为空。'),
             ]);
         }
 
@@ -45,13 +45,13 @@ class MarkRead extends FrontendController
         if (!$marked) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Notification could not be marked as read.'),
+                'message' => __('通知标记已读失败。'),
             ]);
         }
 
         return $this->fetchJson([
             'success' => true,
-            'message' => __('Notification marked as read.'),
+            'message' => __('通知已标记为已读。'),
             'data' => [
                 'notification_id' => $notificationId,
                 'unread_count' => $this->notificationService->getUnreadCount($customerId),

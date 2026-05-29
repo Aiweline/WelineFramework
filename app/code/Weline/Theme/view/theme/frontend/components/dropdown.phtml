@@ -19,16 +19,16 @@ $position = $this->getData('position') ?? 'left';
 $class = $this->getData('class') ?? '';
 
 // 构建CSS类
-$dropdownClass = 'dropdown';
+$dropdownClass = 'w-dropdown dropdown';
 if ($position === 'right') {
-    $dropdownClass .= ' dropdown-right';
+    $dropdownClass .= ' w-dropdown-right dropdown-right';
 }
 if ($class) {
     $dropdownClass .= ' ' . htmlspecialchars($class);
 }
 ?>
 <div class="<?= $dropdownClass ?>">
-    <button class="btn dropdown-toggle" 
+    <button class="w-btn w-btn-secondary w-dropdown-toggle dropdown-toggle"
             type="button" 
             id="<?= htmlspecialchars($id) ?>" 
             data-toggle="dropdown" 
@@ -36,14 +36,14 @@ if ($class) {
             aria-expanded="false">
         {{trigger}}
     </button>
-    <div class="dropdown-menu" aria-labelledby="<?= htmlspecialchars($id) ?>">
+    <div class="w-dropdown-menu dropdown-menu" aria-labelledby="<?= htmlspecialchars($id) ?>">
         <?php foreach ($items as $item): ?>
             <?php if (isset($item['divider']) && $item['divider']): ?>
-                <div class="dropdown-divider"></div>
+                <div class="w-dropdown-divider dropdown-divider"></div>
             <?php elseif (isset($item['header'])): ?>
-                <h6 class="dropdown-header"><?= htmlspecialchars($item['header']) ?></h6>
+                <h6 class="w-dropdown-header dropdown-header"><?= htmlspecialchars($item['header']) ?></h6>
             <?php else: ?>
-                <a class="dropdown-item" 
+                <a class="w-dropdown-item dropdown-item"
                    href="<?= htmlspecialchars($item['url'] ?? '#') ?>"
                    <?= isset($item['onclick']) ? 'onclick="' . htmlspecialchars($item['onclick']) . '"' : '' ?>>
                     <?php if (isset($item['icon'])): ?>

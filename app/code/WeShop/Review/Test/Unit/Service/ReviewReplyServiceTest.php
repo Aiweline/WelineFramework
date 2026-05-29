@@ -10,7 +10,6 @@ use WeShop\Notification\Service\NotificationService;
 use WeShop\Review\Model\Review;
 use WeShop\Review\Model\ReviewReply;
 use WeShop\Review\Service\ReviewReplyService;
-use WeShop\Review\Service\ReviewService;
 use Weline\Framework\Http\Url;
 
 class ReviewReplyServiceTest extends TestCase
@@ -68,12 +67,12 @@ class ReviewReplyServiceTest extends TestCase
         $url = $this->createMock(Url::class);
         $url->expects($this->once())
             ->method('getUrl')
-            ->with(ReviewService::FRONTEND_ROUTE, [
-                'product_id' => 661,
+            ->with('product/view', [
+                'id' => 661,
                 'review_id' => 101,
                 'reply_id' => 555,
             ])
-            ->willReturn('/review/frontend/review?product_id=661&review_id=101&reply_id=555');
+            ->willReturn('/product/view?id=661&review_id=101&reply_id=555');
 
         $review = $this->createMock(Review::class);
         $review->method('getId')->willReturn(101);
@@ -109,6 +108,6 @@ class ReviewReplyServiceTest extends TestCase
 
         $this->assertSame([9, 10, 11], array_column($sent, 'customer_id'));
         $this->assertSame(['review_reply', 'review_reply', 'review_reply'], array_column($sent, 'type'));
-        $this->assertSame('/review/frontend/review?product_id=661&review_id=101&reply_id=555#review-reply-555', $sent[0]['target_url']);
+        $this->assertSame('/product/view?id=661&review_id=101&reply_id=555#review-reply-555', $sent[0]['target_url']);
     }
 }

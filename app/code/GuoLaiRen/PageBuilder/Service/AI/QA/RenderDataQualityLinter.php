@@ -7,51 +7,41 @@ namespace GuoLaiRen\PageBuilder\Service\AI\QA;
 final class RenderDataQualityLinter
 {
     /**
+     * Validate only render-data structure. Copy, SEO, locale, style, and
+     * aesthetic judgments are intentionally left to AI prompt quality and
+     * product review instead of hardcoded gates.
+     *
      * @param array<string, mixed> $renderDataContract
      * @return list<array<string, mixed>>
      */
     public function lint(array $renderDataContract): array
     {
         $payload = \is_array($renderDataContract['payload'] ?? null) ? $renderDataContract['payload'] : $renderDataContract;
-        $findings = [];
-
-        foreach ($this->lintDesign($payload) as $finding) {
-            $findings[] = $finding;
-        }
-        foreach ($this->lintCopy($payload) as $finding) {
-            $findings[] = $finding;
-        }
-        foreach ($this->lintSeo($payload) as $finding) {
-            $findings[] = $finding;
-        }
-
-        return $findings;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @return list<array<string, mixed>>
-     */
-    private function lintDesign(array $payload): array
-    {
         $layouts = \is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [];
         if ($layouts === []) {
             return [
-                $this->finding('error', 'design', 'design.missing_page_layouts', 'Build render data has no page layout output.', 'payload.page_type_layouts'),
+                $this->finding('error', 'structure', 'structure.missing_page_layouts', 'Build render data has no page layout output.', 'payload.page_type_layouts'),
             ];
         }
 
         $findings = [];
         foreach ($layouts as $pageType => $layout) {
             if (!\is_array($layout)) {
+                $findings[] = $this->finding(
+                    'error',
+                    'structure',
+                    'structure.invalid_page_layout',
+                    'Page layout must be an object.',
+                    'payload.page_type_layouts.' . (string)$pageType
+                );
                 continue;
             }
             $blocks = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
             if ($blocks === []) {
                 $findings[] = $this->finding(
                     'error',
-                    'design',
-                    'design.empty_page_layout',
+                    'structure',
+                    'structure.empty_page_layout',
                     'Page layout has no rendered sections.',
                     'payload.page_type_layouts.' . (string)$pageType . '.content'
                 );
@@ -59,24 +49,22 @@ final class RenderDataQualityLinter
             }
             foreach ($blocks as $index => $block) {
                 if (!\is_array($block)) {
+                    $findings[] = $this->finding(
+                        'error',
+                        'structure',
+                        'structure.invalid_section',
+                        'Section must be an object.',
+                        'payload.page_type_layouts.' . (string)$pageType . '.content.' . (string)$index
+                    );
                     continue;
                 }
                 $path = 'payload.page_type_layouts.' . (string)$pageType . '.content.' . (string)$index;
                 if ($this->firstNonEmptyString([$block['code'] ?? null, $block['component'] ?? null, $block['template'] ?? null]) === '') {
                     $findings[] = $this->finding(
                         'error',
-                        'design',
-                        'design.missing_section_identity',
+                        'structure',
+                        'structure.missing_section_identity',
                         'Section is missing a code/component identity.',
-                        $path
-                    );
-                }
-                if (!$this->hasDesignSignal($block)) {
-                    $findings[] = $this->finding(
-                        'warning',
-                        'design',
-                        'design.missing_design_tokens',
-                        'Section is missing design tokens, style plan, or design tags for visual QA.',
                         $path
                     );
                 }
@@ -84,8 +72,8 @@ final class RenderDataQualityLinter
                 if ($htmlStructureReason !== null) {
                     $findings[] = $this->finding(
                         'error',
-                        'design',
-                        'design.malformed_html_structure',
+                        'structure',
+                        'structure.malformed_html',
                         'Section HTML has malformed tags or unbalanced structure: ' . $htmlStructureReason,
                         $path
                     );
@@ -94,146 +82,6 @@ final class RenderDataQualityLinter
         }
 
         return $findings;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @return list<array<string, mixed>>
-     */
-    private function lintCopy(array $payload): array
-    {
-        $findings = [];
-        $expectedLocale = $this->resolveExpectedLocale($payload);
-        foreach ($this->iterBlocks($payload) as $entry) {
-            $text = $this->extractVisibleText($entry['block']);
-            if ($text === '') {
-                $findings[] = $this->finding(
-                    'warning',
-                    'copy',
-                    'copy.empty_visible_copy',
-                    'Section has no visible copy for visitors.',
-                    $entry['path']
-                );
-                continue;
-            }
-            if ($this->isGenericCopy($text)) {
-                $findings[] = $this->finding(
-                    'warning',
-                    'copy',
-                    'copy.generic_or_placeholder',
-                    'Section copy looks generic, placeholder-like, or internal-instruction-like.',
-                    $entry['path']
-                );
-            }
-            if ($this->hasLocaleMismatch($text, $expectedLocale)) {
-                $findings[] = $this->finding(
-                    'error',
-                    'copy',
-                    'copy.locale_mismatch',
-                    'Section copy contains non-target-language planning or block-goal text.',
-                    $entry['path']
-                );
-            }
-        }
-
-        return $findings;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @return list<array<string, mixed>>
-     */
-    private function lintSeo(array $payload): array
-    {
-        $layouts = \is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [];
-        $pages = \is_array($payload['materialized_pages_by_type'] ?? null) ? $payload['materialized_pages_by_type'] : [];
-        $findings = [];
-
-        foreach ($layouts as $pageType => $layout) {
-            $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-            $layout = \is_array($layout) ? $layout : [];
-            $seo = \is_array($page['seo'] ?? null) ? $page['seo'] : (\is_array($layout['seo'] ?? null) ? $layout['seo'] : []);
-            $title = $this->firstNonEmptyString([
-                $seo['title'] ?? null,
-                $page['seo_title'] ?? null,
-                $page['meta_title'] ?? null,
-                $layout['seo_title'] ?? null,
-                $layout['title'] ?? null,
-            ]);
-            $description = $this->firstNonEmptyString([
-                $seo['description'] ?? null,
-                $page['seo_description'] ?? null,
-                $page['meta_description'] ?? null,
-                $layout['seo_description'] ?? null,
-                $layout['description'] ?? null,
-            ]);
-            $h1 = $this->firstNonEmptyString([
-                $page['h1'] ?? null,
-                $layout['h1'] ?? null,
-                $layout['headline'] ?? null,
-                $layout['title'] ?? null,
-            ]);
-
-            $basePath = 'payload.materialized_pages_by_type.' . (string)$pageType;
-            if ($title === '') {
-                $findings[] = $this->finding('warning', 'seo', 'seo.missing_title', 'Page is missing SEO title metadata.', $basePath . '.seo_title');
-            } elseif (\mb_strlen($title) < 8) {
-                $findings[] = $this->finding('warning', 'seo', 'seo.short_title', 'SEO title is too short to describe the page intent.', $basePath . '.seo_title');
-            }
-            if ($description === '') {
-                $findings[] = $this->finding('warning', 'seo', 'seo.missing_description', 'Page is missing SEO description metadata.', $basePath . '.seo_description');
-            } elseif (\mb_strlen($description) < 24) {
-                $findings[] = $this->finding('warning', 'seo', 'seo.short_description', 'SEO description is too short to summarize the page.', $basePath . '.seo_description');
-            }
-            if ($h1 === '') {
-                $findings[] = $this->finding('warning', 'seo', 'seo.missing_h1', 'Page is missing a visible H1/headline signal.', 'payload.page_type_layouts.' . (string)$pageType . '.h1');
-            }
-        }
-
-        return $findings;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @return list<array{path:string,block:array<string,mixed>}>
-     */
-    private function iterBlocks(array $payload): array
-    {
-        $layouts = \is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [];
-        $entries = [];
-        foreach ($layouts as $pageType => $layout) {
-            if (!\is_array($layout)) {
-                continue;
-            }
-            foreach (\is_array($layout['content'] ?? null) ? $layout['content'] : [] as $index => $block) {
-                if (!\is_array($block)) {
-                    continue;
-                }
-                $entries[] = [
-                    'path' => 'payload.page_type_layouts.' . (string)$pageType . '.content.' . (string)$index,
-                    'block' => $block,
-                ];
-            }
-        }
-
-        return $entries;
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     */
-    private function hasDesignSignal(array $block): bool
-    {
-        foreach (['design_tokens', 'design_tags', 'style_plan', 'style_tokens', 'section_style', 'styles', 'style'] as $key) {
-            if (\is_array($block[$key] ?? null) && $block[$key] !== []) {
-                return true;
-            }
-            if (\is_string($block[$key] ?? null) && \trim((string)$block[$key]) !== '') {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -358,151 +206,6 @@ final class RenderDataQualityLinter
         }
 
         return null;
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     */
-    private function extractVisibleText(array $block): string
-    {
-        $parts = [];
-        foreach (['title', 'heading', 'headline', 'subtitle', 'description', 'copy', 'text', 'html'] as $key) {
-            $value = $block[$key] ?? null;
-            if (\is_scalar($value)) {
-                $text = \trim(\strip_tags((string)$value));
-                if ($text !== '') {
-                    $parts[] = $text;
-                }
-            }
-        }
-        foreach (['fields', 'content', 'config', 'default_config', 'realtime_content'] as $key) {
-            if (\is_array($block[$key] ?? null)) {
-                $this->collectTextLeaves($block[$key], $parts, 6, \in_array($key, ['config', 'default_config'], true));
-            }
-        }
-
-        return \trim(\implode(' ', \array_unique($parts)));
-    }
-
-    /**
-     * @param array<int|string, mixed> $source
-     * @param list<string> $parts
-     */
-    private function collectTextLeaves(array $source, array &$parts, int $depth, bool $visibleConfigOnly = false, string $path = ''): void
-    {
-        if ($depth <= 0) {
-            return;
-        }
-        foreach ($source as $key => $value) {
-            $key = \is_int($key) ? (string)$key : \trim((string)$key);
-            $nextPath = $path === '' ? $key : $path . '.' . $key;
-            if ($visibleConfigOnly && $this->isInternalConfigPath($nextPath)) {
-                continue;
-            }
-            if (\is_scalar($value)) {
-                if ($visibleConfigOnly && !$this->isVisibleConfigTextPath($nextPath)) {
-                    continue;
-                }
-                $text = \trim(\strip_tags((string)$value));
-                if ($text !== '') {
-                    $parts[] = $text;
-                }
-                continue;
-            }
-            if (\is_array($value)) {
-                $this->collectTextLeaves($value, $parts, $depth - 1, $visibleConfigOnly, $nextPath);
-            }
-        }
-    }
-
-    private function isInternalConfigPath(string $path): bool
-    {
-        $path = \strtolower($path);
-
-        return \preg_match('/(?:^|\.)(runtime|contract|style|layout|design_tokens|design_tags|visual_signature|image_intent|css_extra|css_responsive|js_content)(?:\.|$)/', $path) === 1;
-    }
-
-    private function isVisibleConfigTextPath(string $path): bool
-    {
-        $path = \strtolower($path);
-        if (\preg_match('/(?:^|\.)(url|href|src|image_url|logo|color|font|shadow|padding|margin|width|height)(?:\.|$)/', $path) === 1) {
-            return false;
-        }
-
-        return \preg_match('/(?:^|\.)(title|heading|headline|subtitle|description|summary|body|copy|text|section_intro|button_text|cta_text|label|alt|aria-label|aria_label|placeholder|html|html_content|html_extra|html_extra_column)$/', $path) === 1;
-    }
-
-    private function isGenericCopy(string $text): bool
-    {
-        $normalized = \mb_strtolower($text);
-        foreach ([
-            'lorem ipsum',
-            'click here',
-            'learn more',
-            'welcome to our website',
-            'coming soon',
-            'todo',
-            'tbd',
-            'write the',
-            'fill in',
-            'placeholder',
-            '待补充',
-            '点击这里',
-            '了解更多',
-            '欢迎来到',
-            '这里会展示',
-            '围绕',
-            '突出卖点',
-        ] as $marker) {
-            if (\str_contains($normalized, \mb_strtolower($marker))) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function resolveExpectedLocale(array $payload): string
-    {
-        foreach ([
-            $payload['content_locale'] ?? null,
-            $payload['default_locale'] ?? null,
-            $payload['locale'] ?? null,
-            $payload['i18n']['primary_locale'] ?? null,
-            $payload['website_profile']['content_locale'] ?? null,
-            $payload['website_profile']['default_locale'] ?? null,
-            $payload['website_profile']['locale'] ?? null,
-        ] as $candidate) {
-            if (!\is_scalar($candidate)) {
-                continue;
-            }
-            $locale = \trim((string)$candidate);
-            if ($locale !== '') {
-                return \strtolower(\str_replace('_', '-', $locale));
-            }
-        }
-
-        return '';
-    }
-
-    private function hasLocaleMismatch(string $text, string $expectedLocale): bool
-    {
-        if ($expectedLocale === '') {
-            return false;
-        }
-        if ($this->isCjkLocale($expectedLocale)) {
-            return false;
-        }
-
-        return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $text) === 1;
-    }
-
-    private function isCjkLocale(string $locale): bool
-    {
-        return \preg_match('/^(zh|ja|ko)(?:-|$)/i', $locale) === 1;
     }
 
     /**

@@ -193,6 +193,68 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         self::assertStringNotContainsString("\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}", (string)\json_encode($config, \JSON_UNESCAPED_UNICODE));
     }
 
+    public function testConfirmedPlanContentLocaleOverridesStaleWebsiteDefaultForSharedDefaults(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $config = (function (array $websiteProfile, array $scope, string $siteDisplayName): array {
+            return $this->buildFooterDefaultConfig($websiteProfile, $scope, $siteDisplayName);
+        })->call(
+            $service,
+            [
+                'site_title' => "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}",
+                'content_locale' => 'en_US',
+                'default_locale' => 'en_US',
+            ],
+            [
+                'content_locale' => 'en_US',
+                'default_locale' => 'en_US',
+                'plan_json' => [
+                    'content_locale' => 'zh_Hans_CN',
+                    'stage1_contract' => ['content_locale' => 'zh_Hans_CN'],
+                ],
+                'page_types' => ['home_page', 'contact_page', 'privacy_policy'],
+            ],
+            "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}"
+        );
+
+        self::assertSame('zh_Hans_CN', $config['runtime.content_locale'] ?? null);
+        self::assertStringNotContainsString('Featured Pages', (string)($config['links.column1_title'] ?? ''));
+        self::assertStringNotContainsString('All rights reserved.', (string)($config['copyright.text'] ?? ''));
+    }
+
+    public function testPlanGeneratedLocaleOverridesStaleTopLevelLocaleForSharedDefaults(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $config = (function (array $websiteProfile, array $scope, string $siteDisplayName): array {
+            return $this->buildFooterDefaultConfig($websiteProfile, $scope, $siteDisplayName);
+        })->call(
+            $service,
+            [
+                'site_title' => "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}",
+                'content_locale' => 'en_US',
+                'default_locale' => 'en_US',
+            ],
+            [
+                'content_locale' => 'en_US',
+                'plan_generated_locale' => 'zh_Hans_CN',
+                'plan_json' => ['content_locale' => 'en_US'],
+                'execution_blueprint' => ['content_locale' => 'en_US'],
+                'page_types' => ['home_page', 'contact_page', 'privacy_policy'],
+            ],
+            "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}"
+        );
+
+        self::assertSame('zh_Hans_CN', $config['runtime.content_locale'] ?? null);
+        self::assertSame("\u{91CD}\u{70B9}\u{9875}\u{9762}", $config['links.column1_title'] ?? null);
+        self::assertStringNotContainsString('Featured Pages', (string)($config['links.column1_title'] ?? ''));
+    }
+
     public function testPortugueseRenderedHtmlLocaleGateAllowsPortugueseCopy(): void
     {
         $service = new AiSitePageComponentGenerationService(

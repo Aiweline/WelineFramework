@@ -15,16 +15,24 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertFileExists($templateFile);
         $content = (string) file_get_contents($templateFile);
 
-        $this->assertStringContainsString('<w:hook name="account.sidebar.content"/>', $content);
+        $this->assertStringContainsString('data-account-sidebar-content-mount', $content);
+        $this->assertStringContainsString('data-account-sidebar-content-url', $content);
         $this->assertStringNotContainsString('Weline_Customer::frontend::account::index::orders', $content);
         $this->assertStringNotContainsString('Weline_Customer::frontend::account::index::subscriptions', $content);
         $this->assertStringContainsString('data-account-section="profile"', $content);
         $this->assertStringContainsString('data-account-section="security"', $content);
         $this->assertStringContainsString('data-account-section="login-info"', $content);
-        $this->assertStringContainsString("var initialSection = raw && hasNav ? raw : 'profile';", $content);
+        $this->assertStringContainsString('function parseAccountHash()', $content);
+        $this->assertStringContainsString('function hasNavSection(section)', $content);
+        $this->assertStringContainsString('function syncFromHash()', $content);
+        $this->assertStringContainsString("targetId = 'profile';", $content);
         $this->assertStringContainsString("activeParent = nav.getAttribute('data-account-nav-parent') || '';", $content);
         $this->assertStringContainsString("var isActiveParent = activeParent && nav.getAttribute('data-section') === activeParent;", $content);
         $this->assertStringContainsString("nav.classList.remove('account-sidebar__nav-link--active');", $content);
+        $this->assertStringContainsString('function buildSidebarContentUrl(sectionName)', $content);
+        $this->assertStringContainsString("'section=' + encodeURIComponent(sectionName)", $content);
+        $this->assertStringContainsString('loadSidebarContent(targetId)', $content);
+        $this->assertStringContainsString("insertAdjacentHTML('beforeend', payload.html)", $content);
     }
 
     public function testSidebarTemplateKeepsCanonicalSidebarHookHost(): void
@@ -54,6 +62,25 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('box-shadow: none;', $content);
         $this->assertStringNotContainsString('#orders', $content);
         $this->assertStringNotContainsString('#subscriptions', $content);
+    }
+
+    public function testAccountIndexHeaderAllowsLongIdentityToWrapOnMobile(): void
+    {
+        $cssFile = dirname(__DIR__, 3) . '/view/statics/css/account-index.css';
+        $templateFile = dirname(__DIR__, 3) . '/view/templates/frontend/account/index.phtml';
+
+        $this->assertFileExists($cssFile);
+        $this->assertFileExists($templateFile);
+        $css = (string) file_get_contents($cssFile);
+        $template = (string) file_get_contents($templateFile);
+
+        $this->assertStringContainsString('20260527-account-mobile-wrap-1', $template);
+        $this->assertStringContainsString('.account-index__user-info', $css);
+        $this->assertStringContainsString('max-width: 100%;', $css);
+        $this->assertStringContainsString('.account-index__username', $css);
+        $this->assertStringContainsString('.account-index__email', $css);
+        $this->assertStringContainsString('overflow-wrap: anywhere;', $css);
+        $this->assertStringContainsString('word-break: break-word;', $css);
     }
 
     public function testTwoFactorAuthHookUsesAccountSectionProtocol(): void

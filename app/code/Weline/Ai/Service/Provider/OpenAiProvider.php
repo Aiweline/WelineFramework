@@ -733,13 +733,20 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             return null;
         }
 
-        if (\strtolower(\trim((string)($responseFormat['type'] ?? ''))) !== 'json_schema') {
-            return $responseFormat;
+        $type = \strtolower(\trim((string)($responseFormat['type'] ?? '')));
+        if ($type === '') {
+            return null;
         }
 
-        return $this->supportsJsonSchemaResponseFormat($model, $config)
-            ? $responseFormat
-            : ['type' => 'json_object'];
+        if ($type === 'json_schema') {
+            return $this->supportsJsonSchemaResponseFormat($model, $config) ? $responseFormat : null;
+        }
+
+        if ($type === 'json_object') {
+            return $this->supportsJsonObjectResponseFormat($model, $config) ? $responseFormat : null;
+        }
+
+        return null;
     }
 
     /**
@@ -747,6 +754,10 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
      */
     private function supportsJsonSchemaResponseFormat(AiModel $model, array $config): bool
     {
+        if ($this->isDeepSeekChatModel($model, $config)) {
+            return false;
+        }
+
         foreach ([
             'response_format_json_schema',
             'supports_response_format_json_schema',
@@ -781,6 +792,42 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function supportsJsonObjectResponseFormat(AiModel $model, array $config): bool
+    {
+        if ($this->isDeepSeekChatModel($model, $config)) {
+            return false;
+        }
+
+        foreach ([
+            'response_format_json_object',
+            'supports_response_format_json_object',
+            'json_object_response_format',
+        ] as $key) {
+            if (\array_key_exists($key, $config)) {
+                $resolved = $this->resolveConfigBoolean($config[$key]);
+                if ($resolved !== null) {
+                    return $resolved;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function isDeepSeekChatModel(AiModel $model, array $config): bool
+    {
+        $baseUrl = \strtolower((string)($config['base_url'] ?? $config['api_url'] ?? ''));
+        $modelCode = \strtolower((string)($config['model'] ?? $config['model_id'] ?? $model->getModelCode()));
+
+        return \str_contains($baseUrl, 'deepseek.com') || \str_contains($modelCode, 'deepseek');
     }
 
     private function resolveConfigBoolean(mixed $value): ?bool

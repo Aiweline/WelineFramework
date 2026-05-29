@@ -167,12 +167,14 @@ final class SubprocessControlKernel
 
             $this->lastControlPort = $controlPort;
             if (!$client->connect('127.0.0.1', $controlPort)) {
-                $lastError = "[连接失败]";
+                $connectError = \method_exists($client, 'getLastConnectError') ? (string) $client->getLastConnectError() : '';
+                $lastError = $connectError !== '' ? "[连接失败: {$connectError}]" : '[连接失败]';
                 if ($retryAttempt < $maxStartupRetries) {
-                    $this->log("连接 Master 失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
+                    $this->log("连接 Master 失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试... {$lastError}");
                     SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
+                $this->log("连接 Master 失败，次数上限已达 {$maxStartupRetries}，{$lastError}");
                 return false;
             }
 

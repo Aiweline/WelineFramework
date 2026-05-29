@@ -73,4 +73,27 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('w-param-media-image', $imageHtml);
         $this->assertStringContainsString('w-param-media-image-select', $imageHtml);
     }
+
+    public function testProcessConfigPreservesExplicitEmptyString(): void
+    {
+        $renderer = new ParamTypeRenderer();
+
+        $processed = $renderer->processConfig([
+            'title' => [
+                'type' => 'string',
+                'label' => 'Title',
+                'default' => 'Default title',
+            ],
+            'subtitle' => [
+                'type' => 'string',
+                'label' => 'Subtitle',
+                'default' => 'Default subtitle',
+            ],
+        ], [
+            'title' => '',
+        ]);
+
+        $this->assertSame('', $processed['title']);
+        $this->assertSame('Default subtitle', $processed['subtitle']);
+    }
 }

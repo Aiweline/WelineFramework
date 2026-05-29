@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
@@ -44,7 +45,7 @@ class AiSiteDraftWebsiteService
             }
         }
 
-        $targetDomain = \strtolower(\trim((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? '')));
+        $targetDomain = $this->normalizeTargetDomain($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? '');
         if ($targetDomain !== '') {
             $existing = $this->loadByDomainBinding($targetDomain);
             if ($existing !== null) {
@@ -70,7 +71,7 @@ class AiSiteDraftWebsiteService
     private function persistWebsite(Website $website, array $websiteProfile, bool $created): array
     {
         $siteTitle = \trim((string)($websiteProfile['site_title'] ?? ''));
-        $targetDomain = \strtolower(\trim((string)($websiteProfile['target_domain'] ?? '')));
+        $targetDomain = $this->normalizeTargetDomain($websiteProfile['target_domain'] ?? '');
         $defaultLocale = \trim((string)($websiteProfile['default_locale'] ?? 'en_US'));
         $locales = \is_array($websiteProfile['locales'] ?? null) ? $websiteProfile['locales'] : [];
 
@@ -121,7 +122,7 @@ class AiSiteDraftWebsiteService
 
     private function loadByDomainBinding(string $targetDomain): ?Website
     {
-        $targetDomain = \strtolower(\trim($targetDomain));
+        $targetDomain = $this->normalizeTargetDomain($targetDomain);
         if ($targetDomain === '') {
             return null;
         }
@@ -164,7 +165,7 @@ class AiSiteDraftWebsiteService
 
     private function ensureWebsiteDomainBinding(int $websiteId, string $targetDomain): void
     {
-        $targetDomain = \strtolower(\trim($targetDomain));
+        $targetDomain = $this->normalizeTargetDomain($targetDomain);
         if ($websiteId <= 0 || $targetDomain === '') {
             return;
         }
@@ -221,6 +222,26 @@ class AiSiteDraftWebsiteService
         }
 
         return 'http://' . $targetDomain;
+    }
+
+    private function normalizeTargetDomain(mixed $targetDomain): string
+    {
+        $targetDomain = \strtolower(\trim((string)$targetDomain));
+        if ($targetDomain === '') {
+            return '';
+        }
+
+        return $this->isReservedProjectHost($targetDomain) ? '' : $targetDomain;
+    }
+
+    private function isReservedProjectHost(string $targetDomain): bool
+    {
+        $host = LocalDomainPolicy::normalizeDomain($targetDomain);
+        if (\str_starts_with($host, 'www.')) {
+            $host = (string)\substr($host, 4);
+        }
+
+        return LocalDomainPolicy::isStandardProjectHost($host);
     }
 
     private function resolveDraftWebsiteUrl(Website $website, string $websiteName, string $websiteCode): string

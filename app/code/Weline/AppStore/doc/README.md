@@ -16,3 +16,12 @@ Use an `appstore/*.log` filename string as the first argument. The second argume
 
 - WEL-86 adds a focused PHPUnit regression for AppStore `Env::log_error()` calls so setup logging cannot pass an array as the message again.
 - After setup logging changes, validate with the targeted AppStore logging test and a non-production `setup:upgrade` command.
+
+## Installed Module Updates
+
+- The installed-module page checks the platform `check-update` API with local module name, version, platform module ID, and current domain.
+- Updating a module reuses `ModuleInstallerService::download()` and `install()` with `action=upgrade`; install records include the previous version and old-version backup directory.
+- Install and update completion refreshes the command index through a fresh `php bin/w command:upgrade` process, then targets WLS reload at the current `WLS_INSTANCE` when an instance record exists.
+- The installed-module page uninstalls directly through `ModuleUninstallService`, which delegates to the framework `php bin/w module:remove Vendor_Module` flow so database and file backups stay owned by system uninstall.
+- The installed-module page shows immediate in-page uninstall progress and reads the latest uninstall audit record when the list becomes empty, so users still see a completion result after the module record has been removed.
+- If a previous install left module files with the `商城应用.md` marker but no AppStore install row, the installed-module page recovers only that marked marketplace module record so the user can still manage and uninstall it from My modules.

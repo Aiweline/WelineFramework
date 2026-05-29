@@ -250,8 +250,9 @@ class AccountOrdersListApiService
             $options = [];
             foreach ($rawOptions as $label => $value) {
                 if (\is_scalar($value) && \trim((string) $value) !== '') {
+                    $optionLabel = \trim((string) $label);
                     $options[] = [
-                        'label' => \trim((string) $label) !== '' ? \trim((string) $label) : (string) __('规格'),
+                        'label' => $optionLabel !== '' ? $this->localizeOptionLabel($optionLabel) : (string) __('规格'),
                         'value' => \trim((string) $value),
                     ];
                 }
@@ -270,10 +271,11 @@ class AccountOrdersListApiService
             if ($value === '') {
                 continue;
             }
+            $optionLabel = \trim((string) ($option['label'] ?? ''));
 
             $normalized = [
-                'label' => \trim((string) ($option['label'] ?? '')) !== ''
-                    ? \trim((string) ($option['label'] ?? ''))
+                'label' => $optionLabel !== ''
+                    ? $this->localizeOptionLabel($optionLabel)
                     : (string) __('规格'),
                 'value' => $value,
             ];
@@ -307,6 +309,16 @@ class AccountOrdersListApiService
         return $options;
     }
 
+    private function localizeOptionLabel(string $label): string
+    {
+        $label = \trim($label);
+        if ($label === '' || !\preg_match('/\p{Han}/u', $label)) {
+            return $label;
+        }
+
+        return (string) __($label);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -317,11 +329,11 @@ class AccountOrdersListApiService
             'empty_filtered' => (string) __('该状态下暂无订单'),
             'view_all_orders' => (string) __('查看全部订单'),
             'go_shopping' => (string) __('去购物'),
-            'order_number' => (string) __('订单号：%{1}'),
+            'order_number' => (string) __('订单号：%{1}', ['%{1}']),
             'amount_label' => (string) __('订单金额：'),
             'pending_payment' => (string) __('待支付'),
             'items_missing' => (string) __('订单商品快照缺失，请重新导入订单数据'),
-            'more_items' => (string) __('还有 %{1} 件商品，查看详情'),
+            'more_items' => (string) __('还有 %{1} 件商品，查看详情', ['%{1}']),
             'view_details' => (string) __('查看详情'),
             'continue_payment' => (string) __('继续支付'),
             'cancel_order' => (string) __('取消订单'),
@@ -337,7 +349,7 @@ class AccountOrdersListApiService
             'order_amount' => (string) __('订单金额'),
             'order_items' => (string) __('订单商品'),
             'payment_panel_hint' => (string) __('支付流程会嵌入当前个人中心页面，不再跳到独立订单页。'),
-            'qty' => (string) __('×%{1}'),
+            'qty' => (string) __('×%{1}', ['%{1}']),
             'pagination' => (string) __('订单分页'),
             'prev' => 'Prev',
             'next' => 'Next',
@@ -359,6 +371,6 @@ class AccountOrdersListApiService
 
     private function getUrl(): Url
     {
-        return $this->url ??= \Weline\Framework\Manager\ObjectManager::getInstance(Url::class);
+        return $this->url ?? \Weline\Framework\Manager\ObjectManager::getInstance(Url::class);
     }
 }

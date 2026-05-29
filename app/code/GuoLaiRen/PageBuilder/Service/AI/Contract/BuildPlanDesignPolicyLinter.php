@@ -74,19 +74,6 @@ final class BuildPlanDesignPolicyLinter
             }
         }
 
-        foreach ($this->normalizeRecordSet($contract['tasks'] ?? [], ['task_id', 'id']) as $taskId => $task) {
-            foreach ($this->stringList($task['policy_slices'] ?? []) as $ruleId) {
-                if (!$this->registry()->hasRule($ruleId, $policyId)) {
-                    $errors[] = 'Task ' . $taskId . ' has unknown policy_slices rule id: ' . $ruleId;
-                }
-            }
-            foreach ($this->stringList($task['acceptance_rule_ids'] ?? []) as $ruleId) {
-                if (!$this->registry()->hasRule($ruleId, $policyId)) {
-                    $errors[] = 'Task ' . $taskId . ' has unknown acceptance_rule_ids rule id: ' . $ruleId;
-                }
-            }
-        }
-
         foreach ($this->registry()->get($policyId)['banned_patterns'] ?? [] as $pattern) {
             $pattern = \trim((string)$pattern);
             if ($pattern !== '' && $this->containsPatternInBuildContract($contract, $pattern)) {
@@ -172,7 +159,6 @@ final class BuildPlanDesignPolicyLinter
         $scan = [
             'pages' => $contract['pages'] ?? [],
             'blocks' => $contract['blocks'] ?? [],
-            'tasks' => $contract['tasks'] ?? [],
         ];
         $haystack = \strtolower((string)\json_encode($scan, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
 

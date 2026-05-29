@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace WeShop\Customer\Extends\Module\Weline_Framework\Query;
 
 use WeShop\Customer\Model\Customer;
+use Weline\Customer\Model\Customer as AuthCustomer;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class CustomerQueryProvider implements QueryProviderInterface
 {
     public function __construct(
-        private readonly Customer $customerModel
+        private readonly Customer $customerModel,
+        private readonly ?AuthCustomer $authCustomerModel = null
     ) {
     }
 
@@ -62,14 +65,52 @@ class CustomerQueryProvider implements QueryProviderInterface
             }
             $firstName = (string) ($row[Customer::schema_fields_FIRST_NAME] ?? '');
             $lastName = (string) ($row[Customer::schema_fields_LAST_NAME] ?? '');
-            $result[] = [
+            $result[$customerId] = [
                 'customer_id' => $customerId,
                 'email' => (string) ($row[Customer::schema_fields_EMAIL] ?? ''),
                 'name' => \trim($firstName . ' ' . $lastName),
+                'created_at' => (string) ($row[Customer::schema_fields_CREATED_AT] ?? ''),
+                'status' => (string) ($row[Customer::schema_fields_STATUS] ?? ''),
             ];
         }
 
-        return $result;
+        $missingIds = \array_values(\array_diff($ids, \array_keys($result)));
+        $authCustomerModel = $this->authCustomerModel;
+        if (!$authCustomerModel instanceof AuthCustomer) {
+            try {
+                $authCustomerModel = ObjectManager::getInstance(AuthCustomer::class);
+            } catch (\Throwable) {
+                $authCustomerModel = null;
+            }
+        }
+
+        if ($missingIds !== [] && $authCustomerModel instanceof AuthCustomer) {
+            $authRows = (clone $authCustomerModel)
+                ->clear()
+                ->where(AuthCustomer::schema_fields_ID, $missingIds, 'in')
+                ->select()
+                ->fetchArray();
+
+            foreach ($authRows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $customerId = (int) ($row[AuthCustomer::schema_fields_ID] ?? 0);
+                if ($customerId <= 0 || isset($result[$customerId])) {
+                    continue;
+                }
+                $email = (string) ($row[AuthCustomer::schema_fields_email] ?? '');
+                $result[$customerId] = [
+                    'customer_id' => $customerId,
+                    'email' => $email,
+                    'name' => '',
+                    'created_at' => (string) ($row['create_time'] ?? ''),
+                    'status' => 'active',
+                ];
+            }
+        }
+
+        return \array_values($result);
     }
 
     public function getDescriptor(): array

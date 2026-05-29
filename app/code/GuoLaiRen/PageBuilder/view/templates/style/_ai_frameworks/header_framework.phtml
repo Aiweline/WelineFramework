@@ -184,10 +184,63 @@ $textColor = $getConfig('style.text_color', '#ffffff');
 $linkColor = $getConfig('style.link_color', '#a0a0b8');
 $linkHoverColor = $getConfig('style.link_hover_color', '#6366f1');
 $accentColor = $getConfig('style.accent_color', '#6366f1');
+$normalizeHexColor = function($value) {
+    $value = trim((string)$value);
+    if (preg_match('/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i', $value, $matches) !== 1) {
+        return '';
+    }
+    $hex = strtolower($matches[1]);
+    if (strlen($hex) === 3) {
+        $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+    }
+    return '#' . $hex;
+};
+$relativeLuminance = function($hex) {
+    $hex = ltrim((string)$hex, '#');
+    if (strlen($hex) !== 6) {
+        return 0.0;
+    }
+    $channels = [
+        hexdec(substr($hex, 0, 2)) / 255,
+        hexdec(substr($hex, 2, 2)) / 255,
+        hexdec(substr($hex, 4, 2)) / 255,
+    ];
+    foreach ($channels as $index => $channel) {
+        $channels[$index] = $channel <= 0.03928
+            ? $channel / 12.92
+            : pow(($channel + 0.055) / 1.055, 2.4);
+    }
+    return 0.2126 * $channels[0] + 0.7152 * $channels[1] + 0.0722 * $channels[2];
+};
+$contrastRatio = function($first, $second) use ($relativeLuminance) {
+    $a = $relativeLuminance($first);
+    $b = $relativeLuminance($second);
+    return (max($a, $b) + 0.05) / (min($a, $b) + 0.05);
+};
+$pickReadableTextColor = function($background) use ($normalizeHexColor, $contrastRatio) {
+    $background = $normalizeHexColor($background);
+    if ($background === '') {
+        return '#ffffff';
+    }
+    $dark = '#1a2c38';
+    $light = '#ffffff';
+    return $contrastRatio($background, $dark) >= $contrastRatio($background, $light) ? $dark : $light;
+};
+$ensureReadableColor = function($candidate, $background) use ($normalizeHexColor, $contrastRatio, $pickReadableTextColor) {
+    $candidate = $normalizeHexColor($candidate);
+    $background = $normalizeHexColor($background);
+    if ($candidate !== '' && $background !== '' && $contrastRatio($background, $candidate) >= 4.5) {
+        return $candidate;
+    }
+    return $pickReadableTextColor($background);
+};
+$linkHoverColor = $ensureReadableColor($linkHoverColor, $bgColor);
+$configuredCtaTextColor = $normalizeHexColor($getConfig('style.cta_text_color', ''));
+$ctaTextColor = $ensureReadableColor($configuredCtaTextColor, $accentColor);
 
 // ===== AI生成的额外PHP变量 =====
 try {
-    {{PHP_VARIABLES}}
+    /* {{PHP_VARIABLES}} */
 } catch (\Throwable $e) {
     w_log_error('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
 }
@@ -288,7 +341,7 @@ try {
 #<?= $componentId ?> .<?= $cls ?>-cta {
     padding: 10px 22px;
     background: var(--header-primary);
-    color: #ffffff;
+    color: <?= htmlspecialchars($ctaTextColor) ?>;
     font-size: 0.9rem;
     font-weight: 600;
     border-radius: 8px;
@@ -324,22 +377,31 @@ try {
 
 @media (max-width: 992px) {
     #<?= $componentId ?> .<?= $cls ?>-nav {
-        position: fixed;
-        top: 72px;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: var(--header-bg);
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 16px;
+        right: 16px;
+        background: color-mix(in srgb, var(--header-bg) 96%, #000);
+        border: 1px solid var(--header-border);
+        border-radius: 12px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+        box-sizing: border-box;
         flex-direction: column;
         justify-content: flex-start;
-        padding: 32px 24px;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-        gap: 24px;
+        padding: 16px;
+        transform: translateY(-8px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s ease, transform 0.22s ease;
+        gap: 14px;
+        max-height: min(70vh, 360px);
+        overflow-y: auto;
     }
     
     #<?= $componentId ?> .<?= $cls ?>-nav.active {
-        transform: translateX(0);
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
     }
     
     #<?= $componentId ?> .<?= $cls ?>-nav-links {

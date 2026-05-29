@@ -22,10 +22,10 @@
 "评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。","评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。"
 "Unsupported review provider operation: %{1}","Unsupported review provider operation: %{1}"
 "Review form token prepared.","Review form token prepared."
-"Please sign in before replying.","Please sign in before replying."
-"Review and reply content are required.","Review and reply content are required."
-"Unable to submit reply right now.","Unable to submit reply right now."
-"Reply submitted.","Reply submitted."
+"Please sign in before replying.",请先登录再回复。
+"Review and reply content are required.",评论和回复内容不能为空。
+"Unable to submit reply right now.",暂时无法提交回复。
+"Reply submitted.",回复已提交。
 商品不能为空。,商品不能为空。
 已选择匿名评论。,已选择匿名评论。
 已选择下单后评论。,已选择下单后评论。
@@ -58,15 +58,15 @@ Rejected,已拒绝
 评价项名称不能为空,评价项名称不能为空
 新增评价项需要同时填写编码和名称,新增评价项需要同时填写编码和名称
 评价项编码已存在,评价项编码已存在
-"Review, customer and reply content are required.","Review, customer and reply content are required."
-"Review does not exist or is not visible.","Review does not exist or is not visible."
-"Reply target does not exist.","Reply target does not exist."
-"Customer #%{1}","Customer #%{1}"
-"You were mentioned in a product review reply","You were mentioned in a product review reply"
-"Your review has a new reply","Your review has a new reply"
-"Customer %{1} mentioned you in a product review reply.","Customer %{1} mentioned you in a product review reply."
-"Customer %{1} replied in a product review.","Customer %{1} replied in a product review."
-Customer,Customer
+"Review, customer and reply content are required.",评论、客户和回复内容不能为空。
+"Review does not exist or is not visible.",评论不存在或不可见。
+"Reply target does not exist.",回复目标不存在。
+"Customer #%{1}",客户 #%{1}
+"You were mentioned in a product review reply",你在商品评价回复中被提及
+"Your review has a new reply",你的评价有新回复
+"Customer %{1} mentioned you in a product review reply.",客户 %{1} 在商品评价回复中提到了你。
+"Customer %{1} replied in a product review.",客户 %{1} 回复了商品评价。
+Customer,客户
 匿名用户,匿名用户
 加载当前产品评价失败：%{1},加载当前产品评价失败：%{1}
 "Approve Review","Approve Review"
@@ -200,3 +200,39 @@ Detail,Detail
 "Customer Name",客户姓名
 Email,邮箱
 Metadata,元数据
+商品评论,商品评论
+阅读其他买家的评价，也可以直接提交你的使用体验。,阅读其他买家的评价，也可以直接提交你的使用体验。
+阅读其他买家的评价，下单后也可以分享你的真实使用体验。,阅读其他买家的评价，下单后也可以分享你的真实使用体验。
+第%{1}页，共%{2}页,第%{1}页，共%{2}页
+每页 %{1} 条,每页 %{1} 条
+上一页,上一页
+下一页,下一页
+回复列表,回复列表
+客户,客户
+评价与回复,评价与回复
+基于 %{1} 条评价,基于 %{1} 条评价
+写回复，可用 @customer:123 提及客户。,写回复，可用 @customer:123 提及客户。
+发送回复,发送回复
+回复已提交。,回复已提交。
+暂时无法提交回复。,暂时无法提交回复。
+回复内容不能为空。,回复内容不能为空。
+回复给,回复给
+翻译,翻译
+翻译中...,翻译中...
+显示原文,显示原文
+显示译文,显示译文
+当前 Chrome 无法使用浏览器翻译。,当前 Chrome 无法使用浏览器翻译。
+这条评论已经是当前语言。,这条评论已经是当前语言。
+本次回复会通知 %{1}。,本次回复会通知 %{1}。
+请先登录再回复。,请先登录再回复。
+点击标题、内容或提交按钮时，系统会自动选择匿名评论或下单后评论。,点击标题、内容或提交按钮时，系统会自动选择匿名评论或下单后评论。
+提交评分并告诉其他买家你的真实体验。,提交评分并告诉其他买家你的真实体验。
+评论和回复内容不能为空。,评论和回复内容不能为空。
+评论、客户和回复内容不能为空。,评论、客户和回复内容不能为空。
+评论不存在或不可见。,评论不存在或不可见。
+回复目标不存在。,回复目标不存在。
+客户 #%{1},客户 #%{1}
+你在商品评价回复中被提及,你在商品评价回复中被提及
+你的评价有新回复,你的评价有新回复
+客户 %{1} 在商品评价回复中提到了你。,客户 %{1} 在商品评价回复中提到了你。
+客户 %{1} 回复了商品评价。,客户 %{1} 回复了商品评价。

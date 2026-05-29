@@ -44,48 +44,38 @@ final class BuildPlanContractValidatorTest extends TestCase
         self::assertContains('Field cannot be both frozen and mutable: pages', $result['errors']);
     }
 
-    public function testRejectsTaskMissingStrongBuildContractFields(): void
+    public function testRejectsBlockMissingRequiredBuildPlanFields(): void
     {
         $contract = $this->validContract();
-        unset(
-            $contract['tasks'][0]['runtime_context'],
-            $contract['tasks'][0]['output_contract'],
-            $contract['tasks'][0]['acceptance']
-        );
+        unset($contract['blocks'][0]['content_keys'], $contract['blocks'][0]['block_type']);
 
         $result = (new BuildPlanContractValidator())->validate($contract);
 
         self::assertFalse($result['valid']);
-        self::assertContains('Task task.hero is missing required field: runtime_context', $result['errors']);
-        self::assertContains('Task task.hero is missing required field: output_contract', $result['errors']);
-        self::assertContains('Task task.hero is missing required field: acceptance', $result['errors']);
+        self::assertContains('Block home.hero is missing required field: content_keys', $result['errors']);
+        self::assertContains('Block home.hero is missing required field: block_type', $result['errors']);
     }
 
-    public function testRejectsBroadRuntimeContextSources(): void
+    public function testRejectsBlockMissingVisualSignatureFields(): void
     {
         $contract = $this->validContract();
-        $contract['tasks'][0]['runtime_context']['debug'] = [
-            'execution_blueprint' => ['pages' => []],
-            'plan_workbench' => ['draft' => []],
-        ];
+        unset($contract['blocks'][0]['visual_signature']['media_strategy']);
 
         $result = (new BuildPlanContractValidator())->validate($contract);
 
         self::assertFalse($result['valid']);
-        self::assertTrue($this->hasErrorContaining($result['errors'], 'runtime_context contains forbidden broad context: runtime_context.debug.execution_blueprint'));
-        self::assertTrue($this->hasErrorContaining($result['errors'], 'runtime_context contains forbidden broad context: runtime_context.debug.plan_workbench'));
+        self::assertContains('Block home.hero is missing visual_signature.media_strategy', $result['errors']);
     }
 
-    public function testRejectsMissingTaskLanguageRuntimeContract(): void
+    public function testRejectsPageReferencingMissingBlock(): void
     {
         $contract = $this->validContract();
-        unset($contract['tasks'][0]['runtime_context']['content_locale'], $contract['tasks'][0]['runtime_context']['language_contract']);
+        $contract['pages'][0]['blocks'][] = 'home.missing';
 
         $result = (new BuildPlanContractValidator())->validate($contract);
 
         self::assertFalse($result['valid']);
-        self::assertContains('Task task.hero runtime_context.content_locale is required', $result['errors']);
-        self::assertContains('Task task.hero runtime_context.language_contract is required', $result['errors']);
+        self::assertContains('Page home references missing block: home.missing', $result['errors']);
     }
 
     /**
@@ -135,7 +125,7 @@ final class BuildPlanContractValidatorTest extends TestCase
                 'tokens' => [
                     'layout' => ['container_max_width' => '1280px'],
                     'spacing' => ['desktop_section_padding' => '120px'],
-                    'typography' => ['h1' => 'clamp(40px, 6vw, 76px)'],
+                    'typography' => ['h1' => '64px desktop / 44px mobile'],
                     'colors' => ['primary' => '#2563eb'],
                     'radius' => ['component_radius' => '12px'],
                     'motion' => ['duration' => '240ms'],
@@ -175,38 +165,8 @@ final class BuildPlanContractValidatorTest extends TestCase
                         'surface_treatment' => 'clean product surface',
                     ],
                     'content_keys' => ['home.hero.title', 'home.hero.cta'],
-                    'task_ids' => ['task.hero'],
                 ],
             ],
-            'tasks' => [
-                [
-                    'task_id' => 'task.hero',
-                    'task_kind' => 'block_build',
-                    'executor' => 'AiSiteBuildQueue',
-                    'input_scope' => ['page_id' => 'home', 'block_id' => 'home.hero'],
-                    'runtime_context' => [
-                        'target' => ['page_id' => 'home', 'block_id' => 'home.hero'],
-                        'content_locale' => 'en_US',
-                        'language_contract' => [
-                            'source_of_truth_locale' => 'en_US',
-                            'visible_copy_rule' => 'All visitor-facing copy uses en_US.',
-                        ],
-                        'block_contract' => ['content_keys' => ['home.hero.title', 'home.hero.cta']],
-                    ],
-                    'output_contract' => [
-                        'format' => 'pagebuilder_component_payload',
-                        'required_outputs' => ['html', 'css', 'render_data'],
-                    ],
-                    'policy_slices' => ['layout.4_8_spacing', 'image.integrated_not_pasted'],
-                    'context_budget' => ['max_tokens' => 1800],
-                    'acceptance' => [
-                        'checks' => ['no_placeholder_or_prompt_copy'],
-                    ],
-                    'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic'],
-                    'depends_on' => [],
-                ],
-            ],
-            'build_order' => ['task.hero'],
             'source_contracts' => [
                 ['id' => 'contract_source_truth', 'type' => ContractType::TYPE_SOURCE_TRUTH, 'version' => ContractType::VERSION_V1, 'status' => ContractType::STATUS_DRAFT],
                 ['id' => 'contract_site_brief', 'type' => ContractType::TYPE_SITE_BRIEF, 'version' => ContractType::VERSION_V1, 'status' => ContractType::STATUS_DRAFT],
@@ -215,11 +175,11 @@ final class BuildPlanContractValidatorTest extends TestCase
                 ['id' => 'contract_block_plan', 'type' => ContractType::TYPE_BLOCK_PLAN, 'version' => ContractType::VERSION_V1, 'status' => ContractType::STATUS_DRAFT],
             ],
             'permission_matrix' => [
-                'read' => ['policy_ref', 'policy_projection', 'design_manifest', 'content_manifest', 'pages', 'blocks', 'tasks'],
+                'read' => ['policy_ref', 'policy_projection', 'design_manifest', 'content_manifest', 'pages', 'blocks'],
                 'patch' => ['render_data.*', 'asset_manifest.*', 'content_manifest.items.*'],
-                'forbidden' => ['policy_ref', 'policy_projection', 'design_manifest', 'pages', 'blocks', 'tasks', 'build_order'],
+                'forbidden' => ['policy_ref', 'policy_projection', 'design_manifest', 'pages', 'blocks'],
             ],
-            'frozen_fields' => ['pages', 'blocks', 'tasks', 'build_order', 'design_manifest', 'policy_ref', 'policy_projection'],
+            'frozen_fields' => ['pages', 'blocks', 'design_manifest', 'policy_ref', 'policy_projection'],
             'mutable_fields' => ['render_data.*', 'asset_manifest.*', 'content_manifest.items.*', 'qa_gates.*'],
             'qa_gates' => [
                 ['id' => 'policy_ref_valid', 'status' => 'pending'],

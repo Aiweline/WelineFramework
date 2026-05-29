@@ -1,0 +1,86 @@
+<!--
+Layout: Review default
+
+Generic frontend review layout. It keeps review pages in the full storefront
+shell even when the active theme does not provide a review-specific layout.
+-->
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::review::head-after</w:hook>
+</head>
+<body class="review-layout">
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::review::body-start</w:hook>
+
+    <if condition="meta.showHeader">
+        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    </if>
+
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+
+    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::review::content-before</w:hook>
+    <div class="review-layout__content" id="main-content" data-layout="review_content">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-review-content,layout-default-content,content,review-content,product-reviews"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="review-layout__content-root-slot">
+            <w:slot id="review-content"
+                name="评价页内容"
+                accept="layout-review-content,review-content,product-reviews,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="review-layout__content-slot">
+            <if condition="meta.content">
+                {{meta.content}}
+                <elseif condition="content"/>
+                {{content}}
+                <elseif condition="meta.contentTemplate"/>
+                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+            </if>
+            </w:slot>
+        </w:slot>
+    </div>
+    <w:hook>Weline_Theme::frontend::layouts::review::content-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+
+    <if condition="meta.showFooter">
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop"/>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    </if>
+
+    <w:hook>Weline_Theme::frontend::layouts::review::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>
+
+<style>
+.review-layout {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--weline-layout-surface-primary, var(--color-bg-primary, #fff));
+    color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
+    font-family: var(--weline-layout-font-family, var(--font-family-base, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif));
+}
+
+.review-layout__content {
+    width: 100%;
+}
+
+.review-layout__content > * {
+    width: 100%;
+}
+</style>

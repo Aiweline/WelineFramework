@@ -54,6 +54,41 @@ return [
         'description' => __('在产品详情页标签区域渲染产品描述、规格、评价、问答等内容。支持多个标签页切换，包括商品详情、规格参数、用户评价、问答等。'),
         'doc' => 'frontend/layouts/product/tabs-content.md',
     ],
+    'WeShop_Product::frontend::layouts::product::description-content' => [
+        'name' => __('产品详情描述内容'),
+        'description' => __('替换产品详情页描述标签面板的默认内容。未实现时使用产品描述字段和空态文案。'),
+        'doc' => 'frontend/layouts/product/description-content.md',
+    ],
+    'WeShop_Product::frontend::layouts::product::specifications-content' => [
+        'name' => __('产品详情规格内容'),
+        'description' => __('替换产品详情页规格标签面板的默认内容。未实现时使用规格表格和空态文案。'),
+        'doc' => 'frontend/layouts/product/specifications-content.md',
+    ],
+    'WeShop_Product::frontend::layouts::product::recommendations-content' => [
+        'name' => __('产品详情推荐区域内容'),
+        'description' => __('替换产品详情页推荐区域的整体内容。适用于完整接管相关推荐、热销、最近浏览和搭配推荐区域。'),
+        'doc' => 'frontend/layouts/product/recommendations-content.md',
+    ],
+    'WeShop_Product::frontend::layouts::product::related-products' => [
+        'name' => __('产品详情相关产品'),
+        'description' => __('在产品详情页推荐区域渲染相关产品列表。适用于只接管相关产品，不影响其他推荐组件。'),
+        'doc' => 'frontend/layouts/product/related-products.md',
+    ],
+    'WeShop_Product::frontend::layouts::product::bestsellers' => [
+        'name' => __('产品详情热销商品'),
+        'description' => __('在产品详情页推荐区域渲染热销商品列表。'),
+        'doc' => 'frontend/layouts/product/bestsellers.md',
+    ],
+    'WeShop_Product::frontend::layouts::product::recently-viewed' => [
+        'name' => __('产品详情最近浏览'),
+        'description' => __('在产品详情页推荐区域渲染最近浏览商品列表。'),
+        'doc' => 'frontend/layouts/product/recently-viewed.md',
+    ],
+    'WeShop_Product::frontend::layouts::product::cross-sell' => [
+        'name' => __('产品详情搭配推荐'),
+        'description' => __('在产品详情页推荐区域渲染搭配购买、交叉销售或向上销售商品列表。'),
+        'doc' => 'frontend/layouts/product/cross-sell.md',
+    ],
 
     // ==================== Backend Product Edit Hooks ====================
     'WeShop_Product::backend::product::edit::nav-after' => [

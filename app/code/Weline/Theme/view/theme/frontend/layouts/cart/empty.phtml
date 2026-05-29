@@ -28,18 +28,41 @@
     @template(Weline_Frontend::templates/public/header.phtml)
     
     <main class="cart-empty-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="cart-empty-main" data-layout="cart_empty">
-        <div class="cart-empty-container">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-cart-empty-content,layout-default-content,content,empty-state,cart-content,product-carousel,recently-viewed,you-may-like"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="cart-empty-main__content-root-slot">
+        <w:slot id="cart-empty-content"
+                name="空购物车内容"
+                accept="layout-cart-empty-content,layout-cart-content,cart-empty,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="cart-empty-container">
             <div class="cart-empty-content">
                 <div class="cart-empty-icon">
                     <i class="fas fa-shopping-cart"></i>
                 </div>
                 <h2 class="cart-empty-title"><?= __('购物车是空的') ?></h2>
                 <p class="cart-empty-message"><?= htmlspecialchars($meta['message'] ?? __('您的购物车是空的')) ?></p>
-                <a href="<?= htmlspecialchars($meta['continueShopping'] ?? '/') ?>" class="btn btn-primary continue-shopping-btn">
+                <a href="<?= htmlspecialchars($meta['continueShopping'] ?? '/') ?>" class="w-btn w-btn-primary continue-shopping-btn">
                     <?= __('继续购物') ?>
                 </a>
             </div>
-        </div>
+        </w:slot>
+        <w:slot id="cart-empty-recommendations"
+                name="空购物车推荐区"
+                accept="layout-cart-recommendations,featured-products,bestsellers,new-arrivals,you-may-like,product-carousel"
+                multiple="true"
+                position="content"
+                wrapper="section"
+                class="cart-empty-recommendations">
+            <w:hook>Weline_Theme::frontend::layouts::cart_empty::recommendations</w:hook>
+        </w:slot>
+        </w:slot>
     </main>
     
     @template(Weline_Frontend::templates/public/footer.phtml)

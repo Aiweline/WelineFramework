@@ -1,15 +1,15 @@
 ﻿"Notification Management","Notification Management"
-"Notification ID is required.",通知ID不能为空。
-"Notification marked as read.",通知已标记为已读。
-"Notification could not be marked as read.",通知标记已读失败。
-"Notification Detail",通知详情
-"Please log in to continue.","Please log in to continue."
+通知ID不能为空。,通知ID不能为空。
+通知已标记为已读。,通知已标记为已读。
+通知标记已读失败。,通知标记已读失败。
+通知详情,通知详情
+请先登录后再继续。,请先登录后再继续。
 请先登录后再配置通知渠道。,请先登录后再配置通知渠道。
 通知渠道配置已保存。,通知渠道配置已保存。
-"Unsupported notification provider operation: %{1}","Unsupported notification provider operation: %{1}"
-"Notification Query","Notification Query"
-"Provides frontend notification operations through the worker API.","Provides frontend notification operations through the worker API."
-"Mark a notification owned by the current customer as read.","Mark a notification owned by the current customer as read."
+不支持的通知接口操作：%{1},不支持的通知接口操作：%{1}
+通知接口,通知接口
+通过前端 worker API 提供通知操作。,通过前端 worker API 提供通知操作。
+将当前客户的通知标记为已读。,将当前客户的通知标记为已读。
 "订单 {1} 已提交","订单 {1} 已提交"
 订单已提交,订单已提交
 我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。,我们已收到您的订单，后续支付、发货和售后状态会按您选择的通知渠道同步。
@@ -23,12 +23,12 @@
 Unread,未读
 Read,已读
 "Notification not found.",通知不存在。
-"Customer ID is required.",客户ID不能为空。
-Info,信息
-Order,订单
-Payment,支付
-Membership,会员
-Promotion,促销
+客户ID不能为空。,客户ID不能为空。
+信息,信息
+订单,订单
+支付,支付
+会员,会员
+促销,促销
 商品问答提及,商品问答提及
 商品评价回复,商品评价回复
 "Manage customer notifications, read status, and delivery visibility for support teams.",管理客户通知、阅读状态和投递可见性，便于客服团队处理。
@@ -62,6 +62,7 @@ Content,内容
 "Already marked as read.",该通知已标记为已读。
 消息通知,消息通知
 订单进度、支付结果、售后提醒和账户消息都会出现在这里。,订单进度、支付结果、售后提醒和账户消息都会出现在这里。
+评价回复、订单进度、支付结果、售后提醒和账户消息都会出现在这里。,评价回复、订单进度、支付结果、售后提醒和账户消息都会出现在这里。
 全部消息,全部消息
 未读,未读
 标记已读,标记已读
@@ -88,6 +89,7 @@ Content,内容
 已保存联系人,已保存联系人
 通知设置,通知设置
 管理订单、支付与售后消息提醒,管理订单、支付与售后消息提醒
+评价回复、订单与账户提醒,评价回复、订单与账户提醒
 订单通知渠道,订单通知渠道
 已选通知渠道,已选通知渠道
 未选择,未选择
@@ -95,8 +97,22 @@ Content,内容
 请先在个人中心配置该渠道。,请先在个人中心配置该渠道。
 去个人中心管理通知渠道,去个人中心管理通知渠道
 访客结账仅使用邮箱接收本次订单通知，登录后可以保存更多通知渠道。,访客结账仅使用邮箱接收本次订单通知，登录后可以保存更多通知渠道。
-"Stay Updated",实时更新
-"Notification Center",通知中心
-"Open Center",打开中心
-"Alerts and updates in one place",提醒和更新集中在一处
-"Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center.",订单更新、付款跟进和会员通知都可以在通知中心统一查看。
+消息集中在个人中心,消息集中在个人中心
+进入消息,进入消息
+提醒和更新集中在一处,提醒和更新集中在一处
+评价回复、订单状态和会员消息都在个人中心统一查看。,评价回复、订单状态和会员消息都在个人中心统一查看。
+立即返回,立即返回
+消息同步,消息同步
+通知中心,通知中心
+订单进度、账户提醒和重要商城事件会集中出现在这里。,订单进度、账户提醒和重要商城事件会集中出现在这里。
+返回个人中心,返回个人中心
+继续购物,继续购物
+全部通知,全部通知
+当前时间线中的全部消息。,当前时间线中的全部消息。
+仍待查看的新提醒。,仍待查看的新提醒。
+时间线,时间线
+最新动态,最新动态
+创建时间,创建时间
+标记为已读,标记为已读
+暂无通知,暂无通知
+账户产生事件后会自动显示在这里。,账户产生事件后会自动显示在这里。

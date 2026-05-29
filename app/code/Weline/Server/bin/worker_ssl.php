@@ -420,10 +420,14 @@ WlsLogger::getInstance()
 
 $workerStartupTraceFileEnabled = (bool)($wlsEnv['debug']['worker_startup_trace'] ?? false)
     || \in_array(\strtolower(\trim((string)(\getenv('WLS_WORKER_STARTUP_TRACE') ?: ''))), ['1', 'true', 'yes', 'on'], true);
+$ipcClient = $ipcClient ?? null;
+$wlsStartupTraceLastStage = 'logger_bootstrap';
+$wlsWorkerGracefulExitReason = '';
 $wlsStartupTraceStartedAt = \microtime(true);
 $wlsStartupTraceLastAt = $wlsStartupTraceStartedAt;
-$wlsStartupTrace = static function (string $stage, array $context = []) use (&$wlsStartupTraceLastAt, $wlsStartupTraceStartedAt, $workerId, $port, $instanceName, $isMaintenanceWorker, $workerStartupTraceFileEnabled): void {
+$wlsStartupTrace = static function (string $stage, array $context = []) use (&$wlsStartupTraceLastAt, &$wlsStartupTraceLastStage, $wlsStartupTraceStartedAt, $workerId, $port, $instanceName, $isMaintenanceWorker, $workerStartupTraceFileEnabled): void {
     $now = \microtime(true);
+    $wlsStartupTraceLastStage = $stage;
     $context['delta_ms'] = (int)\round(($now - $wlsStartupTraceLastAt) * 1000);
     $context['total_ms'] = (int)\round(($now - $wlsStartupTraceStartedAt) * 1000);
     $context['memory_mb'] = \round(\memory_get_usage(true) / 1048576, 2);
@@ -446,6 +450,22 @@ $wlsStartupTrace = static function (string $stage, array $context = []) use (&$w
         );
     }
     WlsLogger::info_('[StartupTrace] ' . $stage . ' ' . (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'));
+};
+$wlsWorkerExitTrace = static function (string $event, string $reason = '', array $context = []) use (&$ipcClient, &$wlsStartupTraceLastStage, $workerId, $port, $instanceName, $isMaintenanceWorker, $controlPort, $orchestratorLaunchId): void {
+    $context = \array_merge([
+        'pid' => \getmypid(),
+        'instance' => $instanceName,
+        'role' => $isMaintenanceWorker ? 'maintenance' : 'worker',
+        'worker_id' => $workerId,
+        'port' => $port,
+        'control_port' => $controlPort,
+        'launch_id' => $orchestratorLaunchId,
+        'last_startup_stage' => $wlsStartupTraceLastStage,
+        'ipc_connected' => $ipcClient !== null && $ipcClient->isConnected(),
+        'memory_mb' => \round(\memory_get_usage(true) / 1048576, 2),
+    ], $context);
+    WlsLogger::error_('[WorkerExitTrace] ' . $event . ' reason=' . $reason . ' ' . (\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}'));
+    WlsLogger::flush_(true);
 };
 $wlsStartupTrace('logger_ready');
 
@@ -1145,21 +1165,29 @@ if (\extension_loaded('uopz') && \function_exists('uopz_allow_exit')) {
     }
 }
 
-// 注册补充 shutdown handler（检测 die()/exit() 非正常退出）
-// 注：致命错误由 ErrorBootstrap 统一处理，此处仅处理非致命退出
-\register_shutdown_function(function() use ($workerId, $port, $instanceName) {
+// Keep a final worker-side trace for fatal and non-graceful exits.
+\register_shutdown_function(function() use (&$wlsWorkerGracefulExitReason, $wlsWorkerExitTrace) {
     $error = \error_get_last();
     $fatalErrorTypes = [\E_ERROR, \E_PARSE, \E_CORE_ERROR, \E_COMPILE_ERROR, \E_RECOVERABLE_ERROR, \E_USER_ERROR];
     
-    // 致命错误由 ErrorBootstrap 处理，不在此重复
     if ($error !== null && \in_array($error['type'], $fatalErrorTypes, true)) {
+        $wlsWorkerExitTrace('fatal_shutdown', 'fatal_error', [
+            'last_error' => [
+                'type' => (int)($error['type'] ?? 0),
+                'message' => (string)($error['message'] ?? ''),
+                'file' => (string)($error['file'] ?? ''),
+                'line' => (int)($error['line'] ?? 0),
+            ],
+        ]);
+        return;
+    }
+
+    if ($wlsWorkerGracefulExitReason !== '') {
         return;
     }
     
     // 无致命错误但进程即将退出：多为业务代码 die()/exit() 或信号终止
-    $exitMsg = "Worker SSL 非致命退出，可能为 die()/exit() 或信号终止";
-    WlsLogger::warning_($exitMsg);
-    WlsLogger::flush_(true);
+    $wlsWorkerExitTrace('shutdown_without_graceful_reason', 'process_shutdown_without_worker_reason');
 });
 
 // Native WLS HTTPS is a development/runtime convenience path; keep the
@@ -1821,7 +1849,12 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     break;
             }
         },
-        static function () use (&$ipcClient): void {
+        static function () use (&$ipcClient, $wlsWorkerExitTrace, &$shouldExit, &$ipcDraining, &$ipcReceivedShutdown): void {
+            $wlsWorkerExitTrace('ipc_unexpected_disconnect', 'control_client_disconnected', [
+                'should_exit' => (bool)$shouldExit,
+                'ipc_draining' => (bool)$ipcDraining,
+                'shutdown_received' => (bool)$ipcReceivedShutdown,
+            ]);
             $ipcClient?->tryReconnect();
         }
     );
@@ -1944,7 +1977,8 @@ $logReload = function (string $method) use ($workerId, $instanceName) {
 // 是否需要优雅退出（重载时设置为 true）
 
 // Worker 优雅退出函数
-$gracefulExit = function (string $reason = '') use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, $processName, &$ipcClient, $workerId, $port, $isMaintenanceWorker) {
+$gracefulExit = function (string $reason = '') use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, $processName, &$ipcClient, $workerId, $port, $isMaintenanceWorker, &$wlsWorkerGracefulExitReason) {
+    $wlsWorkerGracefulExitReason = $reason !== '' ? $reason : 'graceful';
     // 刷新日志缓冲区
     WlsLogger::flush_(true);
     

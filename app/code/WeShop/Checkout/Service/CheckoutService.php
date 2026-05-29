@@ -55,6 +55,7 @@ class CheckoutService
                 'discount_amount' => $summary['discount'],
                 'tax_amount' => $summary['tax'],
                 'total' => $summary['grand_total'],
+                'currency_code' => $summary['currency'],
                 'shipping_method' => (string) ($checkoutData['shipping_method'] ?? ''),
                 'payment_method' => (string) ($checkoutData['payment_method'] ?? ''),
                 'shipping_address' => $shippingAddress,
@@ -132,7 +133,7 @@ class CheckoutService
 
     /**
      * @param array<string, mixed> $checkoutData
-     * @return array<string, float>
+     * @return array<string, mixed>
      */
     public function previewCheckoutSummary(int $customerId, array $checkoutData): array
     {
@@ -276,7 +277,7 @@ class CheckoutService
      * @param array<int, mixed> $cartItems
      * @param array<string, mixed> $totals
      * @param array<string, mixed> $checkoutData
-     * @return array<string, float>
+     * @return array<string, mixed>
      */
     protected function buildCheckoutSummary(array $cartItems, array $totals, array $checkoutData): array
     {
@@ -293,6 +294,7 @@ class CheckoutService
             'discount' => round($discount, 2),
             'tax' => $tax,
             'grand_total' => $grandTotal,
+            'currency' => $this->normalizeCurrencyCode((string) ($checkoutData['currency'] ?? $totals['currency'] ?? '')),
         ];
     }
 
@@ -322,8 +324,15 @@ class CheckoutService
         $checkoutData['is_guest_checkout'] = $this->getCheckoutIdentityService()->normalizeMode($checkoutData['checkout_mode']) === CheckoutIdentityService::MODE_GUEST
             || !empty($checkoutData['is_guest_checkout']);
         $checkoutData['notification_channels'] = $this->normalizeNotificationChannels($checkoutData['notification_channels'] ?? []);
+        $checkoutData['currency'] = $this->normalizeCurrencyCode((string) ($checkoutData['currency'] ?? ''));
 
         return $checkoutData;
+    }
+
+    protected function normalizeCurrencyCode(string $currency): string
+    {
+        $currency = strtoupper(trim($currency));
+        return preg_match('/^[A-Z]{3}$/', $currency) ? $currency : 'USD';
     }
 
     /**
@@ -779,13 +788,16 @@ class CheckoutService
     }
 
     /**
-     * @return array<string, float>
+     * @return array<string, mixed>
      */
     protected function readOrderSummary(Order $order): array
     {
         $summary = $order->getData('weshop_checkout_summary');
         if (\is_array($summary)) {
-            return $this->normalizeSummary($summary);
+            $rawSummary = $summary;
+            $normalizedSummary = $this->normalizeSummary($summary);
+            $normalizedSummary['currency'] = $this->normalizeCurrencyCode((string) ($rawSummary['currency'] ?? $rawSummary['currency_code'] ?? $order->getData(Order::schema_fields_currency_code) ?? ''));
+            return $normalizedSummary;
         }
 
         $grandTotal = (float) ($order->getData(Order::schema_fields_total) ?? 0);
@@ -796,12 +808,13 @@ class CheckoutService
             'discount' => 0.0,
             'tax' => 0.0,
             'grand_total' => $grandTotal,
+            'currency' => $this->normalizeCurrencyCode((string) ($order->getData(Order::schema_fields_currency_code) ?? '')),
         ];
     }
 
     /**
      * @param array<string, mixed> $summary
-     * @return array<string, float>
+     * @return array<string, mixed>
      */
     protected function normalizeSummary(array $summary): array
     {
@@ -811,6 +824,7 @@ class CheckoutService
             'discount' => (float) ($summary['discount'] ?? 0),
             'tax' => (float) ($summary['tax'] ?? 0),
             'grand_total' => (float) ($summary['grand_total'] ?? $summary['total'] ?? 0),
+            'currency' => $this->normalizeCurrencyCode((string) ($summary['currency'] ?? $summary['currency_code'] ?? '')),
         ];
     }
 }

@@ -40,11 +40,26 @@ $this->setData('layoutOption', $layoutOption);
 </head>
 <body>
     <div class="test-container">
-        <h1 class="test-header">CSS/JS提取功能测试</h1>
-        <div class="test-content">
-            <p>这是一个测试页面，用于验证CSS/JS提取功能是否正常工作。</p>
-            <button id="test-button">点击测试</button>
-        </div>
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-test-assets-content,layout-default-content,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="test-assets__content-root-slot">
+            <w:slot id="test-assets-content"
+                name="资源提取测试内容"
+                accept="layout-test-assets-content,layout-default-content,content"
+                reject="header,footer"
+                multiple="true"
+                position="content">
+            <h1 class="test-header">CSS/JS提取功能测试</h1>
+            <div class="test-content">
+                <p>这是一个测试页面，用于验证CSS/JS提取功能是否正常工作。</p>
+                <button id="test-button">点击测试</button>
+            </div>
+            </w:slot>
+        </w:slot>
     </div>
     
     <!-- 内联JS - 应该被提取到外部文件 -->

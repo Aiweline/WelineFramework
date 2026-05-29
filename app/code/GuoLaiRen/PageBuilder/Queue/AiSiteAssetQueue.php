@@ -17,11 +17,15 @@ use GuoLaiRen\PageBuilder\Service\AiSiteIdentityAssetTransparencyValidator;
 use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\QueueInterface;
 
 class AiSiteAssetQueue implements QueueInterface
 {
+    private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';
+    private const INLINE_IMAGE_GENERATION_DISABLED_REASON = 'disabled_by_test_switch';
+
     public function name(): string
     {
         return 'PageBuilder AI image asset generation queue';
@@ -212,6 +216,31 @@ class AiSiteAssetQueue implements QueueInterface
                 ] + $this->buildIdentityAssetScopePatch($scope));
 
                 return 'Image asset generation reused: ' . $slotId;
+            }
+            if ($this->queuedPayloadDisablesInlineImageGeneration($content)) {
+                $scope = $this->markImageGenerationDeferredInScope($scope, self::INLINE_IMAGE_GENERATION_DISABLED_REASON, $slotId);
+                $skipState = [
+                    'asset_manifest' => $manifest,
+                    'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
+                    'asset_image_generation_deferred' => $scope['asset_image_generation_deferred'],
+                ];
+                $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge(
+                    $skipState,
+                    $this->buildReferenceImageInsightScopePatch($scope)
+                ));
+                $sse->sendEvent('asset_generation_skipped', [
+                    'slot_id' => $slotId,
+                    'message' => 'Image asset generation skipped by test image switch.',
+                    'state' => $skipState,
+                ]);
+                $sse->complete([
+                    'success' => true,
+                    'slot_id' => $slotId,
+                    'deferred' => true,
+                    'state' => $skipState,
+                ]);
+
+                return 'Image asset generation skipped by test image switch: ' . $slotId;
             }
             $prompt = $manifestService->buildPrompt($slot, $scope);
             if ($prompt === '') {
@@ -478,6 +507,67 @@ class AiSiteAssetQueue implements QueueInterface
     {
         $content = \json_decode((string)$queue->getContent(), true);
         return \is_array($content) ? $content : [];
+    }
+
+    /**
+     * @param array<string,mixed> $content
+     */
+    private function queuedPayloadDisablesInlineImageGeneration(array $content): bool
+    {
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        foreach ([
+            RequestContext::get(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED, false),
+            $content['disable_inline_image_generation'] ?? null,
+            $content['skip_inline_image_generation'] ?? null,
+            $content['ai_site_test_skip_images'] ?? null,
+            $content['pagebuilder_ai_skip_inline_images'] ?? null,
+            $details['disable_inline_image_generation'] ?? null,
+            $details['skip_inline_image_generation'] ?? null,
+            $details['test_skip_inline_images'] ?? null,
+            $details['ai_site_test_skip_images'] ?? null,
+            \getenv('PAGEBUILDER_AI_SITE_SKIP_INLINE_IMAGES') ?: null,
+        ] as $value) {
+            if ($this->isTruthyQueueSwitchValue($value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function markImageGenerationDeferredInScope(array $scope, string $reason, string $slotId): array
+    {
+        $scope['asset_image_generation_deferred'] = [
+            'reason' => $reason,
+            'slot_id' => \trim($slotId),
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+
+        return $scope;
+    }
+
+    private function isTruthyQueueSwitchValue(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return $value !== 0 && $value !== 0.0;
+        }
+        if (!\is_scalar($value)) {
+            return false;
+        }
+
+        $normalized = \strtolower(\trim((string)$value));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return !\in_array($normalized, ['0', 'false', 'no', 'off', 'disable', 'disabled'], true);
     }
 
     /**

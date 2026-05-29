@@ -19,14 +19,14 @@ final class ContractQaReportBuilder
      * @param array<int|string, mixed> $contracts
      * @param array<string, list<string>> $requiredSourceTypesByContractType
      * @param array<int|string, mixed> $previousContracts
-     * @param list<array<string, mixed>> $contentQualityFindings
+     * @param list<array<string, mixed>> $structureFindings
      * @return array<string, mixed>
      */
     public function build(
         array $contracts,
         array $requiredSourceTypesByContractType = [],
         array $previousContracts = [],
-        array $contentQualityFindings = []
+        array $structureFindings = []
     ): array {
         $contractSet = $this->normalizeContractSet($contracts);
         $previousSet = $this->normalizeContractSet($previousContracts);
@@ -48,8 +48,8 @@ final class ContractQaReportBuilder
         $sourceRefs = $this->dedupeRefs($sourceRefs);
         $summary = $this->summarizeFindings($findings, \count($contractSet));
         $contractStatus = $this->resolveReportStatus($summary);
-        $contentQuality = $this->buildContentQualityPayload($contentQualityFindings);
-        $reportStatus = $this->resolveWorstStatus($contractStatus, (string)$contentQuality['status']);
+        $structureQuality = $this->buildStructureQualityPayload($structureFindings);
+        $reportStatus = $this->resolveWorstStatus($contractStatus, (string)$structureQuality['status']);
         $matrix = ($this->permissionMatrix ?? new PermissionMatrix())->forStage(ContractType::STAGE_QA);
 
         return [
@@ -77,7 +77,7 @@ final class ContractQaReportBuilder
                 'stage' => ContractType::STAGE_QA,
                 'checked_contract_types' => \array_keys($contractSet),
             ],
-            'qa_gates' => $this->buildGates($findings, $contentQualityFindings),
+            'qa_gates' => $this->buildGates($findings, $structureFindings),
             'payload' => [
                 'status' => $reportStatus,
                 'summary' => $summary,
@@ -87,7 +87,7 @@ final class ContractQaReportBuilder
                     'findings' => $findings,
                 ],
                 'findings' => $findings,
-                'content_quality' => $contentQuality,
+                'structure_quality' => $structureQuality,
             ],
         ];
     }
@@ -204,72 +204,6 @@ final class ContractQaReportBuilder
     }
 
     /**
-     * @param array<string, mixed> $args
-     * @return list<array<string, mixed>>
-     */
-    public function buildContentQualityFindings(array $args): array
-    {
-        $findings = [];
-
-        foreach (\is_array($args['missing_facts'] ?? null) ? $args['missing_facts'] : [] as $factId => $factText) {
-            $findings[] = $this->finding(
-                'error',
-                'content_quality',
-                $args['contract_type'] ?? 'source_truth',
-                "Missing must-include fact [{$factId}]: {$factText}",
-                'content_quality.missing_must_include_fact'
-            );
-        }
-
-        foreach (\is_array($args['missing_blocks'] ?? null) ? $args['missing_blocks'] : [] as $blockKey) {
-            $blockKey = (string)$blockKey;
-            $findings[] = $this->finding(
-                'error',
-                'content_quality',
-                $args['contract_type'] ?? 'page_contract',
-                "Missing required block: {$blockKey}",
-                'content_quality.missing_required_block'
-            );
-        }
-
-        if (!empty($args['fallback_used'])) {
-            $findings[] = $this->finding(
-                'warning',
-                'content_quality',
-                $args['contract_type'] ?? 'execution',
-                'Stage-1 fallback plan was used. Content quality may be degraded.',
-                'content_quality.fallback_plan_used'
-            );
-        }
-
-        if (!empty($args['visual_contract_unused'])) {
-            foreach (\is_array($args['visual_contract_unused']) ? $args['visual_contract_unused'] : [] as $item) {
-                $item = (string)$item;
-                $findings[] = $this->finding(
-                    'warning',
-                    'content_quality',
-                    $args['contract_type'] ?? 'page_contract',
-                    "Visual contract item not used in any block: {$item}",
-                    'content_quality.visual_contract_not_used'
-                );
-            }
-        }
-
-        foreach (\is_array($args['forbidden_visuals_hit'] ?? null) ? $args['forbidden_visuals_hit'] : [] as $hit) {
-            $hit = (string)$hit;
-            $findings[] = $this->finding(
-                'error',
-                'content_quality',
-                $args['contract_type'] ?? 'theme_design',
-                "Forbidden visual pattern detected: {$hit}",
-                'content_quality.forbidden_visuals_violation'
-            );
-        }
-
-        return $findings;
-    }
-
-    /**
      * @param list<array<string, mixed>> $findings
      * @return array<string, int>
      */
@@ -326,18 +260,18 @@ final class ContractQaReportBuilder
      * @param list<array<string, mixed>> $findings
      * @return array<string, mixed>
      */
-    private function buildContentQualityPayload(array $findings): array
+    private function buildStructureQualityPayload(array $findings): array
     {
         if ($findings === []) {
             return [
-                'status' => 'not_evaluated',
+                'status' => QaGateHelper::STATUS_PASS,
                 'summary' => [
                     'finding_count' => 0,
                     'error_count' => 0,
                     'warning_count' => 0,
                 ],
                 'findings' => [],
-                'message' => 'Content quality is evaluated only when a content QA linter supplies findings.',
+                'message' => 'Render data structure has no linter findings.',
             ];
         }
 
@@ -356,10 +290,10 @@ final class ContractQaReportBuilder
 
     /**
      * @param list<array<string, mixed>> $findings
-     * @param list<array<string, mixed>> $contentQualityFindings
+     * @param list<array<string, mixed>> $structureFindings
      * @return array<string, array<string, mixed>>
      */
-    private function buildGates(array $findings, array $contentQualityFindings): array
+    private function buildGates(array $findings, array $structureFindings): array
     {
         $qa = $this->qaGateHelper ?? new QaGateHelper();
         $categories = [
@@ -378,7 +312,7 @@ final class ContractQaReportBuilder
             'source_contracts' => $this->gateFromCategory($qa, 'source_contracts', $categories['source_contracts']),
             'frozen_fields' => $this->gateFromCategory($qa, 'frozen_fields', $categories['frozen_fields']),
             'permissions' => $this->gateFromCategory($qa, 'permissions', $categories['permissions']),
-            'content_quality' => $this->gateFromContentFindings($qa, $contentQualityFindings),
+            'structure_quality' => $this->gateFromStructureFindings($qa, $structureFindings),
         ];
     }
 
@@ -386,22 +320,22 @@ final class ContractQaReportBuilder
      * @param list<array<string, mixed>> $findings
      * @return array<string, mixed>
      */
-    private function gateFromContentFindings(QaGateHelper $qa, array $findings): array
+    private function gateFromStructureFindings(QaGateHelper $qa, array $findings): array
     {
         if ($findings === []) {
             return $qa->gate(
-                'content_quality',
-                QaGateHelper::STATUS_PENDING,
-                'Content quality was not evaluated by this contract-only pass.'
+                'structure_quality',
+                QaGateHelper::STATUS_PASS,
+                'Render data structure has no linter findings.'
             );
         }
 
         $summary = $this->summarizeFindings($findings, 0);
 
         return $qa->gate(
-            'content_quality',
+            'structure_quality',
             $this->resolveReportStatus($summary),
-            'Content quality findings are available.',
+            'Render data structure findings are available.',
             [
                 'finding_count' => $summary['finding_count'],
                 'error_count' => $summary['error_count'],

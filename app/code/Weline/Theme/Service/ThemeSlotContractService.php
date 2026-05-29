@@ -213,9 +213,13 @@ HTML;
                 'id' => $slotId,
                 'name' => (string)($slot['name'] ?? $slotId),
                 'accept' => $this->normalizeAccept($slot['accept'] ?? []),
+                'reject' => $this->normalizeAccept($slot['reject'] ?? $meta['reject'] ?? []),
                 'exclusive' => (bool)($slot['exclusive'] ?? false),
                 'multiple' => (bool)($slot['multiple'] ?? true),
                 'position' => (string)($slot['position'] ?? $meta['position'] ?? ''),
+                'max' => $slot['max'] ?? $meta['max'] ?? null,
+                'min' => $slot['min'] ?? $meta['min'] ?? null,
+                'required' => (bool)($slot['required'] ?? $meta['required'] ?? false),
             ];
         }
 

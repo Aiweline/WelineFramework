@@ -33,13 +33,13 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
         $prompt = $service->buildPrompt($slot, $scope);
 
-        self::assertStringContainsString('Block-only visual constraints', $prompt);
-        self::assertStringContainsString('DO NOT draw a website mockup', $prompt);
-        self::assertStringContainsString('DO NOT include a website header', $prompt);
-        self::assertStringContainsString('DO NOT include a website footer', $prompt);
-        self::assertStringContainsString('DO NOT draw call-to-action buttons', $prompt);
-        self::assertStringContainsString('DO NOT render readable English/Chinese paragraph text', $prompt);
-        self::assertStringContainsString('DO NOT show multiple separate page sections stitched together', $prompt);
+        self::assertStringContainsString('Block-only image artifact contract', $prompt);
+        self::assertStringContainsString('not as a rendered website or page screenshot', $prompt);
+        self::assertStringContainsString('DO NOT include website chrome', $prompt);
+        self::assertStringContainsString('header, navigation, footer', $prompt);
+        self::assertStringContainsString('CTA buttons', $prompt);
+        self::assertStringContainsString('DO NOT include any readable text', $prompt);
+        self::assertStringContainsString('multi-section page previews', $prompt);
 
         self::assertStringContainsString('Brand context (do not render as text on the image): Teenipiya', $prompt);
         self::assertStringNotContainsString('Website: Teenipiya', $prompt, 'Website: 标签会被解读为画一个网站，必须避免。');
@@ -166,17 +166,28 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
             'website_profile' => [
                 'brief_description' => 'India card gaming club with APK downloads.',
             ],
-            'execution_blueprint' => [
-                'pages' => [
-                    'home_page' => [
-                        'blocks' => [
-                            [
-                                'block_key' => 'home_hero',
-                                'field_plan' => [
-                                    ['field' => 'title', 'sample' => 'Play royal card games tonight'],
-                                ],
-                            ],
-                            ['block_key' => 'features'],
+            'build_plan_v2' => [
+                'blocks' => [
+                    [
+                        'page_type' => 'home_page',
+                        'section_key' => 'home_hero',
+                        'page_flow_role' => 'opening',
+                        'goal' => 'Play royal card games tonight',
+                        'image_intent' => [
+                            'needs_image' => true,
+                            'image_role' => 'hero_image',
+                            'image_subject' => 'card game lobby hero',
+                        ],
+                    ],
+                    [
+                        'page_type' => 'home_page',
+                        'section_key' => 'features',
+                        'page_flow_role' => 'details',
+                        'goal' => 'Show card room features',
+                        'image_intent' => [
+                            'needs_image' => true,
+                            'image_role' => 'section_image',
+                            'image_subject' => 'card room features',
                         ],
                     ],
                 ],
@@ -193,12 +204,45 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertArrayNotHasKey('page:home_page:features', $slots);
         $heroSlot = $slots['page:home_page:content-home-page-home-hero'];
         self::assertSame('hero_image', (string)($heroSlot['slot_type'] ?? ''));
-        self::assertStringContainsString('Hero banner background', (string)($heroSlot['label'] ?? ''));
+        self::assertStringContainsString('Play royal card games tonight', (string)($heroSlot['label'] ?? ''));
 
         // banner slot.brief 必须以 PRIMARY SUBJECT 开头，业务诉求必须出现在第 1 行
         $brief = (string)($heroSlot['brief'] ?? '');
         self::assertStringStartsWith('PRIMARY SUBJECT', $brief);
         self::assertStringContainsString('India card gaming club', $brief);
+    }
+
+    public function testNeonCardSectionPromptAddsBlockSpecificStyleLock(): void
+    {
+        $service = new AiSiteAssetManifestService();
+
+        $slot = [
+            'slot_id' => 'page:home_page:game-features:details:image',
+            'slot_type' => 'section_image',
+            'page_type' => 'home_page',
+            'block_key' => 'game_features',
+            'brief' => 'Block visual for game_features: neon card-game feature scene with poker cards, mahjong tiles, chips, and live table UI.',
+            'label' => 'Game features image',
+            'field' => 'image',
+        ];
+        $scope = [
+            'website_profile' => [
+                'site_title' => '霓虹棋牌馆',
+                'brief_description' => '霓虹棋牌风格的线上娱乐网站，包含游戏房间、玩家证明、攻略内容和客服支持。',
+                'site_tagline' => '深色霓虹牌桌体验',
+            ],
+        ];
+
+        $prompt = $service->buildPrompt($slot, $scope);
+        $firstLine = \explode("\n", $prompt)[0] ?? '';
+
+        self::assertStringContainsString('game_features', $firstLine);
+        self::assertStringContainsString('neon card-game feature scene', $firstLine);
+        self::assertStringContainsString('Neon card-game image style lock', $prompt);
+        self::assertStringContainsString('Each image MUST express its own block role', $prompt);
+        self::assertStringContainsString('poker chips', $prompt);
+        self::assertStringContainsString('mahjong tiles', $prompt);
+        self::assertStringContainsString('game_features', $prompt);
     }
 
     public function testSyncFromBuildPlanPreservesVerifiedSlotAcrossSamePlanningContext(): void
@@ -303,8 +347,8 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         $logoBrief = (string)($slots['identity:website-logo']['brief'] ?? '');
         self::assertStringStartsWith('PRIMARY SUBJECT for the logo glyph', $logoBrief);
         self::assertStringContainsString('India-focused online card gaming club', $logoBrief);
-        self::assertStringContainsString('Output requirements:', $logoBrief);
-        self::assertStringContainsString('transparent alpha background', $logoBrief);
+        self::assertStringContainsString('Output requirements (HARD):', $logoBrief);
+        self::assertStringContainsString('transparent background', $logoBrief);
         self::assertStringNotContainsString('Generate the official website logo for', $logoBrief);
 
         self::assertArrayHasKey('identity:site-title-icon', $slots);

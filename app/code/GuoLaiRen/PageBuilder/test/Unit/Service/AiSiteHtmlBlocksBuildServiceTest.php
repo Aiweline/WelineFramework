@@ -64,6 +64,39 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
         self::assertStringContainsString('All Pages', (string)($footerBlock['html'] ?? ''));
     }
 
+    public function testBuildSharedHeaderSurfacesCustomPageWhenPolicyAndUtilityPagesExist(): void
+    {
+        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+        $websiteProfile = [
+            'site_title' => 'OpsFlow AI',
+            'default_locale' => 'en_US',
+            'brief_description' => 'AI workflow operations website.',
+        ];
+        $scope = [
+            'default_locale' => 'en_US',
+            'website_profile' => $websiteProfile,
+            'page_types' => [
+                Page::TYPE_HOME,
+                Page::TYPE_ABOUT,
+                Page::TYPE_PRIVACY_POLICY,
+                Page::TYPE_BLOG_LIST,
+                Page::TYPE_CONTACT,
+                Page::TYPE_CUSTOM,
+            ],
+            'virtual_pages_by_type' => [
+                Page::TYPE_CUSTOM => ['title' => 'Workflow Audit'],
+            ],
+        ];
+
+        $headerBlock = $service->buildSharedHeaderBlock(Page::TYPE_HOME, $websiteProfile, $scope);
+        $headerNav = $headerBlock['config']['nav_items'] ?? [];
+
+        self::assertIsArray($headerNav);
+        self::assertLessThanOrEqual(6, \count($headerNav));
+        self::assertContains('/page', \array_column($headerNav, 'href'));
+        self::assertContains('Workflow Audit', \array_column($headerNav, 'label'));
+    }
+
     public function testBuildGeneratedSharedBlockParsesSchemaFromGeneratedPhtml(): void
     {
         $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());

@@ -16,7 +16,10 @@ class NotificationPageDataService
      */
     public function build(int $customerId): array
     {
-        $items = $this->mapItems($this->notificationService->getCustomerNotifications($customerId, 30));
+        $items = $this->mapItems(
+            $this->notificationService->getCustomerNotifications($customerId, 30),
+            $this->notificationService->getTypeOptions()
+        );
 
         return [
             'notifications' => $items,
@@ -29,17 +32,19 @@ class NotificationPageDataService
      * @param array<int, mixed> $items
      * @return array<int, array<string, mixed>>
      */
-    protected function mapItems(array $items): array
+    protected function mapItems(array $items, array $typeLabels = []): array
     {
         $mapped = [];
         foreach ($items as $item) {
             if (!is_array($item)) {
                 continue;
             }
+            $type = (string) ($item['type'] ?? 'info');
 
             $mapped[] = [
                 'notification_id' => (int) ($item['notification_id'] ?? 0),
-                'type' => (string) ($item['type'] ?? 'info'),
+                'type' => $type,
+                'type_label' => (string) ($typeLabels[$type] ?? ucfirst(str_replace(['-', '_'], ' ', $type))),
                 'title' => (string) ($item['title'] ?? ''),
                 'content' => (string) ($item['content'] ?? ''),
                 'target_url' => (string) ($item['target_url'] ?? ''),

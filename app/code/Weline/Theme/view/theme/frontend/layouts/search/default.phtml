@@ -1,0 +1,158 @@
+<?php
+/**
+ * Layout: search/default
+ *
+ * Search page shell. Theme owns only chrome and slot mount points; search
+ * modules provide result data through content or hooks.
+ *
+ * @meta.name {default="搜索页默认布局",name="搜索页默认布局",description="搜索结果页面布局"}
+ * @meta.description {default="包含搜索结果、筛选和推荐区的可部件化布局",name="描述",description="搜索结果页面布局"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="搜索页通常无需登录"}
+ * @param.title {default="搜索结果",name="页面标题",description="页面标题"}
+ * @param.content {default="",name="搜索结果内容",description="搜索结果内容 HTML"}
+ * @param.filters {default="",name="筛选内容",description="搜索筛选内容 HTML"}
+ * @param.showHeader {default=true,name="是否显示header",description="是否显示顶栏"}
+ * @param.showFooter {default=true,name="是否显示footer",description="是否显示底栏"}
+ * @param.class {default="",name="额外CSS类",description="主内容额外 CSS 类"}
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::search::head-after</w:hook>
+</head>
+<body>
+<w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::search::body-start</w:hook>
+
+<div class="weline-page-wrapper search-layout">
+    <if condition="meta.showHeader">
+        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::search::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:hook>Weline_Theme::frontend::layouts::search::header-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    </if>
+
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+
+    <div class="weline-main-content">
+        <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::search::content-before</w:hook>
+
+        <main class="search-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="search-main" data-layout="search">
+            <w:hook>Weline_Theme::frontend::layouts::search::main-before</w:hook>
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-search-content,layout-default-content,content,search-content,search-filters,search-results,product-grid,product-carousel"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="search-main__content-root-slot">
+            <div class="search-layout__grid">
+                <aside class="search-layout__filters">
+                    <w:slot id="search-filters"
+                            name="搜索筛选区"
+                            accept="layout-search-filters,layout-category-filters,category-filters,attribute-filter,price-filter"
+                            multiple="true"
+                            position="sidebar">
+                        <if condition="meta.filters">
+                            {{meta.filters}}
+                        <else/>
+                            <w:hook>Weline_Theme::frontend::layouts::search::filters</w:hook>
+                        </if>
+                    </w:slot>
+                </aside>
+
+                <section class="search-layout__results">
+                    <w:slot id="search-results"
+                            name="搜索结果区"
+                            accept="layout-search-results,layout-product-list-grid,product-grid,product-list-view,search-results"
+                            reject="header,footer"
+                            multiple="true"
+                            position="content">
+                        <w:hook>Weline_Theme::frontend::layouts::search::results-before</w:hook>
+                        <if condition="meta.content">
+                            {{meta.content}}
+                        <elseif condition="content"/>
+                            {{content}}
+                        <else/>
+                            <w:hook>Weline_Theme::frontend::layouts::search::results</w:hook>
+                        </if>
+                        <w:hook>Weline_Theme::frontend::layouts::search::results-after</w:hook>
+                    </w:slot>
+                </section>
+            </div>
+
+            <w:slot id="search-recommendations"
+                    name="搜索推荐区"
+                    accept="layout-search-recommendations,bestsellers,recently-viewed,you-may-like,featured-products,product-carousel"
+                    multiple="true"
+                    position="content"
+                    wrapper="section"
+                    class="search-layout__recommendations">
+                <w:hook>Weline_Theme::frontend::layouts::search::recommendations</w:hook>
+            </w:slot>
+            </w:slot>
+            <w:hook>Weline_Theme::frontend::layouts::search::main-after</w:hook>
+        </main>
+
+        <w:hook>Weline_Theme::frontend::layouts::search::content-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    </div>
+
+    <if condition="meta.showFooter">
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::search::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+        <w:hook>Weline_Theme::frontend::layouts::search::footer-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    </if>
+</div>
+
+<w:hook>Weline_Theme::frontend::layouts::search::body-end</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+
+<style>
+    .search-layout,
+    .weline-main-content {
+        min-height: 100vh;
+    }
+
+    .search-layout__grid {
+        display: grid;
+        grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+        gap: var(--weline-layout-spacing-xl, 2rem);
+        max-width: var(--weline-layout-content-max-width, 1440px);
+        margin: 0 auto;
+        padding: var(--weline-layout-spacing-xl, 2rem) var(--weline-layout-content-padding-inline, 1rem);
+        box-sizing: border-box;
+    }
+
+    .search-layout__filters,
+    .search-layout__results {
+        min-width: 0;
+    }
+
+    .search-layout__recommendations {
+        max-width: var(--weline-layout-content-max-width, 1440px);
+        margin: 0 auto;
+        padding: 0 var(--weline-layout-content-padding-inline, 1rem) var(--weline-layout-spacing-2xl, 3rem);
+        box-sizing: border-box;
+    }
+
+    @media (max-width: 900px) {
+        .search-layout__grid {
+            grid-template-columns: 1fr;
+            gap: var(--weline-layout-spacing-lg, 1.5rem);
+        }
+    }
+</style>
+</body>
+</html>

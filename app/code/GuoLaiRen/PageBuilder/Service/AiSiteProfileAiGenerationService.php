@@ -78,13 +78,13 @@ Required JSON shape:
 
 Example return shape (copy structure, not content; locked fields still win):
 {
-  "site_title": "Teenipiya",
-  "site_tagline": "Play smarter, download with confidence",
-  "brief_description": "Teenipiya helps mobile card-game players understand gameplay, compare app benefits, and download safely.",
-  "meta_title": "Teenipiya - Trusted Teen Patti APK Guide",
-  "meta_description": "Learn Teen Patti basics, review safety details, and find a clear APK download path with Teenipiya.",
-  "meta_keywords": "Teen Patti, APK download, mobile card game",
-  "logo_svg": "<svg width=\"160\" height=\"48\" viewBox=\"0 0 160 48\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"12\" y=\"30\">Teenipiya</text></svg>",
+  "site_title": "Neon Table Club",
+  "site_tagline": "Play clear neon card rooms",
+  "brief_description": "Neon Table Club helps players choose card rooms, understand rules, view rewards, and reach support from one premium neon gaming site.",
+  "meta_title": "Neon Table Club - Neon Card Rooms and Player Support",
+  "meta_description": "Explore neon card rooms with clear rules, rewards, player proof, strategy guides, and fast support.",
+  "meta_keywords": "neon card games, poker rooms, mahjong tables, player support",
+  "logo_svg": "<svg width=\"160\" height=\"48\" viewBox=\"0 0 160 48\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"12\" y=\"30\">Neon Table</text></svg>",
   "icon_svg": "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"32\" cy=\"32\" r=\"18\"/></svg>"
 }
 

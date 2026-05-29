@@ -49,6 +49,8 @@ final class AiSiteAgentWorkspacePreviewService
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope($context['scope']);
+        $scope = $this->scopeCompatibilityService->normalizePreviewContentLocale($scope, $requestedLocale);
+        $previewLocale = $this->scopeCompatibilityService->resolvePreviewContentLocale($scope, $requestedLocale);
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType(
             $this->scopeCompatibilityService->resolveScopedPageTypes($scope),
             $scope,
@@ -63,9 +65,10 @@ final class AiSiteAgentWorkspacePreviewService
         $virtualPage = $virtualPages[$pageType];
         $styleCode = \trim($requestedStyleCode !== '' ? $requestedStyleCode : (string)($virtualPage['style_code'] ?? 'default'));
         $styleCode = $styleCode !== '' ? $styleCode : 'default';
-        $locale = \trim($requestedLocale !== '' ? $requestedLocale : (string)($virtualPage['locale'] ?? State::getLang()));
+        $locale = \trim($previewLocale !== '' ? $previewLocale : ($requestedLocale !== '' ? $requestedLocale : (string)($virtualPage['locale'] ?? State::getLang())));
         $locale = $locale !== '' ? $locale : State::getLang();
         $layout = $this->virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
+        $layout = $this->mergePreviewLayoutFromScope($layout, $scope, $pageType);
         $layout = $this->scopeCompatibilityService->localizeSharedLayoutConfigForScope($layout, $scope, $pageType);
         $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
         $materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);
@@ -118,6 +121,17 @@ final class AiSiteAgentWorkspacePreviewService
         $page->setData('virtual_theme_id', $virtualThemeId);
         $page->setData('virtual_layout_config', $layout);
         $page->setData('virtual_pages_by_type', $virtualPages);
+        if (\is_array($scope['design_tokens'] ?? null) && $scope['design_tokens'] !== []) {
+            $page->setData('design_tokens', $scope['design_tokens']);
+        }
+        $themeCssRef = \is_array($scope['theme_css_ref'] ?? null) ? $scope['theme_css_ref'] : [];
+        $inlineThemeCss = \trim((string)($scope['theme_css'] ?? ''));
+        if ($inlineThemeCss !== '') {
+            $themeCssRef['css'] = $inlineThemeCss;
+        }
+        if ($themeCssRef !== []) {
+            $page->setData('theme_css_ref', $themeCssRef);
+        }
 
         return [
             'page' => $page,
@@ -126,6 +140,29 @@ final class AiSiteAgentWorkspacePreviewService
             'virtual_theme_id' => $virtualThemeId,
             'virtual_pages' => $virtualPages,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $layout
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function mergePreviewLayoutFromScope(array $layout, array $scope, string $pageType): array
+    {
+        $pageTypeLayouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        $scopeLayout = \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [];
+        foreach (['header', 'footer'] as $region) {
+            $regionLayout = \is_array($scopeLayout[$region] ?? null) ? $scopeLayout[$region] : [];
+            if ($regionLayout === []) {
+                continue;
+            }
+            $layout[$region] = \array_replace_recursive(
+                \is_array($layout[$region] ?? null) ? $layout[$region] : [],
+                $regionLayout
+            );
+        }
+
+        return $layout;
     }
 
     /**

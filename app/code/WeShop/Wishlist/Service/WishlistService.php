@@ -45,9 +45,12 @@ class WishlistService
             return $existing;
         }
 
+        $now = date('Y-m-d H:i:s');
         $wishlist->clearData()
             ->setData(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
             ->setData(Wishlist::schema_fields_PRODUCT_ID, $productId)
+            ->setData(Wishlist::schema_fields_CREATED_AT, $now)
+            ->setData(Wishlist::schema_fields_UPDATED_AT, $now)
             ->save();
 
         $afterEventData = $eventData + [

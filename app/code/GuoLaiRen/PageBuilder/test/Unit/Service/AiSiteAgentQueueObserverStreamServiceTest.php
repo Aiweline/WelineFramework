@@ -184,7 +184,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertTrue((bool)$queued['continue_other_operations']);
     }
 
-    public function testReconcileTrustsRunningQueueStatusWithoutPidProbe(): void
+    public function testReconcileTreatsRunningWithoutPidAsSchedulerWaiting(): void
     {
         $service = $this->service();
 
@@ -199,7 +199,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             [
                 'queue_id' => 889,
                 'pid' => 0,
-                'process' => 'queue is running in the scheduler',
+                'process' => 'queue is waiting for the scheduler worker',
                 'snapshot' => [
                     'queue_id' => 889,
                     'pid' => 0,
@@ -212,12 +212,12 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertSame('running', $running['status']);
         self::assertSame('running', $running['semantic_status']);
         self::assertSame(889, $running['queue_id']);
-        self::assertSame('queue is running in the scheduler', $running['message']);
+        self::assertStringContainsString('#889', (string)$running['message']);
         self::assertSame(0, $running['retry_allowed']);
         self::assertSame(0, $running['queue_terminal_recovered']);
-        self::assertFalse((bool)$running['queue_waiting_for_scheduler']);
-        self::assertFalse((bool)$running['can_close_stream']);
-        self::assertFalse((bool)$running['continue_other_operations']);
+        self::assertTrue((bool)$running['queue_waiting_for_scheduler']);
+        self::assertTrue((bool)$running['can_close_stream']);
+        self::assertTrue((bool)$running['continue_other_operations']);
     }
 
     public function testReconcileMapsTerminalQueueStatusesWithoutFoldingCancelledIntoDone(): void
@@ -489,7 +489,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertSame('AI 生成进度 45%', $result[0]);
     }
 
-    public function testForwardObservedQueueSignalsKeepsTaskPlanQueueProcessAndResultVisible(): void
+    public function testForwardObservedQueueSignalsKeepsTaskPlanProcessVisibleWithoutReplayingResult(): void
     {
         $sse = new SpySseWriterForQueueObserverStream(true);
 
@@ -511,13 +511,11 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             2468
         );
 
-        self::assertCount(3, $sse->calls);
+        self::assertCount(1, $sse->calls);
         self::assertSame('progress', $sse->calls[0]['event']);
         self::assertSame('第二阶段任务方案：正在汇总页面任务', $sse->calls[0]['data']['message']);
-        self::assertSame('chunk', $sse->calls[1]['event']);
-        self::assertSame('[12:00:00] INFO 第二阶段任务方案进入批量整理', $sse->calls[1]['data']['message']);
-        self::assertSame('chunk', $sse->calls[2]['event']);
-        self::assertSame('[12:00:02] TASK_PLAN_REFINED 第二阶段任务方案已刷新', $sse->calls[2]['data']['message']);
+        self::assertSame('第二阶段任务方案：正在汇总页面任务', $sse->calls[0]['data']['queue_process']);
+        self::assertArrayNotHasKey('queue_result_delta', $sse->calls[0]['data']);
         self::assertSame('第二阶段任务方案：正在汇总页面任务', $result[0]);
         self::assertSame(\strlen($queueRow['result']), $result[1]);
     }
@@ -553,7 +551,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertSame('AI Stream Token +5', $result[0]);
     }
 
-    public function testForwardObservedQueueSignalsEmitsChunkEventPerResultDeltaLineSkippingEmpty(): void
+    public function testForwardObservedQueueSignalsOnlyAdvancesLastResultLengthWhenResultGrows(): void
     {
         $sse = new SpySseWriterForQueueObserverStream(true);
 
@@ -575,17 +573,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             100
         );
 
-        $chunkEvents = \array_values(\array_filter(
-            $sse->calls,
-            static fn (array $c): bool => $c['event'] === 'chunk'
-        ));
-        self::assertCount(3, $chunkEvents, '空行应被跳过');
-        self::assertSame('行1', $chunkEvents[0]['data']['message']);
-        self::assertSame('行2', $chunkEvents[1]['data']['message']);
-        self::assertSame('行3', $chunkEvents[2]['data']['message']);
-        self::assertSame("行1" . PHP_EOL, $chunkEvents[0]['data']['chunk']);
-
-        // lastQueueResultLength 应被推进到整段长度
+        self::assertSame([], $sse->calls, 'queue.result 增长只推进游标，不再拆成 chunk/queue_result_delta 回放');
         self::assertSame(\strlen("行1\n\n行2\r\n行3"), $result[1]);
     }
 
@@ -611,13 +599,8 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             100
         );
 
-        // 长度倒退应重置为 0 再吞新 delta，而不是跳过
+        // 长度倒退应重置为 0 再推进到当前长度，但不回放旧 result。
         self::assertSame(\strlen('short'), $result[1]);
-        $chunkEvents = \array_values(\array_filter(
-            $sse->calls,
-            static fn (array $c): bool => $c['event'] === 'chunk'
-        ));
-        self::assertCount(1, $chunkEvents);
-        self::assertSame('short', $chunkEvents[0]['data']['message']);
+        self::assertSame([], $sse->calls);
     }
 }

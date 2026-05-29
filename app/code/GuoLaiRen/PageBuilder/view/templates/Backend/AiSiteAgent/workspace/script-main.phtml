@@ -52,17 +52,24 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
 (function () {
     'use strict';
     var PB_SSE_CONNECT_DELAY_MS = 5000;
+    var INLINE_STREAM_MAX_CHARS = 24000;
+    var INLINE_STREAM_EVENT_BUFFER_MAX_CHARS = 65536;
+    var INLINE_STREAM_MAX_DOM_LINES = 200;
+    var INLINE_STREAM_MAX_TEXT_LINES = 200;
+    var PLAN_STREAM_PREVIEW_MAX_CHARS = 60000;
+    var PLAN_STREAM_PREVIEW_MAX_LINES = 600;
+    var WORKSPACE_VOLATILE_STATE_KEYS = ['events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'];
 
     var isGuidedUi = <?= $guidedUi ? 'true' : 'false' ?>;
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var pageTypeLabelMap = <?= \json_encode($pageTypeLabels, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentStageCode = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    var initialWorkspaceState = <?php $this->writeJsonForScript($state); ?>;
+    var initialWorkspaceState = normalizeWorkspaceStateShape(<?php $this->writeJsonForScript($state); ?>);
     var latestWorkspaceState = initialWorkspaceState;
     var initialWorkspaceStateHydrated = false;
     window.__pbInitialWorkspaceState = initialWorkspaceState;
     window.__pbWorkspaceState = initialWorkspaceState;
-    window.__pbLastWorkspaceState = initialWorkspaceState;
+    window.__pbLastWorkspaceState = sanitizeWorkspaceStateForMemory(initialWorkspaceState);
     var hasGeneratedPages = <?= \json_encode($displayPagesByType !== [], \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var isOperationRunning = <?= \json_encode(\in_array($activeOperationStatus, ['pending', 'queued', 'running', 'processing'], true), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentActiveOperationState = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -144,8 +151,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     var currentWorkspaceStage = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var planConfirmedState = <?= \json_encode((bool)($state['plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var buildPlanConfirmedState = <?= \json_encode((bool)($state['build_plan_confirmed'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    var hasExecutionBlueprintState = <?= \json_encode((bool)($state['has_execution_blueprint'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    var hasPendingBuildTasksState = <?= \json_encode((bool)($state['has_pending_build_tasks'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+    var hasPendingBuildPlanBlocksState = <?= \json_encode((bool)($state['has_pending_build_plan_blocks'] ?? false), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     /** 与 PHP 注入的 $pbAiPhaseOnePlanPresent 同步：是否存在可用的建站方案（用于按钮禁用等）。 */
     var lastPhaseOnePlanPresent = <?= \json_encode((bool)($pbAiPhaseOnePlanPresent), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var globalRunVirtualThemeDisabled = false;
@@ -176,6 +182,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         blockIndex: 0,
         blockConfig: {},
         fieldSchema: {}
+    };
+    var blockEditorAiStreamState = {
+        abortController: null,
+        timeoutId: null,
+        reader: null
     };
     // 区块刷新 / SSE 相关状态挂到 window 上，便于跨脚本多入口共享同一份引用。
     function getSharedBlockRefreshState() {
@@ -358,8 +369,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 : ((planBlock.plan_projection && typeof planBlock.plan_projection === 'object')
                     ? planBlock.plan_projection
                     : ((planBlock.projection && typeof planBlock.projection === 'object') ? planBlock.projection : {})));
-        var taskSummary = state.build_task_summary && typeof state.build_task_summary === 'object'
-            ? state.build_task_summary
+        var taskSummary = state.build_plan_execution_summary && typeof state.build_plan_execution_summary === 'object'
+            ? state.build_plan_execution_summary
             : {};
         var hasBuildTaskEvidence = Number(taskSummary.total || taskSummary.pending || taskSummary.done || 0) > 0;
         var meta = buildPlan.contract_meta && typeof buildPlan.contract_meta === 'object' ? buildPlan.contract_meta : {};
@@ -375,7 +386,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             displayKind = 'build_plan';
         } else if (hasNonEmptyPlanArtifact(taskSummary)) {
             displayPlan = taskSummary;
-            displayKind = 'task_summary';
+            displayKind = 'build_plan_summary';
         }
         var hasEvidence = hasNonEmptyPlanArtifact(buildPlan)
             || hasNonEmptyPlanArtifact(projection)
@@ -483,6 +494,149 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return Object.assign({}, base, patch);
     }
 
+    function sanitizeQueueInfoForMemory(info) {
+        var safe = isPlainWorkspaceObject(info) ? Object.assign({}, info) : {};
+        dropWorkspaceVolatileKeys(safe);
+        if (isPlainWorkspaceObject(safe.snapshot)) {
+            safe.snapshot = Object.assign({}, safe.snapshot);
+            dropWorkspaceVolatileKeys(safe.snapshot);
+        }
+        return safe;
+    }
+
+    function dropWorkspaceVolatileKeys(target) {
+        if (!isPlainWorkspaceObject(target)) {
+            return target;
+        }
+        WORKSPACE_VOLATILE_STATE_KEYS.forEach(function (key) {
+            delete target[key];
+        });
+        return target;
+    }
+
+    function sanitizeWorkspaceStateForMemory(state) {
+        var safe = isPlainWorkspaceObject(state) ? Object.assign({}, state) : {};
+        dropWorkspaceVolatileKeys(safe);
+        ['plan_queue_info', 'build_queue_info'].forEach(function (key) {
+            if (isPlainWorkspaceObject(safe[key])) {
+                safe[key] = sanitizeQueueInfoForMemory(safe[key]);
+            }
+        });
+        if (isPlainWorkspaceObject(safe.snapshot)) {
+            safe.snapshot = Object.assign({}, safe.snapshot);
+            dropWorkspaceVolatileKeys(safe.snapshot);
+        }
+        if (isPlainWorkspaceObject(safe.scope)) {
+            safe.scope = Object.assign({}, safe.scope);
+            dropWorkspaceVolatileKeys(safe.scope);
+            if (isPlainWorkspaceObject(safe.scope.snapshot)) {
+                safe.scope.snapshot = Object.assign({}, safe.scope.snapshot);
+                dropWorkspaceVolatileKeys(safe.scope.snapshot);
+            }
+            ['plan_queue_info', 'build_queue_info'].forEach(function (key) {
+                if (isPlainWorkspaceObject(safe.scope[key])) {
+                    safe.scope[key] = sanitizeQueueInfoForMemory(safe.scope[key]);
+                }
+            });
+        }
+        ['plan_workbench'].forEach(function (key) {
+            if (isPlainWorkspaceObject(safe[key])) {
+                safe[key] = Object.assign({}, safe[key]);
+                dropWorkspaceVolatileKeys(safe[key]);
+                delete safe[key].task_results;
+            }
+            if (isPlainWorkspaceObject(safe.scope) && isPlainWorkspaceObject(safe.scope[key])) {
+                safe.scope[key] = Object.assign({}, safe.scope[key]);
+                dropWorkspaceVolatileKeys(safe.scope[key]);
+                delete safe.scope[key].task_results;
+            }
+        });
+        ['page_type_layouts', 'pagebuilder_pages_by_type', 'virtual_pages_by_type'].forEach(function (key) {
+            if (isPlainWorkspaceObject(safe[key])) {
+                safe[key] = sanitizeWorkspaceStateCollectionForMemory(safe[key]);
+            }
+            if (isPlainWorkspaceObject(safe.scope) && isPlainWorkspaceObject(safe.scope[key])) {
+                safe.scope[key] = sanitizeWorkspaceStateCollectionForMemory(safe.scope[key]);
+            }
+        });
+        delete safe.task_results;
+        if (isPlainWorkspaceObject(safe.scope)) {
+            delete safe.scope.task_results;
+        }
+        return safe;
+    }
+
+    function sanitizeWorkspaceStateCollectionForMemory(collection) {
+        var safeCollection = {};
+        Object.keys(collection || {}).forEach(function (itemKey) {
+            var item = collection[itemKey];
+            if (isPlainWorkspaceObject(item)) {
+                safeCollection[itemKey] = dropWorkspaceVolatileKeys(Object.assign({}, item));
+            } else {
+                safeCollection[itemKey] = item;
+            }
+        });
+        return safeCollection;
+    }
+
+    function pruneInlineStreamLines(container) {
+        if (!container || !INLINE_STREAM_MAX_DOM_LINES || INLINE_STREAM_MAX_DOM_LINES <= 0) {
+            return;
+        }
+        while (container.childNodes.length > INLINE_STREAM_MAX_DOM_LINES) {
+            container.removeChild(container.firstChild);
+        }
+    }
+
+    function appendBoundedInlineStreamText(element, text) {
+        if (!element) {
+            return;
+        }
+        var next = String(element.textContent || '') + String(text || '');
+        if (INLINE_STREAM_MAX_TEXT_LINES > 0) {
+            var lines = next.split(/\r\n|\n|\r/);
+            if (lines.length > INLINE_STREAM_MAX_TEXT_LINES) {
+                next = lines.slice(-INLINE_STREAM_MAX_TEXT_LINES).join('\n');
+            }
+        }
+        if (INLINE_STREAM_MAX_CHARS > 0 && next.length > INLINE_STREAM_MAX_CHARS) {
+            next = next.slice(-Math.floor(INLINE_STREAM_MAX_CHARS * 0.85));
+        }
+        element.textContent = next;
+    }
+
+    function appendSseParserBuffer(current, piece) {
+        var next = String(current || '') + String(piece || '');
+        if (INLINE_STREAM_EVENT_BUFFER_MAX_CHARS > 0 && next.length > INLINE_STREAM_EVENT_BUFFER_MAX_CHARS) {
+            next = next.slice(-INLINE_STREAM_EVENT_BUFFER_MAX_CHARS);
+        }
+        return next;
+    }
+
+    function abortComponentConfigModalStream(modalElement) {
+        if (!modalElement) {
+            return;
+        }
+        if (modalElement.__pbComponentConfigStreamTimeoutId) {
+            window.clearTimeout(modalElement.__pbComponentConfigStreamTimeoutId);
+            modalElement.__pbComponentConfigStreamTimeoutId = null;
+        }
+        if (modalElement.__pbComponentConfigStreamReader && typeof modalElement.__pbComponentConfigStreamReader.cancel === 'function') {
+            try {
+                modalElement.__pbComponentConfigStreamReader.cancel();
+            } catch (e) {}
+            modalElement.__pbComponentConfigStreamReader = null;
+        }
+        if (modalElement.__pbComponentConfigStreamAbortController) {
+            modalElement.__pbComponentConfigStreamAbortController.abort();
+            modalElement.__pbComponentConfigStreamAbortController = null;
+        }
+        var streamContent = modalElement.querySelector('#aiComponentConfigSseTerminal_content');
+        if (streamContent) {
+            streamContent.textContent = '';
+        }
+    }
+
     function normalizeWorkspaceStateShape(state) {
         var normalized = state && typeof state === 'object' ? Object.assign({}, state) : {};
         normalized.scope = normalized.scope && typeof normalized.scope === 'object'
@@ -498,7 +652,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             ? normalized.retryable_ai_failure_summary
             : {};
 
-        return normalized;
+        return sanitizeWorkspaceStateForMemory(normalized);
     }
 
     function mergeWorkspaceStatePatch(patch) {
@@ -516,7 +670,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             'plan',
             'plan_queue_info',
             'build_queue_info',
-            'build_task_summary',
+            'build_plan_execution_summary',
             'build_summary',
             'workspace_entry_queue_notice',
             'asset_manifest',
@@ -558,7 +712,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             markdown: pickFirstNonEmptyPlanText(plan.markdown, state.plan_markdown, scope.plan_markdown),
             json: pickFirstNonEmptyPlanObject(plan.json, state.plan_json, scope.plan_json),
             structured: pickFirstNonEmptyPlanObject(plan.structured, state.plan_structured, scope.plan_structured),
-            execution_blueprint: pickFirstNonEmptyPlanObject(plan.execution_blueprint, state.execution_blueprint, scope.execution_blueprint),
             build_plan_v2: pickFirstNonEmptyPlanObject(plan.build_plan_v2, state.build_plan_v2, scope.build_plan_v2)
         };
         if (!hasNonEmptyPlanArtifact(payload.structured) && hasNonEmptyPlanArtifact(payload.json)) {
@@ -568,7 +721,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             payload.markdown !== ''
             || hasNonEmptyPlanArtifact(payload.json)
             || hasNonEmptyPlanArtifact(payload.structured)
-            || hasNonEmptyPlanArtifact(payload.execution_blueprint)
+            || hasNonEmptyPlanArtifact(payload.build_plan_v2)
         ) {
             return payload;
         }
@@ -891,7 +1044,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         workspaceState = normalizeWorkspaceStateShape(mergeWorkspaceStatePatch(workspaceState));
         latestWorkspaceState = workspaceState;
         window.__pbWorkspaceState = workspaceState;
-        window.__pbLastWorkspaceState = workspaceState;
+        window.__pbLastWorkspaceState = sanitizeWorkspaceStateForMemory(workspaceState);
         syncStageOnePlanPreviewFromWorkspaceState(workspaceState);
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'plan_confirmed')) {
             planConfirmedState = !!workspaceState.plan_confirmed;
@@ -899,11 +1052,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'build_plan_confirmed')) {
             buildPlanConfirmedState = !!workspaceState.build_plan_confirmed;
         }
-        if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_execution_blueprint')) {
-            hasExecutionBlueprintState = !!workspaceState.has_execution_blueprint;
-        }
-        if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_pending_build_tasks')) {
-            hasPendingBuildTasksState = !!workspaceState.has_pending_build_tasks;
+        if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_pending_build_plan_blocks')) {
+            hasPendingBuildPlanBlocksState = !!workspaceState.has_pending_build_plan_blocks;
         }
         if (workspaceState.active_operation && typeof workspaceState.active_operation === 'object') {
             currentActiveOperationState = workspaceState.active_operation;
@@ -1461,8 +1611,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         planResumeFailedTasks: <?= \json_encode((string)__('正在续跑失败项，已完成的阶段一内容将保留'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryFailedItemsLabel: <?= \json_encode((string)__('重试失败项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         buildResumeFailedTasks: <?= \json_encode((string)__('正在重试失败的构建任务，已成功的页面将保留。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        buildFullRebuildConfirmTitle: <?= \json_encode((string)__('完全重建构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        buildFullRebuildConfirmMessage: <?= \json_encode((string)__('完全重建会清空当前虚拟主题与已生成页面，并从头重新执行全部构建任务。是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildFullRebuildConfirmTitle: <?= \json_encode((string)__('重新生成当前构建阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildFullRebuildConfirmMessage: <?= \json_encode((string)__('当前阶段完全重新生成会清空当前虚拟主题与已生成页面，并重新执行构建阶段任务。是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         buildFailureCjkLocaleMismatch: <?= \json_encode((string)__('生成组件未满足网站内容语言契约：当前网站内容语言为 %{locale}，但组件可见文案含大量中文。请把阶段一方案中的访客可见文案改为英文，或将工作台「内容语言」改为中文后再重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         buildFailureLocaleContract: <?= \json_encode((string)__('生成组件未满足网站内容语言契约，请检查内容语言与方案文案是否一致。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         briefRequired: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1541,7 +1691,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         focusEmbeddedPreview: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineInstructionRequired: <?= \json_encode((string)__('请先输入区块微调要求'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineUnavailable: <?= \json_encode((string)__('当前区块暂时无法发起 AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        refineQueued: <?= \json_encode((string)__('已提交区块局部修改，正在替换当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineQueued: <?= \json_encode((string)__('已提交区块局部修改，等待系统稍后调度处理'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineContextFallback: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         refineStreaming: <?= \json_encode((string)__('已开始区块微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         regenerateStreaming: <?= \json_encode((string)__('已开始区块重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -2408,6 +2558,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     }
 
     function scheduleRetryableAiFailureResumePrompt(workspaceState) {
+        ensureRetryableAiResumePromptState();
         if (retryableAiResumePromptTimer) {
             window.clearTimeout(retryableAiResumePromptTimer);
             retryableAiResumePromptTimer = 0;
@@ -2765,16 +2916,12 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var planStructured = state.plan_structured && typeof state.plan_structured === 'object'
             ? state.plan_structured
             : (scope.plan_structured && typeof scope.plan_structured === 'object' ? scope.plan_structured : {});
-        var executionBlueprint = state.execution_blueprint && typeof state.execution_blueprint === 'object'
-            ? state.execution_blueprint
-            : (scope.execution_blueprint && typeof scope.execution_blueprint === 'object' ? scope.execution_blueprint : {});
         var candidates = [];
         [
             state,
             scope,
             planJson,
-            planStructured,
-            executionBlueprint && executionBlueprint.theme_context_snapshot
+            planStructured
         ].forEach(function (root) {
             if (!root || typeof root !== 'object') {
                 return;
@@ -3047,6 +3194,141 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         });
     }
 
+    function collectAssetSlotViewModel(slot) {
+        var slotId = readAssetSlotValue(slot, ['slot_id', 'id', 'key']);
+        var status = readAssetSlotValue(slot, ['status', 'queue_status']) || 'pending';
+        var preview = readAssetSlotValue(slot, ['preview', 'preview_url', 'url', 'final_url']);
+        var finalUrl = readAssetSlotValue(slot, ['final_url', 'url']);
+        var lockedBy = readAssetSlotValue(slot, ['locked_by_user', 'locked_by']);
+        var error = normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['error', 'error_message']), 220);
+        var locked = lockedBy !== '' && lockedBy !== '0' && lockedBy.toLowerCase() !== 'false';
+        return {
+            slotId: slotId,
+            status: status,
+            preview: preview,
+            finalUrl: finalUrl,
+            locked: locked,
+            error: error,
+            displayLabel: buildAssetSlotDisplayLabel(slot, slotId),
+            binding: buildAssetSlotBindingText(slot, slotId),
+            purpose: buildAssetSlotPurposeText(slot)
+        };
+    }
+
+    function renderAssetSlotCardHtml(view) {
+        var previewHtml = view.preview
+            ? '<div class="pb-ai-asset-preview mb-2" data-asset-slot-preview-wrap><img alt="" data-asset-slot-preview src="' + escapeHtml(view.preview) + '"></div>'
+            : '';
+        return ''
+            + '<div class="pb-ai-asset-slot-card p-2 small" data-asset-slot-id="' + escapeHtml(view.slotId) + '">'
+            + '<div class="d-flex align-items-start justify-content-between gap-2 mb-1">'
+            + '<strong class="text-break" data-asset-slot-label>' + escapeHtml(view.displayLabel || view.slotId || '-') + '</strong>'
+            + '<span class="badge text-bg-secondary" data-asset-slot-status>' + escapeHtml(view.status) + '</span>'
+            + '</div>'
+            + '<div class="text-muted mb-1 pb-ai-asset-binding' + (view.binding ? '' : ' d-none') + '" data-asset-slot-binding>' + escapeHtml(view.binding) + '</div>'
+            + previewHtml
+            + '<div class="d-flex flex-wrap gap-1 mb-2">'
+            + '<a class="badge text-bg-light border text-decoration-none' + (view.finalUrl ? '' : ' d-none') + '" target="_blank" rel="noopener" data-asset-slot-final-url href="' + escapeHtml(view.finalUrl || '#') + '">final_url</a>'
+            + '<span class="badge text-bg-light border' + (view.purpose ? '' : ' d-none') + '" data-asset-slot-purpose>' + escapeHtml(view.purpose) + '</span>'
+            + '<span class="badge text-bg-warning' + (view.locked ? '' : ' d-none') + '" data-asset-slot-locked>locked</span>'
+            + '<span class="badge text-bg-danger' + (view.error ? '' : ' d-none') + '" data-asset-slot-error-badge>error</span>'
+            + '</div>'
+            + '<div class="text-danger mb-2' + (view.error ? '' : ' d-none') + '" data-asset-slot-error-text>' + escapeHtml(view.error) + '</div>'
+            + '<div class="d-flex flex-wrap gap-2 align-items-center">'
+            + '<button type="button" class="btn btn-sm btn-outline-primary" data-asset-generate="generate" data-slot-id="' + escapeHtml(view.slotId) + '">Generate</button>'
+            + '<button type="button" class="btn btn-sm btn-outline-secondary" data-asset-generate="regenerate" data-slot-id="' + escapeHtml(view.slotId) + '">Regenerate</button>'
+            + '<span class="text-muted" data-asset-queue-meta></span>'
+            + '</div>'
+            + '</div>';
+    }
+
+    function findAssetSlotCard(list, slotId) {
+        var cards = list.querySelectorAll('[data-asset-slot-id]');
+        for (var i = 0; i < cards.length; i += 1) {
+            if (cards[i].getAttribute('data-asset-slot-id') === slotId) {
+                return cards[i];
+            }
+        }
+        return null;
+    }
+
+    function setAssetSlotText(card, selector, text) {
+        var el = card.querySelector(selector);
+        if (el && el.textContent !== text) {
+            el.textContent = text;
+        }
+    }
+
+    function toggleAssetSlotValue(card, selector, visible, text) {
+        var el = card.querySelector(selector);
+        if (!el) {
+            return;
+        }
+        el.classList.toggle('d-none', !visible);
+        if (visible && typeof text === 'string' && el.textContent !== text) {
+            el.textContent = text;
+        }
+    }
+
+    function setAssetSlotButtonLocked(card, locked) {
+        card.querySelectorAll('[data-asset-generate]').forEach(function (button) {
+            button.disabled = !!locked;
+            if (locked) {
+                button.setAttribute('aria-disabled', 'true');
+            } else {
+                button.removeAttribute('aria-disabled');
+            }
+        });
+    }
+
+    function syncAssetSlotPreview(card, preview) {
+        var wrapper = card.querySelector('[data-asset-slot-preview-wrap]');
+        var image = wrapper ? wrapper.querySelector('[data-asset-slot-preview]') : null;
+        if (!preview) {
+            if (wrapper) {
+                wrapper.remove();
+            }
+            return;
+        }
+        if (!wrapper) {
+            wrapper = document.createElement('div');
+            wrapper.className = 'pb-ai-asset-preview mb-2';
+            wrapper.setAttribute('data-asset-slot-preview-wrap', '');
+            image = document.createElement('img');
+            image.alt = '';
+            image.setAttribute('data-asset-slot-preview', '');
+            wrapper.appendChild(image);
+            var binding = card.querySelector('[data-asset-slot-binding]');
+            if (binding && binding.parentNode === card) {
+                binding.insertAdjacentElement('afterend', wrapper);
+            } else {
+                card.insertBefore(wrapper, card.firstChild);
+            }
+        }
+        if (image && image.getAttribute('src') !== preview) {
+            image.setAttribute('src', preview);
+        }
+    }
+
+    function updateAssetSlotCard(card, view) {
+        setAssetSlotText(card, '[data-asset-slot-label]', view.displayLabel || view.slotId || '-');
+        setAssetSlotText(card, '[data-asset-slot-status]', view.status);
+        toggleAssetSlotValue(card, '[data-asset-slot-binding]', !!view.binding, view.binding);
+        syncAssetSlotPreview(card, view.preview);
+        var finalUrl = card.querySelector('[data-asset-slot-final-url]');
+        if (finalUrl) {
+            finalUrl.classList.toggle('d-none', !view.finalUrl);
+            if (view.finalUrl && finalUrl.getAttribute('href') !== view.finalUrl) {
+                finalUrl.setAttribute('href', view.finalUrl);
+            }
+        }
+        toggleAssetSlotValue(card, '[data-asset-slot-purpose]', !!view.purpose, view.purpose);
+        toggleAssetSlotValue(card, '[data-asset-slot-locked]', view.locked, 'locked');
+        toggleAssetSlotValue(card, '[data-asset-slot-error-badge]', !!view.error, 'error');
+        toggleAssetSlotValue(card, '[data-asset-slot-error-text]', !!view.error, view.error);
+        setAssetSlotButtonLocked(card, view.locked);
+    }
+
     function syncAssetPanelFromWorkspaceState(workspaceState) {
         var list = document.getElementById('pb-ai-asset-slot-list');
         var empty = document.getElementById('pb-ai-asset-panel-empty');
@@ -3055,48 +3337,33 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             return;
         }
         var slots = normalizeAssetManifestSlots(readAssetManifestFromWorkspaceState(workspaceState));
+        var seen = {};
         if (count) {
             count.textContent = String(slots.length);
         }
         if (empty) {
             empty.classList.toggle('d-none', slots.length > 0);
         }
-        list.innerHTML = slots.map(function (slot) {
-            var slotId = readAssetSlotValue(slot, ['slot_id', 'id', 'key']);
-            var status = readAssetSlotValue(slot, ['status', 'queue_status']) || 'pending';
-            var preview = readAssetSlotValue(slot, ['preview', 'preview_url', 'url', 'final_url']);
-            var finalUrl = readAssetSlotValue(slot, ['final_url', 'url']);
-            var lockedBy = readAssetSlotValue(slot, ['locked_by_user', 'locked_by']);
-            var error = normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['error', 'error_message']), 220);
-            var displayLabel = buildAssetSlotDisplayLabel(slot, slotId);
-            var binding = buildAssetSlotBindingText(slot, slotId);
-            var purpose = buildAssetSlotPurposeText(slot);
-            var locked = lockedBy !== '' && lockedBy !== '0' && lockedBy.toLowerCase() !== 'false';
-            var previewHtml = preview
-                ? '<div class="pb-ai-asset-preview mb-2"><img alt="" src="' + escapeHtml(preview) + '"></div>'
-                : '';
-            return ''
-                + '<div class="pb-ai-asset-slot-card p-2 small" data-asset-slot-id="' + escapeHtml(slotId) + '">'
-                + '<div class="d-flex align-items-start justify-content-between gap-2 mb-1">'
-                + '<strong class="text-break">' + escapeHtml(displayLabel || slotId || '-') + '</strong>'
-                + '<span class="badge text-bg-secondary" data-asset-slot-status>' + escapeHtml(status) + '</span>'
-                + '</div>'
-                + (binding ? '<div class="text-muted mb-1 pb-ai-asset-binding">' + escapeHtml(binding) + '</div>' : '')
-                + previewHtml
-                + '<div class="d-flex flex-wrap gap-1 mb-2">'
-                + (finalUrl ? '<a class="badge text-bg-light border text-decoration-none" target="_blank" rel="noopener" href="' + escapeHtml(finalUrl) + '">final_url</a>' : '')
-                + (purpose ? '<span class="badge text-bg-light border">' + escapeHtml(purpose) + '</span>' : '')
-                + (locked ? '<span class="badge text-bg-warning">locked</span>' : '')
-                + (error ? '<span class="badge text-bg-danger">error</span>' : '')
-                + '</div>'
-                + (error ? '<div class="text-danger mb-2">' + escapeHtml(error) + '</div>' : '')
-                + '<div class="d-flex flex-wrap gap-2 align-items-center">'
-                + '<button type="button" class="btn btn-sm btn-outline-primary" data-asset-generate="generate" data-slot-id="' + escapeHtml(slotId) + '"' + (locked ? ' disabled aria-disabled="true"' : '') + '>Generate</button>'
-                + '<button type="button" class="btn btn-sm btn-outline-secondary" data-asset-generate="regenerate" data-slot-id="' + escapeHtml(slotId) + '"' + (locked ? ' disabled aria-disabled="true"' : '') + '>Regenerate</button>'
-                + '<span class="text-muted" data-asset-queue-meta></span>'
-                + '</div>'
-                + '</div>';
-        }).join('');
+        slots.forEach(function (slot) {
+            var view = collectAssetSlotViewModel(slot);
+            seen[view.slotId] = true;
+            var card = findAssetSlotCard(list, view.slotId);
+            if (!card) {
+                var holder = document.createElement('div');
+                holder.innerHTML = renderAssetSlotCardHtml(view);
+                card = holder.firstElementChild;
+                list.appendChild(card);
+                setAssetSlotButtonLocked(card, view.locked);
+            } else {
+                updateAssetSlotCard(card, view);
+            }
+        });
+        list.querySelectorAll('[data-asset-slot-id]').forEach(function (card) {
+            var slotId = card.getAttribute('data-asset-slot-id') || '';
+            if (!seen[slotId]) {
+                card.remove();
+            }
+        });
     }
 
     function readReferenceImagesFromWorkspaceState(workspaceState) {
@@ -3966,6 +4233,55 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                     || path.indexOf('/websites/backend/') >= 0
                     || path.indexOf('/admin/') >= 0;
             };
+            var resolveCurrentBackendLocalePrefix = function () {
+                var path = String(currentUrl.pathname || '');
+                var markers = ['/pagebuilder/backend/', '/websites/backend/', '/admin/'];
+                var markerIndex = -1;
+                markers.some(function (marker) {
+                    var index = path.indexOf(marker);
+                    if (index >= 0) {
+                        markerIndex = index;
+                        return true;
+                    }
+                    return false;
+                });
+                if (markerIndex < 0) {
+                    return '';
+                }
+                var prefixSegments = path.slice(0, markerIndex).split('/').filter(Boolean);
+                if (prefixSegments.length < 3) {
+                    return '';
+                }
+                var currency = prefixSegments[prefixSegments.length - 2];
+                var locale = prefixSegments[prefixSegments.length - 1];
+                if (/^[A-Z]{3}$/.test(currency) && /^[A-Za-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,2}$/.test(locale)) {
+                    return '/' + currency + '/' + locale;
+                }
+                if (/^[A-Za-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,2}$/.test(locale)) {
+                    return '/' + locale;
+                }
+                return '';
+            };
+            var insertBackendLocalePrefix = function () {
+                if (!isSessionBoundBackendPath(parsed.pathname)) {
+                    return;
+                }
+                var localePrefix = resolveCurrentBackendLocalePrefix();
+                if (!localePrefix) {
+                    return;
+                }
+                ['/pagebuilder/backend/', '/websites/backend/', '/admin/'].some(function (marker) {
+                    var index = parsed.pathname.indexOf(marker);
+                    if (index < 0) {
+                        return false;
+                    }
+                    var before = parsed.pathname.slice(0, index);
+                    if (before.slice(-localePrefix.length) !== localePrefix) {
+                        parsed.pathname = before.replace(/\/$/, '') + localePrefix + parsed.pathname.slice(index);
+                    }
+                    return true;
+                });
+            };
             if (
                 currentUrl.host
                 && parsed.host !== currentUrl.host
@@ -3974,6 +4290,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 parsed.protocol = currentUrl.protocol;
                 parsed.host = currentUrl.host;
             }
+            insertBackendLocalePrefix();
             return parsed.toString();
         } catch (error) {
             return raw;
@@ -5182,7 +5499,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             planData = window.__pbWorkspaceConfirmedPlan || {};
             markdown = planData.markdown || planData.markdown_content || '';
             confirmedAt = planData.confirmed_at || '';
-            signature = planData.signature || planData.execution_blueprint_signature || '';
+            signature = planData.signature || '';
             locale = planData.plan_locale || '';
         } else if (planType === 'build_plan') {
             var stateForBuildPlan = getLatestWorkspaceStateForQueuePrompt();
@@ -6563,12 +6880,14 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             percent: (normalizedStatus === 'done' || normalizedStatus === 'complete' || normalizedStatus === 'completed') ? 100 : 0
         }, { updateStatus: false });
         try {
-            window.__pbWorkspaceState = window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
+            var workspaceMirror = window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
                 ? Object.assign({}, window.__pbWorkspaceState, statePatch)
                 : Object.assign({}, statePatch);
-            window.__pbLastWorkspaceState = window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
+            var lastMirror = window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
                 ? Object.assign({}, window.__pbLastWorkspaceState, statePatch)
                 : Object.assign({}, statePatch);
+            window.__pbWorkspaceState = normalizeWorkspaceStateShape(workspaceMirror);
+            window.__pbLastWorkspaceState = sanitizeWorkspaceStateForMemory(normalizeWorkspaceStateShape(lastMirror));
         } catch (e) {
             // UI state is already updated locally; cross-script mirrors are best-effort.
         }
@@ -7719,6 +8038,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             + escapeHtml(String(text || ''))
             + '</span>';
         content.appendChild(line);
+        pruneInlineStreamLines(content);
         if (content.parentElement) {
             content.parentElement.scrollTop = content.parentElement.scrollHeight;
         }
@@ -7728,6 +8048,25 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var status = document.getElementById('pb-ai-edit-block-terminal-status');
         if (status) {
             status.textContent = String(text || '');
+        }
+    }
+
+    function abortBlockEditorAiStream() {
+        if (blockEditorAiStreamState.timeoutId) {
+            window.clearTimeout(blockEditorAiStreamState.timeoutId);
+            blockEditorAiStreamState.timeoutId = null;
+        }
+        if (blockEditorAiStreamState.reader && typeof blockEditorAiStreamState.reader.cancel === 'function') {
+            try {
+                blockEditorAiStreamState.reader.cancel();
+            } catch (e) {}
+        }
+        blockEditorAiStreamState.reader = null;
+        if (blockEditorAiStreamState.abortController) {
+            try {
+                blockEditorAiStreamState.abortController.abort();
+            } catch (e) {}
+            blockEditorAiStreamState.abortController = null;
         }
     }
 
@@ -7771,6 +8110,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             toast('error', messages.editUnavailable);
             return;
         }
+        abortBlockEditorAiStream();
         var originalHtml = aiBtn ? aiBtn.innerHTML : '';
         if (aiBtn) {
             aiBtn.disabled = true;
@@ -7786,6 +8126,12 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             if (aiBtn) {
                 aiBtn.disabled = false;
                 aiBtn.innerHTML = originalHtml;
+            }
+            if (typeof completed !== 'undefined' && completed && typeof abortCurrentStream === 'function') {
+                abortCurrentStream();
+            }
+            if (typeof completed !== 'undefined' && completed && typeof clearStreamRefs === 'function') {
+                clearStreamRefs();
             }
             blockEditorTerminalSetStatus(<?= \json_encode((string)__('已断开'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
         }
@@ -7824,10 +8170,40 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                     streamAbortController.abort();
                 }
             }, 30000);
+            var reader = null;
+            var buffer = '';
+            blockEditorAiStreamState.abortController = streamAbortController;
+            blockEditorAiStreamState.timeoutId = streamTimeoutId;
             function clearStreamTimeout() {
                 if (streamTimeoutId) {
+                    if (blockEditorAiStreamState.timeoutId === streamTimeoutId) {
+                        blockEditorAiStreamState.timeoutId = null;
+                    }
                     window.clearTimeout(streamTimeoutId);
                     streamTimeoutId = null;
+                }
+            }
+            function clearStreamRefs() {
+                clearStreamTimeout();
+                buffer = '';
+                if (blockEditorAiStreamState.reader === reader) {
+                    blockEditorAiStreamState.reader = null;
+                }
+                if (blockEditorAiStreamState.abortController === streamAbortController) {
+                    blockEditorAiStreamState.abortController = null;
+                }
+            }
+            function abortCurrentStream() {
+                clearStreamTimeout();
+                if (reader && typeof reader.cancel === 'function') {
+                    try {
+                        reader.cancel();
+                    } catch (cancelError) {}
+                }
+                if (streamAbortController) {
+                    try {
+                        streamAbortController.abort();
+                    } catch (abortError) {}
                 }
             }
 
@@ -7848,9 +8224,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 throw new Error(<?= \json_encode((string)__('当前环境不支持流式响应'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
             }
 
-            var reader = response.body.getReader();
+            reader = response.body.getReader();
+            blockEditorAiStreamState.reader = reader;
             var decoder = new TextDecoder();
-            var buffer = '';
             var completed = false;
 
             function handleEvent(eventName, eventData) {
@@ -7891,9 +8267,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             while (true) {
                 var readResult = await reader.read();
                 if (readResult && readResult.value) {
-                    buffer += decoder.decode(readResult.value, { stream: true });
+                    buffer = appendSseParserBuffer(buffer, decoder.decode(readResult.value, { stream: true }));
                 } else if (readResult && readResult.done) {
-                    buffer += decoder.decode();
+                    buffer = appendSseParserBuffer(buffer, decoder.decode());
                 }
                 buffer = buffer.replace(/\r\n/g, '\n');
                 var parts = buffer.split('\n\n');
@@ -7922,9 +8298,19 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 blockEditorTerminalLog(<?= \json_encode((string)__('AI stream ended before completion, please retry.'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
                 restoreAiButton();
             }
+            clearStreamRefs();
         } catch (error) {
             if (typeof clearStreamTimeout === 'function') {
                 clearStreamTimeout();
+            }
+            if (!completed && typeof abortCurrentStream === 'function') {
+                abortCurrentStream();
+            }
+            if (typeof clearStreamRefs === 'function') {
+                clearStreamRefs();
+            }
+            if (completed && error && String(error.name || '') === 'AbortError') {
+                return;
             }
             restoreAiButton();
             blockEditorTerminalLog(String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
@@ -8121,6 +8507,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             var hasJqueryModal = typeof $ !== 'undefined' && $.fn && typeof $.fn.modal === 'function';
             var resolved = false;
             var onOpenCalled = false;
+            var onCloseCalled = false;
 
             function resolveOnce(payload) {
                 if (resolved) {
@@ -8147,6 +8534,14 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 options.onOpen(modalElement);
             }
 
+            function callOnCloseOnce() {
+                if (onCloseCalled || !modalElement || typeof options.onClose !== 'function') {
+                    return;
+                }
+                onCloseCalled = true;
+                options.onClose(modalElement);
+            }
+
             if (confirmBtn) {
                 confirmBtn.addEventListener('click', function () {
                     resolveOnce({
@@ -8159,6 +8554,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             }
 
             modalElement.addEventListener('hidden.bs.modal', function () {
+                callOnCloseOnce();
                 disposeModalElement();
                 resolveOnce({
                     isConfirmed: false,
@@ -8178,6 +8574,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 button.addEventListener('click', function () {
                     hideBootstrapModal(modalElement);
                     if (!modal && !hasJqueryModal) {
+                        callOnCloseOnce();
                         disposeModalElement();
                         resolveOnce({
                             isConfirmed: false,
@@ -9156,6 +9553,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                             + escapeHtml(text || '')
                             + '</span>';
                         sseContent.appendChild(line);
+                        pruneInlineStreamLines(sseContent);
                         if (sseContent.parentElement) {
                             sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
                         }
@@ -9231,10 +9629,47 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                                 streamAbortController.abort();
                             }
                         }, 30000);
+                        var reader = null;
+                        var buffer = '';
+                        modalElement.__pbComponentConfigStreamAbortController = streamAbortController;
+                        modalElement.__pbComponentConfigStreamTimeoutId = streamTimeoutId;
+                        modalElement.__pbComponentConfigStreamReader = null;
+
                         function clearStreamTimeout() {
                             if (streamTimeoutId) {
                                 window.clearTimeout(streamTimeoutId);
                                 streamTimeoutId = null;
+                            }
+                            modalElement.__pbComponentConfigStreamTimeoutId = null;
+                        }
+
+                        function clearStreamRefs() {
+                            clearStreamTimeout();
+                            buffer = '';
+                            currentData = '';
+                            streamingLineEl = null;
+                            streamingTextEl = null;
+                            thinkingStreamingLineEl = null;
+                            thinkingStreamingTextEl = null;
+                            if (modalElement.__pbComponentConfigStreamReader === reader) {
+                                modalElement.__pbComponentConfigStreamReader = null;
+                            }
+                            if (modalElement.__pbComponentConfigStreamAbortController === streamAbortController) {
+                                modalElement.__pbComponentConfigStreamAbortController = null;
+                            }
+                        }
+
+                        function abortCurrentStream() {
+                            clearStreamTimeout();
+                            if (reader && typeof reader.cancel === 'function') {
+                                try {
+                                    reader.cancel();
+                                } catch (cancelError) {}
+                            }
+                            if (streamAbortController) {
+                                try {
+                                    streamAbortController.abort();
+                                } catch (abortError) {}
                             }
                         }
 
@@ -9257,9 +9692,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                             throw new Error(<?= \json_encode((string)__('当前环境不支持流式响应'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
                         }
 
-                        var reader = streamResponse.body.getReader();
+                        reader = streamResponse.body.getReader();
+                        modalElement.__pbComponentConfigStreamReader = reader;
                         var decoder = new TextDecoder();
-                        var buffer = '';
                         var currentEvent = '';
                         var currentData = '';
                         var streamingLineEl = null;
@@ -9313,10 +9748,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                                         + new Date().toLocaleTimeString('zh-CN', { hour12: false })
                                         + ']</span><span style="opacity:0.75; margin-right:6px;"><?= __('思考') ?></span><span class="pb-ai-component-thinking-text"></span>';
                                     sseContent.appendChild(thinkingStreamingLineEl);
+                                    pruneInlineStreamLines(sseContent);
                                     thinkingStreamingTextEl = thinkingStreamingLineEl.querySelector('.pb-ai-component-thinking-text');
                                 }
                                 if (thinkingStreamingTextEl) {
-                                    thinkingStreamingTextEl.textContent += thinkText;
+                                    appendBoundedInlineStreamText(thinkingStreamingTextEl, thinkText);
                                     if (sseContent && sseContent.parentElement) {
                                         sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
                                     }
@@ -9339,10 +9775,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                                         + new Date().toLocaleTimeString('zh-CN', { hour12: false })
                                         + ']</span><span class="pb-ai-component-streaming-text"></span>';
                                     sseContent.appendChild(streamingLineEl);
+                                    pruneInlineStreamLines(sseContent);
                                     streamingTextEl = streamingLineEl.querySelector('.pb-ai-component-streaming-text');
                                 }
                                 if (streamingTextEl) {
-                                    streamingTextEl.textContent += chunkText;
+                                    appendBoundedInlineStreamText(streamingTextEl, chunkText);
                                     if (sseContent && sseContent.parentElement) {
                                         sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
                                     }
@@ -9351,10 +9788,14 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                                 completed = true;
                                 restoreAiButton();
                                 applyConfigData(payloadData.data || payloadData);
+                                abortCurrentStream();
+                                clearStreamRefs();
                                 sseLog(<?= \json_encode((string)__('生成完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'done');
                             } else if (currentEvent === 'error' || currentEvent === 'stream_error') {
                                 completed = true;
                                 restoreAiButton();
+                                abortCurrentStream();
+                                clearStreamRefs();
                                 sseLog(String(payloadData.message || <?= \json_encode((string)__('生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
                                 throw new Error(String(payloadData.message || <?= \json_encode((string)__('生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
                             }
@@ -9366,9 +9807,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                         while (true) {
                             var chunk = await reader.read();
                             if (chunk && chunk.value) {
-                                buffer += decoder.decode(chunk.value, { stream: true });
+                                buffer = appendSseParserBuffer(buffer, decoder.decode(chunk.value, { stream: true }));
                             } else if (chunk && chunk.done) {
-                                buffer += decoder.decode();
+                                buffer = appendSseParserBuffer(buffer, decoder.decode());
                             }
                             buffer = buffer.replace(/\r\n/g, '\n');
                             var parts = buffer.split('\n\n');
@@ -9398,16 +9839,26 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                             sseLog(<?= \json_encode((string)__('AI stream ended before completion, please retry.'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>, 'error');
                             restoreAiButton();
                         }
+                        clearStreamRefs();
                     } catch (error) {
-                        if (typeof clearStreamTimeout === 'function') {
+                        if (typeof clearStreamRefs === 'function') {
+                            if (!completed && typeof abortCurrentStream === 'function') {
+                                abortCurrentStream();
+                            }
+                            clearStreamRefs();
+                        } else if (typeof clearStreamTimeout === 'function') {
                             clearStreamTimeout();
+                        }
+                        if (completed && error && String(error.name || '') === 'AbortError') {
+                            return;
                         }
                         restoreAiButton();
                         sseLog(String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>), 'error');
                         toast('error', String((error && error.message) || <?= \json_encode((string)__('生成请求失败，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
                     }
                 });
-            }
+            },
+            onClose: abortComponentConfigModalStream
         });
 
         if (!result || !result.isConfirmed || !result.modalElement) {
@@ -9554,11 +10005,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         blockRefreshState.pageType = refineComponentState.pageType;
         blockRefreshState.blockId = refineComponentState.componentCode;
         if (typeof renderBlockStreamingState === 'function') {
-            renderBlockStreamingState(messages.blockSseRefineAwaitingConfirm);
-        }
-        if (typeof renderBlockStreamingState === 'function') {
             renderBlockStreamingState(messages.refineQueued);
         }
+        toast('info', messages.refineQueued);
         postForm(startPatchBlockUrl, {
             public_id: publicId,
             page_type: refineComponentState.pageType,
@@ -10658,6 +11107,17 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     if (editBlockSubmitBtn) {
         editBlockSubmitBtn.addEventListener('click', submitBlockEditor);
     }
+    var editBlockModalEl = document.getElementById('pb-ai-edit-block-modal');
+    if (editBlockModalEl && editBlockModalEl.dataset.pbAiStreamCleanupBound !== '1') {
+        editBlockModalEl.dataset.pbAiStreamCleanupBound = '1';
+        editBlockModalEl.addEventListener('hidden.bs.modal', function () {
+            abortBlockEditorAiStream();
+            var terminalContent = document.getElementById('pb-ai-edit-block-terminal-content');
+            if (terminalContent) {
+                terminalContent.textContent = '';
+            }
+        });
+    }
     var imageRegenerateSubmitBtn = document.getElementById('pb-ai-image-regenerate-submit');
     if (imageRegenerateSubmitBtn) {
         imageRegenerateSubmitBtn.addEventListener('click', submitImageRegenerateModal);
@@ -10909,6 +11369,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
 
     var currentPlanSelection = [];
     var currentPlanPayload = null;
+    var currentPlanStreamMarkdown = '';
+    var planStreamRenderRafScheduled = false;
+    var planStreamRenderRafId = 0;
     var currentPlanTriggerButton = null;
     var currentPlanMode = 'refine';
     var currentPlanModeTargetScope = '';
@@ -13076,37 +13539,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (!structuredRoot && parsedFromMd && typeof parsedFromMd === 'object') {
             structuredRoot = coerceStructuredPlanRootFromParsedJson(parsedFromMd);
         }
-        if (!structuredRoot && payload && typeof payload === 'object' && payload.execution_blueprint && typeof payload.execution_blueprint === 'object') {
-            var eb = payload.execution_blueprint;
-            var ebPages = (eb.page_plans && typeof eb.page_plans === 'object' && !Array.isArray(eb.page_plans))
-                ? eb.page_plans
-                : ((eb.pages && typeof eb.pages === 'object' && !Array.isArray(eb.pages)) ? eb.pages : null);
-            var ebShared = (eb.shared_components && typeof eb.shared_components === 'object' && !Array.isArray(eb.shared_components))
-                ? eb.shared_components
-                : null;
-            var ebHeader = (eb.navigation_plan && typeof eb.navigation_plan === 'object' && !Array.isArray(eb.navigation_plan))
-                ? eb.navigation_plan
-                : null;
-            var ebFooter = (eb.footer_plan && typeof eb.footer_plan === 'object' && !Array.isArray(eb.footer_plan))
-                ? eb.footer_plan
-                : null;
-            var ebStructured = {};
-            if (ebPages) {
-                ebStructured.pages = ebPages;
-            }
-            if (ebShared) {
-                ebStructured.shared_components = ebShared;
-            }
-            if (ebHeader) {
-                ebStructured.navigation_plan = ebHeader;
-            }
-            if (ebFooter) {
-                ebStructured.footer_plan = ebFooter;
-            }
-            if (Object.keys(ebStructured).length > 0) {
-                structuredRoot = ebStructured;
-            }
-        }
         if (structuredRoot && typeof structuredRoot === 'object') {
             structuredRoot = normalizeStageOneStructuredRootForPreview(structuredRoot);
         }
@@ -14427,7 +14859,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     function updatePlanModalContent(markdown, options) {
         var opts = options && typeof options === 'object' ? options : {};
         var persistField = opts.persistField !== false;
+        var syncStreamBuffer = opts.syncStreamBuffer !== false;
         var markdownText = normalizePlanMarkdownText(markdown);
+        if (syncStreamBuffer) {
+            currentPlanStreamMarkdown = clampPlanStreamPreviewMarkdown(markdownText);
+        }
         var previewContent = document.getElementById('pb-ai-plan-rendered-content');
         var markdownField = document.getElementById('pb-ai-plan-markdown');
         var markdownContent = document.getElementById('pb-ai-plan-md-content');
@@ -14449,6 +14885,71 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }
         syncConfirmPlanButtonEnabled();
         syncPlanRebuildButtonVisibility();
+    }
+
+    function clampPlanStreamPreviewMarkdown(markdown) {
+        var next = String(markdown || '');
+        if (PLAN_STREAM_PREVIEW_MAX_LINES > 0) {
+            var lines = next.split(/\r\n|\n|\r/);
+            if (lines.length > PLAN_STREAM_PREVIEW_MAX_LINES) {
+                next = lines.slice(-PLAN_STREAM_PREVIEW_MAX_LINES).join('\n');
+            }
+        }
+        if (PLAN_STREAM_PREVIEW_MAX_CHARS > 0 && next.length > PLAN_STREAM_PREVIEW_MAX_CHARS) {
+            next = next.slice(-PLAN_STREAM_PREVIEW_MAX_CHARS);
+        }
+        return next;
+    }
+
+    function appendBoundedPlanStreamMarkdown(current, piece) {
+        return clampPlanStreamPreviewMarkdown(String(current || '') + String(piece || ''));
+    }
+
+    function releasePlanStreamBuffer(options) {
+        var opts = options && typeof options === 'object' ? options : {};
+        if (planStreamRenderRafId && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(planStreamRenderRafId);
+        }
+        planStreamRenderRafId = 0;
+        planStreamRenderRafScheduled = false;
+        currentPlanStreamMarkdown = '';
+        if (
+            opts.clearPreviewPayload
+            && currentPlanPayload
+            && typeof currentPlanPayload === 'object'
+            && currentPlanPayload.markdown_stream_preview
+        ) {
+            delete currentPlanPayload.markdown;
+            delete currentPlanPayload.markdown_stream_preview;
+            currentPlanPayload.markdown_loaded = false;
+        }
+    }
+
+    function appendPlanStreamChunk(chunk, payload) {
+        var piece = String(chunk || '');
+        if (piece === '') {
+            return;
+        }
+        currentPlanStreamMarkdown = appendBoundedPlanStreamMarkdown(currentPlanStreamMarkdown, piece);
+        if (!currentPlanPayload || typeof currentPlanPayload !== 'object') {
+            currentPlanPayload = {};
+        }
+        currentPlanPayload.markdown = currentPlanStreamMarkdown;
+        currentPlanPayload.markdown_stream_preview = true;
+        currentPlanPayload.markdown_loaded = false;
+        if (planStreamRenderRafScheduled) {
+            return;
+        }
+        planStreamRenderRafScheduled = true;
+        planStreamRenderRafId = requestAnimationFrame(function () {
+            planStreamRenderRafScheduled = false;
+            planStreamRenderRafId = 0;
+            updatePlanModalContent(currentPlanStreamMarkdown, {
+                persistField: false,
+                syncStreamBuffer: false,
+                payload: currentPlanPayload || (payload && typeof payload === 'object' ? payload : {})
+            });
+        });
     }
 
     function normalizePlanMarkdownText(raw) {
@@ -14642,6 +15143,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (planTerminal && typeof planTerminal.stop === 'function') {
             planTerminal.stop({ suppressTransportError: true });
         }
+        releasePlanStreamBuffer({ clearPreviewPayload: false });
         planSseRunning = false;
         if (opts.allowClose !== false) {
             allowPlanModalClose = true;
@@ -15135,7 +15637,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 markPlanTerminalConnected();
                 terminal.log(chunk, 'chunk', payload);
             }
-            updatePlanModalContent(String((document.getElementById('pb-ai-plan-md-content') && document.getElementById('pb-ai-plan-md-content').textContent) || '') + chunk);
+            appendPlanStreamChunk(chunk, payload);
         });
         terminal.on('done', function (event) {
             planSseRunning = false;
@@ -15151,7 +15653,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 mergedPlanPayload = Object.assign(mergedPlanPayload, nextPlan);
             }
             if (payload && typeof payload === 'object') {
-                ['structured', 'json', 'plan_json', 'plan_structured', 'execution_blueprint', 'plan_workbench', 'build_plan_v2'].forEach(function (key) {
+                ['structured', 'json', 'plan_json', 'plan_structured', 'plan_workbench', 'build_plan_v2'].forEach(function (key) {
                     if (payload[key] && typeof payload[key] === 'object') {
                         mergedPlanPayload[key] = payload[key];
                     }
@@ -15195,6 +15697,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 if (typeof terminal.stop === 'function') {
                     terminal.stop({ suppressTransportError: true });
                 }
+                releasePlanStreamBuffer({ clearPreviewPayload: true });
                 schedulePlanWorkspaceReload('plan_retryable_failure', 900);
                 return;
             }
@@ -15222,6 +15725,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             if (typeof terminal.stop === 'function') {
                 terminal.stop({ suppressTransportError: true });
             }
+            releasePlanStreamBuffer({ clearPreviewPayload: false });
             // 方案 SSE 正常结束后触发一次作用域自动保存（防抖）。
             autoSaveScope();
             schedulePlanWorkspaceReload('plan_queue_done', 900);
@@ -15232,6 +15736,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             var payload = parsePlanTerminalPayload(event);
             var message = resolvePlanTerminalErrorMessage(event, payload);
             if (shouldIgnoreResolvedPlanTerminalFailure(payload, message)) {
+                releasePlanStreamBuffer({ clearPreviewPayload: false });
                 restoreResolvedPlanSuccessUiFromWorkspaceState();
                 return;
             }
@@ -15253,6 +15758,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 markPlanTerminalConnected();
                 terminal.log(message, 'error', payload || {});
             }
+            releasePlanStreamBuffer({ clearPreviewPayload: true });
         });
         terminal.on('failed', function (event) {
             planSseRunning = false;
@@ -15260,6 +15766,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             var payload = parsePlanTerminalPayload(event);
             var message = resolvePlanTerminalErrorMessage(event, payload);
             if (shouldIgnoreResolvedPlanTerminalFailure(payload, message)) {
+                releasePlanStreamBuffer({ clearPreviewPayload: false });
                 restoreResolvedPlanSuccessUiFromWorkspaceState();
                 return;
             }
@@ -15281,6 +15788,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 markPlanTerminalConnected();
                 terminal.log(message, 'error', payload || {});
             }
+            releasePlanStreamBuffer({ clearPreviewPayload: true });
         });
         planSseHandlersBound = true;
         return terminal;
@@ -15368,6 +15876,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             setPlanModeStatus(messages.planModeUnavailable);
             return false;
         }
+        releasePlanStreamBuffer({ clearPreviewPayload: true });
         var formData = new FormData();
         formData.append('public_id', publicId);
         formData.append('scope_patch', JSON.stringify(buildVirtualThemePatch()));
@@ -15932,6 +16441,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             setPlanMode('rebuild');
             planConfirmedState = false;
         }
+        releasePlanStreamBuffer({ clearPreviewPayload: forceRebuild });
         currentPlanSelection = normalizedTypes.slice();
         currentPlanTriggerButton = triggerBtn || null;
         pageTypesUserCustomized = true;
@@ -16226,7 +16736,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             nextState.pagebuilder_pages_by_type = {};
             nextState.materialized_pages_by_type = {};
             nextState.build_summary = {};
-            nextState.build_task_summary = {};
+            nextState.build_plan_execution_summary = {};
         }
         var scope = nextState.scope && typeof nextState.scope === 'object' ? Object.assign({}, nextState.scope) : {};
         scope.active_operation = active;
@@ -16241,12 +16751,13 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             scope.pagebuilder_pages_by_type = {};
             scope.materialized_pages_by_type = {};
             scope.build_summary = {};
-            scope.build_task_summary = {};
+            scope.build_plan_execution_summary = {};
         }
         nextState.scope = scope;
+        nextState = normalizeWorkspaceStateShape(nextState);
         latestWorkspaceState = nextState;
         window.__pbWorkspaceState = nextState;
-        window.__pbLastWorkspaceState = nextState;
+        window.__pbLastWorkspaceState = sanitizeWorkspaceStateForMemory(nextState);
         currentActiveOperationState = active;
         isOperationRunning = true;
         renderQueueUiState('build', {
@@ -16651,8 +17162,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                     )
             );
         var summary = null;
-        if (state && typeof state === 'object' && state.build_task_summary && typeof state.build_task_summary === 'object') {
-            summary = state.build_task_summary;
+        if (state && typeof state === 'object' && state.build_plan_execution_summary && typeof state.build_plan_execution_summary === 'object') {
+            summary = state.build_plan_execution_summary;
         }
         if (!summary && window.__pbTaskSummary && typeof window.__pbTaskSummary === 'object') {
             summary = window.__pbTaskSummary;

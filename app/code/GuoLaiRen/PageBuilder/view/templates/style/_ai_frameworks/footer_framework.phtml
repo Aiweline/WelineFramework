@@ -141,7 +141,7 @@ $accentColor = $getConfig('style.accent_color', '#6366f1');
 
 // ===== AI生成的额外PHP变量 =====
 try {
-    {{PHP_VARIABLES}}
+    /* {{PHP_VARIABLES}} */
 } catch (\Throwable $e) {
     w_log_error('[AI Component Error] ' . $componentId . ': ' . $e->getMessage());
 }

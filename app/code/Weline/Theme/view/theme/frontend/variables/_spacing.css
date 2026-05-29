@@ -25,7 +25,7 @@
     
     /* ========== 布局间距 ========== */
     --spacing-container-padding: var(--spacing-md);
-    --spacing-container-max-width: 1200px;
+    --spacing-container-max-width: 1440px;
     --spacing-grid-gap: var(--spacing-md);
 }
 
