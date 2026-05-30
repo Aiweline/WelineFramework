@@ -238,7 +238,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             if ($operation === 'build') {
                 $scopePatch = $buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $confirmedScope);
                 if ($scopePatch !== []) {
-                    $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
+            $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
                 }
                 $scope = $buildTaskService->restoreBuildPlanContract($scope, $confirmedScope);
                 $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
@@ -255,7 +255,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 $scopeChanged = $normalizedScope !== $confirmedScope;
                 $scope = $normalizedScope;
             } elseif (\in_array($operation, ['block_regenerate', 'block_partial_patch'], true) && $scopePatch !== []) {
-                $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
+            $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
                 $scopeChanged = $scope !== $confirmedScope;
             } else {
                 $scopeChanged = false;
@@ -569,7 +569,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         AiSiteAgentSession $session,
         AiSiteScopeCompatibilityService $scopeService
     ): string {
-        $scope = $scopeService->normalizeScope(
+            $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $session)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
@@ -621,7 +621,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         AiSiteAgentSession $session,
         AiSiteScopeCompatibilityService $scopeService
     ): array {
-        $scope = $scopeService->normalizeScope(
+            $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $session)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
@@ -807,7 +807,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         AiSiteAgentSession $session,
         AiSiteScopeCompatibilityService $scopeService
     ): array {
-        $scope = $scopeService->normalizeScope(
+            $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $session)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
@@ -912,11 +912,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         AiSiteAgentSessionService $sessionService,
         AiSiteAgentSession $session
     ): array {
-        return $sessionService->loadScopeForStage(
-            $session,
-            AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            self::BUILD_QUEUE_SCOPE_ARTIFACT_KEYS
-        );
+        return $sessionService->loadScopeForBuildOperation($session);
     }
 
     private function applyForceBuildQueuePreset(
@@ -928,7 +924,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
         /** @var AiSiteBuildTaskService $buildTaskService */
         $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
-        $scope = $scopeService->normalizeScope(
+            $scope = $scopeService->normalizeScope(
             $sessionService->loadScopeForStage(
                 $fresh,
                 AiSiteAgentSession::STAGE_PLAN,
@@ -1002,7 +998,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         int $maxAttempts
     ): array {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        $scope = $scopeService->normalizeScope(
+            $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $fresh)
         );
         $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
@@ -1102,6 +1098,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $message,
             $gate
         );
+        $scope = $buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
 
         throw new \RuntimeException($message);
@@ -1118,7 +1115,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         int $queueId
     ): void {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        $scope = $scopeService->normalizeScope(
+            $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $fresh)
         );
         $scope = $buildTaskService->syncPageTypeLayoutsWithSharedComponents($scope);
@@ -1390,6 +1387,22 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $activeOperations[$operation] = $operationState;
         $scope['active_operations'] = $activeOperations;
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+        $gateReason = \trim((string)($gate['reason'] ?? ''));
+        $failurePayload = $this->buildPublishBlockingAiFailurePayload($operation, $message);
+        $failurePayload['gate_reason'] = $gateReason;
+        $scope['latest_build_failed'] = 1;
+        $scope['latest_build_failure'] = $failurePayload;
+        $scope['publish_blocked_by_latest_ai_failure'] = 1;
+        $scope['publish_blocked_reason'] = $this->formatPublishBlockedByAiFailureMessage($failurePayload);
+        if (\in_array($gateReason, [
+            'missing_build_plan_page_types',
+            'missing_build_plan_blocks',
+            'missing_page_type_layouts',
+            'empty_page_type_layouts',
+        ], true)) {
+            $scope['build_plan_confirmed'] = 0;
+            $scope['plan_confirmed'] = 0;
+        }
         $scope['_queue_force_build'] = [
             'active' => 0,
             'consumed_at' => $now,
@@ -1525,7 +1538,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         string $executionToken
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        $scope = $scopeService->normalizeScope(
+            $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $fresh)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
@@ -1617,7 +1630,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         string $operation,
         string $executionToken
     ): int {
-        $scope = $scopeService->normalizeScope(
+            $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $session)
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];

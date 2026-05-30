@@ -346,7 +346,6 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
             \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [],
             [
                 'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
-                'execution_blueprint_draft' => \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [],
                 'plan_json' => \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
                 'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
                 'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],

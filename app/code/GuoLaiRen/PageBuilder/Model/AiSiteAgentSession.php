@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Model;
 
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
+use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
@@ -245,6 +247,9 @@ class AiSiteAgentSession extends Model
      */
     public function compactScopeForStorage(array $scope): array
     {
+        $scope = (new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer()))
+            ->stripDeprecatedScopeArtifactKeys($scope);
+
         foreach (['events', 'top_logs'] as $field) {
             $scope[$field] = $this->compactScopeLogEntries($scope[$field] ?? []);
         }
