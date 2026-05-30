@@ -1,7 +1,18 @@
+<?php
+$publicId = (string)($publicId ?? '');
+$runVirtualThemeUrl = (string)($runVirtualThemeUrl ?? '');
+$startPublishUrl = (string)($startPublishUrl ?? '');
+$publishCheckUrl = (string)($publishCheckUrl ?? '');
+$operationSseUrl = (string)($operationSseUrl ?? '');
+$workspaceStreamSseUrl = (string)($workspaceStreamSseUrl ?? '');
+$workspaceSnapshotUrl = (string)($workspaceSnapshotUrl ?? '');
+$activeOperation = \is_array($activeOperation ?? null) ? $activeOperation : [];
+$pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
+?>
 <script>
 (function () {
     'use strict';
-    var PB_SSE_CONNECT_DELAY_MS = 5000;
+    var PB_SSE_CONNECT_DELAY_MS = 500;
 
     var previewBridge = window.PbAiWorkspacePreview || {};
     function resolveLivePreviewBridge() {
@@ -163,7 +174,9 @@
     var startPublishUrl = <?= \json_encode($startPublishUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var operationSseBaseUrl = <?= \json_encode($operationSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var workspaceStreamSseBaseUrl = <?= \json_encode((string)($workspaceStreamSseUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceSnapshotUrl = <?= \json_encode((string)($workspaceSnapshotUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var operationSseDeferredHandoffKeys = Object.create(null);
     var activeOperation = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var initialWorkspaceState = window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
         ? window.__pbWorkspaceState
@@ -187,6 +200,7 @@
     // 0 means no wall-clock cutoff: once SSE hands off to snapshot polling,
     // the poller stops only when the real queue state becomes terminal.
     var DEFERRED_QUEUE_STATE_POLL_TTL_MS = 0;
+
     var lastOperationTerminalFingerprint = '';
     var blockRefreshState = (window.__pbBlockRefreshState && typeof window.__pbBlockRefreshState === 'object')
         ? window.__pbBlockRefreshState
@@ -288,6 +302,24 @@
         return ['done', 'complete', 'completed', 'error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
     }
 
+    function resolveActiveExecutionToken(active) {
+        if (!active || typeof active !== 'object') {
+            return '';
+        }
+        return String(active.execution_token || active.token || '').trim();
+    }
+
+    function isWorkspaceSseResumeBlockedByTerminal(active, workspaceState, operation) {
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        var activeStatus = String((active && (active.status || active.queue_status)) || '').trim().toLowerCase();
+        if (activeStatus && isQueueStatusTerminalForWatch(activeStatus)) {
+            return true;
+        }
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var queueStatus = readQueueStatusForDeferredState(state, normalizedOperation);
+        return queueStatus !== '' && isQueueStatusTerminalForWatch(queueStatus);
+    }
+
     function workspaceStateHasBlockingPlanFailures(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return false;
@@ -298,8 +330,109 @@
         return collectRetryableFailureItemsFromPayload('plan', { state: workspaceState }).length > 0;
     }
 
+    function buildOperationStreamKey(operation, executionToken) {
+        return String(operation || '').trim().toLowerCase() + ':' + String(executionToken || '').trim();
+    }
+
+    function markOperationSseDeferredHandoff(operation, executionToken) {
+        var key = buildOperationStreamKey(operation, executionToken);
+        if (key !== ':') {
+            operationSseDeferredHandoffKeys[key] = true;
+        }
+    }
+
+    function resolveWorkspaceStreamSseUrl() {
+        if (workspaceStreamSseBaseUrl) {
+            return String(workspaceStreamSseBaseUrl);
+        }
+        try {
+            var currentUrl = new URL(window.location.href);
+            var normalizedPath = String(currentUrl.pathname || '').replace(/\/workspace(?:\/)?$/i, '/stream-sse');
+            if (normalizedPath !== currentUrl.pathname) {
+                currentUrl.pathname = normalizedPath;
+                currentUrl.search = '';
+                currentUrl.searchParams.set('public_id', publicId);
+                return currentUrl.toString();
+            }
+        } catch (error) {
+            // no-op
+        }
+        return '';
+    }
+    window.__pbResolveWorkspaceStreamSseUrl = resolveWorkspaceStreamSseUrl;
+
+    function ensureWorkspaceStreamRunning(sourceTag) {
+        if (window.__pbWorkspaceStreamPaused) {
+            window.__pbWorkspaceStreamPaused = false;
+        }
+        var term = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
+        var streamUrl = resolveWorkspaceStreamSseUrl();
+        if (!term || !streamUrl) {
+            return false;
+        }
+        if (typeof term.isRunning === 'function' && term.isRunning()) {
+            return true;
+        }
+        if (typeof term.start !== 'function') {
+            return false;
+        }
+        term.start(streamUrl);
+        return true;
+    }
+
+    function shouldPreferWorkspaceStreamForQueueWatch(operation, payload) {
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        var state = payload && payload.state && typeof payload.state === 'object'
+            ? payload.state
+            : (readCachedWorkspaceSnapshotState() || initialWorkspaceState || {});
+        var active = resolveNestedOperationPayload(state, normalizedOperation)
+            || resolveNestedOperationPayload(payload, normalizedOperation);
+        if ((!active || !resolveActiveExecutionToken(active)) && activeOperation && typeof activeOperation === 'object') {
+            active = activeOperation;
+        }
+        var executionToken = resolveActiveExecutionToken(active);
+        if (executionToken && operationSseDeferredHandoffKeys[buildOperationStreamKey(normalizedOperation, executionToken)]) {
+            return true;
+        }
+        var queueStatus = readQueueStatusForDeferredState(state, normalizedOperation);
+        if (!isQueueStatusInProgressForWatch(queueStatus)) {
+            return false;
+        }
+        var key = resolveRuntimeQueueInfoKey(normalizedOperation);
+        var queueInfo = state[key] && typeof state[key] === 'object' ? state[key] : null;
+        var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : null;
+        var pid = parseInt(String(
+            (queueInfo && (queueInfo.pid || queueInfo.worker_pid))
+            || (snapshot && (snapshot.pid || snapshot.worker_pid))
+            || (active && active.pid)
+            || 0
+        ), 10) || 0;
+        // queue_waiting_for_scheduler / can_close_stream 表示 operation-sse 可结束，不代表刷新后应跳过认领流。
+        return queueStatus === 'running' || queueStatus === 'processing' || pid > 0;
+    }
+
     function resumeOperationStreamForQueueWatch(operation, payload, sourceTag) {
-        return false;
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        if (shouldPreferWorkspaceStreamForQueueWatch(normalizedOperation, payload)) {
+            if (ensureWorkspaceStreamRunning(sourceTag || 'queue-watch-workspace')) {
+                return true;
+            }
+        }
+        var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
+        var active = resolveNestedOperationPayload(state, normalizedOperation)
+            || resolveNestedOperationPayload(payload, normalizedOperation);
+        if ((!active || !resolveActiveExecutionToken(active)) && activeOperation && typeof activeOperation === 'object') {
+            active = activeOperation;
+        }
+        var executionToken = resolveActiveExecutionToken(active);
+        if (!executionToken) {
+            return false;
+        }
+        var streamUrl = buildOperationUrl(executionToken);
+        if (!streamUrl) {
+            return false;
+        }
+        return startOperationStream(streamUrl, normalizedOperation, executionToken, sourceTag || 'queue-watch');
     }
 
     function readQueueStatusForDeferredState(workspaceState, operation) {
@@ -937,13 +1070,26 @@
         return data;
     }
 
-    function fetchWorkspaceSnapshotState() {
-        if (!workspaceSnapshotUrl || !publicId) {
-            return Promise.reject(new Error('workspace snapshot unavailable'));
+    function readCachedWorkspaceSnapshotState() {
+        if (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object') {
+            return window.__pbWorkspaceState;
         }
-        return submitWorkspaceForm(workspaceSnapshotUrl, { public_id: publicId }).then(function (data) {
-            return extractWorkspaceSnapshotState(data);
-        });
+        if (latestWorkspaceState && typeof latestWorkspaceState === 'object') {
+            return latestWorkspaceState;
+        }
+        if (initialWorkspaceState && typeof initialWorkspaceState === 'object') {
+            return initialWorkspaceState;
+        }
+        return null;
+    }
+
+    function fetchWorkspaceSnapshotState() {
+        // 状态以 SSE（工作区终端 + operation-sse）为准，不再 POST post-workspace-snapshot。
+        var cached = readCachedWorkspaceSnapshotState();
+        if (!cached) {
+            return Promise.reject(new Error('workspace snapshot cache unavailable'));
+        }
+        return Promise.resolve(cached);
     }
 
     function syncDeferredQueueWorkspaceState(operation, workspaceState) {
@@ -1011,43 +1157,12 @@
 
     function startDeferredQueueStatePoll(operation) {
         var normalizedOperation = String(operation || '').trim().toLowerCase() || 'build';
-        if (!workspaceSnapshotUrl || !publicId) {
-            return false;
-        }
         stopDeferredQueueStatePoll();
-        deferredQueueStatePollOperation = normalizedOperation;
-        deferredQueueStatePollDeadline = DEFERRED_QUEUE_STATE_POLL_TTL_MS > 0
-            ? Date.now() + DEFERRED_QUEUE_STATE_POLL_TTL_MS
-            : 0;
-
-        function pollOnce() {
-            if (!deferredQueueStatePollOperation || deferredQueueStatePollInFlight) {
-                return;
-            }
-            if (deferredQueueStatePollDeadline > 0 && Date.now() > deferredQueueStatePollDeadline) {
-                stopDeferredQueueStatePoll();
-                return;
-            }
-            deferredQueueStatePollInFlight = true;
-            submitWorkspaceForm(workspaceSnapshotUrl, {
-                public_id: publicId,
-                snapshot_mode: 'queue_poll',
-                operation: normalizedOperation
-            }).then(function (data) {
-                deferredQueueStatePollInFlight = false;
-                if (deferredQueueStatePollOperation !== normalizedOperation) {
-                    return;
-                }
-                var workspaceState = extractWorkspaceSnapshotState(data);
-                syncDeferredQueueWorkspaceState(normalizedOperation, workspaceState);
-            }).catch(function () {
-                deferredQueueStatePollInFlight = false;
-            });
-        }
-
-        deferredQueueStatePollTimer = window.setInterval(pollOnce, DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS);
-        pollOnce();
-        return true;
+        return resumeOperationStreamForQueueWatch(
+            normalizedOperation,
+            readCachedWorkspaceSnapshotState() || {},
+            'deferred-poll-disabled'
+        );
     }
 
     function shouldObserveActiveQueueOperationOnLoad(active) {
@@ -1065,28 +1180,82 @@
             || runtimeTruthyFlag(active.continue_other_operations);
     }
 
-    function startActiveQueueObservationOnLoad() {
-        var state = initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {};
+    function resolveWorkspaceLoadResumeContext() {
+        var state = readCachedWorkspaceSnapshotState() || initialWorkspaceState || {};
         var active = activeOperation && typeof activeOperation === 'object' ? activeOperation : {};
-        if (!shouldObserveActiveQueueOperationOnLoad(active) && state.active_operation && typeof state.active_operation === 'object') {
-            active = state.active_operation;
+        if (state.active_operation && typeof state.active_operation === 'object') {
+            var stateActive = state.active_operation;
+            if (!String(active.operation || '').trim()
+                || (!resolveActiveExecutionToken(active) && resolveActiveExecutionToken(stateActive))) {
+                active = stateActive;
+            }
         }
-        if (!shouldObserveActiveQueueOperationOnLoad(active) && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'build'))) {
-            active = {
-                operation: 'build',
-                status: readQueueStatusForDeferredState(state, 'build') || 'queued'
-            };
+        var operation = String(active.operation || '').trim().toLowerCase();
+        if (!operation && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'plan'))) {
+            operation = 'plan';
+            active = Object.assign({ operation: 'plan', status: readQueueStatusForDeferredState(state, 'plan') || 'queued' }, active);
         }
-        if (!shouldObserveActiveQueueOperationOnLoad(active)) {
-            return;
+        if (!operation && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'build'))) {
+            operation = 'build';
+            active = Object.assign({ operation: 'build', status: readQueueStatusForDeferredState(state, 'build') || 'queued' }, active);
         }
-        var op = String(active.operation || '').trim().toLowerCase();
-        var status = String(active.status || active.queue_status || 'queued').trim().toLowerCase();
-        syncQueuedStageUi(op, 'progress', buildDeferredQueueProgressPayload(op, Object.assign({}, state, {
-            active_operation: active,
-            active_operations: state.active_operations && typeof state.active_operations === 'object' ? state.active_operations : Object.create(null)
-        }), status), { level: 'progress' });
-        startDeferredQueueStatePoll(op);
+        return {
+            state: state,
+            active: active,
+            operation: operation
+        };
+    }
+
+    function bootstrapWorkspaceSseOnLoad(sourceTag) {
+        var ctx = resolveWorkspaceLoadResumeContext();
+        var state = ctx.state;
+        var active = ctx.active;
+        var operation = ctx.operation;
+        if (!operation) {
+            // 无活跃操作时仍保持工作区 SSE 流连接，确保后续操作能实时推送。
+            ensureWorkspaceStreamRunning(sourceTag || 'load-bootstrap');
+            return false;
+        }
+        if (isWorkspaceSseResumeBlockedByTerminal(active, state, operation)) {
+            // 操作已完成，不连接 operation-sse，但保持 stream-sse 以便后续操作实时推送。
+            ensureWorkspaceStreamRunning(sourceTag || 'load-bootstrap-terminal');
+            return false;
+        }
+        var shouldSyncUi = shouldObserveActiveQueueOperationOnLoad(active)
+            || isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, operation));
+        if (shouldSyncUi) {
+            var status = String(active.status || active.queue_status || readQueueStatusForDeferredState(state, operation) || 'queued').trim().toLowerCase();
+            syncQueuedStageUi(operation, 'progress', buildDeferredQueueProgressPayload(operation, Object.assign({}, state, {
+                active_operation: active,
+                active_operations: state.active_operations && typeof state.active_operations === 'object' ? state.active_operations : Object.create(null)
+            }), status), { level: 'progress' });
+        }
+        var operationResumed = resumeOperationStreamForQueueWatch(operation, Object.assign({ state: state }, state), sourceTag || 'load-bootstrap');
+        if (shouldPreferWorkspaceStreamForQueueWatch(operation, state)) {
+            ensureWorkspaceStreamRunning('load-bootstrap-workspace');
+        }
+        return operationResumed;
+    }
+
+    function scheduleWorkspaceSseBootstrap() {
+        bootstrapWorkspaceSseOnLoad('load-immediate');
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+                bootstrapWorkspaceSseOnLoad('load-dom');
+            });
+        } else {
+            bootstrapWorkspaceSseOnLoad('load-dom');
+        }
+        window.setTimeout(function () {
+            bootstrapWorkspaceSseOnLoad('load-retry-200');
+        }, 200);
+        window.setTimeout(function () {
+            bootstrapWorkspaceSseOnLoad('load-retry-800');
+        }, 800);
+    }
+
+    function startActiveQueueObservationOnLoad() {
+        return bootstrapWorkspaceSseOnLoad('load-active-queue');
     }
 
     function getCurrentPreviewPageType() {
@@ -1154,6 +1323,11 @@
             var data = parsePayload(event);
             if (!data || typeof data !== 'object') {
                 return;
+            }
+            if (typeof hydrateWorkspaceFromState === 'function' && (data.workspace_status || data.public_id || data.plan_json || data.build_plan_v2)) {
+                hydrateWorkspaceFromState(data);
+                updateTaskSummaryFromState(data);
+                updateStageStatusSummary(data);
             }
             if (data.active_operation && typeof data.active_operation === 'object') {
                 activeOperation = data.active_operation;
@@ -2915,6 +3089,11 @@
     var workspaceApiRef = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
     workspaceApiRef.clearBlockStreamingState = clearBlockStreamingState;
     workspaceApiRef.fetchWorkspaceSnapshotState = fetchWorkspaceSnapshotState;
+    workspaceApiRef.refreshWorkspaceStateFromCache = function () {
+        return fetchWorkspaceSnapshotState().then(function (state) {
+            return { success: true, data: state };
+        });
+    };
     workspaceApiRef.updateTaskSummaryFromState = updateTaskSummaryFromState;
     workspaceApiRef.updateStageStatusSummary = updateStageStatusSummary;
     window.__pbWorkspaceApi = workspaceApiRef;
@@ -2932,7 +3111,7 @@
         has_build_plan_v2: getWorkspaceFlagState('hasBuildPlanV2FlowEvidence', false),
         workspace_status: ''
     });
-    startActiveQueueObservationOnLoad();
+    scheduleWorkspaceSseBootstrap();
     function startOperationStream(streamUrl, operation, executionToken, sourceTag) {
         if (!streamUrl) {
             return false;
@@ -2974,7 +3153,11 @@
             runningOperationType = String(operation || '').toLowerCase();
             runningStartAtByOperationKey[operationKey] = now;
             ensureWorkspaceTerminalVisible(operation);
-            if (typeof previewBridge.pauseWorkspaceStream === 'function') {
+            var pauseWorkspaceForOperationSse = String(sourceTag || '').indexOf('queue-watch') < 0
+                && String(sourceTag || '').indexOf('load-active-queue') < 0
+                && String(sourceTag || '').indexOf('transport-error') < 0
+                && String(sourceTag || '').indexOf('deferred') < 0;
+            if (pauseWorkspaceForOperationSse && typeof previewBridge.pauseWorkspaceStream === 'function') {
                 previewBridge.pauseWorkspaceStream();
             }
         } catch (preSourceError) {
@@ -2996,31 +3179,19 @@
             transportErrorSnapshotProbeStarted = true;
             settled = true;
             closeOperationSource(source);
-            var fallbackMessage = 'Operation stream disconnected; syncing queue state from workspace snapshot.';
-            logOperationToWorkspaceTerminal('transport_error_snapshot_fallback', {
+            var fallbackMessage = <?= \json_encode((string)__('操作事件流断开，正在恢复工作区 SSE 同步。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            logOperationToWorkspaceTerminal('transport_error_sse_resume', {
                 operation: operation,
                 message: fallbackMessage
             }, 'warning', fallbackMessage);
-            fetchWorkspaceSnapshotState().then(function (workspaceState) {
-                if (workspaceState && typeof workspaceState === 'object' && syncDeferredQueueWorkspaceState(operation, workspaceState)) {
-                    return;
-                }
-                startDeferredQueueStatePoll(operation);
-                if (typeof enableNavigationAfterOperation === 'function') {
-                    enableNavigationAfterOperation();
-                }
-                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                    previewBridge.resumeWorkspaceStream();
-                }
-            }).catch(function () {
-                startDeferredQueueStatePoll(operation);
-                if (typeof enableNavigationAfterOperation === 'function') {
-                    enableNavigationAfterOperation();
-                }
-                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                    previewBridge.resumeWorkspaceStream();
-                }
-            });
+            ensureWorkspaceStreamRunning('transport-error');
+            resumeOperationStreamForQueueWatch(operation, readCachedWorkspaceSnapshotState() || {}, 'transport-error');
+            if (typeof enableNavigationAfterOperation === 'function') {
+                enableNavigationAfterOperation();
+            }
+            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                previewBridge.resumeWorkspaceStream();
+            }
             return true;
         }
 
@@ -3510,8 +3681,8 @@
                 if (continueTerminal) {
                     startObserverSyncTerminalPulse(continueTerminal);
                 }
-                resumeOperationStreamForQueueWatch(operation, payload, 'deferred-queue-handoff');
-                startDeferredQueueStatePoll(operation);
+                markOperationSseDeferredHandoff(operation, executionToken);
+                ensureWorkspaceStreamRunning('deferred-queue-handoff');
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
@@ -3653,7 +3824,8 @@
                 if (deferredTerminal) {
                     startObserverSyncTerminalPulse(deferredTerminal);
                 }
-                startDeferredQueueStatePoll(operation);
+                markOperationSseDeferredHandoff(operation, executionToken);
+                ensureWorkspaceStreamRunning('deferred-queue-progress');
 
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
@@ -3782,14 +3954,33 @@
                 offerRetryForFailedOperation(operation, failurePayload);
                 return;
             }
+            if (source && source.readyState === EventSource.CONNECTING) {
+                return;
+            }
+            if (source && source.readyState === EventSource.CLOSED) {
+                settled = true;
+                closeOperationSource(source);
+                markOperationSseDeferredHandoff(operation, executionToken);
+                ensureWorkspaceStreamRunning('operation-sse-closed');
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+                return;
+            }
             handleTransportErrorSnapshotFallback();
         };
 
-        }, PB_SSE_CONNECT_DELAY_MS);
+        var operationSseConnectDelayMs = PB_SSE_CONNECT_DELAY_MS;
+        if (String(sourceTag || '').indexOf('queue-watch') >= 0
+            || String(sourceTag || '').indexOf('transport-error') >= 0
+            || String(sourceTag || '').indexOf('load-active-queue') >= 0
+            || String(sourceTag || '').indexOf('load-bootstrap') >= 0
+            || String(sourceTag || '').indexOf('deferred') >= 0) {
+            operationSseConnectDelayMs = 0;
+        }
+        }, operationSseConnectDelayMs);
         return true;
     }
-
-    // 禁止页面加载后自动刷新并触发 SSE 续连逻辑；仅保留用户显式触发。
 
     function pickOperationResponsePayload(data) {
         if (!data || typeof data !== 'object') {
@@ -3849,7 +4040,7 @@
                 deferred_queue_progress: true,
                 queue_waiting_for_scheduler: true
             }), { level: 'info' });
-            startDeferredQueueStatePoll(operation || fallbackOperation || 'build');
+            resumeOperationStreamForQueueWatch(operation || fallbackOperation || 'build', payload || {}, 'start-deferred');
             return true;
         }
         if (!executionToken || !streamUrl) {
@@ -3863,35 +4054,18 @@
             toast('error', <?= \json_encode((string)__('操作已创建但缺少 SSE 参数'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ': ' + missing.join(', '));
             return false;
         }
+        if (shouldPreferWorkspaceStreamForQueueWatch(operation || fallbackOperation || 'build', payload)) {
+            markOperationSseDeferredHandoff(operation || fallbackOperation || 'build', executionToken);
+            if (ensureWorkspaceStreamRunning('start-response-workspace')) {
+                return true;
+            }
+        }
         return startOperationStream(streamUrl, operation, executionToken, 'startFromResponse');
     }
 
     window.PbAiOperationRunner = {
         startFromResponse: startFromResponse
     };
-
-    function observeExistingDraftOperationOnLoad() {
-        var active = activeOperation && typeof activeOperation === 'object' ? activeOperation : {};
-        var operation = String(active.operation || '').trim();
-        var status = String(active.status || '').toLowerCase();
-        if (!operation || ['queued', 'pending', 'running', 'processing'].indexOf(status) === -1) {
-            return;
-        }
-        if (operation !== 'plan' && operation !== 'build' && operation !== 'publish' && operation !== 'image_asset') {
-            return;
-        }
-        var hasExecutionToken = !!String(active.execution_token || '').trim();
-        if (!hasExecutionToken) {
-            startDeferredQueueStatePoll(operation);
-            return;
-        }
-        var started = startFromResponse(Object.assign({ success: true }, active), operation);
-        if (!started) {
-            startDeferredQueueStatePoll(operation);
-        }
-    }
-
-    window.setTimeout(observeExistingDraftOperationOnLoad, 180);
 
     function startPublishFlow(triggerButton, options) {
         var opts = options && typeof options === 'object' ? options : {};

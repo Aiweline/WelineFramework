@@ -124,6 +124,11 @@ class AiSiteAgentSessionArtifact extends Model
         return $this;
     }
 
+    private const ARTIFACT_FILE_BASES = [
+        'data/pagebuilder/session-artifacts',
+        'var/pagebuilder/session-artifacts',
+    ];
+
     private function readExternalPayloadValue(string $relativePath): mixed
     {
         $relativePath = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, \ltrim($relativePath, '/\\'));
@@ -131,16 +136,26 @@ class AiSiteAgentSessionArtifact extends Model
             return [];
         }
 
-        $base = BP . 'var' . \DIRECTORY_SEPARATOR . 'pagebuilder' . \DIRECTORY_SEPARATOR . 'session-artifacts';
         $path = BP . $relativePath;
-        $baseReal = \realpath($base);
         $pathReal = \realpath($path);
-        if (!\is_string($baseReal) || !\is_string($pathReal)) {
+        if (!\is_string($pathReal) || !\is_file($pathReal)) {
             return [];
         }
 
-        $basePrefix = \rtrim($baseReal, \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR;
-        if (!\str_starts_with($pathReal, $basePrefix) || !\is_file($pathReal)) {
+        $allowed = false;
+        foreach (self::ARTIFACT_FILE_BASES as $baseDir) {
+            $base = BP . \str_replace('/', \DIRECTORY_SEPARATOR, $baseDir);
+            $baseReal = \realpath($base);
+            if (\is_string($baseReal)) {
+                $basePrefix = \rtrim($baseReal, \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR;
+                if (\str_starts_with($pathReal, $basePrefix)) {
+                    $allowed = true;
+                    break;
+                }
+            }
+        }
+
+        if (!$allowed) {
             return [];
         }
 

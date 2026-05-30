@@ -130,7 +130,6 @@ final class AiSiteAgentQueueReuseTest extends TestCase
             'build_task_summary' => ['pending' => 5],
         ]));
         self::assertFalse($method->invoke($controller, ['plan_confirmed' => 1]));
-        self::assertTrue($method->invoke($controller, ['execution_blueprint_draft' => ['tasks' => [['task_key' => 'stage1']]]]));
         self::assertFalse($method->invoke($controller, ['plan_json' => ['pages' => [['page_type' => 'home_page']]]]));
         self::assertFalse($method->invoke($controller, ['plan_workbench' => ['draft' => ['summary' => 'draft']]]));
         self::assertFalse($method->invoke($controller, ['plan_markdown' => 'stage-one markdown']));
@@ -151,10 +150,13 @@ final class AiSiteAgentQueueReuseTest extends TestCase
 
         self::assertFalse($method->invoke($controller, ['plan_json' => ['content_locale' => 'en_US']]));
         self::assertFalse($method->invoke($controller, ['plan_structured' => ['content_locale' => 'en_US']]));
-        self::assertFalse($method->invoke($controller, ['execution_blueprint' => ['content_locale' => 'en_US']]));
         self::assertTrue($method->invoke($controller, ['plan_json' => $this->buildUsableStageOnePlanJson()]));
         self::assertTrue($method->invoke($controller, ['plan_json' => $this->buildContractPassedStageOnePlanJson()]));
-        self::assertTrue($method->invoke($controller, ['execution_blueprint' => ['tasks' => [['task_key' => 'home.hero']]]]));
+        self::assertTrue($method->invoke($controller, [
+            'build_plan_v2' => [
+                'blocks' => [['block_id' => 'hero', 'page_id' => 'home_page']],
+            ],
+        ]));
 
         $source = (string)\file_get_contents($reflection->getFileName());
         $handleConfirmPlan = $this->extractControllerMethodSource($source, 'handleConfirmPlan');
@@ -393,7 +395,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $artifactList = $this->extractConstantArraySource($source, 'BUILD_QUEUE_SCOPE_ARTIFACT_KEYS');
 
         self::assertStringContainsString("'build_plan_v2'", $artifactList);
-        self::assertStringContainsString("'build_blueprint'", $artifactList);
+        self::assertStringNotContainsString("'build_blueprint'", $artifactList);
         self::assertStringContainsString("'task_results'", $artifactList);
         self::assertStringContainsString('loadBuildQueueScope($sessionService', $source);
         self::assertStringNotContainsString("'plan_workbench'", $artifactList);
@@ -409,7 +411,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $runBuildSource = $this->extractControllerMethodSource($source, 'runBuildOperation');
 
         self::assertStringContainsString("'build_plan_v2'", $artifactList);
-        self::assertStringContainsString("'build_blueprint'", $artifactList);
+        self::assertStringNotContainsString("'build_blueprint'", $artifactList);
         self::assertStringContainsString("'task_results'", $artifactList);
         self::assertStringContainsString('self::BUILD_OPERATION_ARTIFACT_KEYS', $handleStartBuildSource);
         self::assertStringContainsString('self::BUILD_OPERATION_ARTIFACT_KEYS', $runBuildSource);
@@ -440,15 +442,15 @@ final class AiSiteAgentQueueReuseTest extends TestCase
 
         self::assertSame([], $patch['plan_json']);
         self::assertSame('', $patch['plan_markdown']);
-        self::assertSame([], $patch['execution_blueprint']);
-        self::assertSame([], $patch['execution_blueprint_draft']);
         self::assertSame(0, $patch['plan_confirmed']);
         self::assertSame([], $patch['build_plan_v2']);
         self::assertSame([], $patch['plan_projection']);
         self::assertSame([], $patch['content_manifest']);
         self::assertSame(0, $patch['build_plan_confirmed']);
-        self::assertSame([], $patch['build_blueprint']);
-        self::assertSame([], $patch['build_tasks']);
+        self::assertArrayNotHasKey('execution_blueprint', $patch);
+        self::assertArrayNotHasKey('execution_blueprint_draft', $patch);
+        self::assertArrayNotHasKey('build_blueprint', $patch);
+        self::assertArrayNotHasKey('build_tasks', $patch);
         self::assertArrayNotHasKey('task_plan_confirmed', $patch);
         self::assertArrayNotHasKey('virtual_theme_plan', $patch);
     }
@@ -909,11 +911,10 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $methodSource = $this->extractControllerMethodSource($source, 'prepareBuildImageAssets');
 
         self::assertStringContainsString(
-            'prepareBuildAssets($session, $adminId, $scope, 0)',
+            'prepareBuildAssets($session, $adminId, $scope, 3)',
             $methodSource,
-            'Build queue must not spend the page-generation critical path waiting for image assets.'
+            'Build queue prepares identity assets before page generation.'
         );
-        self::assertStringNotContainsString('prepareBuildAssets($session, $adminId, $scope, 3)', $methodSource);
     }
 
     public function testBuildTaskCompletedEventsDoNotHydrateWorkspaceState(): void
@@ -921,10 +922,9 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
         $methodSource = $this->extractControllerMethodSource($source, 'buildObservedTaskCompletedPayload');
 
-        self::assertStringContainsString("'state_loaded' => false", $methodSource);
-        self::assertStringContainsString("'state_ref' => 'workspace_snapshot'", $methodSource);
-        self::assertStringNotContainsString('buildWorkspaceState(', $methodSource);
-        self::assertStringNotContainsString("'state' =>", $methodSource);
+        self::assertStringContainsString('buildWorkspaceState($fresh, $adminId, 80, true)', $methodSource);
+        self::assertStringContainsString("'state' => \$payloadState", $methodSource);
+        self::assertStringContainsString('buildWorkspaceEventStatePayload', $methodSource);
     }
 
     public function testImageAssetQueuePatchesVirtualThemeOnlyBeforePublish(): void
