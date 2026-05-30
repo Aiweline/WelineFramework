@@ -13,18 +13,20 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteDesignConsistencyServicesTest extends TestCase
 {
-    public function testManifestPolicyRejectsInlineBlueprint(): void
+    public function testManifestPolicyRejectsInlineBuildPlanArtifact(): void
     {
         $policy = new AiSiteScopeManifestPolicy();
         $this->expectException(\InvalidArgumentException::class);
-        $policy->assertManifestClean(['execution_blueprint' => ['pages' => [['blocks' => []]]]], true);
+        $policy->assertManifestClean([
+            'build_plan_v2' => ['blocks' => [['payload' => \str_repeat('x', AiSiteScopeManifestPolicy::MANIFEST_INLINE_MAX_BYTES + 1)]]],
+        ], true);
     }
 
     public function testManifestPolicyDehydrateStripsInlineHtml(): void
     {
         $policy = new AiSiteScopeManifestPolicy();
         $scope = [
-            'execution_blueprint' => ['pages' => []],
+            'plan_json' => ['pages' => []],
             'virtual_pages_by_type' => [
                 'home_page' => [
                     'blocks' => [
@@ -34,7 +36,7 @@ final class AiSiteDesignConsistencyServicesTest extends TestCase
             ],
         ];
         $dehydrated = $policy->dehydrateScopePaths($scope);
-        self::assertSame([], $dehydrated['execution_blueprint']);
+        self::assertSame([], $dehydrated['plan_json']);
         self::assertArrayNotHasKey('html', $dehydrated['virtual_pages_by_type']['home_page']['blocks'][0]);
         self::assertNotEmpty($dehydrated['virtual_page_index']['home_page']['blocks']);
     }
@@ -96,7 +98,10 @@ final class AiSiteDesignConsistencyServicesTest extends TestCase
         $policy = new AiSiteScopeManifestPolicy();
         $peakBefore = \memory_get_usage(true);
         for ($i = 0; $i < 50; ++$i) {
-            $scope = ['design_tokens' => ['font_display' => 'A', 'font_body' => 'A'], 'build_tasks' => ['t' . $i => ['status' => 'done']]];
+            $scope = [
+                'design_tokens' => ['font_display' => 'A', 'font_body' => 'A'],
+                'build_plan_v2' => ['blocks' => [['block_id' => 'hero-' . $i, 'execution' => ['status' => 'done']]]],
+            ];
             $policy->dehydrateScopePaths($scope);
             unset($scope);
         }

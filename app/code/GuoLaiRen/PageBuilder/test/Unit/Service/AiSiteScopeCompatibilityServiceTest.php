@@ -148,22 +148,18 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(44, $scope['pagebuilder_pages_by_type'][Page::TYPE_HOME]['page_id'] ?? 0);
     }
 
-    public function testNormalizeConfirmedPlanFlagRestoresStaleFlagFromConfirmedBlueprint(): void
+    public function testNormalizeConfirmedPlanFlagRestoresStaleFlagFromConfirmedBuildPlan(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
 
         $scope = [
             'plan_confirmed' => 0,
-            'execution_blueprint' => [
-                'signature' => 'stage-one-sig',
-                'tasks' => [['task_key' => 'home:hero']],
+            'build_plan_confirmed' => 1,
+            'build_plan_confirmed_at' => '2026-04-24 12:00:00',
+            'build_plan_v2' => [
+                'contract_meta' => ['status' => 'confirmed', 'signature' => 'build-plan-sig'],
+                'blocks' => [['block_id' => 'hero']],
             ],
-            'execution_blueprint_draft' => [
-                'signature' => 'stage-one-sig',
-                'tasks' => [['task_key' => 'home:hero']],
-            ],
-            'execution_blueprint_confirmed_signature' => 'stage-one-sig',
-            'execution_blueprint_confirmed_at' => '2026-04-24 12:00:00',
         ];
 
         $normalized = $service->normalizeConfirmedPlanFlag($scope);
@@ -173,22 +169,50 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         self::assertSame('2026-04-24 12:00:00', (string)($normalized['plan_confirmed_at'] ?? ''));
     }
 
-    public function testNormalizeConfirmedPlanFlagDoesNotRestoreWhenDraftDiffersFromConfirmedBlueprint(): void
+    public function testStripDeprecatedScopeArtifactKeysRemovesLegacyTopLevelFields(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->stripDeprecatedScopeArtifactKeys([
+            'execution_blueprint' => ['tasks' => []],
+            'execution_blueprint_draft' => ['tasks' => []],
+            'build_blueprint' => ['tasks' => []],
+            'build_tasks' => ['page:home_page:hero' => ['status' => 'done']],
+            'build_plan_v2' => ['blocks' => []],
+            '_artifact_refs' => [
+                'visual_edit' => [
+                    'build_blueprint' => ['storage' => 'session_artifact_v1'],
+                    'build_workbench' => ['storage' => 'session_artifact_v1'],
+                ],
+            ],
+            'plan_workbench' => [
+                'confirmed' => [
+                    'execution_blueprint' => ['signature' => 'legacy'],
+                    'signature' => 'confirmed',
+                ],
+            ],
+        ]);
+
+        self::assertArrayNotHasKey('execution_blueprint', $scope);
+        self::assertArrayNotHasKey('execution_blueprint_draft', $scope);
+        self::assertArrayNotHasKey('build_blueprint', $scope);
+        self::assertArrayNotHasKey('build_tasks', $scope);
+        self::assertArrayHasKey('build_plan_v2', $scope);
+        self::assertArrayNotHasKey('build_blueprint', $scope['_artifact_refs']['visual_edit'] ?? []);
+        self::assertArrayNotHasKey('execution_blueprint', $scope['plan_workbench']['confirmed'] ?? []);
+    }
+
+    public function testNormalizeConfirmedPlanFlagDoesNotRestoreWithoutConfirmedBuildPlan(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
 
         $scope = [
             'plan_confirmed' => 0,
-            'execution_blueprint' => [
-                'signature' => 'confirmed-sig',
-                'tasks' => [['task_key' => 'home:hero']],
+            'build_plan_confirmed' => 0,
+            'build_plan_v2' => [
+                'contract_meta' => ['status' => 'draft', 'signature' => 'draft-sig'],
+                'blocks' => [['block_id' => 'hero']],
             ],
-            'execution_blueprint_draft' => [
-                'signature' => 'new-draft-sig',
-                'tasks' => [['task_key' => 'home:hero']],
-            ],
-            'execution_blueprint_confirmed_signature' => 'confirmed-sig',
-            'execution_blueprint_confirmed_at' => '2026-04-24 12:00:00',
         ];
 
         $normalized = $service->normalizeConfirmedPlanFlag($scope);
@@ -950,10 +974,6 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                 'content_locale' => 'zh_Hans_CN',
                 'default_locale' => 'pt_BR',
             ],
-            'execution_blueprint' => [
-                'content_locale' => 'zh_Hans_CN',
-                'shared_prompt_context' => ['content_locale' => 'zh_Hans_CN'],
-            ],
             'plan_json' => [
                 'content_locale' => 'zh_Hans_CN',
                 'i18n' => ['content_locale' => 'zh_Hans_CN'],
@@ -962,8 +982,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         self::assertSame('pt_BR', $scope['content_locale'] ?? null);
         self::assertSame('pt_BR', $scope['website_profile']['content_locale'] ?? null);
-        self::assertSame('pt_BR', $scope['execution_blueprint']['content_locale'] ?? null);
-        self::assertSame('pt_BR', $scope['execution_blueprint']['shared_prompt_context']['content_locale'] ?? null);
+        self::assertArrayNotHasKey('execution_blueprint', $scope);
         self::assertSame('pt_BR', $scope['plan_json']['content_locale'] ?? null);
         self::assertSame('pt_BR', $scope['plan_json']['i18n']['content_locale'] ?? null);
         self::assertSame(['pt_BR'], \array_slice($scope['locales'] ?? [], 0, 1));

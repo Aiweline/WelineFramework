@@ -1705,7 +1705,9 @@ final class AiSiteAssetManifestService
         $path = \is_string($path) && $path !== '' ? $path : $url;
         $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
         $lowerPath = \strtolower($path);
-        if (!\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
+        $isPageBuilderGeneratedAsset = \str_contains($lowerPath, '/pub/media/page-build/')
+            && \str_contains($lowerPath, '/ai-generated/');
+        if (!$isPageBuilderGeneratedAsset) {
             return true;
         }
         $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
@@ -2106,9 +2108,15 @@ final class AiSiteAssetManifestService
 
         $source = \strtolower(\trim((string)($slot['source'] ?? '')));
         $lowerFinalUrl = \strtolower($finalUrl);
-        return $source === 'generated'
+        if (
+            $source === 'generated'
             && \str_contains($lowerFinalUrl, '/ai-generated/')
-            && \str_ends_with($lowerFinalUrl, '.svg');
+            && \str_ends_with($lowerFinalUrl, '.svg')
+        ) {
+            return !$this->isLogoAssetSlot($slot) && !$this->isFaviconLikeSlot($slot);
+        }
+
+        return false;
     }
 
     /**

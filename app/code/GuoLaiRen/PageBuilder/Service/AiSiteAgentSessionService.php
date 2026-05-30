@@ -358,6 +358,35 @@ class AiSiteAgentSessionService
         );
     }
 
+    /** @var list<string> */
+    public const BUILD_OPERATION_ARTIFACT_KEYS = [
+        'plan_json',
+        'build_plan_v2',
+        'plan_projection',
+        'content_manifest',
+        'build_workbench',
+        'build_contracts',
+        'render_data_contract',
+        'task_results',
+        'qa_report',
+        'repair_patch',
+    ];
+
+    /**
+     * Build/publish queue paths must hydrate confirmed build_plan_v2; manifest-only
+     * loads leave execution shells without blocks and collapse the task tree to shared chrome.
+     *
+     * @return array<string, mixed>
+     */
+    public function loadScopeForBuildOperation(AiSiteAgentSession $session): array
+    {
+        return $this->loadScopeForStage(
+            $session,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            self::BUILD_OPERATION_ARTIFACT_KEYS
+        );
+    }
+
     /**
      * @return array<string, mixed>
      */

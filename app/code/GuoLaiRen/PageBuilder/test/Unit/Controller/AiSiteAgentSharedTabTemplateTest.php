@@ -55,18 +55,18 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringNotContainsString('renderTaskPlan', $script);
     }
 
-    public function testConfirmedPlanModalUsesNonEmptyBlueprintFallbackAndBindsPreviewTabs(): void
+    public function testConfirmedPlanModalUsesBuildPlanV2ArtifactsAndBindsPreviewTabs(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
 
         self::assertIsString($script);
-        self::assertStringContainsString('displayPlan: displayPlan', $script);
-        self::assertStringContainsString("displayKind: displayKind", $script);
-        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'execution_blueprint'", $script);
-        self::assertStringContainsString("buildPlanPreviewHtml('', { execution_blueprint: planData })", $script);
+        self::assertStringContainsString('resolveBuildPlanV2ArtifactsFromWorkspaceState(stateForBuildPlan)', $script);
+        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'projection'", $script);
+        self::assertStringContainsString("buildPlanPreviewHtml('', { structured: planData, json: planData })", $script);
         self::assertStringContainsString('bindPreviewTabButtons(planRenderedContent);', $script);
         self::assertStringContainsString('bindPreviewActionButtons(planRenderedContent);', $script);
+        self::assertStringNotContainsString('execution_blueprint', $script);
     }
 
     public function testCurrentPageRefineUsesDedicatedPageApi(): void
@@ -103,7 +103,8 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertIsString($layout);
         self::assertIsString($script);
         self::assertStringContainsString('for="pb-ai-target-domain"', $layout);
-        self::assertStringContainsString('class="form-control pb-ai-target-domain-sync"', $layout);
+        self::assertStringContainsString('pb-ai-target-domain-sync', $layout);
+        self::assertStringContainsString('id="pb-ai-target-domain"', $layout);
         self::assertStringContainsString('function isTargetDomainRequiredForPlanActionSatisfied()', $script);
         self::assertStringContainsString('if (!isTargetDomainRequiredForPlanActionSatisfied()) {', $script);
         self::assertStringContainsString('setTargetDomainFieldInvalid(true);', $script);

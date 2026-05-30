@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Extends\Module\Weline_Ai\Adapter;
 
+use GuoLaiRen\PageBuilder\Extends\Module\Weline_Ai\Style\PageBuilderStyleProvider;
 use Weline\Ai\Interface\AdapterModelBindingInterface;
 use Weline\Ai\Interface\AdapterSkillBindingInterface;
 use Weline\Ai\Interface\AdapterStyleBindingInterface;
@@ -41,7 +42,7 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface, AdapterSki
 
     public function getDefaultStyleCodes(): array
     {
-        return [];
+        return [PageBuilderStyleProvider::CARD_GAME_STYLE_CODE];
     }
 
     /**

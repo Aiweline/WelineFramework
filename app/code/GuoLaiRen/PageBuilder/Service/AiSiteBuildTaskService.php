@@ -535,10 +535,10 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * Keep only task-level plan context that prompt assembly actually reads.
-     * The full BuildPlan task and its runtime_context are already represented by
-     * the executable task fields, and duplicating them across every blueprint
-     * task makes session artifacts large enough to destabilize queue workers.
+     * Keep only block-level plan context that prompt assembly actually reads.
+     * The full BuildPlan block and its execution context are already represented
+     * by the executable block fields; duplicating them across every block makes
+     * session artifacts large enough to destabilize queue workers.
      *
      * @param array<string, mixed> $planContext
      * @return array<string, mixed>
@@ -572,8 +572,8 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * Stage2 prompt context is frozen while the task tree is built. Later prompt
-     * assembly must read these task-level references instead of falling back to
+     * Block prompt context is frozen while BuildPlan execution rows are built.
+     * Later prompt assembly must read these block-level references instead of falling back to
      * broad mutable scope state.
      *
      * @param array<string, mixed> $scope
@@ -1665,6 +1665,9 @@ class AiSiteBuildTaskService
         $scope = $this->reconcileGeneratedArtifactsWithTaskState($scope, true);
         $scope = $this->clearResolvedRetryableAiFailures($scope);
         $summary = $this->summarize($scope);
+        if (!$this->shouldAttachBuildRenderDataContract($scope, $summary)) {
+            return $scope;
+        }
         if ((int)($summary['running'] ?? 0) <= 0) {
             return $this->attachBuildRenderDataContract($scope);
         }
@@ -1679,6 +1682,29 @@ class AiSiteBuildTaskService
         $scope = $this->clearResolvedRetryableAiFailures($scope);
 
         return $this->attachBuildRenderDataContract($scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $summary
+     */
+    private function shouldAttachBuildRenderDataContract(array $scope, array $summary): bool
+    {
+        if ((int)($summary['total'] ?? 0) <= 0) {
+            return false;
+        }
+        if ((int)($summary['pending'] ?? 0) > 0
+            || (int)($summary['running'] ?? 0) > 0
+            || (int)($summary['failed'] ?? 0) > 0
+            || (int)($summary['cancelled'] ?? 0) > 0
+            || (int)($summary['done'] ?? 0) < (int)($summary['total'] ?? 0)
+        ) {
+            return false;
+        }
+
+        $gate = $this->inspectBuildCompletionGate($scope);
+
+        return !empty($gate['passed']);
     }
 
     /**
@@ -2684,7 +2710,10 @@ class AiSiteBuildTaskService
         $scope = $this->normalizeConfirmedBuildPlanFlag($scope);
         $scope = $this->clearResolvedRetryableAiFailures($scope);
         $taskSummary = $this->summarize($scope);
-        $allBuildTasksComplete = $this->isBuildTaskSummaryFullyComplete($taskSummary)
+        $completionGate = $this->inspectBuildCompletionGate($scope);
+        $completionGatePassed = !empty($completionGate['passed']);
+        $allBuildTasksComplete = $completionGatePassed
+            && $this->isBuildTaskSummaryFullyComplete($taskSummary)
             && !$this->hasUnfinishedBlueprintTasks($scope);
         $taskState = $this->extractTaskState($scope);
         $existingBuildLedger = $this->getRetryableAiFailures($scope, 'build');
@@ -3520,11 +3549,20 @@ class AiSiteBuildTaskService
                 return false;
             }
 
+            if ($this->isBuiltPageSectionArtifact($layoutSection)) {
+                return true;
+            }
+
+            $componentCode = \trim((string)($layoutSection['code'] ?? $layoutSection['component'] ?? $sectionCode));
+            if ($componentCode !== '' && $this->virtualThemeComponentArtifactAvailable($scope, $componentCode)) {
+                return true;
+            }
+
             if ($this->requiresPersistedVirtualThemeLayoutCheck($scope)) {
                 return $this->persistedVirtualThemeLayoutContainsSectionCode($scope, $pageType, $sectionCode);
             }
 
-            return true;
+            return false;
         }
         if ($activeRegeneration) {
             return false;
@@ -3535,7 +3573,8 @@ class AiSiteBuildTaskService
 
         $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        return $this->virtualPageContainsSectionCode($virtualPage, $sectionCode)
+
+        return $this->virtualPageContainsBuiltSectionArtifact($virtualPage, $sectionCode)
             && !$this->arrayContainsGeneratedArtifactPromptTrace($virtualPage)
             && !$this->virtualThemeComponentHasPromptTrace($scope, $sectionCode);
     }
@@ -3823,6 +3862,53 @@ class AiSiteBuildTaskService
         $rendered = $html !== '' ? $html : $phtml;
 
         return !$this->containsGeneratedArtifactPromptTrace($rendered);
+    }
+
+    /**
+     * @param array<string, mixed> $section
+     */
+    private function isBuiltPageSectionArtifact(array $section): bool
+    {
+        if ($section === []) {
+            return false;
+        }
+
+        $html = \trim((string)($section['html'] ?? $section['html_content'] ?? ''));
+        $phtml = \trim((string)($section['phtml'] ?? $section['template_phtml'] ?? ''));
+        if ($html === '' && $phtml === '') {
+            return false;
+        }
+
+        $code = \trim((string)($section['code'] ?? $section['component'] ?? $section['section_code'] ?? ''));
+        if ($code === '') {
+            return false;
+        }
+
+        $rendered = $html !== '' ? $html : $phtml;
+
+        return !$this->containsGeneratedArtifactPromptTrace($rendered);
+    }
+
+    /**
+     * @param array<string, mixed> $virtualPage
+     */
+    private function virtualPageContainsBuiltSectionArtifact(array $virtualPage, string $sectionCode): bool
+    {
+        $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        foreach ($blocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            foreach (['section_code', 'code', 'block_code', 'component', 'component_code'] as $key) {
+                if (!$this->sectionIdentityMatches((string)($block[$key] ?? ''), $sectionCode)) {
+                    continue;
+                }
+
+                return $this->isBuiltPageSectionArtifact($block);
+            }
+        }
+
+        return false;
     }
 
     /**

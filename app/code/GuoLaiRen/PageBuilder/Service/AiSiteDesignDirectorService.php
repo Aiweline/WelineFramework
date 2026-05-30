@@ -497,20 +497,20 @@ final class AiSiteDesignDirectorService
     private function neonCardColorRoles(): array
     {
         return [
-            'primary' => '#8B5CF6',
-            'background' => '#070A18',
-            'surface' => '#10172A',
-            'surface_alt' => '#172033',
-            'text' => '#F8FAFC',
-            'muted_text' => '#A7B0C5',
+            'primary' => '#7C3AED',
+            'background' => '#0F0F23',
+            'surface' => '#15152E',
+            'surface_alt' => '#1E1B3F',
+            'text' => '#E2E8F0',
+            'muted_text' => '#A78BFA',
             'accent' => '#00F5FF',
-            'accent_soft' => '#FF2BD6',
+            'accent_soft' => '#F43F5E',
             'warning' => '#F7C948',
             'success' => '#33F28B',
-            'divider' => '#2A3654',
+            'divider' => '#312E81',
             'shadow' => '#030712',
             'on_primary' => '#FFFFFF',
-            'secondary' => '#FF2BD6',
+            'secondary' => '#A78BFA',
         ];
     }
 
@@ -536,7 +536,7 @@ final class AiSiteDesignDirectorService
             $themePlan['typography']['font_family'] ?? null,
             $themePlan['font_family'] ?? null,
             $scope['theme_design']['typography_spacing_radius']['font_family'] ?? null,
-        ], $isNeonCardDefault ? 'Chakra Petch, Orbitron, Inter, system-ui, sans-serif' : 'system readable stack');
+        ], $isNeonCardDefault ? 'Russo One, Chakra Petch, Orbitron, Outfit, Work Sans, system-ui, sans-serif' : 'system readable stack');
 
         return \array_replace($defaults, [
             'font_family' => $font,

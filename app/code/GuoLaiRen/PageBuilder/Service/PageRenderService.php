@@ -1709,7 +1709,9 @@ HTML;
         $path = \is_string($path) && $path !== '' ? $path : $url;
         $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
         $lowerPath = \strtolower($path);
-        if (!\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
+        $isPageBuilderGeneratedAsset = \str_contains($lowerPath, '/pub/media/page-build/')
+            && \str_contains($lowerPath, '/ai-generated/');
+        if (!$isPageBuilderGeneratedAsset) {
             return false;
         }
 

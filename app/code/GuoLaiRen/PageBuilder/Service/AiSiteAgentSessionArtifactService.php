@@ -17,6 +17,8 @@ class AiSiteAgentSessionArtifactService
     private const STORAGE_EXTERNAL_FILE = 'session_artifact_file_v1';
     private const EXTERNAL_PAYLOAD_THRESHOLD_BYTES = 524288;
 
+    private const ARTIFACT_FILE_BASE_DIR = 'data/pagebuilder/session-artifacts';
+
     // build 流程中同一会话的 plan_workbench / build_plan_v2 等 artifact 单文件可能达到 6-8MB JSON，
     // 同进程内 hydrateScope 会被反复触发（loadScopeForStage 调用 50+ 次）。每次都做 file_get_contents +
     // json_decode 会让 worker 在 512MB memory_limit 下 OOM。这里按 payload_hash 做 LRU 缓存，
@@ -192,6 +194,16 @@ class AiSiteAgentSessionArtifactService
             }
 
             if ($hasValue) {
+                if (
+                    $artifactKey === 'build_plan_v2'
+                    && \is_array($value)
+                    && !$this->hasCompleteBuildPlanArtifactPayload($value)
+                    && $existingRef !== []
+                ) {
+                    $refs[$stageCode][$artifactKey] = $existingRef;
+                    $scope = $this->setPathValue($scope, $definition['path'], $definition['empty']);
+                    continue;
+                }
                 $value = $this->compactArtifactPayloadForStorage($artifactKey, $value);
                 $json = $this->encodeValueDocument($value);
                 $hash = \sha1($json);
@@ -387,7 +399,8 @@ class AiSiteAgentSessionArtifactService
             }
 
             $stageCode = (string)$definition['stage'];
-            if ($this->hasArtifactPayload($this->getPathValue($scope, $definition['path'], $definition['empty']))) {
+            $inlineValue = $this->getPathValue($scope, $definition['path'], $definition['empty']);
+            if (!$this->shouldHydrateArtifactFromStorage($artifactKey, $inlineValue)) {
                 continue;
             }
 
@@ -584,8 +597,7 @@ class AiSiteAgentSessionArtifactService
         $hash = \preg_match('/^[a-f0-9]{40}$/i', $payloadHash) === 1 ? \strtolower($payloadHash) : \sha1($payloadJson);
         $stageCode = $this->sanitizeStorageSegment($stageCode);
         $artifactKey = $this->sanitizeStorageSegment($artifactKey);
-        $directory = BP . 'var' . \DIRECTORY_SEPARATOR . 'pagebuilder' . \DIRECTORY_SEPARATOR
-            . 'session-artifacts' . \DIRECTORY_SEPARATOR . $sessionId . \DIRECTORY_SEPARATOR . $stageCode;
+        $directory = BP . self::ARTIFACT_FILE_BASE_DIR . \DIRECTORY_SEPARATOR . $sessionId . \DIRECTORY_SEPARATOR . $stageCode;
         if (!\is_dir($directory)) {
             \mkdir($directory, 0775, true);
         }
@@ -598,7 +610,7 @@ class AiSiteAgentSessionArtifactService
             \rename($temporaryPath, $path);
         }
 
-        return 'var/pagebuilder/session-artifacts/' . $sessionId . '/' . $stageCode . '/' . $filename;
+        return self::ARTIFACT_FILE_BASE_DIR . '/' . $sessionId . '/' . $stageCode . '/' . $filename;
     }
 
     private function sanitizeStorageSegment(string $value): string
@@ -751,6 +763,29 @@ SQL);
         }
 
         return $value !== null && $value !== false;
+    }
+
+    private function shouldHydrateArtifactFromStorage(string $artifactKey, mixed $inlineValue): bool
+    {
+        if (!$this->hasArtifactPayload($inlineValue)) {
+            return true;
+        }
+        if ($artifactKey === 'build_plan_v2' && \is_array($inlineValue)) {
+            return !$this->hasCompleteBuildPlanArtifactPayload($inlineValue);
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     */
+    private function hasCompleteBuildPlanArtifactPayload(array $contract): bool
+    {
+        $blocks = \is_array($contract['blocks'] ?? null) ? $contract['blocks'] : [];
+        $pages = \is_array($contract['pages'] ?? null) ? $contract['pages'] : [];
+
+        return $blocks !== [] && $pages !== [];
     }
 
     private function encodeValueDocument(mixed $value): string

@@ -140,12 +140,12 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('function syncStageOnePlanPreviewFromWorkspaceState(workspaceState)', $script);
         self::assertStringContainsString('syncStageOnePlanPreviewFromWorkspaceState(workspaceState);', $script);
 
-        // 多源候选拼装契约：markdown / json / structured / execution_blueprint / build_plan_v2 必须都参与回退。
+        // 多源候选拼装契约：markdown / json / structured / build_plan_v2 参与回退，不再读取 execution_blueprint。
         self::assertStringContainsString('markdown: pickFirstNonEmptyPlanText(plan.markdown, state.plan_markdown, scope.plan_markdown)', $script);
         self::assertStringContainsString('json: pickFirstNonEmptyPlanObject(plan.json, state.plan_json, scope.plan_json)', $script);
         self::assertStringContainsString('structured: pickFirstNonEmptyPlanObject(plan.structured, state.plan_structured, scope.plan_structured)', $script);
-        self::assertStringContainsString('execution_blueprint: pickFirstNonEmptyPlanObject(plan.execution_blueprint, state.execution_blueprint, scope.execution_blueprint)', $script);
         self::assertStringContainsString('build_plan_v2: pickFirstNonEmptyPlanObject(plan.build_plan_v2, state.build_plan_v2, scope.build_plan_v2)', $script);
+        self::assertStringNotContainsString('execution_blueprint', $script);
 
         // 结构化 plan 归一化链：pickStructuredPlanRoot → normalizeStageOneStructuredRootForPreview。
         self::assertStringContainsString('function pickStructuredPlanRoot(payload)', $script);
@@ -734,7 +734,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertLessThan(
             $summary,
             $reconcile,
-            'Workspace task progress must summarize the reconciled build_tasks state.'
+            'Workspace task progress must summarize build_plan_v2 execution after artifact reconciliation.'
         );
     }
 
@@ -945,12 +945,14 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
         self::assertIsString($runtime);
         $startBody = $this->extractFunctionBody($runtime, 'startFromResponse');
-        $observeBody = $this->extractFunctionBody($runtime, 'observeExistingDraftOperationOnLoad');
+        $bootstrapBody = $this->extractFunctionBody($runtime, 'bootstrapWorkspaceSseOnLoad');
+        $preferBody = $this->extractFunctionBody($runtime, 'shouldPreferWorkspaceStreamForQueueWatch');
 
         self::assertStringContainsString('var hasObservableStreamStart = !!(executionToken && streamUrl);', $startBody);
         self::assertStringContainsString('var shouldDeferToQueuePoll = !hasObservableStreamStart && !!(', $startBody);
-        self::assertStringContainsString("['queued', 'pending', 'running', 'processing'].indexOf(status) === -1", $observeBody);
-        self::assertStringNotContainsString('!!active.queue_waiting_for_scheduler || !!active.can_close_stream', $observeBody);
+        self::assertStringContainsString('isWorkspaceSseResumeBlockedByTerminal', $bootstrapBody);
+        self::assertStringContainsString('resumeOperationStreamForQueueWatch', $bootstrapBody);
+        self::assertStringNotContainsString('!!active.queue_waiting_for_scheduler || !!active.can_close_stream', $preferBody);
     }
 
     public function testRetryableAiFailuresExposeManualContinueButtonsForPlanAndBuildOnly(): void

@@ -37,6 +37,7 @@ class AiSiteAutoAssetGenerationService
     public function prepareBuildAssets(AiSiteAgentSession $session, int $adminId, array $scope, int $limit = self::DEFAULT_LIMIT): array
     {
         $scope = $this->ensureReferenceImageInsights($scope);
+        $scope = $this->clearInvalidIdentityAssetFieldsFromScope($scope);
         $manifest = $this->manifestService->syncFromBuildPlan($scope);
         // 无论何种模式，都清理旧的占位图，留空等待真实 AI 图片生成
         $placeholderUrls = $this->manifestService->extractPlaceholderAssetUrls($manifest);
@@ -201,6 +202,7 @@ class AiSiteAutoAssetGenerationService
         }
 
         $scope = $this->ensureReferenceImageInsights($scope);
+        $scope = $this->clearInvalidIdentityAssetFieldsFromScope($scope);
         $manifest = $this->manifestService->syncFromBuildPlan($scope);
         $placeholderUrls = $this->manifestService->extractPlaceholderAssetUrls($manifest);
         $manifest = $this->manifestService->discardPlaceholderGeneratedAssets($manifest);
@@ -1125,11 +1127,14 @@ class AiSiteAutoAssetGenerationService
         $path = \is_string($path) && $path !== '' ? $path : $url;
         $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
         $lowerPath = \strtolower($path);
-        if (!\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
+        $isPageBuilderGeneratedAsset = \str_contains($lowerPath, '/pub/media/page-build/')
+            && \str_contains($lowerPath, '/ai-generated/');
+        if (!$isPageBuilderGeneratedAsset) {
             return false;
         }
         $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
-        if (!\str_contains($lowerPath, $expectedToken) || !\str_ends_with($lowerPath, '.png')) {
+        $hasSupportedExtension = \str_ends_with($lowerPath, '.png') || \str_ends_with($lowerPath, '.svg');
+        if (!\str_contains($lowerPath, $expectedToken) || !$hasSupportedExtension) {
             return true;
         }
         $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
@@ -1141,7 +1146,11 @@ class AiSiteAutoAssetGenerationService
             return true;
         }
 
-        return !$this->isPngImageBytes($bytes) || !$this->pngAppearsToHaveTransparentBackground($bytes);
+        return !AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset(
+            $bytes,
+            $this->mimeTypeForIdentityAssetPath($path),
+            $role
+        );
     }
 
     /**
@@ -1418,11 +1427,12 @@ class AiSiteAutoAssetGenerationService
                     return false;
                 }
                 $status = \strtolower(\trim((string)($slot['status'] ?? 'pending')));
-                if ($status !== '' && !\in_array($status, ['pending', 'planned'], true)) {
+                $finalUrl = \trim((string)($slot['final_url'] ?? ''));
+                $needsRealImageRetry = $finalUrl !== '' && $this->slotNeedsRealImageRetry($slot);
+                if (!$needsRealImageRetry && $status !== '' && !\in_array($status, ['pending', 'planned'], true)) {
                     return false;
                 }
-                $finalUrl = \trim((string)($slot['final_url'] ?? ''));
-                if ($finalUrl !== '' && !$this->slotNeedsRealImageRetry($slot)) {
+                if ($finalUrl !== '' && !$needsRealImageRetry) {
                     return false;
                 }
                 return true;

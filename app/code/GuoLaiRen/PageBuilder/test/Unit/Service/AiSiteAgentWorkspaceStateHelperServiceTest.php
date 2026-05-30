@@ -222,6 +222,7 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertSame([], $pruned['plan']['build_plan_v2']);
         self::assertSame(['pages' => ['home_page']], $pruned['plan']['projection']);
         self::assertTrue($pruned['plan']['build_plan_v2_available']);
+        self::assertArrayNotHasKey('execution_blueprint', $pruned['plan']);
         self::assertArrayNotHasKey('plan_json', $pruned);
         self::assertArrayNotHasKey('plan_structured', $pruned);
         self::assertArrayNotHasKey('task_plan', $pruned);

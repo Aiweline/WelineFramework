@@ -29,9 +29,56 @@ class AiSiteScopeCompatibilityService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public function stripDeprecatedScopeArtifactKeys(array $scope): array
+    {
+        foreach ([
+            'execution_blueprint',
+            'execution_blueprint_draft',
+            'execution_blueprint_confirmed_signature',
+            'execution_blueprint_confirmed_at',
+            'build_blueprint',
+            'build_tasks',
+            'task_plan',
+            'build_order',
+        ] as $key) {
+            unset($scope[$key]);
+        }
+
+        if (\is_array($scope['_artifact_refs'] ?? null)) {
+            foreach ($scope['_artifact_refs'] as $stageCode => $stageRefs) {
+                if (!\is_array($stageRefs)) {
+                    continue;
+                }
+                foreach (['execution_blueprint', 'build_blueprint'] as $artifactKey) {
+                    unset($scope['_artifact_refs'][$stageCode][$artifactKey]);
+                }
+                if ($scope['_artifact_refs'][$stageCode] === []) {
+                    unset($scope['_artifact_refs'][$stageCode]);
+                }
+            }
+            if ($scope['_artifact_refs'] === []) {
+                unset($scope['_artifact_refs']);
+            }
+        }
+
+        $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+        $confirmed = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
+        if ($confirmed !== []) {
+            unset($confirmed['execution_blueprint']);
+            $planWorkbench['confirmed'] = $confirmed;
+            $scope['plan_workbench'] = $planWorkbench;
+        }
+
+        return $scope;
+    }
+
     public function normalizeScope(array $scope): array
     {
-        $normalized = $scope;
+        $normalized = $this->stripDeprecatedScopeArtifactKeys($scope);
         $normalized[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] = $this->normalizePageTypesUserCustomized(
             $scope[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] ?? null
         ) ? 1 : 0;

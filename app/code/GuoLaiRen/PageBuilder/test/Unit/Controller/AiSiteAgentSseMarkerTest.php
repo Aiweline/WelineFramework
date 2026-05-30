@@ -694,7 +694,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'preview_page_type' => 'home_page',
             'plan_confirmed' => 0,
             'plan_confirmed_at' => '',
-            'has_execution_blueprint' => true,
+            'has_stage_one_plan' => true,
             'build_plan_confirmed' => 0,
             'build_plan_confirmed_at' => '',
             'has_build_plan_v2' => false,
@@ -733,7 +733,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'top_logs' => [],
             'scope' => [
                 'plan_confirmed' => 1,
-                'execution_blueprint_confirmed_signature' => 'confirmed-sig',
+                'build_plan_confirmed' => 1,
             ],
         ];
 
@@ -768,7 +768,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(1540, $pollingPayload['token_usage']['total_tokens']);
         self::assertSame(0, $ssePayload['plan_confirmed']);
         self::assertSame('', $ssePayload['plan_confirmed_at']);
-        self::assertTrue($ssePayload['has_execution_blueprint']);
+        self::assertTrue($ssePayload['has_stage_one_plan']);
         self::assertSame(0, $ssePayload['build_plan_confirmed']);
         self::assertSame('', $ssePayload['build_plan_confirmed_at']);
         self::assertFalse($ssePayload['has_build_plan_v2']);
