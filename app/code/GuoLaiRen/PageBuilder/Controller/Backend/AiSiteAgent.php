@@ -101,6 +101,7 @@ class AiSiteAgent extends BaseController
         'build_summary',
         'build_task_summary',
         'can_publish',
+        'completion_gate_snapshot',
         'default_language',
         'default_locale',
         'design_direction_code',
@@ -321,11 +322,6 @@ class AiSiteAgent extends BaseController
             return $this->fetch('workspace-error');
         }
 
-        $linkedWebsitesSession = $this->workspaceBridgeService->ensureLinkedWebsitesMirrorSession($session, $adminId);
-        if ($linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession) {
-            $this->workspaceBridgeService->syncPageBuilderScopeFromLinkedWebsitesSession($session, $linkedWebsitesSession, $adminId);
-        }
-        $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $buildStateStartedAt = \microtime(true);
         // Read-only page rendering should not persist normalized state back to DB.
         // Otherwise a simple workspace refresh can race with SSE/autosave/build writes
@@ -337,6 +333,17 @@ class AiSiteAgent extends BaseController
         ]);
         $expertUi = false;
         $viewState = $this->pruneWorkspaceStateForView($state);
+        if (\is_array($viewState['scope'] ?? null)) {
+            $viewState['scope'] = $this->applyAutoDesignDirectionToScope($viewState['scope'], $adminId);
+            $directionState = $this->designDirectionService()->buildWorkspaceDirectionState($viewState['scope']);
+            $viewState['design_direction'] = $directionState;
+            $viewState['design_direction_snapshot'] = $viewState['scope']['design_direction_snapshot'] ?? [];
+            $viewState['design_direction_match_reason'] = (string)($viewState['scope']['design_direction_match_reason'] ?? ($directionState['match_reason'] ?? ''));
+        }
+        $linkedWebsitesSession = $this->loadExistingLinkedWebsitesMirrorSessionFromScope(
+            \is_array($viewState['scope'] ?? null) ? $viewState['scope'] : [],
+            $adminId
+        );
         $linkedWebsitesScope = $linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession
             ? $linkedWebsitesSession->getScopeArray()
             : [];
@@ -400,6 +407,7 @@ class AiSiteAgent extends BaseController
         $this->assign('update_block_config_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-update-block-config'));
         $this->assign('start_publish_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-publish'));
         $this->assign('operation_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId]));
+        $this->assign('workspace_stream_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/get-stream-sse', ['public_id' => $publicId]));
         $this->assign('switch_preview_page_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-switch-preview-page'));
         $this->assign('workspace_snapshot_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-workspace-snapshot'));
         $this->assign('publish_check_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-publish-checklist'));
@@ -949,7 +957,7 @@ class AiSiteAgent extends BaseController
         }
 
         if ($stage === AiSiteAgentSession::STAGE_PUBLISH) {
-            $state = $this->buildWorkspaceState($session, $adminId, 24, true);
+            $state = $this->buildWorkspaceFastViewState($session, $adminId);
             $publishBlock = $this->resolvePublishBlockingAiFailureFromWorkspaceState($state);
             if (!empty($publishBlock['blocked'])) {
                 return $this->fetchJson([
@@ -975,14 +983,12 @@ class AiSiteAgent extends BaseController
         $this->sessionService->setStage($session->getId(), $adminId, $stage);
         $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'stage_changed', (string)__('工作区阶段已切换'));
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $viewState = $this->buildWorkspaceFastViewState($fresh, $adminId);
 
         return $this->fetchJson([
             'success' => true,
             'stage' => $stage,
-            'data' => $this->buildWorkspaceOperationPayload(
-                $this->buildWorkspaceState($fresh, $adminId, 24, true),
-                'stage'
-            ),
+            'data' => $this->buildWorkspaceOperationPayload($viewState, 'stage'),
         ]);
     }
 
@@ -1559,6 +1565,50 @@ class AiSiteAgent extends BaseController
     private function designDirectionService(): DesignDirectionService
     {
         return ObjectManager::getInstance(DesignDirectionService::class);
+    }
+
+    /**
+     * 自动模式下按当前 scope 重新解析设计方向（含适配器默认风格），用于只读展示。
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function applyAutoDesignDirectionToScope(array $scope, int $adminId): array
+    {
+        if ($this->isTruthyRequestFlagFromScope($scope, 'design_direction_locked')) {
+            return $scope;
+        }
+
+        $mode = $this->designDirectionService()->normalizeMode(
+            (string)($scope['design_direction_mode'] ?? DesignDirectionService::MODE_AUTO)
+        );
+        if ($mode !== DesignDirectionService::MODE_AUTO) {
+            return $scope;
+        }
+
+        try {
+            $directionPatch = $this->designDirectionService()->resolveSelectionForScope($scope, $adminId, false);
+        } catch (\InvalidArgumentException) {
+            return $scope;
+        }
+
+        return $this->scopeCompatibilityService->normalizeScope(\array_replace($scope, $directionPatch));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function isTruthyRequestFlagFromScope(array $scope, string $key): bool
+    {
+        $value = $scope[$key] ?? 0;
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value === 1;
+        }
+
+        return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'on'], true);
     }
 
     private function handleDesignDirectionList(): string
@@ -3704,6 +3754,18 @@ class AiSiteAgent extends BaseController
         if ($operation === '' || !$this->isRetryableAiOperationName($operation)) {
             return $this->jsonError('RETRY_OPERATION_UNSUPPORTED', 'The failed AI operation cannot be retried.', ['operation']);
         }
+        if ($operation === 'build') {
+            $buildScope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            );
+            if (!$this->buildTaskService->hasConfirmedBuildPlanForBuild($buildScope)) {
+                return $this->jsonError(
+                    'BUILD_PLAN_REQUIRED_BEFORE_BUILD',
+                    (string)__('构建缺少已确认的执行蓝图，请先重新生成并确认建站方案。'),
+                    ['public_id', 'build_plan_confirmed']
+                );
+            }
+        }
         if (!\in_array($operation, ['plan', 'build'], true) && $pageType === '') {
             return $this->jsonError('RETRY_OPERATION_INCOMPLETE', 'The failed AI operation is missing page_type.', ['page_type']);
         }
@@ -5088,7 +5150,29 @@ class AiSiteAgent extends BaseController
         if ($session === null) {
             return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
-        $state = $this->buildWorkspaceState($session, $adminId, 40, true);
+        $state = $this->buildWorkspaceFastViewState($session, $adminId);
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForBuildOperation($session)
+        );
+        $fastScope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        foreach ([
+            'active_operation',
+            'active_operations',
+            'build_queue_info',
+            'latest_build_failed',
+            'publish_blocked_by_latest_ai_failure',
+            'completion_gate_snapshot',
+            'workspace_status',
+            'can_publish',
+            'visual_edit_url',
+            'visual_preview_url',
+            'pre_publish_visual_urls',
+        ] as $runtimeKey) {
+            if (\array_key_exists($runtimeKey, $fastScope)) {
+                $scope[$runtimeKey] = $fastScope[$runtimeKey];
+            }
+        }
+        $state['scope'] = $scope;
         $publishBlock = $this->resolvePublishBlockingAiFailureFromWorkspaceState($state);
         if (!empty($publishBlock['blocked'])) {
             return $this->fetchJson([
@@ -5102,16 +5186,34 @@ class AiSiteAgent extends BaseController
                 ],
             ]);
         }
-        if (empty($state['can_publish'])) {
+        $completionGatePassed = !empty($scope['completion_gate_snapshot']['passed'])
+            || !empty($state['completion_gate_snapshot']['passed'])
+            || !empty($fastScope['completion_gate_snapshot']['passed']);
+        $buildTaskSummary = \is_array($scope['build_task_summary'] ?? null) && ($scope['build_task_summary'] ?? []) !== []
+            ? $scope['build_task_summary']
+            : (\is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : []);
+        $buildAlreadyComplete = $completionGatePassed
+            || $this->taskSummaryIndicatesCompleted($buildTaskSummary)
+            || !empty($scope['can_publish'])
+            || (
+                !empty($state['can_publish'])
+                && \in_array((string)($state['workspace_status'] ?? ''), [
+                    AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH,
+                    AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED,
+                ], true)
+            );
+        if (empty($state['can_publish']) && !$buildAlreadyComplete) {
             if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
                 return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案，再进入发布流程。')]);
             }
-            if (!$this->isBuildPlanReadyForBuild($state)) {
+            if (!$this->isBuildPlanReadyForBuild($scope) && !$buildAlreadyComplete) {
                 return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案生成的执行蓝图，再进入发布流程。')]);
             }
             return $this->fetchJson(['success' => false, 'code' => 'WORKSPACE_NOT_READY', 'message' => __('当前工作区尚未准备好发布，请先完成页面生成与编辑。')]);
         }
-        $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        if ($buildAlreadyComplete && empty($state['can_publish'])) {
+            $state['can_publish'] = true;
+        }
         $stageTwoReadiness = $this->buildStageTwoPublishReadinessReport($scope);
         if (empty($stageTwoReadiness['passed'])) {
             return $this->fetchJson([
@@ -6369,10 +6471,21 @@ class AiSiteAgent extends BaseController
         $hasExecutionBlueprint = $this->workspaceFastViewHasExecutionBlueprint($scope);
         $hasBuildPlanV2 = $this->workspaceFastViewHasBuildPlan($scope);
         $taskReady = $this->taskSummaryIndicatesCompleted($buildTaskSummary);
+        $completionGatePassed = !empty($scope['completion_gate_snapshot']['passed'])
+            || !empty($queuePatch['completion_gate_snapshot']['passed'] ?? null);
         $titleOk = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? '')) !== '';
         $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
             || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
-        $canPublish = $published || (!empty($scope['can_publish']) && $taskReady && $titleOk);
+        $canPublish = $published
+            || (
+                !empty($scope['can_publish'])
+                && $titleOk
+                && (
+                    $taskReady
+                    || $completionGatePassed
+                    || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+                )
+            );
         $workspaceStatus = (string)($scope['workspace_status'] ?? '');
         if ($workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH && !$canPublish) {
             $workspaceStatus = $taskReady
@@ -6403,8 +6516,10 @@ class AiSiteAgent extends BaseController
                 $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
             }
         } elseif (!empty($queuePatch['latest_build_failed']) || !empty($queuePatch['publish_blocked_by_latest_ai_failure'])) {
-            $canPublish = false;
-            $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+            if (!$completionGatePassed) {
+                $canPublish = false;
+                $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+            }
         }
 
         $state = \array_replace($queuePatch, [
@@ -6704,6 +6819,10 @@ class AiSiteAgent extends BaseController
 
     private function resolveAiSiteCurrentRequestOrigin(): string
     {
+        if (!isset($this->request)) {
+            return '';
+        }
+
         $host = \trim((string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: ''));
         if ($host === '') {
             return '';
@@ -6826,8 +6945,29 @@ class AiSiteAgent extends BaseController
             return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
-        $state = $this->buildWorkspaceState($session, $adminId, 40, true);
-        $scope = $state['scope'];
+        $state = $this->buildWorkspaceFastViewState($session, $adminId);
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForBuildOperation($session)
+        );
+        $fastScope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        foreach ([
+            'active_operation',
+            'active_operations',
+            'build_queue_info',
+            'latest_build_failed',
+            'publish_blocked_by_latest_ai_failure',
+            'completion_gate_snapshot',
+            'workspace_status',
+            'can_publish',
+            'visual_edit_url',
+            'visual_preview_url',
+            'pre_publish_visual_urls',
+        ] as $runtimeKey) {
+            if (\array_key_exists($runtimeKey, $fastScope)) {
+                $scope[$runtimeKey] = $fastScope[$runtimeKey];
+            }
+        }
+        $buildPlanScope = $scope;
         $publishBlock = $this->resolvePublishBlockingAiFailureFromWorkspaceState($state);
         $publishBlockedItem = null;
         if (!empty($publishBlock['blocked'])) {
@@ -6843,7 +6983,23 @@ class AiSiteAgent extends BaseController
         if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
             return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案，再检查发布条件。')]);
         }
-        if (!$this->isBuildPlanReadyForBuild($state)) {
+        $completionGatePassed = !empty($scope['completion_gate_snapshot']['passed'])
+            || !empty($state['completion_gate_snapshot']['passed'])
+            || !empty($fastScope['completion_gate_snapshot']['passed']);
+        $buildTaskSummary = \is_array($scope['build_task_summary'] ?? null) && ($scope['build_task_summary'] ?? []) !== []
+            ? $scope['build_task_summary']
+            : (\is_array($state['build_task_summary'] ?? null) ? $state['build_task_summary'] : []);
+        $buildAlreadyComplete = $completionGatePassed
+            || $this->taskSummaryIndicatesCompleted($buildTaskSummary)
+            || !empty($scope['can_publish'])
+            || (
+                !empty($state['can_publish'])
+                && \in_array((string)($state['workspace_status'] ?? ''), [
+                    AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH,
+                    AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED,
+                ], true)
+            );
+        if (!$this->isBuildPlanReadyForBuild($buildPlanScope) && !$buildAlreadyComplete) {
             return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案生成的执行蓝图，再检查发布条件。')]);
         }
         $virtualPages = \is_array($state['virtual_pages_by_type']) ? $state['virtual_pages_by_type'] : [];
@@ -6857,7 +7013,12 @@ class AiSiteAgent extends BaseController
                 'ok' => (int)$state['virtual_theme_id'] > 0,
                 'value' => (int)$state['virtual_theme_id'],
             ],
-            ['key' => 'website_profile', 'code' => 'WEBSITE_PROFILE_READY', 'label' => __('网站级资料已齐备'), 'ok' => \trim((string)($state['website_profile']['site_title'] ?? '')) !== '', 'value' => $state['website_profile']],
+            ['key' => 'website_profile', 'code' => 'WEBSITE_PROFILE_READY', 'label' => __('网站级资料已齐备'), 'ok' => \trim((string)($state['website_profile']['site_title'] ?? '')) !== '', 'value' => [
+                'site_title' => (string)($state['website_profile']['site_title'] ?? ''),
+                'site_tagline' => (string)($state['website_profile']['site_tagline'] ?? ''),
+                'brief_description' => (string)($state['website_profile']['brief_description'] ?? ''),
+                'default_locale' => (string)($state['website_profile']['default_locale'] ?? ''),
+            ]],
             ['key' => 'virtual_pages', 'code' => 'VIRTUAL_PAGES_READY', 'label' => __('虚拟页面已生成'), 'ok' => \count($virtualPages) >= \count($pageTypes), 'value' => \array_keys($virtualPages)],
             [
                 'key' => 'visual_editor',
@@ -6876,7 +7037,12 @@ class AiSiteAgent extends BaseController
             'code' => 'STAGE2_TASK_BLOCK_INTEGRITY',
             'label' => __('阶段二任务与生成区块数量一致'),
             'ok' => !empty($stageTwoReadiness['passed']),
-            'value' => $stageTwoReadiness,
+            'value' => [
+                'passed' => !empty($stageTwoReadiness['passed']),
+                'expected_total' => (int)($stageTwoReadiness['expected_total'] ?? 0),
+                'actual_total' => (int)($stageTwoReadiness['actual_total'] ?? 0),
+                'failures' => \is_array($stageTwoReadiness['failures'] ?? null) ? $stageTwoReadiness['failures'] : [],
+            ],
             'detail' => $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness),
         ];
         $scope = $this->refreshScopeQualityContractsForPublishGate($scope);
@@ -6906,7 +7072,25 @@ class AiSiteAgent extends BaseController
             'publish_status' => $state['publish_status'],
             'quality_gate' => $qualityReport,
         ];
-        $this->appendWorkspaceEvent($session->getId(), $adminId, $state['stage'], 'publish_check', $passed ? (string)__('发布检查已通过') : (string)__('发布检查尚未通过'), ['details' => $payload]);
+        if (\is_array($payload['quality_gate'] ?? null)) {
+            unset($payload['quality_gate']['page_reports']);
+        }
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            (string)$state['stage'],
+            'publish_check',
+            $passed ? (string)__('发布检查已通过') : (string)__('发布检查尚未通过'),
+            [
+                'details' => [
+                    'passed' => $passed,
+                    'code' => $payload['code'],
+                    'workspace_status' => $payload['workspace_status'],
+                    'publish_status' => $payload['publish_status'],
+                    'item_count' => \count($checkItems),
+                ],
+            ]
+        );
 
         return $this->fetchJson(['success' => true, 'data' => $payload]);
     }
@@ -11069,6 +11253,9 @@ class AiSiteAgent extends BaseController
         $normalized['publish_blocked_reason'] = !empty($publishBlockingBuildFailure['blocked'])
             ? $this->formatPublishBlockedByAiFailureMessage($publishBlockingBuildFailure)
             : '';
+        if (!empty($publishBlockingBuildFailure['blocked'])) {
+            $normalized = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($normalized);
+        }
         $workspaceStatus = $this->resolveWorkspaceStatus($session, $normalized, $canPublish, $pendingGenerationPageTypes);
         if (!empty($publishBlockingBuildFailure['blocked'])) {
             $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
@@ -12563,6 +12750,20 @@ class AiSiteAgent extends BaseController
                 $item['blocking'] = true;
                 $item['level'] = 'pass';
                 $item['detail'] = $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness);
+            } elseif ($key === 'build_plan_blocks_done' && $stageTwoPassed) {
+                $item['ok'] = true;
+                $item['blocking'] = true;
+                $item['level'] = 'pass';
+                $item['detail'] = (string)__('阶段二任务已全部完成，BuildPlan 区块证据已对齐。');
+                $taskSummary = \is_array($stageTwoReadiness['task_summary'] ?? null) ? $stageTwoReadiness['task_summary'] : [];
+                $item['value'] = [
+                    'total' => (int)($taskSummary['total'] ?? 0),
+                    'done' => (int)($taskSummary['done'] ?? 0),
+                    'pending' => (int)($taskSummary['pending'] ?? 0),
+                    'running' => (int)($taskSummary['running'] ?? 0),
+                    'failed' => (int)($taskSummary['failed'] ?? 0),
+                    'cancelled' => (int)($taskSummary['cancelled'] ?? 0),
+                ];
             } elseif ($key === 'visual_assets_safe' && !$this->publishQualityItemHasBrokenImages($item)) {
                 $item['ok'] = true;
                 $item['blocking'] = false;
@@ -16378,7 +16579,7 @@ class AiSiteAgent extends BaseController
             1
         );
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->sessionService->loadScopeForBuildOperation($session)
         );
         return $this->runVirtualThemeBuildOperationV3($sse, $session, $adminId, $scope);
     }
@@ -17222,7 +17423,7 @@ class AiSiteAgent extends BaseController
     {
         $this->assertActiveStreamLeaseAlive($session, $adminId);
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PUBLISH)
+            $this->sessionService->loadScopeForBuildOperation($session)
         );
         $publishBlock = $this->resolveLatestPublishBlockingAiBuildFailure(
             $scope,
@@ -17695,6 +17896,20 @@ class AiSiteAgent extends BaseController
         }
         if ($siteProfileManual !== []) {
             $payload['site_profile_manual'] = $siteProfileManual;
+        }
+        $scopeForDirection = $this->scopeCompatibilityService->normalizeScope(\array_replace(
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN),
+            $payload
+        ));
+        try {
+            $directionPatch = $this->designDirectionService()->resolveSelectionForScope($scopeForDirection, $adminId, false);
+            $payload = \array_replace($payload, $directionPatch);
+        } catch (\InvalidArgumentException $invalidArgumentException) {
+            return $this->jsonError(
+                'DESIGN_DIRECTION_INVALID',
+                $invalidArgumentException->getMessage(),
+                ['design_direction_code']
+            );
         }
         $saved = $merge ? $this->sessionService->mergeScope($session->getId(), $adminId, $payload) : $this->sessionService->replaceScope($session->getId(), $adminId, $payload);
         if (!$saved) {
@@ -18274,6 +18489,20 @@ class AiSiteAgent extends BaseController
         }
 
         return $options;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function loadExistingLinkedWebsitesMirrorSessionFromScope(array $scope, int $adminId): ?WebsitesAiSiteBuilderSession
+    {
+        $linkedPublicId = \trim((string)($scope['handoff_workspace_public_id'] ?? ''));
+        if ($linkedPublicId === '') {
+            return null;
+        }
+
+        $linkedSession = $this->getWebsitesSessionService()->loadByPublicId($linkedPublicId, $adminId);
+        return $linkedSession instanceof WebsitesAiSiteBuilderSession ? $linkedSession : null;
     }
 
     /**

@@ -128,7 +128,7 @@ final class AiSiteWorkflowTrace
             $summaries[] = [
                 'index' => $index,
                 'task_key' => (string)($task['task_key'] ?? $task['task_id'] ?? ''),
-                'task_type' => (string)($task['task_type'] ?? $task['task_kind'] ?? ''),
+                'task_type' => (string)($task['task_type'] ?? ''),
                 'page_type' => (string)($task['page_type'] ?? ''),
                 'region' => (string)($task['region'] ?? ''),
                 'section_code' => (string)($task['section_code'] ?? ''),

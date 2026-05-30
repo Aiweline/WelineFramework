@@ -32,9 +32,9 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
         self::assertStringContainsString('[AI Site Build Queue Diagnostic]', $source);
         self::assertStringContainsString('$throwable = new \RuntimeException($surfaceMessage, 0, $throwable);', $source);
         self::assertStringContainsString('ERROR_DIAGNOSTIC', $source);
-        self::assertStringContainsString("'missing_build_blueprint_tasks'", $source);
-        self::assertStringContainsString("'failed_build_tasks'", $source);
-        self::assertStringContainsString("reason === 'cancelled_build_tasks'", $source);
+        self::assertStringContainsString("'missing_build_plan_blocks'", $source);
+        self::assertStringContainsString("'failed_build_plan_blocks'", $source);
+        self::assertStringContainsString("reason === 'cancelled_build_plan_blocks'", $source);
         self::assertStringNotContainsString('Build queue returned without any build task summary.', $source);
 
         $passedGateSource = $this->extractMethodSource($source, 'markQueueBuildOperationPassedGate');

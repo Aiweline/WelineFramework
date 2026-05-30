@@ -42,10 +42,11 @@ final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
         self::assertIsString($script);
         self::assertStringContainsString('displayPlan: displayPlan', $script);
         self::assertStringContainsString('displayKind: displayKind', $script);
-        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'execution_blueprint'", $script);
-        self::assertStringContainsString("buildPlanPreviewHtml('', { execution_blueprint: planData })", $script);
-        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'plan_json'", $script);
-        self::assertStringContainsString("buildPlanPreviewHtml('', { structured: planData, json: planData })", $script);
+        self::assertStringContainsString('resolveBuildPlanV2ArtifactsFromWorkspaceState', $script);
+        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'projection'", $script);
+        self::assertStringNotContainsString('execution_blueprint', $script);
+        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'projection'", $script);
+        self::assertStringContainsString("displayKind = 'build_plan'", $script);
     }
 
     public function testConfirmedPlanModalBindsPreviewInteractionsAfterRendering(): void
