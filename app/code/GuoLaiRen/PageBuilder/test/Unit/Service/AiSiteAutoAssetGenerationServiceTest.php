@@ -286,10 +286,10 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $service = new AiSiteAutoAssetGenerationService(
             new AiSiteAssetManifestService(),
             null,
-            static fn(): array => [
+            static fn(string $prompt, int $adminId, string $slotId): array => [
                 'images' => [[
-                    'b64_json' => \base64_encode('identity-first-image'),
-                    'mime_type' => 'image/png',
+                    'b64_json' => \base64_encode(self::transparentIdentitySvg($slotId)),
+                    'mime_type' => 'image/svg+xml',
                 ]],
                 'model' => 'fake-image-model',
             ]
@@ -543,10 +543,10 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $service = new AiSiteAutoAssetGenerationService(
             new AiSiteAssetManifestService(),
             null,
-            static fn(): array => [
+            static fn(string $prompt, int $adminId, string $slotId): array => [
                 'images' => [[
-                    'b64_json' => \base64_encode('real-logo-image'),
-                    'mime_type' => 'image/png',
+                    'b64_json' => \base64_encode(self::transparentIdentitySvg($slotId)),
+                    'mime_type' => 'image/svg+xml',
                     'revised_prompt' => 'Generated real logo',
                 ]],
                 'model' => 'fake-image-model',
@@ -563,11 +563,11 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         try {
             self::assertContains('identity:website-logo', $result['generated_slots']);
             self::assertNotSame($legacyPlaceholderUrl, $finalUrl);
-            self::assertStringEndsWith('.png', $finalUrl);
+            self::assertStringEndsWith('.svg', $finalUrl);
             self::assertSame($finalUrl, (string)($resultScope['verified_assets']['identity:website-logo'] ?? ''));
             self::assertSame($finalUrl, (string)($resultScope['logo'] ?? ''));
             self::assertSame($finalUrl, (string)($resultScope['website_profile']['logo'] ?? ''));
-            self::assertSame('real-logo-image', (string)\file_get_contents($absolutePath));
+            self::assertStringContainsString('<svg', (string)\file_get_contents($absolutePath));
         } finally {
             foreach ($manifest as $generatedSlot) {
                 $relativePath = (string)($generatedSlot['variants'][0]['path'] ?? '');
@@ -754,8 +754,8 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
                 $seenPrompt
             );
             // 同时确认负向 block-only 约束已注入
-            self::assertStringContainsString('Block-only visual constraints', $seenPrompt);
-            self::assertStringContainsString('DO NOT draw a website mockup', $seenPrompt);
+            self::assertStringContainsString('Block-only image artifact contract', $seenPrompt);
+            self::assertStringContainsString('DO NOT include website chrome', $seenPrompt);
             self::assertSame($seenPrompt, (string)($variant['revised_prompt'] ?? ''));
         } finally {
             if ($relativePath !== '' && \is_file($absolutePath)) {
@@ -797,8 +797,8 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             null,
             static fn(string $prompt, int $adminId, string $slotId): array => [
                 'images' => [[
-                    'b64_json' => \base64_encode('required-' . $slotId),
-                    'mime_type' => 'image/png',
+                    'b64_json' => \base64_encode(self::transparentIdentitySvg($slotId)),
+                    'mime_type' => 'image/svg+xml',
                     'revised_prompt' => $prompt,
                 ]],
                 'model' => 'fake-image-model',
@@ -842,8 +842,8 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             null,
             static fn(string $prompt, int $adminId, string $slotId): array => [
                 'images' => [[
-                    'b64_json' => \base64_encode('required-' . $slotId),
-                    'mime_type' => 'image/png',
+                    'b64_json' => \base64_encode(self::transparentIdentitySvg($slotId)),
+                    'mime_type' => 'image/svg+xml',
                     'revised_prompt' => $prompt,
                 ]],
                 'model' => 'fake-image-model',
@@ -1033,5 +1033,18 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
                 \unlink($absolutePath);
             }
         }
+    }
+
+    private static function transparentIdentitySvg(string $slotId): string
+    {
+        $label = \str_contains($slotId, 'site-title-icon') ? 'I' : 'L';
+
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">'
+            . '<circle cx="64" cy="64" r="42" fill="#00F5FF"/>'
+            . '<path d="M36 72 L64 24 L92 72 Z" fill="#FF2BD6"/>'
+            . '<text x="64" y="88" text-anchor="middle" font-size="34" font-family="Arial" fill="#FFFFFF">'
+            . $label
+            . '</text>'
+            . '</svg>';
     }
 }

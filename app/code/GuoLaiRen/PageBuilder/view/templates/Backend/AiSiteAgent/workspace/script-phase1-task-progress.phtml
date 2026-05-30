@@ -685,13 +685,16 @@
 
     function bindPlanQueueInfoRefresh() {
         var btn = document.getElementById('pb-ai-plan-queue-info-refresh');
-        if (!btn || btn.dataset.pbBound === '1' || !workspaceSnapshotUrl) {
+        if (!btn || btn.dataset.pbBound === '1') {
             return;
         }
         btn.dataset.pbBound = '1';
         btn.addEventListener('click', function () {
             btn.disabled = true;
-            postForm(workspaceSnapshotUrl, { public_id: publicId }).then(function (data) {
+            var refreshPromise = (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.refreshWorkspaceStateFromCache === 'function')
+                ? window.__pbWorkspaceApi.refreshWorkspaceStateFromCache()
+                : Promise.reject(new Error('workspace cache refresh unavailable'));
+            refreshPromise.then(function (data) {
                 btn.disabled = false;
                 if (data && data.success && data.data) {
                     if (typeof window.hydrateWorkspaceFromState === 'function') {

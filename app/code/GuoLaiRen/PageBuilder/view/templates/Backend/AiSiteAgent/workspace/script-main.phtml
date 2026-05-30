@@ -1109,10 +1109,10 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return !!hasBuildPlanV2FlowEvidence();
     };
     workspaceApi.getHasExecutionBlueprintState = function () {
-        return !!hasExecutionBlueprintState;
+        return !!hasBuildPlanV2FlowEvidence();
     };
     workspaceApi.getHasPendingBuildTasksState = function () {
-        return !!hasPendingBuildTasksState;
+        return !!hasPendingBuildPlanBlocksState;
     };
     // 流式终端/SSE 回调通过此处更新方案弹层 Markdown 与进度（与运行时注入的 API 对齐）。
     workspaceApi.updatePlanModalContent = function (markdown) {
@@ -1151,7 +1151,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (isNonEmptyObject(scopePlan.plan_json) || isNonEmptyObject(scopePlan.structured)) {
             return true;
         }
-        if (lastPhaseOnePlanPresent || hasExecutionBlueprintState) {
+        if (lastPhaseOnePlanPresent || hasBuildPlanV2FlowEvidence()) {
             return true;
         }
         var workspaceState = (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object')
@@ -6061,6 +6061,61 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (lockEl) {
             lockEl.textContent = data.design_direction_locked ? <?= \json_encode((string)__('已冻结'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> : <?= \json_encode((string)__('生成方案时冻结'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
         }
+    }
+
+    var designDirectionMatchTimer = 0;
+    function shouldRefreshDesignDirectionMatch() {
+        var fb = guidedScopeDefaults();
+        if (fb.design_direction_locked === 1 || fb.design_direction_locked === true || String(fb.design_direction_locked || '') === '1') {
+            return false;
+        }
+        var mode = String(fb.design_direction_mode || 'auto').trim().toLowerCase();
+        return mode === 'auto' || mode === '';
+    }
+    function buildDesignDirectionMatchPatch(data) {
+        var item = data && data.item && typeof data.item === 'object' ? data.item : null;
+        return {
+            design_direction_mode: 'auto',
+            design_direction_code: item ? String(item.code || '') : '',
+            design_direction_snapshot: item ? item : {},
+            design_direction_match_reason: String((data && data.reason) || '')
+        };
+    }
+    function scheduleDesignDirectionMatch(sourceTag) {
+        if (!designDirectionMatchUrl || !shouldRefreshDesignDirectionMatch()) {
+            return;
+        }
+        window.clearTimeout(designDirectionMatchTimer);
+        var delayMs = sourceTag === 'load-immediate' ? 0 : 350;
+        designDirectionMatchTimer = window.setTimeout(function () {
+            var fb = guidedScopeDefaults();
+            var siteTitle = getNeedsFormFieldValue('pb-ai-site-title', fb.site_title || '');
+            var brief = getNeedsFormFieldValue('pb-ai-brief-description', fb.brief_description || '');
+            var body = 'site_title=' + encodeURIComponent(siteTitle)
+                + '&brief_description=' + encodeURIComponent(brief)
+                + '&adapter_code=' + encodeURIComponent('pagebuilder_plan_generation');
+            fetch(designDirectionMatchUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: body
+            }).then(function (response) {
+                return response.json();
+            }).then(function (data) {
+                if (!data || !data.success) {
+                    return;
+                }
+                var patch = buildDesignDirectionMatchPatch(data);
+                patchGuidedScopeDefaults(patch);
+                renderDesignDirectionSummary(patch);
+                if (mergeScopeUrl && publicId) {
+                    postNeedsFormScopePatch(patch);
+                }
+            }).catch(function () {});
+        }, delayMs);
     }
 
     function normalizeSiteProfileManual(raw) {
@@ -11171,6 +11226,15 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         });
     });
     hydrateInitialWorkspaceStateOnce();
+    scheduleDesignDirectionMatch('load-immediate');
+    [titleInputEl, briefInputEl].forEach(function (el) {
+        if (!el) {
+            return;
+        }
+        el.addEventListener('input', function () {
+            scheduleDesignDirectionMatch('input');
+        });
+    });
 
     var extraToggle = document.getElementById('pb-guided-toggle-extra-types');
     var extraPanel = document.getElementById('pb-guided-extra-types-panel');
@@ -15949,7 +16013,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             ? window.__pbTaskSummary
             : {};
         var stage = String(currentWorkspaceStage || currentStageCode || '').toLowerCase();
-        return !!hasPendingBuildTasksState
+        return !!hasPendingBuildPlanBlocksState
             || !!buildPlanConfirmedState
             || stage === 'build'
             || ((Number(summary.queued || 0) + Number(summary.running || 0)) > 0)
@@ -16536,7 +16600,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 prompt_mode: resolveInitialPlanPromptMode(),
                 confirm_regenerate: confirmRegenerate ? '1' : '0'
             }, {
-                timeoutMs: 20000
+                // 方案启动会 hydrate scope、注册队列并组装 workspace payload，本地 WLS 上常超过 20s。
+                timeoutMs: 120000
             });
         }
 
@@ -17382,7 +17447,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 return;
             }
             var hasUnfinishedTasks = summary.total > 0 && summary.done < summary.total;
-            if (!runningOperation && !hasPendingBuildTasksState && !hasUnfinishedTasks && summary.pending <= 0) {
+            if (!runningOperation && !hasPendingBuildPlanBlocksState && !hasUnfinishedTasks && summary.pending <= 0) {
                 return;
             }
             var confirmMessage = buildVisualEditResumePromptMessage(summary, runningOperation);
@@ -17575,8 +17640,17 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             var workspaceTerminalInst = window.WelineSseTerminal
                 ? window.WelineSseTerminal['pagebuilder-workspace-terminal']
                 : null;
-            if (workspaceTerminalInst && typeof workspaceTerminalInst.isRunning === 'function' && workspaceTerminalInst.isRunning()) {
+            if (!workspaceTerminalInst) {
                 return;
+            }
+            if (typeof workspaceTerminalInst.isRunning === 'function' && workspaceTerminalInst.isRunning()) {
+                return;
+            }
+            var streamUrl = typeof window.__pbResolveWorkspaceStreamSseUrl === 'function'
+                ? String(window.__pbResolveWorkspaceStreamSseUrl() || '').trim()
+                : '';
+            if (streamUrl && typeof workspaceTerminalInst.start === 'function') {
+                workspaceTerminalInst.start(streamUrl);
             }
         },
         setVirtualPagesByType: function (pages) {

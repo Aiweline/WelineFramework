@@ -107,25 +107,45 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         );
     }
 
-    public function testConfirmedBuildPlanBlueprintAndTaskStateAreCompactedBeforeStorage(): void
+    public function testConfirmedBuildPlanAndLegacyArtifactsAreStrippedBeforeStorage(): void
     {
         $session = new AiSiteAgentSession();
-        $sharedContext = [
-            'theme_context_snapshot' => ['palette' => ['primary' => '#0f172a']],
-            'shared_prompt_context' => ['nav_style' => 'compact trust nav'],
-        ];
 
         $session->setScopeArray([
             'workspace_track' => 'virtual_theme',
             'plan_confirmed' => 1,
+            'plan_json' => ['pages' => ['home_page' => ['goal' => 'Keep me']]],
+            'plan_structured' => ['pages' => ['home_page' => ['goal' => 'Keep me']]],
             'execution_blueprint' => [
-                'signature' => 'stage1-confirmed-signature',
+                'signature' => 'legacy-stage1-signature',
                 'page_types' => ['home_page'],
             ],
-            'execution_blueprint_confirmed_signature' => 'stage1-confirmed-signature',
             'execution_blueprint_draft' => [
                 'signature' => 'stale-draft-signature',
-                'page_types' => ['home_page'],
+            ],
+            'build_blueprint' => [
+                'signature' => 'legacy-build-blueprint',
+                'tasks' => [['task_key' => 'page:home_page:hero']],
+            ],
+            'build_tasks' => [
+                'page:home_page:hero' => [
+                    'status' => 'running',
+                    'attempt_no' => 2,
+                ],
+            ],
+            'build_plan_v2' => [
+                'contract_meta' => ['status' => 'confirmed'],
+                'blocks' => [
+                    [
+                        'block_id' => 'hero',
+                        'execution' => [
+                            'task_key' => 'page:home_page:hero',
+                            'status' => 'running',
+                            'attempt_no' => 2,
+                            'message' => 'working',
+                        ],
+                    ],
+                ],
             ],
             'plan_workbench' => [
                 'stage1' => [
@@ -136,52 +156,16 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
                     'structured_plan' => ['pages' => ['home_page' => ['goal' => 'Keep me']]],
                     'plan_json' => ['pages' => ['home_page' => ['goal' => 'Keep me']]],
                     'plan_book' => ['structured' => ['source' => 'stage1.block_tree', 'pages' => ['home_page' => ['blocks' => []]]]],
-                    'shared_prompt_context' => ['context_hash' => 'shared-hash'],
-                ],
-            ],
-            'build_blueprint' => [
-                'source' => 'build_plan_v2',
-                'signature' => 'build-blueprint-signature',
-                'page_types' => ['home_page'],
-                'theme_context_snapshot' => $sharedContext['theme_context_snapshot'],
-                'shared_prompt_context' => $sharedContext['shared_prompt_context'],
-                'tasks' => [
-                    [
-                        'task_key' => 'page:home_page:hero',
-                        'runtime_context' => [
-                            'block_key' => 'hero',
-                            'theme_context_snapshot' => $sharedContext['theme_context_snapshot'],
-                            'shared_prompt_context' => $sharedContext['shared_prompt_context'],
-                        ],
-                    ],
-                ],
-            ],
-            'build_tasks' => [
-                'page:home_page:hero' => [
-                    'task_key' => 'page:home_page:hero',
-                    'task_type' => 'page_section',
-                    'group_key' => 'home_page',
-                    'page_type' => 'home_page',
-                    'section_code' => 'content/home-page-hero',
-                    'dependencies' => ['shared:header', 'shared:footer'],
-                    'can_parallel' => true,
-                    'progress_weight' => 2.5,
-                    'runtime_context' => ['block_key' => 'hero'],
-                    'plan_context' => ['goal' => 'duplicate'],
-                    'task_script' => ['story_goal' => 'duplicate'],
-                    'block_task' => ['task_goal' => 'duplicate'],
-                    'implementation_contract' => ['acceptance' => ['duplicate']],
-                    'status' => 'running',
-                    'attempt_no' => 2,
-                    'message' => 'working',
-                    'result_ref' => ['component_code' => 'hero'],
                 ],
             ],
         ]);
 
         $stored = $session->getScopeArray();
 
-        self::assertSame([], $stored['execution_blueprint_draft'] ?? null);
+        self::assertArrayNotHasKey('execution_blueprint', $stored);
+        self::assertArrayNotHasKey('execution_blueprint_draft', $stored);
+        self::assertArrayNotHasKey('build_blueprint', $stored);
+        self::assertArrayNotHasKey('build_tasks', $stored);
         self::assertSame(['pages' => ['home_page' => ['goal' => 'Keep me']]], $stored['plan_structured'] ?? null);
         self::assertSame(['pages' => ['home_page' => ['goal' => 'Keep me']]], $stored['plan_json'] ?? null);
         self::assertArrayNotHasKey('execution_blueprint', $stored['plan_workbench']['confirmed'] ?? []);
@@ -189,26 +173,7 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertArrayNotHasKey('plan_json', $stored['plan_workbench']['confirmed'] ?? []);
         self::assertArrayNotHasKey('plan_book', $stored['plan_workbench']['confirmed'] ?? []);
         self::assertSame(1, $stored['plan_workbench']['confirmed']['_storage_compacted'] ?? null);
-        self::assertArrayNotHasKey('confirmed_stage1_plan_book', $stored);
-        self::assertSame(
-            ['field' => 'plan_json'],
-            $stored['plan_workbench']['confirmed']['plan_book_ref'] ?? null
-        );
-
-        self::assertArrayNotHasKey('theme_context_snapshot', $stored['build_blueprint'] ?? []);
-        self::assertArrayNotHasKey('shared_prompt_context', $stored['build_blueprint'] ?? []);
-        self::assertSame(['block_key' => 'hero'], $stored['build_blueprint']['tasks'][0]['runtime_context'] ?? null);
-
-        $buildTaskState = $stored['build_tasks']['page:home_page:hero'] ?? [];
-        self::assertSame('running', $buildTaskState['status'] ?? null);
-        self::assertSame(2, $buildTaskState['attempt_no'] ?? null);
-        self::assertSame('working', $buildTaskState['message'] ?? null);
-        self::assertSame(['component_code' => 'hero'], $buildTaskState['result_ref'] ?? null);
-        self::assertArrayNotHasKey('task_script', $buildTaskState);
-        self::assertArrayNotHasKey('plan_context', $buildTaskState);
-        self::assertArrayNotHasKey('block_task', $buildTaskState);
-        self::assertArrayNotHasKey('implementation_contract', $buildTaskState);
-        self::assertArrayNotHasKey('runtime_context', $buildTaskState);
+        self::assertSame('running', $stored['build_plan_v2']['blocks'][0]['execution']['status'] ?? null);
     }
 
     public function testDraftStageOnePlanWorkbenchConfirmedPayloadsAreCompactedBeforeStorage(): void
@@ -220,10 +185,6 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
             'plan_confirmed' => 0,
             'plan_json' => ['pages' => ['home_page' => ['goal' => 'Draft plan']]],
             'plan_structured' => ['pages' => ['home_page' => ['goal' => 'Draft plan']]],
-            'execution_blueprint_draft' => [
-                'signature' => 'draft-stage1-signature',
-                'page_types' => ['home_page'],
-            ],
             'plan_workbench' => [
                 'contract_context' => ['selected_skill_codes' => ['virtual_theme']],
                 'stage1' => [
@@ -273,7 +234,6 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
                     'content_manifest' => ['storage' => 'session_artifact_v1', 'hash' => 'manifest-hash'],
                 ],
                 AiSiteAgentSession::STAGE_VISUAL_EDIT => [
-                    'build_blueprint' => ['storage' => 'session_artifact_v1', 'hash' => 'build-blueprint-hash'],
                     'build_workbench' => ['storage' => 'session_artifact_v1', 'hash' => 'build-workbench-hash'],
                     'build_contracts' => ['storage' => 'session_artifact_v1', 'hash' => 'build-contracts-hash'],
                     'render_data_contract' => ['storage' => 'session_artifact_v1', 'hash' => 'render-contract-hash'],
@@ -284,7 +244,6 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
             'build_plan_v2' => ['tasks' => [['task_key' => 'page:home_page:hero', 'heavy' => \str_repeat('c', 1024)]]],
             'plan_projection' => ['pages' => ['home_page' => ['blocks' => ['hero']]]],
             'content_manifest' => ['pages' => ['home_page' => ['copy' => \str_repeat('d', 1024)]]],
-            'build_blueprint' => ['tasks' => [['task_key' => 'page:home_page:hero', 'heavy' => \str_repeat('e', 1024)]]],
             'build_workbench' => ['heavy' => \str_repeat('f', 1024)],
             'build_contracts' => ['heavy' => \str_repeat('g', 1024)],
             'render_data_contract' => ['heavy' => \str_repeat('h', 1024)],
@@ -297,7 +256,7 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertSame([], $stored['build_plan_v2'] ?? null);
         self::assertSame([], $stored['plan_projection'] ?? null);
         self::assertSame([], $stored['content_manifest'] ?? null);
-        self::assertSame([], $stored['build_blueprint'] ?? null);
+        self::assertArrayNotHasKey('build_blueprint', $stored);
         self::assertSame([], $stored['build_workbench'] ?? null);
         self::assertSame([], $stored['build_contracts'] ?? null);
         self::assertSame([], $stored['render_data_contract'] ?? null);

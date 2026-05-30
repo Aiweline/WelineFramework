@@ -614,6 +614,47 @@ JSON;
         );
     }
 
+    public function testSyncBuildTaskFailuresDoesNotClearPublishBlockingWhenCompletionGateFails(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = [
+            'page_types' => ['home_page', 'about_page'],
+            'page_type_layouts' => [
+                'home_page' => ['blocks' => [['block_key' => 'hero']]],
+                'about_page' => ['blocks' => [['block_key' => 'intro']]],
+            ],
+            'build_plan_confirmed' => 1,
+            'build_tasks' => [
+                'home_page:hero' => [
+                    'status' => 'done',
+                    'attempt_no' => 1,
+                    'message' => '',
+                ],
+                'about_page:intro' => [
+                    'status' => 'done',
+                    'attempt_no' => 1,
+                    'message' => '',
+                ],
+            ],
+            'latest_build_failed' => 1,
+            'publish_blocked_by_latest_ai_failure' => 1,
+            'publish_blocked_reason' => 'missing page types',
+            'latest_build_failure' => [
+                'blocked' => true,
+                'operation' => 'build',
+                'status' => 'error',
+                'message' => 'missing page types',
+            ],
+            'retryable_ai_failures' => [],
+        ];
+
+        $scope = $service->syncBuildTaskFailuresToRetryableLedger($scope);
+
+        self::assertSame(1, (int)($scope['latest_build_failed'] ?? 0));
+        self::assertSame(1, (int)($scope['retryable_ai_failure_count'] ?? 0));
+        self::assertArrayHasKey('build', $scope['retryable_ai_failures']);
+    }
+
     public function testEnsureTaskScopeRejectsScopeWithoutConfirmedBuildPlanV2(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
@@ -887,7 +928,7 @@ JSON;
         $pendingKeys = \array_column($service->listPendingTasks($scope), 'task_key');
 
         $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $this->buildPlanTaskState($scope, 'shared:header')['status'] ?? null);
-        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_DONE, $this->buildPlanTaskState($scope, $pageTaskKey)['status'] ?? null);
+        $this->assertSame(AiSiteBuildTaskService::TASK_STATUS_RUNNING, $this->buildPlanTaskState($scope, $pageTaskKey)['status'] ?? null);
         $this->assertNotContains('shared:header', $pendingKeys);
         $this->assertNotContains($pageTaskKey, $pendingKeys);
     }
@@ -950,6 +991,7 @@ JSON;
         $scope['page_type_layouts']['home_page']['content'][] = [
             'code' => 'content/home-page-hero',
             'component' => 'content/home-page-hero',
+            'html' => '<section><h1>Hero</h1></section>',
         ];
 
         $scope = $service->resetBuildTasksToPendingForRebuild($scope);
