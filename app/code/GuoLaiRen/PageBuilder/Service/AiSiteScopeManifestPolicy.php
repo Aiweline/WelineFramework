@@ -18,7 +18,6 @@ final class AiSiteScopeManifestPolicy
         'plan_json',
         'plan_structured',
         'plan_markdown',
-        'build_plan_v2',
         'plan_projection',
         'content_manifest',
         'plan_workbench',

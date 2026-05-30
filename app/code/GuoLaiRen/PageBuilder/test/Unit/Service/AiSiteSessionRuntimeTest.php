@@ -47,13 +47,13 @@ final class AiSiteSessionRuntimeTest extends TestCase
     {
         $policy = new AiSiteScopeManifestPolicy();
         $manifest = [
-            'build_blueprint' => ['pages' => [['blocks' => [['id' => 'hero']]]]],
+            'build_plan_v2' => ['blocks' => [['block_id' => 'hero']]],
             'design_tokens' => ['font_display' => 'A', 'font_body' => 'A'],
             'theme_css_ref' => ['hash' => 'sha256:abc', 'css' => '.pb-c-section{}'],
             'theme_css' => '.pb-c-section{}',
         ];
         $dehydrated = $policy->dehydrateScopePaths($manifest);
-        self::assertSame([], $dehydrated['build_blueprint']);
+        self::assertSame([], $dehydrated['build_plan_v2']);
         self::assertArrayNotHasKey('css', $dehydrated['theme_css_ref']);
         self::assertArrayNotHasKey('theme_css', $dehydrated);
     }

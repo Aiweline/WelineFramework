@@ -41,6 +41,7 @@ $retryAiOperationUrl = (string)($this->getData('retry_ai_operation_url') ?? '');
 $updateBlockConfigUrl = (string)($this->getData('update_block_config_url') ?? '');
 $startPublishUrl = (string)($this->getData('start_publish_url') ?? '');
 $operationSseUrl = (string)($this->getData('operation_sse_url') ?? '');
+$workspaceStreamSseUrl = (string)($this->getData('workspace_stream_sse_url') ?? '');
 $switchPreviewPageUrl = (string)($this->getData('switch_preview_page_url') ?? '');
 $workspaceSnapshotUrl = (string)($this->getData('workspace_snapshot_url') ?? '');
 $publishCheckUrl = (string)($this->getData('publish_check_url') ?? '');
@@ -104,8 +105,13 @@ if (!$session instanceof \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession) {
 }
 
 $publicId = $session->getPublicId();
-// 必须与会话持久化 stage 一致，勿因「已有建站方案」改写为 visual_edit，否则步骤条无法切回建站方案页。
+// 必须与会话持久化 stage 一致；以 session 行数据为最终来源，避免 fast view 轮询补丁与阶段字段短暂不同步。
+$sessionStageRaw = \trim((string)$session->getStage());
+$sessionStage = \in_array($sessionStageRaw, ['plan', 'visual_edit', 'publish'], true) ? $sessionStageRaw : '';
 $currentStage = (string)($state['stage'] ?? \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::STAGE_PLAN);
+if ($sessionStage !== '') {
+    $currentStage = $sessionStage;
+}
 $websiteProfile = \is_array($state['website_profile'] ?? null) ? $state['website_profile'] : [];
 $cfgDebugDefaultSiteTitle = \trim((string)($this->getData('ai_site_debug_default_site_title') ?? ''));
 $cfgDebugDefaultBrief = \trim((string)($this->getData('ai_site_debug_default_brief') ?? ''));
@@ -541,6 +547,7 @@ $workspaceTplData = [
     'updateBlockConfigUrl' => $updateBlockConfigUrl,
     'startPublishUrl' => $startPublishUrl,
     'operationSseUrl' => $operationSseUrl,
+    'workspaceStreamSseUrl' => $workspaceStreamSseUrl,
     'switchPreviewPageUrl' => $switchPreviewPageUrl,
     'workspaceSnapshotUrl' => $workspaceSnapshotUrl,
     'publishCheckUrl' => $publishCheckUrl,
