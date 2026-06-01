@@ -2766,7 +2766,6 @@ class AiSiteAgent extends BaseController
             'plan_rebuild_summary' => [],
             'plan_change_scope_report' => [],
             'plan_generation_progress' => [],
-            '_plan_generation_checkpoint' => [],
             'retryable_ai_failures' => [],
             'retryable_ai_failure_count' => 0,
             'next_stage_blocked_by_ai_failures' => 0,
@@ -7910,48 +7909,52 @@ class AiSiteAgent extends BaseController
                             }
                             $buildPayload['round'] = $requestedRound;
                             $buildPayload['staged_generation'] = true;
-                            $buildPayload['stage1_checkpoint'] = \is_array($scope['_plan_generation_checkpoint'] ?? null) ? $scope['_plan_generation_checkpoint'] : [];
-                            $buildPayload['on_stage1_scope_checkpoint'] = function (array $scopePatch) use ($fresh, $adminId, &$scope): void {
+                            $buildPayload['on_stage1_scope_patch'] = function (array $scopePatch) use ($fresh, $adminId, &$scope): void {
                                 if ($scopePatch === []) {
                                     return;
                                 }
                                 $scope = \array_replace($scope, $scopePatch);
                                 $this->sessionService->mergeScope($fresh->getId(), $adminId, $scopePatch);
                             };
-                            $buildPayload['on_stage1_checkpoint'] = function (array $checkpoint) use ($fresh, $adminId, &$scope): void {
-                                if ($checkpoint === [] || !\is_array($checkpoint['plan_json'] ?? null)) {
+                            $buildPayload['on_stage1_progress_state'] = function (array $progressState) use ($fresh, $adminId, &$scope): void {
+                                if ($progressState === [] || !\is_array($progressState['plan_json'] ?? null)) {
                                     return;
                                 }
-                                $checkpoint = $this->mergeStageOneCheckpointForScope(
-                                    \is_array($scope['_plan_generation_checkpoint'] ?? null) ? $scope['_plan_generation_checkpoint'] : [],
-                                    $checkpoint
+                                $progressPlanJson = \is_array($progressState['plan_json'] ?? null) ? $progressState['plan_json'] : [];
+                                $stageOneContract = \is_array($progressPlanJson['stage1_contract'] ?? null) ? $progressPlanJson['stage1_contract'] : [];
+                                $scope['plan_json'] = $this->mergeStageOnePersistedPlanJson(
+                                    \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
+                                    $progressPlanJson
                                 );
-                                $checkpointPlanJson = \is_array($checkpoint['plan_json'] ?? null) ? $checkpoint['plan_json'] : [];
-                                $stageOneContract = \is_array($checkpointPlanJson['stage1_contract'] ?? null) ? $checkpointPlanJson['stage1_contract'] : [];
-                                $scope['_plan_generation_checkpoint'] = $checkpoint;
+                                $scope['plan_structured'] = $this->mergeStageOnePersistedPlanJson(
+                                    \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [],
+                                    $progressPlanJson
+                                );
                                 if ($stageOneContract !== []) {
                                     $scope['stage1_contract'] = $stageOneContract;
                                 }
-                                $retryableFailures = \is_array($checkpoint['retryable_ai_failures'] ?? null)
-                                    ? \array_values(\array_filter($checkpoint['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
+                                $retryableFailures = \is_array($progressState['retryable_ai_failures'] ?? null)
+                                    ? \array_values(\array_filter($progressState['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
                                     : [];
                                 $scope = $this->buildTaskService->replaceRetryableAiFailures($scope, 'plan', $retryableFailures);
-                                $checkpointScopePatch = [
-                                    '_plan_generation_checkpoint' => $checkpoint,
+                                $progressScopePatch = [
+                                    '_unset_scope_keys' => ['_plan_generation_checkpoint'],
+                                    'plan_json' => \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
+                                    'plan_structured' => \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [],
                                     'retryable_ai_failures' => \is_array($scope['retryable_ai_failures'] ?? null) ? $scope['retryable_ai_failures'] : [],
                                     'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
                                     'next_stage_blocked_by_ai_failures' => (int)($scope['next_stage_blocked_by_ai_failures'] ?? 0),
                                     'plan_generation_progress' => [
-                                        'step' => (string)($checkpoint['step'] ?? ''),
-                                        'page_types' => \is_array($checkpoint['page_types'] ?? null) ? $checkpoint['page_types'] : [],
+                                        'step' => (string)($progressState['step'] ?? ''),
+                                        'page_types' => \is_array($progressState['page_types'] ?? null) ? $progressState['page_types'] : [],
                                         'failed_count' => \count($retryableFailures),
-                                        'updated_at' => (string)($checkpoint['updated_at'] ?? \date('Y-m-d H:i:s')),
+                                        'updated_at' => (string)($progressState['updated_at'] ?? \date('Y-m-d H:i:s')),
                                     ],
                                 ];
                                 if ($stageOneContract !== []) {
-                                    $checkpointScopePatch['stage1_contract'] = $stageOneContract;
+                                    $progressScopePatch['stage1_contract'] = $stageOneContract;
                                 }
-                                $this->sessionService->mergeScope($fresh->getId(), $adminId, $checkpointScopePatch);
+                                $this->sessionService->mergeScope($fresh->getId(), $adminId, $progressScopePatch);
                             };
                             $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream(
                                 $scope,
@@ -7988,8 +7991,8 @@ class AiSiteAgent extends BaseController
             $retryablePlanFailures = \is_array($artifacts['retryable_ai_failures'] ?? null)
                 ? \array_values(\array_filter($artifacts['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
                 : [];
-            $checkpointForRetry = \is_array($scope['_plan_generation_checkpoint'] ?? null) ? $scope['_plan_generation_checkpoint'] : [];
             $scopePatchPersist = \array_replace($derivedPatch, [
+                '_unset_scope_keys' => ['_plan_generation_checkpoint'],
                 'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
                 'execution_blueprint_draft' => $executionBlueprint,
                 'plan_json' => $planJson,
@@ -8012,7 +8015,6 @@ class AiSiteAgent extends BaseController
                 'plan_generated_source_signature' => $this->buildPlanSourceSignature(\array_replace($scope, ['page_types' => $currentPageTypes])),
                 'plan_confirmed' => 0,
                 '_force_rebuild' => 0,
-                '_plan_generation_checkpoint' => $retryablePlanFailures === [] ? [] : $checkpointForRetry,
                 'plan_generation_progress' => [],
             ]);
             $missingPlanPageTypes = $this->buildTaskService->collectMissingSelectedPlanPageTypes(\array_replace($scope, $scopePatchPersist));
@@ -8287,43 +8289,27 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * @param array<string, mixed> $currentCheckpoint
-     * @param array<string, mixed> $incomingCheckpoint
+     * @param array<string, mixed> $currentPlanJson
+     * @param array<string, mixed> $incomingPlanJson
      * @return array<string, mixed>
      */
-    private function mergeStageOneCheckpointForScope(array $currentCheckpoint, array $incomingCheckpoint): array
+    private function mergeStageOnePersistedPlanJson(array $currentPlanJson, array $incomingPlanJson): array
     {
-        if ((int)($incomingCheckpoint['merge_plan_json'] ?? 0) !== 1) {
-            return $incomingCheckpoint;
+        if ($incomingPlanJson === []) {
+            return $currentPlanJson;
+        }
+        if ($currentPlanJson === []) {
+            return $incomingPlanJson;
         }
 
-        $currentSignature = \trim((string)($currentCheckpoint['signature'] ?? ''));
-        $incomingSignature = \trim((string)($incomingCheckpoint['signature'] ?? ''));
-        if ($currentSignature !== '' && $incomingSignature !== '' && !\hash_equals($currentSignature, $incomingSignature)) {
-            return $incomingCheckpoint;
-        }
-
-        $currentPlanJson = \is_array($currentCheckpoint['plan_json'] ?? null) ? $currentCheckpoint['plan_json'] : [];
-        $incomingPlanJson = \is_array($incomingCheckpoint['plan_json'] ?? null) ? $incomingCheckpoint['plan_json'] : [];
-        $mergedPlanJson = \array_replace($currentPlanJson, $incomingPlanJson);
+        $merged = \array_replace($currentPlanJson, $incomingPlanJson);
         $currentPages = \is_array($currentPlanJson['pages'] ?? null) ? $currentPlanJson['pages'] : [];
         $incomingPages = \is_array($incomingPlanJson['pages'] ?? null) ? $incomingPlanJson['pages'] : [];
         if ($currentPages !== [] || $incomingPages !== []) {
-            $mergedPlanJson['pages'] = \array_replace($currentPages, $incomingPages);
+            $merged['pages'] = \array_replace($currentPages, $incomingPages);
         }
 
-        $mergedCheckpoint = \array_replace($currentCheckpoint, $incomingCheckpoint, [
-            'plan_json' => $mergedPlanJson,
-        ]);
-        $currentPageCheckpoints = \is_array($currentCheckpoint['page_checkpoints'] ?? null) ? $currentCheckpoint['page_checkpoints'] : [];
-        $incomingPageCheckpoint = \is_array($incomingCheckpoint['page_checkpoint'] ?? null) ? $incomingCheckpoint['page_checkpoint'] : [];
-        $incomingPageType = \trim((string)($incomingPageCheckpoint['page_type'] ?? ''));
-        if ($incomingPageType !== '') {
-            $currentPageCheckpoints[$incomingPageType] = $incomingPageCheckpoint;
-            $mergedCheckpoint['page_checkpoints'] = $currentPageCheckpoints;
-        }
-
-        return $mergedCheckpoint;
+        return $merged;
     }
 
     private function emitPlanMarkdownBlocks(SseWriter $sse, AiSiteAgentSession $session, int $adminId, string $markdown): void
@@ -9261,7 +9247,7 @@ class AiSiteAgent extends BaseController
         $queueId = (int)($activeOperation['queue_id'] ?? 0);
         $lastQueueProcess = '';
         $lastQueueResultLength = 0;
-        $lastTaskProgressSnapshotSignature = '';
+        $lastTaskProgressStateSignature = '';
         $initialQueueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId);
         $eventCorrelation = $this->buildObservedOperationEventCorrelation(
             $operation,
@@ -9292,12 +9278,12 @@ class AiSiteAgent extends BaseController
             $lastQueueStatus,
             $lastQueuePid
         );
-        $this->emitObservedBuildTaskProgressSnapshot(
+        $this->emitObservedBuildTaskProgressState(
             $sse,
             $scope,
             $operation,
             $initialQueueRow,
-            $lastTaskProgressSnapshotSignature
+            $lastTaskProgressStateSignature
         );
 
         if ($queueCheckpointOnly) {
@@ -9377,12 +9363,12 @@ class AiSiteAgent extends BaseController
                 $lastQueueStatus,
                 $lastQueuePid,
             ];
-            $this->emitObservedBuildTaskProgressSnapshot(
+            $this->emitObservedBuildTaskProgressState(
                 $sse,
                 $scope,
                 $operation,
                 $queueRow,
-                $lastTaskProgressSnapshotSignature
+                $lastTaskProgressStateSignature
             );
             if (!$this->isObservedOperationStillRunning($activeOperation, $operation, $executionToken, $queueRow)) {
                 $loopQueueStatus = \trim((string)($queueRow['status'] ?? ''));
@@ -9494,7 +9480,7 @@ class AiSiteAgent extends BaseController
                 'operation' => $operation,
                 'queue_id' => (int)($queueRow['queue_id'] ?? 0),
                 'queue_status' => $queueStatus,
-                'queue_snapshot' => $queueSnapshot,
+                'queue_state' => $queueSnapshot,
                 'queue_info' => $queueInfo,
                 'state' => $state,
                 'token_usage' => \is_array($queueSnapshot['token_usage'] ?? null) ? $queueSnapshot['token_usage'] : [],
@@ -9537,7 +9523,7 @@ class AiSiteAgent extends BaseController
         $lastQueueResultLength = 0;
         $lastQueueStatus = '';
         $lastQueuePid = 0;
-        $lastTaskProgressSnapshotSignature = '';
+        $lastTaskProgressStateSignature = '';
         $pollIntervalMs = self::OBSERVER_QUEUE_PROGRESS_POLL_INTERVAL_MS;
         $maxObserveCycles = (int)\ceil(self::OBSERVER_QUEUE_PROGRESS_MAX_OBSERVE_MS / \max(1, $pollIntervalMs));
 
@@ -9565,12 +9551,12 @@ class AiSiteAgent extends BaseController
                 $lastQueueStatus,
                 $lastQueuePid
             );
-            $this->emitObservedBuildTaskProgressSnapshot(
+            $this->emitObservedBuildTaskProgressState(
                 $sse,
                 $scope,
                 $operation,
                 $queueRow,
-                $lastTaskProgressSnapshotSignature
+                $lastTaskProgressStateSignature
             );
 
             if (!$this->isObservedQueueInProgress($queueRow)) {
@@ -9594,7 +9580,7 @@ class AiSiteAgent extends BaseController
                 'queue_id' => $queueId,
                 'queue_status' => (string)($queueRow['status'] ?? 'running'),
                 'queue_process' => (string)($queueRow['process'] ?? ''),
-                'queue_snapshot' => \is_array($queueRow) ? $this->buildQueueObserverPublicSnapshot($queueRow) : [],
+                'queue_state' => \is_array($queueRow) ? $this->buildQueueObserverPublicSnapshot($queueRow) : [],
                 'queue_info' => \is_array($queueRow) ? $this->buildQueueObserverPanelPayload($queueRow) : [],
                 'progress_kind' => 'queue_info',
                 'observer_detail' => true,
@@ -9995,26 +9981,18 @@ class AiSiteAgent extends BaseController
         if (\trim((string)($queueInfo['process'] ?? '')) === '') {
             $queueInfo['process'] = $message;
         }
-        $snapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
-        $snapshot['status'] = 'cancelled';
-        $snapshot['queue_status'] = 'cancelled';
-        $snapshot['job_status'] = 'cancelled';
-        $snapshot['semantic_status'] = 'cancelled';
-        $snapshot['queue_terminal_recovered'] = 1;
-        $snapshot['retry_allowed'] = 1;
-        $snapshot['finished'] = 1;
+        $queueInfo['finished'] = 1;
         if ((int)($operationState['queue_id'] ?? 0) > 0) {
-            $snapshot['queue_id'] = (int)$operationState['queue_id'];
             $queueInfo['queue_id'] = (int)$operationState['queue_id'];
         }
-        $queueInfo['snapshot'] = $snapshot;
+        unset($queueInfo['snapshot']);
 
         return $queueInfo;
     }
 
     /**
      * Persist only semantic recovery metadata. This does not execute or mutate
-     * generated content; it prevents stale queue snapshots from re-locking UI.
+     * generated content; it prevents stale queue state from re-locking UI.
      *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $operationState
@@ -10357,10 +10335,7 @@ class AiSiteAgent extends BaseController
      */
     private function resolveBuildQueueRowForAutoResume(AiSiteAgentSession $session, ?array $buildQueueInfo): ?array
     {
-        $queueId = 0;
-        if (\is_array($buildQueueInfo['snapshot'] ?? null)) {
-            $queueId = (int)($buildQueueInfo['queue_id'] ?? $buildQueueInfo['snapshot']['queue_id'] ?? 0);
-        }
+        $queueId = \is_array($buildQueueInfo) ? (int)($buildQueueInfo['queue_id'] ?? 0) : 0;
         if ($queueId > 0) {
             $row = $this->findAiSiteOperationQueueRow($session, 'build', $queueId);
             if (\is_array($row) && $row !== []) {
@@ -10502,7 +10477,7 @@ class AiSiteAgent extends BaseController
      * @param array<string, mixed> $scope
      * @param array<string, mixed>|null $queueRow
      */
-    private function emitObservedBuildTaskProgressSnapshot(
+    private function emitObservedBuildTaskProgressState(
         SseWriter $sse,
         array $scope,
         string $operation,
@@ -10543,7 +10518,7 @@ class AiSiteAgent extends BaseController
             : (string)__('AI 构建任务同步中');
         $progressPercent = isset($activeOperation['progress_percent']) ? (int)$activeOperation['progress_percent'] : $this->resolveTaskSummaryProgressPercent($summary);
 
-        $payload = $this->buildTaskProgressSnapshotPayload(
+        $payload = $this->buildTaskProgressStatePayload(
             $summary,
             'build',
             $message,
@@ -10552,7 +10527,7 @@ class AiSiteAgent extends BaseController
             $queueRow,
             $activeStatus
         );
-        $this->emitTaskProgressSnapshotEvent($sse, $payload);
+        $this->emitTaskProgressStateEvent($sse, $payload);
     }
 
     /**
@@ -10560,7 +10535,7 @@ class AiSiteAgent extends BaseController
      * @param array<string, mixed>|null $queueRow
      * @return array<string, mixed>
      */
-    private function buildTaskProgressSnapshotPayload(
+    private function buildTaskProgressStatePayload(
         array $summary,
         string $operation,
         string $message,
@@ -10585,7 +10560,7 @@ class AiSiteAgent extends BaseController
         if (\is_array($queueRow) && $queueRow !== []) {
             $payload['queue_id'] = (int)($queueRow['queue_id'] ?? 0);
             $payload['queue_status'] = \trim((string)($queueRow['status'] ?? ''));
-            $payload['queue_snapshot'] = $this->buildQueueObserverPublicSnapshot($queueRow);
+            $payload['queue_state'] = $this->buildQueueObserverPublicSnapshot($queueRow);
         }
 
         return $payload;
@@ -10598,7 +10573,7 @@ class AiSiteAgent extends BaseController
      *
      * @param array<string, mixed> $payload
      */
-    private function emitTaskProgressSnapshotEvent(SseWriter $sse, array $payload): void
+    private function emitTaskProgressStateEvent(SseWriter $sse, array $payload): void
     {
         if (!$sse->isAlive()) {
             return;
@@ -10610,7 +10585,7 @@ class AiSiteAgent extends BaseController
     /**
      * @param array<string, mixed> $scope
      */
-    private function emitBuildTaskProgressSnapshotFromScope(
+    private function emitBuildTaskProgressStateFromScope(
         SseWriter $sse,
         array $scope,
         string $operation,
@@ -10627,7 +10602,7 @@ class AiSiteAgent extends BaseController
             return;
         }
 
-        $this->emitTaskProgressSnapshotEvent($sse, $this->buildTaskProgressSnapshotPayload(
+        $this->emitTaskProgressStateEvent($sse, $this->buildTaskProgressStatePayload(
             $summary,
             $operation,
             $message,
@@ -11021,7 +10996,7 @@ class AiSiteAgent extends BaseController
             'active_operation_status',
             'queue_id',
             'queue_status',
-            'queue_snapshot',
+            'queue_state',
             'task_progress',
             'task_summary',
             'build_task_summary',
@@ -11527,7 +11502,6 @@ class AiSiteAgent extends BaseController
             );
             $normalized['active_operation'] = $activeOperation;
             $normalized['active_operations'] = $activeOperations;
-            $queueSnapshot = \is_array($buildQueueInfo['snapshot'] ?? null) ? $buildQueueInfo['snapshot'] : [];
             $buildQueueInfo = \array_replace(\is_array($buildQueueInfo) ? $buildQueueInfo : [], [
                 'status' => 'done',
                 'queue_status' => 'done',
@@ -11535,14 +11509,8 @@ class AiSiteAgent extends BaseController
                 'job_status' => 'done',
                 'message' => $doneMessage,
                 'process' => $doneMessage,
-                'snapshot' => \array_replace($queueSnapshot, [
-                    'status' => 'done',
-                    'queue_status' => 'done',
-                    'job_status' => 'done',
-                    'message' => $doneMessage,
-                    'process' => $doneMessage,
-                ]),
             ]);
+            unset($buildQueueInfo['snapshot']);
             $normalized['build_queue_info'] = $buildQueueInfo;
         }
         $workspaceEntryQueueNotice = $this->buildWorkspaceEntryQueueNotice($activeOperation, [
@@ -12647,15 +12615,12 @@ class AiSiteAgent extends BaseController
      */
     private function readAiQueueInfoStatus(array $queueInfo): string
     {
-        $snapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
+        unset($queueInfo['snapshot']);
         return \strtolower(\trim((string)(
             $queueInfo['status']
             ?? $queueInfo['queue_status']
             ?? $queueInfo['state']
             ?? $queueInfo['job_status']
-            ?? $snapshot['job_status']
-            ?? $snapshot['status']
-            ?? $snapshot['queue_status']
             ?? ''
         )));
     }
@@ -12665,13 +12630,11 @@ class AiSiteAgent extends BaseController
      */
     private function readAiQueueInfoMessage(array $queueInfo): string
     {
-        $snapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
+        unset($queueInfo['snapshot']);
         foreach ([
             $queueInfo['result_tail'] ?? null,
             $queueInfo['message'] ?? null,
             $queueInfo['process'] ?? null,
-            $snapshot['message'] ?? null,
-            $snapshot['process'] ?? null,
         ] as $candidate) {
             $message = \trim((string)$candidate);
             if ($message !== '') {
@@ -15096,7 +15059,7 @@ class AiSiteAgent extends BaseController
             ? $this->buildQueueObserverPanelPayload($queueRow)
             : null;
         $queueStatus = \is_array($queueInfo)
-            ? \trim((string)($queueInfo['status'] ?? $queueInfo['queue_status'] ?? $queueInfo['snapshot']['status'] ?? ''))
+            ? \trim((string)($queueInfo['status'] ?? $queueInfo['queue_status'] ?? ''))
             : (\is_array($queueRow) ? \trim((string)($queueRow['status'] ?? '')) : '');
         $queueRecoveredForRetry = \is_array($queueInfo) && (
             !empty($queueInfo['queue_terminal_recovered'])
@@ -15544,7 +15507,7 @@ class AiSiteAgent extends BaseController
                         $buildLoopStallPasses++;
                         $scope = $resetScope;
                         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-                        $this->emitBuildTaskProgressSnapshotFromScope(
+                        $this->emitBuildTaskProgressStateFromScope(
                             $sse,
                             $scope,
                             'build',
@@ -15697,7 +15660,7 @@ class AiSiteAgent extends BaseController
                 $scope = $this->buildTaskService->markTaskRunning($scope, $runningTaskKey);
             }
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-            $this->emitBuildTaskProgressSnapshotFromScope(
+            $this->emitBuildTaskProgressStateFromScope(
                 $sse,
                 $scope,
                 'build',
@@ -15896,7 +15859,7 @@ class AiSiteAgent extends BaseController
                     'failed_task_keys' => $failedTaskKeys,
                 ]
             );
-            $this->emitBuildTaskProgressSnapshotFromScope(
+            $this->emitBuildTaskProgressStateFromScope(
                 $sse,
                 $scope,
                 'build',
@@ -17008,7 +16971,7 @@ class AiSiteAgent extends BaseController
                 'batch_state' => 'failed',
             ])
         );
-        $this->emitBuildTaskProgressSnapshotFromScope(
+        $this->emitBuildTaskProgressStateFromScope(
             $sse,
             $scope,
             'build',
@@ -17363,7 +17326,7 @@ class AiSiteAgent extends BaseController
                         $buildLoopStallPasses++;
                         $scope = $resetScope;
                         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-                        $this->emitBuildTaskProgressSnapshotFromScope(
+                        $this->emitBuildTaskProgressStateFromScope(
                             $sse,
                             $scope,
                             'build',
@@ -17521,7 +17484,7 @@ class AiSiteAgent extends BaseController
                 $scope = $this->buildTaskService->markTaskRunning($scope, $runningTaskKey);
             }
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-            $this->emitBuildTaskProgressSnapshotFromScope(
+            $this->emitBuildTaskProgressStateFromScope(
                 $sse,
                 $scope,
                 'build',
@@ -17806,7 +17769,7 @@ class AiSiteAgent extends BaseController
                     'failed_task_keys' => $failedTaskKeys,
                 ]
             );
-            $this->emitBuildTaskProgressSnapshotFromScope(
+            $this->emitBuildTaskProgressStateFromScope(
                 $sse,
                 $scope,
                 'build',
@@ -18121,7 +18084,7 @@ class AiSiteAgent extends BaseController
             if ((int)($summary['total'] ?? 0) > 0) {
                 $payload = \array_replace(
                     $payload,
-                    $this->buildTaskProgressSnapshotPayload(
+                    $this->buildTaskProgressStatePayload(
                         $summary,
                         $operation,
                         $message,
@@ -18137,7 +18100,7 @@ class AiSiteAgent extends BaseController
         if (\in_array($operation, ['build', 'regenerate_page', 'block_regenerate'], true)
             && (string)($payload['progress_kind'] ?? '') === 'task_progress'
         ) {
-            $this->emitTaskProgressSnapshotEvent($sse, $payload);
+            $this->emitTaskProgressStateEvent($sse, $payload);
         } else {
             $sse->sendEvent('progress', $payload);
         }

@@ -31,13 +31,13 @@ class AiSiteAgentWorkspaceEntryNoticeService
         $queueInfo = \is_array($queueInfoByOperation[$operation] ?? null)
             ? $queueInfoByOperation[$operation]
             : null;
-        if ($queueInfo === null || !\is_array($queueInfo['snapshot'] ?? null)) {
+        $queueState = $this->resolveQueueCurrentState($queueInfo);
+        if ($queueState === []) {
             return ['show' => false];
         }
 
-        $snapshot = $queueInfo['snapshot'];
-        $queueId = (int)($queueInfo['queue_id'] ?? $snapshot['queue_id'] ?? 0);
-        $queueStatus = \trim((string)($snapshot['status'] ?? ''));
+        $queueId = (int)($queueState['queue_id'] ?? 0);
+        $queueStatus = \trim((string)($queueState['status'] ?? $queueState['queue_status'] ?? $queueState['job_status'] ?? ''));
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         $status = $queueStatus !== '' ? $queueStatus : $activeStatus;
         if ($queueId <= 0 || $status === '') {
@@ -60,8 +60,8 @@ class AiSiteAgentWorkspaceEntryNoticeService
             'queue_id' => $queueId,
             'queue_status' => $status,
             'queue_status_label' => $statusLabel,
-            'queue_name' => (string)($snapshot['name'] ?? ''),
-            'biz_key' => (string)($snapshot['biz_key'] ?? ''),
+            'queue_name' => (string)($queueState['name'] ?? ''),
+            'biz_key' => (string)($queueState['biz_key'] ?? ''),
             'process' => \trim((string)($queueInfo['process'] ?? '')),
             'result_excerpt' => $resultLog !== '' ? \mb_substr($resultLog, -600) : '',
             'ack_action' => $reloadOnAck ? 'reload_workspace' : '',
@@ -77,13 +77,29 @@ class AiSiteAgentWorkspaceEntryNoticeService
     }
 
     /**
+     * @param array<string, mixed>|null $queueInfo
+     * @return array<string, mixed>
+     */
+    private function resolveQueueCurrentState(?array $queueInfo): array
+    {
+        if ($queueInfo === null) {
+            return [];
+        }
+        $current = $queueInfo;
+        unset($current['snapshot']);
+
+        return $current;
+    }
+
+    /**
      * @param array<string, array<string, mixed>|null> $queueInfoByOperation
      */
     private function selectFallbackOperation(array $queueInfoByOperation): string
     {
         foreach (['build', 'plan'] as $operation) {
             $queueInfo = \is_array($queueInfoByOperation[$operation] ?? null) ? $queueInfoByOperation[$operation] : null;
-            $status = \trim((string)($queueInfo['snapshot']['status'] ?? ''));
+            $queueState = $this->resolveQueueCurrentState($queueInfo);
+            $status = \trim((string)($queueState['status'] ?? $queueState['queue_status'] ?? $queueState['job_status'] ?? ''));
             if ($queueInfo !== null && \in_array($status, ['running', 'pending', 'queued', 'error'], true)) {
                 return $operation;
             }
