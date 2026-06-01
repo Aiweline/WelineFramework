@@ -11,10 +11,8 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\Sse\SseWriter;
 
 /**
- * 内部 Spy：记录 SseWriter 的 sendEvent / isAlive 调用以锁定事件序列与 payload。
- *
- * 绕过父类构造（SSE 真实写入依赖 Runtime / Env），通过 override 保持测试侧 100% 纯。
- */
+ * 鍐呴儴 Spy锛氳褰?SseWriter 鐨?sendEvent / isAlive 璋冪敤浠ラ攣瀹氫簨浠跺簭鍒椾笌 payload銆? *
+ * 缁曡繃鐖剁被鏋勯€狅紙SSE 鐪熷疄鍐欏叆渚濊禆 Runtime / Env锛夛紝閫氳繃 override 淇濇寔娴嬭瘯渚?100% 绾€? */
 final class SpySseWriterForQueueObserverStream extends SseWriter
 {
     /**
@@ -54,7 +52,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
     // reconcileActiveOperationWithQueueInfo
     // ------------------------------------------------------------------
 
-    public function testReconcileReturnsOriginalWhenOperationMismatchesOrQueueSnapshotMissing(): void
+    public function testReconcileReturnsOriginalWhenOperationMismatchesOrQueueStateMissing(): void
     {
         $service = $this->service();
 
@@ -68,28 +66,43 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
 
         self::assertSame(
             $active,
-            $service->reconcileActiveOperationWithQueueInfo($active, ['snapshot' => ['status' => 'done']], 'task_plan'),
-            'operation 不匹配应原样返回'
+            $service->reconcileActiveOperationWithQueueInfo($active, ['status' => 'done'], 'task_plan'),
+            'operation 涓嶅尮閰嶅簲鍘熸牱杩斿洖'
         );
 
         self::assertSame(
             $active,
             $service->reconcileActiveOperationWithQueueInfo($active, null, 'plan'),
-            'queueInfo null 应原样返回'
+            'queueInfo null should return original'
         );
 
         $notActive = ['operation' => 'plan', 'status' => 'done'];
         self::assertSame(
             $notActive,
-            $service->reconcileActiveOperationWithQueueInfo($notActive, ['snapshot' => ['status' => 'error']], 'plan'),
-            'active 非 queued/running 应原样返回'
+            $service->reconcileActiveOperationWithQueueInfo($notActive, ['status' => 'error'], 'plan'),
+            'inactive status should return original'
         );
 
         self::assertSame(
             $active,
-            $service->reconcileActiveOperationWithQueueInfo($active, ['snapshot' => 'not-an-array'], 'plan'),
-            'snapshot 非数组应原样返回'
+            $service->reconcileActiveOperationWithQueueInfo($active, [], 'plan'),
+            'missing queue state should return original'
         );
+    }
+
+    public function testReconcileUsesTopLevelQueueStateWithoutNestedState(): void
+    {
+        $service = $this->service();
+
+        $result = $service->reconcileActiveOperationWithQueueInfo(
+            ['operation' => 'plan', 'status' => 'error', 'message' => 'stale frontend failure'],
+            ['queue_id' => 344, 'pid' => 987, 'status' => 'running', 'process' => 'AI body is still streaming'],
+            'plan'
+        );
+
+        self::assertSame('running', $result['status']);
+        self::assertSame(344, $result['queue_id']);
+        self::assertSame('AI body is still streaming', $result['message']);
     }
 
     public function testReconcileMapsErrorStatusToErrorWithProcessFallbackChain(): void
@@ -100,14 +113,14 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         $withProcess = $service->reconcileActiveOperationWithQueueInfo(
             $active,
             [
-                'snapshot' => ['status' => 'error'],
-                'process' => 'AI 拒绝请求：超过配额',
+                'status' => 'error',
+                'process' => 'provider quota exceeded',
                 'result_log' => '',
             ],
             'plan'
         );
         self::assertSame('error', $withProcess['status']);
-        self::assertSame('AI 拒绝请求：超过配额', $withProcess['message'], 'process 非空时优先');
+        self::assertSame('provider quota exceeded', $withProcess['message'], 'process should be preferred when non-empty');
         self::assertFalse((bool)$withProcess['queue_waiting_for_scheduler']);
         self::assertFalse((bool)$withProcess['can_close_stream']);
         self::assertFalse((bool)$withProcess['continue_other_operations']);
@@ -117,7 +130,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             $active,
             [
                 'queue_id' => 553,
-                'snapshot' => ['queue_id' => 553, 'status' => 'error'],
+                'status' => 'error',
                 'process' => 'AI body stream is intentionally omitted from queue logs',
                 'result_log' => "line one\nstage-one terminal failure detail",
             ],
@@ -130,22 +143,22 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         $withOnlyResult = $service->reconcileActiveOperationWithQueueInfo(
             $active,
             [
-                'snapshot' => ['status' => 'error'],
+                'status' => 'error',
                 'process' => '',
                 'result_log' => 'stack trace ...',
             ],
             'plan'
         );
         self::assertSame('error', $withOnlyResult['status']);
-        self::assertNotSame('', (string)$withOnlyResult['message'], 'result_log 非空时使用 i18n 兜底文案');
+        self::assertNotSame('', (string)$withOnlyResult['message'], 'result_log should produce a fallback message');
 
         $withNothing = $service->reconcileActiveOperationWithQueueInfo(
             $active,
-            ['snapshot' => ['status' => 'error']],
+            ['status' => 'error'],
             'plan'
         );
         self::assertSame('error', $withNothing['status']);
-        self::assertNotSame('', (string)$withNothing['message'], '兜底 i18n 文案应非空');
+        self::assertNotSame('', (string)$withNothing['message'], 'fallback i18n message should not be empty');
     }
 
     public function testReconcileMapsInProgressQueueStatusOverStaleError(): void
@@ -162,7 +175,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
                 'can_close_stream' => true,
                 'continue_other_operations' => true,
             ],
-            ['queue_id' => 344, 'pid' => 987, 'snapshot' => ['status' => 'running', 'queue_id' => 344, 'pid' => 987], 'process' => 'AI body is still streaming'],
+            ['queue_id' => 344, 'pid' => 987, 'status' => 'running', 'process' => 'AI body is still streaming'],
             'plan'
         );
         self::assertSame('running', $running['status']);
@@ -174,7 +187,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
 
         $queued = $service->reconcileActiveOperationWithQueueInfo(
             ['operation' => 'task_plan', 'status' => 'error', 'message' => 'stale frontend failure'],
-            ['snapshot' => ['status' => 'pending']],
+            ['status' => 'pending'],
             'task_plan'
         );
         self::assertSame('queued', $queued['status']);
@@ -200,11 +213,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
                 'queue_id' => 889,
                 'pid' => 0,
                 'process' => 'queue is waiting for the scheduler worker',
-                'snapshot' => [
-                    'queue_id' => 889,
-                    'pid' => 0,
-                    'status' => 'running',
-                ],
+                'status' => 'running',
             ],
             'build'
         );
@@ -240,11 +249,11 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
                     'can_close_stream' => true,
                     'continue_other_operations' => true,
                 ],
-                ['snapshot' => ['status' => $queueStatus]],
+                ['status' => $queueStatus],
                 'task_plan'
             );
-            self::assertSame($expectedActiveStatus, $result['status'], "queue={$queueStatus} 应映射为 {$expectedActiveStatus}");
-            self::assertNotSame('', (string)$result['message'], 'task_plan 兜底 message 非空');
+            self::assertSame($expectedActiveStatus, $result['status'], "queue={$queueStatus} 搴旀槧灏勪负 {$expectedActiveStatus}");
+            self::assertNotSame('', (string)$result['message'], 'task_plan 鍏滃簳 message 闈炵┖');
             self::assertFalse((bool)$result['queue_waiting_for_scheduler']);
             self::assertFalse((bool)$result['can_close_stream']);
             self::assertFalse((bool)$result['continue_other_operations']);
@@ -257,7 +266,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
                 'message' => '',
                 'queue_waiting_for_scheduler' => true,
             ],
-            ['snapshot' => ['status' => 'done']],
+            ['status' => 'done'],
             'build'
         );
         self::assertSame('done', $buildResult['status']);
@@ -266,7 +275,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
 
         $recovered = $service->reconcileActiveOperationWithQueueInfo(
             ['operation' => 'plan', 'status' => 'error', 'message' => 'stale frontend failure'],
-            ['snapshot' => ['status' => 'done'], 'process' => 'queue completed successfully'],
+            ['status' => 'done', 'process' => 'queue completed successfully'],
             'plan'
         );
         self::assertSame('done', $recovered['status']);
@@ -287,12 +296,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
                 'queue_terminal_recovered' => 1,
                 'semantic_status' => 'stale',
                 'process' => 'site plan completed',
-                'snapshot' => [
-                    'queue_id' => 778,
-                    'status' => 'done',
-                    'retry_allowed' => 1,
-                    'queue_terminal_recovered' => 1,
-                ],
+                'status' => 'done',
             ],
             'plan'
         );
@@ -302,13 +306,13 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertSame(0, $doneWithStaleRecoveryFlags['retry_allowed']);
         self::assertSame(0, $doneWithStaleRecoveryFlags['queue_terminal_recovered']);
 
-        // 已有非空 message 不应被兜底覆盖
+        // 宸叉湁闈炵┖ message 涓嶅簲琚厹搴曡鐩?        $preserved = $service->reconcileActiveOperationWithQueueInfo(
         $preserved = $service->reconcileActiveOperationWithQueueInfo(
-            ['operation' => 'plan', 'status' => 'running', 'message' => '已写入的定制文案'],
-            ['snapshot' => ['status' => 'done']],
+            ['operation' => 'plan', 'status' => 'running', 'message' => '宸插啓鍏ョ殑瀹氬埗鏂囨'],
+            ['status' => 'done'],
             'plan'
         );
-        self::assertSame('已写入的定制文案', $preserved['message']);
+        self::assertSame('宸插啓鍏ョ殑瀹氬埗鏂囨', $preserved['message']);
     }
 
     // ------------------------------------------------------------------
@@ -322,7 +326,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertSame([], $sse->calls);
     }
 
-    public function testEmitQueueDetailEventsSendsInfoWithSnapshotAndDetailLines(): void
+    public function testEmitQueueDetailEventsSendsInfoWithCurrentStateAndDetailLines(): void
     {
         $sse = new SpySseWriterForQueueObserverStream(true);
         $queueRow = [
@@ -353,9 +357,9 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertSame('queue_info', $data['progress_kind']);
         self::assertTrue($data['observer_detail']);
         self::assertNotEmpty($data['detail_lines']);
-        self::assertArrayHasKey('queue_snapshot', $data);
+        self::assertArrayHasKey('queue_state', $data);
         self::assertArrayHasKey('queue_info', $data);
-        self::assertSame(42, $data['queue_snapshot']['queue_id']);
+        self::assertSame(42, $data['queue_state']['queue_id']);
         self::assertSame(120, $data['token_usage']['input_tokens']);
         self::assertSame(30, $data['token_usage']['output_tokens']);
     }
@@ -388,8 +392,8 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
 
         $queueRow = [
             'queue_id' => 77,
-            'status' => 'running',   // last='queued' → 状态变更
-            'pid' => 12345,           // last=0 → pid 领取
+            'status' => 'running',
+            'pid' => 12345,
             'process' => '',
             'result' => '',
         ];
@@ -400,17 +404,17 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             'build',
             '',
             0,
-            'queued',  // 上一轮状态
-            0          // 上一轮 PID
+            'queued',
+            0
         );
 
-        self::assertCount(2, $sse->calls, '应发出 status 变更 + PID 领取 两个 info 事件');
+        self::assertCount(2, $sse->calls, 'status change and PID acquisition should emit two info events');
         self::assertSame('info', $sse->calls[0]['event']);
         self::assertSame('info', $sse->calls[1]['event']);
         self::assertTrue($sse->calls[0]['data']['observer_detail']);
         self::assertTrue($sse->calls[1]['data']['observer_detail']);
 
-        // 返回四元组：[lastProcess, lastResultLength, nextStatus, queuePid]
+        // 杩斿洖鍥涘厓缁勶細[lastProcess, lastResultLength, nextStatus, queuePid]
         self::assertSame(['', 0, 'running', 12345], $result);
     }
 
@@ -464,29 +468,29 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             'queue_id' => 1,
             'status' => 'running',
             'pid' => 100,
-            'process' => 'AI 生成进度 45%',
+            'process' => 'AI 鐢熸垚杩涘害 45%',
             'result' => '',
         ];
 
-        // operation='build' 不在 suppress 列表（plan/task_plan 被抑制） → 走 progress 事件
+        // operation='build' 涓嶅湪 suppress 鍒楄〃锛坧lan/task_plan 琚姂鍒讹級 鈫?璧?progress 浜嬩欢
         $result = $this->service()->forwardObservedQueueSignals(
             $sse,
             $queueRow,
             'build',
-            '',        // 上一轮 process 为空
+            '',        // 涓婁竴杞?process 涓虹┖
             0,
-            'running', // 状态未变更
-            100        // PID 未变
+            'running', // 鐘舵€佹湭鍙樻洿
+            100        // PID 鏈彉
         );
 
         self::assertCount(1, $sse->calls);
         self::assertSame('progress', $sse->calls[0]['event']);
-        self::assertSame('AI 生成进度 45%', $sse->calls[0]['data']['message']);
-        self::assertSame('AI 生成进度 45%', $sse->calls[0]['data']['queue_process']);
+        self::assertSame('AI 鐢熸垚杩涘害 45%', $sse->calls[0]['data']['message']);
+        self::assertSame('AI 鐢熸垚杩涘害 45%', $sse->calls[0]['data']['queue_process']);
         self::assertSame('queue_info', $sse->calls[0]['data']['progress_kind']);
 
-        // lastProcess 应被更新
-        self::assertSame('AI 生成进度 45%', $result[0]);
+        // lastProcess 搴旇鏇存柊
+        self::assertSame('AI 鐢熸垚杩涘害 45%', $result[0]);
     }
 
     public function testForwardObservedQueueSignalsKeepsTaskPlanProcessVisibleWithoutReplayingResult(): void
@@ -497,8 +501,8 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             'queue_id' => 18,
             'status' => 'running',
             'pid' => 2468,
-            'process' => '第二阶段任务方案：正在汇总页面任务',
-            'result' => "[12:00:00] INFO 第二阶段任务方案进入批量整理\n[12:00:02] TASK_PLAN_REFINED 第二阶段任务方案已刷新\n",
+            'process' => 'task plan is summarizing page tasks',
+            'result' => "[12:00:00] INFO task plan entered batch refinement\n[12:00:02] TASK_PLAN_REFINED task plan refreshed\n",
         ];
 
         $result = $this->service()->forwardObservedQueueSignals(
@@ -513,10 +517,10 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
 
         self::assertCount(1, $sse->calls);
         self::assertSame('progress', $sse->calls[0]['event']);
-        self::assertSame('第二阶段任务方案：正在汇总页面任务', $sse->calls[0]['data']['message']);
-        self::assertSame('第二阶段任务方案：正在汇总页面任务', $sse->calls[0]['data']['queue_process']);
+        self::assertSame('task plan is summarizing page tasks', $sse->calls[0]['data']['message']);
+        self::assertSame('task plan is summarizing page tasks', $sse->calls[0]['data']['queue_process']);
         self::assertArrayNotHasKey('queue_result_delta', $sse->calls[0]['data']);
-        self::assertSame('第二阶段任务方案：正在汇总页面任务', $result[0]);
+        self::assertSame('task plan is summarizing page tasks', $result[0]);
         self::assertSame(\strlen($queueRow['result']), $result[1]);
     }
 
@@ -532,7 +536,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             'result' => '',
         ];
 
-        // operation='plan' 属于 suppress 列表 → 走带空 message 的 info + queue_panel_update=true
+        // operation='plan' 灞炰簬 suppress 鍒楄〃 鈫?璧板甫绌?message 鐨?info + queue_panel_update=true
         $result = $this->service()->forwardObservedQueueSignals(
             $sse,
             $queueRow,
@@ -559,7 +563,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             'status' => 'running',
             'pid' => 100,
             'process' => '',
-            'result' => "行1\n\n行2\r\n行3",
+            'result' => "琛?\n\n琛?\r\n琛?",
         ];
 
         $result = $this->service()->forwardObservedQueueSignals(
@@ -567,13 +571,13 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             $queueRow,
             'build',
             '',
-            0,           // 上一轮 result 长度 0 → 全量作为 delta
+            0,           // 涓婁竴杞?result 闀垮害 0 鈫?鍏ㄩ噺浣滀负 delta
             'running',
             100
         );
 
-        self::assertSame([], $sse->calls, 'queue.result 增长只推进游标，不再拆成 chunk/queue_result_delta 回放');
-        self::assertSame(\strlen("行1\n\n行2\r\n行3"), $result[1]);
+        self::assertSame([], $sse->calls, 'queue.result 澧為暱鍙帹杩涙父鏍囷紝涓嶅啀鎷嗘垚 chunk/queue_result_delta 鍥炴斁');
+        self::assertSame(\strlen("琛?\n\n琛?\r\n琛?"), $result[1]);
     }
 
     public function testForwardObservedQueueSignalsResetsLastLengthWhenResultShrinks(): void
@@ -593,13 +597,12 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
             $queueRow,
             'build',
             '',
-            99999, // 上一轮长度远大于现状
+            99999, // 涓婁竴杞暱搴﹁繙澶т簬鐜扮姸
             'running',
             100
         );
 
-        // 长度倒退应重置为 0 再推进到当前长度，但不回放旧 result。
-        self::assertSame(\strlen('short'), $result[1]);
+        // 闀垮害鍊掗€€搴旈噸缃负 0 鍐嶆帹杩涘埌褰撳墠闀垮害锛屼絾涓嶅洖鏀炬棫 result銆?        self::assertSame(\strlen('short'), $result[1]);
         self::assertSame([], $sse->calls);
     }
 }
