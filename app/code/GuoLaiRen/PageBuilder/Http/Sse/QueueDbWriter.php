@@ -987,8 +987,8 @@ class QueueDbWriter extends SseWriter
     }
 
     /**
-     * Persist only the latest compact Stage-1 page fanout snapshot so a browser
-     * refresh can recover total/done/remaining progress without replaying SSE logs.
+     * Persist only the current compact Stage-1 page fanout progress so a browser
+     * refresh can recover total/done/remaining without replaying SSE logs.
      *
      * @param array<string, mixed> $patch
      * @param array<string, mixed> $payload

@@ -34,6 +34,21 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
+     * @param array<string, mixed>|null $queueInfo
+     * @return array<string, mixed>
+     */
+    private function resolveQueueCurrentState(?array $queueInfo): array
+    {
+        if ($queueInfo === null) {
+            return [];
+        }
+        $current = $queueInfo;
+        unset($current['snapshot']);
+
+        return $current;
+    }
+
+    /**
      * @param array<string, mixed> $state
      */
     public function buildStateFingerprint(array $state): string
@@ -49,9 +64,9 @@ class AiSiteAgentWorkspaceStateHelperService
             'build_plan_confirmed' => (int)($state['build_plan_confirmed'] ?? ($scope['build_plan_confirmed'] ?? 0)),
             'virtual_theme_id' => (int)($state['virtual_theme_id'] ?? 0),
             'build_plan_execution_summary' => $this->resolveBuildPlanExecutionSummary($state),
-            'queue_snapshots' => [
-                'plan' => \is_array($state['plan_queue_info']['snapshot'] ?? null) ? $state['plan_queue_info']['snapshot'] : [],
-                'build' => \is_array($state['build_queue_info']['snapshot'] ?? null) ? $state['build_queue_info']['snapshot'] : [],
+            'queue_state' => [
+                'plan' => $this->resolveQueueCurrentState(\is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null),
+                'build' => $this->resolveQueueCurrentState(\is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null),
             ],
         ];
 
@@ -286,6 +301,9 @@ class AiSiteAgentWorkspaceStateHelperService
         if (\is_array($state['page_type_layouts'] ?? null)) {
             $state['page_type_layouts'] = $this->prunePageTypeLayoutsForView($state['page_type_layouts']);
         }
+        if (\is_array($state['build_task_summary'] ?? null)) {
+            $state['build_task_summary'] = $this->pruneBuildTaskSummaryForView($state['build_task_summary']);
+        }
         if ($buildPlanForView !== []) {
             $state['build_plan_v2'] = $this->pruneBuildPlanForView($buildPlanForView);
             $state['build_plan_execution_summary'] = $this->resolveBuildPlanExecutionSummary($state);
@@ -315,6 +333,17 @@ class AiSiteAgentWorkspaceStateHelperService
             $state['plan_structured'],
             $state['plan_workbench'],
             $state['virtual_theme_plan'],
+            $state['task_plan'],
+            $state['task_plan_markdown'],
+            $state['task_plan_structured'],
+            $state['task_plan_confirmed'],
+            $state['task_plan_confirmed_at'],
+            $state['build_blueprint'],
+            $state['build_tasks'],
+            $state['build_html'],
+            $state['build_css'],
+            $state['build_js'],
+            $state['execution_blueprint'],
             $state['plan_projection'],
             $state['raw'],
             $state['raw_response']
@@ -375,6 +404,19 @@ class AiSiteAgentWorkspaceStateHelperService
             $scope['plan_workbench'],
             $scope['build_plan_v2'],
             $scope['plan_projection'],
+            $scope['task_plan'],
+            $scope['task_plan_markdown'],
+            $scope['task_plan_structured'],
+            $scope['task_plan_confirmed'],
+            $scope['task_plan_confirmed_at'],
+            $scope['build_blueprint'],
+            $scope['build_tasks'],
+            $scope['build_html'],
+            $scope['build_css'],
+            $scope['build_js'],
+            $scope['execution_blueprint'],
+            $scope['_plan_generation_checkpoint'],
+            $scope['_task_plan_generation_checkpoint'],
             $scope['content_manifest'],
             $scope['virtual_theme_plan'],
             $scope['virtual_theme_build_tree'],
@@ -394,7 +436,7 @@ class AiSiteAgentWorkspaceStateHelperService
     {
         return [
             'total' => (int)($summary['total'] ?? 0),
-            'done' => (int)($summary['done'] ?? 0),
+            'done' => (int)($summary['done'] ?? $summary['completed'] ?? $summary['success'] ?? 0),
             'pending' => (int)($summary['pending'] ?? 0),
             'running' => (int)($summary['running'] ?? 0),
             'failed' => (int)($summary['failed'] ?? 0),
@@ -410,11 +452,12 @@ class AiSiteAgentWorkspaceStateHelperService
     private function resolveBuildPlanExecutionSummary(array $state): array
     {
         $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        $currentSummary = $this->resolveCurrentBuildTaskSummary($state);
         $buildPlan = \is_array($state['build_plan_v2'] ?? null)
             ? $state['build_plan_v2']
             : (\is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : []);
         if ($buildPlan === []) {
-            return [];
+            return $currentSummary !== [] ? $this->summarizeExecutionSummaryCountsForView($currentSummary) : [];
         }
         if (\is_array($buildPlan['execution_summary'] ?? null) && $buildPlan['execution_summary'] !== []) {
             return $this->summarizeExecutionSummaryCountsForView($buildPlan['execution_summary']);
@@ -442,7 +485,22 @@ class AiSiteAgentWorkspaceStateHelperService
             $this->accumulateBuildPlanExecutionSummaryRow($summary, (string)($row['status'] ?? 'pending'));
         }
 
-        return $summary;
+        return (int)$summary['total'] > 0
+            ? $summary
+            : ($currentSummary !== [] ? $this->summarizeExecutionSummaryCountsForView($currentSummary) : $summary);
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function resolveCurrentBuildTaskSummary(array $state): array
+    {
+        if (\is_array($state['build_task_summary'] ?? null)) {
+            return $state['build_task_summary'];
+        }
+        $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        return \is_array($scope['build_task_summary'] ?? null) ? $scope['build_task_summary'] : [];
     }
 
     /**
@@ -920,6 +978,15 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
+     * @param array<string, mixed> $summary
+     * @return array<string, mixed>
+     */
+    private function pruneBuildTaskSummaryForView(array $summary): array
+    {
+        return $this->pruneRecursiveFailureForView($summary);
+    }
+
+    /**
      * @param array<string, mixed> $failure
      * @return array<string, mixed>
      */
@@ -1221,12 +1288,13 @@ class AiSiteAgentWorkspaceStateHelperService
         $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
         $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
         $queueInfo = $this->selectStatusQueueInfo($state, (string)($activeOperation['operation'] ?? ''));
-        $queueSnapshot = \is_array($queueInfo['snapshot'] ?? null) ? $queueInfo['snapshot'] : [];
+        $queueState = $this->resolveQueueCurrentState(\is_array($queueInfo) ? $queueInfo : null);
         $lastEventId = $this->resolveLastEventId(\is_array($state['events'] ?? null) ? $state['events'] : []);
         $status = $this->normalizeEnvelopeStatus(
             (string)(
-                $queueSnapshot['job_status']
-                ?? $queueSnapshot['status']
+                $queueState['job_status']
+                ?? $queueState['status']
+                ?? $queueState['queue_status']
                 ?? $activeOperation['status']
                 ?? $state['workspace_status']
                 ?? ''
@@ -1245,8 +1313,8 @@ class AiSiteAgentWorkspaceStateHelperService
         ));
 
         return [
-            'job_key' => (string)($queueSnapshot['job_key'] ?? $activeOperation['job_key'] ?? ''),
-            'job_type' => (string)($queueSnapshot['job_type'] ?? $activeOperation['job_type'] ?? $this->resolveQueueJobType((string)($activeOperation['operation'] ?? ''))),
+            'job_key' => (string)($queueState['job_key'] ?? $activeOperation['job_key'] ?? ''),
+            'job_type' => (string)($queueState['job_type'] ?? $activeOperation['job_type'] ?? $this->resolveQueueJobType((string)($activeOperation['operation'] ?? ''))),
             'status' => $status,
             'event_id' => $lastEventId,
             'seq_no' => $lastEventId,
@@ -1256,9 +1324,9 @@ class AiSiteAgentWorkspaceStateHelperService
             'session_public_id' => (string)($state['public_id'] ?? ''),
             'context_hash' => $contextHash,
             'state_fingerprint' => $stateFingerprint,
-            'token_usage' => $this->resolveEnvelopeTokenUsage($queueSnapshot, $queueInfo, $activeOperation),
+            'token_usage' => $this->resolveEnvelopeTokenUsage($queueState, $queueInfo, $activeOperation),
             'progress_kind' => $this->resolveProgressKind($state, $activeOperation),
-            'updated_at' => $this->resolveEnvelopeUpdatedAt($state, $activeOperation, $queueSnapshot),
+            'updated_at' => $this->resolveEnvelopeUpdatedAt($state, $activeOperation, $queueState),
         ];
     }
 

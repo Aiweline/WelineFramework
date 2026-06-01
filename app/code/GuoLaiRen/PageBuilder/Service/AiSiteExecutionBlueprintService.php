@@ -604,7 +604,7 @@ final class AiSiteExecutionBlueprintService
             'plan_instruction' => $instruction,
             'plan_runtime_instruction' => $runtimeInstruction,
         ]);
-        $onScopeCheckpoint = \is_callable($payload['on_stage1_scope_checkpoint'] ?? null) ? $payload['on_stage1_scope_checkpoint'] : null;
+        $onScopePatch = \is_callable($payload['on_stage1_scope_patch'] ?? null) ? $payload['on_stage1_scope_patch'] : null;
         $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $scope);
         $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope);
         $isResumeRepair = $this->isStageOneResumeRepairPayload($payload, $scope);
@@ -632,8 +632,8 @@ final class AiSiteExecutionBlueprintService
                 if ($referenceImageInsightsSignature !== '') {
                     $scope['reference_image_insights_signature'] = $referenceImageInsightsSignature;
                 }
-                $this->persistStageOneScopeCheckpoint(
-                    $onScopeCheckpoint,
+                $this->persistStageOneScopePatch(
+                    $onScopePatch,
                     [
                         'reference_image_insights' => $referenceImageInsights,
                         'reference_image_insights_signature' => (string)($scope['reference_image_insights_signature'] ?? ''),
@@ -688,13 +688,10 @@ final class AiSiteExecutionBlueprintService
             $siteDisplayName,
             $siteSummary
         );
-        $checkpointSignature = $this->buildStageOneCheckpointSignature($scope, $websiteProfile, $pageTypes, $planLocale, $contentLocale, $instruction, $targetScope, $oneLineRequirement);
-        $checkpoint = $this->resolveStageOneCheckpoint($payload, $scope, $checkpointSignature);
-        if ($checkpoint !== [] && \trim((string)($checkpoint['signature'] ?? '')) !== '') {
-            $checkpointSignature = (string)$checkpoint['signature'];
-        }
-        $onCheckpoint = \is_callable($payload['on_stage1_checkpoint'] ?? null) ? $payload['on_stage1_checkpoint'] : null;
-        $planJson = \is_array($checkpoint['plan_json'] ?? null) ? $checkpoint['plan_json'] : [];
+        $progressSignature = $this->buildStageOneProgressSignature($scope, $websiteProfile, $pageTypes, $planLocale, $contentLocale, $instruction, $targetScope, $oneLineRequirement);
+        $persistedProgress = $this->resolveStageOnePersistedPlanProgress($payload, $scope, $progressSignature);
+        $onProgressState = \is_callable($payload['on_stage1_progress_state'] ?? null) ? $payload['on_stage1_progress_state'] : null;
+        $planJson = \is_array($persistedProgress['plan_json'] ?? null) ? $persistedProgress['plan_json'] : [];
         $stageOneGenerationAttempts = [
             'requirement_expand' => 0,
             'theme_design' => 0,
@@ -735,7 +732,7 @@ final class AiSiteExecutionBlueprintService
                 );
                 $planJson = $this->mergeStageOneRequirementExpansionAiPlanJson($planJson, $requirementDecoded, $oneLineRequirement, $pageTypes);
                 $this->assertStageOneRequirementExpansionIsGenerated($planJson);
-                $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'requirement_expand', $pageTypes);
+                $this->emitStageOnePlanProgressState($onProgressState, $progressSignature, $planJson, 'requirement_expand', $pageTypes);
             }
             $this->emitStageOnePipelineProgress(
                 $onProgress,
@@ -779,7 +776,7 @@ final class AiSiteExecutionBlueprintService
                     $scope
                 );
                 $this->assertStageOneThemePlanIsGenerated($planJson);
-                $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'theme_design', $pageTypes);
+                $this->emitStageOnePlanProgressState($onProgressState, $progressSignature, $planJson, 'theme_design', $pageTypes);
             }
             $planJson = $this->materializeStageOneThemeContract(
                 $planJson,
@@ -790,8 +787,8 @@ final class AiSiteExecutionBlueprintService
                 $scope
             );
             $this->assertStageOneThemePlanIsGenerated($planJson);
-            $this->persistStageOneScopeCheckpoint(
-                $onScopeCheckpoint,
+            $this->persistStageOneScopePatch(
+                $onScopePatch,
                 [
                     'stage1_contract' => \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : [],
                     'theme_context_snapshot' => \is_array($planJson['theme_context_snapshot'] ?? null) ? $planJson['theme_context_snapshot'] : [],
@@ -864,8 +861,8 @@ final class AiSiteExecutionBlueprintService
                 $onProgress,
                 $pageFanoutFailures,
                 $stageOneGenerationAttempts,
-                $onCheckpoint,
-                $checkpointSignature,
+                $onProgressState,
+                $progressSignature,
                 $pageTypes
             );
             if ($pagePlans !== []) {
@@ -897,8 +894,8 @@ final class AiSiteExecutionBlueprintService
                     $onProgress,
                     $retryFanoutFailures,
                     $stageOneGenerationAttempts,
-                    $onCheckpoint,
-                    $checkpointSignature,
+                    $onProgressState,
+                    $progressSignature,
                     $pageTypes
                 );
                 if ($retryPagePlans !== []) {
@@ -906,7 +903,7 @@ final class AiSiteExecutionBlueprintService
                 }
                 $pageFanoutFailures = $retryFanoutFailures;
             }
-            $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'page_fanout', $pageTypes, $pageFanoutFailures);
+            $this->emitStageOnePlanProgressState($onProgressState, $progressSignature, $planJson, 'page_fanout', $pageTypes, $pageFanoutFailures);
 
             $this->emitStageOnePipelineProgress(
                 $onProgress,
@@ -948,7 +945,7 @@ final class AiSiteExecutionBlueprintService
             $artifacts['generation_source'] = 'ai_staged';
             $artifacts['retryable_ai_failures'] = \array_values($combinedRetryableFailures);
             $artifacts['partial_retry_required'] = $combinedRetryableFailures !== [] ? 1 : 0;
-            $this->persistStageOneCheckpoint($onCheckpoint, $checkpointSignature, $planJson, 'plan_assemble', $pageTypes, $combinedRetryableFailures);
+            $this->emitStageOnePlanProgressState($onProgressState, $progressSignature, $planJson, 'plan_assemble', $pageTypes, $combinedRetryableFailures);
             $this->emitStageOnePipelineProgress(
                 $onProgress,
                 '阶段一总设计装配完成，正在写入方案草案',
@@ -970,7 +967,7 @@ final class AiSiteExecutionBlueprintService
     /**
      * @param list<string> $pageTypes
      */
-    private function buildStageOneCheckpointSignature(
+    private function buildStageOneProgressSignature(
         array $scope,
         array $websiteProfile,
         array $pageTypes,
@@ -998,38 +995,39 @@ final class AiSiteExecutionBlueprintService
     /**
      * @return array<string, mixed>
      */
-    private function resolveStageOneCheckpoint(array $payload, array $scope, string $signature): array
+    private function resolveStageOnePersistedPlanProgress(array $payload, array $scope, string $signature): array
     {
         if ($this->isStageOneRebuildPayload($payload, $scope)) {
             return [];
         }
 
-        $checkpoint = \is_array($payload['stage1_checkpoint'] ?? null)
-            ? $payload['stage1_checkpoint']
-            : (\is_array($scope['_plan_generation_checkpoint'] ?? null) ? $scope['_plan_generation_checkpoint'] : []);
-        if ($checkpoint === []) {
-            $persistedPlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-            if ($persistedPlanJson !== [] && $this->checkpointHasResumableStageOneProgress(['plan_json' => $persistedPlanJson])) {
-                return [
-                    'signature' => $signature,
-                    'step' => 'persisted_plan_json',
-                    'plan_json' => $persistedPlanJson,
-                    'page_types' => \is_array($scope['page_types'] ?? null) ? \array_values($scope['page_types']) : [],
-                    'updated_at' => (string)($scope['plan_generated_at'] ?? \date('Y-m-d H:i:s')),
-                ];
-            }
-
-            return [];
-        }
-        $storedSignature = \trim((string)($checkpoint['signature'] ?? ''));
-        if ($storedSignature === $signature) {
-            return $checkpoint;
-        }
-        if ($this->isStageOneResumeRepairPayload($payload, $scope) && $this->checkpointHasResumableStageOneProgress($checkpoint)) {
-            return $checkpoint;
+        $persistedPlanJson = $this->extractPersistedStageOnePlanJson($scope);
+        if ($persistedPlanJson !== [] && $this->planJsonHasResumableStageOneProgress($persistedPlanJson)) {
+            return [
+                'signature' => $signature,
+                'step' => 'persisted_plan_json',
+                'plan_json' => $persistedPlanJson,
+                'page_types' => \is_array($scope['page_types'] ?? null) ? \array_values($scope['page_types']) : [],
+                'updated_at' => (string)($scope['plan_generated_at'] ?? \date('Y-m-d H:i:s')),
+            ];
         }
 
         return [];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function extractPersistedStageOnePlanJson(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        if ($planJson !== []) {
+            return $planJson;
+        }
+
+        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        return $structured !== [] && $this->planJsonHasResumableStageOneProgress($structured) ? $structured : [];
     }
 
     /**
@@ -1073,11 +1071,10 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param array<string, mixed> $checkpoint
+     * @param array<string, mixed> $planJson
      */
-    private function checkpointHasResumableStageOneProgress(array $checkpoint): bool
+    private function planJsonHasResumableStageOneProgress(array $planJson): bool
     {
-        $planJson = \is_array($checkpoint['plan_json'] ?? null) ? $checkpoint['plan_json'] : [];
         if ($planJson === []) {
             return false;
         }
@@ -1398,7 +1395,7 @@ final class AiSiteExecutionBlueprintService
      * @param callable(array<string, mixed>):void|null $onCheckpoint
      * @param list<string> $pageTypes
      */
-    private function persistStageOneCheckpoint(
+    private function emitStageOnePlanProgressState(
         ?callable $onCheckpoint,
         string $signature,
         array $planJson,
@@ -1427,7 +1424,7 @@ final class AiSiteExecutionBlueprintService
      * @param array<string, mixed> $pagePlan
      * @param list<string> $pageTypes
      */
-    private function persistStageOnePageCheckpoint(
+    private function emitStageOnePageProgressState(
         ?callable $onCheckpoint,
         string $signature,
         array $planJson,
@@ -1439,9 +1436,9 @@ final class AiSiteExecutionBlueprintService
             return;
         }
 
-        $checkpointPlanJson = $planJson;
-        $checkpointPlanJson['pages'] = \array_replace(
-            \is_array($checkpointPlanJson['pages'] ?? null) ? $checkpointPlanJson['pages'] : [],
+        $progressPlanJson = $planJson;
+        $progressPlanJson['pages'] = \array_replace(
+            \is_array($progressPlanJson['pages'] ?? null) ? $progressPlanJson['pages'] : [],
             [$pageType => $pagePlan]
         );
 
@@ -1449,7 +1446,7 @@ final class AiSiteExecutionBlueprintService
             'signature' => $signature,
             'step' => 'page_plan',
             'completed_task' => 'page_plan:' . $pageType,
-            'plan_json' => $checkpointPlanJson,
+            'plan_json' => $progressPlanJson,
             'page_types' => \array_values($pageTypes),
             'page_checkpoint' => [
                 'page_type' => $pageType,
@@ -1463,18 +1460,18 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param callable(array<string, mixed>):void|null $onScopeCheckpoint
+     * @param callable(array<string, mixed>):void|null $onScopePatch
      * @param array<string, mixed> $scopePatch
      * @param list<string> $pageTypes
      */
-    private function persistStageOneScopeCheckpoint(
-        ?callable $onScopeCheckpoint,
+    private function persistStageOneScopePatch(
+        ?callable $onScopePatch,
         array $scopePatch,
         string $step,
         array $pageTypes
     ): void
     {
-        if ($onScopeCheckpoint === null || $scopePatch === []) {
+        if ($onScopePatch === null || $scopePatch === []) {
             return;
         }
 
@@ -1484,7 +1481,7 @@ final class AiSiteExecutionBlueprintService
             'failed_count' => 0,
             'updated_at' => \date('Y-m-d H:i:s'),
         ];
-        $onScopeCheckpoint($scopePatch);
+        $onScopePatch($scopePatch);
     }
 
     /**
@@ -3500,7 +3497,7 @@ final class AiSiteExecutionBlueprintService
                 }
                 $generationAttempts['page_fanout'][$pageKey]['status'] = $finalCheckpointPassed ? 'passed' : 'failed';
                 if ($finalCheckpointPassed) {
-                    $this->persistStageOnePageCheckpoint(
+                    $this->emitStageOnePageProgressState(
                         $onCheckpoint,
                         $checkpointSignature,
                         $planJson,

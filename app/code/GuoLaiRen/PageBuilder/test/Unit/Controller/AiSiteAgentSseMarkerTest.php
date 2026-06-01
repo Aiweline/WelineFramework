@@ -267,13 +267,14 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         ]);
 
         self::assertSame(143, $payload['queue_id']);
-        self::assertSame('running', $payload['snapshot']['status']);
-        self::assertSame('glr_aisite:session:987:job:stage1.requirement_expand', $payload['snapshot']['job_key']);
-        self::assertSame('stage1.requirement_expand', $payload['snapshot']['job_type']);
-        self::assertSame('token-abc', $payload['snapshot']['token']);
-        self::assertSame(1200, $payload['snapshot']['token_usage']['input_tokens']);
-        self::assertSame(340, $payload['snapshot']['token_usage']['output_tokens']);
-        self::assertSame(1540, $payload['snapshot']['token_usage']['total_tokens']);
+        self::assertArrayNotHasKey('snapshot', $payload);
+        self::assertSame('running', $payload['status']);
+        self::assertSame('glr_aisite:session:987:job:stage1.requirement_expand', $payload['job_key']);
+        self::assertSame('stage1.requirement_expand', $payload['job_type']);
+        self::assertSame('token-abc', $payload['token']);
+        self::assertSame(1200, $payload['token_usage']['input_tokens']);
+        self::assertSame(340, $payload['token_usage']['output_tokens']);
+        self::assertSame(1540, $payload['token_usage']['total_tokens']);
         self::assertSame('AI 流式生成中... (+33 B)', $payload['process']);
         self::assertSame("[02:16:04] INFO checkpoint saved", $payload['result_log']);
     }
@@ -314,7 +315,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'pid' => 48104,
                 'type_id' => 6,
                 'finished' => 0,
-                'process' => 'AI 流式生成中... (+33 B)',
+                'process' => 'AI stream running... (+33 B)',
                 'result' => "[02:16:04] INFO checkpoint saved\n",
                 'content' => \json_encode([
                     'operation' => 'plan',
@@ -340,26 +341,33 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             $writer->events,
             static fn(array $event): bool => $event['event'] === 'chunk'
         ));
+        $queueInfoEvents = \array_values(\array_filter(
+            $writer->events,
+            static fn(array $event): bool => \is_array($event['data'] ?? null)
+                && ($event['data']['progress_kind'] ?? '') === 'queue_info'
+                && \is_array($event['data']['queue_info'] ?? null)
+        ));
 
         self::assertNotEmpty($infoEvents);
         self::assertIsArray($infoEvents[0]['data']);
         self::assertSame('queue_info', $infoEvents[0]['data']['progress_kind']);
         self::assertArrayHasKey('queue_info', $infoEvents[0]['data']);
-        self::assertSame('running', $infoEvents[0]['data']['queue_info']['snapshot']['status']);
+        self::assertArrayNotHasKey('snapshot', $infoEvents[0]['data']['queue_info']);
+        self::assertSame('running', $infoEvents[0]['data']['queue_info']['status']);
         self::assertSame(600, $infoEvents[0]['data']['token_usage']['input_tokens']);
-        self::assertSame(180, $infoEvents[0]['data']['queue_info']['snapshot']['token_usage']['output_tokens']);
-        $panelUpdateEvents = \array_values(\array_filter(
-            $infoEvents,
-            static fn(array $event): bool => \is_array($event['data']) && !empty($event['data']['queue_panel_update'])
+        self::assertSame(180, $infoEvents[0]['data']['queue_info']['token_usage']['output_tokens']);
+        $processEvents = \array_values(\array_filter(
+            $queueInfoEvents,
+            static fn(array $event): bool => (string)($event['data']['queue_process'] ?? '') !== ''
         ));
-        self::assertNotEmpty($panelUpdateEvents);
-        self::assertSame('AI 流式生成中... (+33 B)', $panelUpdateEvents[0]['data']['queue_process']);
+        self::assertNotEmpty($processEvents);
+        self::assertSame('AI stream running... (+33 B)', $processEvents[0]['data']['queue_process']);
 
-        self::assertSame([], $chunkEvents, '规划类队列不再把 queue.result 作为 chunk SSE 回放');
-        self::assertArrayNotHasKey('queue_result_delta', $panelUpdateEvents[0]['data']);
-        self::assertSame("[02:16:04] INFO checkpoint saved", (string)$panelUpdateEvents[0]['data']['queue_info']['result_log']);
-        self::assertSame(780, $panelUpdateEvents[0]['data']['token_usage']['total_tokens']);
-        self::assertSame(780, $panelUpdateEvents[0]['data']['queue_info']['snapshot']['token_usage']['total_tokens']);
+        self::assertSame([], $chunkEvents, 'queue.result should not replay as chunk SSE');
+        self::assertArrayNotHasKey('queue_result_delta', $processEvents[0]['data']);
+        self::assertSame("[02:16:04] INFO checkpoint saved", (string)$processEvents[0]['data']['queue_info']['result_log']);
+        self::assertSame(780, $processEvents[0]['data']['token_usage']['total_tokens']);
+        self::assertSame(780, $processEvents[0]['data']['queue_info']['token_usage']['total_tokens']);
     }
 
     public function testDoneQueueSuppressesReplayedObservedFailureEvents(): void
@@ -465,8 +473,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('function abortBlockEditorAiStream()', $mainScript);
         self::assertStringContainsString('abortCurrentStream();', $mainScript);
         self::assertStringContainsString('clearStreamRefs();', $mainScript);
-        self::assertStringContainsString("if (isPlainWorkspaceObject(safe.snapshot))", $mainScript);
-        self::assertStringContainsString("if (isPlainWorkspaceObject(safe.scope.snapshot))", $mainScript);
+        self::assertStringContainsString("delete safe.snapshot;", $mainScript);
+        self::assertStringContainsString("delete safe.scope.snapshot;", $mainScript);
         self::assertStringContainsString("safe.scope[key] = sanitizeQueueInfoForMemory(safe.scope[key]);", $mainScript);
         self::assertStringContainsString("['page_type_layouts', 'pagebuilder_pages_by_type', 'virtual_pages_by_type']", $mainScript);
         self::assertStringContainsString('function sanitizeWorkspaceStateCollectionForMemory(collection)', $mainScript);
@@ -499,8 +507,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'details close should clear the bounded live log DOM'
             );
             self::assertStringContainsString('if (panelEl && !panelEl.open)', $script);
-            self::assertStringContainsString('state.snapshot = Object.assign({}, state.snapshot);', $script);
-            self::assertStringContainsString('state.scope.snapshot = Object.assign({}, state.scope.snapshot);', $script);
+            self::assertStringContainsString('delete state.snapshot;', $script);
+            self::assertStringContainsString('delete state.scope.snapshot;', $script);
             self::assertStringContainsString('state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);', $script);
             self::assertStringContainsString('state.plan_queue_info = sanitizeQueueInfoForMemory(state.plan_queue_info);', $script);
             self::assertStringContainsString('state.build_queue_info = sanitizeQueueInfoForMemory(state.build_queue_info);', $script);
@@ -656,8 +664,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         }
         }
         self::assertStringContainsString('if (doneEl) { doneEl.textContent = String(counts.done || 0); }', $runtimeScript);
-        self::assertStringContainsString('private function emitObservedBuildTaskProgressSnapshot', $controllerSource);
-        self::assertStringContainsString('private function buildTaskProgressSnapshotPayload', $controllerSource);
+        self::assertStringContainsString('private function emitObservedBuildTaskProgressState', $controllerSource);
+        self::assertStringContainsString('private function buildTaskProgressStatePayload', $controllerSource);
         self::assertStringContainsString("'progress_kind' => 'task_progress'", $controllerSource);
         self::assertStringContainsString('\'ai_generating\' => $aiGenerating', $controllerSource);
         self::assertStringContainsString('private function buildObservedProgressPayload', $controllerSource);
@@ -706,20 +714,17 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             ],
             'plan_queue_info' => [
                 'queue_id' => 143,
-                'snapshot' => [
-                    'queue_id' => 143,
-                    'status' => 'running',
-                    'job_status' => 'running',
-                    'job_key' => 'glr_aisite:session:987:job:stage1.requirement_expand',
-                    'job_type' => 'stage1.requirement_expand',
-                    'token' => 'token-abc',
-                    'token_usage' => [
-                        'input_tokens' => 1200,
-                        'output_tokens' => 340,
-                        'total_tokens' => 1540,
-                    ],
-                    'start_at' => '2026-04-21 12:19:50',
+                'status' => 'running',
+                'job_status' => 'running',
+                'job_key' => 'glr_aisite:session:987:job:stage1.requirement_expand',
+                'job_type' => 'stage1.requirement_expand',
+                'token' => 'token-abc',
+                'token_usage' => [
+                    'input_tokens' => 1200,
+                    'output_tokens' => 340,
+                    'total_tokens' => 1540,
                 ],
+                'start_at' => '2026-04-21 12:19:50',
                 'process' => 'AI queue running',
                 'result_log' => '',
             ],
@@ -817,12 +822,9 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         ], [
             'build' => [
                 'queue_id' => 82,
-                'snapshot' => [
-                    'queue_id' => 82,
-                    'status' => 'done',
-                    'name' => 'PageBuilder build #82',
-                    'biz_key' => 'glr_aisite:session:48:queue_slot:build',
-                ],
+                'status' => 'done',
+                'name' => 'PageBuilder build #82',
+                'biz_key' => 'glr_aisite:session:48:queue_slot:build',
                 'process' => 'Build queue completed.',
                 'result_log' => '',
             ],
