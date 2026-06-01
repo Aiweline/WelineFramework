@@ -90,19 +90,12 @@ class AiSiteAgentQueueObserverHelperService
     }
 
     /**
-     * 将 queueRow + 已计算好的 public snapshot 组装成前端 panel payload。
-     *
-     * 约定：调用方（控制器）先通过 `AiSiteQueueSnapshotService` 计算 snapshot，
-     * 再把 snapshot 传进来；这样 Helper 不用引入新依赖。
-     *
-     * 截断规则：`result_log` 只作为当前短消息/终态摘要，不再承载历史日志；超过 4096 字节时只保留尾部。
-     *
      * @param array<string, mixed> $queueRow
-     * @param array<string, mixed> $snapshot
+     * @param array<string, mixed> $currentState
      *
-     * @return array{queue_id:int,snapshot:array<string,mixed>,process:string,result_log:string}
+     * @return array<string, mixed>
      */
-    public function buildPanelPayload(array $queueRow, array $snapshot): array
+    public function buildPanelPayload(array $queueRow, array $currentState): array
     {
         $process = \trim((string)($queueRow['process'] ?? ''));
         $processMax = 4000;
@@ -111,13 +104,25 @@ class AiSiteAgentQueueObserverHelperService
         }
         $result = $this->resolveResultLogForPanel($queueRow);
 
-        // panel payload 只输出权威 4 字段（queue_id / snapshot / process / result_log）。
-        // queue 状态/状态别名（status / queue_status / job_status）由 AiSiteSsePayloadNormalizer
-        // 在 SSE 顶层 payload 中统一镜像；前端通过 queue_info.snapshot.status 或顶层 queue_status 读取。
-        // 顺序稳定：前端依赖键顺序做 JSON 输出确定性比对。
         return [
-            'queue_id' => (int)($snapshot['queue_id'] ?? 0),
-            'snapshot' => $snapshot,
+            'queue_id' => (int)($currentState['queue_id'] ?? 0),
+            'name' => (string)($currentState['name'] ?? ''),
+            'module' => (string)($currentState['module'] ?? ''),
+            'biz_key' => (string)($currentState['biz_key'] ?? ''),
+            'status' => (string)($currentState['status'] ?? ''),
+            'queue_status' => (string)($currentState['status'] ?? ''),
+            'job_status' => (string)($currentState['job_status'] ?? ($currentState['status'] ?? '')),
+            'semantic_status' => (string)($currentState['semantic_status'] ?? ($currentState['job_status'] ?? ($currentState['status'] ?? ''))),
+            'pid' => (int)($currentState['pid'] ?? 0),
+            'type_id' => (int)($currentState['type_id'] ?? 0),
+            'finished' => (int)($currentState['finished'] ?? 0),
+            'start_at' => (string)($currentState['start_at'] ?? ''),
+            'end_at' => (string)($currentState['end_at'] ?? ''),
+            'job_key' => (string)($currentState['job_key'] ?? ''),
+            'job_type' => (string)($currentState['job_type'] ?? ''),
+            'token' => (string)($currentState['token'] ?? ''),
+            'token_usage' => \is_array($currentState['token_usage'] ?? null) ? $currentState['token_usage'] : [],
+            'stage1_page_progress' => \is_array($currentState['stage1_page_progress'] ?? null) ? $currentState['stage1_page_progress'] : [],
             'process' => $process,
             'result_log' => $result,
         ];
