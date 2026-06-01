@@ -1186,7 +1186,10 @@ JSON;
             'page_type_layouts' => [
                 'contact_page' => [
                     'content' => [
-                        ['code' => 'content/contact-page-faq'],
+                        [
+                            'code' => 'content/contact-page-faq',
+                            'html' => '<section>Generated contact FAQ content.</section>',
+                        ],
                     ],
                 ],
             ],
@@ -1211,8 +1214,8 @@ JSON;
         }
         $scope = \array_replace_recursive($scope, [
             'shared_components' => [
-                'header' => ['html' => '<header>Ready</header>'],
-                'footer' => ['html' => '<footer>Ready</footer>'],
+                'header' => ['code' => 'header/ai-site-header', 'html' => '<header>Ready</header>'],
+                'footer' => ['code' => 'footer/ai-site-footer', 'html' => '<footer>Ready</footer>'],
             ],
             'page_type_layouts' => [
                 'home_page' => [
@@ -1225,6 +1228,7 @@ JSON;
                             'component' => 'content/home-page-hero',
                             'title' => 'Ready Home Page',
                             'description' => 'A concrete home section with visitor-facing proof and a direct action.',
+                            'html' => '<section>Ready home page visitor-facing proof and direct action.</section>',
                             'design_tags' => [
                                 'visual' => ['trust band'],
                                 'motion' => ['subtle reveal'],
@@ -1312,8 +1316,8 @@ JSON;
         }
         $scope = \array_replace_recursive($scope, [
             'shared_components' => [
-                'header' => ['html' => '<header>Ready</header>'],
-                'footer' => ['html' => '<footer>Ready</footer>'],
+                'header' => ['code' => 'header/ai-site-header', 'html' => '<header>Ready</header>'],
+                'footer' => ['code' => 'footer/ai-site-footer', 'html' => '<footer>Ready</footer>'],
             ],
             'page_type_layouts' => [
                 'home_page' => [
@@ -1436,6 +1440,175 @@ JSON;
         self::assertSame('missing_page_type_layouts', $gate['reason']);
         self::assertSame(['about_page'], $gate['missing_page_type_layouts']);
         self::assertStringContainsString('about_page', $service->formatBuildCompletionGateFailureDetail($gate));
+    }
+
+    public function testInspectBuildCompletionGateFailsWhenPageLayoutHasFewerBlocksThanPlan(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = $service->ensureTaskScope($this->buildConfirmedScope(['home_page']), [], 'virtual_theme');
+        $firstBlock = \is_array($scope['build_plan_v2']['blocks'][0] ?? null) ? $scope['build_plan_v2']['blocks'][0] : [];
+        $scope['build_plan_v2']['blocks'][] = $firstBlock;
+
+        foreach (['shared:header', 'shared:footer', 'page:home_page:content/home-page-hero'] as $taskKey) {
+            $scope = $this->withBuildPlanTaskState($scope, $taskKey, [
+                'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+            ]);
+        }
+        $scope = \array_replace_recursive($scope, [
+            'shared_components' => [
+                'header' => ['code' => 'header/ai-site-header', 'html' => '<header>Ready</header>'],
+                'footer' => ['code' => 'footer/ai-site-footer', 'html' => '<footer>Ready</footer>'],
+            ],
+            'page_type_layouts' => [
+                'home_page' => [
+                    'content' => [
+                        [
+                            'code' => 'content/home-page-hero',
+                            'component' => 'content/home-page-hero',
+                            'html' => '<section>Hero generated from the confirmed plan.</section>',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $gate = $service->inspectBuildCompletionGate($scope);
+        $shortfall = $gate['page_block_shortfalls'][0] ?? [];
+
+        self::assertFalse((bool)$gate['passed']);
+        self::assertSame('incomplete_page_block_counts', $gate['reason']);
+        self::assertSame('home_page', $shortfall['page_type'] ?? null);
+        self::assertSame(2, $shortfall['expected_blocks'] ?? null);
+        self::assertSame(1, $shortfall['layout_blocks'] ?? null);
+        self::assertStringContainsString('home_page expected=2', $service->formatBuildCompletionGateFailureDetail($gate));
+    }
+
+    public function testInspectBuildCompletionGateFailsWhenLayoutHasWrongBlockIdentitiesEvenIfCountsMatch(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = $service->ensureTaskScope($this->buildConfirmedScopeWithBlocks([
+            'home_page' => ['hero', 'trust'],
+        ]), [], 'virtual_theme');
+
+        foreach ([
+            'shared:header',
+            'shared:footer',
+            'page:home_page:content/home-page-hero',
+            'page:home_page:content/home-page-trust',
+        ] as $taskKey) {
+            $scope = $this->withBuildPlanTaskState($scope, $taskKey, [
+                'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+            ]);
+        }
+
+        $scope = \array_replace_recursive($scope, [
+            'shared_components' => [
+                'header' => ['code' => 'header/ai-site-header', 'html' => '<header>Ready</header>'],
+                'footer' => ['code' => 'footer/ai-site-footer', 'html' => '<footer>Ready</footer>'],
+            ],
+            'virtual_pages_by_type' => [
+                'home_page' => [
+                    'blocks' => [
+                        ['code' => 'content/home-page-hero', 'html' => '<section>Hero generated from the confirmed plan.</section>'],
+                        ['code' => 'content/home-page-trust', 'html' => '<section>Trust generated from the confirmed plan.</section>'],
+                    ],
+                ],
+            ],
+            'page_type_layouts' => [
+                'home_page' => [
+                    'content' => [
+                        ['code' => 'content/home-page-default-one', 'html' => '<section>Wrong generated block one.</section>'],
+                        ['code' => 'content/home-page-default-two', 'html' => '<section>Wrong generated block two.</section>'],
+                    ],
+                ],
+            ],
+        ]);
+
+        $gate = $service->inspectBuildCompletionGate($scope);
+        $shortfall = $gate['page_block_shortfalls'][0] ?? [];
+
+        self::assertFalse((bool)$gate['passed']);
+        self::assertSame('incomplete_page_block_counts', $gate['reason']);
+        self::assertSame(2, $shortfall['layout_blocks'] ?? null);
+        self::assertSame([
+            'content/home-page-hero',
+            'content/home-page-trust',
+        ], $shortfall['missing_layout_block_codes'] ?? null);
+    }
+
+    public function testInspectBuildCompletionGateFailsWhenBuildPlanDropsStageOneBlocks(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = $service->ensureTaskScope($this->buildConfirmedScopeWithBlocks([
+            'home_page' => ['hero', 'trust'],
+        ]), [], 'virtual_theme');
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $buildPlan['blocks'] = \array_values(\array_filter(
+            \is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [],
+            static fn(array $block): bool => (string)($block['section_key'] ?? '') !== 'trust'
+        ));
+        $scope['build_plan_v2'] = $buildPlan;
+
+        foreach (['shared:header', 'shared:footer', 'page:home_page:content/home-page-hero'] as $taskKey) {
+            $scope = $this->withBuildPlanTaskState($scope, $taskKey, [
+                'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+            ]);
+        }
+        $scope = \array_replace_recursive($scope, [
+            'shared_components' => [
+                'header' => ['code' => 'header/ai-site-header', 'html' => '<header>Ready</header>'],
+                'footer' => ['code' => 'footer/ai-site-footer', 'html' => '<footer>Ready</footer>'],
+            ],
+            'page_type_layouts' => [
+                'home_page' => [
+                    'content' => [
+                        ['code' => 'content/home-page-hero', 'html' => '<section>Hero generated from the confirmed plan.</section>'],
+                    ],
+                ],
+            ],
+        ]);
+
+        $gate = $service->inspectBuildCompletionGate($scope);
+
+        self::assertFalse((bool)$gate['passed']);
+        self::assertSame('build_plan_missing_stage1_blocks', $gate['reason']);
+        self::assertSame('content/home-page-trust', $gate['build_plan_missing_stage1_blocks'][0]['missing_block_codes'][0] ?? null);
+    }
+
+    public function testInspectBuildCompletionGateFailsWhenGeneratedLayoutStillUsesDefaultTemplateCopy(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $scope = $service->ensureTaskScope($this->buildConfirmedScopeWithBlocks([
+            'blog_category' => ['category_hero'],
+        ]), [], 'virtual_theme');
+
+        foreach (['shared:header', 'shared:footer', 'page:blog_category:content/blog-category-category-hero'] as $taskKey) {
+            $scope = $this->withBuildPlanTaskState($scope, $taskKey, [
+                'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+            ]);
+        }
+        $scope = \array_replace_recursive($scope, [
+            'shared_components' => [
+                'header' => ['code' => 'header/ai-site-header', 'html' => '<header>Ready</header>'],
+                'footer' => ['code' => 'footer/ai-site-footer', 'html' => '<footer>Ready</footer>'],
+            ],
+            'page_type_layouts' => [
+                'blog_category' => [
+                    'content' => [
+                        [
+                            'code' => 'content/blog-category-category-hero',
+                            'html' => '<section><h1>欢迎访问</h1><p>默认页面模板</p></section>',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $gate = $service->inspectBuildCompletionGate($scope);
+
+        self::assertFalse((bool)$gate['passed']);
+        self::assertSame('default_template_page_layouts', $gate['reason']);
+        self::assertSame(['blog_category'], $gate['default_template_page_layouts']);
     }
 
     /**

@@ -42,6 +42,7 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
         self::assertStringContainsString("'completion_gate_snapshot' => \$this->stripGateSummary(\$gate)", $passedGateSource);
         self::assertStringContainsString('syncPageTypeLayoutsWithSharedComponents($scope)', $passedGateSource);
         self::assertStringContainsString("\$buildSummary['completion_gate'] = \$this->stripGateSummary(\$gate);", $passedGateSource);
+        self::assertStringContainsString("\$buildSummary['page_block_progress']", $source);
 
         $markDoneSource = $this->extractMethodSource($source, 'markQueueDone');
         self::assertStringContainsString("'result' => \$line", $markDoneSource);

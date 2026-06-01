@@ -63,7 +63,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertIsString($source);
 
         self::assertDoesNotMatchRegularExpression('/private\s+const\s+PAGE_SECTION_BUILD_DISPATCH_WINDOW\s*=/', $source);
-        self::assertStringContainsString('DEFAULT_PAGE_SECTION_BUILD_DISPATCH_WINDOW = 1', $source);
+        self::assertStringContainsString('DEFAULT_PAGE_SECTION_BUILD_DISPATCH_WINDOW = 4', $source);
         self::assertStringContainsString('pagebuilder.ai_site.page_section_build_dispatch_window', $source);
         self::assertStringContainsString('resolvePageSectionBuildDispatchWindow()', $source);
 
@@ -163,6 +163,8 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         $persistExistingDraft = $this->extractControllerMethodSource($source, 'persistExistingPlanDraftOrThrow');
         self::assertStringContainsString('self::PLAN_CONFIRMATION_ARTIFACT_KEYS', $handleConfirmPlan);
         self::assertStringContainsString('self::PLAN_CONFIRMATION_ARTIFACT_KEYS', $persistExistingDraft);
+        self::assertStringContainsString('PLAN_PAGE_COVERAGE_INCOMPLETE', $handleConfirmPlan);
+        self::assertStringNotContainsString('SKIPPED: scope hydration issue', $handleConfirmPlan);
     }
 
     public function testQueuedOperationStartOnlyReusesSameNonPlanQueueOperation(): void
@@ -345,11 +347,11 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'pending']));
         self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'queued']));
         self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'running', 'pid' => 0]));
-        self::assertFalse($method->invoke($controller, ['queue_id' => 9, 'status' => 'running', 'pid' => 48104]));
+        self::assertFalse($method->invoke($controller, ['queue_id' => 9, 'status' => 'running', 'pid' => (int)\getmypid()]));
         self::assertFalse($method->invoke($controller, ['queue_id' => 9, 'status' => 'running', 'pid' => 0], true));
-        self::assertFalse($method->invoke($controller, ['queue_id' => 9, 'status' => 'done']));
-        self::assertFalse($method->invoke($controller, ['queue_id' => 9, 'status' => 'error']));
-        self::assertFalse($method->invoke($controller, ['queue_id' => 9, 'status' => 'stop']));
+        self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'done']));
+        self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'error']));
+        self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'stop']));
         self::assertFalse($method->invoke($controller, ['queue_id' => 0, 'status' => 'done']));
     }
 
@@ -742,6 +744,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
     public function testPlanQueueTerminalErrorCreatesRetryablePlanFailure(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Queue/AiSitePlanQueue.php');
+        $executeSource = $this->extractFunctionSource($source, 'execute');
         $methodSource = $this->extractControllerMethodSource($source, 'updateSessionError');
         $retrySource = $this->extractFunctionSource($source, 'createTransientPlanRetryQueue');
 
@@ -752,6 +755,9 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("'retry_scope' => 'plan'", $source);
         self::assertStringNotContainsString("'queue', 'create'", $retrySource);
         self::assertStringContainsString('QUEUE_RETRY same_queue=', $source);
+        self::assertStringContainsString('createPlanCompletionGateRetryQueue($queue, $content, $retryMessage)', $executeSource);
+        self::assertStringContainsString('markPlanRetryScheduledInScope', $executeSource);
+        self::assertStringNotContainsString('$queueDoneMessage = $retryablePlanMessages === []', $executeSource);
     }
 
     public function testStageScopeWhitelistKeepsPlanRetryStateVisible(): void

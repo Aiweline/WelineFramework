@@ -13,7 +13,123 @@
     // 选择按钮的 SVG 图标
     const SELECT_ICON = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
     const INFO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
-    
+
+    /**
+     * 插槽 accept 协议（与 theme-editor.js / ThemePlaceableRegistry 保持一致）
+     */
+    function normalizeCode(value) {
+        return String(value == null ? '' : value).trim().toLowerCase();
+    }
+
+    function normalizeCodeList(value) {
+        if (value == null || value === false) {
+            return [];
+        }
+        let items = [];
+        if (Array.isArray(value)) {
+            value.forEach(item => {
+                if (Array.isArray(item)) {
+                    items = items.concat(item);
+                } else {
+                    items.push(item);
+                }
+            });
+        } else {
+            const raw = String(value).trim();
+            if (raw.startsWith('[')) {
+                try {
+                    return normalizeCodeList(JSON.parse(raw));
+                } catch (err) {
+                    // fall through
+                }
+            }
+            items = raw.split(',');
+        }
+        const seen = new Set();
+        items.forEach(item => {
+            const code = normalizeCode(item);
+            if (code) {
+                seen.add(code);
+            }
+        });
+        return Array.from(seen);
+    }
+
+    function getEditorLayoutContext() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            layoutType: normalizeCode(params.get('layout_type') || 'homepage'),
+            layoutOption: normalizeCode(params.get('layout_option') || 'default'),
+        };
+    }
+
+    function expandPageLayoutSupportCodes(pageLayouts) {
+        const layouts = normalizeCodeList(pageLayouts);
+        const codes = [];
+        const ctx = getEditorLayoutContext();
+
+        layouts.forEach(layout => {
+            if (!layout || layout === '*') {
+                return;
+            }
+            codes.push(`layout-${layout}`);
+            if (ctx.layoutType && layout === ctx.layoutType && ctx.layoutOption && ctx.layoutOption !== 'default') {
+                codes.push(`layout-${ctx.layoutType}-${ctx.layoutOption}`);
+            }
+        });
+
+        return codes;
+    }
+
+    /** layout-homepage-minimal-content ↔ layout-homepage-content */
+    function expandAcceptCodesForLayout(acceptCodes) {
+        const normalized = normalizeCodeList(acceptCodes);
+        const expanded = new Set(normalized);
+
+        normalized.forEach(accept => {
+            const match = accept.match(/^layout-([^-]+)-([^-]+)-(.+)$/);
+            if (match) {
+                expanded.add(`layout-${match[1]}-${match[3]}`);
+            }
+        });
+
+        return Array.from(expanded);
+    }
+
+    function collectWidgetSupportCodes(widgetData) {
+        const codes = [
+            widgetData?.code,
+            widgetData?.type,
+            widgetData?.slot,
+        ];
+
+        normalizeCodeList(widgetData?.position || []).forEach(code => codes.push(code));
+        normalizeCodeList(widgetData?.supports || []).forEach(code => codes.push(code));
+        normalizeCodeList(widgetData?.slots || []).forEach(code => codes.push(code));
+        expandPageLayoutSupportCodes(widgetData?.pageLayouts || widgetData?.page_layouts || [])
+            .forEach(code => codes.push(code));
+
+        return normalizeCodeList(codes);
+    }
+
+    function slotAcceptsWidget(acceptCodes, rejectCodes, slotId, widgetData) {
+        const normalizedAccept = expandAcceptCodesForLayout(acceptCodes);
+        const normalizedReject = normalizeCodeList(rejectCodes);
+        const widgetCodes = collectWidgetSupportCodes(widgetData);
+        const normalizedSlotId = normalizeCode(slotId);
+
+        if (normalizedReject.some(code => widgetCodes.includes(code))) {
+            return false;
+        }
+        if (normalizedSlotId && widgetCodes.includes(normalizedSlotId)) {
+            return true;
+        }
+        if (normalizedAccept.length === 0 || normalizedAccept.includes('*')) {
+            return true;
+        }
+        return normalizedAccept.some(accept => widgetCodes.includes(accept));
+    }
+
     /**
      * 计算选择按钮的最佳位置
      * @param {HTMLElement} slot - 插槽元素
@@ -475,6 +591,7 @@
                 id: this.dataset.wslot,
                 name: this.dataset.wslotName || this.dataset.wslot,
                 accept: this.dataset.wslotAccept ? this.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
+                reject: this.dataset.wslotReject ? this.dataset.wslotReject.split(',').map(s => s.trim()) : [],
                 exclusive: isExclusive,
                 multiple: isMultiple,
                 max: maxWidgets,
@@ -517,16 +634,13 @@
                 return;
             }
             
-            // 检查部件是否被接受（accept 为空或包含 * 时允许所有）
-            const acceptedCodes = slotData.accept;
-            const widgetCode = widgetData.code;
-            const widgetSlot = widgetData.slot;
-            const isWildcard = acceptedCodes.length === 0 || acceptedCodes.includes('*');
-            
-            const allowed = isWildcard ||
-                           (widgetSlot && widgetSlot === slotData.id) || 
-                           acceptedCodes.includes(widgetCode);
-            
+            const allowed = slotAcceptsWidget(
+                slotData.accept,
+                slotData.reject,
+                slotData.id,
+                widgetData
+            );
+
             if (!allowed) {
                 if (window.parent !== window) {
                     window.parent.postMessage({

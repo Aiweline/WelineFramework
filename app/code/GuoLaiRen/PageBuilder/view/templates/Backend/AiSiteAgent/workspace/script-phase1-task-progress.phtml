@@ -270,6 +270,188 @@
             + '</div>';
     }
 
+    function renderPlanQueuePageList(items) {
+        var values = Array.isArray(items) ? items.map(function (item) {
+            return String(item || '').trim();
+        }).filter(Boolean) : [];
+        return values.length > 0 ? values.join(', ') : '-';
+    }
+
+    function renderPlanQueueProgressBar(label, count, total, tone, items) {
+        var safeTotal = Math.max(1, parseInt(String(total || 0), 10) || 0);
+        var safeCount = Math.max(0, parseInt(String(count || 0), 10) || 0);
+        var width = Math.max(0, Math.min(100, Math.round((safeCount / safeTotal) * 100)));
+        return '<div class="pb-ai-plan-fanout-row mb-2">'
+            + '<div class="d-flex align-items-center justify-content-between gap-2 mb-1">'
+            + '<span class="fw-semibold">' + escapeHtml(label) + '</span>'
+            + '<span class="text-muted">' + safeCount + '/' + safeTotal + '</span>'
+            + '</div>'
+            + '<div class="progress" style="height:6px;">'
+            + '<div class="progress-bar bg-' + escapeHtml(tone) + '" role="progressbar" style="width:' + width + '%" aria-valuenow="' + width + '" aria-valuemin="0" aria-valuemax="100"></div>'
+            + '</div>'
+            + '<div class="text-muted mt-1">' + escapeHtml(renderPlanQueuePageList(items)) + '</div>'
+            + '</div>';
+    }
+
+    function normalizePlanQueuePageProgress(progress, fallbackMessage) {
+        var source = progress && typeof progress === 'object' ? progress : {};
+        var total = parseInt(String(source.total || 0), 10) || 0;
+        var done = Array.isArray(source.done) ? source.done : [];
+        var running = Array.isArray(source.running) ? source.running : [];
+        var failed = Array.isArray(source.failed) ? source.failed : [];
+        var pending = Array.isArray(source.pending) ? source.pending : [];
+        var details = Array.isArray(source.details) ? source.details : [];
+        if (total > 0) {
+            return {
+                total: total,
+                done: done,
+                running: running,
+                failed: failed,
+                pending: pending,
+                details: details
+            };
+        }
+
+        var text = String(fallbackMessage || '').trim();
+        var match = text.match(/(?:页面总设计已生成|正在生成页面总设计)[^\d]*(\d+)\s*\/\s*(\d+)[^\w\u4e00-\u9fa5]*([a-z0-9_]+)?/i);
+        if (!match) {
+            return null;
+        }
+        var current = Math.max(0, parseInt(match[1], 10) || 0);
+        total = Math.max(current, parseInt(match[2], 10) || 0);
+        var pageType = String(match[3] || '').trim();
+        var completed = /已生成/.test(text);
+        var doneCount = completed ? current : Math.max(0, current - 1);
+        var runningList = pageType !== '' && !completed ? [pageType] : [];
+        var doneList = pageType !== '' && completed ? [pageType] : [];
+        var pendingCount = Math.max(0, total - doneCount - runningList.length - failed.length);
+        details = [];
+        if (pageType !== '') {
+            details.push({
+                page_type: pageType,
+                status: completed ? 'done' : 'running',
+                message: text
+            });
+        }
+        return {
+            total: total,
+            done: doneList,
+            done_count: doneCount,
+            running: runningList,
+            failed: [],
+            pending: new Array(pendingCount).fill('pending'),
+            details: details
+        };
+    }
+
+    function renderPlanQueueTaskDetails(details) {
+        var rows = Array.isArray(details) ? details : [];
+        if (rows.length === 0) {
+            return '';
+        }
+        return '<div class="border-top pt-2 mt-2">'
+            + '<div class="fw-semibold mb-1">Task details</div>'
+            + rows.slice(0, 24).map(function (row) {
+                row = row && typeof row === 'object' ? row : {};
+                var status = String(row.status || '').trim() || 'pending';
+                var pageType = String(row.page_type || '').trim() || '-';
+                var message = String(row.error_message || row.message || '').trim();
+                var badge = status === 'done' || status === 'passed' || status === 'checkpoint'
+                    ? 'success'
+                    : (status === 'failed' || status === 'error' || status === 'retryable_failure' ? 'danger' : (status === 'running' || status === 'retrying' ? 'info' : 'secondary'));
+                return '<div class="d-flex flex-wrap align-items-start gap-2 py-1 border-bottom">'
+                    + '<span class="badge text-bg-' + badge + '">' + escapeHtml(status) + '</span>'
+                    + '<code class="small">' + escapeHtml(pageType) + '</code>'
+                    + '<span class="text-muted flex-grow-1">' + escapeHtml(message || '-') + '</span>'
+                    + '</div>';
+            }).join('')
+            + '</div>';
+    }
+
+    function publishPlanQueueLatestPageProgress(progress, fallbackMessage) {
+        var latestEl = document.getElementById('pb-ai-plan-queue-latest-message');
+        if (!latestEl) {
+            return false;
+        }
+        var normalized = normalizePlanQueuePageProgress(progress, fallbackMessage);
+        if (!normalized) {
+            return false;
+        }
+        var total = Math.max(1, parseInt(String(normalized.total || 0), 10) || 0);
+        var running = Array.isArray(normalized.running) ? normalized.running : [];
+        var done = Array.isArray(normalized.done) ? normalized.done : [];
+        var failed = Array.isArray(normalized.failed) ? normalized.failed : [];
+        var pending = Array.isArray(normalized.pending) ? normalized.pending : [];
+        var doneCount = parseInt(String(normalized.done_count != null ? normalized.done_count : done.length), 10) || 0;
+        var failedCount = parseInt(String(normalized.failed_count != null ? normalized.failed_count : failed.length), 10) || 0;
+        var runningCount = parseInt(String(normalized.running_count != null ? normalized.running_count : running.length), 10) || 0;
+        var remainingCount = parseInt(String(normalized.remaining_count != null ? normalized.remaining_count : Math.max(0, total - doneCount - failedCount)), 10) || 0;
+        latestEl.innerHTML = '<div class="d-flex align-items-center justify-content-between gap-2 mb-2">'
+            + '<span class="fw-semibold">Stage 1 page fanout</span>'
+            + '<span class="text-muted">total ' + total + ' · done ' + doneCount + ' · remaining ' + remainingCount + '</span>'
+            + '</div>'
+            + '<div class="mb-2">' + escapeHtml(String(fallbackMessage || '').trim()) + '</div>'
+            + renderPlanQueueProgressBar('Running', runningCount, total, 'info', running)
+            + renderPlanQueueProgressBar('Done', doneCount, total, 'success', done)
+            + renderPlanQueueProgressBar('Failed', failedCount, total, 'danger', failed)
+            + renderPlanQueueProgressBar('Pending', pending.length, total, 'secondary', pending)
+            + renderPlanQueueTaskDetails(normalized.details);
+        latestEl.classList.remove('d-none');
+        return true;
+    }
+
+    function publishPlanQueueLatestMessage(message) {
+        if (window.__pbUpdatePlanQueueLatestMessage && typeof window.__pbUpdatePlanQueueLatestMessage === 'function') {
+            window.__pbUpdatePlanQueueLatestMessage(message);
+            return;
+        }
+        var latestEl = document.getElementById('pb-ai-plan-queue-latest-message');
+        if (!latestEl) {
+            return;
+        }
+        var text = String(message || '').replace(/\r\n|\r/g, '\n').trim();
+        var lines = text.split('\n').map(function (line) {
+            return String(line || '').trim();
+        }).filter(Boolean);
+        text = lines.length > 0 ? lines[lines.length - 1] : text;
+        latestEl.textContent = text;
+        latestEl.classList.toggle('d-none', text === '');
+    }
+
+    function resolvePlanQueueLatestMessage(info) {
+        var queueInfo = info && typeof info === 'object' ? info : {};
+        var snapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
+        var candidates = [
+            queueInfo.latest_message,
+            queueInfo.process,
+            queueInfo.terminal_summary,
+            queueInfo.message,
+            snapshot.process,
+            snapshot.message,
+            snapshot.result_tail,
+            snapshot.result
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var text = String(candidates[i] || '').trim();
+            if (text !== '') {
+                return text;
+            }
+        }
+        return '';
+    }
+
+    function resolvePlanQueueLatestPageProgress(info) {
+        var queueInfo = info && typeof info === 'object' ? info : {};
+        if (queueInfo.stage1_page_progress && typeof queueInfo.stage1_page_progress === 'object') {
+            return queueInfo.stage1_page_progress;
+        }
+        var snapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
+        if (snapshot.stage1_page_progress && typeof snapshot.stage1_page_progress === 'object') {
+            return snapshot.stage1_page_progress;
+        }
+        return null;
+    }
+
     function renderPlanQueueInfoPanel(workspaceState) {
         var metaEl = document.getElementById('pb-ai-plan-queue-info-meta');
         var procEl = document.getElementById('pb-ai-plan-queue-info-process');
@@ -288,6 +470,7 @@
             if (statusEl) {
                 statusEl.textContent = '';
             }
+            publishPlanQueueLatestMessage('');
             return;
         }
         var snapJson = '';
@@ -313,6 +496,10 @@
             + '</pre>';
         procEl.textContent = String(info.process || '').trim() || '—';
         renderLiveLogSummary(String(info.terminal_summary || info.message || '').trim());
+        var latestMessage = resolvePlanQueueLatestMessage(info);
+        if (!publishPlanQueueLatestPageProgress(resolvePlanQueueLatestPageProgress(info), latestMessage)) {
+            publishPlanQueueLatestMessage(latestMessage);
+        }
         if (statusEl) {
             statusEl.textContent = String((info.snapshot && (info.snapshot.job_status || info.snapshot.status)) || '').trim();
         }
@@ -527,6 +714,7 @@
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')
             || Object.prototype.hasOwnProperty.call(payload, 'job_key')
             || Object.prototype.hasOwnProperty.call(payload, 'job_type')
+            || Object.prototype.hasOwnProperty.call(payload, 'stage1_page_progress')
             || Object.prototype.hasOwnProperty.call(payload, 'token')
             || Object.prototype.hasOwnProperty.call(payload, 'execution_token')
             || Object.prototype.hasOwnProperty.call(payload, 'token_usage')
@@ -641,12 +829,24 @@
         if (Object.keys(snapshot).length === 0 && queueId <= 0 && process === '' && terminalSummary === '') {
             return null;
         }
+        var latestMessage = String(
+            payload.queue_process
+            || payload.message
+            || process
+            || terminalSummary
+            || delta
+            || ''
+        ).trim();
 
         return {
             queue_id: queueId,
             snapshot: snapshot,
             process: process,
-            terminal_summary: terminalSummary
+            terminal_summary: terminalSummary,
+            latest_message: latestMessage,
+            stage1_page_progress: payload.stage1_page_progress && typeof payload.stage1_page_progress === 'object'
+                ? payload.stage1_page_progress
+                : null
         };
     }
 

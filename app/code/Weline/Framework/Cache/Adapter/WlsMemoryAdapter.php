@@ -371,7 +371,9 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
     public static function clearAllMemory(): void
     {
         foreach (self::liveInstances() as $adapter) {
-            $adapter->clearMemory();
+            // 必须走 clear() 同步清理 Memory Server 中的命名空间数据；
+            // 仅 clearMemory() 只会丢弃 Worker 进程内本地副本，FPC 仍会命中旧页面。
+            $adapter->clear();
         }
         self::$stats = [];
     }

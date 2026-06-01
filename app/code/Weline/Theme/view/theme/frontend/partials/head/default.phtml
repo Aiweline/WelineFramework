@@ -51,6 +51,8 @@ $theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
 ?>
 <!-- 主题CSS（基础样式，不包含变量） -->
 <theme:css>Weline_Theme::theme/{{area}}/assets/css/theme.css</theme:css>
+<!-- Remix Icon：主题部件与导航统一使用的图标字体 -->
+<link rel="stylesheet" href="<?= htmlspecialchars($this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css')) ?>" type="text/css">
 <?php
 // 加载生成的布局CSS文件（包含所有变量、色盘和布局特定的CSS）
 // 规则：所有主题相关数据（包括主题对象）由 ControllerFetchFileBefore Observer 设置

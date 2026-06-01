@@ -27,7 +27,9 @@
 <body>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
-    @template(Weline_Frontend::templates/public/header.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::homepage::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::header-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
 
     <!-- 极简首页布局的面包屑导航区域 -->
@@ -38,7 +40,7 @@
     <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
 
     <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::homepage::content-before<else/>minimal-content-before</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::content-before</w:hook>
     <main class="homepage-main minimal <?= htmlspecialchars($meta['class'] ?? '') ?>" id="homepage-main" data-layout="homepage_minimal">
         <w:slot id="content"
                 name="极简首页内容"
@@ -54,16 +56,18 @@
                     multiple="true"
                     position="content"
                     class="homepage-minimal__content-slot">
-                <w:hook>Weline_Theme::frontend::layouts::homepage::content-before<else/>minimal-content-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::content-before</w:hook>
                 {{meta.content}}
-                <w:hook>Weline_Theme::frontend::layouts::homepage::content-after<else/>minimal-content-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::homepage::content-after</w:hook>
             </w:slot>
         </w:slot>
     </main>
-    <w:hook>Weline_Theme::frontend::layouts::homepage::content-after<else/>minimal-content-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::content-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
-    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::homepage::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::homepage::footer-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>

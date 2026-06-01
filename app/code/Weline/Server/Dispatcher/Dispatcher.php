@@ -2686,13 +2686,13 @@ class Dispatcher
     {
         $body = <<<'HTML'
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
-    <title>System upgrade in progress</title>
+    <title>WLS正在启动中...</title>
     <style>
         :root {
             color-scheme: light;
@@ -2768,82 +2768,45 @@ class Dispatcher
 </head>
 <body>
     <main class="panel">
-        <div class="badge"><span class="dot"></span><span>Maintenance mode</span></div>
-        <h1>System upgrade in progress</h1>
-        <p>The website is under maintenance. We are checking recovery automatically.</p>
-        <p>When the service returns a healthy 200 response, this page will refresh by itself.</p>
-        <p class="hint">No need to keep refreshing. The next check will run in a few seconds.</p>
+        <div class="badge"><span class="dot"></span><span>业务 Worker 启动中</span></div>
+        <h1>WLS正在启动中...</h1>
+        <p>业务 Worker 正在初始化，系统正在检测维护 Worker 并切换入口。</p>
+        <p>如果已有维护 Worker 就绪，请求会自动转接；否则本页会每隔数秒自动刷新，直至服务恢复。</p>
+        <p class="hint">这是一个临时提示。系统启动完成后会自动恢复正常服务，无需手动反复刷新。</p>
     </main>
     <script>
     (function () {
-        var initialDelayMs = 5000;
-        var maxDelayMs = 30000;
-        var currentDelayMs = initialDelayMs;
+        var intervalMs = 5000;
         var timer = null;
-        var probing = false;
-        var probeUrl = new URL(window.location.href);
-        probeUrl.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
 
-        function updateProbeNonce() {
-            probeUrl.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
-        }
-
-        function scheduleNext(delayMs) {
-            window.clearTimeout(timer);
-            timer = window.setTimeout(runProbe, delayMs);
-        }
-
-        function retry() {
-            currentDelayMs = Math.min(maxDelayMs, Math.round(currentDelayMs * 1.5));
-            scheduleNext(currentDelayMs);
-        }
-
-        function probe(method) {
-            updateProbeNonce();
-            return window.fetch(probeUrl.toString(), {
-                method: method,
-                cache: 'no-store',
-                credentials: 'same-origin',
-                redirect: 'manual',
-                headers: {
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
-                }
-            });
-        }
-
-        function runProbe() {
-            if (probing || document.hidden) {
-                scheduleNext(initialDelayMs);
+        function startAutoReload() {
+            if (timer !== null || document.hidden) {
                 return;
             }
-            probing = true;
-            probe('HEAD').then(function (response) {
-                if (response.status === 405 || response.status === 501) {
-                    return probe('GET');
-                }
-                return response;
-            }).then(function (response) {
-                probing = false;
-                if (response && response.status >= 200 && response.status < 300) {
+            timer = window.setInterval(function () {
+                if (!document.hidden) {
                     window.location.reload();
-                    return;
                 }
-                retry();
-            }).catch(function () {
-                probing = false;
-                retry();
-            });
+            }, intervalMs);
+        }
+
+        function stopAutoReload() {
+            if (timer === null) {
+                return;
+            }
+            window.clearInterval(timer);
+            timer = null;
         }
 
         document.addEventListener('visibilitychange', function () {
-            if (!document.hidden) {
-                currentDelayMs = initialDelayMs;
-                scheduleNext(250);
+            if (document.hidden) {
+                stopAutoReload();
+                return;
             }
+            startAutoReload();
         });
 
-        scheduleNext(initialDelayMs);
+        startAutoReload();
     })();
     </script>
 </body>
@@ -2870,8 +2833,8 @@ HTML;
     {
         return <<<'HTML'
     <aside class="wls-dev-alert" role="status" aria-live="polite" style="position:fixed;right:18px;bottom:18px;z-index:2147483647;max-width:min(420px,calc(100vw - 36px));padding:14px 16px;border:1px solid #fca5a5;border-left:6px solid #dc2626;border-radius:10px;background:#fee2e2;color:#7f1d1d;box-shadow:0 18px 50px rgba(127,29,29,0.22);text-align:left;font-size:14px;line-height:1.55;">
-        <strong style="display:block;margin-bottom:4px;color:#991b1b;font-size:15px;">DEV: all workers are unavailable</strong>
-        <span>Dispatcher is serving the maintenance fallback page. Check worker readiness, IPC pool registration, port availability, and the Master recovery queue.</span>
+        <strong style="display:block;margin-bottom:4px;color:#991b1b;font-size:15px;">DEV：当前所有 Worker 不可用</strong>
+        <span>Dispatcher 已进入维护页响应。请检查 Worker 自检、IPC 入池、端口占用和 Master 复活队列。</span>
     </aside>
 HTML;
     }

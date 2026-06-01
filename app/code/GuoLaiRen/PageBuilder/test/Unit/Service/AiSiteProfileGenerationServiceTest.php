@@ -64,6 +64,21 @@ class AiSiteProfileGenerationServiceTest extends TestCase
         self::assertSame(['zh_Hans_CN', 'en_US'], $profile['locales']);
     }
 
+    public function testGeneratePrefersExplicitTargetDomainOverPreviewHost(): void
+    {
+        $service = new AiSiteProfileGenerationService();
+
+        $profile = $service->generate([
+            'target_domain' => 'apk-cookie-56a3cf.weline.test',
+            'preview_full_url' => 'https://p11005ce4.weline.test:9502/pagebuilder/backend/ai-site-agent/workspace-preview',
+            'website_profile' => [
+                'target_domain' => 'p11005ce4.weline.test',
+            ],
+        ]);
+
+        self::assertSame('apk-cookie-56a3cf.weline.test', $profile['target_domain']);
+    }
+
     public function testGeneratePrefersSelectedLocaleOverStaleContentLocale(): void
     {
         $service = new AiSiteProfileGenerationService();

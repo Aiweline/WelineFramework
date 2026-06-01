@@ -2337,6 +2337,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (source.build_plan_execution_summary && typeof source.build_plan_execution_summary === 'object') {
             return source.build_plan_execution_summary;
         }
+        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
+            return source.build_task_summary;
+        }
         if (source.state && typeof source.state === 'object') {
             return readBuildTaskSummaryCandidate(source.state);
         }
@@ -2435,6 +2438,15 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }
         if (source.build_plan_execution_summary && typeof source.build_plan_execution_summary === 'object') {
             return source.build_plan_execution_summary;
+        }
+        if (source.task_summary && typeof source.task_summary === 'object') {
+            return source.task_summary;
+        }
+        if (source.task_progress && typeof source.task_progress === 'object') {
+            return source.task_progress;
+        }
+        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
+            return source.build_task_summary;
         }
         if (source.state && typeof source.state === 'object') {
             return extractTaskProgressSummary(source.state);
@@ -2784,6 +2796,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var staleEl = document.getElementById('pb-ai-task-stale');
         var cancelledEl = document.getElementById('pb-ai-task-cancelled');
         var runningIndicatorEl = document.getElementById('pb-ai-task-running-indicator');
+        var pageDoneEl = document.getElementById('pb-ai-page-done');
+        var pageTotalEl = document.getElementById('pb-ai-page-total');
 
         function updateTaskProgressCounterElements(counts) {
             if (totalEl) { totalEl.textContent = String(counts.total || 0); }
@@ -2820,13 +2834,36 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
         }
 
+        function updatePageProgressCounterElements(counts) {
+            counts = counts && typeof counts === 'object' ? counts : {};
+            if (pageDoneEl) {
+                pageDoneEl.textContent = String(parseInt(String(counts.done || 0), 10) || 0);
+            }
+            if (pageTotalEl) {
+                pageTotalEl.textContent = String(parseInt(String(counts.total || 0), 10) || 0);
+            }
+        }
+
         var groupsContainer = document.getElementById('pb-ai-task-groups');
         var groups = summary.groups && typeof summary.groups === 'object' ? summary.groups : null;
         if (!groupsContainer || !groups) {
             updateTaskProgressCounterElements(summary);
+            updatePageProgressCounterElements({ done: 0, total: 0 });
+            if (window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary === 'function') {
+                window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary(
+                    summary,
+                    getRuntimeWorkspaceStateForPublishGate()
+                );
+            }
             return;
         }
         var calc = makeEmptyTaskProgressCounts();
+        var pageCalc = { done: 0, total: 0 };
+        Object.keys(selectedMap).forEach(function (pageType) {
+            if (pageType && pageType !== 'shared') {
+                pageCalc.total += 1;
+            }
+        });
         groupsContainer.innerHTML = '';
         if (groupsContainer.dataset.pbTaskSummaryToggleBound !== '1') {
             groupsContainer.dataset.pbTaskSummaryToggleBound = '1';
@@ -2864,6 +2901,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             calc.pending = calc.todo;
             calc.total += total;
             var done = parseInt(String(group.done || 0), 10) || 0;
+            if (pageType !== 'shared' && total > 0 && done >= total) {
+                pageCalc.done += 1;
+            }
             var tasks = Array.isArray(group.tasks) ? group.tasks : [];
             var renderedTasks = tasks.map(function (task, idx) {
                 if (!task || typeof task !== 'object') {
@@ -2898,6 +2938,13 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             groupsContainer.appendChild(wrapper);
         });
         updateTaskProgressCounterElements(calc);
+        updatePageProgressCounterElements(pageCalc);
+        if (window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary === 'function') {
+            window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary(
+                summary,
+                getRuntimeWorkspaceStateForPublishGate()
+            );
+        }
     };
 
     function normalizeStageStatusPresentation(kind, workspaceState) {
@@ -3086,6 +3133,39 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return terminal === 'stop' || terminal === 'stopped' || queueSt === 'stop';
     }
 
+    function isLoadResumeOperationSourceTag(sourceTag) {
+        var tag = String(sourceTag || '').trim().toLowerCase();
+        return tag.indexOf('load-') === 0
+            || tag.indexOf('queue-watch') === 0
+            || tag.indexOf('deferred') === 0;
+    }
+
+    function syncPreviewTabsFromTaskProgressPayload(payload, workspaceState) {
+        if (!payload || typeof payload !== 'object') {
+            return;
+        }
+        if (!window.PbAiWorkspacePreview || typeof window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary !== 'function') {
+            return;
+        }
+        var taskSummary = null;
+        if (payload.task_summary && typeof payload.task_summary === 'object') {
+            taskSummary = payload.task_summary;
+        } else if (payload.task_progress && typeof payload.task_progress === 'object') {
+            taskSummary = payload.task_progress;
+        } else if (payload.build_task_summary && typeof payload.build_task_summary === 'object') {
+            taskSummary = payload.build_task_summary;
+        } else if (window.__pbTaskSummary && typeof window.__pbTaskSummary === 'object') {
+            taskSummary = window.__pbTaskSummary;
+        }
+        if (!taskSummary) {
+            return;
+        }
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : (payload.state && typeof payload.state === 'object' ? payload.state : null);
+        window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary(taskSummary, state);
+    }
+
     var workspaceApiRef = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
     workspaceApiRef.clearBlockStreamingState = clearBlockStreamingState;
     workspaceApiRef.fetchWorkspaceSnapshotState = fetchWorkspaceSnapshotState;
@@ -3112,6 +3192,15 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         workspace_status: ''
     });
     scheduleWorkspaceSseBootstrap();
+    if (window.__pbTaskSummary && window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary === 'function') {
+        window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary(
+            window.__pbTaskSummary,
+            readCachedWorkspaceSnapshotState() || window.__pbInitialWorkspaceState || window.__pbWorkspaceState || null
+        );
+    }
+    if (typeof window.applyTaskSummarySelectionFilter === 'function') {
+        window.applyTaskSummarySelectionFilter();
+    }
     function startOperationStream(streamUrl, operation, executionToken, sourceTag) {
         if (!streamUrl) {
             return false;
@@ -3133,13 +3222,16 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }
 
         if (String(operation || '') === 'build') {
-            // 只有在还没有显示 build guard 时才显示（比如直接调用 startOperationStream 而不是通过 pbAiConfirmGenerateThemeContinue）
-            if (buildStartupPending && document.getElementById('pb-ai-build-guard') && !document.getElementById('pb-ai-build-guard').classList.contains('d-none')) {
-                // Build guard 已经显示了（由 pbAiConfirmGenerateThemeContinue 显示），不重复显示
-            } else {
-                buildStartupPending = true;
-                if (typeof previewBridge.showBuildGuard === 'function') {
-                    previewBridge.showBuildGuard(messages.buildPreparing);
+            var isLoadResume = isLoadResumeOperationSourceTag(sourceTag);
+            // 页面刷新/队列续听时不重新弹出构建遮罩，避免已完成页面标签再次走一遍进度动画。
+            if (!isLoadResume) {
+                if (buildStartupPending && document.getElementById('pb-ai-build-guard') && !document.getElementById('pb-ai-build-guard').classList.contains('d-none')) {
+                    // Build guard 已经显示了（由 pbAiConfirmGenerateThemeContinue 显示），不重复显示
+                } else {
+                    buildStartupPending = true;
+                    if (typeof previewBridge.showBuildGuard === 'function') {
+                        previewBridge.showBuildGuard(messages.buildPreparing);
+                    }
                 }
             }
             if (typeof previewBridge.setBuildNavigationGuard === 'function') {
@@ -3195,6 +3287,15 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return true;
         }
 
+        var operationSseConnectDelayMs = PB_SSE_CONNECT_DELAY_MS;
+        if (String(sourceTag || '').indexOf('queue-watch') >= 0
+            || String(sourceTag || '').indexOf('transport-error') >= 0
+            || String(sourceTag || '').indexOf('load-active-queue') >= 0
+            || String(sourceTag || '').indexOf('load-bootstrap') >= 0
+            || String(sourceTag || '').indexOf('deferred') >= 0) {
+            operationSseConnectDelayMs = 0;
+        }
+
         runningSourceStartTimer = window.setTimeout(function () {
             runningSourceStartTimer = null;
             try {
@@ -3223,6 +3324,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                     updateTaskSummaryFromState(payload.state);
                 }
                 updateTaskSummaryFromState(payload);
+                if (String(payload.operation || operation || '').toLowerCase() === 'plan'
+                    && window.__pbPhase1TaskProgress
+                    && typeof window.__pbPhase1TaskProgress.syncFromSsePayload === 'function') {
+                    window.__pbPhase1TaskProgress.syncFromSsePayload('plan', payload, 'info');
+                }
                 logOperationToWorkspaceTerminal('info', payload, 'info', String(payload.message || ''));
             });
 
@@ -3336,15 +3442,34 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                     updateTaskSummaryFromState(payload.state);
                 }
                 updateTaskSummaryFromState(payload);
+                if (String(payload.operation || operation || '').toLowerCase() === 'plan'
+                    && window.__pbPhase1TaskProgress
+                    && typeof window.__pbPhase1TaskProgress.syncFromSsePayload === 'function') {
+                    window.__pbPhase1TaskProgress.syncFromSsePayload('plan', payload, logEventType || 'progress');
+                }
                 var progressMessage = String(payload.message || '');
                 if (progressMessage) {
                     logOperationToWorkspaceTerminal(logEventType || 'progress', payload, 'progress', progressMessage);
                 }
 
+                if (String(payload.progress_kind || '') === 'task_progress') {
+                    syncPreviewTabsFromTaskProgressPayload(payload, payload.state && typeof payload.state === 'object' ? payload.state : null);
+                }
+
                 if (buildStartupPending && typeof previewBridge.updateBuildGuardProgress === 'function') {
                     var pageType = String(payload.page_type || '');
                     var pageLabel = String(payload.page_label || pageTypeLabelMap[pageType] || pageType || '').trim();
+                    var taskDone = 0;
+                    var taskTotal = 0;
+                    var taskSummaryForGuard = payload.task_summary || payload.task_progress || payload.build_task_summary || null;
+                    if (taskSummaryForGuard && typeof taskSummaryForGuard === 'object') {
+                        taskDone = parseInt(taskSummaryForGuard.done || 0, 10) || 0;
+                        taskTotal = parseInt(taskSummaryForGuard.total || 0, 10) || 0;
+                    }
                     var detailText = pageLabel ? (pageLabel + ' · ' + progressMessage) : progressMessage;
+                    if (taskTotal > 0) {
+                        detailText = taskDone + '/' + taskTotal + (detailText ? (' · ' + detailText) : '');
+                    }
                     previewBridge.updateBuildGuardProgress(
                         (<?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + (parseInt(payload.progress_percent || 0, 10) || 0) + '%'),
                         payload.progress_percent || 0,
@@ -3576,6 +3701,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 hydrateWorkspaceFromState(payload.state);
                 updateTaskSummaryFromState(payload.state);
             }
+            updateTaskSummaryFromState(payload);
+            syncPreviewTabsFromTaskProgressPayload(payload, payload.state && typeof payload.state === 'object' ? payload.state : null);
             var taskMessage = String(payload.message || <?= \json_encode((string)__('任务已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
             logOperationToWorkspaceTerminal('build_plan_block_completed', payload, 'done', taskMessage);
         });
@@ -3969,15 +4096,6 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
             handleTransportErrorSnapshotFallback();
         };
-
-        var operationSseConnectDelayMs = PB_SSE_CONNECT_DELAY_MS;
-        if (String(sourceTag || '').indexOf('queue-watch') >= 0
-            || String(sourceTag || '').indexOf('transport-error') >= 0
-            || String(sourceTag || '').indexOf('load-active-queue') >= 0
-            || String(sourceTag || '').indexOf('load-bootstrap') >= 0
-            || String(sourceTag || '').indexOf('deferred') >= 0) {
-            operationSseConnectDelayMs = 0;
-        }
         }, operationSseConnectDelayMs);
         return true;
     }

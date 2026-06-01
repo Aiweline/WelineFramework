@@ -226,9 +226,48 @@ class ThemePlaceableRegistry implements ThemePlaceableRegistryInterface
 
     private function matchesSlotCodeProtocol(array $acceptCodes, array $widgetCodes): bool
     {
-        return $acceptCodes === []
-            || in_array('*', $acceptCodes, true)
-            || array_intersect($acceptCodes, $widgetCodes) !== [];
+        if ($acceptCodes === [] || in_array('*', $acceptCodes, true)) {
+            return true;
+        }
+
+        $expandedAccept = $this->expandAcceptCodeList($acceptCodes);
+
+        return array_intersect($expandedAccept, $widgetCodes) !== [];
+    }
+
+    /**
+     * 布局变体 accept 与通用 layout 码互通，例如：
+     * layout-homepage-minimal-content 亦接受部件 supports 中的 layout-homepage-content。
+     *
+     * @return list<string>
+     */
+    private function expandAcceptCodeList(array $acceptCodes): array
+    {
+        $expanded = [];
+        foreach ($acceptCodes as $code) {
+            $code = strtolower(trim((string)$code));
+            if ($code === '') {
+                continue;
+            }
+            foreach ($this->expandAcceptAliases($code) as $alias) {
+                $expanded[$alias] = $alias;
+            }
+        }
+
+        return array_values($expanded);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function expandAcceptAliases(string $acceptCode): array
+    {
+        $aliases = [$acceptCode];
+        if (preg_match('#^layout-([^-]+)-([^-]+)-(.+)$#', $acceptCode, $matches) === 1) {
+            $aliases[] = 'layout-' . $matches[1] . '-' . $matches[3];
+        }
+
+        return array_values(array_unique($aliases));
     }
 
     private function collectWidgetSupportCodes(array $widget): array

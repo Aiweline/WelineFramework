@@ -65,6 +65,22 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     var pageTypeLabelMap = <?= \json_encode($pageTypeLabels, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentStageCode = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var initialWorkspaceState = normalizeWorkspaceStateShape(<?php $this->writeJsonForScript($state); ?>);
+    console.log('[DEBUG initialWorkspaceState]', JSON.stringify({
+        plan_json_pages: initialWorkspaceState.plan_json && initialWorkspaceState.plan_json.pages ? Object.keys(initialWorkspaceState.plan_json.pages).length : 0,
+        plan_structured_pages: initialWorkspaceState.plan_structured && initialWorkspaceState.plan_structured.pages ? Object.keys(initialWorkspaceState.plan_structured.pages).length : 0,
+        state_plan_json_pages: initialWorkspaceState.plan && initialWorkspaceState.plan.json && initialWorkspaceState.plan.json.pages ? Object.keys(initialWorkspaceState.plan.json.pages).length : 0,
+        state_plan_structured_pages: initialWorkspaceState.plan && initialWorkspaceState.plan.structured && initialWorkspaceState.plan.structured.pages ? Object.keys(initialWorkspaceState.plan.structured.pages).length : 0,
+        state_plan_keys: initialWorkspaceState.plan ? Object.keys(initialWorkspaceState.plan) : 'NO_PLAN',
+        state_plan_structured_available: initialWorkspaceState.plan ? initialWorkspaceState.plan.structured_available : 'N/A',
+        state_plan_json_available: initialWorkspaceState.plan ? initialWorkspaceState.plan.json_available : 'N/A',
+        state_plan_slimmed: initialWorkspaceState.plan ? initialWorkspaceState.plan.slimmed : 'N/A',
+        state_keys_count: Object.keys(initialWorkspaceState).length,
+        has_plan_json_top: 'plan_json' in initialWorkspaceState,
+        has_plan_structured_top: 'plan_structured' in initialWorkspaceState,
+        plan_missing: initialWorkspaceState.plan_missing_page_types,
+        stage1_passed: initialWorkspaceState.stage1_validation_report ? initialWorkspaceState.stage1_validation_report.passed : 'N/A',
+        plan_confirmed: initialWorkspaceState.plan_confirmed,
+    }));
     var latestWorkspaceState = initialWorkspaceState;
     var initialWorkspaceStateHydrated = false;
     window.__pbInitialWorkspaceState = initialWorkspaceState;
@@ -563,6 +579,15 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (isPlainWorkspaceObject(safe.scope)) {
             delete safe.scope.task_results;
         }
+        if (isPlainWorkspaceObject(safe.build_plan_execution_summary)) {
+            safe.build_plan_execution_summary = Object.assign({}, safe.build_plan_execution_summary);
+            delete safe.build_plan_execution_summary.groups;
+        }
+        if (isPlainWorkspaceObject(safe.build_plan_v2) && isPlainWorkspaceObject(safe.build_plan_v2.execution_summary)) {
+            safe.build_plan_v2 = Object.assign({}, safe.build_plan_v2);
+            safe.build_plan_v2.execution_summary = Object.assign({}, safe.build_plan_v2.execution_summary);
+            delete safe.build_plan_v2.execution_summary.groups;
+        }
         return safe;
     }
 
@@ -910,6 +935,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (!phaseOnePlanPresentFromWorkspaceState(state)) {
             return false;
         }
+        if (resolveMissingSelectedPlanPageTypes(state).length > 0) {
+            return false;
+        }
         var explicitMessage = readExplicitPlanFailureMessage(failedOperation, state);
         if (isPlanCompletionMessageForWorkspaceUi(explicitMessage)) {
             return true;
@@ -985,6 +1013,19 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var doneOperation = findPlanSuccessOperationFromWorkspaceState(workspaceState);
         if (!doneOperation) {
             return false;
+        }
+        var blockingMessage = getPhaseOnePlanBlockingErrorMessage(workspaceState);
+        if (blockingMessage !== '') {
+            planSseRunning = false;
+            planStartRequestPending = false;
+            isOperationRunning = false;
+            setPlanModeStatus(blockingMessage, 'error');
+            setPlanModalProgress(blockingMessage, 100, false, 'error');
+            renderQueueUiState('plan', { state: 'failed', message: blockingMessage, percent: 100 }, { updateStatus: false });
+            setPlanRetryButtonVisible(true);
+            syncConfirmPlanButtonEnabled();
+            syncPlanRebuildButtonVisibility();
+            return true;
         }
         var message = String(doneOperation.message || messages.planModeDone || messages.planGenerated || '').trim();
         planSseRunning = false;
@@ -1461,11 +1502,127 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return {};
     }
 
+    function resolveSelectedPlanPageTypesFromState(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var pageTypes = [];
+        var pushType = function (value) {
+            var pageType = String(value || '').trim();
+            if (pageType !== '' && pageTypes.indexOf(pageType) === -1) {
+                pageTypes.push(pageType);
+            }
+        };
+        if (Array.isArray(state.page_types)) {
+            state.page_types.forEach(pushType);
+        }
+        if (Array.isArray(scope.page_types)) {
+            scope.page_types.forEach(pushType);
+        }
+        if (pageTypes.length === 0 && typeof selectedPageTypes === 'function') {
+            return selectedPageTypes();
+        }
+        return pageTypes;
+    }
+
+    function resolveGeneratedPlanPageTypesFromState(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var planJson = {};
+        if (state.plan && typeof state.plan === 'object' && state.plan.json && typeof state.plan.json === 'object' && Object.keys(state.plan.json.pages || {}).length > 0) {
+            planJson = state.plan.json;
+        } else if (state.plan && typeof state.plan === 'object' && state.plan.structured && typeof state.plan.structured === 'object' && Object.keys(state.plan.structured.pages || {}).length > 0) {
+            planJson = state.plan.structured;
+        } else if (scope.plan_json && typeof scope.plan_json === 'object') {
+            planJson = scope.plan_json;
+        } else if (state.plan_json && typeof state.plan_json === 'object') {
+            planJson = state.plan_json;
+        } else if (currentPlanPayload && typeof currentPlanPayload === 'object' && currentPlanPayload.json && typeof currentPlanPayload.json === 'object') {
+            planJson = currentPlanPayload.json;
+        } else if (currentPlanPayload && typeof currentPlanPayload === 'object' && currentPlanPayload.structured && typeof currentPlanPayload.structured === 'object') {
+            planJson = currentPlanPayload.structured;
+        }
+        var actual = [];
+        var pages = planJson && typeof planJson.pages === 'object' ? planJson.pages : {};
+        var pageKeys = Object.keys(pages || {});
+        console.log('[resolveGeneratedPlanPageTypesFromState] planJson source: ' + (planJson === (state.plan && state.plan.structured) ? 'state.plan.structured' : planJson === (state.plan && state.plan.json) ? 'state.plan.json' : 'other') + ', pageKeys.length: ' + pageKeys.length + ', firstKey: ' + (pageKeys[0] || 'NONE'));
+        if (pageKeys.length > 0 && pages[pageKeys[0]]) {
+            console.log('[resolveGeneratedPlanPageTypesFromState] first page keys: ' + Object.keys(pages[pageKeys[0]]).join(', '));
+        }
+        pageKeys.forEach(function (key) {
+            var page = pages[key];
+            if (!page || typeof page !== 'object') {
+                return;
+            }
+            var pageType = String(page.page_type || page.type || key || '').trim();
+            if (pageType !== '' && actual.indexOf(pageType) === -1) {
+                actual.push(pageType);
+            }
+        });
+        return actual;
+    }
+
+    function resolveMissingSelectedPlanPageTypes(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var fromState = Array.isArray(state.plan_missing_page_types) ? state.plan_missing_page_types : [];
+        if (fromState.length > 0) {
+            return fromState.slice();
+        }
+        var fromScope = Array.isArray(scope.plan_missing_page_types) ? scope.plan_missing_page_types : [];
+        if (fromScope.length > 0) {
+            return fromScope.slice();
+        }
+        var expected = resolveSelectedPlanPageTypesFromState(state);
+        var actual = resolveGeneratedPlanPageTypesFromState(state);
+        if (expected.length === 0) {
+            return [];
+        }
+        return expected.filter(function (pageType) {
+            return actual.indexOf(pageType) === -1;
+        });
+    }
+
+    function isPlanInputStaleForConfirmation(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        return !!state.plan_input_stale
+            || !!state.plan_rebuild_required
+            || !!state.plan_source_changed
+            || !!state.plan_translation_required
+            || !!scope.plan_input_stale
+            || !!scope.plan_rebuild_required
+            || !!scope.plan_source_changed
+            || !!scope.plan_translation_required;
+    }
+
+    function formatPlanMissingPagesMessage(missingPages) {
+        var pages = Array.isArray(missingPages) ? missingPages.filter(Boolean) : [];
+        if (pages.length === 0) {
+            return '';
+        }
+        var template = String(messages.planMissingSelectedPages || '');
+        if (template.indexOf('%{pages}') !== -1) {
+            return template.replace('%{pages}', pages.join(', '));
+        }
+        return template + ' ' + pages.join(', ');
+    }
+
     function getPhaseOnePlanBlockingErrorMessage(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan')) {
+            return '';
+        }
         var failedOperation = findPlanFailureOperationFromWorkspaceState(state);
         if (failedOperation) {
             if (shouldTreatPlanFailureAsResolvedBySuccess(state, failedOperation)) {
@@ -1487,6 +1644,19 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (parseInt(String(state.partial_retry_required || scope.partial_retry_required || 0), 10) === 1) {
             return getRetryableAiFailureMessage(state, 'plan');
         }
+        if (isPlanInputStaleForConfirmation(state)) {
+            return String(messages.planInputStaleRegenerateRequired || messages.planSchemeRebuildConfirmMessage || '');
+        }
+        var missingPlanPages = resolveMissingSelectedPlanPageTypes(state);
+        if (missingPlanPages.length > 0) {
+            return formatPlanMissingPagesMessage(missingPlanPages);
+        }
+        var stage1Report = state.stage1_validation_report && typeof state.stage1_validation_report === 'object'
+            ? state.stage1_validation_report
+            : (scope.stage1_validation_report && typeof scope.stage1_validation_report === 'object' ? scope.stage1_validation_report : {});
+        if (stage1Report && Object.keys(stage1Report).length > 0 && stage1Report.passed === false) {
+            return String(messages.planStageOneValidationFailed || messages.networkError || '');
+        }
         return '';
     }
 
@@ -1500,10 +1670,16 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             return;
         }
         var state = getLatestWorkspaceStateForQueuePrompt();
-        confirmBtn.disabled = planGenerationActionLockActive
-            || !hasCurrentPhaseOnePlanDraft()
-            || isPhaseOneQueueUnfinished()
-            || hasPhaseOnePlanBlockingErrors(state);
+        var c1 = planGenerationActionLockActive;
+        var c2 = !(hasCurrentPhaseOnePlanDraft() || lastPhaseOnePlanPresent);
+        var c3 = isPhaseOneQueueUnfinished();
+        var c4 = hasPhaseOnePlanBlockingErrors(state);
+        var c5 = planSseRunning || hasBuildOperationRunningForUi(state);
+        console.log('[syncConfirmPlanButtonEnabled]', JSON.stringify({lockActive: c1, noPlan: c2, queueUnfinished: c3, blockingErrors: c4, buildRunning: c5, lastPhaseOnePlanPresent: lastPhaseOnePlanPresent, hasDraft: hasCurrentPhaseOnePlanDraft()}));
+        if (c4) {
+            console.log('[blockingError]', getPhaseOnePlanBlockingErrorMessage(state));
+        }
+        confirmBtn.disabled = c1 || c2 || c3 || c4 || c5;
     }
 
     function syncPlanRebuildButtonVisibility() {
@@ -1511,10 +1687,45 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (!btn) {
             return;
         }
-        var visible = hasCurrentPhaseOnePlanDraft();
+        var state = getLatestWorkspaceStateForQueuePrompt();
+        var visible = (hasCurrentPhaseOnePlanDraft() || lastPhaseOnePlanPresent)
+            || isPlanInputStaleForConfirmation(state)
+            || resolveMissingSelectedPlanPageTypes(state).length > 0;
+        var queueBusy = planStartRequestPending || planSseRunning || planGenerationActionLockActive
+            || hasRunningQueueForUi(state, 'plan') || hasBuildOperationRunningForUi(state);
         btn.classList.toggle('d-none', !visible);
-        // 强制重建是方案队列未完成时唯一允许的操作入口。
-        btn.disabled = !visible || planStartRequestPending;
+        btn.disabled = !visible || queueBusy;
+        if (visible && btn.textContent !== String(messages.schemeRebuildButton || '')) {
+            btn.textContent = String(messages.schemeRebuildButton || btn.textContent || '');
+        }
+        syncPlanRegenerateStatusBanner(state);
+    }
+
+    function syncPlanRegenerateStatusBanner(workspaceState) {
+        var statusEl = document.getElementById('pb-ai-plan-status');
+        if (!statusEl) {
+            return;
+        }
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var missingPages = resolveMissingSelectedPlanPageTypes(state);
+        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan')) {
+            statusEl.textContent = String(messages.planGenerating || statusEl.textContent || '');
+            statusEl.classList.remove('text-warning');
+            return;
+        }
+        if (isPlanInputStaleForConfirmation(state)) {
+            statusEl.textContent = String(messages.planInputStaleRegenerateRequired || statusEl.textContent || '');
+            statusEl.classList.add('text-warning');
+            return;
+        }
+        if (missingPages.length > 0) {
+            statusEl.textContent = formatPlanMissingPagesMessage(missingPages);
+            statusEl.classList.add('text-warning');
+            return;
+        }
+        statusEl.classList.remove('text-warning');
     }
     /**
      * 工作区流（非弹层 SSE）在 plan_generated 等节点回调：收敛按钮状态、写入方案 Markdown 并触发自动保存。
@@ -1604,10 +1815,13 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         targetDomainRequiredLabel: <?= \json_encode((string)__('目标域名（必填）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         targetDomainRequiredPlaceholder: <?= \json_encode((string)__('请先填写要绑定的目标域名'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         noPageType: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        schemeRebuildButton: <?= \json_encode((string)__('方案重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        schemeRebuildButton: <?= \json_encode((string)__('重新生成方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSchemeRebuildConfirmTitle: <?= \json_encode((string)__('重建整个方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSchemeRebuildConfirmMessage: <?= \json_encode((string)__('方案重建会舍弃当前方案、执行蓝图以及待构建任务，并重新生成完整方案。是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSchemeRebuilding: <?= \json_encode((string)__('正在重建整个方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleRegenerateRequired: <?= \json_encode((string)__('建站资料已变更，与当前方案不一致。请先点击「重新生成方案」。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planMissingSelectedPages: <?= \json_encode((string)__('建站方案尚未覆盖全部选中页面（缺少：%{pages}），请重试失败项或重新生成方案后再确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStageOneValidationFailed: <?= \json_encode((string)__('建站方案尚未通过完整校验，请等待全部选中页面生成完成后再确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planResumeFailedTasks: <?= \json_encode((string)__('正在续跑失败项，已完成的阶段一内容将保留'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryFailedItemsLabel: <?= \json_encode((string)__('重试失败项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         buildResumeFailedTasks: <?= \json_encode((string)__('正在重试失败的构建任务，已成功的页面将保留。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1717,15 +1931,15 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         assetImageGenerationFailuresTitle: <?= \json_encode((string)__('文生图生成有部分失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         assetImageGenerationFailuresHint: <?= \json_encode((string)__('以下为最近失败的槽位与接口返回摘要；修复模型配置或网络后可重新生成以重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryableAiQueueRunning: <?= \json_encode((string)__('当前队列仍在运行，等待完成后查看失败结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiFailuresPending: <?= \json_encode((string)__('当前仍有 AI 生成失败项，系统不会自动重试；请调整底座提示词后重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiFailuresPendingWithCount: <?= \json_encode((string)__('当前仍有 %{count} 个 AI 生成失败项，系统不会自动重试；请调整底座提示词后重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        retryableAiResumePromptStarted: <?= \json_encode((string)__('AI 失败项不会自动重试，请调整底座提示词后重新生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiFailuresPending: <?= \json_encode((string)__('当前仍有 AI 生成失败项，请点击重新重试或重新生成方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiFailuresPendingWithCount: <?= \json_encode((string)__('当前仍有 %{count} 个 AI 生成失败项，请点击重新重试或重新生成方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumePromptStarted: <?= \json_encode((string)__('AI 失败项需要重新重试，请重新生成方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryableAiResumeOperationPlan: <?= \json_encode((string)__('建站方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryableAiResumeOperationBuild: <?= \json_encode((string)__('构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         publishFailureListTitle: <?= \json_encode((string)__('失败项明细'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         retryableAiFailureItemPrefix: <?= \json_encode((string)__('失败项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planFailureListTitle: <?= \json_encode((string)__('阶段一失败项，确认方案已暂停'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planFailureListHint: <?= \json_encode((string)__('请先重试或重建失败项；失败详情如下。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planFailureListTitle: <?= \json_encode((string)__('阶段一失败项，请重新重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planFailureListHint: <?= \json_encode((string)__('请重新重试或重新生成方案；失败详情如下。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editUnavailable: <?= \json_encode((string)__('当前区块暂时无法打开字段编辑弹窗。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         blockSseDoneConfirm: <?= \json_encode((string)__('区块生成已完成，但未返回可立即刷新的区块结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1789,6 +2003,29 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return ['pending', 'queued', 'running', 'processing'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
     }
 
+    function normalizePlanQueueLatestMessage(message) {
+        var text = String(message || '').replace(/\r\n|\r/g, '\n').trim();
+        if (text === '') {
+            return '';
+        }
+        var lines = text.split('\n').map(function (line) {
+            return String(line || '').trim();
+        }).filter(Boolean);
+        return lines.length > 0 ? lines[lines.length - 1] : text;
+    }
+
+    function updatePlanQueueLatestMessage(message) {
+        var latestEl = document.getElementById('pb-ai-plan-queue-latest-message');
+        if (!latestEl) {
+            return;
+        }
+        var text = normalizePlanQueueLatestMessage(message);
+        latestEl.textContent = text;
+        latestEl.classList.toggle('d-none', text === '');
+    }
+
+    window.__pbUpdatePlanQueueLatestMessage = updatePlanQueueLatestMessage;
+
     function renderQueueUiState(kind, queueState, options) {
         var queueKind = String(kind || 'plan').trim() === 'build' ? 'build' : 'plan';
         var state = queueState && typeof queueState === 'object' ? queueState : {};
@@ -1796,10 +2033,29 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var status = String(state.state || state.status || state.queue_status || 'idle').trim().toLowerCase();
         var percent = Math.max(0, Math.min(100, parseInt(state.percent || state.progress || 0, 10) || 0));
         var message = String(state.message || state.process || '').trim();
+        var latestPlanState = queueKind === 'plan' ? getLatestWorkspaceStateForQueuePrompt() : {};
+        var planStillRunning = queueKind === 'plan'
+            && (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(latestPlanState, 'plan'));
+        if (planStillRunning && !isQueueUiBusyStatus(status)) {
+            status = 'running';
+            percent = Math.max(1, Math.min(99, percent || 1));
+            message = message || String(messages.planGenerating || messages.planModeRunning || '');
+        }
         if (queueKind === 'plan' && isPlanFailureStatusForWorkspaceUi(status) && shouldIgnoreResolvedPlanTerminalFailure({}, message)) {
             status = 'completed';
             percent = 100;
             message = String(messages.planModeDone || messages.planGenerated || '');
+        }
+        if (queueKind === 'plan' && !planStillRunning && ['done', 'complete', 'completed', 'success'].indexOf(status) !== -1) {
+            var planBlockingMessage = getPhaseOnePlanBlockingErrorMessage(latestPlanState);
+            if (planBlockingMessage !== '') {
+                status = 'failed';
+                percent = 100;
+                message = planBlockingMessage;
+            }
+        }
+        if (queueKind === 'plan') {
+            updatePlanQueueLatestMessage(message);
         }
         var label = queueKind === 'build' ? 'Build' : 'Stage 1 plan';
         var detail = label + ': ' + (status || 'idle');
@@ -5903,8 +6159,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     };
     workspaceApi.retryPhaseOnePlanGeneration = function (options) {
         var opts = options && typeof options === 'object' ? options : {};
-        if (planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan')) {
-            toast('warning', getRetryableAiFailureMessage(null, 'plan'));
+        if (planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan') || hasBuildOperationRunningForUi(getLatestWorkspaceStateForQueuePrompt())) {
+            toast('warning', messages.buildQueueBusyActionBlocked || getRetryableAiFailureMessage(null, 'plan'));
             return false;
         }
         var selectedTypes = Array.isArray(opts.selectedTypes) && opts.selectedTypes.length > 0
@@ -7476,11 +7732,18 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var statusText = String(tab.getAttribute('data-generation-text') || '').trim();
         var suffix = statusText;
         if (suffix.length > 14) {
-            suffix = status === 'done'
-                ? <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
-                : (status === 'ready'
-                    ? <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
-                    : <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
+            if (status === 'done') {
+                suffix = <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            } else if (status === 'ready') {
+                suffix = <?= \json_encode((string)__('可编辑'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+            } else {
+                var fractionMatch = suffix.match(/(\d+\s*\/\s*\d+)$/);
+                if (fractionMatch) {
+                    suffix = fractionMatch[1].replace(/\s+/g, '');
+                } else {
+                    suffix = suffix.slice(0, 11) + '...';
+                }
+            }
         }
         tab.textContent = suffix !== '' ? (baseLabel + ' / ' + suffix) : baseLabel;
         tab.classList.toggle('text-success', status === 'done');
@@ -7523,6 +7786,171 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     // 兼容旧名 queueGenerationStatus（历史脚本仍可能调用）。
     function queueGenerationStatus(pageType, status, text) {
         return markPageGenerationStatus(pageType, status, text);
+    }
+
+    function normalizePreviewTabTaskStatus(status) {
+        var normalized = String(status || '').trim().toLowerCase();
+        if (normalized === '' || normalized === 'pending') {
+            return 'todo';
+        }
+        if (normalized === 'in_progress' || normalized === 'processing') {
+            return 'running';
+        }
+        if (normalized === 'error') {
+            return 'failed';
+        }
+        if (normalized === 'stop' || normalized === 'stopped' || normalized === 'canceled') {
+            return 'cancelled';
+        }
+        if (['todo', 'queued', 'running', 'done', 'failed', 'stale', 'cancelled'].indexOf(normalized) !== -1) {
+            return normalized;
+        }
+        if (normalized === 'blocked') {
+            return 'failed';
+        }
+        return 'todo';
+    }
+
+    function groupBlockProgressRowsByPageType(blockRows) {
+        var groups = Object.create(null);
+        (Array.isArray(blockRows) ? blockRows : []).forEach(function (row) {
+            if (!row || typeof row !== 'object') {
+                return;
+            }
+            var pageType = String(row.page_type || '').trim();
+            if (!pageType) {
+                return;
+            }
+            if (!groups[pageType]) {
+                groups[pageType] = {
+                    page_type: pageType,
+                    total: 0,
+                    done: 0,
+                    running: 0,
+                    queued: 0,
+                    pending: 0,
+                    failed: 0,
+                    tasks: []
+                };
+            }
+            var group = groups[pageType];
+            var taskStatus = normalizePreviewTabTaskStatus(row.status);
+            group.total += 1;
+            if (taskStatus === 'done') {
+                group.done += 1;
+            } else if (taskStatus === 'running') {
+                group.running += 1;
+            } else if (taskStatus === 'queued') {
+                group.queued += 1;
+            } else if (taskStatus === 'failed' || taskStatus === 'cancelled' || taskStatus === 'stale') {
+                group.failed += 1;
+            } else {
+                group.pending += 1;
+            }
+            group.tasks.push({
+                label: String(row.label || row.section_key || row.block_id || '').trim(),
+                section_code: String(row.section_key || '').trim(),
+                status: taskStatus,
+                message: String(row.message || '').trim()
+            });
+        });
+        return groups;
+    }
+
+    function buildPreviewTabGenerationPresentationFromGroup(group) {
+        var total = parseInt(String(group && group.total || 0), 10) || 0;
+        if (total <= 0) {
+            return { status: 'idle', text: '' };
+        }
+        var done = parseInt(String(group.done || 0), 10) || 0;
+        var running = parseInt(String(group.running || 0), 10) || 0;
+        var failed = parseInt(String(group.failed || 0), 10) || 0;
+        var completedLabel = <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        var generatingLabel = <?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        var failedLabel = <?= \json_encode((string)__('失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
+        if (done >= total) {
+            return { status: 'done', text: completedLabel };
+        }
+        if (failed > 0 && (done + failed) >= total) {
+            return { status: 'running', text: failedLabel };
+        }
+        var tasks = Array.isArray(group.tasks) ? group.tasks : [];
+        var activeTask = null;
+        var taskIndex;
+        for (taskIndex = 0; taskIndex < tasks.length; taskIndex += 1) {
+            if (normalizePreviewTabTaskStatus(tasks[taskIndex].status) === 'running') {
+                activeTask = tasks[taskIndex];
+                break;
+            }
+        }
+        if (!activeTask) {
+            for (taskIndex = 0; taskIndex < tasks.length; taskIndex += 1) {
+                var pendingStatus = normalizePreviewTabTaskStatus(tasks[taskIndex].status);
+                if (pendingStatus === 'todo' || pendingStatus === 'queued') {
+                    activeTask = tasks[taskIndex];
+                    break;
+                }
+            }
+        }
+        var moduleLabel = activeTask
+            ? String(activeTask.label || activeTask.section_code || activeTask.component || '').trim()
+            : '';
+        var currentIndex = done + (running > 0 ? 1 : 0);
+        if (currentIndex <= 0 && running > 0) {
+            currentIndex = 1;
+        }
+        if (moduleLabel) {
+            return {
+                status: 'running',
+                text: moduleLabel + ' ' + currentIndex + '/' + total
+            };
+        }
+        return {
+            status: 'running',
+            text: generatingLabel + ' ' + Math.floor((done / total) * 100) + '%'
+        };
+    }
+
+    function resolvePreviewTabGenerationGroups(summary, workspaceState) {
+        var taskSummary = summary && typeof summary === 'object' ? summary : {};
+        var groups = taskSummary.groups && typeof taskSummary.groups === 'object' ? taskSummary.groups : null;
+        if (groups && Object.keys(groups).length > 0) {
+            return groups;
+        }
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : (latestWorkspaceState || initialWorkspaceState || {});
+        var blockRows = Array.isArray(state.build_plan_block_progress) ? state.build_plan_block_progress : [];
+        if (blockRows.length > 0) {
+            return groupBlockProgressRowsByPageType(blockRows);
+        }
+        return null;
+    }
+
+    function syncPreviewTabGenerationFromTaskSummary(summary, workspaceState) {
+        var groups = resolvePreviewTabGenerationGroups(summary, workspaceState);
+        if (!groups) {
+            return;
+        }
+        var selectedMap = Object.create(null);
+        selectedPageTypes().forEach(function (pageType) {
+            selectedMap[String(pageType || '')] = true;
+        });
+        Object.keys(groups).forEach(function (groupKey) {
+            var group = groups[groupKey];
+            if (!group || typeof group !== 'object') {
+                return;
+            }
+            var pageType = String(group.page_type || groupKey || '').trim();
+            if (!pageType || (Object.keys(selectedMap).length > 0 && !selectedMap[pageType])) {
+                return;
+            }
+            var presentation = buildPreviewTabGenerationPresentationFromGroup(group);
+            if (presentation.status === 'idle' && presentation.text === '') {
+                return;
+            }
+            markPageGenerationStatus(pageType, presentation.status, presentation.text);
+        });
     }
 
     function syncPreviewTabsWithSelection() {
@@ -15152,7 +15580,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             shouldShow = false;
         }
         retryBtn.classList.toggle('d-none', !shouldShow);
-        retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan');
+        retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan') || hasBuildOperationRunningForUi(getLatestWorkspaceStateForQueuePrompt());
     }
 
     function shouldShowPlanRetryButtonFromWorkspaceState(workspaceState) {
@@ -16184,9 +16612,16 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }
         var workspaceStatus = String(state.workspace_status || '').toLowerCase();
         var publishStatus = String(state.publish_status || '').toLowerCase();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var scopeWorkspaceStatus = String(scope.workspace_status || '').toLowerCase();
+        var scopePublishStatus = String(scope.publish_status || '').toLowerCase();
         return !!state.can_publish
+            || !!scope.can_publish
             || workspaceStatus === 'can_publish'
+            || scopeWorkspaceStatus === 'can_publish'
             || workspaceStatus === 'published'
+            || scopeWorkspaceStatus === 'published'
+            || scopePublishStatus === 'published'
             || publishStatus === 'published';
     }
 
@@ -16472,7 +16907,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (planStartRequestPending) {
             return Promise.resolve(false);
         }
-        if (!hasCurrentPhaseOnePlanDraft()) {
+        if (!hasCurrentPhaseOnePlanDraft() && !isPlanInputStaleForConfirmation()) {
             toast('warning', messages.planStartUnavailable);
             return Promise.resolve(false);
         }
@@ -17024,7 +17459,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 if (publishStageBtn.disabled || !setStageUrl) {
                     return;
                 }
-                if (!canEnterPublishStageFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {})) {
+                var publishEntryCard = document.getElementById('pb-ai-publish-stage-entry-card');
+                var publishEntryReady = publishStageBtn.disabled === false
+                    || String(publishStageBtn.getAttribute('aria-disabled') || '').toLowerCase() !== 'true'
+                    || String(publishEntryCard && publishEntryCard.dataset ? (publishEntryCard.dataset.publishReady || '') : '') === '1';
+                if (!publishEntryReady && !canEnterPublishStageFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {})) {
                     toast('warning', messages.publishBlockedLatestBuildFailure || messages.networkError);
                     syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
                     return;
@@ -17194,7 +17633,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 if (publishStageBtn.disabled || !setStageUrl) {
                     return;
                 }
-                if (!canEnterPublishStageFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {})) {
+                var publishEntryCard = document.getElementById('pb-ai-publish-stage-entry-card');
+                var publishEntryReady = publishStageBtn.disabled === false
+                    || String(publishStageBtn.getAttribute('aria-disabled') || '').toLowerCase() !== 'true'
+                    || String(publishEntryCard && publishEntryCard.dataset ? (publishEntryCard.dataset.publishReady || '') : '') === '1';
+                if (!publishEntryReady && !canEnterPublishStageFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {})) {
                     toast('warning', messages.publishBlockedLatestBuildFailure || messages.networkError);
                     syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
                     return;
@@ -17615,6 +18058,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         },
         markPageGenerationStatus: markPageGenerationStatus,
         queueGenerationStatus: queueGenerationStatus,
+        syncPreviewTabGenerationFromTaskSummary: syncPreviewTabGenerationFromTaskSummary,
         buildVirtualThemePatch: buildVirtualThemePatch,
         syncPreviewMetaFromState: syncPreviewMetaFromState,
         switchWorkspaceStage: switchWorkspaceStage,

@@ -103,6 +103,7 @@ $this->setData('envConfig', $envConfig);
 </script>
 <!-- 主题JS -->
 <theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<link rel="stylesheet" href="<?= htmlspecialchars($this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css')) ?>" type="text/css">
 <?php
 if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
