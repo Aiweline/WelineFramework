@@ -543,6 +543,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 4. 最先聚合框架注册表（含 generated/extends.php）。须先于 composer 与后续收集，否则易退化为逐模块递归扫描。
         $this->printing->note(__('正在准备系统环境...'));
         $argsModule = $this->parseModuleArgs($args);
+        $this->preRegisterDiscoveredModulesForRegistryBootstrap($argsModule);
         $this->collectFrameworkRegistries(true, $argsModule);
 
         // 5. composer dump-autoload（刷新类映射，供后续模块升级与运行时加载）
@@ -1252,6 +1253,47 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // 标记本次升级已经收集过注册表
         $this->registryCollectedInThisRun = true;
+    }
+
+    /**
+     * Make newly deployed modules visible before rebuilding registries.
+     *
+     * Registry collection runs before the normal module setup stage. If a deployed
+     * module owns hook specs but is not yet present in app/etc/modules.php, active
+     * modules can expose hook implementation files before the owner module's
+     * hook.php is scanned. Register only MODULE entries here; the regular setup
+     * flow still handles installs, upgrades, and pending non-module registrations.
+     */
+    private function preRegisterDiscoveredModulesForRegistryBootstrap(array $moduleNames = []): void
+    {
+        $currentModules = Env::getInstance()->getModuleList(true);
+        [, $dependencyModules] = Register::getOriginModulesData();
+
+        if ($moduleNames !== []) {
+            $dependencyModules = array_intersect_key($dependencyModules, array_flip($moduleNames));
+        }
+
+        $missingModules = [];
+        foreach ($dependencyModules as $moduleName => $module) {
+            if (isset($currentModules[$moduleName])) {
+                continue;
+            }
+            if (empty($module['register']) || !is_file($module['register'])) {
+                continue;
+            }
+            $missingModules[$moduleName] = $module['register'];
+        }
+
+        if ($missingModules === []) {
+            return;
+        }
+
+        $this->printing->note(__('检测到新部署模块，先写入模块注册表：%{1}', [implode(', ', array_keys($missingModules))]));
+        Register::setRegisterPhase(Register::PHASE_MODULE_ONLY);
+        foreach ($missingModules as $registerFile) {
+            require $registerFile;
+        }
+        Env::getInstance()->getModuleList(true);
     }
 
     private function raiseCliMemoryLimit(string $targetLimit): void
