@@ -175,12 +175,34 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         );
 
         self::assertSame(
-            ['queue_id', 'snapshot', 'process', 'result_log'],
+            [
+                'queue_id',
+                'name',
+                'module',
+                'biz_key',
+                'status',
+                'queue_status',
+                'job_status',
+                'semantic_status',
+                'pid',
+                'type_id',
+                'finished',
+                'start_at',
+                'end_at',
+                'job_key',
+                'job_type',
+                'token',
+                'token_usage',
+                'stage1_page_progress',
+                'process',
+                'result_log',
+            ],
             \array_keys($payload),
             'panel payload 必须严格包含四个字段且顺序稳定（前端依赖）'
         );
         self::assertSame(4321, $payload['queue_id']);
-        self::assertSame($snapshot, $payload['snapshot']);
+        self::assertSame('running', $payload['status']);
+        self::assertSame('running', $payload['queue_status']);
         self::assertSame('正在执行', $payload['process']);
         self::assertSame("line-a\nline-b", $payload['result_log']);
 

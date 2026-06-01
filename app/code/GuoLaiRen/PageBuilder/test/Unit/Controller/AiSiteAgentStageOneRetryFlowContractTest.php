@@ -32,6 +32,8 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString('$retryablePlanMessages = $this->assertPlanQueueCompletionGate(', $execute);
         self::assertStringContainsString('$retryQueueId = $this->createPlanCompletionGateRetryQueue(', $execute);
         self::assertStringContainsString('$this->markPlanRetryScheduledInScope(', $execute);
+        self::assertStringNotContainsString('resolvePlanJsonForCompletionGate', $queueSource);
+        self::assertStringNotContainsString('persistRecoveredCompletionGatePlanJson', $queueSource);
     }
 
     public function testPlanOperationSseKeepsQueuedObserverStreamOpen(): void
@@ -76,14 +78,20 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString('var planStillRunning = queueKind === \'plan\'', $renderQueueState);
         self::assertStringContainsString('status = \'running\';', $renderQueueState);
         self::assertStringContainsString('!planStillRunning', $renderQueueState);
+
+        $retryableGuards = $this->extractFunctionSource($workspaceScript, 'syncRetryableAiFailureActionGuards');
+        self::assertStringContainsString('setPlanRetryButtonVisible(shouldShowPlanRetryButtonFromWorkspaceState(state));', $retryableGuards);
     }
 
-    public function testStageOnePageFanoutProgressUsesCurrentSnapshotOnly(): void
+    public function testStageOnePageFanoutProgressUsesCurrentStateOnly(): void
     {
         $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
         $runPlanOperation = $this->extractMethodSource($controllerSource, 'runQueuedPlanOperationFromWorkspaceStream');
         self::assertStringContainsString("'stage1_page_progress'", $runPlanOperation);
         self::assertStringContainsString("'queue_process'", $runPlanOperation);
+        self::assertStringContainsString('mergeStageOnePersistedPlanJson(', $runPlanOperation);
+        self::assertStringContainsString("'plan_json' => \\is_array(\$scope['plan_json'] ?? null) ? \$scope['plan_json'] : []", $runPlanOperation);
+        self::assertStringContainsString("'plan_structured' => \\is_array(\$scope['plan_structured'] ?? null) ? \$scope['plan_structured'] : []", $runPlanOperation);
 
         $moduleDir = \dirname((new ReflectionClass(AiSiteAgent::class))->getFileName(), 3);
         $serviceSource = (string)\file_get_contents(
@@ -116,8 +124,8 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString('mergeStageOnePageProgressIntoQueueContentPatch', $queueWriterSource);
         self::assertStringContainsString("'stage1_page_progress'", $queueWriterSource);
 
-        $queueSnapshotSource = (string)\file_get_contents((new ReflectionClass(AiSiteQueueSnapshotService::class))->getFileName());
-        self::assertStringContainsString("'stage1_page_progress' => \$stageOnePageProgress", $queueSnapshotSource);
+        $queueStateSource = (string)\file_get_contents((new ReflectionClass(AiSiteQueueSnapshotService::class))->getFileName());
+        self::assertStringContainsString("'stage1_page_progress' => \$stageOnePageProgress", $queueStateSource);
     }
 
     private function extractMethodSource(string $source, string $method): string

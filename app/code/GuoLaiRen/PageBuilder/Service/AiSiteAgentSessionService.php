@@ -134,7 +134,6 @@ class AiSiteAgentSessionService
         'shared_components',
         'shared_prompt_context',
         'theme_context_snapshot',
-        '_plan_generation_checkpoint',
         '_plan_sse_request',
     ];
 
@@ -732,6 +731,15 @@ SQL;
     private function mergeScopePatch(array $scope, array $patch): array
     {
         $merged = \array_replace($scope, $patch);
+        $unsetKeys = \is_array($patch['_unset_scope_keys'] ?? null) ? $patch['_unset_scope_keys'] : [];
+        foreach ($unsetKeys as $key) {
+            $key = \is_string($key) ? \trim($key) : '';
+            if ($key === '') {
+                continue;
+            }
+            unset($merged[$key]);
+        }
+        unset($merged['_unset_scope_keys']);
         if (\array_key_exists('asset_manifest', $patch)) {
             $manifest = \is_array($merged['asset_manifest'] ?? null) ? $merged['asset_manifest'] : [];
             $merged['asset_manifest_hash'] = \sha1((string)\json_encode($manifest, \JSON_UNESCAPED_UNICODE));

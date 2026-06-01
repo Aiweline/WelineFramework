@@ -2149,11 +2149,11 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         self::assertReferenceStyleContextCarried($artifacts['plan_workbench']['stage1']['theme_context_snapshot'] ?? null);
     }
 
-    public function testBuildPlanArtifactsByAiStreamReusesStageOneCheckpointWithoutRepeatingAiCalls(): void
+    public function testBuildPlanArtifactsByAiStreamReusesPersistedStageOnePlanJsonWithoutRepeatingAiCalls(): void
     {
-        $checkpoints = [];
+        $progressStates = [];
         $aiService = $this->createAiServiceStreamMock();
-        $aiService->expects(self::atLeast(5))
+        $aiService->expects(self::atLeast(4))
             ->method('generateStream')
             ->willReturnCallback(function (string $prompt, callable $callback): void {
                 $this->dispatchStageOneStreamMockResponse($prompt, $callback);
@@ -2173,36 +2173,46 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ];
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $aiService);
         $firstArtifacts = $service->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
-            'on_stage1_checkpoint' => static function (array $checkpoint) use (&$checkpoints): void {
-                $checkpoints[] = $checkpoint;
+            'on_stage1_progress_state' => static function (array $progressState) use (&$progressStates): void {
+                $progressStates[] = $progressState;
             },
             'staged_generation' => true,
         ]);
 
         self::assertNotEmpty($firstArtifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? []);
-        self::assertGreaterThanOrEqual(4, \count($checkpoints));
-        self::assertSame('requirement_parse', (string)($checkpoints[0]['step'] ?? ''));
-        self::assertSame('requirement_expand', (string)($checkpoints[1]['step'] ?? ''));
-        self::assertSame('theme_design', (string)($checkpoints[2]['step'] ?? ''));
-        self::assertSame('page_fanout', (string)($checkpoints[3]['step'] ?? ''));
+        self::assertGreaterThanOrEqual(3, \count($progressStates));
+        self::assertContains('requirement_expand', \array_map(static fn(array $state): string => (string)($state['step'] ?? ''), $progressStates));
+        self::assertContains('theme_design', \array_map(static fn(array $state): string => (string)($state['step'] ?? ''), $progressStates));
+        self::assertContains('page_fanout', \array_map(static fn(array $state): string => (string)($state['step'] ?? ''), $progressStates));
+        $persistedPlanJson = $firstArtifacts['plan_json'];
+        $persistedPlanJson['pages'][Page::TYPE_ABOUT] = $this->buildCurrentContractAboutPageFixture();
 
-        $noRepeatAiService = $this->createAiServiceStreamMock();
-        $noRepeatAiService->expects(self::never())->method('generateStream');
-        $resumeService = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $noRepeatAiService);
-        $resumedArtifacts = $resumeService->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
-            'stage1_checkpoint' => \end($checkpoints),
-        ]);
+        $resumeCalls = [];
+        $resumeAiService = $this->createAiServiceStreamMock();
+        $resumeAiService->expects(self::atMost(2))
+            ->method('generateStream')
+            ->willReturnCallback(function (string $prompt, callable $callback) use (&$resumeCalls): void {
+                $resumeCalls[] = $prompt;
+                $this->dispatchStageOneStreamMockResponse($prompt, $callback);
+            });
+        $resumeService = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $resumeAiService);
+        $resumedArtifacts = $resumeService->buildPlanArtifactsByAiStream(\array_replace($scope, [
+            'plan_json' => $persistedPlanJson,
+            'plan_structured' => \is_array($firstArtifacts['structured'] ?? null) ? $firstArtifacts['structured'] : $firstArtifacts['plan_json'],
+            'plan_generated_at' => '2026-06-01 09:00:00',
+        ]), $websiteProfile);
 
         self::assertSame($firstArtifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? [], $resumedArtifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? []);
         self::assertSame($firstArtifacts['plan_json']['theme_design']['theme_purpose'] ?? '', $resumedArtifacts['plan_json']['theme_design']['theme_purpose'] ?? '');
         self::assertSame('ai_staged', (string)($resumedArtifacts['generation_source'] ?? ''));
+        self::assertSame('', $this->findCapturedPromptByPageType($resumeCalls, Page::TYPE_ABOUT));
     }
 
-    public function testBuildPlanArtifactsByAiStreamRegeneratesCheckpointPageWithEmptyBlocks(): void
+    public function testBuildPlanArtifactsByAiStreamRegeneratesPersistedPageWithEmptyBlocks(): void
     {
-        $checkpoints = [];
+        $progressStates = [];
         $aiService = $this->createAiServiceStreamMock();
-        $aiService->expects(self::exactly(5))
+        $aiService->expects(self::atLeast(4))
             ->method('generateStream')
             ->willReturnCallback(function (string $prompt, callable $callback): void {
                 $this->dispatchStageOneStreamMockResponse($prompt, $callback);
@@ -2222,72 +2232,70 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         ];
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $aiService);
         $firstArtifacts = $service->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
-            'on_stage1_checkpoint' => static function (array $checkpoint) use (&$checkpoints): void {
-                $checkpoints[] = $checkpoint;
+            'on_stage1_progress_state' => static function (array $progressState) use (&$progressStates): void {
+                $progressStates[] = $progressState;
             },
         ]);
-        $checkpoint = \end($checkpoints);
-        self::assertIsArray($checkpoint);
-        $checkpoint['plan_json']['pages'][Page::TYPE_HOME]['blocks'] = [];
+        self::assertNotEmpty($progressStates);
+        $persistedPlanJson = $firstArtifacts['plan_json'];
+        $persistedPlanJson['pages'][Page::TYPE_ABOUT] = $this->buildCurrentContractAboutPageFixture();
+        $persistedPlanJson['pages'][Page::TYPE_HOME]['blocks'] = [];
 
         $resumeCalls = [];
         $repairAiService = $this->createAiServiceStreamMock();
-        $repairAiService->expects(self::once())
+        $repairAiService->expects(self::atLeastOnce())
             ->method('generateStream')
             ->willReturnCallback(function (string $prompt, callable $callback) use (&$resumeCalls): void {
                 $resumeCalls[] = $prompt;
                 $callback($this->buildStagedPageAiResponse(Page::TYPE_HOME));
-            });
+        });
 
         $resumeService = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $repairAiService);
-        $resumedArtifacts = $resumeService->buildPlanArtifactsByAiStream($scope, $websiteProfile, [
-            'stage1_checkpoint' => $checkpoint,
-        ]);
+        $resumedArtifacts = $resumeService->buildPlanArtifactsByAiStream(\array_replace($scope, [
+            'plan_json' => $persistedPlanJson,
+            'plan_generated_at' => '2026-06-01 09:00:00',
+        ]), $websiteProfile);
 
         self::assertNotEmpty($resumedArtifacts['plan_json']['pages'][Page::TYPE_HOME]['blocks'] ?? []);
         self::assertSame(
-            $firstArtifacts['plan_json']['pages'][Page::TYPE_ABOUT]['blocks'] ?? [],
-            $resumedArtifacts['plan_json']['pages'][Page::TYPE_ABOUT]['blocks'] ?? []
+            \array_map(static fn(array $block): string => (string)($block['block_key'] ?? ''), $persistedPlanJson['pages'][Page::TYPE_ABOUT]['blocks'] ?? []),
+            \array_map(static fn(array $block): string => (string)($block['block_key'] ?? ''), $resumedArtifacts['plan_json']['pages'][Page::TYPE_ABOUT]['blocks'] ?? [])
         );
-        self::assertNotEmpty($resumeCalls, 'only the invalid checkpoint page should be regenerated');
+        self::assertNotEmpty($resumeCalls, 'only the invalid persisted page should be regenerated');
+        self::assertSame('', $this->findCapturedPromptByPageType($resumeCalls, Page::TYPE_ABOUT));
     }
 
-    public function testResolveStageOneCheckpointAcceptsStoredCheckpointOnResumePlanDespiteSignatureDrift(): void
+    public function testResolveStageOnePersistedPlanProgressUsesPlanJson(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
-        $resolveCheckpoint = new \ReflectionMethod(AiSiteExecutionBlueprintService::class, 'resolveStageOneCheckpoint');
-        $resolveCheckpoint->setAccessible(true);
+        $resolveProgress = new \ReflectionMethod(AiSiteExecutionBlueprintService::class, 'resolveStageOnePersistedPlanProgress');
+        $resolveProgress->setAccessible(true);
 
-        $storedSignature = 'stored-checkpoint-signature';
-        $checkpoint = [
-            'signature' => $storedSignature,
-            'step' => 'page_fanout',
-            'plan_json' => [
-                'requirement_expansion' => ['expanded_brief' => 'seed'],
-                'theme_design' => ['theme_purpose' => 'resume checkpoint theme'],
-                'pages' => [
-                    Page::TYPE_HOME => ['blocks' => [['block_key' => 'hero']]],
-                    Page::TYPE_ABOUT => ['blocks' => [['block_key' => 'intro']]],
-                ],
+        $persistedPlanJson = [
+            'requirement_expansion' => ['expanded_brief' => 'seed'],
+            'theme_design' => ['theme_purpose' => 'persisted current theme'],
+            'pages' => [
+                Page::TYPE_HOME => ['blocks' => [['block_key' => 'hero']]],
+                Page::TYPE_ABOUT => ['blocks' => [['block_key' => 'intro']]],
             ],
         ];
         $scope = [
             'plan_last_prompt_mode' => 'resume_plan',
             '_plan_sse_request' => ['prompt_mode' => 'resume_plan'],
-            '_plan_generation_checkpoint' => $checkpoint,
+            'plan_json' => $persistedPlanJson,
+            'plan_generated_at' => '2026-06-01 09:00:00',
         ];
         $payload = [
             'prompt_mode' => 'resume_plan',
             'resume_failed_tasks' => 1,
             'target_scope' => 'resume_generation',
             'instruction' => 'resume only failed pages',
-            'stage1_checkpoint' => $checkpoint,
         ];
 
-        $resolved = $resolveCheckpoint->invoke($service, $payload, $scope, 'different-signature');
-        self::assertSame($storedSignature, (string)($resolved['signature'] ?? ''));
+        $resolved = $resolveProgress->invoke($service, $payload, $scope, 'current-progress-signature');
+        self::assertSame('current-progress-signature', (string)($resolved['signature'] ?? ''));
         self::assertSame(
-            'resume checkpoint theme',
+            'persisted current theme',
             (string)($resolved['plan_json']['theme_design']['theme_purpose'] ?? '')
         );
     }
@@ -3723,6 +3731,37 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $decoded['plan_json']['pages']['about_page']['theme_alignment_summary'] = 'string explaining how this page obeys theme_design/shared_prompt_context';
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildCurrentContractAboutPageFixture(): array
+    {
+        return [
+            'page_goal' => 'Build brand trust with story, mission, values, proof, and a clear next step.',
+            'theme_alignment_summary' => 'About page uses the shared trust palette and narrative rhythm while keeping a direct CTA.',
+            'primary_keywords' => ['about brand', 'mission', 'trust proof'],
+            'secondary_keywords' => ['values', 'story', 'quality'],
+            'page_design_plan' => [
+                'page_role' => 'trust-building about page',
+                'content_narrative' => 'origin, values, proof, CTA',
+                'visual_hierarchy' => 'story lead, value grid, proof band, CTA close',
+                'visual_signature_application' => 'editorial proof sections with warm accents',
+                'composition_motif' => 'timeline into proof rail',
+                'color_layering' => 'light editorial base with trust accent bands',
+                'section_flow' => ['origin_story', 'mission_values', 'trust_proof', 'about_cta'],
+                'interaction_notes' => ['timeline reveal', 'proof card hover'],
+                'polish_details' => ['soft dividers', 'editorial spacing'],
+                'anti_monotony_rule' => 'alternate timeline, grid, proof rail, and CTA band layouts',
+            ],
+            'blocks' => [
+                $this->buildStageOnePageBlockFixture('origin_story', 'Tell the origin story and show why the brand exists.', ['timeline layout', 'editorial portrait', 'soft shadow'], ['timeline reveal', 'slow fade'], ['story anchor links']),
+                $this->buildStageOnePageBlockFixture('mission_values', 'Turn mission and values into proof points.', ['value cards', 'icon grid', 'calm spacing'], ['staggered card reveal'], ['card hover detail']),
+                $this->buildStageOnePageBlockFixture('trust_proof', 'Show trust proof, customer confidence, and quality signals.', ['proof cards', 'rating chips', 'soft shadow'], ['proof fade', 'badge reveal'], ['proof card hover']),
+                $this->buildStageOnePageBlockFixture('about_cta', 'Invite visitors to continue into community or support.', ['community strip', 'rounded avatar group'], ['gentle slide up'], ['secondary CTA hover']),
+            ],
+        ];
     }
 
     private function buildStagedPageAiResponse(string $pageType): string

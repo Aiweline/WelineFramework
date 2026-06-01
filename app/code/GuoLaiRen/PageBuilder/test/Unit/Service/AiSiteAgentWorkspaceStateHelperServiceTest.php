@@ -21,7 +21,7 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
             'active_operation' => ['operation' => 'plan', 'status' => 'running'],
             'virtual_theme_id' => 0,
             'scope' => ['plan_confirmed' => 1, 'build_plan_confirmed' => 0],
-            'plan_queue_info' => ['snapshot' => ['queue_id' => 10, 'status' => 'running']],
+            'plan_queue_info' => ['queue_id' => 10, 'status' => 'running'],
         ];
 
         $fingerprint = $service->buildStateFingerprint($state);
@@ -219,7 +219,8 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
 
         $pruned = $service->pruneStateForView($state);
         self::assertSame('plan-md', $pruned['plan']['markdown']);
-        self::assertSame([], $pruned['plan']['build_plan_v2']);
+        self::assertSame('bp_1', (string)($pruned['plan']['build_plan_v2']['id'] ?? ''));
+        self::assertTrue((bool)($pruned['plan']['build_plan_v2']['slimmed_for_view'] ?? false));
         self::assertSame(['pages' => ['home_page']], $pruned['plan']['projection']);
         self::assertTrue($pruned['plan']['build_plan_v2_available']);
         self::assertArrayNotHasKey('execution_blueprint', $pruned['plan']);
@@ -429,8 +430,8 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
 
         self::assertSame('queue_info', $service->resolveProgressKind([], []));
         self::assertSame('queue_info', $service->resolveProgressKind(['build_plan_confirmed' => 0], ['operation' => 'build']));
-        self::assertSame('task_progress', $service->resolveProgressKind(['build_plan_confirmed' => 1], ['operation' => 'build']));
-        self::assertSame('task_progress', $service->resolveProgressKind(['build_plan_confirmed' => 1], ['operation' => 'block_partial_patch']));
+        self::assertSame('build_plan_progress', $service->resolveProgressKind(['build_plan_confirmed' => 1], ['operation' => 'build']));
+        self::assertSame('build_plan_progress', $service->resolveProgressKind(['build_plan_confirmed' => 1], ['operation' => 'block_partial_patch']));
         self::assertSame('queue_info', $service->resolveProgressKind(['build_plan_confirmed' => 1], ['operation' => 'plan']));
     }
 
@@ -478,12 +479,10 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
                 'build_plan_v2' => ['contract_id' => 'bp-contract-1'],
             ],
             'plan_queue_info' => [
-                'snapshot' => [
-                    'queue_id' => 77,
-                    'status' => 'running',
-                    'job_key' => 'jk-plan-abc',
-                    'input_tokens' => 120,
-                ],
+                'queue_id' => 77,
+                'status' => 'running',
+                'job_key' => 'jk-plan-abc',
+                'input_tokens' => 120,
             ],
         ];
 
