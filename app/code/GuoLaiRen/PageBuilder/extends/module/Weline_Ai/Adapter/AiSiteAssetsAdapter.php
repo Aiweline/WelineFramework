@@ -66,7 +66,9 @@ class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindi
             . "Asset constraints:\n"
             . "1. Generate one production-ready website image for the requested PageBuilder slot.\n"
             . "2. Do not include visible prompt text, UI labels, watermarks, screenshots, or placeholder graphics.\n"
-            . "3. Match the target site language, market, block role, and visual direction from the prompt.\n";
+            . "3. Match the target site language, market, block role, and visual direction from the prompt.\n"
+            . "4. Neon card-game visual contract (when prompt mentions card game, APK, Teen Patti, Rummy, mahjong, poker, chips, table, or neon entertainment): use premium dark card-room atmosphere, electric cyan/magenta/violet rim light, restrained gold highlights, green felt or glass table texture, cinematic crop, and block-specific props. Each image must differ by block role; never reuse one generic hero lobby for every section.\n"
+            . "5. Never return flat gray placeholders, emoji stand-ins, CSS-only motifs, or text-only panels when a real generated image is requested.\n";
 
         if ($this->requiresTransparentIdentityPng($params)) {
             $contract .= "4. Identity logo/icon contract (HARD): output a transparent identity asset: transparent PNG alpha, or safe SVG with no canvas background. The canvas must be transparent; only the brand mark, symbol, or wordmark pixels may be visible.\n"

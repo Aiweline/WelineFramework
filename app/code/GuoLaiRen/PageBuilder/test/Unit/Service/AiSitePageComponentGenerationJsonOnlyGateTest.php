@@ -235,6 +235,8 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
         self::assertStringContainsString('card.item_3_title => Card 3 title:text:Helpful next step', $extraFields);
         self::assertStringNotContainsString('Card 1 title:text:Latest operations guides', $extraFields);
         self::assertStringNotContainsString('subscriber conversion.', $this->extractCardTitleLines($extraFields));
+        self::assertStringNotContainsString('visitors can review', $extraFields);
+        self::assertStringNotContainsString('Visitors see', $extraFields);
     }
 
     public function testCardGridTitleNormalizerTurnsFragmentsIntoProductLabels(): void

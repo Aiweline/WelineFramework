@@ -625,14 +625,45 @@ class ThemeData
                 $value = $metaConfig->getConfig($themeId, $namespace, $configKey, $effectiveScope, $resolvedLocale);
             }
 
-            if ($value === null && is_scalar($defaultValue)) {
-                $value = (string)$defaultValue;
+            if ($value === null) {
+                $value = is_scalar($defaultValue) ? (string)$defaultValue : $defaultValue;
             }
 
-            $values[$paramName] = $value;
+            $values[$paramName] = self::normalizeParamValueForDefinition($value, $definition);
         }
 
         return $values;
+    }
+
+    public static function normalizeParamValueForDefinition(mixed $value, array $definition): mixed
+    {
+        $defaultValue = $definition['default'] ?? null;
+        $type = strtolower(trim((string)($definition['type'] ?? '')));
+        $expectsArray = $type === 'array' || is_array($defaultValue);
+
+        if (!$expectsArray || is_array($value)) {
+            return $value;
+        }
+
+        if ($value === null) {
+            return is_array($defaultValue) ? $defaultValue : [];
+        }
+
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        $trimmedValue = trim($value);
+        if ($trimmedValue === '') {
+            return is_array($defaultValue) ? $defaultValue : [];
+        }
+
+        $decodedValue = json_decode($trimmedValue, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decodedValue)) {
+            return $decodedValue;
+        }
+
+        return $value;
     }
 
     /**
@@ -663,6 +694,9 @@ class ThemeData
             }
 
             $configIdentify = "{$identify}.param.{$paramName}.value";
+            if (is_array($value)) {
+                $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
             self::set($configIdentify, (string)$value, $scope, $locale);
         }
     }

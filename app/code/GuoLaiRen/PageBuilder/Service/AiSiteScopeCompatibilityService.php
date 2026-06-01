@@ -1826,8 +1826,15 @@ class AiSiteScopeCompatibilityService
      */
     private function resolveSelectedContentLocale(array $scope, array $websiteProfile): string
     {
+        if ($this->contentLocaleLooksLikeAdminDefaultLeak($scope, $websiteProfile)) {
+            return \trim((string)($scope['plan_locale'] ?? ''));
+        }
+
         foreach ([
             $scope['ai_content_locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $websiteProfile['content_locale'] ?? null,
+            $scope['plan_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $websiteProfile['default_locale'] ?? null,
             $scope['default_language'] ?? null,
@@ -1892,6 +1899,26 @@ class AiSiteScopeCompatibilityService
         }
 
         return '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function contentLocaleLooksLikeAdminDefaultLeak(array $scope, array $websiteProfile): bool
+    {
+        if (\trim((string)($scope['ai_content_locale'] ?? '')) !== '') {
+            return false;
+        }
+
+        $contentLocale = \trim((string)($scope['content_locale'] ?? ''));
+        $defaultLocale = \trim((string)($scope['default_locale'] ?? $websiteProfile['default_locale'] ?? ''));
+
+        return $contentLocale !== ''
+            && $defaultLocale !== ''
+            && \trim((string)($scope['plan_locale'] ?? '')) !== ''
+            && $contentLocale === $defaultLocale
+            && \trim((string)($scope['plan_locale'] ?? '')) !== $contentLocale;
     }
 
     /**

@@ -1,4 +1,8 @@
-<?php if ($this->getData('layoutType') && class_exists(\Weline\Theme\Block\Partials::class)): ?>
+<?php
+$themeData = $this->getData('theme') ?? [];
+$layoutType = $this->getData('layoutType') ?: ($themeData['layoutType'] ?? null);
+?>
+<?php if ($layoutType && class_exists(\Weline\Theme\Block\Partials::class)): ?>
     <?php
     $footerPartials = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);
     $footerPartials->setData('area', 'frontend');

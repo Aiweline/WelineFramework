@@ -216,6 +216,10 @@ final class AiSiteExecutionBlueprintService
 
     private function resolveStageOneContentLocale(array $scope, string $planLocale = ''): string
     {
+        if ($this->stageOneContentLocaleLooksLikeAdminDefaultLeak($scope, $planLocale)) {
+            return \trim((string)($scope['plan_locale'] ?? $planLocale));
+        }
+
         foreach ([
             $scope['ai_content_locale'] ?? null,
             \is_array($scope['plan_json'] ?? null) && \is_array($scope['plan_json']['stage1_contract'] ?? null)
@@ -231,10 +235,11 @@ final class AiSiteExecutionBlueprintService
             \is_array($scope['plan_structured'] ?? null) ? ($scope['plan_structured']['content_locale'] ?? null) : null,
             \is_array($scope['stage1_contract'] ?? null) ? ($scope['stage1_contract']['content_locale'] ?? null) : null,
             $scope['plan_generated_locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $scope['plan_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['website_profile']['default_locale'] ?? null,
-            $scope['website_profile']['content_locale'] ?? null,
-            $scope['content_locale'] ?? null,
             $scope['default_language'] ?? null,
             $planLocale,
         ] as $value) {
@@ -248,6 +253,29 @@ final class AiSiteExecutionBlueprintService
         }
 
         return '';
+    }
+
+    /**
+     * Admin UI locale can leak into default_locale/content_locale while the user
+     * selected a different plan language in the workspace form.
+     *
+     * @param array<string, mixed> $scope
+     */
+    private function stageOneContentLocaleLooksLikeAdminDefaultLeak(array $scope, string $planLocale = ''): bool
+    {
+        if (\trim((string)($scope['ai_content_locale'] ?? '')) !== '') {
+            return false;
+        }
+
+        $contentLocale = \trim((string)($scope['content_locale'] ?? ''));
+        $defaultLocale = \trim((string)($scope['default_locale'] ?? $scope['website_profile']['default_locale'] ?? ''));
+        $resolvedPlanLocale = \trim((string)($scope['plan_locale'] ?? $planLocale));
+
+        return $contentLocale !== ''
+            && $defaultLocale !== ''
+            && $resolvedPlanLocale !== ''
+            && $contentLocale === $defaultLocale
+            && $resolvedPlanLocale !== $contentLocale;
     }
 
     /**
@@ -1111,13 +1139,9 @@ final class AiSiteExecutionBlueprintService
             $pageType,
             $page,
             $contract,
-            [
+            $this->buildStageOneValidatorContext($scope, (string)($scope['plan_locale'] ?? ''), [
                 'generation_attempts' => ['resume_checkpoint_validation' => 1],
-                'recovery_count' => 0,
-                'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? '')),
-                'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
-                'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
-            ]
+            ])
         );
 
         return !empty($report['passed']);
@@ -1287,13 +1311,9 @@ final class AiSiteExecutionBlueprintService
             $pageType,
             $page,
             $contract,
-            [
+            $this->buildStageOneValidatorContext($scope, (string)($scope['plan_locale'] ?? ''), [
                 'generation_attempts' => ['page_checkpoint' => 1],
-                'recovery_count' => 0,
-                'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? '')),
-                'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
-                'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
-            ]
+            ])
         );
 
         return !empty($report['passed']);
@@ -1504,6 +1524,166 @@ final class AiSiteExecutionBlueprintService
         $prefix = $completed ? '页面总设计已生成' : '正在生成页面总设计';
 
         return $prefix . '（' . $current . '/' . $totalPages . '）：' . $pageKey;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @param list<string> $completedPageTypes
+     * @return array<string, mixed>
+     */
+    private function initializeStageOnePageFanoutProgress(array $pageTypes, array $completedPageTypes = []): array
+    {
+        $pageTypes = \array_values(\array_unique(\array_filter(\array_map(
+            static fn(mixed $pageType): string => \trim((string)$pageType),
+            $pageTypes
+        ), static fn(string $pageType): bool => $pageType !== '')));
+        $completedLookup = \array_fill_keys($completedPageTypes, true);
+        $pageStatuses = [];
+        foreach ($pageTypes as $pageType) {
+            $pageStatuses[$pageType] = [
+                'status' => isset($completedLookup[$pageType]) ? 'done' : 'pending',
+                'message' => isset($completedLookup[$pageType]) ? 'Reused saved page plan checkpoint.' : 'Waiting for page fanout worker.',
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+        }
+
+        return [
+            'total' => \count($pageTypes),
+            'page_types' => $pageTypes,
+            'page_statuses' => $pageStatuses,
+        ];
+    }
+
+    /**
+     * @param callable(array<string, mixed>):void|null $onProgress
+     * @param array<string, mixed> $fanoutProgress
+     * @param array<string, mixed> $context
+     */
+    private function emitStageOnePageFanoutProgress(
+        ?callable $onProgress,
+        array &$fanoutProgress,
+        string $pageType,
+        string $status,
+        array $context = []
+    ): void {
+        if ($onProgress === null) {
+            return;
+        }
+
+        $pageType = \trim($pageType);
+        $status = \trim($status) !== '' ? \trim($status) : 'running';
+        $message = \trim((string)($context['message'] ?? ''));
+        if ($pageType !== '') {
+            $pageStatuses = \is_array($fanoutProgress['page_statuses'] ?? null) ? $fanoutProgress['page_statuses'] : [];
+            $pageStatuses[$pageType] = \array_replace(
+                \is_array($pageStatuses[$pageType] ?? null) ? $pageStatuses[$pageType] : [],
+                [
+                    'status' => $status,
+                    'message' => $message !== '' ? $message : $status,
+                    'updated_at' => \date('Y-m-d H:i:s'),
+                ]
+            );
+            if (isset($context['error_message']) && \trim((string)$context['error_message']) !== '') {
+                $pageStatuses[$pageType]['error_message'] = \trim((string)$context['error_message']);
+            }
+            $fanoutProgress['page_statuses'] = $pageStatuses;
+        }
+
+        $snapshot = $this->summarizeStageOnePageFanoutProgress($fanoutProgress);
+        $progressMessage = $this->buildStageOnePageFanoutProgressMessage($snapshot);
+        $progressPercent = \max(60, \min(82, 60 + (int)\floor(((int)$snapshot['done_count'] / \max(1, (int)$snapshot['total'])) * 22)));
+        $this->emitStageOnePipelineProgress(
+            $onProgress,
+            $progressMessage,
+            $progressPercent,
+            'page_plan',
+            'fanout_progress',
+            \array_replace([
+                'page_type' => $pageType,
+                'page_total' => (int)$snapshot['total'],
+                'stage1_page_progress' => $snapshot,
+                'queue_process' => $progressMessage,
+            ], $context)
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $fanoutProgress
+     * @return array<string, mixed>
+     */
+    private function summarizeStageOnePageFanoutProgress(array $fanoutProgress): array
+    {
+        $pageTypes = \is_array($fanoutProgress['page_types'] ?? null) ? \array_values(\array_map('strval', $fanoutProgress['page_types'])) : [];
+        $pageStatuses = \is_array($fanoutProgress['page_statuses'] ?? null) ? $fanoutProgress['page_statuses'] : [];
+        $groups = [
+            'running' => [],
+            'done' => [],
+            'failed' => [],
+            'pending' => [],
+        ];
+        $details = [];
+        foreach ($pageTypes as $pageType) {
+            $status = \strtolower(\trim((string)($pageStatuses[$pageType]['status'] ?? 'pending')));
+            $detailMessage = \trim((string)($pageStatuses[$pageType]['message'] ?? ''));
+            $detail = [
+                'page_type' => $pageType,
+                'status' => $status !== '' ? $status : 'pending',
+                'message' => $this->clipText($detailMessage, 180),
+                'updated_at' => \trim((string)($pageStatuses[$pageType]['updated_at'] ?? '')),
+            ];
+            $errorMessage = \trim((string)($pageStatuses[$pageType]['error_message'] ?? ''));
+            if ($errorMessage !== '') {
+                $detail['error_message'] = $this->clipText($errorMessage, 180);
+            }
+            $details[] = $detail;
+            if (\in_array($status, ['done', 'passed', 'checkpoint'], true)) {
+                $groups['done'][] = $pageType;
+            } elseif (\in_array($status, ['failed', 'error', 'retryable_failure'], true)) {
+                $groups['failed'][] = $pageType;
+            } elseif (\in_array($status, ['running', 'retrying'], true)) {
+                $groups['running'][] = $pageType;
+            } else {
+                $groups['pending'][] = $pageType;
+            }
+        }
+
+        return [
+            'total' => \count($pageTypes),
+            'running' => $groups['running'],
+            'done' => $groups['done'],
+            'failed' => $groups['failed'],
+            'pending' => $groups['pending'],
+            'done_count' => \count($groups['done']),
+            'failed_count' => \count($groups['failed']),
+            'running_count' => \count($groups['running']),
+            'pending_count' => \count($groups['pending']),
+            'remaining_count' => \count($groups['running']) + \count($groups['pending']),
+            'details' => $details,
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     */
+    private function buildStageOnePageFanoutProgressMessage(array $snapshot): string
+    {
+        $formatList = static function (array $items): string {
+            $items = \array_values(\array_filter(\array_map('strval', $items), static fn(string $item): bool => $item !== ''));
+            if ($items === []) {
+                return '-';
+            }
+
+            return \implode(', ', \array_slice($items, 0, 8)) . (\count($items) > 8 ? ', +' . ((string)(\count($items) - 8)) : '');
+        };
+
+        return 'Stage 1 page fanout: total ' . (string)((int)($snapshot['total'] ?? 0))
+            . ' | done ' . (string)((int)($snapshot['done_count'] ?? 0))
+            . ' | remaining ' . (string)((int)($snapshot['remaining_count'] ?? 0))
+            . ' | running [' . $formatList(\is_array($snapshot['running'] ?? null) ? $snapshot['running'] : []) . ']'
+            . ' | done pages [' . $formatList(\is_array($snapshot['done'] ?? null) ? $snapshot['done'] : []) . ']'
+            . ' | failed [' . $formatList(\is_array($snapshot['failed'] ?? null) ? $snapshot['failed'] : []) . ']'
+            . ' | pending [' . $formatList(\is_array($snapshot['pending'] ?? null) ? $snapshot['pending'] : []) . ']';
     }
 
     /**
@@ -3116,6 +3296,18 @@ final class AiSiteExecutionBlueprintService
             return $prebuiltResults;
         }
 
+        $fanoutProgress = $this->initializeStageOnePageFanoutProgress(
+            \array_values(\array_unique(\array_merge(\array_keys($prebuiltResults), $pageTypes))),
+            \array_keys($prebuiltResults)
+        );
+        $this->emitStageOnePageFanoutProgress(
+            $onProgress,
+            $fanoutProgress,
+            '',
+            'pending',
+            ['message' => 'Stage 1 page fanout queued with ' . \count($pageTypes) . ' active page tasks.']
+        );
+
         $concurrency = \max(1, \count($pageTypes));
         $ai = $this->getAiService();
         $adapterRequestParams = $this->buildStageOneAiAdapterRequestParams($scope, $websiteProfile);
@@ -3139,7 +3331,14 @@ final class AiSiteExecutionBlueprintService
                 'recovery' => 0,
                 'status' => 'pending',
             ];
-            $tasks[$pageKey] = function (array $sessionParams) use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onProgress, &$completedPages, $totalPages, &$generationAttempts, $adapterRequestParams, $onCheckpoint, $checkpointSignature, $checkpointPageTypes): array {
+            $tasks[$pageKey] = function (array $sessionParams) use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onProgress, &$completedPages, $totalPages, &$generationAttempts, $adapterRequestParams, $onCheckpoint, $checkpointSignature, $checkpointPageTypes, &$fanoutProgress): array {
+                $this->emitStageOnePageFanoutProgress(
+                    $onProgress,
+                    $fanoutProgress,
+                    $pageKey,
+                    'running',
+                    ['message' => 'Page plan worker running: ' . $pageKey]
+                );
                 $baselinePage = \is_array($planJson['pages'][$pageKey] ?? null) ? $planJson['pages'][$pageKey] : [];
                 $requestParams = \array_merge($adapterRequestParams, $sessionParams);
                 $useSegmentedPagePlan = $this->shouldUseSegmentedStageOnePagePlan($pageKey, $scope);
@@ -3188,13 +3387,10 @@ final class AiSiteExecutionBlueprintService
                     $pageKey,
                     $pagePlan,
                     $stageOneContract,
-                    [
+                    $this->buildStageOneValidatorContext($scope, $planLocale, [
                         'generation_attempts' => ['page_primary' => 1],
-                        'recovery_count' => 0,
                         'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? '')),
-                        'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
-                        'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
-                    ]
+                    ])
                 );
                 $pageCheckpointPassed = $this->hasStageOnePagePlanCheckpoint([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)
                     && !empty($pageValidationReport['passed']);
@@ -3215,6 +3411,13 @@ final class AiSiteExecutionBlueprintService
                         'page_plan',
                         'retry',
                         ['page_type' => $pageKey]
+                    );
+                    $this->emitStageOnePageFanoutProgress(
+                        $onProgress,
+                        $fanoutProgress,
+                        $pageKey,
+                        'retrying',
+                        ['message' => 'Page plan worker retrying strict recovery: ' . $pageKey]
                     );
                     if ($useSegmentedPagePlan) {
                         $segmentedRecoveryInstruction = 'Previous segmented page plan failed Stage-1 page validation: '
@@ -3278,13 +3481,11 @@ final class AiSiteExecutionBlueprintService
                     $pageKey,
                     $pagePlan,
                     $stageOneContract,
-                    [
+                    $this->buildStageOneValidatorContext($scope, $planLocale, [
                         'generation_attempts' => ['page_final' => 1],
                         'recovery_count' => (int)($generationAttempts['page_fanout'][$pageKey]['recovery'] ?? 0),
                         'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? '')),
-                        'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
-                        'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
-                    ]
+                    ])
                 );
                 $finalCheckpointPassed = $this->hasStageOnePagePlanCheckpoint([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)
                     && !empty($finalPageValidationReport['passed']);
@@ -3308,6 +3509,18 @@ final class AiSiteExecutionBlueprintService
                         $checkpointPageTypes
                     );
                 }
+                $this->emitStageOnePageFanoutProgress(
+                    $onProgress,
+                    $fanoutProgress,
+                    $pageKey,
+                    $finalCheckpointPassed ? 'done' : 'failed',
+                    [
+                        'message' => $finalCheckpointPassed
+                            ? 'Page plan worker completed: ' . $pageKey
+                            : 'Page plan worker failed validation: ' . $pageKey,
+                        'error_message' => $finalCheckpointPassed ? '' : (string)($generationAttempts['page_fanout'][$pageKey]['final_failure_summary'] ?? ''),
+                    ]
+                );
                 $pageProgress = 60 + (int)\floor(($completedPages / \max(1, $totalPages)) * 22);
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
@@ -3354,6 +3567,16 @@ final class AiSiteExecutionBlueprintService
                 $message = 'Stage-one page fanout returned a page plan without usable blocks.';
                 $retryableFailures[$pageKey] = $this->buildStageOneRetryablePageFailureFromFanoutAttempt($pageKey, $message, $fanoutAttempt);
                 $generationAttempts['page_fanout'][$pageKey]['status'] = 'retryable_failure';
+                $this->emitStageOnePageFanoutProgress(
+                    $onProgress,
+                    $fanoutProgress,
+                    $pageKey,
+                    'failed',
+                    [
+                        'message' => 'Page plan worker produced no usable blocks: ' . $pageKey,
+                        'error_message' => $retryableFailures[$pageKey]['message'],
+                    ]
+                );
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
                     'Page plan generation returned no usable blocks and is waiting for retry: ' . $pageKey,
@@ -3375,6 +3598,16 @@ final class AiSiteExecutionBlueprintService
                 $fanoutAttempt
             );
             $generationAttempts['page_fanout'][$pageKey]['status'] = 'error';
+            $this->emitStageOnePageFanoutProgress(
+                $onProgress,
+                $fanoutProgress,
+                $pageKey,
+                'failed',
+                [
+                    'message' => 'Page plan worker failed: ' . $pageKey,
+                    'error_message' => $retryableFailures[$pageKey]['message'],
+                ]
+            );
             $this->emitStageOnePipelineProgress(
                 $onProgress,
                 'Page plan generation failed and is waiting for retry: ' . $pageKey,
@@ -3700,11 +3933,6 @@ final class AiSiteExecutionBlueprintService
             }
 
             $needsImage = (bool)$intent['needs_image'];
-            if ($generatedImageTargetKey !== '' && $segmentKey === $generatedImageTargetKey && !$needsImage) {
-                $issues[] = $this->stageOneSegmentRetryIssue('page_missing_generated_image_intent', 'pages.' . $pageType . '.blocks.image_intent', $pageType, $segmentKey, [
-                    'expected' => 'generated image target block must set image_intent.needs_image=true with concrete image fields',
-                ]);
-            }
             if (!$this->hasCompleteStageOneImageIntent($block)) {
                 $issues[] = $this->stageOneSegmentRetryIssue(
                     $needsImage ? 'invalid_image_intent_field' : 'missing_css_motif_for_no_image_block',
@@ -4023,11 +4251,11 @@ final class AiSiteExecutionBlueprintService
             }
             if ($generatedImageTargetKey !== '' && $segmentKey === $generatedImageTargetKey) {
                 $examples[$segmentKey] = [
-                    'needs_image' => true,
-                    'image_role' => 'hero_image or section_image',
-                    'image_subject' => 'concrete generated scene/product/interface subject tied to this block',
-                    'placement' => 'media_panel or inline_visual',
-                    'media_strategy' => 'Generated image integrated with this block; do not say CSS-only/no generated image',
+                    'needs_image' => 'prefer true when the generated image strengthens this block, otherwise false',
+                    'image_role' => 'hero_image or section_image when needs_image=true; css_motif when false',
+                    'image_subject' => 'concrete generated scene/product/interface subject when true; none when false',
+                    'placement' => 'media_panel or inline_visual when true; background_layer/none when false',
+                    'media_strategy' => 'Prefer a generated image integrated with this block, but CSS-only/no generated image is allowed when the page still works visually.',
                 ];
                 continue;
             }
@@ -4427,7 +4655,7 @@ final class AiSiteExecutionBlueprintService
         $orderedKeyExample = $this->orderStageOneBlockKeysForPrompt($requiredBlockKeys, $optionalBlockKeys, $targetBlockCount);
         $isPolicyPage = \in_array($pageType, ['privacy_policy', 'terms_of_service', 'refund_policy', 'shipping_policy', 'cookie_policy'], true);
         $generatedImageTargetRule = !$isPolicyPage
-            ? 'Generated-image target rule: choose one ordered_block_keys value as generated_image_target_block_key. Prefer the opening/media/support block that can carry a real generated scene, product interface, phone mockup, support desk, or editorial visual. That target block segment must later set image_intent.needs_image=true; other blocks may use complete CSS-only motifs.'
+            ? 'Generated-image target preference: choose one ordered_block_keys value as generated_image_target_block_key when a stable real scene, product interface, phone mockup, support desk, or editorial visual would improve the page. This is a richness preference, not a completion gate; the target block may still use complete CSS-only visual planning when generated media is unstable.'
             : 'Policy media rule: generated_image_target_block_key must be an empty string for dense policy/legal pages unless the page contract explicitly says otherwise.';
 
         return \implode("\n", \array_values(\array_filter([
@@ -4462,7 +4690,7 @@ final class AiSiteExecutionBlueprintService
             'Schema:',
             '{"page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"ordered_block_keys":["string"],"generated_image_target_block_key":"string or empty for policy pages","block_blueprints":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","content_focus":"string","visual_signature_hint":"string","image_intent_hint":"generated image subject or CSS-only motif","handoff_rule":"string"}]}}',
             'Page skeleton example (copy the structure, not the content; rewrite for this page): ' . $this->stageOnePageSkeletonExampleJson(),
-            'Self-check before return: ordered_block_keys length equals target, every required block key appears exactly once, the first key equals the first required key, non-policy generated_image_target_block_key is one of ordered_block_keys, final CTA stays near the page end unless it is the page opening, and block_blueprints covers every ordered key. If too long, shorten blueprint strings; do not omit keys.',
+            'Self-check before return: ordered_block_keys length equals target, every required block key appears exactly once, the first key equals the first required key, generated_image_target_block_key is empty or one of ordered_block_keys, final CTA stays near the page end unless it is the page opening, and block_blueprints covers every ordered key. If too long, shorten blueprint strings; do not omit keys.',
         ], static fn(string $line): bool => \trim($line) !== '')));
     }
 
@@ -4513,12 +4741,12 @@ final class AiSiteExecutionBlueprintService
             }
         }
         $firstBlockSegmentRule = (!$isPolicyPage && $firstOrderedBlockKey !== '' && $firstOrderedBlockKey !== $generatedImageTargetKey && \in_array($firstOrderedBlockKey, $segmentKeys, true))
-            ? 'First-block media guidance for this segment: block_key=' . $firstOrderedBlockKey . ' may use CSS-only visual planning when that fits the page narrative. Ensure the page still has at least one generated-image block elsewhere when this first block is CSS-only.'
+            ? 'First-block media guidance for this segment: block_key=' . $firstOrderedBlockKey . ' may use a generated image when it strengthens the page narrative, but complete CSS-only visual planning is acceptable.'
             : '';
         $generatedImageSegmentRule = (!$isPolicyPage && $generatedImageTargetKey !== '' && \in_array($generatedImageTargetKey, $segmentKeys, true))
-            ? 'Generated-image assignment for this segment: block_key=' . $generatedImageTargetKey . ' is the page-level generated_image_target_block_key. This block MUST set image_intent.needs_image=true, use a concrete generated scene/product/interface/editorial subject, and visual_signature.media_strategy must describe the real image integration without CSS-only/no generated image wording.'
+            ? 'Generated-image preference for this segment: block_key=' . $generatedImageTargetKey . ' is the preferred media target. Prefer image_intent.needs_image=true with a concrete generated scene/product/interface/editorial subject when it fits, but do not block the page when a complete CSS-only motif is the stable result.'
             : (!$isPolicyPage && $generatedImageTargetKey !== ''
-                ? 'Generated-image assignment for this page: block_key=' . $generatedImageTargetKey . ' carries the page-level generated image in another segment. Blocks in this segment may use generated images only when their own blueprint needs one; otherwise use complete CSS-only motifs.'
+                ? 'Generated-image preference for this page: block_key=' . $generatedImageTargetKey . ' is the preferred media target in another segment. Blocks in this segment may use generated images when their own blueprint benefits; otherwise use complete CSS-only motifs.'
                 : '');
         $blockReturnExamplesJson = $this->stageOneBlockReturnExamplesJson();
         $fieldPlanIntentExamplesJson = $this->stageOneFieldPlanIntentExamplesJson();
@@ -4550,7 +4778,7 @@ final class AiSiteExecutionBlueprintService
             'Visible-copy rule: content, field_plan.sample, and execution_script.core_copy are visitor-facing copy seeds. Do not put layout recipes, hover notes, CSS values, or why-this-block explanations in those fields.',
             'Output budget: each block.content/core_copy <= 110 chars; feature_points max 2 and <= 12 chars; field_plan.sample <= 56 chars; implementation_note <= 32 chars; visual_signature values <= 56 chars; design_tags arrays max 2 items.',
             'Creativity rule: obey the block schema but invent the block-specific composition, motion, surface, and visitor message from the page goal. Do not copy examples verbatim or make every block a generic card grid.',
-            'Image rule: non-policy pages need at least one generated scene/product/interface image somewhere in the page, but it does not have to be the first block. Every image_intent must include all required keys. If needs_image=false, visual_signature.media_strategy must start with "CSS-only/no generated image" and image_intent.css_motif/visual_atmosphere/image_treatment must be filled.',
+            'Image richness rule: non-policy pages should prefer real generated scene/product/interface images where they strengthen the page, but image count is not a completion gate. Every image_intent must include all required keys. If needs_image=false or generated media is unstable, visual_signature.media_strategy must start with "CSS-only/no generated image" and image_intent.css_motif/visual_atmosphere/image_treatment must be filled with a polished visual companion.',
             $generatedImageSegmentRule,
             'Media decision examples for this exact segment: ' . $segmentMediaDecisionExamplesJson . '. Use this to choose generated-image vs CSS-only path before writing the block JSON; rewrite the wording for the current brand and block.',
             'needs_image type rule: image_intent.needs_image MUST be the JSON boolean true or false. Never return "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text; put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment.',
@@ -5226,7 +5454,7 @@ final class AiSiteExecutionBlueprintService
         $pagePlan['blocks'] = $this->repairAiStageOneBlocksBeforeValidation(
             $blocks,
             $pageType,
-            $planLocale,
+            $contentLocale !== '' ? $contentLocale : $planLocale,
             ['theme_design' => \is_array($scope['theme_design'] ?? null) ? $scope['theme_design'] : []],
             \is_array($pagePlan['page_design_plan'] ?? null) ? $pagePlan['page_design_plan'] : []
         );
@@ -5598,8 +5826,8 @@ final class AiSiteExecutionBlueprintService
             '- CSS-only image_intent examples by common block_key: ' . $cssOnlyImageIntentExamplesJson,
             '- Complete block examples (copy the shape, not the exact content; rewrite for this page/locale/block): ' . $blockReturnExamplesJson,
             '- When image_intent.needs_image=true, image_subject must be a concrete block-level generated visual: a scene, product/editorial photograph, interface/product mockup, environment, people moment, or premium illustration tied to the block goal. When needs_image=false, image_subject must be "none" and css_motif carries the visual plan.',
-            '- Non-policy page visual asset rule: every non-policy page must include at least one block with image_intent.needs_image=true and a concrete generated image subject. Do not make an entire home/about/contact/custom page CSS-only. Contact/support pages should use a real generated support-desk, app-help, product-interface, or customer-service scene where it best fits the page narrative.',
-            '- Preferred generated-image target examples by page type: ' . $this->stageOneGeneratedImageTargetExamplesJson() . '. Prefer these required/opening/support/article blocks when present, but keep narrative fit and still return all required blocks.',
+            '- Non-policy page visual asset preference: marketing pages should usually include real generated image slots when they strengthen the narrative. This is guidance for richer design, not a completion gate; complete CSS-only visual planning is acceptable when generated-image planning is unstable.',
+            '- Preferred generated-image target examples by page type: ' . $this->stageOneGeneratedImageTargetExamplesJson() . '. Prefer these required/opening/support/article blocks when present, but keep narrative fit, allow CSS-only alternatives, and still return all required blocks.',
             '- Non-policy opening image direction: for home_page, about_page, contact_page, and custom marketing pages, prefer a concrete generated scene/product/interface subject early in the page when it supports the narrative, but do not force block index 0 to be the generated-image block.',
             '- Do not use icon-only image subjects for page blocks. Invalid page-block subjects include app icon, shield badge, logo mark, sparkle glyph, line icon, avatar badge, chevron, symbol, SVG icon, download arrow, coin mark, or any subject that is only a decorative mark.',
             '- Icon/decorative visual boundary: when the visual need is small icons, badges, arrows, dividers, chips, rating stars, initials, or abstract marks, keep needs_image=false and describe the motif in css_motif/design_tags. Use needs_image=true only when the block needs a real generated scene/product/interface/editorial visual.',
@@ -5651,13 +5879,11 @@ final class AiSiteExecutionBlueprintService
             $pageType,
             $invalidPagePlan,
             $stageOneContract,
-            [
+            $this->buildStageOneValidatorContext($scope, $planLocale, [
                 'generation_attempts' => ['recovery_prompt' => 1],
                 'recovery_count' => 1,
                 'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? '')),
-                'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
-                'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
-            ]
+            ])
         );
 
         return $this->buildAiStageOnePagePrompt(
@@ -5782,11 +6008,7 @@ final class AiSiteExecutionBlueprintService
             $rules[] = 'Issue-specific rule for visual/message uniqueness:' . $targetText . ' rewrite each affected block with a concrete block-specific composition_pattern, spatial_rhythm, media_strategy, surface_treatment, interaction_pattern, headline, and core_copy. No visual_signature field may be empty, "none", "same as above", or a schema filler value. Keep required block keys unchanged; do not add unrelated blocks just to create variety.';
         }
         if (isset($codes['page_missing_generated_image_intent'])) {
-            $targetText = $imageTargets !== []
-                ? (' Target block(s): ' . \implode(', ', \array_values(\array_unique($imageTargets))) . '.')
-                : '';
-            $rules[] = 'Issue-specific rule for page_missing_generated_image_intent:' . $targetText
-                . ' the returned page must contain at least one block with image_intent.needs_image=true. Prefer the named block when it is a natural media target, otherwise place the generated-image slot on the block that best fits the page narrative. Use image_role hero_image or section_image, placement background_layer/media_panel/inline_visual, reuse_policy reuse_when_intent_matches, and a concrete image_subject tied to that block. Do not force block index 0 to be the generated-image block solely to satisfy this issue.';
+            $rules[] = 'Issue-specific rule for page_missing_generated_image_intent: generated media is now a preference, not a hard gate. Return the complete page object with valid image_intent on every block; use needs_image=true only when the block has a concrete stable generated image subject, otherwise use a complete CSS-only motif.';
         }
         if (isset($codes['icon_only_image_subject'])) {
             $targetText = $iconOnlyImageTargets !== []
@@ -7620,6 +7842,22 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildStageOneValidatorContext(array $scope, string $planLocale, array $overrides = []): array
+    {
+        return \array_replace([
+            'recovery_count' => 0,
+            'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? '')),
+            'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
+            'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
+            'plan_locale' => $planLocale,
+            'content_locale' => $this->resolveStageOneContentLocale($scope, $planLocale),
+        ], $overrides);
+    }
+
+    /**
      * @param array<string, mixed> $planJson
      * @param list<string> $pageTypes
      */
@@ -8768,6 +9006,13 @@ final class AiSiteExecutionBlueprintService
             $template = \trim((string)($block['component_kind'] ?? $block['template'] ?? ''));
             $sectionName = \trim((string)($block['section_code'] ?? $blockKey));
             $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
+            $fieldPlan = $this->repairStageOneFieldPlanShapeBeforeValidation(
+                $fieldPlan,
+                $block,
+                $blockKey,
+                (string)$pageType,
+                $planLocale
+            );
             foreach ($fieldPlan as $fieldIndex => $row) {
                 if (!\is_array($row)) {
                     continue;
@@ -8811,6 +9056,180 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \array_values($blocks);
+    }
+
+    /**
+     * @param list<array<string, mixed>|mixed> $fieldPlan
+     * @param array<string, mixed> $block
+     * @return list<array<string, mixed>>
+     */
+    private function repairStageOneFieldPlanShapeBeforeValidation(
+        array $fieldPlan,
+        array $block,
+        string $blockKey,
+        string $pageType,
+        string $planLocale
+    ): array {
+        $rowsByField = [];
+        foreach ($fieldPlan as $index => $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $field = \trim((string)($row['field'] ?? ''));
+            if ($field === '') {
+                $field = $index === 0 ? 'headline' : ($index === 1 ? 'supporting_copy' : 'context_detail');
+            }
+            $row['field'] = $field;
+            $row = $this->repairStageOneFieldPlanRowBeforeValidation($row, $block, $blockKey, $pageType, $planLocale);
+            $normalizedField = \mb_strtolower($field);
+            if ($normalizedField !== '' && !isset($rowsByField[$normalizedField])) {
+                $rowsByField[$normalizedField] = $row;
+            }
+        }
+
+        $usedFields = [];
+        $takeRow = function (array $candidateFields, string $targetField) use (&$rowsByField, &$usedFields, $block, $blockKey, $pageType, $planLocale): array {
+            foreach ($candidateFields as $candidateField) {
+                $normalizedField = \mb_strtolower(\trim((string)$candidateField));
+                if ($normalizedField === '' || isset($usedFields[$normalizedField]) || !\is_array($rowsByField[$normalizedField] ?? null)) {
+                    continue;
+                }
+                $usedFields[$normalizedField] = true;
+                $row = $rowsByField[$normalizedField];
+                $row['field'] = $targetField;
+                return $this->repairStageOneFieldPlanRowBeforeValidation($row, $block, $blockKey, $pageType, $planLocale);
+            }
+
+            return $this->repairStageOneFieldPlanRowBeforeValidation(
+                ['field' => $targetField],
+                $block,
+                $blockKey,
+                $pageType,
+                $planLocale
+            );
+        };
+
+        $thirdField = $this->resolveStageOneThirdFieldPlanKey($fieldPlan, $block);
+
+        return [
+            $takeRow(['headline', 'title'], 'headline'),
+            $takeRow(['supporting_copy', 'body_copy', 'description', 'summary', 'subtitle'], 'supporting_copy'),
+            $takeRow([$thirdField, 'context_detail', 'proof_detail', 'image_brief', 'form_label', 'policy_summary', 'cta_label', 'action_label', 'button_text'], $thirdField),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function repairStageOneFieldPlanRowBeforeValidation(
+        array $row,
+        array $block,
+        string $blockKey,
+        string $pageType,
+        string $planLocale
+    ): array {
+        $field = \trim((string)($row['field'] ?? ''));
+        if ($field === '') {
+            $field = 'context_detail';
+            $row['field'] = $field;
+        }
+
+        $template = \trim((string)($block['component_kind'] ?? $block['template'] ?? ''));
+        $sectionName = \trim((string)($block['section_code'] ?? $blockKey));
+        $sample = \trim((string)($row['sample'] ?? ''));
+        if ($sample === '' || $this->isPromptLikeStageOneText($sample, $field, $template, $sectionName, $pageType)) {
+            $sample = $this->buildStageOneFieldPlanSampleFromBlock($field, $block, $blockKey, $pageType, $planLocale);
+            $row['sample'] = $sample;
+        }
+
+        $implementationNote = $this->resolveStageOneFieldImplementationNote($row);
+        if (
+            $implementationNote === ''
+            || $this->isStageOneContractPromptLikeText($implementationNote)
+            || $this->isPromptLikeStageOneText($implementationNote, $field, $template, $sectionName, $pageType)
+        ) {
+            $implementationNote = $this->buildStageOneFieldImplementationNoteFromSample(
+                $field,
+                $sample,
+                $blockKey,
+                $pageType,
+                $planLocale
+            );
+        }
+
+        return $this->syncStageOneFieldImplementationNote($row, $implementationNote);
+    }
+
+    /**
+     * @param list<array<string, mixed>|mixed> $fieldPlan
+     * @param array<string, mixed> $block
+     */
+    private function resolveStageOneThirdFieldPlanKey(array $fieldPlan, array $block): string
+    {
+        $pageFlowRole = \mb_strtolower(\trim((string)($block['page_flow_role'] ?? '')));
+        $preferred = [];
+        foreach ($fieldPlan as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $field = \trim((string)($row['field'] ?? ''));
+            $normalizedField = \mb_strtolower($field);
+            if ($field === '' || \in_array($normalizedField, ['headline', 'title', 'supporting_copy', 'body_copy', 'description', 'summary', 'subtitle'], true)) {
+                continue;
+            }
+            $preferred[] = $field;
+        }
+
+        if ($preferred !== []) {
+            return $preferred[0];
+        }
+
+        return $pageFlowRole === 'cta' ? 'cta_label' : 'context_detail';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function buildStageOneFieldPlanSampleFromBlock(
+        string $field,
+        array $block,
+        string $blockKey,
+        string $pageType,
+        string $planLocale
+    ): string {
+        $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+        $featurePoints = \is_array($executionScript['feature_points'] ?? null) ? $executionScript['feature_points'] : [];
+        $featureTexts = [];
+        foreach ($featurePoints as $point) {
+            if (\is_scalar($point)) {
+                $featureTexts[] = \trim((string)$point);
+            }
+        }
+        $keywordTexts = [];
+        foreach (\is_array($block['keywords'] ?? null) ? $block['keywords'] : [] as $keyword) {
+            if (\is_scalar($keyword)) {
+                $keywordTexts[] = \trim((string)$keyword);
+            }
+        }
+        $sources = [
+            (string)($block['content'] ?? ''),
+            (string)($executionScript['core_copy'] ?? ''),
+            \implode(' · ', \array_filter($featureTexts)),
+            \implode(' · ', \array_filter($keywordTexts)),
+            (string)($block['goal'] ?? ''),
+        ];
+        foreach ($sources as $source) {
+            $source = \trim($source);
+            if ($source === '' || $this->isPromptLikeStageOneText($source, $field, '', $blockKey, $pageType)) {
+                continue;
+            }
+
+            return $this->clipText($source, 90);
+        }
+
+        return $this->buildStageOneConcreteFieldSample($field, $blockKey, $pageType, $planLocale);
     }
 
     /**
@@ -9128,8 +9547,9 @@ final class AiSiteExecutionBlueprintService
      * @param list<array<string,mixed>> $issues
      * @return array<string,mixed>
      */
-    private function applyStageOneIssueFallbacks(array $planJson, array $issues, string $planLocale): array
+    private function applyStageOneIssueFallbacks(array $planJson, array $issues, string $planLocale, string $contentLocale = ''): array
     {
+        $copyLocale = $contentLocale !== '' ? $contentLocale : $planLocale;
         foreach ($issues as $issue) {
             $pageType = \trim((string)($issue['page_type'] ?? ''));
             $blockKey = \trim((string)($issue['block_key'] ?? ''));
@@ -9186,13 +9606,9 @@ final class AiSiteExecutionBlueprintService
                     continue;
                 }
                 if ($fieldPath === 'content') {
-                    $blocks[$index]['content'] = $this->isEnglishLocale($planLocale)
-                        ? ('Visible ' . $blockKey . ' content rendered for users.')
-                        : ('在页面中呈现 ' . $blockKey . ' 的可见内容。');
+                    $blocks[$index]['content'] = $this->buildStageOneConcreteBlockContent($blockKey, $pageType, $copyLocale);
                 } elseif ($fieldPath === 'execution_script.core_copy') {
-                    $blocks[$index]['execution_script']['core_copy'] = $this->isEnglishLocale($planLocale)
-                        ? ('Core copy for ' . $blockKey . ' stays visible and actionable.')
-                        : ($blockKey . ' 的核心文案保持可见且可执行。');
+                    $blocks[$index]['execution_script']['core_copy'] = $this->buildStageOneConcreteCoreCopy($blockKey, $pageType, $copyLocale);
                 } elseif ($fieldPath === 'execution_script.feature_points') {
                     $blocks[$index]['execution_script']['feature_points'] = [
                         $this->buildStageOneFeaturePointFromBlockContext($blockKey, $pageType, 0, $planLocale),
@@ -9205,9 +9621,7 @@ final class AiSiteExecutionBlueprintService
                         $field = \trim((string)($fieldPlan[$fieldIndex]['field'] ?? ''));
                         $sample = \trim((string)($fieldPlan[$fieldIndex]['sample'] ?? ''));
                         if ($sample === '') {
-                            $sample = $this->isEnglishLocale($planLocale)
-                                ? ('Visible ' . ($field !== '' ? $field : 'content') . ' content for ' . $blockKey)
-                                : ($blockKey . ' 的' . ($field !== '' ? $field : '内容') . '可见文案');
+                            $sample = $this->buildStageOneConcreteFieldSample($field, $blockKey, $pageType, $copyLocale);
                             $fieldPlan[$fieldIndex]['sample'] = $sample;
                         }
                         $fieldPlan[$fieldIndex] = $this->syncStageOneFieldImplementationNote(
@@ -9219,11 +9633,11 @@ final class AiSiteExecutionBlueprintService
                 }
                 $content = \trim((string)($blocks[$index]['content'] ?? ''));
                 if ($this->isWeakStageOneBlockContent($content, $blockKey, $pageType)) {
-                    $blocks[$index]['content'] = $this->buildStageOneConcreteBlockContent($blockKey, $pageType, $planLocale);
+                    $blocks[$index]['content'] = $this->buildStageOneConcreteBlockContent($blockKey, $pageType, $copyLocale);
                 }
                 $coreCopy = \trim((string)($blocks[$index]['execution_script']['core_copy'] ?? ''));
                 if ($this->isWeakStageOneCoreCopy($coreCopy, $blockKey, $pageType)) {
-                    $blocks[$index]['execution_script']['core_copy'] = $this->buildStageOneConcreteCoreCopy($blockKey, $pageType, $planLocale);
+                    $blocks[$index]['execution_script']['core_copy'] = $this->buildStageOneConcreteCoreCopy($blockKey, $pageType, $copyLocale);
                 }
                 foreach (\is_array($blocks[$index]['field_plan'] ?? null) ? $blocks[$index]['field_plan'] : [] as $fpIndex => $fieldRow) {
                     if (!\is_array($fieldRow)) {
@@ -9232,7 +9646,7 @@ final class AiSiteExecutionBlueprintService
                     $field = \trim((string)($fieldRow['field'] ?? ''));
                     $sample = \trim((string)($fieldRow['sample'] ?? ''));
                     if ($this->isWeakStageOneFieldSample($sample, $field, $blockKey, $pageType)) {
-                        $blocks[$index]['field_plan'][$fpIndex]['sample'] = $this->buildStageOneConcreteFieldSample($field, $blockKey, $pageType, $planLocale);
+                        $blocks[$index]['field_plan'][$fpIndex]['sample'] = $this->buildStageOneConcreteFieldSample($field, $blockKey, $pageType, $copyLocale);
                     }
                 }
                 break;
@@ -9501,15 +9915,10 @@ final class AiSiteExecutionBlueprintService
                 (string)$pageType,
                 $page,
                 $contract,
-                [
+                $this->buildStageOneValidatorContext($scope, $planLocale, [
                     'generation_attempts' => ['problem_scan' => 1],
-                    'recovery_count' => 0,
                     'brief_description' => $briefDescription,
-                    'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
-                    'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
-                    'plan_locale' => $planLocale,
-                    'content_locale' => $this->resolveStageOneContentLocale($scope, $planLocale),
-                ]
+                ])
             );
             foreach (\is_array($pageValidationReport['issues'] ?? null) ? $pageValidationReport['issues'] : [] as $contractIssue) {
                 if (!\is_array($contractIssue)) {
@@ -10082,34 +10491,34 @@ final class AiSiteExecutionBlueprintService
 
     private function buildStageOneConcreteBlockContent(string $blockKey, string $pageType, string $locale): string
     {
-        if (!$this->isEnglishLocale($locale)) {
+        if ($this->isChineseLocale($locale)) {
             return $blockKey !== ''
                 ? ($blockKey . ' 区块直接展示客户可读内容、关键信息和下一步动作。')
-                : '该区块直接展示客户可读内容、关键信息和下一步动作。';
+                : ($pageType !== '' ? ($pageType . ' 页面区块直接展示客户可读内容、关键信息和下一步动作。') : '该区块直接展示客户可读内容、关键信息和下一步动作。');
         }
 
-        return $blockKey !== ''
-            ? ('The ' . $blockKey . ' block shows concrete customer-facing details, trust signals, and the next action on the page.')
-            : 'This block shows concrete customer-facing details, trust signals, and the next action on the page.';
+        $blockLabel = $blockKey !== '' ? $blockKey : ($pageType !== '' ? $pageType . ' section' : 'section');
+
+        return 'The ' . $blockLabel . ' block shows concrete customer-facing details, trust signals, and the next action on the page.';
     }
 
     private function buildStageOneConcreteCoreCopy(string $blockKey, string $pageType, string $locale): string
     {
-        if (!$this->isEnglishLocale($locale)) {
+        if ($this->isChineseLocale($locale)) {
             return $blockKey !== ''
                 ? ($blockKey . ' 区块用清晰文案说明用户会看到什么、为什么可信，以及下一步如何继续。')
-                : '该区块用清晰文案说明用户会看到什么、为什么可信，以及下一步如何继续。';
+                : ($pageType !== '' ? ($pageType . ' 页面区块用清晰文案说明用户会看到什么、为什么可信，以及下一步如何继续。') : '该区块用清晰文案说明用户会看到什么、为什么可信，以及下一步如何继续。');
         }
 
-        return $blockKey !== ''
-            ? ('The ' . $blockKey . ' block explains what customers get, why they can trust it, and which next step they can take now.')
-            : 'This block explains what customers get, why they can trust it, and which next step they can take now.';
+        $blockLabel = $blockKey !== '' ? $blockKey : ($pageType !== '' ? $pageType . ' section' : 'section');
+
+        return 'The ' . $blockLabel . ' block explains what customers get, why they can trust it, and which next step they can take now.';
     }
 
     private function buildStageOneConcreteFieldSample(string $field, string $blockKey, string $pageType, string $locale): string
     {
         $field = \trim($field);
-        if (!$this->isEnglishLocale($locale)) {
+        if ($this->isChineseLocale($locale)) {
             return match (\mb_strtolower($field)) {
                 'title', 'headline' => '清晰说明本区块的核心信息',
                 'subtitle', 'summary', 'description' => '补充客户需要理解的条件、步骤或结果',

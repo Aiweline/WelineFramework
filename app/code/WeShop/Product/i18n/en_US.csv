@@ -106,6 +106,20 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 在产品详情页主内容区域渲染产品图片、信息、购买选项等。包括产品图片画廊、基本信息、价格、库存状态、购买按钮等核心内容。,"Render product images, information, purchase options, etc., in the main content area of the product detail page. Includes core content such as product image gallery, basic information, price, stock status, and purchase button."
 产品详情标签内容,"Product Details Tab Content"
 在产品详情页标签区域渲染产品描述、规格、评价、问答等内容。支持多个标签页切换，包括商品详情、规格参数、用户评价、问答等。,"Render product description, specifications, reviews, Q&A, etc., in the tab area of the product detail page. Supports multiple tab switching, including product details, specifications, user reviews, Q&A, etc."
+产品详情描述内容,"Product detail description content"
+替换产品详情页描述标签面板的默认内容。未实现时使用产品描述字段和空态文案。,"Replace the default content of the product detail description tab panel. When it is not implemented, the product description field and empty state are used."
+产品详情规格内容,"Product detail specifications content"
+替换产品详情页规格标签面板的默认内容。未实现时使用规格表格和空态文案。,"Replace the default content of the product detail specifications tab panel. When it is not implemented, the specifications table and empty state are used."
+产品详情推荐区域内容,"Product detail recommendations content"
+替换产品详情页推荐区域的整体内容。适用于完整接管相关推荐、热销、最近浏览和搭配推荐区域。,"Replace the full recommendations area on the product detail page. Use this when taking over related products, bestsellers, recently viewed, and cross-sell recommendations."
+产品详情相关产品,"Product detail related products"
+在产品详情页推荐区域渲染相关产品列表。适用于只接管相关产品，不影响其他推荐组件。,"Render the related products list in the product detail recommendations area. Use this to take over related products without affecting other recommendation components."
+产品详情热销商品,"Product detail bestsellers"
+在产品详情页推荐区域渲染热销商品列表。,"Render the bestseller product list in the product detail recommendations area."
+产品详情最近浏览,"Product detail recently viewed"
+在产品详情页推荐区域渲染最近浏览商品列表。,"Render the recently viewed product list in the product detail recommendations area."
+产品详情搭配推荐,"Product detail cross-sell recommendations"
+在产品详情页推荐区域渲染搭配购买、交叉销售或向上销售商品列表。,"Render bundled, cross-sell, or up-sell product lists in the product detail recommendations area."
 产品编辑页步骤导航后,"After product edit step navigation"
 在后台产品编辑页步骤导航末尾追加模块自己的管理入口。,"Add module management entries after the backend product edit step navigation."
 产品编辑页内容后,"After product edit content"
@@ -114,23 +128,6 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 颜色,Color
 尺码,Size
 款式,Style
-红色,Red
-粉色,Pink
-绿色,Green
-黛青,Navy
-米杏,Beige
-月白,White
-天青,Blue
-雪青,Purple
-金棕,Gold
-栗棕,Brown
-墨黑,Black
-银灰,Silver
-原麻,Natural
-烟灰,Gray
-经典款,Classic
-生活款,Lifestyle
-细节款,Detail
 评分,Rating
 放大查看,"Zoom image"
 暂无图片,"No images"
@@ -148,20 +145,6 @@ SKU,SKU
 数量,Quantity
 加入购物车,"Add to Cart"
 立即购买,"Buy Now"
-商品详情,"Product Details"
-暂无商品详情,"No product details yet"
-暂无商品描述。,"No product description yet."
-暂无规格信息。,"No specifications available."
-顾客评价,"Customer Reviews"
-星,star
-匿名用户,"Anonymous customer"
-暂无评价,"No reviews yet"
-商品评价内容会在这里展示。,"Product reviews will appear here."
-商品问答,"Product Q&A"
-问,Q
-答,A
-暂无问答,"No questions yet"
-商品问答内容会在这里展示。,"Product Q&A content will appear here."
 结算页地址未配置,"Checkout page URL is not configured"
 "购物车 API 不支持 add 操作","Cart API does not support the add operation"
 "购物车 API 未初始化","Cart API is not initialized"
@@ -179,27 +162,18 @@ SKU,SKU
 添加购物车失败,"Failed to add to cart"
 已加入心愿单,已加入心愿单
 请先登录。,"Please log in."
-产品详情描述内容,"Product detail description content"
-"替换产品详情页描述标签面板的默认内容。未实现时使用产品描述字段和空态文案。","Replace the default content of the product detail description tab panel. When it is not implemented, the product description field and empty state are used."
-产品详情规格内容,"Product detail specifications content"
-"替换产品详情页规格标签面板的默认内容。未实现时使用规格表格和空态文案。","Replace the default content of the product detail specifications tab panel. When it is not implemented, the specifications table and empty state are used."
-产品详情推荐区域内容,"Product detail recommendations content"
-"替换产品详情页推荐区域的整体内容。适用于完整接管相关推荐、热销、最近浏览和搭配推荐区域。","Replace the full recommendations area on the product detail page. Use this when taking over related products, bestsellers, recently viewed, and cross-sell recommendations."
-产品详情相关产品,"Product detail related products"
-"在产品详情页推荐区域渲染相关产品列表。适用于只接管相关产品，不影响其他推荐组件。","Render the related products list in the product detail recommendations area. Use this to take over related products without affecting other recommendation components."
-产品详情热销商品,"Product detail bestsellers"
-在产品详情页推荐区域渲染热销商品列表。,"Render the bestseller product list in the product detail recommendations area."
-产品详情最近浏览,"Product detail recently viewed"
-在产品详情页推荐区域渲染最近浏览商品列表。,"Render the recently viewed product list in the product detail recommendations area."
-产品详情搭配推荐,"Product detail cross-sell recommendations"
-在产品详情页推荐区域渲染搭配购买、交叉销售或向上销售商品列表。,"Render bundled, cross-sell, or up-sell product lists in the product detail recommendations area."
 添加中,Adding
 已添加,Added
 跳转结算中,"Redirecting to checkout"
+"No product description available.","No product description available."
 Specifications,Specifications
+"No specifications available.","No specifications available."
 Q&A,Q&A
+"No questions yet","No questions yet"
+"Product questions will appear here when available.","Product questions will appear here when available."
 Reviews,Reviews
-Product detail tabs,"Product detail tabs"
+"No reviews yet","No reviews yet"
+"Customer reviews will appear here when available.","Customer reviews will appear here when available."
 快速查看,"Quick View"
 收藏,Favorite
 对比,Compare
@@ -369,26 +343,3 @@ ID,ID
 原价：,"Original Price:"
 现价：,"Current Price:"
 活动倒计时：,Countdown:
-加入对比,"Add to Compare"
-"对比 API 未初始化","Compare API is not initialized"
-"对比 API 不支持 add 操作","Compare API does not support the add operation"
-加入对比失败,"Failed to add to compare"
-已加入对比,"Added to compare"
-已加入对比列表。,"Added to compare list."
-分销分享,"Affiliate share"
-分销分享链接,"Affiliate share link"
-复制,Copy
-分享,Share
-"分销 API 未初始化","Affiliate API is not initialized"
-分销数据加载失败,"Affiliate data failed to load"
-已复制,Copied
-已分享,Shared
-加载中,Loading
-"分销 API 不支持分享链接操作","Affiliate API does not support share link operations"
-暂不可用,Unavailable
-"No product description available.","No product description available."
-"No specifications available.","No specifications available."
-"No questions yet","No questions yet"
-"Product questions will appear here when available.","Product questions will appear here when available."
-"No reviews yet","No reviews yet"
-"Customer reviews will appear here when available.","Customer reviews will appear here when available."

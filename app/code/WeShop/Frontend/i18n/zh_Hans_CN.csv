@@ -22,10 +22,6 @@
 "Inject markup after the storefront header search suggestions list.",将标记注入店铺顶部搜索建议列表之后。
 "Header account",顶部账户
 "Inject account-related UI into the storefront header.",将账户相关UI注入店铺顶部。
-"Header language switcher",顶部语言切换
-"Inject the language switcher into the storefront header.",将语言切换器注入店铺顶部。
-"Header currency switcher",顶部货币切换
-"Inject the currency switcher into the storefront header.",将货币切换器注入店铺顶部。
 "Header mini cart",顶部迷你购物车
 "Render the mini-cart entry inside the storefront header.",在店铺顶部渲染迷你购物车入口。
 "Homepage content after",首页内容后
