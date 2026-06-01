@@ -151,8 +151,9 @@ class PageRenderService
         // 获取样式代码
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
         
-        // 获取当前语言
-        $currentLocale = $locale ?: \Weline\Framework\Http\Cookie::getLang();
+        // 获取当前语言。发布页没有显式 locale 时，以页面默认语言为准，避免后台 Cookie 污染访客站点。
+        $pageDefaultLocale = \trim((string)$page->getData(Page::schema_fields_DEFAULT_LOCALE));
+        $currentLocale = $locale ?: ($pageDefaultLocale !== '' ? $pageDefaultLocale : \Weline\Framework\Http\Cookie::getLang());
         
         // 构建样式配置
         $finalSettings = $this->buildStyleSettings($page, $styleCode, $currentLocale, $tempStyleCode);

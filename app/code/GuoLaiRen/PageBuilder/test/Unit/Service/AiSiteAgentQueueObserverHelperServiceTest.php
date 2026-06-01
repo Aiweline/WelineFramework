@@ -31,7 +31,7 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
     {
         $service = new AiSiteAgentQueueObserverHelperService();
 
-        self::assertTrue($service->shouldSuppressProcessMirror('plan'));
+        self::assertFalse($service->shouldSuppressProcessMirror('plan'));
         self::assertFalse($service->shouldSuppressProcessMirror('task_plan'));
         self::assertFalse($service->shouldSuppressProcessMirror('build'));
         self::assertFalse($service->shouldSuppressProcessMirror(''));

@@ -850,6 +850,8 @@ class QueueDbWriter extends SseWriter
             'job_key',
             'job_type',
             'queue_status',
+            'queue_process',
+            'stage1_page_progress',
             'status',
             'task_key',
             'task_type',
@@ -967,6 +969,7 @@ class QueueDbWriter extends SseWriter
         $line = $this->formatLogLine($event, $summary);
         $resultLine = $this->shouldPersistQueueResultLine($event, $payload) ? $line : '';
         $patch = $this->buildQueueResultPatch($resultLine, $summary);
+        $this->mergeStageOnePageProgressIntoQueueContentPatch($patch, $payload);
         if ($patch === []) {
             return true;
         }
@@ -981,6 +984,83 @@ class QueueDbWriter extends SseWriter
         }
 
         return true;
+    }
+
+    /**
+     * Persist only the latest compact Stage-1 page fanout snapshot so a browser
+     * refresh can recover total/done/remaining progress without replaying SSE logs.
+     *
+     * @param array<string, mixed> $patch
+     * @param array<string, mixed> $payload
+     */
+    private function mergeStageOnePageProgressIntoQueueContentPatch(array &$patch, array $payload): void
+    {
+        if ($this->queueId <= 0 || !\is_array($payload['stage1_page_progress'] ?? null)) {
+            return;
+        }
+
+        $row = w_query('queue', 'get', ['queue_id' => $this->queueId]);
+        if (!\is_array($row) || $row === []) {
+            return;
+        }
+
+        $content = \json_decode((string)($row['content'] ?? ''), true);
+        if (!\is_array($content)) {
+            $content = [];
+        }
+        $content['stage1_page_progress'] = $this->compactStageOnePageProgress($payload['stage1_page_progress']);
+        $encoded = \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        if (\is_string($encoded) && $encoded !== '') {
+            $patch['content'] = $encoded;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $progress
+     * @return array<string, mixed>
+     */
+    private function compactStageOnePageProgress(array $progress): array
+    {
+        $compact = [];
+        foreach ([
+            'total',
+            'done_count',
+            'failed_count',
+            'running_count',
+            'pending_count',
+            'remaining_count',
+            'updated_at',
+        ] as $key) {
+            if (\array_key_exists($key, $progress)) {
+                $compact[$key] = $progress[$key];
+            }
+        }
+        foreach (['running', 'done', 'failed', 'pending'] as $key) {
+            $compact[$key] = \array_values(\array_slice(
+                \array_filter(\array_map('strval', \is_array($progress[$key] ?? null) ? $progress[$key] : [])),
+                0,
+                32
+            ));
+        }
+        $details = [];
+        foreach (\is_array($progress['details'] ?? null) ? $progress['details'] : [] as $detail) {
+            if (!\is_array($detail)) {
+                continue;
+            }
+            $details[] = [
+                'page_type' => $this->strcutQueueTail((string)($detail['page_type'] ?? ''), 80),
+                'status' => $this->strcutQueueTail((string)($detail['status'] ?? ''), 40),
+                'message' => $this->strcutQueueTail((string)($detail['message'] ?? ''), 180),
+                'error_message' => $this->strcutQueueTail((string)($detail['error_message'] ?? ''), 180),
+                'updated_at' => $this->strcutQueueTail((string)($detail['updated_at'] ?? ''), 40),
+            ];
+            if (\count($details) >= 32) {
+                break;
+            }
+        }
+        $compact['details'] = $details;
+
+        return $compact;
     }
 
     /**

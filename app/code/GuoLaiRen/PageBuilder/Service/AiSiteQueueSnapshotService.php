@@ -52,6 +52,7 @@ class AiSiteQueueSnapshotService
         $jobType = '';
         $jobStatus = '';
         $token = '';
+        $stageOnePageProgress = [];
         $tokenUsage = $this->normalizeTokenUsage($queueRow);
         $contentRaw = $this->normalizeSnapshotContentForJsonDecode($queueRow['content'] ?? null);
         if ($contentRaw !== '') {
@@ -70,6 +71,9 @@ class AiSiteQueueSnapshotService
                 $jobType = \trim((string)($decoded['job_type'] ?? ''));
                 $jobStatus = \trim((string)($decoded['status'] ?? ''));
                 $token = \trim((string)($decoded['token'] ?? ($decoded['execution_token'] ?? '')));
+                $stageOnePageProgress = \is_array($decoded['stage1_page_progress'] ?? null)
+                    ? $decoded['stage1_page_progress']
+                    : [];
                 $contentTokenUsage = $this->normalizeTokenUsage($decoded);
                 foreach (['input_tokens', 'output_tokens', 'total_tokens'] as $tokenKey) {
                     if ($tokenUsage[$tokenKey] === null && $contentTokenUsage[$tokenKey] !== null) {
@@ -101,6 +105,7 @@ class AiSiteQueueSnapshotService
             'job_status' => $effectiveJobStatus,
             'token' => $token,
             'token_usage' => $tokenUsage,
+            'stage1_page_progress' => $stageOnePageProgress,
         ];
     }
 

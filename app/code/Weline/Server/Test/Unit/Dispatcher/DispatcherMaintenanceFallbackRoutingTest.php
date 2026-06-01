@@ -263,9 +263,10 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         self::assertStringContainsString('Cache-Control: no-store, no-cache, must-revalidate', $response);
         self::assertStringContainsString('Pragma: no-cache', $response);
         self::assertStringContainsString('Retry-After: 5', $response);
-        self::assertStringContainsString('System upgrade in progress', $response);
-        self::assertStringContainsString('checking recovery automatically', $response);
-        self::assertStringContainsString('_maintenance_recovery_probe', $response);
+        self::assertStringContainsString('WLS正在启动中', $response);
+        self::assertStringContainsString('业务 Worker 启动中', $response);
+        self::assertStringContainsString('window.location.reload', $response);
+        self::assertStringContainsString('setInterval', $response);
     }
 
     public function testAllWorkersUnavailableFloatingAlertIsInjectedOnlyInDevMode(): void
@@ -290,7 +291,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $devPage = (string)$resolve->invoke($dispatcher, true);
 
         self::assertStringContainsString('wls-dev-alert', $devPage);
-        self::assertStringContainsString('DEV: all workers are unavailable</strong>', $devPage);
+        self::assertStringContainsString('DEV：当前所有 Worker 不可用</strong>', $devPage);
         self::assertStringContainsString('#dc2626', $devPage);
     }
 

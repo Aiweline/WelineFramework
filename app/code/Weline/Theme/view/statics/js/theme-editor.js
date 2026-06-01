@@ -352,33 +352,32 @@
     }
 
     function resolveEditorApi() {
-        // ThemeEditor uses provider calls; the backend direct-route API exposes request/get/post only.
         const candidates = [
-            window.WelineApiModule,
-            window.Weline && window.Weline.Api
+            window.Weline && window.Weline.Api,
+            window.WelineApiModule
         ];
-        let directRequestApi = null;
+        let providerApi = null;
         for (const api of candidates) {
             if (!api) {
                 continue;
             }
-            if (api.__backend !== true && typeof api.call === 'function') {
+            if (api.__backend === true && typeof api.request === 'function') {
                 return {
-                    mode: 'provider',
+                    mode: 'direct',
                     api
                 };
             }
-            if (typeof api.request === 'function') {
-                directRequestApi = api;
+            if (api.__backend !== true && typeof api.call === 'function') {
+                providerApi = api;
             }
         }
-        if (directRequestApi) {
+        if (providerApi) {
             return {
-                mode: 'direct',
-                api: directRequestApi
+                mode: 'provider',
+                api: providerApi
             };
         }
-        throw new Error('Weline frontend API is not available');
+        throw new Error('Weline API is not available');
     }
 
     async function apiRequest(url, options = {}) {
@@ -1296,38 +1295,58 @@
     /**
      * 处理插槽选中
      */
-    function handleSlotSelected(slot) {
-        console.log('插槽被选中:', slot);
-        
-        // 保存当前选中的插槽
-        state.selectedSlot = slot;
-        
-        // 根据插槽 ID 确定区域并过滤部件
+    function normalizeSelectedSlot(slot) {
+        if (!slot || typeof slot !== 'object') {
+            return null;
+        }
+
+        const rawAccept = slot.accept ?? '*';
+        const rawReject = slot.reject ?? '';
+        const accept = Array.isArray(rawAccept)
+            ? rawAccept.join(',')
+            : String(rawAccept);
+        const reject = Array.isArray(rawReject)
+            ? rawReject.join(',')
+            : String(rawReject);
+
+        return {
+            ...slot,
+            accept,
+            reject,
+        };
+    }
+
+    function applySlotWidgetRecommendations(slot) {
         const slotId = slot.id || '';
-        // 优先使用 slot.area（来自 position 属性），否则从 slotId 推断
-        let areaCode = slot.area || inferAreaFromSlotId(slotId);
-        
-        console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', slot.area, 'resolved areaCode:', areaCode);
-        
-        // 切换插槽前，先完全重置前次过滤状态
+        const areaCode = slot.area || inferAreaFromSlotId(slotId);
+        const rejectTypes = normalizeCodeList(slot.reject || '');
+
         restoreWidgetOrder();
-        
-        // 调用区域过滤函数，隐藏不适合该区域的部件
+
         if (areaCode) {
-            filterWidgetsByArea(areaCode);
+            filterWidgetsByArea(areaCode, rejectTypes);
             state.selectedArea = areaCode;
         }
-        
-        // 高亮右侧部件列表中可放入该插槽的部件并排序
-        let acceptCodes = slot.accept || [];
-        // 确保 acceptCodes 是数组
-        if (typeof acceptCodes === 'string') {
-            acceptCodes = acceptCodes.split(',').map(s => s.trim()).filter(s => s);
+
+        highlightAcceptableWidgets(slot.accept);
+    }
+
+    function handleSlotSelected(slot) {
+        const normalizedSlot = normalizeSelectedSlot(slot);
+        if (!normalizedSlot) {
+            return;
         }
-        if (!Array.isArray(acceptCodes)) {
-            acceptCodes = [];
-        }
-        highlightAcceptableWidgets(acceptCodes);
+
+        console.log('插槽被选中:', normalizedSlot);
+
+        state.selectedSlot = normalizedSlot;
+
+        const slotId = normalizedSlot.id || '';
+        const areaCode = normalizedSlot.area || inferAreaFromSlotId(slotId);
+
+        console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', normalizedSlot.area, 'resolved areaCode:', areaCode);
+
+        applySlotWidgetRecommendations(normalizedSlot);
         
         // 滚动到高亮的部件（延迟以等待DOM更新）
         scrollToHighlightedWidgets();
@@ -3168,6 +3187,42 @@
         return normalizeCodeList(accept);
     }
 
+    function expandPageLayoutSupportCodes(pageLayouts) {
+        const layouts = normalizeCodeList(pageLayouts);
+        const codes = [];
+        const layoutType = normalizeCode(state.layoutType || getCurrentPageType() || '');
+        const layoutOption = normalizeCode(state.layoutOption || 'default');
+
+        layouts.forEach(layout => {
+            if (!layout || layout === '*') {
+                return;
+            }
+            codes.push(`layout-${layout}`);
+            if (layoutType && layout === layoutType && layoutOption && layoutOption !== 'default') {
+                codes.push(`layout-${layoutType}-${layoutOption}`);
+            }
+        });
+
+        return codes;
+    }
+
+    /**
+     * 布局变体 accept 与通用 layout 码互通（与后端 ThemePlaceableRegistry 一致）。
+     */
+    function expandAcceptCodesForLayout(acceptCodes) {
+        const normalized = normalizeCodeList(acceptCodes);
+        const expanded = new Set(normalized);
+
+        normalized.forEach(accept => {
+            const match = accept.match(/^layout-([^-]+)-([^-]+)-(.+)$/);
+            if (match) {
+                expanded.add(`layout-${match[1]}-${match[3]}`);
+            }
+        });
+
+        return Array.from(expanded);
+    }
+
     function collectWidgetSupportCodes(widgetData) {
         const codes = [
             widgetData?.code,
@@ -3178,11 +3233,19 @@
         normalizeCodeList(widgetData?.position || []).forEach(code => codes.push(code));
         normalizeCodeList(widgetData?.supports || []).forEach(code => codes.push(code));
         normalizeCodeList(widgetData?.slots || []).forEach(code => codes.push(code));
+        expandPageLayoutSupportCodes(widgetData?.pageLayouts || widgetData?.page_layouts || []).forEach(code => codes.push(code));
 
         return normalizeCodeList(codes);
     }
 
     function collectWidgetElementSupportCodes(widgetEl) {
+        let pageLayouts = widgetEl.getAttribute('data-widget-page-layouts') || '[]';
+        try {
+            pageLayouts = JSON.parse(pageLayouts);
+        } catch (err) {
+            pageLayouts = pageLayouts.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
         return collectWidgetSupportCodes({
             code: widgetEl.getAttribute('data-widget-code') || '',
             type: widgetEl.getAttribute('data-widget-type') || '',
@@ -3190,11 +3253,12 @@
             position: widgetEl.getAttribute('data-widget-position') || '',
             supports: widgetEl.getAttribute('data-widget-supports') || '',
             slots: widgetEl.getAttribute('data-widget-slots') || '',
+            pageLayouts: pageLayouts,
         });
     }
 
     function slotAcceptsWidgetCodes(acceptCodes, rejectCodes, slotId, widgetCodes) {
-        const normalizedAccept = normalizeCodeList(acceptCodes);
+        const normalizedAccept = expandAcceptCodesForLayout(acceptCodes);
         const normalizedReject = normalizeCodeList(rejectCodes);
         const normalizedWidgetCodes = normalizeCodeList(widgetCodes);
         const normalizedSlotId = normalizeCode(slotId);
@@ -3209,7 +3273,7 @@
 
         return normalizedAccept.length === 0
             || normalizedAccept.includes('*')
-            || normalizedAccept.some(code => normalizedWidgetCodes.includes(code));
+            || normalizedAccept.some(accept => normalizedWidgetCodes.includes(accept));
     }
 
     function isSlotDataAccepted(slot, widgetData) {
@@ -3318,28 +3382,23 @@
      * 处理预览页面中点击插槽
      */
     function handlePreviewSlotClicked(data) {
-        const slot = data.slot;
-        const accept = data.accept ? data.accept.split(',').map(s => s.trim()) : [];
-        const reject = data.reject ? data.reject.split(',').map(s => s.trim()) : [];
-        
-        // 保存当前选中的插槽
-        state.selectedSlot = { id: slot, accept: accept, reject: reject, name: slot };
-        
-        // 高亮右侧部件列表中可放入该插槽的部件并排序
-        highlightAcceptableWidgets(accept);
-        
-        // 滚动到高亮的部件
-        scrollToHighlightedWidgets();
-        
-        showToast(`插槽 "${slot}" 可接受: ${accept.join(', ')}`, 'info');
+        handleSlotSelected({
+            id: data.slot || '',
+            name: data.name || data.slot || '',
+            accept: data.accept || '*',
+            reject: data.reject || '',
+            area: data.area || data.position || '',
+            exclusive: data.exclusive === true || data.exclusive === 'true',
+            multiple: data.multiple !== false && data.multiple !== 'false',
+        });
     }
 
     /**
      * 高亮可接受的部件并排序
      */
     function highlightAcceptableWidgets(acceptCodes) {
-        const slot = state.selectedSlot || { id: '', accept: acceptCodes || [] };
-        const normalizedAccept = normalizeCodeList(slot.accept ?? acceptCodes ?? []);
+        const slot = state.selectedSlot || { id: '', accept: acceptCodes || [], reject: '' };
+        const normalizedAccept = expandAcceptCodesForLayout(slot.accept ?? acceptCodes ?? []);
         const normalizedReject = normalizeCodeList(slot.reject ?? []);
 
         if (!normalizedAccept || normalizedAccept.length === 0) {
@@ -3853,7 +3912,9 @@
                 (function() {
                     const select = document.getElementById('config_${key}');
                     if (!select) return;
-                    window.Weline.Api.call('theme', 'editorRequest', { url: '/weline/eav/api/options/attributes?entity_code=${escapeHtml(entityCode)}', method: 'GET' }, { silent: true })
+                    (window.ThemeEditor && window.ThemeEditor.apiJson
+                        ? window.ThemeEditor.apiJson('/weline/eav/api/options/attributes?entity_code=${escapeHtml(entityCode)}', { silent: true })
+                        : Promise.reject(new Error('ThemeEditor API is not available')))
                         .then(r => (r && typeof r.json === 'function') ? r.json() : ((r && r.data) || r))
                         .then(data => {
                             if (data.success && data.data.attributes) {
@@ -3887,7 +3948,9 @@
                     (function() {
                         const select = document.getElementById('config_${key}');
                         if (!select) return;
-                        window.Weline.Api.call('theme', 'editorRequest', { url: '/weline/eav/api/options?entity_code=${escapeHtml(entityCode)}&attribute_code=${escapeHtml(attributeCode)}', method: 'GET' }, { silent: true })
+                        (window.ThemeEditor && window.ThemeEditor.apiJson
+                            ? window.ThemeEditor.apiJson('/weline/eav/api/options?entity_code=${escapeHtml(entityCode)}&attribute_code=${escapeHtml(attributeCode)}', { silent: true })
+                            : Promise.reject(new Error('ThemeEditor API is not available')))
                             .then(r => (r && typeof r.json === 'function') ? r.json() : ((r && r.data) || r))
                             .then(data => {
                                 if (data.success && data.data.options) {
@@ -4671,10 +4734,20 @@
             return true;
         }
 
-        const supportPrefix = layout ? `layout-${layout}-` : '';
+        const layoutOption = normalizeCode(state.layoutOption || 'default');
         const widgetCodes = collectWidgetSupportCodes(widgetData);
+        if (layout && widgetCodes.includes(`layout-${layout}`)) {
+            return true;
+        }
+        const supportPrefix = layout ? `layout-${layout}-` : '';
         if (supportPrefix && widgetCodes.some(code => code === `layout-${layout}` || code.startsWith(supportPrefix))) {
             return true;
+        }
+        if (layout && layoutOption && layoutOption !== 'default') {
+            const optionPrefix = `layout-${layout}-${layoutOption}-`;
+            if (widgetCodes.some(code => code.startsWith(optionPrefix) || code === `layout-${layout}-${layoutOption}`)) {
+                return true;
+            }
         }
         return false;
     }
@@ -9363,6 +9436,7 @@
      * 全局暴露：取消区域选中（用于清除部件过滤）
      */
     window.ThemeEditor = window.ThemeEditor || {};
+    window.ThemeEditor.apiJson = apiJson;
     window.ThemeEditor.deselectArea = deselectArea;
     window.ThemeEditor.selectArea = selectArea;
     window.ThemeEditor.filterWidgetsByArea = filterWidgetsByArea;

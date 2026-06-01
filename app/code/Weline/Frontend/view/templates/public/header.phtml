@@ -1,8 +1,10 @@
 
 <?php
 $frontendUrl = rtrim((string) $this->getUrl(''), '/') . '/';
+$themeData = $this->getData('theme') ?? [];
+$layoutType = $this->getData('layoutType') ?: ($themeData['layoutType'] ?? null);
 ?>
-<?php if ($this->getData('layoutType') && class_exists(\Weline\Theme\Block\Partials::class)): ?>
+<?php if ($layoutType && class_exists(\Weline\Theme\Block\Partials::class)): ?>
     <?php
     $headerPartials = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Block\Partials::class);
     $headerPartials->setData('area', 'frontend');

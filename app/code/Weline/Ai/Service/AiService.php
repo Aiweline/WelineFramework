@@ -261,8 +261,42 @@ class AiService
 
         $baseSessionId = \trim((string)($options['session_id'] ?? ''));
         $baseParams = \is_array($options['params'] ?? null) ? $options['params'] : [];
+        $concurrency = \max(1, (int)($options['concurrency'] ?? 1));
         $settled = [];
 
+        // Concurrent via FiberTaskRunner when concurrency > 1
+        if ($concurrency > 1) {
+            $wrapped = [];
+            foreach ($tasks as $taskKey => $task) {
+                if (!\is_callable($task)) {
+                    throw new \InvalidArgumentException('Cooperative AI task must be callable.');
+                }
+                $childParams = $this->buildCooperativeChildSessionParams($baseParams, $baseSessionId, (string)$taskKey, $options);
+                $wrapped[$taskKey] = static function () use ($task, $childParams, $taskKey): mixed {
+                    return $task($childParams, $taskKey);
+                };
+            }
+            $runner = new \Weline\Framework\Php\FiberTaskRunner(defaultConcurrency: $concurrency);
+            foreach ($runner->runEvents($wrapped) as $taskKey => $event) {
+                if (($event['status'] ?? '') === 'fulfilled') {
+                    $settled[$taskKey] = [
+                        'status' => 'fulfilled',
+                        'result' => $event['result'] ?? null,
+                    ];
+                } else {
+                    $settled[$taskKey] = [
+                        'status' => 'rejected',
+                        'error' => ($event['error'] ?? null) instanceof \Throwable
+                            ? $event['error']
+                            : new \RuntimeException('Cooperative AI task failed without an exception payload.'),
+                    ];
+                }
+            }
+
+            return $settled;
+        }
+
+        // Sequential fallback
         foreach ($tasks as $taskKey => $task) {
             if (!\is_callable($task)) {
                 throw new \InvalidArgumentException('Cooperative AI task must be callable.');

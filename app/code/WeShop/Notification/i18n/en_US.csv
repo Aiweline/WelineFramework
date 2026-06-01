@@ -8,7 +8,7 @@
 通知渠道配置已保存。,"Notification channel settings saved."
 不支持的通知接口操作：%{1},"Unsupported notification provider operation: %{1}"
 通知接口,"Notification Query"
-通过前端 worker API 提供通知操作。,"Provides frontend notification operations through the worker API."
+"通过前端 worker API 提供通知操作。","Provides frontend notification operations through the worker API."
 将当前客户的通知标记为已读。,"Mark a notification owned by the current customer as read."
 "订单 {1} 已提交","Order {1} submitted"
 订单已提交,"Order submitted"
@@ -54,6 +54,7 @@ View,View
 "No notifications found.","No notifications found."
 "Try adjusting filters or wait for new customer events.","Try adjusting filters or wait for new customer events."
 "Back to Notifications","Back to Notifications"
+"Notification Detail","Notification Detail"
 "Review notification metadata and content before support follow-up.","Review notification metadata and content before support follow-up."
 "Basic Information","Basic Information"
 目标链接,"Target Link"
@@ -61,12 +62,11 @@ View,View
 Content,Content
 "Already marked as read.","Already marked as read."
 消息通知,Notifications
-订单进度、支付结果、售后提醒和账户消息都会出现在这里。,"Order updates, payment results, after-sales reminders, and account messages will appear here."
 评价回复、订单进度、支付结果、售后提醒和账户消息都会出现在这里。,"Review replies, order updates, payment results, after-sales reminders, and account messages will appear here."
 全部消息,"All Messages"
 未读,Unread
 标记已读,"Mark as Read"
-查看,View
+立即返回,"Open Now"
 当前还没有消息。后续订单、支付、配送和售后事件产生后，会自动出现在这里。,"There are no messages yet. Future order, payment, delivery, and after-sales events will appear here automatically."
 通知渠道设置,"Notification Channel Settings"
 配置订单、支付、配送和售后通知的接收方式，结账页会优先使用这里保存的偏好。,"Configure how you receive order, payment, delivery, and after-sales notifications. Checkout will use the preferences saved here first."
@@ -87,8 +87,6 @@ Content,Content
 邮件适合订单确认、支付结果和售后进度提醒。,"Email is suitable for order confirmations, payment results, and after-sales progress reminders."
 "Telegram、Webhook 等外部渠道需要先配置联系人才能启用。","External channels such as Telegram and Webhook require contacts before they can be enabled."
 已保存联系人,"Saved Contacts"
-通知设置,"Notification Settings"
-管理订单、支付与售后消息提醒,"Manage order, payment, and after-sales notifications"
 评价回复、订单与账户提醒,"Review replies, orders, and account alerts"
 订单通知渠道,"Order notification channels"
 已选通知渠道,"Selected notification channels"
@@ -101,18 +99,3 @@ Content,Content
 进入消息,"Open Messages"
 提醒和更新集中在一处,"Alerts and updates in one place"
 评价回复、订单状态和会员消息都在个人中心统一查看。,"Review replies, order status, and membership messages are all managed in the account center."
-立即返回,"Open Now"
-消息同步,"Stay In Sync"
-通知中心,"Notification Center"
-订单进度、账户提醒和重要商城事件会集中出现在这里。,"Track order progress, account reminders, and important storefront events in one timeline."
-返回个人中心,"Back to Account"
-继续购物,"Continue Shopping"
-全部通知,"All Notifications"
-当前时间线中的全部消息。,"Events currently available in your timeline."
-仍待查看的新提醒。,"New updates still waiting for your review."
-时间线,Timeline
-最新动态,"Latest Updates"
-创建时间,Created
-标记为已读,"Mark as Read"
-暂无通知,"No notifications yet"
-账户产生事件后会自动显示在这里。,"Once events are generated for your account, they will appear here automatically."

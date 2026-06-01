@@ -17,6 +17,7 @@ final class AiSiteAgentPublishContractTest extends TestCase
             "'code' => 'LATEST_AI_BUILD_FAILED'",
             "'code' => 'PLAN_NOT_CONFIRMED'",
             "'code' => 'BUILD_PLAN_NOT_CONFIRMED'",
+            "'code' => 'BUILD_COMPLETION_GATE_BLOCKED'",
             "'code' => 'WORKSPACE_NOT_READY'",
             "'code' => 'PUBLISH_STAGE2_TASK_BLOCK_MISMATCH'",
             "'code' => 'PUBLISH_QUALITY_GATE_FAILED'",
@@ -40,6 +41,7 @@ final class AiSiteAgentPublishContractTest extends TestCase
             "'code' => 'WEBSITE_PROFILE_READY'",
             "'code' => 'VIRTUAL_PAGES_READY'",
             "'code' => 'VISUAL_EDITOR_READY'",
+            "'code' => 'BUILD_COMPLETION_GATE'",
             "'code' => 'STAGE2_TASK_BLOCK_INTEGRITY'",
             "'code' => \$passed ? 'PUBLISH_CHECKLIST_PASSED' : 'PUBLISH_CHECKLIST_BLOCKED'",
         ] as $expectedCode) {
@@ -47,6 +49,19 @@ final class AiSiteAgentPublishContractTest extends TestCase
         }
         self::assertStringNotContainsString("'code' => 'HTML_BLOCKS_READY'", $methodSource);
         self::assertStringNotContainsString("'code' => 'SITE_READY'", $methodSource);
+    }
+
+    public function testPublishEntrypointsUseFreshBuildCompletionGateInsteadOfCachedCanPublish(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $startSource = $this->extractMethodSource($source, 'handleStartPublish');
+        $checklistSource = $this->extractMethodSource($source, 'handlePublishChecklist');
+
+        foreach ([$startSource, $checklistSource] as $methodSource) {
+            self::assertStringContainsString('inspectBuildCompletionGate($scope)', $methodSource);
+            self::assertStringContainsString('$buildAlreadyComplete = $completionGatePassed;', $methodSource);
+            self::assertStringNotContainsString("\$this->taskSummaryIndicatesCompleted(\$buildTaskSummary)\n            || !empty(\$scope['can_publish'])", $methodSource);
+        }
     }
 
     public function testPublishOperationRunsStageTwoTaskBlockGateBeforePublishService(): void

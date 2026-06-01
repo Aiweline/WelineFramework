@@ -234,14 +234,14 @@ class AiSiteProfileGenerationService
             return \strtolower($this->readScopeString($scope, 'target_domain'));
         }
 
-        $localHost = $this->resolveLocalPreviewHost($scope);
-        if ($localHost !== '') {
-            return $localHost;
-        }
-
         $explicit = $this->pickString($scope['target_domain'] ?? null, $scope['selected_domain'] ?? null);
         if ($explicit !== '') {
             return \strtolower($explicit);
+        }
+
+        $localHost = $this->resolveLocalPreviewHost($scope);
+        if ($localHost !== '') {
+            return $localHost;
         }
 
         return \strtolower($this->pickString($existing['target_domain'] ?? null));
