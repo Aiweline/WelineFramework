@@ -36,7 +36,15 @@ $baseUrl = $this->request->getBaseUrl();
 // 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
 // 直接使用colors数组，无需重复读取和处理
 $colors = $this->getData('colors') ?? [];
-$headerLabel = static function ($value): string {
+$headerCategoryService = null;
+try {
+    if (class_exists(\WeShop\Catalog\Service\CategoryService::class)) {
+        $headerCategoryService = \Weline\Framework\Manager\ObjectManager::getInstance(\WeShop\Catalog\Service\CategoryService::class);
+    }
+} catch (\Throwable) {
+    $headerCategoryService = null;
+}
+$headerLabel = static function ($value) use ($headerCategoryService): string {
     $key = trim((string)($value ?? ''));
     if ($key === '') {
         return '';
@@ -51,8 +59,12 @@ $headerLabel = static function ($value): string {
         if ($widgetTranslated !== $widgetLabel) {
             return $widgetTranslated;
         }
+        $key = $widgetLabel;
     }
-    return $widgetLabel;
+    if ($headerCategoryService instanceof \WeShop\Catalog\Service\CategoryService) {
+        return $headerCategoryService->localizeCategoryDisplayName($key);
+    }
+    return $key;
 };
 $headerEsc = static function ($value) use ($headerLabel): string {
     return htmlspecialchars($headerLabel($value), ENT_QUOTES, 'UTF-8');

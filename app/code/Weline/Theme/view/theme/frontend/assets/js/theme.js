@@ -2711,23 +2711,27 @@
             const currentLang = getCurrentLang();
             const langDisplay = getLangDisplay(currentLang);
 
-            // 更新 current-language 元素
-            const currentLangElements = document.querySelectorAll('[data-i18n-switcher] .current-language');
-            currentLangElements.forEach(el => {
-                el.textContent = langDisplay;
-            });
-
-            // 更新 active 状态
             const languageSwitchers = document.querySelectorAll('[data-i18n-switcher]');
             languageSwitchers.forEach(languageSwitcher => {
+                let displayName = langDisplay;
+
                 const languageOptions = languageSwitcher.querySelectorAll('[data-language-option], .language-option, a[data-lang]');
                 languageOptions.forEach(option => {
                     const langCode = option.getAttribute('data-lang') || option.dataset.lang;
                     if (langCode === currentLang) {
                         option.classList.add('active');
+                        const nameEl = option.querySelector('.weline-choice-name');
+                        displayName = nameEl
+                            ? String(nameEl.textContent || '').trim()
+                            : langDisplay;
                     } else {
                         option.classList.remove('active');
                     }
+                });
+
+                const currentLangElements = languageSwitcher.querySelectorAll('.current-language');
+                currentLangElements.forEach(el => {
+                    el.textContent = displayName;
                 });
             });
         }

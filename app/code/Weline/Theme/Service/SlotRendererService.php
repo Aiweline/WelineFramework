@@ -1000,41 +1000,13 @@ class SlotRendererService
     private function autoPublishDraft(int $themeId, string $pageType, array $draftLayout): void
     {
         try {
-            // 先获取一次已发布数据（避免循环内 N+1 查询）
-            $existingPublished = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_PUBLISHED);
-            
-            // 静默发布：将草稿数据复制到已发布状态
-            foreach ($draftLayout as $area => $areaData) {
-                foreach ($areaData['widgets'] ?? [] as $widget) {
-                    // 去重：按 widget_code + widget_module + slot_id 三重匹配
-                    $alreadyPublished = false;
-                    $widgetSlotId = $widget['slot_id'] ?? '';
-                    foreach ($existingPublished[$area]['widgets'] ?? [] as $existingWidget) {
-                        if ($existingWidget['widget_code'] === $widget['widget_code'] 
-                            && $existingWidget['widget_module'] === $widget['widget_module']
-                            && ($existingWidget['slot_id'] ?? '') === $widgetSlotId) {
-                            $alreadyPublished = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!$alreadyPublished) {
-                        $this->layoutService->saveWidget([
-                            'theme_id' => $themeId,
-                            'page_type' => $pageType,
-                            'area' => $area,
-                            'widget_code' => $widget['widget_code'],
-                            'widget_module' => $widget['widget_module'],
-                            'widget_type' => $widget['widget_type'] ?? '',
-                            'slot_id' => $widget['slot_id'] ?? null,
-                            'config' => $widget['config'] ?? [],
-                            'sort_order' => $widget['sort_order'] ?? 0,
-                            'is_active' => true,
-                            'status' => ThemeLayout::STATUS_PUBLISHED,
-                        ]);
-                    }
-                }
+            if (!$this->hasWidgetsInLayout($draftLayout)) {
+                return;
             }
+
+            // 与后台发布一致：先删后插全量替换，禁止向 published 追加行（否则会出现重复部件）
+            $this->layoutService->publishLayout($themeId, $pageType);
+            $this->clearCache();
         } catch (\Exception $e) {
             // 静默失败，不影响前端渲染
         }
@@ -1098,8 +1070,38 @@ class SlotRendererService
         $this->orphanWidgets = [];
         self::$publishedLayoutDataCache = [];
         self::$widgetOutputCache = [];
+        $this->purgeRuntimeCacheNamespace();
         self::$runtimeCache = null;
         self::$runtimeCacheResolved = false;
+    }
+
+    /**
+     * 清理 WLS 跨请求共享的 theme_runtime 布局/部件输出缓存。
+     * 发布主题后必须调用，否则 Worker 仍可能渲染旧版 slot 布局。
+     */
+    public function purgeRuntimeCacheNamespace(): void
+    {
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
+            return;
+        }
+
+        try {
+            $cache = self::runtimeCache();
+            if ($cache !== null) {
+                $cache->clearNamespace('theme_runtime');
+                return;
+            }
+
+            $cache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => 'theme_runtime_slot',
+                'prefer_direct_connect' => true,
+                'pool_size' => 1,
+                'auto_start' => false,
+            ]));
+            $cache->clearNamespace('theme_runtime');
+        } catch (\Throwable) {
+            // 静默失败，不影响发布主流程
+        }
     }
 
     private function runtimeCacheGet(string $key): mixed

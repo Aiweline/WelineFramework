@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Frontend\Controller;
 
+use GuoLaiRen\PageBuilder\Model\Page as PageBuilderPage;
 use WeShop\Catalog\Service\CategoryService;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Service\ProductBestSellerService;
@@ -13,6 +14,7 @@ use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Server\Service\MemoryStateFacade;
+use Weline\Websites\Data\WebsiteData;
 
 class Index extends BaseController
 {
@@ -35,6 +37,11 @@ class Index extends BaseController
 
     public function index(): string
     {
+        $pageBuilderHomeRedirect = $this->redirectPageBuilderHomeIfNeeded();
+        if ($pageBuilderHomeRedirect !== null) {
+            return $pageBuilderHomeRedirect;
+        }
+
         $cacheKey = $this->buildViewPayloadCacheKey();
         $cachedView = $this->getViewPayloadCache($cacheKey);
         if (is_array($cachedView) && isset($cachedView['html'])) {
@@ -157,6 +164,40 @@ class Index extends BaseController
         ]);
 
         return $html;
+    }
+
+    private function redirectPageBuilderHomeIfNeeded(): ?string
+    {
+        $website = WebsiteData::getWebsite();
+        if ($website === null || (string)$website->getData('scope') !== 'page_builder') {
+            return null;
+        }
+
+        $websiteId = (int)$website->getWebsiteId();
+        if ($websiteId <= 0) {
+            return null;
+        }
+
+        try {
+            /** @var PageBuilderPage $pageModel */
+            $pageModel = ObjectManager::getInstance(PageBuilderPage::class);
+            $page = clone $pageModel;
+            $page->clearData()->clearQuery()
+                ->where(PageBuilderPage::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(PageBuilderPage::schema_fields_TYPE, PageBuilderPage::TYPE_HOME)
+                ->where(PageBuilderPage::schema_fields_STATUS, PageBuilderPage::STATUS_PUBLISHED)
+                ->find()
+                ->fetch();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $handle = \trim((string)$page->getData(PageBuilderPage::schema_fields_HANDLE));
+        if ($handle === '') {
+            return null;
+        }
+
+        return $this->redirect('/' . \ltrim($handle, '/'));
     }
 
     /**

@@ -27,6 +27,12 @@
     font-weight: 700;
     line-height: 1.25;
 }
+.weline-choice-switcher .current-language {
+    max-width: 9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .weline-choice-switcher .current-currency-symbol {
     font-weight: 600;
     opacity: 0.86;
@@ -81,10 +87,21 @@
 }
 .language-option.weline-choice-option,
 .currency-option.weline-choice-option {
+    display: flex;
     align-items: center;
     justify-content: flex-start;
     gap: 0.65rem;
     padding: 0.65rem 0.75rem;
+}
+.language-option.weline-choice-option .fa-check,
+.currency-option.weline-choice-option .fa-check {
+    flex: 0 0 auto;
+    display: none;
+    color: #ff9900;
+}
+.language-option.weline-choice-option.active .fa-check,
+.currency-option.weline-choice-option.active .fa-check {
+    display: inline-block;
 }
 .weline-choice-flag,
 .weline-choice-current-flag,
@@ -133,6 +150,17 @@
     color: #565959;
     font-size: 0.75rem;
     line-height: 1.2;
+}
+.weline-choice-native {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid #d5d9d9;
+    border-radius: 4px;
+    color: #111;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 .weline-choice-empty {
     padding: 0.7rem 0.75rem;

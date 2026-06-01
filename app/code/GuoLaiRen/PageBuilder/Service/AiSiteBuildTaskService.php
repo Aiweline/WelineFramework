@@ -332,6 +332,35 @@ class AiSiteBuildTaskService
      *   missing_page_types:list<string>,
      * }
      */
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<string>
+     */
+    public function collectMissingSelectedPlanPageTypes(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        if ($planJson === []) {
+            $planJson = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        }
+        $expected = $this->normalizeBuildPlanStringList($scope['page_types'] ?? []);
+        if ($expected === []) {
+            return [];
+        }
+
+        $actual = [];
+        foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($key) ? $key : '')));
+            if ($pageType !== '') {
+                $actual[$pageType] = true;
+            }
+        }
+
+        return $this->missingStringSet($expected, \array_values(\array_keys($actual)));
+    }
+
     public function inspectConfirmedBuildPlanPageTypeCoverage(array $scope): array
     {
         $expected = $this->normalizeBuildPlanStringList($scope['page_types'] ?? []);
@@ -1216,6 +1245,15 @@ class AiSiteBuildTaskService
 
     /**
      * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    public function listTaskDefinitions(array $scope): array
+    {
+        return $this->extractBlueprintTasks($scope, true);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      * @param array<string, mixed> $resultRef
      * @return array<string, mixed>
      */
@@ -1666,6 +1704,15 @@ class AiSiteBuildTaskService
         $scope = $this->clearResolvedRetryableAiFailures($scope);
         $summary = $this->summarize($scope);
         if (!$this->shouldAttachBuildRenderDataContract($scope, $summary)) {
+            if ((int)($summary['running'] ?? 0) > 0) {
+                return $this->resetRunningTasksForInterruptedBuild(
+                    $scope,
+                    (string)__(
+                        '构建主循环已结束，但仍有任务停留在执行中状态；已重置为 pending 等待队列继续调度。'
+                    )
+                );
+            }
+
             return $scope;
         }
         if ((int)($summary['running'] ?? 0) <= 0) {
@@ -2086,6 +2133,14 @@ class AiSiteBuildTaskService
         $missingPersistedVirtualThemeLayouts = \is_array($pageTypeCoverage['missing_persisted_virtual_theme_layouts'] ?? null)
             ? $pageTypeCoverage['missing_persisted_virtual_theme_layouts']
             : [];
+        $pageBlockProgress = $this->inspectBuildCompletionPageBlockProgress($scope);
+        $pageBlockShortfalls = \is_array($pageBlockProgress['shortfalls'] ?? null) ? $pageBlockProgress['shortfalls'] : [];
+        $buildPlanMissingStageOneBlocks = \is_array($pageBlockProgress['missing_stage1_plan_blocks'] ?? null)
+            ? $pageBlockProgress['missing_stage1_plan_blocks']
+            : [];
+        $defaultTemplatePageLayouts = \is_array($pageBlockProgress['default_template_page_layouts'] ?? null)
+            ? $pageBlockProgress['default_template_page_layouts']
+            : [];
         $unfinished = \max(0, $total - $done, $pending + $running + $failed + $cancelled);
         $hasIncompleteTasks = $total <= 0
             || $this->hasUnfinishedBlueprintTasks($scope)
@@ -2099,6 +2154,9 @@ class AiSiteBuildTaskService
             || $missingPageTypeLayouts !== []
             || $emptyPageTypeLayouts !== []
             || $missingPersistedVirtualThemeLayouts !== []
+            || $buildPlanMissingStageOneBlocks !== []
+            || $defaultTemplatePageLayouts !== []
+            || $pageBlockShortfalls !== []
             || $done < $total;
 
         $reason = '';
@@ -2120,6 +2178,12 @@ class AiSiteBuildTaskService
             $reason = 'empty_page_type_layouts';
         } elseif ($missingPersistedVirtualThemeLayouts !== []) {
             $reason = 'missing_persisted_virtual_theme_layouts';
+        } elseif ($buildPlanMissingStageOneBlocks !== []) {
+            $reason = 'build_plan_missing_stage1_blocks';
+        } elseif ($defaultTemplatePageLayouts !== []) {
+            $reason = 'default_template_page_layouts';
+        } elseif ($pageBlockShortfalls !== []) {
+            $reason = 'incomplete_page_block_counts';
         } elseif ($unfinished > 0) {
             $reason = 'unfinished_build_plan_blocks';
         }
@@ -2136,6 +2200,10 @@ class AiSiteBuildTaskService
             'invalid_artifacts' => $invalidArtifacts,
             'duplicate_artifacts' => $duplicateArtifacts,
             'page_type_coverage' => $pageTypeCoverage,
+            'page_block_progress' => $pageBlockProgress,
+            'page_block_shortfalls' => $pageBlockShortfalls,
+            'build_plan_missing_stage1_blocks' => $buildPlanMissingStageOneBlocks,
+            'default_template_page_layouts' => $defaultTemplatePageLayouts,
             'missing_build_page_types' => $missingBuildPageTypes,
             'missing_page_type_layouts' => $missingPageTypeLayouts,
             'empty_page_type_layouts' => $emptyPageTypeLayouts,
@@ -2143,6 +2211,428 @@ class AiSiteBuildTaskService
             'unfinished' => $unfinished,
             'summary' => $summary,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{expected_page_types:list<string>,rows:list<array<string,mixed>>,shortfalls:list<array<string,mixed>>}
+     */
+    public function inspectBuildCompletionPageBlockProgress(array $scope): array
+    {
+        $expectedPageTypes = $this->normalizeBuildPlanStringList($scope['page_types'] ?? []);
+        $rows = [];
+        foreach ($expectedPageTypes as $pageType) {
+            $rows[$pageType] = $this->emptyPageBlockProgressRow($pageType);
+        }
+
+        $expectedBlocks = $this->collectExpectedBuildPlanPageBlocks($scope);
+        foreach ($expectedBlocks as $pageType => $blocks) {
+            $rows[$pageType] ??= $this->emptyPageBlockProgressRow((string)$pageType);
+            $rows[$pageType]['expected_blocks'] = \count($blocks);
+            $rows[$pageType]['expected_block_codes'] = $this->extractExpectedPageBlockCodes($blocks, 'section_code');
+            $rows[$pageType]['expected_block_ids'] = $this->extractExpectedPageBlockCodes($blocks, 'block_id');
+            $rows[$pageType]['expected_block_keys'] = $this->extractExpectedPageBlockCodes($blocks, 'block_key');
+        }
+
+        $stageOneBlocks = $this->collectExpectedStageOnePlanPageBlocks($scope);
+        foreach ($stageOneBlocks as $pageType => $blocks) {
+            $rows[$pageType] ??= $this->emptyPageBlockProgressRow((string)$pageType);
+            $rows[$pageType]['stage1_expected_blocks'] = \count($blocks);
+            $rows[$pageType]['stage1_expected_block_codes'] = $this->extractExpectedPageBlockCodes($blocks, 'section_code');
+            $rows[$pageType]['missing_stage1_plan_block_codes'] = $this->missingStringSet(
+                $rows[$pageType]['stage1_expected_block_codes'],
+                $rows[$pageType]['expected_block_codes']
+            );
+        }
+
+        $taskState = $this->extractTaskState($scope);
+        $completedByPage = [];
+        $executableByPage = [];
+        foreach ($this->extractBlueprintTasks($scope) as $task) {
+            if ((string)($task['task_type'] ?? '') !== 'page_section') {
+                continue;
+            }
+            $pageType = \trim((string)($task['page_type'] ?? ''));
+            if ($pageType === '') {
+                continue;
+            }
+            $rows[$pageType] ??= $this->emptyPageBlockProgressRow($pageType);
+            $rows[$pageType]['executable_blocks'] = (int)$rows[$pageType]['executable_blocks'] + 1;
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            $sectionCode = \trim((string)($task['section_code'] ?? ''));
+            if ($sectionCode !== '') {
+                $executableByPage[$pageType][$sectionCode] = true;
+            }
+            $state = \is_array($taskState[$taskKey] ?? null) ? $taskState[$taskKey] : [];
+            $status = $this->normalizeTaskStatus((string)($state['status'] ?? self::TASK_STATUS_PENDING));
+            if ($status === self::TASK_STATUS_DONE && $this->isGeneratedArtifactAvailableForTask($scope, $task)) {
+                $rows[$pageType]['completed_blocks'] = (int)$rows[$pageType]['completed_blocks'] + 1;
+                if ($sectionCode !== '') {
+                    $completedByPage[$pageType][$sectionCode] = true;
+                }
+            }
+        }
+
+        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        foreach ($rows as $pageType => $row) {
+            $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
+            $rows[$pageType]['layout_blocks'] = $this->countBuiltLayoutContentBlocks($layout);
+            $rows[$pageType]['layout_block_codes'] = $this->collectLayoutSectionCodes($layout);
+            $rows[$pageType]['missing_layout_block_codes'] = $this->missingSectionIdentitySet(
+                $rows[$pageType]['expected_block_codes'],
+                $rows[$pageType]['layout_block_codes']
+            );
+            $rows[$pageType]['missing_executable_block_codes'] = $this->missingStringSet(
+                $rows[$pageType]['expected_block_codes'],
+                \array_values(\array_keys($executableByPage[$pageType] ?? []))
+            );
+            $rows[$pageType]['missing_completed_block_codes'] = $this->missingStringSet(
+                $rows[$pageType]['expected_block_codes'],
+                \array_values(\array_keys($completedByPage[$pageType] ?? []))
+            );
+            $rows[$pageType]['has_default_template_markers'] = $this->arrayContainsDefaultTemplateMarkers($layout);
+            $rows[$pageType]['persisted_layout_blocks'] = 0;
+            $rows[$pageType]['persisted_layout_block_codes'] = [];
+            $rows[$pageType]['missing_persisted_layout_block_codes'] = [];
+            $rows[$pageType]['persisted_layout_has_default_template_markers'] = false;
+            if ($this->requiresPersistedVirtualThemeLayoutCheck($scope)) {
+                $persistedLayout = $this->loadPersistedVirtualThemeLayoutConfig($scope, (string)$pageType);
+                $rows[$pageType]['persisted_layout_blocks'] = $this->countBuiltLayoutContentBlocks($persistedLayout);
+                $rows[$pageType]['persisted_layout_block_codes'] = $this->collectLayoutSectionCodes($persistedLayout);
+                $rows[$pageType]['missing_persisted_layout_block_codes'] = $this->missingSectionIdentitySet(
+                    $rows[$pageType]['expected_block_codes'],
+                    $rows[$pageType]['persisted_layout_block_codes']
+                );
+                $rows[$pageType]['persisted_layout_has_default_template_markers'] = $this->arrayContainsDefaultTemplateMarkers($persistedLayout);
+            }
+        }
+
+        $shortfalls = [];
+        $missingStageOneBlocks = [];
+        $defaultTemplatePageLayouts = [];
+        foreach ($rows as $pageType => $row) {
+            $expected = (int)($row['expected_blocks'] ?? 0);
+            $stageOneExpected = (int)($row['stage1_expected_blocks'] ?? 0);
+            $executable = (int)($row['executable_blocks'] ?? 0);
+            $completed = (int)($row['completed_blocks'] ?? 0);
+            $layout = (int)($row['layout_blocks'] ?? 0);
+            $missingStageOneBlockCodes = \is_array($row['missing_stage1_plan_block_codes'] ?? null) ? $row['missing_stage1_plan_block_codes'] : [];
+            $missingExecutableBlockCodes = \is_array($row['missing_executable_block_codes'] ?? null) ? $row['missing_executable_block_codes'] : [];
+            $missingCompletedBlockCodes = \is_array($row['missing_completed_block_codes'] ?? null) ? $row['missing_completed_block_codes'] : [];
+            $missingLayoutBlockCodes = \is_array($row['missing_layout_block_codes'] ?? null) ? $row['missing_layout_block_codes'] : [];
+            $missingPersistedLayoutBlockCodes = \is_array($row['missing_persisted_layout_block_codes'] ?? null)
+                ? $row['missing_persisted_layout_block_codes']
+                : [];
+            $hasDefaultTemplateMarkers = !empty($row['has_default_template_markers'])
+                || !empty($row['persisted_layout_has_default_template_markers']);
+            $complete = $expected > 0
+                && ($stageOneExpected <= 0 || $expected >= $stageOneExpected)
+                && $executable >= $expected
+                && $completed >= $expected
+                && $layout >= $expected
+                && $missingStageOneBlockCodes === []
+                && $missingExecutableBlockCodes === []
+                && $missingCompletedBlockCodes === []
+                && $missingLayoutBlockCodes === []
+                && $missingPersistedLayoutBlockCodes === []
+                && !$hasDefaultTemplateMarkers;
+            $rows[$pageType]['complete'] = $complete;
+            if ($missingStageOneBlockCodes !== [] || ($stageOneExpected > 0 && $expected < $stageOneExpected)) {
+                $missingStageOneBlocks[] = [
+                    'page_type' => (string)$pageType,
+                    'missing_block_codes' => $missingStageOneBlockCodes,
+                    'stage1_expected_blocks' => $stageOneExpected,
+                    'build_plan_expected_blocks' => $expected,
+                ];
+            }
+            if ($hasDefaultTemplateMarkers) {
+                $defaultTemplatePageLayouts[] = (string)$pageType;
+            }
+            if (!$complete) {
+                $shortfalls[] = [
+                    'page_type' => (string)$pageType,
+                    'expected_blocks' => $expected,
+                    'executable_blocks' => $executable,
+                    'completed_blocks' => $completed,
+                    'layout_blocks' => $layout,
+                    'persisted_layout_blocks' => (int)($row['persisted_layout_blocks'] ?? 0),
+                    'missing_stage1_plan_block_codes' => $missingStageOneBlockCodes,
+                    'missing_executable_block_codes' => $missingExecutableBlockCodes,
+                    'missing_completed_block_codes' => $missingCompletedBlockCodes,
+                    'missing_layout_block_codes' => $missingLayoutBlockCodes,
+                    'missing_persisted_layout_block_codes' => $missingPersistedLayoutBlockCodes,
+                    'has_default_template_markers' => $hasDefaultTemplateMarkers,
+                ];
+            }
+        }
+
+        return [
+            'expected_page_types' => $expectedPageTypes,
+            'rows' => \array_values($rows),
+            'shortfalls' => $shortfalls,
+            'missing_stage1_plan_blocks' => $missingStageOneBlocks,
+            'default_template_page_layouts' => \array_values(\array_unique($defaultTemplatePageLayouts)),
+        ];
+    }
+
+    /**
+     * @return array{page_type:string,expected_blocks:int,executable_blocks:int,completed_blocks:int,layout_blocks:int,complete:bool}
+     */
+    private function emptyPageBlockProgressRow(string $pageType): array
+    {
+        return [
+            'page_type' => $pageType,
+            'expected_blocks' => 0,
+            'stage1_expected_blocks' => 0,
+            'executable_blocks' => 0,
+            'completed_blocks' => 0,
+            'layout_blocks' => 0,
+            'persisted_layout_blocks' => 0,
+            'expected_block_codes' => [],
+            'expected_block_ids' => [],
+            'expected_block_keys' => [],
+            'stage1_expected_block_codes' => [],
+            'layout_block_codes' => [],
+            'persisted_layout_block_codes' => [],
+            'missing_stage1_plan_block_codes' => [],
+            'missing_executable_block_codes' => [],
+            'missing_completed_block_codes' => [],
+            'missing_layout_block_codes' => [],
+            'missing_persisted_layout_block_codes' => [],
+            'has_default_template_markers' => false,
+            'persisted_layout_has_default_template_markers' => false,
+            'complete' => false,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, list<array{page_type:string,block_id:string,block_key:string,section_code:string,task_key:string}>>
+     */
+    private function collectExpectedBuildPlanPageBlocks(array $scope): array
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $pagesById = $this->normalizeBuildPlanRecordSet($contract['pages'] ?? [], ['page_id', 'id']);
+        $selected = $this->buildStringSet($this->normalizeBuildPlanStringList($scope['page_types'] ?? []));
+        $blocksByPage = [];
+        foreach (\is_array($contract['blocks'] ?? null) ? $contract['blocks'] : [] as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockId = \trim((string)($block['block_id'] ?? $block['id'] ?? ''));
+            $pageId = \trim((string)($block['page_id'] ?? ''));
+            $page = \is_array($pagesById[$pageId] ?? null) ? $pagesById[$pageId] : [];
+            $pageType = \trim((string)($block['page_type'] ?? $page['page_type'] ?? ''));
+            if ($pageType === '' || ($selected !== [] && !isset($selected[$pageType]))) {
+                continue;
+            }
+            $sectionKey = \trim((string)($block['section_key'] ?? $block['block_key'] ?? ''));
+            if ($sectionKey === '' && $blockId !== '') {
+                $parts = \explode('.', $blockId);
+                $sectionKey = (string)\end($parts);
+            }
+            $sectionCode = $this->resolveBuildPlanSectionCode($pageType, $sectionKey, $blockId);
+            $blocksByPage[$pageType][] = [
+                'page_type' => $pageType,
+                'block_id' => $blockId,
+                'block_key' => $sectionKey,
+                'section_code' => $sectionCode,
+                'task_key' => 'page:' . $pageType . ':' . $sectionCode,
+            ];
+        }
+
+        return $blocksByPage;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, list<array{page_type:string,block_id:string,block_key:string,section_code:string,task_key:string}>>
+     */
+    private function collectExpectedStageOnePlanPageBlocks(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        if ($planJson === []) {
+            $planJson = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        }
+        $selected = $this->buildStringSet($this->normalizeBuildPlanStringList($scope['page_types'] ?? []));
+        $blocksByPage = [];
+        foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $pageKey => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($pageKey) ? $pageKey : '')));
+            if ($pageType === '' || ($selected !== [] && !isset($selected[$pageType]))) {
+                continue;
+            }
+            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $blockKey => $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $sectionKey = \trim((string)(
+                    $block['section_key']
+                    ?? $block['block_key']
+                    ?? $block['key']
+                    ?? $block['id']
+                    ?? (\is_string($blockKey) ? $blockKey : '')
+                ));
+                if ($sectionKey === '') {
+                    continue;
+                }
+                $blockId = \trim((string)($block['block_id'] ?? $block['id'] ?? ''));
+                if ($blockId === '') {
+                    $blockId = $pageType . '.' . $sectionKey;
+                }
+                $sectionCode = $this->resolveBuildPlanSectionCode($pageType, $sectionKey, $blockId);
+                $blocksByPage[$pageType][] = [
+                    'page_type' => $pageType,
+                    'block_id' => $blockId,
+                    'block_key' => $sectionKey,
+                    'section_code' => $sectionCode,
+                    'task_key' => 'page:' . $pageType . ':' . $sectionCode,
+                ];
+            }
+        }
+
+        return $blocksByPage;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @return list<string>
+     */
+    private function extractExpectedPageBlockCodes(array $blocks, string $field): array
+    {
+        $values = [];
+        foreach ($blocks as $block) {
+            $value = \trim((string)($block[$field] ?? ''));
+            if ($value !== '') {
+                $values[] = $value;
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     * @return list<string>
+     */
+    private function collectLayoutSectionCodes(array $layout): array
+    {
+        $codes = [];
+        foreach (\is_array($layout['content'] ?? null) ? $layout['content'] : [] as $section) {
+            if (!\is_array($section)) {
+                continue;
+            }
+            $sectionCode = $this->resolveLayoutSectionCode($section);
+            if ($sectionCode !== '') {
+                $codes[] = $sectionCode;
+            }
+        }
+
+        return \array_values(\array_unique($codes));
+    }
+
+    /**
+     * @param list<string> $values
+     * @return array<string, true>
+     */
+    private function buildStringSet(array $values): array
+    {
+        $set = [];
+        foreach ($values as $value) {
+            $value = \trim((string)$value);
+            if ($value !== '') {
+                $set[$value] = true;
+            }
+        }
+
+        return $set;
+    }
+
+    /**
+     * @param list<string> $expected
+     * @param list<string> $actual
+     * @return list<string>
+     */
+    private function missingSectionIdentitySet(array $expected, array $actual): array
+    {
+        $missing = [];
+        foreach ($expected as $expectedCode) {
+            $expectedCode = \trim((string)$expectedCode);
+            if ($expectedCode === '') {
+                continue;
+            }
+            $found = false;
+            foreach ($actual as $actualCode) {
+                if ($this->sectionIdentityMatches((string)$actualCode, $expectedCode)) {
+                    $found = true;
+                    break;
+                }
+            }
+            if (!$found) {
+                $missing[] = $expectedCode;
+            }
+        }
+
+        return \array_values(\array_unique($missing));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function loadPersistedVirtualThemeLayoutConfig(array $scope, string $pageType): array
+    {
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId <= 0 || $pageType === '') {
+            return [];
+        }
+
+        try {
+            /** @var VirtualThemeLayout $layout */
+            $layout = clone ObjectManager::getInstance(VirtualThemeLayout::class);
+            $layout->clearData()->clearQuery();
+            $layout->where(VirtualThemeLayout::schema_fields_VIRTUAL_THEME_ID, $virtualThemeId)
+                ->where(VirtualThemeLayout::schema_fields_PAGE_TYPE, $pageType)
+                ->where(VirtualThemeLayout::schema_fields_AREA, 'frontend')
+                ->order(VirtualThemeLayout::schema_fields_ID, 'DESC')
+                ->find()
+                ->fetch();
+
+            $config = $layout->getConfig();
+            return (int)$layout->getId() > 0 && \is_array($config) ? $config : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function arrayContainsDefaultTemplateMarkers(array $payload): bool
+    {
+        if ($payload === []) {
+            return false;
+        }
+        $encoded = \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+        if (!\is_string($encoded) || $encoded === '') {
+            return false;
+        }
+
+        foreach ([
+            'Default Page Template',
+            'This is the default page',
+            '欢迎访问',
+            '默认页面模板',
+            '了解更多功能特性',
+        ] as $marker) {
+            if (\stripos($encoded, $marker) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -2260,6 +2750,63 @@ class AiSiteBuildTaskService
             return (string)__('构建结果缺少页面类型产物：%{page_types}。请重新生成建站方案并重新调度构建队列。', [
                 'page_types' => \implode(', ', \array_slice($missing, 0, 12)),
             ]);
+        }
+        if ($reason === 'build_plan_missing_stage1_blocks') {
+            $progress = \is_array($gate['page_block_progress'] ?? null) ? $gate['page_block_progress'] : [];
+            $missingRows = \is_array($progress['missing_stage1_plan_blocks'] ?? null) ? $progress['missing_stage1_plan_blocks'] : [];
+            $lines = [];
+            foreach ($missingRows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $pageType = \trim((string)($row['page_type'] ?? ''));
+                if ($pageType === '') {
+                    continue;
+                }
+                $missingCodes = \is_array($row['missing_block_codes'] ?? null) ? $row['missing_block_codes'] : [];
+                $lines[] = \sprintf(
+                    '%s stage1=%d build_plan=%d missing=%s',
+                    $pageType,
+                    (int)($row['stage1_expected_blocks'] ?? 0),
+                    (int)($row['build_plan_expected_blocks'] ?? 0),
+                    \implode(',', \array_slice($missingCodes, 0, 6))
+                );
+            }
+
+            return 'Build plan is missing blocks from the confirmed Stage-1 page plan: ' . \implode('; ', \array_slice($lines, 0, 8));
+        }
+        if ($reason === 'default_template_page_layouts') {
+            $pages = \is_array($gate['default_template_page_layouts'] ?? null) ? $gate['default_template_page_layouts'] : [];
+
+            return 'Build result still contains default page-template markers for: ' . \implode(', ', \array_slice($pages, 0, 12));
+        }
+        if ($reason === 'incomplete_page_block_counts') {
+            $progress = \is_array($gate['page_block_progress'] ?? null) ? $gate['page_block_progress'] : [];
+            $shortfalls = \is_array($progress['shortfalls'] ?? null) ? $progress['shortfalls'] : [];
+            $lines = [];
+            foreach ($shortfalls as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $pageType = \trim((string)($row['page_type'] ?? ''));
+                if ($pageType === '') {
+                    continue;
+                }
+                $lines[] = \sprintf(
+                    '%s expected=%d executable=%d completed=%d layout=%d persisted_layout=%d missing_layout=%s missing_persisted=%s missing_completed=%s',
+                    $pageType,
+                    (int)($row['expected_blocks'] ?? 0),
+                    (int)($row['executable_blocks'] ?? 0),
+                    (int)($row['completed_blocks'] ?? 0),
+                    (int)($row['layout_blocks'] ?? 0),
+                    (int)($row['persisted_layout_blocks'] ?? 0),
+                    \implode(',', \array_slice(\is_array($row['missing_layout_block_codes'] ?? null) ? $row['missing_layout_block_codes'] : [], 0, 4)),
+                    \implode(',', \array_slice(\is_array($row['missing_persisted_layout_block_codes'] ?? null) ? $row['missing_persisted_layout_block_codes'] : [], 0, 4)),
+                    \implode(',', \array_slice(\is_array($row['missing_completed_block_codes'] ?? null) ? $row['missing_completed_block_codes'] : [], 0, 4))
+                );
+            }
+
+            return 'Build page block counts are incomplete: ' . \implode('; ', \array_slice($lines, 0, 8));
         }
         if ($reason === 'cancelled_build_plan_blocks') {
             return (string)__('有构建任务已取消，请检查工作台任务状态后重试。');
@@ -3988,19 +4535,32 @@ class AiSiteBuildTaskService
      */
     private function layoutHasContentBlocks(array $layout): bool
     {
+        return $this->countBuiltLayoutContentBlocks($layout) > 0;
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     */
+    private function countBuiltLayoutContentBlocks(array $layout): int
+    {
         $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        $count = 0;
         foreach ($content as $section) {
             if (!\is_array($section)) {
                 continue;
             }
             foreach (['code', 'component', 'section_code'] as $key) {
                 if (\trim((string)($section[$key] ?? '')) !== '') {
-                    return true;
+                    ++$count;
+                    continue 2;
                 }
+            }
+            if ($this->isBuiltPageSectionArtifact($section)) {
+                ++$count;
             }
         }
 
-        return false;
+        return $count;
     }
 
     /**
@@ -4025,12 +4585,44 @@ class AiSiteBuildTaskService
                 ->fetch();
 
             $config = $layout->getConfig();
-            return $layout->getId() > 0
-                && $this->layoutContainsSectionCode($config, $sectionCode)
-                && !$this->arrayContainsGeneratedArtifactPromptTrace($config);
+            if ($layout->getId() <= 0 || $this->arrayContainsGeneratedArtifactPromptTrace($config)) {
+                return false;
+            }
+            $section = $this->findLayoutSectionByCode($config, $sectionCode);
+
+            return $section !== null && $this->isBuiltPageSectionArtifact($section);
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $summary summarize() 返回值
+     * @return list<array{page_type:string,done:int,total:int,complete:bool}>
+     */
+    public function summarizePageBlockProgress(array $summary): array
+    {
+        $groups = \is_array($summary['groups'] ?? null) ? $summary['groups'] : [];
+        $rows = [];
+        foreach ($groups as $groupKey => $group) {
+            if ($groupKey === 'shared' || !\is_array($group)) {
+                continue;
+            }
+            $pageType = \trim((string)($group['page_type'] ?? $groupKey));
+            if ($pageType === '') {
+                continue;
+            }
+            $done = (int)($group['done'] ?? 0);
+            $total = (int)($group['total'] ?? 0);
+            $rows[] = [
+                'page_type' => $pageType,
+                'done' => $done,
+                'total' => $total,
+                'complete' => $total > 0 && $done >= $total,
+            ];
+        }
+
+        return $rows;
     }
 
     /**

@@ -79,6 +79,66 @@ final class AiSiteBuildPlanServiceTest extends TestCase
         self::assertSame(true, $contract['presentation_projection']['never_feed_to_build'] ?? null);
     }
 
+    public function testBuildUsesStructuredPlanWhenPlanJsonHasNoPages(): void
+    {
+        $service = new AiSiteBuildPlanService();
+
+        $contract = $service->buildFromScope([
+            'page_types' => ['home_page'],
+            'site_title' => 'Structured Source Site',
+            'brief_description' => 'Confirm structured plans when the lightweight plan_json only carries metadata.',
+            'default_locale' => 'en_US',
+            'plan_json' => [
+                'content_locale' => 'en_US',
+            ],
+            'plan_structured' => [
+                'signature' => 'structured-stage1-signature',
+                'site_strategy' => [
+                    'site_display_name' => 'Structured Source Site',
+                ],
+                'pages' => [
+                    'home_page' => [
+                        'title' => 'Home',
+                        'page_goal' => 'Explain the offer and drive the primary contact CTA.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'page_flow_role' => 'opening',
+                                'title' => 'Structured plan hero',
+                                'content' => 'A concise proof-led hero section for a complete structured source plan.',
+                                'goal' => 'Use the structured artifact as the source of truth.',
+                                'execution_script' => [
+                                    'core_copy' => 'Guests see signature dishes, trust proof, and a clear reservation path.',
+                                ],
+                                'visual_signature' => [
+                                    'composition_pattern' => 'editorial hero',
+                                    'spatial_rhythm' => 'headline above proof row',
+                                    'media_strategy' => 'CSS-only proof surface',
+                                    'surface_treatment' => 'warm high-contrast panel',
+                                    'interaction_pattern' => 'CTA hover lift',
+                                ],
+                                'image_intent' => [
+                                    'needs_image' => false,
+                                    'css_motif' => 'fine line grid',
+                                ],
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'A concise proof-led hero section.'],
+                                    ['field' => 'cta', 'sample' => 'Reserve a table'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = $service->validate($contract);
+
+        self::assertTrue($result['valid'], \implode("\n", $result['errors']));
+        self::assertSame('home_page', $contract['pages'][0]['page_type'] ?? null);
+        self::assertSame('Structured plan hero', $contract['content_manifest']['items']['block.home_page.hero.title'] ?? null);
+    }
+
     public function testBuildPlanRejectsStageOnePagesMissingSelectedPageTypes(): void
     {
         $service = new AiSiteBuildPlanService();
@@ -127,6 +187,41 @@ final class AiSiteBuildPlanServiceTest extends TestCase
                 ],
             ],
         ]);
+    }
+
+    public function testBuildPlanDoesNotReuseConfirmedContractWhenSelectedPageTypesChange(): void
+    {
+        $service = new AiSiteBuildPlanService();
+        $confirmedHomeOnly = $service->confirm($service->buildFromScope([
+            'page_types' => ['home_page'],
+            'site_title' => 'Example Site',
+            'brief_description' => 'Convert qualified buyers with clear trust proof.',
+            'default_locale' => 'en_US',
+            'plan_json' => [
+                'signature' => 'stage1-signature-home',
+                'pages' => [
+                    'home_page' => $this->minimalStageOnePage('Home', 'home hero'),
+                ],
+            ],
+        ]));
+
+        $contract = $service->buildFromScope([
+            'page_types' => ['home_page', 'about_page'],
+            'site_title' => 'Example Site',
+            'brief_description' => 'Convert qualified buyers with clear trust proof.',
+            'default_locale' => 'en_US',
+            'build_plan_v2' => $confirmedHomeOnly,
+            'plan_json' => [
+                'signature' => 'stage1-signature-home-about',
+                'pages' => [
+                    'home_page' => $this->minimalStageOnePage('Home', 'home hero'),
+                    'about_page' => $this->minimalStageOnePage('About', 'about story'),
+                ],
+            ],
+        ]);
+
+        self::assertSame(['home_page', 'about_page'], \array_column($contract['pages'], 'page_type'));
+        self::assertCount(2, $contract['pages']);
     }
 
     public function testBuildPlanUsesContentLocaleInsteadOfPlanLocaleForEveryTask(): void
@@ -450,5 +545,43 @@ final class AiSiteBuildPlanServiceTest extends TestCase
         self::assertArrayNotHasKey('rationale', $contract['blocks'][0]['image_intent']);
         self::assertArrayNotHasKey('rationale', $contract['blocks'][0]['visual']['image_intent']);
         self::assertArrayNotHasKey('reason', $contract['blocks'][0]['visual']['source_design_tags']);
+    }
+
+    private function minimalStageOnePage(string $title, string $headline): array
+    {
+        return [
+            'title' => $title,
+            'page_goal' => 'Explain the offer and guide visitors to the next action.',
+            'blocks' => [
+                [
+                    'block_key' => 'hero',
+                    'page_flow_role' => 'opening',
+                    'title' => $headline,
+                    'goal' => 'Show the core value with a direct CTA.',
+                    'visual_signature' => [
+                        'composition_pattern' => 'split hero',
+                        'spatial_rhythm' => 'copy left, media right',
+                        'media_strategy' => 'Generated hero image in the media panel',
+                        'surface_treatment' => 'clean dark surface',
+                        'interaction_pattern' => 'CTA hover lift',
+                    ],
+                    'image_intent' => [
+                        'needs_image' => true,
+                        'image_role' => 'hero_image',
+                        'image_subject' => 'service dashboard on a laptop',
+                        'placement' => 'media_panel',
+                        'visual_atmosphere' => 'calm professional workspace',
+                        'image_treatment' => 'rounded editorial crop',
+                        'reuse_policy' => 'reuse_when_intent_matches',
+                        'css_motif' => '',
+                    ],
+                    'field_plan' => [
+                        ['field' => 'headline', 'sample' => $headline],
+                        ['field' => 'supporting_copy', 'sample' => 'A clear overview helps visitors understand the next step.'],
+                        ['field' => 'cta_label', 'sample' => 'Contact us'],
+                    ],
+                ],
+            ],
+        ];
     }
 }

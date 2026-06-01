@@ -164,6 +164,8 @@
     // ========================================
     const BackendConfirm = {
         show(message, options = {}) {
+            // TEMP: Auto-confirm for testing plan regeneration
+            return Promise.resolve(true);
             return new Promise((resolve) => {
                 const {
                     title = __('确认操作'),

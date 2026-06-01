@@ -1006,6 +1006,16 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     if (\class_exists(\Weline\Theme\Block\Partials::class)) {
                         \Weline\Theme\Block\Partials::clearMetaCache();
                     }
+                    if (\class_exists(\Weline\Theme\Service\SlotRendererService::class)) {
+                        \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\SlotRendererService::class)
+                            ->clearCache();
+                    }
+                    if (\class_exists(\Weline\Theme\Observer\ControllerFetchFileBefore::class)) {
+                        \Weline\Theme\Observer\ControllerFetchFileBefore::clearRuntimeCache();
+                    }
+                    if (\class_exists(\Weline\Theme\Helper\ThemeData::class)) {
+                        \Weline\Theme\Helper\ThemeData::clearCache();
+                    }
                     if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
                         \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
                     }

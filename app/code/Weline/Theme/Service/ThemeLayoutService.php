@@ -502,23 +502,31 @@ class ThemeLayoutService
                     ->delete()
                     ->fetch();
 
-                // 3. 去重：按 slot_id 分组，独占插槽只保留最后一条
-                $slotSeen = []; // slot_id => true（用于独占插槽去重）
-                
+                // 3. 去重：独占插槽按 slot_id；其余按 area+slot+部件身份，避免脏草稿/快照重复发布
+                $exclusiveSlotSeen = [];
+                $widgetIdentitySeen = [];
+
                 foreach ($draftLayout as $area => $areaData) {
                     foreach ($areaData['widgets'] as $widget) {
                         $slotId = $widget['slot_id'] ?? null;
-                        
-                        // 独占插槽去重：同一 slot_id 只发布一个部件
-                        if ($slotId) {
+
+                        if ($slotId && $this->isExclusivePublishSlot((string)$slotId)) {
                             $slotKey = $area . '::' . $slotId;
-                            if (isset($slotSeen[$slotKey])) {
-                                // 同一独占插槽已有部件，跳过冗余记录
+                            if (isset($exclusiveSlotSeen[$slotKey])) {
                                 continue;
                             }
-                            $slotSeen[$slotKey] = true;
+                            $exclusiveSlotSeen[$slotKey] = true;
+                        } else {
+                            $identityKey = $area . '::'
+                                . ($slotId ?? '') . '::'
+                                . ($widget['widget_module'] ?? '') . '::'
+                                . ($widget['widget_code'] ?? '');
+                            if (isset($widgetIdentitySeen[$identityKey])) {
+                                continue;
+                            }
+                            $widgetIdentitySeen[$identityKey] = true;
                         }
-                        
+
                         $this->saveWidget([
                             'theme_id' => $themeId,
                             'page_type' => $type,
@@ -536,9 +544,83 @@ class ThemeLayoutService
                 }
             }
 
+            $this->purgePublishedLayoutCaches();
+
             return true;
         } catch (\Exception $e) {
             return false;
+        }
+    }
+
+    /**
+     * 发布布局后清理前端路由/FPC/共享内存中的旧版 slot 与整页缓存，避免 Worker 继续输出重复或过期部件。
+     */
+    private function purgePublishedLayoutCaches(): void
+    {
+        if (\class_exists(SlotRendererService::class)) {
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+        }
+
+        try {
+            ObjectManager::getInstance(\Weline\Framework\Router\Cache\RouterCache::class . 'Factory')->flush();
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
+                \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            $cacheManager = ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
+            foreach (['fpc', 'router'] as $pool) {
+                if (\method_exists($cacheManager, 'hasPool') && $cacheManager->hasPool($pool)) {
+                    $cacheManager->pool($pool)->clear();
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            ObjectManager::getInstance(\Weline\Server\Service\Control\BroadcastControlDispatchService::class)
+                ->cacheClear();
+        } catch (\Throwable) {
+        }
+
+        try {
+            if (\class_exists(\Weline\Server\Service\MemoryStateFacade::class)) {
+                $facade = new \Weline\Server\Service\MemoryStateFacade([
+                    'consumer_code' => 'theme_layout_publish',
+                    'prefer_direct_connect' => true,
+                    'pool_size' => 1,
+                    'auto_start' => false,
+                ]);
+                $facade->clearCache('router');
+                $facade->clearCache('fpc');
+                $facade->clearNamespace('theme_runtime');
+                $facade->disconnect();
+            }
+        } catch (\Throwable) {
+        }
+
+        $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads';
+        if (\is_dir($payloadDir)) {
+            try {
+                $iterator = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($payloadDir, \FilesystemIterator::SKIP_DOTS),
+                    \RecursiveIteratorIterator::CHILD_FIRST
+                );
+                foreach ($iterator as $item) {
+                    if ($item->isDir()) {
+                        @\rmdir($item->getPathname());
+                    } else {
+                        @\unlink($item->getPathname());
+                    }
+                }
+            } catch (\Throwable) {
+            }
         }
     }
 
@@ -962,5 +1044,26 @@ class ThemeLayoutService
         }
 
         return ObjectManager::getInstance(ThemePlaceableRegistry::class);
+    }
+
+    /**
+     * 与 ThemeEditor 保存部件、theme-editor.js isExclusiveSlot 的独占插槽列表保持一致。
+     */
+    private function isExclusivePublishSlot(string $slotId): bool
+    {
+        static $exclusiveSlots = [
+            'header',
+            'logo',
+            'search',
+            'navigation',
+            'footer',
+            'footer-social',
+            'footer-copyright',
+            'widget-hero',
+            'list-grid',
+            'list-pagination',
+        ];
+
+        return \in_array($slotId, $exclusiveSlots, true);
     }
 }

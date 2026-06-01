@@ -33,7 +33,7 @@ class AiSiteAgentQueueObserverHelperService
      */
     public function shouldSuppressProcessMirror(string $operation): bool
     {
-        return $operation === 'plan';
+        return false;
     }
 
     /**

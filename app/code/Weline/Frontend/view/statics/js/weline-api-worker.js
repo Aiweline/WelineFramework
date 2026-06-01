@@ -148,13 +148,16 @@
         }
 
         if (!handshakePromise) {
-            handshakePromise = handshake(config).finally(() => {
+            handshakePromise = (async () => {
+                const session = await handshake(config);
+                workerSession = session;
+                return session;
+            })().finally(() => {
                 handshakePromise = null;
             });
         }
 
-        workerSession = await handshakePromise;
-        return workerSession;
+        return handshakePromise;
     }
 
     async function handshake(config) {

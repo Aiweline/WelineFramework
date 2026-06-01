@@ -195,6 +195,17 @@ class AiSiteAgentSessionArtifactService
 
             if ($hasValue) {
                 if (
+                    \in_array($artifactKey, ['plan_json', 'plan_structured'], true)
+                    && \is_array($value)
+                    && !isset($touchedMap[$artifactKey])
+                    && !$this->hasCompleteStageOnePlanPayload($value)
+                    && $existingRef !== []
+                ) {
+                    $refs[$stageCode][$artifactKey] = $existingRef;
+                    $scope = $this->setPathValue($scope, $definition['path'], $definition['empty']);
+                    continue;
+                }
+                if (
                     $artifactKey === 'build_plan_v2'
                     && \is_array($value)
                     && !$this->hasCompleteBuildPlanArtifactPayload($value)
@@ -296,6 +307,24 @@ class AiSiteAgentSessionArtifactService
     }
 
     /**
+     * Manifest-only workspace loads can contain lightweight plan metadata such as
+     * {"content_locale":"en_US"}. Those payloads must never replace a complete
+     * plan artifact produced by stage one.
+     *
+     * @param array<string, mixed> $value
+     */
+    private function hasCompleteStageOnePlanPayload(array $value): bool
+    {
+        $pages = \is_array($value['pages'] ?? null) ? $value['pages'] : [];
+        if ($pages !== []) {
+            return true;
+        }
+
+        $pagePlans = \is_array($value['page_plans'] ?? null) ? $value['page_plans'] : [];
+        return $pagePlans !== [];
+    }
+
+    /**
      * @param list<array{stage_code:string, artifact_key:string, payload_json?:string, payload?:mixed, hash?:string, bytes?:int, storage?:string}> $artifacts
      */
     public function persistArtifacts(int $sessionId, array $artifacts): void
@@ -391,38 +420,60 @@ class AiSiteAgentSessionArtifactService
             return $scope;
         }
 
-        $keys = $artifactKeys === [] ? $this->resolveReferencedArtifactKeys($scope) : $artifactKeys;
+        $explicitKeys = $artifactKeys !== [];
+        $keys = $explicitKeys ? $artifactKeys : $this->resolveReferencedArtifactKeys($scope);
+        \file_put_contents(
+            BP . 'var/log/emergency_fallback.log',
+            \date('Y-m-d H:i:s') . " [hydrateScope] sessionId={$sessionId} explicitKeys=" . ($explicitKeys ? 'true' : 'false') . ' keys=' . \implode(',', $keys) . "\n",
+            \FILE_APPEND
+        );
         foreach (\array_values(\array_unique($keys)) as $artifactKey) {
             $definition = self::ARTIFACT_DEFINITIONS[$artifactKey] ?? null;
             if (!\is_array($definition)) {
+                \error_log("[hydrateScope] skip {$artifactKey}: no definition");
                 continue;
             }
 
             $stageCode = (string)$definition['stage'];
             $inlineValue = $this->getPathValue($scope, $definition['path'], $definition['empty']);
             if (!$this->shouldHydrateArtifactFromStorage($artifactKey, $inlineValue)) {
+                \error_log("[hydrateScope] skip {$artifactKey}: shouldHydrate=false (inlineValue type=" . \gettype($inlineValue) . ')');
                 continue;
             }
 
             $artifact = $this->loadArtifactModel($sessionId, $stageCode, $artifactKey);
+            \error_log("[hydrateScope] {$artifactKey}: artifactId=" . $artifact->getId());
             if ($artifact->getId() <= 0) {
+                if (!$explicitKeys) {
+                    continue;
+                }
+                // Fallback: load latest artifact from filesystem when DB metadata is missing.
+                $payload = $this->loadLatestArtifactFromFilesystem($sessionId, $stageCode, $artifactKey);
+                \error_log("[hydrateScope] {$artifactKey}: filesystem fallback payload=" . (\is_array($payload) ? 'array(' . \count($payload) . ')' : \gettype($payload)));
+                if (!$this->hasArtifactPayload($payload)) {
+                    continue;
+                }
+                $scope = $this->setPathValue($scope, $definition['path'], $payload);
                 continue;
             }
 
             $ref = $this->getArtifactRef($scope, $stageCode, $artifactKey);
-            if ($ref !== []) {
+            if ($ref !== [] && !$explicitKeys) {
                 $refHash = \trim((string)($ref['hash'] ?? ''));
                 $payloadHash = \trim((string)$artifact->getPayloadHash());
                 if ($refHash !== '' && $payloadHash !== '' && !\hash_equals($refHash, $payloadHash)) {
+                    \error_log("[hydrateScope] skip {$artifactKey}: hash mismatch ref={$refHash} payload={$payloadHash}");
                     continue;
                 }
             }
 
             $payload = $this->loadCachedOrFreshPayloadValue($artifact);
             if (!$this->hasArtifactPayload($payload)) {
+                \error_log("[hydrateScope] skip {$artifactKey}: no payload");
                 continue;
             }
 
+            \error_log("[hydrateScope] {$artifactKey}: loaded OK, type=" . \gettype($payload));
             $scope = $this->setPathValue($scope, $definition['path'], $payload);
         }
 
@@ -632,6 +683,57 @@ class AiSiteAgentSessionArtifactService
             ->fetch();
 
         return $artifact;
+    }
+
+    /**
+     * Load the latest artifact payload directly from filesystem when DB metadata is missing.
+     *
+     * @return array<string, mixed>|string|null
+     */
+    private function loadLatestArtifactFromFilesystem(int $sessionId, string $stageCode, string $artifactKey): mixed
+    {
+        $directory = BP . self::ARTIFACT_FILE_BASE_DIR . \DIRECTORY_SEPARATOR . $sessionId . \DIRECTORY_SEPARATOR . $stageCode;
+        if (!\is_dir($directory)) {
+            return null;
+        }
+
+        $prefix = $artifactKey . '-';
+        $latestFile = null;
+        $latestMtime = 0;
+
+        $handle = \opendir($directory);
+        if ($handle === false) {
+            return null;
+        }
+        while (($entry = \readdir($handle)) !== false) {
+            if ($entry === '.' || $entry === '..' || !\str_starts_with($entry, $prefix) || !\str_ends_with($entry, '.json')) {
+                continue;
+            }
+            $filePath = $directory . \DIRECTORY_SEPARATOR . $entry;
+            $mtime = \filemtime($filePath);
+            if ($mtime > $latestMtime) {
+                $latestMtime = $mtime;
+                $latestFile = $filePath;
+            }
+        }
+        \closedir($handle);
+
+        if ($latestFile === null) {
+            return null;
+        }
+
+        $json = \file_get_contents($latestFile);
+        if ($json === false || \trim($json) === '') {
+            return null;
+        }
+
+        try {
+            $decoded = \json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+
+        return \is_array($decoded) ? $decoded : null;
     }
 
     private function ensureArtifactTableExists(): void

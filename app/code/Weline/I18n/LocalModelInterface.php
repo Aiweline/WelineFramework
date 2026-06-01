@@ -21,5 +21,4 @@ interface LocalModelInterface
     /** 与 TraitLocalModel / LocalModel 属性初始值一致，供 self:: 解析 */
     public const schema_fields_local_code = 'local_code';
     public const schema_fields_name       = 'name';
-    public const schema_fields_config     = 'config';
 }

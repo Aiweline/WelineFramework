@@ -23,14 +23,14 @@ use Weline\Ai\Service\AiService;
 
 final class AiSiteExecutionBlueprintServiceTest extends TestCase
 {
-    public function testStageOneContentLocalePrefersWebsiteLocaleOverPlanLocale(): void
+    public function testStageOneContentLocalePrefersExplicitContentLocaleOverWebsiteDefault(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
         $method = new \ReflectionMethod($service, 'resolveStageOneContentLocale');
         $method->setAccessible(true);
 
         self::assertSame(
-            'pt_BR',
+            'zh_Hans_CN',
             (string)$method->invoke($service, [
                 'plan_locale' => 'zh_Hans_CN',
                 'content_locale' => 'zh_Hans_CN',
@@ -40,6 +40,23 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                     'content_locale' => 'zh_Hans_CN',
                 ],
             ], 'zh_Hans_CN')
+        );
+
+        self::assertSame(
+            'en_US',
+            (string)$method->invoke($service, [
+                'plan_locale' => 'en_US',
+                'default_locale' => 'es_ES',
+            ], 'en_US')
+        );
+
+        self::assertSame(
+            'en_US',
+            (string)$method->invoke($service, [
+                'plan_locale' => 'en_US',
+                'content_locale' => 'es_ES',
+                'default_locale' => 'es_ES',
+            ], 'en_US')
         );
 
         self::assertSame(
@@ -96,6 +113,23 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
                 ],
             ], 'zh_Hans_CN')
         );
+    }
+
+    public function testStageOneConcreteBlockRepairUsesEnglishForNonChineseLocales(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $contentMethod = new \ReflectionMethod($service, 'buildStageOneConcreteBlockContent');
+        $contentMethod->setAccessible(true);
+        $coreCopyMethod = new \ReflectionMethod($service, 'buildStageOneConcreteCoreCopy');
+        $coreCopyMethod->setAccessible(true);
+
+        $content = (string)$contentMethod->invoke($service, 'hero', Page::TYPE_HOME, 'es_ES');
+        $coreCopy = (string)$coreCopyMethod->invoke($service, 'hero', Page::TYPE_HOME, 'es_ES');
+
+        self::assertStringContainsString('customer-facing', $content);
+        self::assertStringNotContainsString('区块', $content);
+        self::assertStringContainsString('trust it', $coreCopy);
+        self::assertNotSame($content, $coreCopy);
     }
 
     public function testPalettePlanIgnoresNegatedGamingTermsForSaasBrief(): void
@@ -3895,6 +3929,44 @@ final class AiSiteExecutionBlueprintServiceTest extends TestCase
         $decoded['plan_json']['pages']['home_page']['blocks'][0]['execution_script']['feature_points'] = ['Visible headline', 'Primary CTA'];
 
         return \json_encode($decoded, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    public function testRepairAiStageOneBlocksBeforeValidationPadsFieldPlanToContractShape(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $repairMethod = new \ReflectionMethod(AiSiteExecutionBlueprintService::class, 'repairAiStageOneBlocksBeforeValidation');
+        $repairMethod->setAccessible(true);
+
+        $blocks = [[
+            'block_key' => 'brand_promise',
+            'page_flow_role' => 'proof',
+            'goal' => 'Show chef sourcing and restaurant quality proof.',
+            'content' => 'Chef-selected ingredients and careful preparation prove the restaurant quality promise.',
+            'design_tags' => [],
+            'field_plan' => [
+                ['field' => 'supporting_copy', 'sample' => 'Every dish starts with carefully selected seasonal ingredients.', 'implementation_note' => 'Render as body copy.'],
+                ['field' => 'context_detail', 'sample' => 'Seasonal sourcing | Chef craft', 'implementation_note' => 'Render as a proof chip.'],
+            ],
+            'execution_script' => [
+                'core_copy' => 'Quality sourcing and chef craft give visitors a clear reason to trust the restaurant.',
+                'feature_points' => ['Seasonal sourcing', 'Chef craft'],
+            ],
+        ]];
+
+        $repaired = $repairMethod->invoke(
+            $service,
+            $blocks,
+            Page::TYPE_HOME,
+            'en_US',
+            ['theme_design' => ['color_scheme' => ['primary' => '#221814', 'accent' => '#C8963E', 'background' => '#120F0C']]],
+            ['color_layering' => 'Dark restaurant base with warm gold accents.']
+        );
+
+        self::assertCount(3, $repaired[0]['field_plan'] ?? []);
+        self::assertSame('headline', $repaired[0]['field_plan'][0]['field'] ?? '');
+        self::assertNotSame('', \trim((string)($repaired[0]['field_plan'][0]['sample'] ?? '')));
+        self::assertSame('supporting_copy', $repaired[0]['field_plan'][1]['field'] ?? '');
+        self::assertSame('context_detail', $repaired[0]['field_plan'][2]['field'] ?? '');
     }
 
     public function testRepairAiStageOneBlocksBeforeValidationBackfillsMissingDesignTags(): void
