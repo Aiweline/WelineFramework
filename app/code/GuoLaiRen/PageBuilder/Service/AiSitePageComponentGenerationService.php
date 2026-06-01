@@ -54,6 +54,8 @@ class AiSitePageComponentGenerationService
     ];
 
     private ?\GuoLaiRen\PageBuilder\Service\AI\Contract\AiSiteVisualBlockContractRenderer $visualBlockContractRenderer = null;
+    /** @var array<string, array<string, mixed>> */
+    private array $buildPlanTaskRootCache = [];
 
     public function __construct(
         private readonly ?FrameworkBuilder $frameworkBuilder = null,
@@ -2327,21 +2329,22 @@ class AiSitePageComponentGenerationService
             false
         );
         $isNeonCard = $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode);
+        $useNeonChineseCopy = $isNeonCard && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask);
 
         $title = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
             ['content.title', 'title', 'heading', 'headline', 'section_title', 'content.heading'],
             ['headline', 'title', 'heading', 'section_title'],
-        ], $isNeonCard ? '入座前，先看清规则' : 'Questions visitors check before they decide');
+        ], $useNeonChineseCopy ? '入座前，先看清规则' : 'Questions visitors check before they decide');
         $description = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
             ['content.description', 'content.body', 'description', 'body', 'section_intro'],
             ['supporting_copy', 'summary', 'task_goal', 'block_goal', 'goal', 'content', 'core_copy'],
-        ], $isNeonCard
+        ], $useNeonChineseCopy
             ? '把房间规则、公平说明、活动条件和支持入口放在同一组可展开问题里，访问者不用离开页面就能确认关键信息。'
             : 'Keep the most important questions visible and easy to scan before the next action.'
         );
         $title = $this->normalizeDeterministicEditableDefault($title, 120);
         $description = $this->normalizeDeterministicEditableDefault($description, 280);
-        $items = $this->resolveDeterministicFaqRulesItems($defaultConfig, $buildPlanTask, $scope, $isNeonCard);
+        $items = $this->resolveDeterministicFaqRulesItems($defaultConfig, $buildPlanTask, $scope, $useNeonChineseCopy);
         $semanticComponentCode = $this->buildSemanticComponentCodeForValidation($componentCode, $defaultConfig, $renderContext);
         $headingTag = $this->requiresPrimaryHeadingForRenderedComponent($semanticComponentCode !== '' ? $semanticComponentCode : $componentCode, $renderContext) ? 'h1' : 'h2';
 
@@ -2371,7 +2374,7 @@ class AiSitePageComponentGenerationService
             'php_variables' => \implode("\n", $phpVariables),
             'css_extra' => $this->buildDeterministicFaqRulesCss($prefix, $roleMap, $safePalette, $isNeonCard),
             'css_responsive' => $this->buildDeterministicFaqRulesResponsiveCss($prefix),
-            'html_content' => $this->buildDeterministicFaqRulesHtml($prefix, $headingTag, $title, $description, $items, $isNeonCard),
+            'html_content' => $this->buildDeterministicFaqRulesHtml($prefix, $headingTag, $title, $description, $items, $useNeonChineseCopy),
             'js_content' => '',
         ];
     }
@@ -3062,7 +3065,7 @@ class AiSitePageComponentGenerationService
                 $phpVariables[] = '$formPlaceholder' . $number . ' = $getConfig(\'' . $placeholderKey . '\', ' . \var_export($item['placeholder'], true) . ');';
             }
             $noteText = $this->normalizeDeterministicEditableDefault($this->firstConfigString($defaultConfig, ['form.note_text'])
-                ?: ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+                ?: ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode) && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask)
                     ? '提交后可继续浏览房间、规则和活动说明，客服会按问题类型给出指引。'
                     : 'Share the request and the team will respond with a practical next step.'), 140);
             $extraFields[] = 'form.note_text => Form note:textarea:' . $noteText;
@@ -3129,7 +3132,7 @@ class AiSitePageComponentGenerationService
         array $scope
     ): string
     {
-        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)) {
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode) && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask)) {
             return match ($mode) {
                 'faq' => '把房间选择、玩法规则、安全提示和客服入口整理成玩家能快速浏览的答案。',
                 'form' => '提交想了解的房间、玩法或支持问题，后续指引保持清晰可追踪。',
@@ -3178,7 +3181,7 @@ class AiSitePageComponentGenerationService
         $goal = $this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['task_goal', 'block_goal', 'goal']) ?? '';
         $goal = $this->sanitizeVisibleCopy($goal);
 
-        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, 'contact support channels')) {
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, 'contact support channels') && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask)) {
             return [
                 ['label' => '房间帮助', 'value' => $goal !== '' ? $this->normalizeDeterministicEditableDefault($goal, 130) : '查看牌桌入口、玩法说明和开始前的关键提示。'],
                 ['label' => '规则咨询', 'value' => '围绕棋牌玩法、活动节奏和安全提示给玩家清晰指引。'],
@@ -3204,7 +3207,7 @@ class AiSitePageComponentGenerationService
      */
     private function resolveDeterministicSupportFormFields(array $defaultConfig, array $buildPlanTask = [], array $scope = []): array
     {
-        $fallback = $this->isNeonCardSiteContext($scope, $buildPlanTask, 'support form')
+        $fallback = $this->isNeonCardSiteContext($scope, $buildPlanTask, 'support form') && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask)
             ? [
                 ['label' => '联系昵称', 'placeholder' => '填写便于客服识别的昵称'],
                 ['label' => '联系方式', 'placeholder' => '留下可回复的联系方式'],
@@ -3256,7 +3259,7 @@ class AiSitePageComponentGenerationService
         }
 
         $goal = $this->sanitizeVisibleCopy($this->findFirstDeterministicVisibleCopyByKeys($buildPlanTask, ['task_goal', 'block_goal', 'goal']) ?? '');
-        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, 'support faq')) {
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, 'support faq') && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask)) {
             return [
                 [
                     'question' => '如何开始体验？',
@@ -3889,7 +3892,7 @@ class AiSitePageComponentGenerationService
             $buildPlanTask['page_flow_role'] ?? '',
             $scope['industry'] ?? '',
         ], \JSON_UNESCAPED_UNICODE), 'UTF-8');
-        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode . ' ' . $title)) {
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode . ' ' . $title) && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask)) {
             if (\preg_match('/blog|resource|article|guide|learn|insight|攻略|资讯/iu', $identity) === 1) {
                 return '浏览牌桌选择、玩法规则、活动节奏和负责任娱乐的实用指南。';
             }
@@ -3906,13 +3909,13 @@ class AiSitePageComponentGenerationService
             return '用深色霓虹、牌桌质感和清晰行动路径，让玩家快速理解当前区块的价值。';
         }
         if (\preg_match('/blog|resource|article|guide|learn|insight/iu', $identity) === 1) {
-            return 'Browse practical guides that help visitors compare options and choose the next step.';
+            return 'Browse practical guides that compare options clearly and point to the next step.';
         }
         if (\preg_match('/trust|proof|result|impact|testimonial|customer/iu', $identity) === 1) {
-            return 'Show the trust signals visitors need before they take action.';
+            return 'Show the trust signals players need before they take action.';
         }
         if (\preg_match('/feature|pillar|capability|benefit|category|offer/iu', $identity) === 1) {
-            return 'Group the core benefits into a clear set of scannable visitor decisions.';
+            return 'Group the core benefits into a clear set of scannable decisions.';
         }
         if (\preg_match('/about|origin|principle|mission|story|philosophy/iu', $identity) === 1) {
             return 'Explain the principles behind the experience in clear, visitor-facing language.';
@@ -3924,7 +3927,7 @@ class AiSitePageComponentGenerationService
             return 'Turn abstract claims into visible steps, useful proof, and practical outcomes.';
         }
 
-        return 'Show the most useful details in a structure visitors can scan and act on.';
+        return 'Show the most useful details in a structure players can scan and act on.';
     }
 
     /**
@@ -3954,7 +3957,7 @@ class AiSitePageComponentGenerationService
             $buildPlanTask['page_flow_role'] ?? '',
             $scope['industry'] ?? '',
         ], \JSON_UNESCAPED_UNICODE), 'UTF-8');
-        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)) {
+        if ($this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode) && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask)) {
             if (\preg_match('/cta|final|contact|newsletter|conversion|download|join|register/iu', $identity) === 1) {
                 return '带玩家确认房间入口、规则提示和支持信息，然后进入下一场霓虹牌局。';
             }
@@ -3968,13 +3971,13 @@ class AiSitePageComponentGenerationService
             return '用霓虹棋牌视觉、具体区块内容和清晰下一步，帮助玩家快速判断并行动。';
         }
         if (\preg_match('/cta|final|contact|demo|newsletter|conversion/iu', $identity) === 1) {
-            return 'Guide visitors toward the next step with clear context, proof, and support.';
+            return 'Guide players toward the next step with clear context, proof, and support.';
         }
         if (\preg_match('/hero|opening|banner|masthead/iu', $identity) === 1) {
             return 'Introduce the offer with a focused promise, credible proof, and one clear action.';
         }
         if (\preg_match('/blog|resource|article|guide|learn|insight/iu', $identity) === 1) {
-            return 'Browse practical guidance that helps visitors understand options before they act.';
+            return 'Browse practical guidance that explains options before the next action.';
         }
 
         return $fallback;
@@ -4034,7 +4037,6 @@ class AiSitePageComponentGenerationService
         if ($this->sameNormalizedVisibleCopy($body, $itemTitle) || $this->sameNormalizedVisibleCopy($body, $sectionDescription)) {
             return true;
         }
-
         return $this->containsBroadPlanGoalCopy($body);
     }
 
@@ -4051,9 +4053,9 @@ class AiSitePageComponentGenerationService
             ['title' => 'Clear path', 'body' => $this->buildDeterministicCardGridItemBody('map', $description, 0)],
             ['title' => 'Guided action', 'body' => $this->buildDeterministicCardGridItemBody('automate', $description, 1)],
             ['title' => 'Visible proof', 'body' => $this->buildDeterministicCardGridItemBody('measure', $description, 2)],
-            ['title' => 'Quick comparison', 'body' => 'Help visitors compare the important details without reading a long page.'],
-            ['title' => 'Helpful support', 'body' => 'Keep guidance close to the action so visitors can move forward with confidence.'],
-            ['title' => 'Practical outcome', 'body' => 'Connect the page promise to a result visitors can understand and evaluate.'],
+            ['title' => 'Quick comparison', 'body' => 'Make the important details easy to compare without reading a long page.'],
+            ['title' => 'Helpful support', 'body' => 'Keep guidance close to the action so players can move forward with confidence.'],
+            ['title' => 'Practical outcome', 'body' => 'Connect the page promise to a result players can understand and evaluate.'],
         ]);
         foreach ($pool as $candidate) {
             if (!$this->sameNormalizedVisibleCopy($title, (string)($candidate['title'] ?? ''))) {
@@ -4116,6 +4118,30 @@ class AiSitePageComponentGenerationService
     }
 
     /**
+     * Deterministic fallbacks may keep the visual style from the site context,
+     * but visitor-facing fallback copy must follow the website locale.
+     *
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $buildPlanTask
+     */
+    private function deterministicFallbackShouldUseEnglish(array $scope, array $buildPlanTask = []): bool
+    {
+        $locale = \trim((string)(
+            $scope['content_locale']
+            ?? $scope['default_locale']
+            ?? $scope['plan_locale']
+            ?? $buildPlanTask['content_locale']
+            ?? $buildPlanTask['locale']
+            ?? ''
+        ));
+        if ($locale === '') {
+            $locale = $this->resolveScopePrimaryLocale($scope);
+        }
+
+        return $this->isEnglishLocale($locale);
+    }
+
+    /**
      * @param list<array{title:string,body:string}> $fallbackItems
      * @param array<string,bool> $seen
      * @return array{title:string,body:string}
@@ -4140,11 +4166,11 @@ class AiSitePageComponentGenerationService
             return ['title' => $title, 'body' => $body];
         }
 
-        $title = 'Visitor proof ' . ($index + 1);
+        $title = 'Proof point ' . ($index + 1);
 
         return [
             'title' => $title,
-            'body' => 'Keep the story specific enough for visitors to understand the next step.',
+            'body' => 'Keep the story specific enough to make the next step clear.',
         ];
     }
 
@@ -4270,52 +4296,52 @@ class AiSitePageComponentGenerationService
         if ($this->isNeonCardSiteContext([], $buildPlanTask, $componentCode . ' ' . $description)) {
             if (\preg_match('/blog|resource|article|guide|learn|insight|攻略|资讯/iu', $identity) === 1) {
                 return [
-                    ['title' => '牌桌入门指南', 'body' => '帮助新玩家快速理解房间选择、规则提示和开始前的关键注意点。'],
-                    ['title' => '玩法节奏攻略', 'body' => '用清晰步骤说明如何阅读牌局节奏、活动时间和支持入口。'],
-                    ['title' => '负责任娱乐清单', 'body' => '把娱乐边界、账户安全和客服说明放在玩家容易看到的位置。'],
+                    ['title' => 'Table Starter Guide', 'body' => 'Help new players quickly understand room choice, rule cues, and key checks before starting.'],
+                    ['title' => 'Game Rhythm Strategy', 'body' => 'Use clear steps to explain how to read table rhythm, event timing, and support entry points.'],
+                    ['title' => 'Responsible Play Checklist', 'body' => 'Keep play limits, account safety, and support details visible where players can inspect them.'],
                 ];
             }
             if (\preg_match('/about|origin|principle|mission|story|philosophy|brand|关于|品牌/iu', $identity) === 1) {
                 return [
-                    ['title' => '霓虹牌桌氛围', 'body' => '用深色光效和牌桌质感建立鲜明、沉浸但可读的品牌第一印象。'],
-                    ['title' => '清晰玩法规则', 'body' => '把房间、规则、支持和安全提示整理成玩家能快速理解的路径。'],
-                    ['title' => '玩家支持承诺', 'body' => '让客服、帮助和负责任娱乐提示成为体验的一部分，而不是藏在页面底部。'],
+                    ['title' => 'Neon Table Atmosphere', 'body' => 'Use dark glow, card-table texture, and readable staging to create a clear first impression.'],
+                    ['title' => 'Clear Game Rules', 'body' => 'Organize rooms, rules, support, and safety cues into a path players can understand quickly.'],
+                    ['title' => 'Player Support Promise', 'body' => 'Make support, help, and responsible play cues part of the experience instead of hiding them.'],
                 ];
             }
             if (\preg_match('/trust|proof|result|impact|testimonial|customer|review|玩家|信任/iu', $identity) === 1) {
                 return [
-                    ['title' => '玩家评价可见', 'body' => '用短评、评分和真实场景提示降低新玩家进入房间前的疑虑。'],
-                    ['title' => '规则透明清楚', 'body' => '把玩法说明、账户提示和责任娱乐信息放进同一条可信阅读路径。'],
-                    ['title' => '支持入口明确', 'body' => '让玩家在开始、遇到问题和查看规则时都能找到快速帮助。'],
+                    ['title' => 'Visible Player Reviews', 'body' => 'Use short reviews, ratings, and realistic table cues to lower doubt before players enter a room.'],
+                    ['title' => 'Transparent Rules', 'body' => 'Place gameplay guidance, account tips, and responsible play information into one trusted path.'],
+                    ['title' => 'Clear Support Entry', 'body' => 'Help players find quick support before starting, when checking rules, or when questions appear.'],
                 ];
             }
             if (\preg_match('/feature|pillar|capability|benefit|category|offer|game|玩法|游戏/iu', $identity) === 1) {
                 return [
-                    ['title' => '热门房间入口', 'body' => '把核心棋牌房间、赛事节奏和快速上手动作放在同一组可扫卡片里。'],
-                    ['title' => '活动福利节奏', 'body' => '说明奖励、任务和活动入口时保持克制，让玩家知道下一步而不被噪音淹没。'],
-                    ['title' => '移动端流畅体验', 'body' => '突出手机端牌桌、加载节奏和关键提示，减少开始前的犹豫。'],
+                    ['title' => 'Room Entry Highlights', 'body' => 'Show core card rooms, tournament rhythm, and quick-start actions in one scannable card group.'],
+                    ['title' => 'Bonus Event Rhythm', 'body' => 'Explain rewards, missions, and event entry points with restraint so players know the next step.'],
+                    ['title' => 'Smooth Mobile Flow', 'body' => 'Highlight mobile table state, loading rhythm, and key cues to reduce hesitation before play.'],
                 ];
             }
         }
         if (\preg_match('/blog|resource|article|guide|learn|insight/iu', $identity) === 1) {
             return [
                 ['title' => 'Practical guide', 'body' => 'Concise guidance that helps visitors compare options before they act.'],
-                ['title' => 'Decision checklist', 'body' => 'A short list of details visitors can review without leaving the page.'],
+                ['title' => 'Decision checklist', 'body' => 'A short checklist keeps room, rule, and support details close to the page.'],
                 ['title' => 'Helpful next step', 'body' => 'Clear support and action cues that turn reading into progress.'],
             ];
         }
         if (\preg_match('/about|origin|principle|mission|story|philosophy/iu', $identity) === 1) {
             return [
-                ['title' => 'Clear purpose', 'body' => 'Explain why the experience exists and what visitors can expect from it.'],
+                ['title' => 'Clear purpose', 'body' => 'Explain why the experience exists and what players can expect from it.'],
                 ['title' => 'Responsible design', 'body' => 'Keep important context, support, and limits easy to inspect.'],
-                ['title' => 'Useful outcome', 'body' => 'Connect the story to a result visitors can understand before taking action.'],
+                ['title' => 'Useful outcome', 'body' => 'Connect the story to a result players can understand before taking action.'],
             ];
         }
         if (\preg_match('/trust|proof|result|impact|testimonial|customer/iu', $identity) === 1) {
             return [
                 ['title' => 'Visitor confidence', 'body' => 'Use proof, ratings, and clear support cues to reduce uncertainty.'],
                 ['title' => 'Transparent details', 'body' => 'Keep rules, timing, and expectations visible before the action.'],
-                ['title' => 'Reliable support', 'body' => 'Show where visitors can get help when they need more context.'],
+                ['title' => 'Reliable support', 'body' => 'Show where players can get help when they need more context.'],
             ];
         }
         if (\preg_match('/feature|pillar|capability|benefit|category|offer/iu', $identity) === 1) {
@@ -4612,11 +4638,11 @@ class AiSitePageComponentGenerationService
             $componentCode,
             $buildPlanTask,
             $scope,
-            $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+            $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode) && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask)
                 ? '确认房间、规则和支持入口后，直接进入下一场霓虹牌局。'
                 : 'Guide visitors toward the next step with clear context, proof, and support.'
         );
-        $defaultCtaText = $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode)
+        $defaultCtaText = $this->isNeonCardSiteContext($scope, $buildPlanTask, $componentCode) && !$this->deterministicFallbackShouldUseEnglish($scope, $buildPlanTask)
             ? '开始游戏'
             : 'Get started';
         $ctaText = $this->resolveDeterministicHeroText($defaultConfig, $buildPlanTask, [
@@ -13071,6 +13097,20 @@ PROMPT;
         $sectionVisualContractPrompt = $this->buildSectionVisualContractPromptAddon($sectionVisualContract, $sectionThemePalette);
         $blockVisualSignaturePrompt = $this->buildBlockVisualSignaturePromptAddon($buildPlanTask, $section);
         $siblingDiversityPrompt = $this->buildSiblingBlockDiversityPromptAddon($pageType, $buildPlanTask, $scope);
+        $currentPageAssignmentPrompt = $this->buildCurrentPageAssignmentPromptAddon(
+            $pageType,
+            $pageLabel,
+            $buildPlanTask,
+            $scope,
+            $locale
+        );
+        $currentBlockAssignmentPrompt = $this->buildCurrentBlockAssignmentPromptAddon(
+            $pageType,
+            $section,
+            $buildPlanTask,
+            $scope,
+            $locale
+        );
         $componentPrefix = $this->normalizeComponentCssPrefix((string)($section['code'] ?? ''));
         $currentBlockRoleContract = $this->buildRoleSpecificRecoveryContractFromExplicitPlan(
             $buildPlanTask,
@@ -13113,7 +13153,9 @@ PROMPT;
             . "Stage-3 execution order: user prompt intent and latest explicit refinement are primary for content/design decisions; frozen_task_context + confirmed_theme are the concrete confirmed plan slice for this block; copy_policy is the visible-output contract against invalid structure, prompt placeholders, and internal metadata leakage; current_asset_context, quality_gate_contract, skill_guidance, and design_quality are guidance unless they protect that structure contract.\n"
             . "You are generating exactly one PageBuilder content component for the current task.\n"
             . "Page type: {$pageLabel} ({$pageType})\n"
+            . $currentPageAssignmentPrompt
             . "Section: {$sectionName}; role={$sectionKey}; structure={$sectionTemplate}\n"
+            . $currentBlockAssignmentPrompt
             . ($sectionTemplate === 'hero' && $strictHeroCover ? "Hero default: real 1920x750-style editable <img> cover layer, scrim, text-safe panel, and no CSS-background-only replacement.\n" : '')
             . ($sectionTemplate === 'hero' && !$strictHeroCover ? "Page banner freedom: this is a page-opening role, not a fixed hero formula. Use the current page identity to choose a distinct composition; do not clone the home-page full image + overlay + floating copy panel pattern.\n" : '')
             . "Visitor-facing brand summary: {$siteSummary}\n"
@@ -13532,9 +13574,9 @@ PROMPT;
         if ($pageDesignPlan !== []) {
             $lines[] = '- page_design_plan: ' . $this->jsonEncodeForPrompt($pageDesignPlan, 900);
         }
-        $lines[] = '- Implement composition_pattern and media_strategy from visual_signature before choosing a layout. Do not default every block to media-left copy-right or a three-card grid.';
+        $lines[] = '- Use composition_pattern and media_strategy from visual_signature as the first design brief before choosing a layout, so the block does not drift into the same media-left/copy-right or three-card rhythm by habit.';
         $lines[] = '- Follow image_intent exactly: needs_image=true means this block must consume/generate the planned image slot when available; needs_image=false means use the planned css_motif/visual_atmosphere/image_treatment and do not invent image URLs.';
-        $lines[] = '- SAFE_TEXT_ROLE_OUTLINE and TEXT_CSS_BASELINE are only fallback role vocabulary. They must not override this visual_signature or make sibling blocks share the same copy-plus-proof-card shell.';
+        $lines[] = '- SAFE_TEXT_ROLE_OUTLINE and TEXT_CSS_BASELINE are fallback role vocabulary. Let visual_signature and page_design_plan decide the shell first so sibling blocks can feel intentionally different.';
 
         return \implode("\n", $lines) . "\n";
     }
@@ -13578,8 +13620,175 @@ PROMPT;
             return '';
         }
 
-        return "CTX_SIBLING_BLOCK_COMPOSITIONS (do not reuse these shells for the current block):\n"
-            . '- ' . \implode('; ', \array_slice($siblings, 0, 12)) . "\n";
+        return "CTX_SIBLING_BLOCK_COMPOSITIONS (design context for variety, not a validation gate):\n"
+            . '- ' . \implode('; ', \array_slice($siblings, 0, 12)) . "\n"
+            . "- Use this as creative context so the current block can choose its own information angle, rhythm, and support device instead of drifting into the same generic shell.\n";
+    }
+
+    /**
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function buildCurrentPageAssignmentPromptAddon(
+        string $pageType,
+        string $pageLabel,
+        array $buildPlanTask,
+        array $scope,
+        string $locale
+    ): string {
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
+        $stylePlan = \is_array($blockTask['style_plan'] ?? null) ? $blockTask['style_plan'] : [];
+        $pageIdentity = \is_array($planContext['page_identity_contract'] ?? null) ? $planContext['page_identity_contract'] : [];
+        $pageDesignPlan = \is_array($planContext['page_design_plan'] ?? null)
+            ? $planContext['page_design_plan']
+            : (\is_array($stylePlan['page_design_plan'] ?? null) ? $stylePlan['page_design_plan'] : []);
+        $root = $this->resolveBuildPlanTaskRoot($scope);
+        $pageTasksByType = \is_array($root['page_tasks'] ?? null) ? $root['page_tasks'] : [];
+        $otherPages = [];
+        foreach ($pageTasksByType as $candidatePageType => $tasks) {
+            $candidatePageType = \trim((string)$candidatePageType);
+            if ($candidatePageType === '' || $candidatePageType === $pageType || !\is_array($tasks)) {
+                continue;
+            }
+            $firstTask = [];
+            foreach ($tasks as $task) {
+                if (\is_array($task) && $task !== []) {
+                    $firstTask = $task;
+                    break;
+                }
+            }
+            if ($firstTask === []) {
+                continue;
+            }
+            $siblingPlanContext = \is_array($firstTask['plan_context'] ?? null) ? $firstTask['plan_context'] : [];
+            $siblingBlockTask = \is_array($firstTask['block_task'] ?? null) ? $firstTask['block_task'] : [];
+            $siblingStylePlan = \is_array($siblingBlockTask['style_plan'] ?? null) ? $siblingBlockTask['style_plan'] : [];
+            $siblingPageDesignPlan = \is_array($siblingPlanContext['page_design_plan'] ?? null)
+                ? $siblingPlanContext['page_design_plan']
+                : (\is_array($siblingStylePlan['page_design_plan'] ?? null) ? $siblingStylePlan['page_design_plan'] : []);
+            $otherPages[] = [
+                'page_type' => $candidatePageType,
+                'page_goal' => $this->clipText((string)($siblingPlanContext['page_goal'] ?? ''), 180),
+                'page_flow_role' => (string)($siblingPlanContext['page_flow_role'] ?? $siblingStylePlan['page_flow_role'] ?? ''),
+                'section_flow' => $this->clipText((string)($siblingPageDesignPlan['section_flow'] ?? ''), 180),
+                'layout_rhythm' => $this->clipText((string)($siblingPageDesignPlan['layout_rhythm'] ?? $siblingPageDesignPlan['composition_strategy'] ?? ''), 180),
+            ];
+            if (\count($otherPages) >= 10) {
+                break;
+            }
+        }
+
+        $assignment = [
+            'page_type' => $pageType,
+            'page_label' => $pageLabel,
+            'page_goal' => $this->clipText((string)($planContext['page_goal'] ?? ''), 260),
+            'page_flow_role' => (string)($planContext['page_flow_role'] ?? $stylePlan['page_flow_role'] ?? ''),
+            'page_identity_contract' => $pageIdentity,
+            'page_design_plan' => $pageDesignPlan,
+            'other_selected_pages' => $otherPages,
+        ];
+        if ($locale !== '') {
+            $filtered = $this->filterPromptArrayForLocale($assignment, $locale);
+            if (\is_array($filtered)) {
+                $assignment = $filtered;
+            }
+        }
+
+        return "CTX_CURRENT_PAGE_ASSIGNMENT (page-level design brief; planning context, never visitor copy):\n"
+            . $this->jsonEncodeForPrompt($assignment, 2200) . "\n"
+            . "- Page assignment rule: design this block as part of page_type={$pageType}, not as a reusable home-page section. Page goal, page_flow_role, page_identity_contract, and page_design_plan should shape the layout rhythm, media choice, copy angle, and CTA tone.\n"
+            . "- Cross-page variety rule: other_selected_pages explains what the rest of the generated site is doing. Use it to make this page feel purpose-built and visually distinct while staying in the same brand system. This is design direction, not a hard validation gate.\n";
+    }
+
+    /**
+     * @param array<string,mixed> $section
+     * @param array<string,mixed> $buildPlanTask
+     * @param array<string,mixed> $scope
+     */
+    private function buildCurrentBlockAssignmentPromptAddon(
+        string $pageType,
+        array $section,
+        array $buildPlanTask,
+        array $scope,
+        string $locale
+    ): string {
+        $planContext = \is_array($buildPlanTask['plan_context'] ?? null) ? $buildPlanTask['plan_context'] : [];
+        $blockTask = \is_array($buildPlanTask['block_task'] ?? null) ? $buildPlanTask['block_task'] : [];
+        $taskScript = \is_array($buildPlanTask['task_script'] ?? null) ? $buildPlanTask['task_script'] : [];
+        $contentPlan = \is_array($blockTask['content_plan'] ?? null) ? $blockTask['content_plan'] : [];
+        $fieldRequirements = \is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [];
+        $visualSignature = $this->resolveBlockVisualSignature($buildPlanTask, $section);
+        $imageIntent = $this->resolveBlockImageIntent($buildPlanTask);
+        $blockKey = \trim((string)($buildPlanTask['block_key'] ?? $buildPlanTask['section_key'] ?? $section['key'] ?? ''));
+        $sectionCode = \trim((string)($buildPlanTask['section_code'] ?? $section['code'] ?? ''));
+        $pageFlowRole = \trim((string)($buildPlanTask['page_flow_role'] ?? $planContext['page_flow_role'] ?? $blockTask['page_flow_role'] ?? ''));
+        $blockGoal = $this->pickString(
+            $planContext['block_goal'] ?? null,
+            $blockTask['task_goal'] ?? null,
+            $taskScript['story_goal'] ?? null,
+            $section['name'] ?? null
+        );
+
+        $siblings = [];
+        $root = $this->resolveBuildPlanTaskRoot($scope);
+        $pageTasks = \is_array($root['page_tasks'][$pageType] ?? null) ? $root['page_tasks'][$pageType] : [];
+        foreach ($pageTasks as $task) {
+            if (!\is_array($task)) {
+                continue;
+            }
+            $siblingBlockKey = \trim((string)($task['block_key'] ?? $task['section_key'] ?? ''));
+            if ($siblingBlockKey === '' || ($blockKey !== '' && $siblingBlockKey === $blockKey)) {
+                continue;
+            }
+            $siblingPlanContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
+            $siblingBlockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
+            $siblingSignature = $this->resolveBlockVisualSignature($task);
+            $siblings[] = [
+                'block_key' => $siblingBlockKey,
+                'section_code' => (string)($task['section_code'] ?? ''),
+                'page_flow_role' => (string)($task['page_flow_role'] ?? $siblingPlanContext['page_flow_role'] ?? $siblingBlockTask['page_flow_role'] ?? ''),
+                'block_goal' => $this->clipText($this->pickString(
+                    $siblingPlanContext['block_goal'] ?? null,
+                    $siblingBlockTask['task_goal'] ?? null
+                ), 180),
+                'composition_pattern' => (string)($siblingSignature['composition_pattern'] ?? ''),
+            ];
+            if (\count($siblings) >= 10) {
+                break;
+            }
+        }
+
+        $assignment = [
+            'task_key' => (string)($buildPlanTask['task_key'] ?? ''),
+            'page_type' => $pageType,
+            'block_key' => $blockKey,
+            'section_code' => $sectionCode,
+            'section_template' => (string)($section['template'] ?? ''),
+            'page_flow_role' => $pageFlowRole,
+            'role_kind' => $this->resolveExplicitBlockRoleKindForPrompt($buildPlanTask, $section),
+            'block_goal' => $this->clipText($blockGoal, 260),
+            'stage3_directive' => $this->clipText((string)($taskScript['stage3_directive'] ?? ''), 260),
+            'content_plan' => $contentPlan,
+            'field_content_requirements' => $fieldRequirements,
+            'visual_signature' => $visualSignature,
+            'image_intent' => $imageIntent,
+            'sibling_blocks_on_same_page' => $siblings,
+        ];
+        if ($locale !== '') {
+            $filtered = $this->filterPromptArrayForLocale($assignment, $locale);
+            if (\is_array($filtered)) {
+                $assignment = $filtered;
+            }
+        }
+
+        $localeLabel = $locale !== '' ? $locale : 'the target locale';
+
+        return "CTX_CURRENT_BLOCK_ASSIGNMENT (highest-priority module identity; planning context, never visitor copy):\n"
+            . $this->jsonEncodeForPrompt($assignment, 2200) . "\n"
+            . "- Assignment rule: generate only this block_key/section_code. The visible heading, cards, proof, form labels, FAQ rows, media, and CTA must express this block_goal/content_plan, not the whole website objective.\n"
+            . "- Module-boundary rule: sibling_blocks_on_same_page shows what nearby modules already cover. Use it as page context so the current block has a distinct purpose, information angle, and layout rhythm. This is not a post-generation dedupe rule; it is the current module brief.\n"
+            . "- Copy specificity rule: do not paste broad site goals, campaign objectives, or queue/build labels as visible copy. Rewrite the current block assignment into finished {$localeLabel} website copy.\n";
     }
 
     private function resolveRoleFidelityHint(string $blockKey, string $pageFlowRole, string $blockGoal): string
@@ -14556,9 +14765,9 @@ JSON;
         if ($required && $slotId !== '' && $finalUrl === '') {
             return "Block visual contract:\n"
                 . "- visual_contract: " . $this->jsonEncodeForPrompt($visualContract, 1600) . "\n"
-                . "- image_required: yes\n"
-                . "- Pending image slot {$slotId}: this is an unresolved required media dependency. Do not invent a placeholder image URL and do not claim CSS-only media satisfies the generated-image slot.\n"
-                    . "- If a later FINAL REQUIRED IMAGE CONTRACT supplies an exact image URL/template, prefer that editable <img> binding. If no verified final_url/template is available, return no fake image tags and rely on the workflow retry/repair path to regenerate the asset before publish.\n";
+                . "- image_required: no\n"
+                . "- Pending image slot {$slotId}: generated media is unavailable for this run. Do not invent a placeholder image URL and do not claim CSS-only media is a generated image.\n"
+                    . "- If a later FINAL IMAGE CONTRACT supplies an exact image URL/template, prefer that editable <img> binding. If no verified final_url/template is available, return no fake image tags and build a polished CSS-only or product-UI media surface so the page block can still complete.\n";
         }
         if ((int)($visualContract['image_unavailable'] ?? 0) === 1) {
             return "Block visual contract:\n"
@@ -15540,7 +15749,23 @@ JSON;
      */
     private function resolveBuildPlanTaskRoot(array $scope): array
     {
-        return $this->buildPlanTaskRootFromBuildBlueprint($scope);
+        $cacheKey = $this->buildPlanTaskRootCacheKey($scope);
+        if ($cacheKey !== '' && isset($this->buildPlanTaskRootCache[$cacheKey])) {
+            return $this->buildPlanTaskRootCache[$cacheKey];
+        }
+
+        $root = $this->buildPlanTaskRootFromBuildBlueprint($scope);
+        if ($cacheKey !== '') {
+            if (\count($this->buildPlanTaskRootCache) >= 8) {
+                $firstKey = \array_key_first($this->buildPlanTaskRootCache);
+                if ($firstKey !== null) {
+                    unset($this->buildPlanTaskRootCache[$firstKey]);
+                }
+            }
+            $this->buildPlanTaskRootCache[$cacheKey] = $root;
+        }
+
+        return $root;
     }
 
     /**
@@ -15550,32 +15775,22 @@ JSON;
     private function buildPlanTaskRootFromBuildBlueprint(array $scope): array
     {
         $sharedTasks = [];
-        foreach (['header', 'footer'] as $region) {
-            $task = $this->getBuildTaskService()->getTaskDefinition($scope, 'shared:' . $region);
-            if (\is_array($task) && $task !== []) {
-                $sharedTasks[] = $task;
-            }
-        }
-
         $pageTasks = [];
         $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $pageTypes = [];
-        foreach (\is_array($contract['pages'] ?? null) ? $contract['pages'] : [] as $page) {
-            if (!\is_array($page)) {
+        foreach ($this->getBuildTaskService()->listTaskDefinitions($scope) as $task) {
+            if (!\is_array($task) || $task === []) {
                 continue;
             }
-            $pageType = \trim((string)($page['page_type'] ?? ''));
-            if ($pageType !== '') {
-                $pageTypes[$pageType] = true;
+            $taskType = \trim((string)($task['task_type'] ?? ''));
+            if ($taskType === 'shared_component') {
+                $sharedTasks[] = $task;
+                continue;
             }
-        }
-        foreach (\array_keys($pageTypes) as $pageType) {
-            foreach ($this->getBuildTaskService()->listTaskKeysByPageType($scope, (string)$pageType) as $taskKey) {
-                $task = $this->getBuildTaskService()->getTaskDefinition($scope, (string)$taskKey);
-                if (!\is_array($task) || $task === []) {
-                    continue;
+            if ($taskType === 'page_section') {
+                $pageType = \trim((string)($task['page_type'] ?? ''));
+                if ($pageType !== '') {
+                    $pageTasks[$pageType][] = $task;
                 }
-                $pageTasks[(string)$pageType][] = $task;
             }
         }
 
@@ -15590,6 +15805,39 @@ JSON;
             'shared_tasks' => $sharedTasks,
             'page_tasks' => $pageTasks,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function buildPlanTaskRootCacheKey(array $scope): string
+    {
+        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        if ($contract === []) {
+            return '';
+        }
+
+        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
+        $signature = \trim((string)($meta['signature'] ?? $meta['source_signature'] ?? ''));
+        if ($signature !== '') {
+            return $signature;
+        }
+
+        $pages = \is_array($contract['pages'] ?? null) ? $contract['pages'] : [];
+        $blocks = \is_array($contract['blocks'] ?? null) ? $contract['blocks'] : [];
+        $blockIds = [];
+        foreach (\array_slice($blocks, 0, 8) as $block) {
+            if (\is_array($block)) {
+                $blockIds[] = (string)($block['block_id'] ?? $block['id'] ?? '');
+            }
+        }
+
+        return \sha1((string)\json_encode([
+            'pages' => \count($pages),
+            'blocks' => \count($blocks),
+            'block_ids' => $blockIds,
+            'locale' => (string)($contract['i18n']['primary_locale'] ?? ''),
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES));
     }
 
     /**

@@ -520,7 +520,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         self::assertSame(\strlen($queueRow['result']), $result[1]);
     }
 
-    public function testForwardObservedQueueSignalsEmitsSuppressedPanelUpdateWhenOperationSuppressed(): void
+    public function testForwardObservedQueueSignalsMirrorsPlanProcessAsProgress(): void
     {
         $sse = new SpySseWriterForQueueObserverStream(true);
 
@@ -544,9 +544,8 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
         );
 
         self::assertCount(1, $sse->calls);
-        self::assertSame('info', $sse->calls[0]['event']);
-        self::assertSame('', $sse->calls[0]['data']['message'], 'suppress 分支必须保持 message 为空字符串');
-        self::assertTrue($sse->calls[0]['data']['queue_panel_update']);
+        self::assertSame('progress', $sse->calls[0]['event']);
+        self::assertSame('AI Stream Token +5', $sse->calls[0]['data']['message']);
         self::assertSame('AI Stream Token +5', $sse->calls[0]['data']['queue_process']);
         self::assertSame('AI Stream Token +5', $result[0]);
     }

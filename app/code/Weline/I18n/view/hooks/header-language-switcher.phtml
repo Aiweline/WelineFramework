@@ -81,10 +81,16 @@ try {
             continue;
         }
         
+        try {
+            $selfName = (string)$i18n->getLocaleLanguageSelfName((string)$localeCode);
+        } catch (\Throwable) {
+            $selfName = '';
+        }
+
         $i18nLanguages[] = [
             'code' => $localeCode,
             'name' => $localeName,
-            'native' => $localeName,
+            'native' => $selfName !== '' ? $selfName : $localeName,
             'flag' => $getLanguageFlag((string)$localeCode),
         ];
     }
@@ -138,6 +144,7 @@ if ($event) {
 // 如果 event 返回了数据，使用 event 的数据，否则使用 I18n 的数据
 $languages = $eventLanguages ?? $i18nLanguages;
 $displayCurrentLang = $eventCurrentLang ?? $currentLang;
+$websiteDisplayLocale = $currentLangLocal !== '' ? $currentLangLocal : $displayCurrentLang;
 
 $aliasDisplayLocales = [];
 $addAliasDisplayLocale = static function (string $localeCode) use (&$aliasDisplayLocales): void {
@@ -194,16 +201,32 @@ foreach ($languages as $lang) {
     }
 
     try {
-        $aliases[] = $i18n->getLocaleName($langCode, $langCode);
+        $aliases[] = $i18n->getLocaleLanguageSelfName($langCode);
     } catch (\Throwable) {
     }
 
     $firstAlias = reset($aliases);
-    $langName = trim((string)($lang['name'] ?? $lang['native'] ?? $firstAlias ?: $langCode));
+    $langName = '';
+    try {
+        $langName = trim((string)$i18n->getLocaleName($langCode, $websiteDisplayLocale));
+    } catch (\Throwable) {
+        $langName = '';
+    }
+    if ($langName === '') {
+        $langName = trim((string)($lang['name'] ?? ''));
+    }
     if ($langName === '') {
         $langName = trim((string)($firstAlias ?: $langCode));
     }
-    $langNative = trim((string)($lang['native'] ?? $langName));
+
+    $langNative = '';
+    try {
+        $langNative = trim((string)$i18n->getLocaleLanguageSelfName($langCode));
+    } catch (\Throwable) {
+    }
+    if ($langNative === '') {
+        $langNative = trim((string)($lang['native'] ?? ''));
+    }
     if ($langNative === '') {
         $langNative = $langName;
     }
@@ -235,13 +258,20 @@ foreach ($normalizedLanguages as $language) {
 $languages = array_merge($currentLanguages, $otherLanguages);
 $currentLanguageFlag = '';
 $currentLanguageShort = $shortLocaleCode((string)$displayCurrentLang);
+$currentLanguageName = '';
+$currentLanguageNative = '';
 foreach ($languages as $lang) {
     if ((string)$lang['code'] === (string)$displayCurrentLang) {
         $currentLanguageFlag = (string)($lang['flag'] ?? '');
         $currentLanguageShort = (string)($lang['short'] ?? $currentLanguageShort);
+        $currentLanguageName = trim((string)($lang['name'] ?? ''));
+        $currentLanguageNative = trim((string)($lang['native'] ?? $currentLanguageName));
         break;
     }
 }
+$currentLanguageLabel = $currentLanguageName !== ''
+    ? $currentLanguageName
+    : ($currentLanguageNative !== '' ? $currentLanguageNative : $currentLanguageShort);
 
 // 渲染语言切换器
 // 注意：URL 链接由前端 i18n.js 模块动态生成（通过 updateLanguageSwitcherLinks()）
@@ -257,7 +287,7 @@ foreach ($languages as $lang) {
                 <i class="fas fa-globe" aria-hidden="true"></i>
             <?php endif; ?>
         </span>
-        <span class="current-language"><?= $escape($currentLanguageShort) ?></span>
+        <span class="current-language" title="<?= $escape($currentLanguageShort) ?>"><?= $escape($currentLanguageLabel) ?></span>
         <i class="fas fa-chevron-down" aria-hidden="true"></i>
     </span>
     <div class="language-options weline-choice-panel" data-weline-choice-panel role="menu" aria-label="<?= __('语言选项') ?>">
@@ -269,7 +299,7 @@ foreach ($languages as $lang) {
             <?php
             $langCode = $lang['code'] ?? '';
             $langName = $lang['name'] ?? $langCode;
-            $langNative = $lang['native'] ?? $langName;
+            $langNative = $lang['native'] ?? '';
             $langFlag = (string)($lang['flag'] ?? '');
             $isCurrent = ($langCode === $displayCurrentLang);
             
@@ -281,6 +311,7 @@ foreach ($languages as $lang) {
                data-language-option="true"
                data-choice-option="true"
                data-lang="<?= $escape($langCode) ?>"
+               data-native="<?= $escape($langNative) ?>"
                data-search="<?= $escape($lang['search'] ?? $langCode) ?>"
                role="menuitem"
                <?= $index >= $selectorPageSize ? 'hidden' : '' ?>>
@@ -293,8 +324,11 @@ foreach ($languages as $lang) {
                 </span>
                 <span class="weline-choice-text">
                     <span class="weline-choice-name"><?= $escape($langName) ?></span>
-                    <span class="weline-choice-meta"><?= $escape($langCode) ?><?php if ($langNative !== $langName): ?> · <?= $escape($langNative) ?><?php endif; ?></span>
+                    <span class="weline-choice-meta"><?= $escape($langCode) ?></span>
                 </span>
+                <?php if ($langNative !== '' && $langNative !== $langName): ?>
+                    <span class="weline-choice-native" aria-hidden="true"><?= $escape($langNative) ?></span>
+                <?php endif; ?>
                 <i class="fas fa-check" aria-hidden="true"></i>
             </a>
         <?php endforeach; ?>

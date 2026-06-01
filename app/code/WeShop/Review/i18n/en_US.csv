@@ -16,16 +16,16 @@
 评价已提交，审核通过后会公开展示。,"Review submitted. It will be public after approval."
 "Product ID cannot be empty.","Product ID cannot be empty."
 "Product Reviews","Product Reviews"
-评价已创建,评价已创建
+评价已创建,"Review created"
 "商品评价创建后触发，负载包含 review、review_id、product_id、customer_id、rating、status。","商品评价创建后触发，负载包含 review、review_id、product_id、customer_id、rating、status。"
-评价状态已变更,评价状态已变更
+评价状态已变更,"Review status changed"
 "评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。","评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。"
 "Unsupported review provider operation: %{1}","Unsupported review provider operation: %{1}"
 "Review form token prepared.","Review form token prepared."
-"Please sign in before replying.","Please sign in before replying."
-"Review and reply content are required.","Review and reply content are required."
-"Unable to submit reply right now.","Unable to submit reply right now."
-"Reply submitted.","Reply submitted."
+请先登录再回复。,"Log in before replying."
+评论和回复内容不能为空。,"Review and reply content are required."
+暂时无法提交回复。,"Unable to submit your reply right now."
+回复已提交。,"Reply submitted."
 商品不能为空。,"Product is required."
 已选择匿名评论。,"Anonymous review selected."
 已选择下单后评论。,"Order-required review selected."
@@ -58,15 +58,15 @@ Rejected,Rejected
 评价项名称不能为空,"Rating option label cannot be empty"
 新增评价项需要同时填写编码和名称,"New rating options require both code and label"
 评价项编码已存在,"Rating option code already exists"
-"Review, customer and reply content are required.","Review, customer and reply content are required."
-"Review does not exist or is not visible.","Review does not exist or is not visible."
-"Reply target does not exist.","Reply target does not exist."
-"Customer #%{1}","Customer #%{1}"
-"You were mentioned in a product review reply","You were mentioned in a product review reply"
-"Your review has a new reply","Your review has a new reply"
-"Customer %{1} mentioned you in a product review reply.","Customer %{1} mentioned you in a product review reply."
-"Customer %{1} replied in a product review.","Customer %{1} replied in a product review."
-Customer,Customer
+评论、客户和回复内容不能为空。,"Review, customer, and reply content are required."
+评论不存在或不可见。,"Review does not exist or is not visible."
+回复目标不存在。,"Reply target does not exist."
+"客户 #%{1}","Customer #%{1}"
+你在商品评价回复中被提及,"You were mentioned in a product review reply"
+你的评价有新回复,"Your review has a new reply"
+"客户 %{1} 在商品评价回复中提到了你。","Customer %{1} mentioned you in a product review reply."
+"客户 %{1} 回复了商品评价。","Customer %{1} replied in a product review."
+客户,Customer
 匿名用户,Anonymous
 加载当前产品评价失败：%{1},"Failed to load reviews for this product: %{1}"
 "Approve Review","Approve Review"
@@ -114,36 +114,43 @@ View,View
 登录失败，请检查用户名和密码。,"Login failed. Check your username and password."
 请输入用户名或邮箱。,"Enter your username or email."
 请输入密码。,"Enter your password."
-Translate,Translate
-Translating...,Translating...
-"Show original","Show original"
-"Show translation","Show translation"
-"Browser translation is unavailable in this Chrome session.","Browser translation is unavailable in this Chrome session."
-"This comment already matches the current language.","This comment already matches the current language."
-"Customer Voices","Customer Voices"
-"Latest Reviews","Latest Reviews"
+翻译,Translate
+翻译中...,Translating...
+显示原文,"Show original"
+显示译文,"Show translation"
+"当前 Chrome 无法使用浏览器翻译。","Browser translation is unavailable in this Chrome session."
+这条评论已经是当前语言。,"This review already matches the current language."
+回复,Reply
+回复给,"Reply to"
+"写回复，可用 @customer:123 提及客户。","Write a reply. Use @customer:123 to mention a customer."
+发送回复,"Send reply"
+回复内容不能为空。,"Reply content is required."
+"本次回复会通知 %{1}。","This reply will notify %{1}."
+评价与回复,"Reviews and replies"
+商品评价,"Product Reviews"
 我要评论,"Write a review"
-"View All Reviews","View All Reviews"
 点击我要评论后自动判断评价方式,"The review mode is selected automatically after you click Write a review"
 未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。,"Guests submit anonymous reviews directly; logged-in customers can be checked for order-verified reviews automatically."
-star,star
+%{1}星,"%{1} stars"
 不评分,"No rating"
-Title,Title
-"Write a headline for your review","Write a headline for your review"
-Review,Review
-"Describe your experience with this product","Describe your experience with this product"
+标题,Title
+写一个简短的评价标题,"Write a short review title"
+评价内容,"Review content"
+描述你使用这件商品的体验,"Describe your experience with this product"
 图片链接,"Image links"
 每行一个图片链接,"One image link per line"
 视频链接,"Video links"
 每行一个视频链接,"One video link per line"
-"Submit review","Submit review"
-"No product reviews yet. Be the first to share your experience.","No product reviews yet. Be the first to share your experience."
-登录成功后会自动刷新评价资格。,"Review eligibility refreshes automatically after login."
+提交评价,"Submit Review"
+"基于 %{1} 条评价","Based on %{1} reviews"
+回复列表,Replies
+暂无商品评价，欢迎分享你的使用体验。,"No product reviews yet. You're welcome to share your experience."
+登录成功后会刷新当前页面，并自动打开评论表单。,"After you sign in, this page will refresh and the review form will open automatically."
 关闭,Close
 用户名或邮箱,"Username or email"
 密码,Password
 取消,Cancel
-登录并继续,登录并继续
+登录并继续,"Sign in and continue"
 评论管理,"Review Management"
 已配置评价项,"Configured rating options"
 返回评论列表,"Back to review list"
@@ -165,6 +172,7 @@ Review,Review
 启用的评价项会展示在前台评价表单中，买家提交后会随评价一起保存并展示在后台详情和产品评价区。,"Enabled rating options appear in the storefront review form and are saved with each review for backend details and product review areas."
 保存配置,"Save settings"
 WeShop,WeShop
+Review,Review
 "Review List","Review List"
 "Filter Reviews","Filter Reviews"
 "Product ID","Product ID"
@@ -177,6 +185,7 @@ Star(s),Star(s)
 "Apply Filters","Apply Filters"
 Reset,Reset
 "No reviews found","No reviews found"
+Title,Title
 图片,Images
 Previous,Previous
 Next,Next
@@ -188,6 +197,7 @@ Detail,Detail
 图文视频,"Images and videos"
 这条评价没有提交图片或视频。,"This review did not include images or videos."
 "Review Replies","Review Replies"
+Customer,Customer
 "Reply to","Reply to"
 "Mentioned customers","Mentioned customers"
 "No replies yet.","No replies yet."
@@ -200,40 +210,3 @@ Detail,Detail
 "Customer Name","Customer Name"
 Email,Email
 Metadata,Metadata
-商品评论,"Product Reviews"
-商品评价,"Product Reviews"
-阅读其他买家的评价，也可以直接提交你的使用体验。,"Read other buyers' reviews, and submit your own experience directly."
-阅读其他买家的评价，下单后也可以分享你的真实使用体验。,"Read other buyers' reviews, and share your real experience after purchase."
-第%{1}页，共%{2}页,"Page %{1} of %{2}"
-每页 %{1} 条,"Per page: %{1}"
-上一页,"Previous page"
-下一页,"Next page"
-回复列表,Replies
-客户,Customer
-评价与回复,"Reviews and replies"
-基于 %{1} 条评价,"Based on %{1} reviews"
-写回复，可用 @customer:123 提及客户。,"Write a reply. Use @customer:123 to mention a customer."
-发送回复,"Send reply"
-回复已提交。,"Reply submitted."
-暂时无法提交回复。,"Unable to submit your reply right now."
-回复内容不能为空。,"Reply content is required."
-回复给,"Reply to"
-翻译,Translate
-翻译中...,Translating...
-显示原文,"Show original"
-显示译文,"Show translation"
-当前 Chrome 无法使用浏览器翻译。,"Browser translation is unavailable in this Chrome session."
-这条评论已经是当前语言。,"This review already matches the current language."
-本次回复会通知 %{1}。,"This reply will notify %{1}."
-请先登录再回复。,"Log in before replying."
-点击标题、内容或提交按钮时，系统会自动选择匿名评论或下单后评论。,"When you focus the title, content, or submit button, the system will choose anonymous or order-verified review mode automatically."
-提交评分并告诉其他买家你的真实体验。,"Submit a rating and tell other buyers about your real experience."
-评论和回复内容不能为空。,"Review and reply content are required."
-评论、客户和回复内容不能为空。,"Review, customer, and reply content are required."
-评论不存在或不可见。,"Review does not exist or is not visible."
-回复目标不存在。,"Reply target does not exist."
-客户 #%{1},"Customer #%{1}"
-你在商品评价回复中被提及,"You were mentioned in a product review reply"
-你的评价有新回复,"Your review has a new reply"
-客户 %{1} 在商品评价回复中提到了你。,"Customer %{1} mentioned you in a product review reply."
-客户 %{1} 回复了商品评价。,"Customer %{1} replied in a product review."

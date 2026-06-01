@@ -64,7 +64,7 @@ class ThemeComponentRenderer
             $instanceConfig
         );
 
-        return $config;
+        return $this->normalizeConfigByParamDefinitions($config, $definition->params);
     }
 
     private function resolveThemeDefaults(ThemeComponentDefinition $definition, ?WelineTheme $theme, string $area): array
@@ -89,8 +89,9 @@ class ThemeComponentRenderer
     {
         $defaults = [];
         foreach ($params as $key => $param) {
-            if (is_array($param) && array_key_exists('default', $param)) {
-                $defaults[$key] = $param['default'];
+            $paramName = $this->resolveParamName($key, $param);
+            if ($paramName !== null && is_array($param) && array_key_exists('default', $param)) {
+                $defaults[$paramName] = $param['default'];
             }
         }
 
@@ -104,11 +105,17 @@ class ThemeComponentRenderer
         }
 
         $meta = is_array($config['meta'] ?? null) ? $config['meta'] : [];
+        $meta = $this->normalizeMetaArrayByParamDefinitions($meta, $definition->params);
         foreach ($config as $key => $value) {
             if (!is_string($key) || !str_starts_with($key, 'meta.') || $key === 'meta.') {
                 continue;
             }
-            $this->setNestedMetaValue($meta, substr($key, 5), $value);
+            $metaPath = substr($key, 5);
+            $this->setNestedMetaValue(
+                $meta,
+                $metaPath,
+                $this->normalizeMetaValueByParamDefinition($metaPath, $value, $definition->params)
+            );
         }
 
         $paramKeys = array_unique(array_merge(
@@ -125,6 +132,67 @@ class ThemeComponentRenderer
 
         $config['meta'] = $meta;
         return $config;
+    }
+
+    private function normalizeConfigByParamDefinitions(array $config, array $params): array
+    {
+        foreach ($params as $key => $definition) {
+            $paramName = $this->resolveParamName($key, $definition);
+            if ($paramName === null || !is_array($definition) || !array_key_exists($paramName, $config)) {
+                continue;
+            }
+            $config[$paramName] = ThemeData::normalizeParamValueForDefinition($config[$paramName], $definition);
+        }
+
+        return $config;
+    }
+
+    private function normalizeMetaArrayByParamDefinitions(array $meta, array $params): array
+    {
+        foreach ($params as $key => $definition) {
+            $paramName = $this->resolveParamName($key, $definition);
+            if ($paramName === null || !is_array($definition) || !array_key_exists($paramName, $meta)) {
+                continue;
+            }
+            $meta[$paramName] = ThemeData::normalizeParamValueForDefinition($meta[$paramName], $definition);
+        }
+
+        return $meta;
+    }
+
+    private function normalizeMetaValueByParamDefinition(string $metaPath, mixed $value, array $params): mixed
+    {
+        $definition = $this->findParamDefinition($metaPath, $params);
+        if ($definition === null) {
+            return $value;
+        }
+
+        return ThemeData::normalizeParamValueForDefinition($value, $definition);
+    }
+
+    private function findParamDefinition(string $paramName, array $params): ?array
+    {
+        foreach ($params as $key => $definition) {
+            if ($this->resolveParamName($key, $definition) === $paramName && is_array($definition)) {
+                return $definition;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveParamName(string|int $key, mixed $definition): ?string
+    {
+        if (is_string($key) && $key !== '') {
+            return $key;
+        }
+
+        if (is_array($definition)) {
+            $name = trim((string)($definition['param_name'] ?? $definition['key'] ?? $definition['name'] ?? ''));
+            return $name !== '' ? $name : null;
+        }
+
+        return null;
     }
 
     private function setNestedMetaValue(array &$meta, string $path, mixed $value): void

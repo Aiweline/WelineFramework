@@ -294,9 +294,11 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $claim = $this->invokePrivate($controller, 'claimActiveOperationExecution', [$session, $adminId, $effectiveExecutionToken, $operation, 'queue']);
             if (!\is_array($claim) || !($claim['ok'] ?? false)) {
                 if ((string)($claim['reason'] ?? '') === 'duplicate_stream') {
-                    $this->queueTrace($sse, '认领跳过：duplicate_stream（仍视为重复构建，可加 -f 换新令牌）');
+                    $this->queueTrace($sse, '认领跳过：duplicate_stream（拒绝将队列标记为完成，请刷新工作台后重试）');
 
-                    return '检测到重复构建任务，已跳过。';
+                    throw new \RuntimeException((string)__(
+                        '检测到重复构建任务认领，本次不结束队列；请刷新工作台后重试构建。'
+                    ));
                 }
 
                 throw new \RuntimeException((string)($claim['message'] ?? '操作认领失败。'));
@@ -324,6 +326,12 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                         $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
                         $this->queueTrace($sse, '强制重新生成：已在执行前清空旧构建产物并重置全部构建任务。');
                     }
+                } elseif (isset($resumeScope['_build_regeneration']) || isset($resumeScope['_queue_force_build'])) {
+                    unset($resumeScope['_build_regeneration'], $resumeScope['_queue_force_build']);
+                    $resumeScope = $buildTaskService->reconcileGeneratedArtifactsWithTaskState($resumeScope, true);
+                    $sessionService->replaceScope((int)$session->getId(), $adminId, $resumeScope);
+                    $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+                    $this->queueTrace($sse, '断点续生成：已清除残留强制重建标记并同步已有产物。');
                 }
                 $resumeScope = $scopeService->normalizeScope(
                     $this->loadBuildQueueScope($sessionService, $session)
@@ -422,6 +430,10 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             }
             if ($forceNewExecutionToken) {
                 $this->clearQueueForceBuildMarker($sessionService, (int)$session->getId(), $adminId);
+            }
+
+            if (\in_array($operation, ['build', 'regenerate_page'], true)) {
+                $this->assertBuildQueueMayFinish($sessionService, $scopeService, $buildTaskService, $session, $adminId, $operation);
             }
 
             $doneMessage = $this->buildOperationDoneMessage($operation);
@@ -1027,6 +1039,9 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $gate = $buildTaskService->inspectBuildCompletionGate($scope);
         $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
         $buildSummary['completion_gate'] = $this->stripGateSummary($gate);
+        $buildSummary['page_block_progress'] = \is_array($gate['page_block_progress'] ?? null)
+            ? $gate['page_block_progress']
+            : [];
         $buildSummary['last_gate_checked_at'] = \date('Y-m-d H:i:s');
         $scope['build_summary'] = $buildSummary;
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
@@ -1184,6 +1199,9 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $buildSummary['active_operation'] = $operation;
             $buildSummary['last_generated_at'] = $now;
             $buildSummary['completion_gate'] = $this->stripGateSummary($gate);
+            $buildSummary['page_block_progress'] = \is_array($gate['page_block_progress'] ?? null)
+                ? $gate['page_block_progress']
+                : [];
             $scope['build_summary'] = $buildSummary;
         } elseif ($isScopedBuildOperation) {
             $scope = $this->clearResolvedScopedBuildOperationFailureState(
@@ -1272,7 +1290,35 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             'invalid_generated_artifacts',
             'duplicate_generated_artifacts',
             'unfinished_build_plan_blocks',
+            'missing_build_plan_page_types',
+            'missing_page_type_layouts',
+            'empty_page_type_layouts',
+            'missing_persisted_virtual_theme_layouts',
+            'build_plan_missing_stage1_blocks',
+            'default_template_page_layouts',
+            'incomplete_page_block_counts',
         ], true);
+    }
+
+    private function assertBuildQueueMayFinish(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteBuildTaskService $buildTaskService,
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $operation
+    ): void {
+        $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
+        $scope = $scopeService->normalizeScope(
+            $this->loadBuildQueueScope($sessionService, $fresh)
+        );
+        $scope = $buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
+        $gate = $buildTaskService->inspectBuildCompletionGate($scope);
+        if (!empty($gate['passed'])) {
+            return;
+        }
+
+        throw new \RuntimeException($this->formatBuildCompletionGateBlockedMessage($buildTaskService, $gate, $operation));
     }
 
     /**

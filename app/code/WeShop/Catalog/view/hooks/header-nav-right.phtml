@@ -28,7 +28,7 @@ if (empty($rightMenuCategories)) {
 $template = $this;
 
 // 递归函数：将分类数据转换为菜单项格式（支持层级 URL）
-$convertCategoryToMenuItem = function ($category, string $parentPath = '') use (&$convertCategoryToMenuItem, $template) {
+$convertCategoryToMenuItem = function ($category, string $parentPath = '') use (&$convertCategoryToMenuItem, $template, $categoryService) {
     // 只处理启用的分类
     if (empty($category['is_active']) || (int)$category['is_active'] !== 1) {
         return null;
@@ -47,7 +47,7 @@ $convertCategoryToMenuItem = function ($category, string $parentPath = '') use (
     $categoryUrl = $template->getUrl('catalog/category/' . $fullHandle);
 
     $menuItem = [
-        'text' => $category['name'] ?? '',
+        'text' => $categoryService->localizeCategoryDisplayName((string)($category['name'] ?? '')),
         'url'  => $categoryUrl,
     ];
 

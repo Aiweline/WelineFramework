@@ -438,6 +438,13 @@ class AiSiteMaterializationService
                 Page::TYPE_CONTACT => 'Contact',
                 Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
                 Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
+                Page::TYPE_BLOG => 'Blog Post',
+                Page::TYPE_BLOG_CATEGORY => 'Blog Categories',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_CUSTOM => 'Page',
             ],
             'th' => [
                 Page::TYPE_HOME => 'หน้าแรก',

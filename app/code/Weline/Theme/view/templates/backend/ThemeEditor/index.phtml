@@ -3895,13 +3895,11 @@ body:has(.theme-editor-container) .footer {
 <script data-no-extract="true">
 window.WelineApiConfig = Object.assign(
     {},
-    (window.__WelineThemeConfig && window.__WelineThemeConfig.api) || {},
     window.WelineApiConfig || {},
     {
-        requestTimeoutMs: 60000,
-        workerUrl: '@static(Weline_Frontend::js/weline-api-worker.js)'
+        area: 'backend',
+        requestTimeoutMs: 60000
     }
 );
 </script>
-<script src="@static(Weline_Frontend::js/weline-api.js)?v=20260525-theme-editor"></script>
-<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260529-array-live-refresh-active"></script>
+<script src="@static(Weline_Theme::js/theme-editor.js)?v=20260530-backend-direct-api"></script>

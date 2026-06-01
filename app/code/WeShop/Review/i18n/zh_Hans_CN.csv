@@ -22,10 +22,10 @@
 "评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。","评价审核状态变化后触发，负载包含 review、review_id、product_id、customer_id、old_status、new_status。"
 "Unsupported review provider operation: %{1}","Unsupported review provider operation: %{1}"
 "Review form token prepared.","Review form token prepared."
-"Please sign in before replying.",请先登录再回复。
-"Review and reply content are required.",评论和回复内容不能为空。
-"Unable to submit reply right now.",暂时无法提交回复。
-"Reply submitted.",回复已提交。
+请先登录再回复。,请先登录再回复。
+评论和回复内容不能为空。,评论和回复内容不能为空。
+暂时无法提交回复。,暂时无法提交回复。
+回复已提交。,回复已提交。
 商品不能为空。,商品不能为空。
 已选择匿名评论。,已选择匿名评论。
 已选择下单后评论。,已选择下单后评论。
@@ -58,15 +58,15 @@ Rejected,已拒绝
 评价项名称不能为空,评价项名称不能为空
 新增评价项需要同时填写编码和名称,新增评价项需要同时填写编码和名称
 评价项编码已存在,评价项编码已存在
-"Review, customer and reply content are required.",评论、客户和回复内容不能为空。
-"Review does not exist or is not visible.",评论不存在或不可见。
-"Reply target does not exist.",回复目标不存在。
-"Customer #%{1}",客户 #%{1}
-"You were mentioned in a product review reply",你在商品评价回复中被提及
-"Your review has a new reply",你的评价有新回复
-"Customer %{1} mentioned you in a product review reply.",客户 %{1} 在商品评价回复中提到了你。
-"Customer %{1} replied in a product review.",客户 %{1} 回复了商品评价。
-Customer,客户
+评论、客户和回复内容不能为空。,评论、客户和回复内容不能为空。
+评论不存在或不可见。,评论不存在或不可见。
+回复目标不存在。,回复目标不存在。
+"客户 #%{1}","客户 #%{1}"
+你在商品评价回复中被提及,你在商品评价回复中被提及
+你的评价有新回复,你的评价有新回复
+"客户 %{1} 在商品评价回复中提到了你。","客户 %{1} 在商品评价回复中提到了你。"
+"客户 %{1} 回复了商品评价。","客户 %{1} 回复了商品评价。"
+客户,客户
 匿名用户,匿名用户
 加载当前产品评价失败：%{1},加载当前产品评价失败：%{1}
 "Approve Review","Approve Review"
@@ -114,31 +114,38 @@ View,查看
 登录失败，请检查用户名和密码。,登录失败，请检查用户名和密码。
 请输入用户名或邮箱。,请输入用户名或邮箱。
 请输入密码。,请输入密码。
-Translate,Translate
-Translating...,Translating...
-"Show original","Show original"
-"Show translation","Show translation"
-"Browser translation is unavailable in this Chrome session.","Browser translation is unavailable in this Chrome session."
-"This comment already matches the current language.","This comment already matches the current language."
-"Customer Voices",买家声音
-"Latest Reviews",最新评论
+翻译,翻译
+翻译中...,翻译中...
+显示原文,显示原文
+显示译文,显示译文
+"当前 Chrome 无法使用浏览器翻译。","当前 Chrome 无法使用浏览器翻译。"
+这条评论已经是当前语言。,这条评论已经是当前语言。
+回复,回复
+回复给,回复给
+"写回复，可用 @customer:123 提及客户。","写回复，可用 @customer:123 提及客户。"
+发送回复,发送回复
+回复内容不能为空。,回复内容不能为空。
+"本次回复会通知 %{1}。","本次回复会通知 %{1}。"
+评价与回复,评价与回复
+商品评价,商品评价
 我要评论,我要评论
-"View All Reviews",查看全部评论
 点击我要评论后自动判断评价方式,点击我要评论后自动判断评价方式
 未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。,未登录会直接按匿名评论；登录后可自动确认是否能按订单评价。
-star,star
+%{1}星,%{1}星
 不评分,不评分
-Title,标题
-"Write a headline for your review","Write a headline for your review"
-Review,Review
-"Describe your experience with this product","Describe your experience with this product"
+标题,标题
+写一个简短的评价标题,写一个简短的评价标题
+评价内容,评价内容
+描述你使用这件商品的体验,描述你使用这件商品的体验
 图片链接,图片链接
 每行一个图片链接,每行一个图片链接
 视频链接,视频链接
 每行一个视频链接,每行一个视频链接
-"Submit review","Submit review"
-"No product reviews yet. Be the first to share your experience.",暂无商品评论，欢迎成为第一个分享体验的用户。
-登录成功后会自动刷新评价资格。,登录成功后会自动刷新评价资格。
+提交评价,提交评价
+"基于 %{1} 条评价","基于 %{1} 条评价"
+回复列表,回复列表
+暂无商品评价，欢迎分享你的使用体验。,暂无商品评价，欢迎分享你的使用体验。
+登录成功后会刷新当前页面，并自动打开评论表单。,登录成功后会刷新当前页面，并自动打开评论表单。
 关闭,关闭
 用户名或邮箱,用户名或邮箱
 密码,密码
@@ -165,6 +172,7 @@ Review,Review
 启用的评价项会展示在前台评价表单中，买家提交后会随评价一起保存并展示在后台详情和产品评价区。,启用的评价项会展示在前台评价表单中，买家提交后会随评价一起保存并展示在后台详情和产品评价区。
 保存配置,保存配置
 WeShop,WeShop
+Review,Review
 "Review List",评论列表
 "Filter Reviews",筛选评论
 "Product ID",产品ID
@@ -177,6 +185,7 @@ Star(s),星
 "Apply Filters",应用筛选
 Reset,重置
 "No reviews found",未找到评论
+Title,标题
 图片,图片
 Previous,上一页
 Next,下一页
@@ -188,6 +197,7 @@ Detail,Detail
 图文视频,图文视频
 这条评价没有提交图片或视频。,这条评价没有提交图片或视频。
 "Review Replies","Review Replies"
+Customer,客户
 "Reply to","Reply to"
 "Mentioned customers","Mentioned customers"
 "No replies yet.","No replies yet."
@@ -200,39 +210,3 @@ Detail,Detail
 "Customer Name",客户姓名
 Email,邮箱
 Metadata,元数据
-商品评论,商品评论
-阅读其他买家的评价，也可以直接提交你的使用体验。,阅读其他买家的评价，也可以直接提交你的使用体验。
-阅读其他买家的评价，下单后也可以分享你的真实使用体验。,阅读其他买家的评价，下单后也可以分享你的真实使用体验。
-第%{1}页，共%{2}页,第%{1}页，共%{2}页
-每页 %{1} 条,每页 %{1} 条
-上一页,上一页
-下一页,下一页
-回复列表,回复列表
-客户,客户
-评价与回复,评价与回复
-基于 %{1} 条评价,基于 %{1} 条评价
-写回复，可用 @customer:123 提及客户。,写回复，可用 @customer:123 提及客户。
-发送回复,发送回复
-回复已提交。,回复已提交。
-暂时无法提交回复。,暂时无法提交回复。
-回复内容不能为空。,回复内容不能为空。
-回复给,回复给
-翻译,翻译
-翻译中...,翻译中...
-显示原文,显示原文
-显示译文,显示译文
-当前 Chrome 无法使用浏览器翻译。,当前 Chrome 无法使用浏览器翻译。
-这条评论已经是当前语言。,这条评论已经是当前语言。
-本次回复会通知 %{1}。,本次回复会通知 %{1}。
-请先登录再回复。,请先登录再回复。
-点击标题、内容或提交按钮时，系统会自动选择匿名评论或下单后评论。,点击标题、内容或提交按钮时，系统会自动选择匿名评论或下单后评论。
-提交评分并告诉其他买家你的真实体验。,提交评分并告诉其他买家你的真实体验。
-评论和回复内容不能为空。,评论和回复内容不能为空。
-评论、客户和回复内容不能为空。,评论、客户和回复内容不能为空。
-评论不存在或不可见。,评论不存在或不可见。
-回复目标不存在。,回复目标不存在。
-客户 #%{1},客户 #%{1}
-你在商品评价回复中被提及,你在商品评价回复中被提及
-你的评价有新回复,你的评价有新回复
-客户 %{1} 在商品评价回复中提到了你。,客户 %{1} 在商品评价回复中提到了你。
-客户 %{1} 回复了商品评价。,客户 %{1} 回复了商品评价。

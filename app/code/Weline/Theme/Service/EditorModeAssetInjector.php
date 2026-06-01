@@ -8,7 +8,7 @@ use Weline\Framework\View\Template;
 
 class EditorModeAssetInjector
 {
-    private const EDITOR_MODE_ASSET_VERSION = '20260529-dnd-fallback';
+    private const EDITOR_MODE_ASSET_VERSION = '20260530-slot-accept-protocol';
 
     public function __construct(
         private readonly Template $template

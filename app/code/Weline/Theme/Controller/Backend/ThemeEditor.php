@@ -94,13 +94,6 @@ class ThemeEditor extends BackendController
     }
 
     /**
-     * 清除全页面缓存（FPC）
-     * 发布主题后必须调用，否则前端仍然显示旧的缓存 HTML。
-     * 
-     * flush() 会自动触发 Weline_Framework_Cache::integration::cache_flushed 事件，
-     * Server 模块监听该事件并通知 WLS Worker 重载内存缓存，无需手动处理 WLS 通知。
-     */
-    /**
      * 判断主题目录是否包含后端（backend）区域
      * 无 backend 目录时可视化编辑仅用前端
      */
@@ -117,15 +110,94 @@ class ThemeEditor extends BackendController
             || is_dir($base . $ds . 'backend');
     }
 
+    /**
+     * 可视化编辑发布主题后清理缓存：清空非全局（非 permanent）缓存池，并失效 FPC/路由/主题运行时缓存。
+     * 发布后不调用会导致前台仍显示旧 HTML 或重复部件。
+     */
     private function flushFullPageCache(): void
     {
         try {
-            $routerCache = \Weline\Framework\Manager\ObjectManager::getInstance(
+            ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class)->clearAll();
+        } catch (\Throwable $e) {
+            // 非全局池清理失败不阻塞发布流程
+        }
+
+        try {
+            $routerCache = ObjectManager::getInstance(
                 \Weline\Framework\Router\Cache\RouterCache::class . 'Factory'
             );
             $routerCache->flush();
         } catch (\Throwable $e) {
-            // FPC 清理失败不阻塞发布流程
+            // 路由/FPC 派生缓存清理失败不阻塞发布流程
+        }
+
+        try {
+            if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
+                \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
+            }
+        } catch (\Throwable $e) {
+        }
+
+        try {
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+        } catch (\Throwable $e) {
+        }
+
+        try {
+            ControllerFetchFileBefore::clearRuntimeCache();
+        } catch (\Throwable $e) {
+        }
+
+        ThemeData::clearCache();
+
+        try {
+            ObjectManager::getInstance(
+                \Weline\Server\Service\Control\BroadcastControlDispatchService::class
+            )->cacheClear();
+        } catch (\Throwable $e) {
+        }
+
+        $this->purgeSharedMemoryCachePools();
+        $this->purgeRouterFpcPayloadFiles();
+    }
+
+    private function purgeSharedMemoryCachePools(): void
+    {
+        try {
+            $facade = new \Weline\Server\Service\MemoryStateFacade([
+                'consumer_code' => 'theme_editor_fpc_flush',
+                'prefer_direct_connect' => true,
+                'pool_size' => 1,
+                'auto_start' => false,
+            ]);
+            $facade->clearCache('router');
+            $facade->clearCache('fpc');
+            $facade->clearNamespace('theme_runtime');
+            $facade->disconnect();
+        } catch (\Throwable $e) {
+        }
+    }
+
+    private function purgeRouterFpcPayloadFiles(): void
+    {
+        $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads';
+        if (!\is_dir($dir)) {
+            return;
+        }
+
+        try {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+            foreach ($iterator as $item) {
+                if ($item->isDir()) {
+                    @\rmdir($item->getPathname());
+                } else {
+                    @\unlink($item->getPathname());
+                }
+            }
+        } catch (\Throwable $e) {
         }
     }
 
@@ -3496,6 +3568,8 @@ HTML;
             }
 
             $this->clearVersionPreviewCaches($themeId, true);
+            $this->cacheGenerator->clearCache($themeId);
+            $this->cacheGenerator->generate($themeId);
             $this->flushFullPageCache();
 
             return [
@@ -3585,6 +3659,11 @@ HTML;
     {
         try {
             ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+        } catch (\Throwable) {
+        }
+
+        try {
+            ControllerFetchFileBefore::clearRuntimeCache();
         } catch (\Throwable) {
         }
 

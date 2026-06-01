@@ -1007,35 +1007,7 @@ final class AiSiteStageOneContractValidator
      */
     private function validatePageImageCoverage(array $blocks, array $requiredImageBlockKeys, array $pageContract, string $pageType, array &$issues): void
     {
-        if (!$this->pageShouldRequireGeneratedVisual($pageType, $blocks)) {
-            return;
-        }
-        $firstBlock = \is_array($blocks[0] ?? null) ? $blocks[0] : [];
-        $firstBlockKey = \trim((string)($firstBlock['block_key'] ?? ''));
-        if ($requiredImageBlockKeys !== []) {
-            return;
-        }
-
-        $issues[] = $this->issue('page_missing_generated_image_intent', 'pages.' . $pageType . '.blocks.image_intent', 'high', [
-            'page_type' => $pageType,
-            'block_key' => $firstBlockKey !== '' ? $firstBlockKey : '__page__',
-            'expected' => 'At least one real generated image slot on non-policy pages, with image_intent.needs_image=true and a concrete scene/product/interface subject.',
-        ]);
-    }
-
-    /**
-     * @param list<array<string,mixed>> $blocks
-     */
-    private function pageShouldRequireGeneratedVisual(string $pageType, array $blocks): bool
-    {
-        if ($this->isPolicyPageType($pageType)) {
-            return false;
-        }
-        if ($blocks === []) {
-            return false;
-        }
-
-        return true;
+        // Generated media is a design preference, not a page-completion gate.
     }
 
     /**

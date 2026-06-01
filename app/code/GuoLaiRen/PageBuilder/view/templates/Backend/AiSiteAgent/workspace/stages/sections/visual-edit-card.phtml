@@ -87,7 +87,12 @@ $previewPageId = (int)($previewPageId ?? ($state['preview_page_id'] ?? 0));
         </div>
 
         <?php
-        $pbAiVisualEditCanEnterPublish = !empty($state['can_publish']);
+        $pbAiVisualEditScope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+        $pbAiVisualEditWorkspaceStatus = \strtolower(\trim((string)($state['workspace_status'] ?? $pbAiVisualEditScope['workspace_status'] ?? '')));
+        $pbAiVisualEditCanEnterPublish = !empty($state['can_publish'])
+            || !empty($pbAiVisualEditScope['can_publish'])
+            || $pbAiVisualEditWorkspaceStatus === 'can_publish'
+            || $pbAiVisualEditWorkspaceStatus === 'published';
         $pbAiVisualEditPublishBadge = $pbAiVisualEditCanEnterPublish
             ? (string)__('可进入发布确认')
             : (string)__('等待构建完成');

@@ -92,6 +92,9 @@ if (!$isCustomerLoggedIn) {
     }
 }
 $ratingOptionsJson = json_encode($ratingOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$shouldOpenReviewWritePanel = (string) ($_GET['review_write'] ?? '') === '1'
+    && $isCustomerLoggedIn
+    && $productId > 0;
 $reviewUiTextJson = json_encode([
     'anonymous' => (string) __('匿名用户'),
     'anonymousMode' => (string) __('匿名评论'),
@@ -136,7 +139,7 @@ $reviewUiTextJson = json_encode([
         </div>
         <div class="flex flex-wrap items-center justify-end gap-2">
             <?php if ($productId > 0): ?>
-                <button type="button" class="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90" data-review-write-trigger>
+                <button type="button" class="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90<?= $shouldOpenReviewWritePanel ? ' hidden' : '' ?>" data-review-write-trigger<?= $shouldOpenReviewWritePanel ? ' hidden' : '' ?>>
                     <span class="material-symbols-outlined text-base">rate_review</span>
                     <?= __('我要评论') ?>
                 </button>
@@ -144,29 +147,8 @@ $reviewUiTextJson = json_encode([
         </div>
     </div>
 
-    <?php if ($reviewCount > 0): ?>
-        <div class="motor-review-summary" data-review-summary>
-            <div class="motor-review-summary__score">
-                <strong><?= number_format($rating, 1) ?></strong>
-                <span><?= __('基于 %{1} 条评价', number_format($reviewCount)) ?></span>
-            </div>
-            <div class="motor-review-summary__bars">
-                <?php for ($i = 5; $i >= 1; $i--): ?>
-                    <?php $percent = max(0, min(100, (int) ($ratingDistribution[$i] ?? 0))); ?>
-                    <div class="motor-review-summary__bar-row">
-                        <span><?= $i ?></span>
-                        <div class="motor-review-summary__bar-track">
-                            <div class="motor-review-summary__bar-value" style="width: <?= $percent ?>%;"></div>
-                        </div>
-                        <span><?= $percent ?>%</span>
-                    </div>
-                <?php endfor; ?>
-            </div>
-        </div>
-    <?php endif; ?>
-
     <?php if ($productId > 0): ?>
-        <div class="mt-5 hidden rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark" data-review-write-panel hidden>
+        <div class="mt-5 rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark<?= $shouldOpenReviewWritePanel ? '' : ' hidden' ?>" data-review-write-panel<?= $shouldOpenReviewWritePanel ? '' : ' hidden' ?>>
             <div class="rounded-xl border border-border-light bg-surface-light p-3 text-sm dark:border-border-dark dark:bg-surface-dark">
                 <div class="flex items-center gap-2 font-semibold text-text-primary-light dark:text-text-primary-dark">
                     <span class="material-symbols-outlined text-base text-primary" data-review-mode-icon>touch_app</span>
@@ -227,6 +209,27 @@ $reviewUiTextJson = json_encode([
                 </button>
                 <div class="text-sm text-text-secondary-light dark:text-text-secondary-dark" data-review-feedback></div>
             </form>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($reviewCount > 0): ?>
+        <div class="motor-review-summary" data-review-summary>
+            <div class="motor-review-summary__score">
+                <strong><?= number_format($rating, 1) ?></strong>
+                <span><?= __('基于 %{1} 条评价', number_format($reviewCount)) ?></span>
+            </div>
+            <div class="motor-review-summary__bars">
+                <?php for ($i = 5; $i >= 1; $i--): ?>
+                    <?php $percent = max(0, min(100, (int) ($ratingDistribution[$i] ?? 0))); ?>
+                    <div class="motor-review-summary__bar-row">
+                        <span><?= $i ?></span>
+                        <div class="motor-review-summary__bar-track">
+                            <div class="motor-review-summary__bar-value" style="width: <?= $percent ?>%;"></div>
+                        </div>
+                        <span><?= $percent ?>%</span>
+                    </div>
+                <?php endfor; ?>
+            </div>
         </div>
     <?php endif; ?>
 
@@ -385,7 +388,7 @@ $reviewUiTextJson = json_encode([
                     </div>
                     <div>
                         <h2 id="product-review-auth-title-<?= $productId ?>" class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('登录后评论') ?></h2>
-                        <p id="product-review-auth-description-<?= $productId ?>" class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('登录成功后会自动刷新评价资格。') ?></p>
+                        <p id="product-review-auth-description-<?= $productId ?>" class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('登录成功后会刷新当前页面，并自动打开评论表单。') ?></p>
                     </div>
                     <button type="button" class="review-auth-close rounded-full p-1 text-text-secondary-light hover:text-primary dark:text-text-secondary-dark" data-review-auth-close aria-label="<?= htmlspecialchars((string) __('关闭'), ENT_QUOTES) ?>">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -450,6 +453,8 @@ $reviewUiTextJson = json_encode([
                 var authSubmit = root.querySelector('[data-review-auth-submit]');
                 var apiPromise = null;
                 var accountApiPromise = null;
+                var accountModulePromise = null;
+                var accountLoginCheckPromise = null;
                 var tokenPromise = null;
                 var modePromise = null;
                 var storageKey = 'weshop.review.pending.' + productId;
@@ -466,7 +471,10 @@ $reviewUiTextJson = json_encode([
                 var translatorAvailabilityTimeout = 3000;
                 var translatorCreateTimeout = 15000;
                 var translatorTranslateTimeout = 20000;
-                var afterLoginCallback = null;
+                var pendingPostLoginIntent = null;
+                var postLoginIntentStorageKey = 'weshop.review.postLoginIntent';
+                var reviewWriteQueryParam = 'review_write';
+                var shouldResumeReviewWritePanel = <?= $shouldOpenReviewWritePanel ? 'true' : 'false' ?>;
                 window.__weshopReviewTranslatorSupported = browserTranslatorSupported;
 
                 window.setTimeout(function () {
@@ -741,73 +749,143 @@ $reviewUiTextJson = json_encode([
                     return accountApiPromise;
                 }
 
-                function ensureAccountObject() {
-                    var account = window.account || window.Account || window.WelineAccountModule || null;
-                    if (account && typeof account === 'object') {
-                        return account;
+                function loadAccountModule() {
+                    if (!accountModulePromise) {
+                        accountModulePromise = Promise.resolve().then(function () {
+                            if (window.WelineAccountModule && typeof window.WelineAccountModule.checkFrontendUserLogin === 'function') {
+                                return window.WelineAccountModule;
+                            }
+                            if (window.Weline && typeof window.Weline.load === 'function') {
+                                return window.Weline.load('account').then(function () {
+                                    if (window.WelineAccountModule && typeof window.WelineAccountModule.checkFrontendUserLogin === 'function') {
+                                        return window.WelineAccountModule;
+                                    }
+                                    throw new Error('WelineAccountModule is not available.');
+                                });
+                            }
+                            throw new Error('Account module is not available.');
+                        }).catch(function (error) {
+                            accountModulePromise = null;
+                            throw error;
+                        });
                     }
-
-                    account = {
-                        isLogin: Boolean(isCustomerLoggedIn),
-                        logged_in: Boolean(isCustomerLoggedIn),
-                        isLoggedIn: function () {
-                            return Boolean(this.isLogin || this.logged_in);
-                        }
-                    };
-                    window.account = account;
-                    return account;
+                    return accountModulePromise;
                 }
 
-                function getAccountObject() {
-                    return ensureAccountObject();
+                function normalizeAccountLoginState(result) {
+                    if (!result || typeof result !== 'object') {
+                        return {isLogin: false, user: null};
+                    }
+                    var loggedIn = !!(result.isLogin || result.logged_in || (result.success !== false && (result.user || (result.data && result.data.user))));
+                    return {
+                        isLogin: loggedIn,
+                        user: result.user || (result.data && result.data.user) || null
+                    };
+                }
+
+                function checkAccountLoginState() {
+                    if (accountLoginCheckPromise) {
+                        return accountLoginCheckPromise;
+                    }
+                    accountLoginCheckPromise = loadAccountModule().then(function (AccountModule) {
+                        if (typeof AccountModule.checkFrontendUserLogin === 'function') {
+                            return AccountModule.checkFrontendUserLogin();
+                        }
+                        if (typeof AccountModule.checkFrontendLogin === 'function') {
+                            return AccountModule.checkFrontendLogin();
+                        }
+                        throw new Error('Account login check is unavailable.');
+                    }).then(function (result) {
+                        var state = normalizeAccountLoginState(result);
+                        isCustomerLoggedIn = state.isLogin;
+                        if (state.isLogin) {
+                            syncAccountLoginState(state.user);
+                        }
+                        return state.isLogin;
+                    }).catch(function () {
+                        return Boolean(isCustomerLoggedIn || getAccountFrontendUserSync());
+                    }).finally(function () {
+                        accountLoginCheckPromise = null;
+                    });
+                    return accountLoginCheckPromise;
+                }
+
+                function getAccountFrontendUserSync() {
+                    var module = window.WelineAccountModule || null;
+                    if (module && typeof module.getFrontendUser === 'function') {
+                        try {
+                            return module.getFrontendUser();
+                        } catch (error) {
+                        }
+                    }
+                    if (window.Weline && window.Weline.Account && typeof window.Weline.Account.getFrontendUser === 'function') {
+                        try {
+                            return window.Weline.Account.getFrontendUser();
+                        } catch (error) {
+                        }
+                    }
+                    return null;
                 }
 
                 function isAccountLoggedInSync() {
-                    var account = getAccountObject();
-                    var value;
-                    if (account) {
-                        if (typeof account.isLoggedIn === 'function') {
-                            try {
-                                value = account.isLoggedIn();
-                                if (typeof value === 'boolean') {
-                                    return value;
-                                }
-                            } catch (error) {
-                            }
-                        }
-                        if (typeof account.isLogin === 'boolean') {
-                            return account.isLogin;
-                        }
-                        if (typeof account.logged_in === 'boolean') {
-                            return account.logged_in;
-                        }
-                        if (typeof account.getFrontendUser === 'function') {
-                            try {
-                                if (account.getFrontendUser()) {
-                                    return true;
-                                }
-                            } catch (error) {
-                            }
-                        }
-                        if (account.user || account.customer || account.frontendUser) {
-                            return true;
-                        }
+                    if (isCustomerLoggedIn) {
+                        return true;
                     }
-                    return Boolean(isCustomerLoggedIn);
+                    return Boolean(getAccountFrontendUserSync());
+                }
+
+                function syncAccountLoginState(user) {
+                    isCustomerLoggedIn = true;
+                    modePromise = null;
+                    if (loginTrigger) {
+                        loginTrigger.hidden = true;
+                        loginTrigger.classList.add('hidden');
+                    }
+                    window.dispatchEvent(new CustomEvent('weshop:review-login', {detail: {user: user || null}}));
                 }
 
                 function markLoggedIn(user) {
-                    isCustomerLoggedIn = true;
-                    modePromise = null;
-                    var account = getAccountObject();
-                    if (account && typeof account === 'object') {
-                        account.isLogin = true;
-                        account.logged_in = true;
-                        if (user && !account.user) {
-                            account.user = user;
+                    syncAccountLoginState(user);
+                }
+
+                function resolveLoginPayload(result) {
+                    if (!result || typeof result !== 'object') {
+                        return null;
+                    }
+                    if (typeof result.success === 'boolean') {
+                        return result;
+                    }
+                    if (result.data && typeof result.data === 'object') {
+                        if (typeof result.data.success === 'boolean') {
+                            return {
+                                success: result.data.success,
+                                message: result.data.message || result.message || '',
+                                user: result.data.user || result.user || null,
+                                status: result.data.status || result.status || null
+                            };
+                        }
+                        if (result.success !== false) {
+                            return {
+                                success: true,
+                                message: result.message || '',
+                                user: result.data.user || result.user || null,
+                                status: result.data.status || result.status || null
+                            };
                         }
                     }
-                    window.dispatchEvent(new CustomEvent('weshop:review-login', {detail: {user: user || null}}));
+                    return {
+                        success: result.success !== false,
+                        message: result.message || result.msg || '',
+                        user: result.user || null,
+                        status: result.status || null
+                    };
+                }
+
+                function resumePostLoginIntent(intent) {
+                    if (intent && intent.type === 'reply' && resumeReplyIntent(intent)) {
+                        return;
+                    }
+                    showPanel({focus: true});
                 }
 
                 function updateMode(mode, description, icon) {
@@ -856,36 +934,156 @@ $reviewUiTextJson = json_encode([
                     if (modePromise) {
                         return modePromise;
                     }
-                    isCustomerLoggedIn = isAccountLoggedInSync();
-                    if (!isCustomerLoggedIn) {
-                        updateMode('anonymous', texts.modeAnonymousDescription, 'edit_note');
-                        modePromise = Promise.resolve(reviewMode);
-                        return modePromise;
-                    }
-                    if (modeDescription) {
-                        modeDescription.textContent = texts.modeChecking;
-                    }
-                    if (modeIcon) {
-                        modeIcon.textContent = 'sync';
-                    }
-                    modePromise = getReviewApi().then(function (ReviewApi) {
-                        return ReviewApi.resolveMode({product_id: productId}, {silent: true});
-                    }).then(function (result) {
-                        var data = result && result.data ? result.data : {};
-                        if (result && result.success && data.selected_mode === 'order') {
-                            updateMode('order', texts.modeOrderDescription, 'verified_user');
+                    modePromise = checkAccountLoginState().then(function (loggedIn) {
+                        if (!loggedIn) {
+                            updateMode('anonymous', texts.modeAnonymousDescription, 'edit_note');
                             return reviewMode;
                         }
-                        updateMode('anonymous', texts.modeFallbackDescription, 'edit_note');
-                        return reviewMode;
-                    }).catch(function () {
-                        updateMode('anonymous', texts.modeFallbackDescription, 'edit_note');
-                        return reviewMode;
+                        if (modeDescription) {
+                            modeDescription.textContent = texts.modeChecking;
+                        }
+                        if (modeIcon) {
+                            modeIcon.textContent = 'sync';
+                        }
+                        return getReviewApi().then(function (ReviewApi) {
+                            return ReviewApi.resolveMode({product_id: productId}, {silent: true});
+                        }).then(function (result) {
+                            var data = result && result.data ? result.data : {};
+                            if (result && result.success && data.selected_mode === 'order') {
+                                updateMode('order', texts.modeOrderDescription, 'verified_user');
+                                return reviewMode;
+                            }
+                            updateMode('anonymous', texts.modeFallbackDescription, 'edit_note');
+                            return reviewMode;
+                        }).catch(function () {
+                            updateMode('anonymous', texts.modeFallbackDescription, 'edit_note');
+                            return reviewMode;
+                        });
                     });
                     return modePromise;
                 }
 
-                function showPanel() {
+                function activateReviewsSection() {
+                    if (window.WeShopProductTabs && typeof window.WeShopProductTabs.activate === 'function') {
+                        window.WeShopProductTabs.activate('reviews');
+                        return true;
+                    }
+                    return activateProductDetailTab('reviews');
+                }
+
+                function focusWritePanel() {
+                    activateReviewsSection();
+                    if (!writePanel) {
+                        return;
+                    }
+                    window.requestAnimationFrame(function () {
+                        writePanel.scrollIntoView({behavior: 'smooth', block: 'start', inline: 'nearest'});
+                        var firstField = form
+                            ? form.querySelector('textarea[name="content"], input[name="title"], select[name="rating"]')
+                            : null;
+                        if (firstField) {
+                            try {
+                                firstField.focus({preventScroll: true});
+                            } catch (error) {
+                                firstField.focus();
+                            }
+                        }
+                    });
+                }
+
+                function clearReviewWriteQueryParam() {
+                    var params = new URLSearchParams(window.location.search || '');
+                    if (!params.has(reviewWriteQueryParam)) {
+                        return;
+                    }
+                    params.delete(reviewWriteQueryParam);
+                    var nextSearch = params.toString();
+                    var nextUrl = window.location.pathname
+                        + (nextSearch ? '?' + nextSearch : '')
+                        + window.location.hash;
+                    window.history.replaceState({}, '', nextUrl);
+                }
+
+                function storePostLoginIntent(intent) {
+                    if (!intent || typeof intent !== 'object') {
+                        return;
+                    }
+                    try {
+                        sessionStorage.setItem(postLoginIntentStorageKey, JSON.stringify(intent));
+                    } catch (error) {
+                        // Ignore storage failures and rely on review_write query only.
+                    }
+                }
+
+                function consumePostLoginIntent() {
+                    try {
+                        var raw = sessionStorage.getItem(postLoginIntentStorageKey);
+                        if (!raw) {
+                            return null;
+                        }
+                        sessionStorage.removeItem(postLoginIntentStorageKey);
+                        return JSON.parse(raw);
+                    } catch (error) {
+                        sessionStorage.removeItem(postLoginIntentStorageKey);
+                        return null;
+                    }
+                }
+
+                function reloadAfterReviewLogin(intent) {
+                    if (intent) {
+                        storePostLoginIntent(intent);
+                    }
+                    var url = new URL(window.location.href);
+                    url.searchParams.set(reviewWriteQueryParam, '1');
+                    url.hash = 'reviews-content';
+                    window.location.assign(url.pathname + url.search + url.hash);
+                }
+
+                function resumeReplyIntent(intent) {
+                    if (!intent || intent.type !== 'reply') {
+                        return false;
+                    }
+                    var reviewId = Number(intent.reviewId || 0);
+                    if (reviewId <= 0) {
+                        return false;
+                    }
+                    var selector = '[data-review-reply-toggle][data-review-id-value="' + reviewId + '"]';
+                    if (Number(intent.parentReplyId || 0) > 0) {
+                        selector += '[data-parent-reply-id="' + Number(intent.parentReplyId) + '"]';
+                    } else {
+                        selector += '[data-parent-reply-id="0"]';
+                    }
+                    var button = root.querySelector(selector);
+                    if (!button) {
+                        return false;
+                    }
+                    toggleReplyForm(button);
+                    return true;
+                }
+
+                function resumeReviewWriteIntentFromUrl() {
+                    var params = new URLSearchParams(window.location.search || '');
+                    var hasWriteIntent = params.get(reviewWriteQueryParam) === '1' || shouldResumeReviewWritePanel;
+                    if (!hasWriteIntent) {
+                        return;
+                    }
+                    clearReviewWriteQueryParam();
+                    activateReviewsSection();
+                    checkAccountLoginState().then(function (loggedIn) {
+                        var intent = consumePostLoginIntent();
+                        if (intent && resumeReplyIntent(intent)) {
+                            return;
+                        }
+                        if (!loggedIn) {
+                            openAuthModal({type: 'write'});
+                            return;
+                        }
+                        showPanel({focus: true});
+                    });
+                }
+
+                function showPanel(options) {
+                    options = options || {};
                     if (writePanel) {
                         writePanel.hidden = false;
                         writePanel.classList.remove('hidden');
@@ -896,6 +1094,10 @@ $reviewUiTextJson = json_encode([
                     }
                     return resolveModeForIntent().then(function () {
                         return ensureFormToken();
+                    }).then(function () {
+                        if (options.focus !== false) {
+                            focusWritePanel();
+                        }
                     });
                 }
 
@@ -903,13 +1105,13 @@ $reviewUiTextJson = json_encode([
                     if (event) {
                         event.preventDefault();
                     }
-                    if (!isAccountLoggedInSync()) {
-                        openAuthModal(function () {
-                            showPanel();
-                        });
-                        return;
-                    }
-                    showPanel();
+                    checkAccountLoginState().then(function (loggedIn) {
+                        if (!loggedIn) {
+                            openAuthModal({type: 'write'});
+                            return;
+                        }
+                        showPanel({focus: true});
+                    });
                 }
 
                 function activateProductDetailTab(tabName) {
@@ -1230,14 +1432,17 @@ $reviewUiTextJson = json_encode([
                     textarea.value = token + (value.trim() ? ' ' + value.trim() : ' ');
                 }
 
-                function toggleReplyForm(button) {
-                    if (!isAccountLoggedInSync()) {
-                        openAuthModal(function () {
-                            toggleReplyForm(button);
-                        });
-                        return;
-                    }
+                function buildReplyPostLoginIntent(button) {
+                    return {
+                        type: 'reply',
+                        reviewId: Number(button.getAttribute('data-review-id-value') || 0),
+                        parentReplyId: Number(button.getAttribute('data-parent-reply-id') || 0),
+                        mentionCustomerId: Number(button.getAttribute('data-mention-customer-id') || 0),
+                        mentionLabel: button.getAttribute('data-mention-label') || ''
+                    };
+                }
 
+                function openReplyForm(button) {
                     var reviewId = Number(button.getAttribute('data-review-id-value') || 0);
                     var parentReplyId = Number(button.getAttribute('data-parent-reply-id') || 0);
                     var article = findReviewArticle(reviewId);
@@ -1267,6 +1472,16 @@ $reviewUiTextJson = json_encode([
                     }
                     updateMentionHint(formNode, mentionTarget);
                     setReplyFeedback(formNode, '', true);
+                }
+
+                function toggleReplyForm(button) {
+                    checkAccountLoginState().then(function (loggedIn) {
+                        if (!loggedIn) {
+                            openAuthModal(buildReplyPostLoginIntent(button));
+                            return;
+                        }
+                        openReplyForm(button);
+                    });
                 }
 
                 function submitReply(formNode, button) {
@@ -1312,9 +1527,7 @@ $reviewUiTextJson = json_encode([
                             return;
                         }
                         if (result && result.data && result.data.redirect_url) {
-                            openAuthModal(function () {
-                                toggleReplyForm(button);
-                            });
+                            openAuthModal(buildReplyPostLoginIntent(button));
                             return;
                         }
                         setReplyFeedback(formNode, (result && result.message) || texts.replyUnable, false);
@@ -1463,11 +1676,13 @@ $reviewUiTextJson = json_encode([
                     }
                 }
 
-                function openAuthModal(callback) {
+                function openAuthModal(postLoginIntent) {
                     if (!authModal) {
                         return;
                     }
-                    afterLoginCallback = typeof callback === 'function' ? callback : null;
+                    pendingPostLoginIntent = postLoginIntent && typeof postLoginIntent === 'object'
+                        ? postLoginIntent
+                        : {type: 'write'};
                     authModal.hidden = false;
                     authModal.classList.remove('hidden');
                     authModal.classList.add('flex');
@@ -1508,36 +1723,33 @@ $reviewUiTextJson = json_encode([
                         authSubmit.disabled = true;
                         authSubmit.classList.add('opacity-60');
                     }
-                    var account = getAccountObject();
-                    var loginPromise;
-                    if (account && typeof account.frontendUserLogin === 'function') {
-                        loginPromise = account.frontendUserLogin(username, password, Number((authForm.querySelector('[name="remember_duration"]') || {}).value || 0));
-                    } else if (account && typeof account.frontendLogin === 'function') {
-                        loginPromise = account.frontendLogin(username, password, Number((authForm.querySelector('[name="remember_duration"]') || {}).value || 0));
-                    } else {
-                        loginPromise = getAccountApi().then(function (AccountApi) {
+                    var rememberDuration = Number((authForm.querySelector('[name="remember_duration"]') || {}).value || 0);
+                    var loginPromise = loadAccountModule().then(function (AccountModule) {
+                        if (typeof AccountModule.frontendUserLogin === 'function') {
+                            return AccountModule.frontendUserLogin(username, password, rememberDuration);
+                        }
+                        if (typeof AccountModule.frontendLogin === 'function') {
+                            return AccountModule.frontendLogin(username, password, rememberDuration);
+                        }
+                        return getAccountApi().then(function (AccountApi) {
                             return AccountApi.login({
                                 username: username,
                                 password: password,
-                                remember_duration: Number((authForm.querySelector('[name="remember_duration"]') || {}).value || 0),
+                                remember_duration: rememberDuration,
                                 redirect_url: window.location.pathname + window.location.search
                             }, {silent: true});
                         });
-                    }
+                    });
                     Promise.resolve(loginPromise).then(function (result) {
-                        var data = result && result.data ? result.data : result;
+                        var data = resolveLoginPayload(result);
                         if (!data || data.success === false || data.status === 'challenge_required') {
                             throw new Error((data && data.message) || texts.loginFailed);
                         }
                         markLoggedIn(data.user || null);
-                        var callback = afterLoginCallback;
-                        afterLoginCallback = null;
+                        var intent = pendingPostLoginIntent || {type: 'write'};
+                        pendingPostLoginIntent = null;
                         closeAuthModal();
-                        if (typeof callback === 'function') {
-                            callback();
-                        } else {
-                            showPanel();
-                        }
+                        resumePostLoginIntent(intent);
                     }).catch(function (error) {
                         showAuthAlert((error && error.message) || texts.loginFailed);
                     }).finally(function () {
@@ -1595,7 +1807,7 @@ $reviewUiTextJson = json_encode([
                 }
                 if (loginTrigger) {
                     loginTrigger.addEventListener('click', function () {
-                        openAuthModal();
+                        openAuthModal({type: 'write'});
                     });
                 }
                 if (authForm) {
@@ -1633,8 +1845,13 @@ $reviewUiTextJson = json_encode([
                 });
                 submit.addEventListener('click', submitReview);
                 bindProductDetailTabs();
+                checkAccountLoginState();
+                resumeReviewWriteIntentFromUrl();
                 focusDeepLinkedReviewNode();
-                window.addEventListener('load', focusDeepLinkedReviewNode);
+                window.addEventListener('load', function () {
+                    resumeReviewWriteIntentFromUrl();
+                    focusDeepLinkedReviewNode();
+                });
                 window.addEventListener('hashchange', focusDeepLinkedReviewNode);
             })();
         </script>

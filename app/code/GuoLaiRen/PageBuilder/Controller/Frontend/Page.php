@@ -175,7 +175,7 @@ class Page extends FrontendController
             $this->syncRequestedLocale($requestedLocale);
         }
         
-        // 获取当前使用的语言（从Cookie或URL参数）
+        // 获取当前使用的语言（从 URL、页面默认语言或 Cookie 推断）
         $currentLocale = $requestedLocale ?: \Weline\Framework\Http\Cookie::getLang();
 
         // 获取当前网站ID；预览模式优先从 URL 的 website_id 配合 handle 解码，避免跨站预览时 getCurrentWebsiteId 不匹配
@@ -304,6 +304,16 @@ class Page extends FrontendController
             return;
         }
 
+        $selectedLocales = $page->getSelectedLocales();
+        if (!$requestedLocale) {
+            $pageDefaultLocale = \trim((string)$page->getData(PageModel::schema_fields_DEFAULT_LOCALE));
+            if ($pageDefaultLocale !== '') {
+                $currentLocale = $pageDefaultLocale;
+            } elseif ($selectedLocales !== [] && !\in_array($currentLocale, $selectedLocales, true)) {
+                $currentLocale = (string)$selectedLocales[0];
+            }
+        }
+
         $viewHtmlCacheKey = '';
         if (!$isPreview) {
             $viewHtmlCacheKey = $this->buildViewHtmlCacheKey($page, $currentLocale, $websiteId, (string)($page->getData(PageModel::schema_fields_STYLE) ?? ''));
@@ -315,7 +325,6 @@ class Page extends FrontendController
         }
 
         // 检查页面是否选择了当前语言
-        $selectedLocales = $page->getSelectedLocales();
         $isLocaleSupported = empty($selectedLocales) || in_array($currentLocale, $selectedLocales);
         
         // 获取指定语言的内容

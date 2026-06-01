@@ -1864,6 +1864,8 @@ KEY,KEY
 无法创建缓存锁文件：%{1},无法创建缓存锁文件：%{1}
 写入编译缓存失败：%{1},写入编译缓存失败：%{1}
 写入元数据缓存失败：%{1},写入元数据缓存失败：%{1}
+"Failed to write template manifest temp file: %{1}","Failed to write template manifest temp file: %{1}"
+"Failed to write template manifest file: %{1}","Failed to write template manifest file: %{1}"
 "Failed to hash template source file: %{1}","Failed to hash template source file: %{1}"
 已安装,已安装
 安装失败,安装失败
@@ -1913,4 +1915,3 @@ KEY,KEY
 异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}
 资源不存在：%{1}，模组：%{2},资源不存在：%{1}，模组：%{2}
 资源不存在：%{1},资源不存在：%{1}
-请先登录。,请先登录。

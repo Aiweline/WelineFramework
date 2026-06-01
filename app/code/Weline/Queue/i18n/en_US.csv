@@ -12,6 +12,7 @@
 已启用强制模式(-f)：本次执行将优先使用队列类中的强制重建逻辑。,"Force mode (-f) enabled: This execution will prioritize the forced rebuild logic in the queue class."
 已清空该队列历史输出，本次仅展示最新执行过程。,"Cleared the queue's historical output; only the latest execution process is shown."
 正在执行...,Executing...
+闃熷垪鎵ц璇︽儏,闃熷垪鎵ц璇︽儏
 队列执行详情,"Queue execution detail"
 队列执行详情（失败）,"Queue execution detail (failed)"
 队列消息内容验证不通过。,"Queue message content validation failed."

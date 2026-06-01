@@ -51,17 +51,31 @@ class ReviewWriteTemplateTest extends TestCase
         $this->assertStringContainsString('data-review-form-token', $template);
         $this->assertStringContainsString('ReviewApi.formToken', $template);
         $this->assertStringContainsString('ReviewApi.resolveMode', $template);
-        $this->assertStringContainsString('window.account || window.Account || window.WelineAccountModule', $template);
-        $this->assertStringContainsString('window.account = account', $template);
+        $this->assertStringContainsString('function loadAccountModule()', $template);
+        $this->assertStringContainsString('checkFrontendUserLogin', $template);
+        $this->assertStringContainsString('function checkAccountLoginState()', $template);
         $this->assertStringContainsString('function handleReviewWriteIntent(event)', $template);
-        $this->assertStringContainsString('if (!isAccountLoggedInSync())', $template);
-        $this->assertStringContainsString('openAuthModal(function () {', $template);
-        $this->assertStringContainsString('showPanel();', $template);
+        $this->assertStringContainsString('function resolveLoginPayload(result)', $template);
+        $this->assertStringContainsString('function resumePostLoginIntent(intent)', $template);
+        $this->assertStringContainsString('window.WelineAccountModule', $template);
+        $this->assertStringContainsString('openAuthModal({type: \'write\'});', $template);
+        $this->assertStringContainsString('resumePostLoginIntent(intent);', $template);
+        $this->assertStringContainsString('review_write', $template);
+        $this->assertStringContainsString('focusWritePanel();', $template);
+        $this->assertStringContainsString('resumeReviewWriteIntentFromUrl();', $template);
+        $this->assertStringContainsString('showPanel({focus: true});', $template);
+        $this->assertStringContainsString('$shouldOpenReviewWritePanel', $template);
         $this->assertStringContainsString("writeTrigger.addEventListener('click', handleReviewWriteIntent)", $template);
         $this->assertStringContainsString('review-auth-primary-label', $template);
+        $this->assertStringContainsString('登录成功后会刷新当前页面，并自动打开评论表单。', $template);
         $this->assertStringContainsString('data-review-translate', $template);
         $this->assertStringContainsString('self.Translator.create', $template);
         $this->assertStringContainsString('id="product-reviews"', $template);
+        $this->assertLessThan(
+            strpos($template, 'data-review-summary'),
+            strpos($template, 'data-review-write-panel'),
+            'Write panel should render before the review summary for top-of-section UX.'
+        );
         $this->assertStringContainsString('data-review-surface="product-detail"', $template);
         $this->assertStringContainsString('data-review-summary', $template);
         $this->assertStringContainsString('weshop.product.view.page_data', $template);
@@ -95,10 +109,14 @@ class ReviewWriteTemplateTest extends TestCase
         $this->assertIsString($css);
         $this->assertStringContainsString("fetchTagSource('statics', 'WeShop_Review::css/product-reviews.css'", $headHook);
         $this->assertStringContainsString('WeShop_Review::css/product-reviews.css', $headHook);
-        $this->assertStringContainsString('product-review-thread-polish', $headHook);
+        $this->assertStringContainsString('product-review-responsive-stack', $headHook);
         $this->assertStringContainsString('<link rel="stylesheet"', $headHook);
         $this->assertStringContainsString('#product-reviews', $css);
+        $this->assertStringContainsString('container-type: inline-size', $css);
         $this->assertStringContainsString('grid-template-columns: minmax(240px, 300px) minmax(0, 1fr)', $css);
+        $this->assertStringContainsString('@media (max-width: 1023px)', $css);
+        $this->assertStringContainsString('@container product-reviews (max-width: 1023px)', $css);
+        $this->assertStringContainsString(':has([data-review-write-panel]:not([hidden]))', $css);
         $this->assertStringContainsString('[data-review-summary]', $css);
         $this->assertStringContainsString('.motor-review-summary__bar-row', $css);
         $this->assertStringContainsString('article[data-review-id]::before', $css);

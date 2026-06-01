@@ -187,16 +187,25 @@ class AiSitePlanQueue implements QueueInterface
             $this->queueTrace($sse, 'runPlanOperation 已返回。');
             $retryablePlanMessages = $this->assertPlanQueueCompletionGate($sessionService, $scopeService, $publicId, $adminId);
             if ($retryablePlanMessages !== []) {
-                $this->queueTrace(
-                    $sse,
-                    '第一阶段完成门禁按待修复页面放行：' . \implode('; ', \array_slice($retryablePlanMessages, 0, 5))
+                $retryMessage = 'Stage-one plan has retryable page failures; the same queue will resume missing pages: '
+                    . \implode('; ', \array_slice($retryablePlanMessages, 0, 5));
+                $this->queueTrace($sse, $retryMessage);
+                $retryQueueId = $this->createPlanCompletionGateRetryQueue($queue, $content, $retryMessage);
+                $this->markPlanRetryScheduledInScope(
+                    $sessionService,
+                    $scopeService,
+                    $publicId,
+                    $adminId,
+                    $effectiveExecutionToken,
+                    $retryQueueId,
+                    $retryMessage
                 );
-            } else {
-                $this->queueTrace($sse, '第一阶段完成门禁已通过。');
+                $this->markQueueRetryScheduled($queue, $retryQueueId, $content, $retryMessage);
+
+                return $retryMessage;
             }
-            $queueDoneMessage = $retryablePlanMessages === []
-                ? '第一阶段方案生成完成。'
-                : '第一阶段方案已保存，存在待修复页面。';
+            $this->queueTrace($sse, '第一阶段完成门禁已通过。');
+            $queueDoneMessage = '第一阶段方案生成完成。';
             $this->queueTrace($sse, '队列执行完成：' . $queueDoneMessage);
             $this->markQueueDone($queue, $queueDoneMessage);
             $sse->complete();
@@ -213,6 +222,34 @@ class AiSitePlanQueue implements QueueInterface
             if ($this->isTransientAiProviderFailure($message) && $this->canScheduleTransientPlanRetry($content)) {
                 $retryQueueId = $this->createTransientPlanRetryQueue($queue, $content, $message);
                 $retryMessage = 'Stage-one plan provider was temporarily busy; queue #' . $retryQueueId . ' was marked retryable for the same adapter model.';
+                $this->markPlanRetryScheduledInScope(
+                    $sessionService,
+                    $scopeService,
+                    $publicId,
+                    $adminId,
+                    $effectiveExecutionToken,
+                    $retryQueueId,
+                    $retryMessage
+                );
+                $this->markQueueRetryScheduled($queue, $retryQueueId, $content, $retryMessage);
+                if ($sse instanceof QueueDbWriter) {
+                    $this->queueTrace($sse, $retryMessage);
+                }
+
+                return $retryMessage;
+            }
+            if ($this->canScheduleGeneralPlanRetry($content, $message)) {
+                $retryQueueId = $this->createGeneralPlanRetryQueue($queue, $content, $message);
+                $retryMessage = 'Stage-one plan failed with retryable generated output; queue #' . $retryQueueId . ' will continue the same queue data.';
+                $this->markPlanRetryScheduledInScope(
+                    $sessionService,
+                    $scopeService,
+                    $publicId,
+                    $adminId,
+                    $effectiveExecutionToken,
+                    $retryQueueId,
+                    $retryMessage
+                );
                 $this->markQueueRetryScheduled($queue, $retryQueueId, $content, $retryMessage);
                 if ($sse instanceof QueueDbWriter) {
                     $this->queueTrace($sse, $retryMessage);
@@ -742,6 +779,56 @@ class AiSitePlanQueue implements QueueInterface
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
     }
 
+    private function markPlanRetryScheduledInScope(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        string $publicId,
+        int $adminId,
+        string $executionToken,
+        int $queueId,
+        string $message
+    ): void {
+        try {
+            $session = $sessionService->loadByPublicId($publicId, $adminId);
+            if (!$session instanceof AiSiteAgentSession) {
+                return;
+            }
+            $scope = $scopeService->normalizeScope(
+                $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+            );
+            $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+            $attemptNo = \max(0, (int)($active['attempt_no'] ?? 0)) + 1;
+            $active = \array_replace($active, [
+                'operation' => 'plan',
+                'execution_token' => $executionToken,
+                'status' => 'queued',
+                'queue_id' => $queueId,
+                'message' => $message,
+                'retry_allowed' => 1,
+                'failure_mode' => 'plan_retryable_failure',
+                'queue_waiting_for_scheduler' => true,
+                'can_close_stream' => true,
+                'continue_other_operations' => true,
+                'attempt_no' => $attemptNo,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ]);
+            $scope['active_operation'] = $active;
+            $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+            $activeOperations['plan'] = $active;
+            $scope['active_operations'] = $activeOperations;
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
+            $scope['partial_retry_required'] = 1;
+            $scope['plan_generation_last_error'] = [
+                'message' => $message,
+                'attempt_no' => $attemptNo,
+                'max_attempts' => self::MAX_PLAN_QUEUE_ATTEMPTS,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+            $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
+        } catch (\Throwable) {
+        }
+    }
+
     /**
      * @return array{ok: bool, message?: string, terminal_status?: string}
      */
@@ -1084,6 +1171,27 @@ class AiSitePlanQueue implements QueueInterface
         return false;
     }
 
+    private function isPlatformPlanQueueFailure(string $message): bool
+    {
+        $normalized = \mb_strtolower($message);
+        foreach ([
+            'undefined constant',
+            'undefined method',
+            'fatal error',
+            'parse error',
+            'syntax error',
+            'class not found',
+            'call to a member function',
+            'typeerror',
+        ] as $needle) {
+            if (\str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * @param array<string, mixed> $content
      */
@@ -1095,19 +1203,71 @@ class AiSitePlanQueue implements QueueInterface
     /**
      * @param array<string, mixed> $content
      */
-    private function createTransientPlanRetryQueue(Queue &$queue, array $content, string $message): int
+    private function canScheduleGeneralPlanRetry(array $content, string $message): bool
+    {
+        if ($this->isPlatformPlanQueueFailure($message)) {
+            return false;
+        }
+
+        return \max(0, (int)($content['_plan_queue_retry_count'] ?? 0)) < self::MAX_PLAN_QUEUE_ATTEMPTS;
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function createTransientPlanRetryQueue(Queue &$queue, array &$content, string $message): int
+    {
+        $content['_provider_transient_retry_count'] = \max(0, (int)($content['_provider_transient_retry_count'] ?? 0)) + 1;
+
+        return $this->prepareSamePlanQueueRetry($queue, $content, $message, 'plan_provider_transient');
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function createGeneralPlanRetryQueue(Queue &$queue, array &$content, string $message): int
+    {
+        $content['_plan_queue_retry_count'] = \max(0, (int)($content['_plan_queue_retry_count'] ?? 0)) + 1;
+
+        return $this->prepareSamePlanQueueRetry($queue, $content, $message, 'plan_retryable_failure');
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function createPlanCompletionGateRetryQueue(Queue &$queue, array &$content, string $message): int
+    {
+        $content['_plan_completion_gate_retry_count'] = \max(0, (int)($content['_plan_completion_gate_retry_count'] ?? 0)) + 1;
+
+        return $this->prepareSamePlanQueueRetry($queue, $content, $message, 'plan_completion_gate');
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function prepareSamePlanQueueRetry(Queue &$queue, array &$content, string $message, string $retryScope): int
     {
         $queueId = (int)$queue->getId();
-        $content['_provider_transient_retry_count'] = \max(0, (int)($content['_provider_transient_retry_count'] ?? 0)) + 1;
+        if ($queueId <= 0) {
+            throw new \RuntimeException('Unable to mark PageBuilder plan queue retry on the same queue row.');
+        }
+
+        $request = \is_array($content['_plan_sse_request'] ?? null) ? $content['_plan_sse_request'] : [];
+        $request['prompt_mode'] = 'resume_plan';
+        $details = \is_array($content['details'] ?? null) ? $content['details'] : [];
+        $details['prompt_mode'] = 'resume_plan';
+        $details['_plan_sse_request'] = \array_replace(
+            \is_array($details['_plan_sse_request'] ?? null) ? $details['_plan_sse_request'] : [],
+            ['prompt_mode' => 'resume_plan']
+        );
+        $content['prompt_mode'] = 'resume_plan';
+        $content['_plan_sse_request'] = $request;
+        $content['details'] = $details;
         $content['retry_of_queue_id'] = $queueId;
         $content['retry_reason'] = $message;
         $content['retry_scheduled_at'] = \date('Y-m-d H:i:s');
-        $content['retry_scope'] = 'plan_provider_transient';
+        $content['retry_scope'] = $retryScope;
         $content['_force_rebuild'] = (int)($content['_force_rebuild'] ?? 0) === 1 ? 1 : 0;
-
-        if ($queueId <= 0) {
-            throw new \RuntimeException('Unable to mark PageBuilder plan queue retry after transient provider failure.');
-        }
 
         return $queueId;
     }

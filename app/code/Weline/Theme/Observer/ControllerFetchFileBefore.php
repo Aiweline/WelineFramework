@@ -314,6 +314,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                 'theme' => $theme, // 主题对象本身，供模板直接使用
             ];
             $template->setData('theme', $themeData);
+            $template->setData('layoutType', $layoutType);
+            $template->setData('layoutOption', $layoutOption);
 
             if (isset($requestCache->colorsCache[$configCacheKey])) {
                 $colors = $requestCache->colorsCache[$configCacheKey];
@@ -376,6 +378,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                         'theme' => $theme,
                     ];
                     $template->setData('theme', $themeData);
+                    $template->setData('layoutType', $layoutType);
+                    $template->setData('layoutOption', $layoutOption);
                     $template->setData('colors', $requestCache->colorsCache[$configCacheKey] ?? []);
                     $existingMeta = $template->getData('meta');
                     if (!is_array($existingMeta)) {
@@ -420,6 +424,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $template->setData('contentTemplate', $contentTemplateFileName);
                 $template->setData('layoutTemplate', $resolvedLayoutPath);
                 $template->setData('fileName', $fileName);
+                $template->setData('layoutType', $layoutType);
+                $template->setData('layoutOption', $layoutOption);
 
                 // 加载布局文件的参数配置（自动读取 @param 定义的参数）
                 // 构建 meta_identify：layouts.{layoutType} 或 layouts.{layoutType}.{layoutOption}
@@ -528,6 +534,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                 'theme' => $theme, // 主题对象本身，供模板直接使用
             ];
             $template->setData('theme', $themeData);
+            $template->setData('layoutType', $layoutType);
+            $template->setData('layoutOption', $layoutOption);
 
             if (!isset($scope)) {
                 $scope = $this->themeContext->resolveCurrentScope($area);

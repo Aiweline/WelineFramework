@@ -41,10 +41,18 @@ async function waitForThemeEditor(page) {
   await page.locator('#themeEditor').waitFor({ state: 'attached', timeout: 60000 });
   await page.waitForFunction(() => {
     const candidates = [
-      window.WelineApiModule,
       window.Weline && window.Weline.Api,
+      window.WelineApiModule,
     ];
-    return candidates.some((api) => api && api.__backend !== true && typeof api.call === 'function');
+    return candidates.some((api) => {
+      if (!api) {
+        return false;
+      }
+      if (api.__backend === true && typeof api.request === 'function') {
+        return true;
+      }
+      return api.__backend !== true && typeof api.call === 'function';
+    });
   }, null, {
     timeout: 60000,
   });
@@ -53,12 +61,31 @@ async function waitForThemeEditor(page) {
 
 async function callEditorRequest(page, url, method = 'GET', body = null) {
   return page.evaluate(async (input) => {
-    const api = [
+    const backendApi = [
+      window.Weline && window.Weline.Api,
+      window.WelineApiModule,
+    ].find((candidate) => candidate && candidate.__backend === true && typeof candidate.request === 'function');
+    if (backendApi) {
+      const options = {
+        method: input.method,
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+          'x-requested-with': 'XMLHttpRequest',
+        },
+      };
+      if (input.body !== null && input.body !== undefined) {
+        options.body = JSON.stringify(input.body);
+      }
+      return backendApi.request(input.url, options);
+    }
+
+    const providerApi = [
       window.WelineApiModule,
       window.Weline && window.Weline.Api,
     ].find((candidate) => candidate && candidate.__backend !== true && typeof candidate.call === 'function');
-    if (!api) {
-      throw new Error('Weline frontend API is not available for ThemeEditor E2E.');
+    if (!providerApi) {
+      throw new Error('Weline API is not available for ThemeEditor E2E.');
     }
     const params = {
       url: input.url,
@@ -71,7 +98,7 @@ async function callEditorRequest(page, url, method = 'GET', body = null) {
     if (input.body !== null && input.body !== undefined) {
       params.body = JSON.stringify(input.body);
     }
-    return api.call('theme', 'editorRequest', params, { silent: true });
+    return providerApi.call('theme', 'editorRequest', params, { silent: true });
   }, { url, method, body });
 }
 

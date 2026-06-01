@@ -3,6 +3,7 @@
 namespace Weline\I18n\Model;
 
 use Symfony\Component\Intl\Countries;
+use Symfony\Component\Intl\Languages;
 use Symfony\Component\Intl\Locales;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
@@ -33,6 +34,22 @@ class I18n
         'pt_BR' => 'Portuguese (Brazil)',
         'ru_RU' => 'Russian (Russia)',
         'nl_NL' => 'Dutch (Netherlands)',
+    ];
+
+    private const FALLBACK_LANGUAGE_SELF_NAMES = [
+        'en' => 'English',
+        'zh' => '中文',
+        'zh_Hans' => '简体中文',
+        'zh_Hant' => '繁體中文',
+        'ja' => '日本語',
+        'ko' => '한국어',
+        'de' => 'Deutsch',
+        'fr' => 'Français',
+        'es' => 'Español',
+        'it' => 'Italiano',
+        'pt' => 'Português',
+        'ru' => 'Русский',
+        'nl' => 'Nederlands',
     ];
 
     private const FALLBACK_COUNTRY_NAMES = [
@@ -233,6 +250,57 @@ class I18n
             $name = $this->getLocaleNameFromProvider($locale_code, $displace_locale_code);
         }
         return $name;
+    }
+
+    /**
+     * 返回语码对应语言在其自身语言下的名称（如 zh_Hans_CN -> 简体中文，en_US -> English）。
+     * 与 getLocaleName($code, $websiteLocale) 不同，后者是当前网站界面语言下的 locale 全称。
+     */
+    public function getLocaleLanguageSelfName(string $localeCode): string
+    {
+        $localeCode = trim($localeCode);
+        if ($localeCode === '') {
+            return '';
+        }
+
+        $languageTag = $this->extractLanguageTagFromLocaleCode($localeCode);
+        if ($languageTag === '') {
+            return $localeCode;
+        }
+
+        if (class_exists(Languages::class)) {
+            try {
+                return Languages::getName($languageTag, $languageTag);
+            } catch (\Throwable) {
+                $baseLanguage = explode('_', $languageTag)[0] ?? '';
+                if ($baseLanguage !== '') {
+                    try {
+                        return Languages::getName($baseLanguage, $baseLanguage);
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+        }
+
+        return self::FALLBACK_LANGUAGE_SELF_NAMES[$languageTag]
+            ?? self::FALLBACK_LANGUAGE_SELF_NAMES[explode('_', $languageTag)[0] ?? '']
+            ?? $this->getLocaleName($localeCode, $localeCode);
+    }
+
+    private function extractLanguageTagFromLocaleCode(string $localeCode): string
+    {
+        $parts = explode('_', trim($localeCode));
+        $language = strtolower((string)($parts[0] ?? ''));
+        if ($language === '') {
+            return '';
+        }
+
+        $second = (string)($parts[1] ?? '');
+        if ($second !== '' && strlen($second) !== 2) {
+            return $language . '_' . $second;
+        }
+
+        return $language;
     }
 
     public function getLocalesWithFlags(int $width = 24, int $height = 18, string $lang_code = 'zh_Hans_CN', bool $installed = true)

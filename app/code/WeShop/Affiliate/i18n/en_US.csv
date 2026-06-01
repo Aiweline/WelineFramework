@@ -161,6 +161,14 @@ Affiliate,Affiliate
 "分销 API 不支持提现申请","Affiliate API does not support withdrawal requests"
 提现申请失败,"Withdrawal request failed"
 提现申请已提交，正在刷新记录。,"Withdrawal request submitted. Refreshing records."
+搜索,Search
+搜索当前报表,"Search this report"
+每页,"Rows per page"
+显示,Showing
+条,rows
+上一页,Previous
+下一页,Next
+没有匹配记录,"No matching records."
 推广链接管理,"Promotion link management"
 "默认推广首页，也可以生成任意本站页面的独立分销链接；点击后按 30 天末触归因记录后续注册、互动和订单。","The default target is the homepage. You can also generate a separate affiliate link for any page on this site. Clicks start a 30-day last-touch attribution window for registrations, engagement, and orders."
 默认首页推广链接,"Default homepage promotion link"
@@ -237,11 +245,3 @@ SKU,SKU
 鍩烘暟,鍩烘暟
 姣斾緥,姣斾緥
 鍘熷洜,鍘熷洜
-搜索,Search
-搜索当前报表,"Search this report"
-每页,"Rows per page"
-显示,Showing
-条,rows
-上一页,Previous
-下一页,Next
-没有匹配记录,"No matching records."

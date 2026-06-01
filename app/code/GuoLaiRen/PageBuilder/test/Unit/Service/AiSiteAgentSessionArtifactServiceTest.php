@@ -118,6 +118,44 @@ final class AiSiteAgentSessionArtifactServiceTest extends TestCase
         self::assertSame([], $prepared['artifacts']);
     }
 
+    public function testUntouchedMetadataOnlyPlanPayloadKeepsExistingPlanArtifactReference(): void
+    {
+        $service = new AiSiteAgentSessionArtifactService(new AiSiteAgentSessionArtifact());
+
+        $prepared = $service->prepareScopeForStorage(123, [
+            '_artifact_refs' => [
+                AiSiteAgentSession::STAGE_PLAN => [
+                    'plan_json' => [
+                        'storage' => 'session_artifact_v1',
+                        'stage_code' => AiSiteAgentSession::STAGE_PLAN,
+                        'artifact_key' => 'plan_json',
+                        'hash' => 'full-plan-json-hash',
+                    ],
+                    'plan_structured' => [
+                        'storage' => 'session_artifact_v1',
+                        'stage_code' => AiSiteAgentSession::STAGE_PLAN,
+                        'artifact_key' => 'plan_structured',
+                        'hash' => 'full-plan-structured-hash',
+                    ],
+                ],
+            ],
+            'plan_json' => ['content_locale' => 'en_US'],
+            'plan_structured' => ['content_locale' => 'en_US'],
+        ]);
+
+        self::assertSame([], $prepared['scope']['plan_json']);
+        self::assertSame([], $prepared['scope']['plan_structured']);
+        self::assertSame([], $prepared['artifacts']);
+        self::assertSame(
+            'full-plan-json-hash',
+            $prepared['scope']['_artifact_refs'][AiSiteAgentSession::STAGE_PLAN]['plan_json']['hash'] ?? null
+        );
+        self::assertSame(
+            'full-plan-structured-hash',
+            $prepared['scope']['_artifact_refs'][AiSiteAgentSession::STAGE_PLAN]['plan_structured']['hash'] ?? null
+        );
+    }
+
     public function testUnchangedHydratedPayloadIsClearedWithoutRewritingArtifact(): void
     {
         $service = new AiSiteAgentSessionArtifactService(new AiSiteAgentSessionArtifact());

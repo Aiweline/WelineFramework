@@ -870,15 +870,37 @@ final class FullPageCacheCoordinator
             return true;
         }
 
-        $query = (string)(\parse_url($fullUri, \PHP_URL_QUERY) ?: '');
-        if ($query === '') {
-            return false;
+        $bypassKeys = ['preview', 'visual_editor', 'editor_mode', 'workspace_preview', 'debug_hooks', 'no_cache', 'nocache'];
+
+        $getParams = WelineEnv::getGet(null, []);
+        if (\is_array($getParams)) {
+            foreach ($bypassKeys as $key) {
+                if (isset($getParams[$key]) && (string)$getParams[$key] !== '' && (string)$getParams[$key] !== '0') {
+                    return true;
+                }
+            }
         }
 
-        \parse_str($query, $params);
-        foreach (['preview', 'visual_editor', 'editor_mode', 'workspace_preview', 'debug_hooks', 'no_cache', 'nocache'] as $key) {
-            if (isset($params[$key]) && (string)$params[$key] !== '' && (string)$params[$key] !== '0') {
-                return true;
+        $query = (string)(\parse_url($fullUri, \PHP_URL_QUERY) ?: '');
+        if ($query === '') {
+            $query = (string)($_SERVER['QUERY_STRING'] ?? '');
+        }
+        if ($query !== '') {
+            \parse_str($query, $params);
+            foreach ($bypassKeys as $key) {
+                if (isset($params[$key]) && (string)$params[$key] !== '' && (string)$params[$key] !== '0') {
+                    return true;
+                }
+            }
+        }
+
+        // WLS 部分请求在到达 FPC 时 $_GET 尚未填充，但 QUERY_STRING 已含 nocache 等参数
+        $rawQuery = (string)($_SERVER['QUERY_STRING'] ?? '');
+        if ($rawQuery !== '') {
+            foreach ($bypassKeys as $key) {
+                if (\preg_match('/(?:^|[&;])' . \preg_quote($key, '/') . '(?:=|&|;|$)/i', $rawQuery) === 1) {
+                    return true;
+                }
             }
         }
 

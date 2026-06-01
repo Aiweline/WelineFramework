@@ -6,6 +6,9 @@
 订单管理,"Order Management"
 订单已标记为已送达。,"Order marked as delivered."
 送达状态更新失败。,"Delivery update failed."
+无效的支付状态。,无效的支付状态。
+订单支付状态已更新。,订单支付状态已更新。
+订单支付状态更新失败。,订单支付状态更新失败。
 无效的订单状态。,"Invalid order status."
 订单状态已更新。,"Order status updated."
 订单状态更新失败。,"Order status update failed."
@@ -40,6 +43,8 @@
 创建订单并返回摘要。,"Create an order and return its summary."
 批量持久化订单商品行。,"Persist order items in batch."
 返回客户账户中心的最近订单与待付款订单。,"Return recent and unpaid orders for the customer account center."
+批量返回订单基础信息，供跨模块报表聚合使用。,批量返回订单基础信息，供跨模块报表聚合使用。
+批量返回客户订单数、成交金额和最近下单时间。,批量返回客户订单数、成交金额和最近下单时间。
 返回当前前台客户订单仪表盘数据。,"Return current frontend customer order dashboard data."
 返回当前前台客户待付款订单摘要。,"Return current frontend customer unpaid orders summary."
 取消当前前台客户拥有的订单。,"Cancel an order owned by the current frontend customer."
@@ -58,10 +63,6 @@
 确定要取消此订单吗？取消后将自动退款。,"Are you sure you want to cancel this order? An automatic refund will be issued after cancellation."
 确定要取消此订单吗？,"Are you sure you want to cancel this order?"
 规格,Specification
-尺寸,Size
-颜色,Color
-材质,Material
-品牌,Brand
 您还没有订单,"You have no orders yet"
 该状态下暂无订单,"No orders in this status"
 查看全部订单,"View all orders"
@@ -95,6 +96,8 @@
 已取消,Canceled
 已退款,Refunded
 已付款,Paid
+支付失败,支付失败
+部分支付,部分支付
 "商品 #%{1}","Product #%{1}"
 已取消或已退款的订单无法发货。,"Cancelled or refunded orders cannot be shipped."
 仅已付款订单可发货。,"Only paid orders can be shipped."
@@ -185,6 +188,7 @@ ID,ID
 税费,"Taxes and Fees"
 折扣,Discount
 订单操作,"Order actions"
+更新支付,更新支付
 确认发货,"Confirm Shipment"
 标记已送达,"Mark as Delivered"
 打印订单,"Print order"
