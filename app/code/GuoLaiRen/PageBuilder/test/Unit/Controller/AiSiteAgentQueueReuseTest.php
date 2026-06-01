@@ -269,7 +269,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("'queue_id' => 0", $source);
     }
 
-    public function testPreflightFailureIsNotOverwrittenByOldQueueSnapshot(): void
+    public function testPreflightFailureIsNotOverwrittenByOldQueueState(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
         $method = new ReflectionMethod(AiSiteAgent::class, 'reconcileActiveOperationWithQueueInfo');
@@ -286,7 +286,8 @@ final class AiSiteAgentQueueReuseTest extends TestCase
             ],
             [
                 'queue_id' => 582,
-                'snapshot' => ['status' => 'error', 'message' => 'old queue failure'],
+                'status' => 'error',
+                'message' => 'old queue failure',
             ],
             'build'
         );
@@ -472,7 +473,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertFalse((new ReflectionClass(AiSiteAgent::class))->hasMethod('shouldReusePersistedTaskPlanWithoutQueue'));
     }
 
-    public function testStageOneResumeModeBypassesPureReuseShortcutAndKeepsCheckpointPrompting(): void
+    public function testStageOneResumeModeBypassesPureReuseShortcutAndUsesPersistedPlanState(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
 
@@ -482,6 +483,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("\$effectivePlanPromptMode = 'resume_plan';", $source);
         self::assertStringContainsString("\$requestedPromptMode === 'resume_plan'", $source);
         self::assertStringContainsString("'resume_generation'", $source);
+        self::assertStringNotContainsString("\$buildPayload['stage1_checkpoint']", $source);
     }
 
     public function testRetryablePlanFailuresDefaultToResumeInsteadOfForcedRebuild(): void
@@ -774,7 +776,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
 
         $planKeysSource = $this->extractConstantArraySource($source, 'PLAN_STAGE_SCOPE_KEYS');
         $visualEditKeysSource = $this->extractConstantArraySource($source, 'VISUAL_EDIT_STAGE_SCOPE_KEYS');
-        self::assertStringContainsString("'_plan_generation_checkpoint'", $planKeysSource);
+        self::assertStringNotContainsString("'_plan_generation_checkpoint'", $planKeysSource);
         self::assertStringContainsString("'plan_generation_progress'", $planKeysSource);
         self::assertStringNotContainsString("'_task_plan_generation_checkpoint'", $visualEditKeysSource);
     }

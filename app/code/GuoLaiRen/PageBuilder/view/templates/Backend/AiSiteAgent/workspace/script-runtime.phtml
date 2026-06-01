@@ -399,11 +399,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return false;
         }
         var key = resolveRuntimeQueueInfoKey(normalizedOperation);
-        var queueInfo = state[key] && typeof state[key] === 'object' ? state[key] : null;
-        var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : null;
+        var queueInfo = normalizeRuntimeQueueState(state[key] && typeof state[key] === 'object' ? state[key] : null);
         var pid = parseInt(String(
-            (queueInfo && (queueInfo.pid || queueInfo.worker_pid))
-            || (snapshot && (snapshot.pid || snapshot.worker_pid))
+            queueInfo.pid
+            || queueInfo.worker_pid
             || (active && active.pid)
             || 0
         ), 10) || 0;
@@ -440,15 +439,16 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return '';
         }
         var key = resolveRuntimeQueueInfoKey(operation);
-        var queueInfo = workspaceState[key] && typeof workspaceState[key] === 'object'
-            ? workspaceState[key]
-            : null;
-        var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
-            ? queueInfo.snapshot
-            : null;
+        var queueInfo = normalizeRuntimeQueueState(
+            workspaceState[key] && typeof workspaceState[key] === 'object'
+                ? workspaceState[key]
+                : null
+        );
         return String(
-            (queueInfo ? (queueInfo.status || queueInfo.queue_status || queueInfo.state || '') : '')
-            || (snapshot ? (snapshot.status || snapshot.job_status || snapshot.queue_status || '') : '')
+            queueInfo.status
+            || queueInfo.queue_status
+            || queueInfo.state
+            || queueInfo.job_status
             || ''
         ).trim().toLowerCase();
     }
@@ -747,6 +747,15 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return !!(value && typeof value === 'object' && !Array.isArray(value));
     }
 
+    function normalizeRuntimeQueueState(queueInfo) {
+        if (!isRuntimePlainObject(queueInfo)) {
+            return {};
+        }
+        var currentState = Object.assign({}, queueInfo);
+        delete currentState.snapshot;
+        return currentState;
+    }
+
     function copyRuntimeSummaryFields(source, fields, textLimit) {
         var safe = {};
         if (!isRuntimePlainObject(source)) {
@@ -779,13 +788,16 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             : (isRuntimePlainObject(state.active_operation) ? state.active_operation : {});
         var op = String((operation || source.operation || active.operation || '')).trim().toLowerCase();
         var queueInfo = resolveQueueInfoForOperation(source, op);
+        var queueState = normalizeRuntimeQueueState(queueInfo);
         var safe = {
             operation: op || String(source.operation || '').trim()
         };
         var message = String(
             source.message
             || active.message
-            || (queueInfo && (queueInfo.terminal_summary || queueInfo.message || queueInfo.process))
+            || queueState.terminal_summary
+            || queueState.message
+            || queueState.process
             || fallbackMessage
             || ''
         ).trim();
@@ -805,32 +817,26 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 'retry_allowed'
             ], 512);
         }
-        if (isRuntimePlainObject(queueInfo)) {
-            safe.queue_info = copyRuntimeSummaryFields(queueInfo, [
+        if (Object.keys(queueState).length > 0) {
+            safe.queue_info = copyRuntimeSummaryFields(queueState, [
                 'queue_id',
                 'status',
                 'queue_status',
+                'job_status',
+                'pid',
+                'finished',
                 'process',
                 'progress_percent',
                 'terminal_summary',
                 'message'
             ], 512);
-            if (isRuntimePlainObject(queueInfo.token_usage)) {
-                safe.queue_info.token_usage = copyRuntimeSummaryFields(queueInfo.token_usage, [
+            if (isRuntimePlainObject(queueState.token_usage)) {
+                safe.queue_info.token_usage = copyRuntimeSummaryFields(queueState.token_usage, [
                     'prompt_tokens',
                     'completion_tokens',
                     'total_tokens',
                     'cached_tokens'
                 ], 64);
-            }
-            if (isRuntimePlainObject(queueInfo.snapshot)) {
-                safe.queue_info.snapshot = copyRuntimeSummaryFields(queueInfo.snapshot, [
-                    'queue_id',
-                    'status',
-                    'job_status',
-                    'pid',
-                    'finished'
-                ], 120);
             }
         }
         return safe;
@@ -870,7 +876,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
     function resolveQueueFailureMessage(payload, operation) {
         var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
-        var queueInfo = resolveQueueInfoForOperation(payload, operation);
+        var queueInfo = normalizeRuntimeQueueState(resolveQueueInfoForOperation(payload, operation));
         var activeOperation = state.active_operation && typeof state.active_operation === 'object'
             ? state.active_operation
             : (payload && payload.active_operation && typeof payload.active_operation === 'object' ? payload.active_operation : {});
@@ -923,31 +929,31 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var activeOperation = state.active_operation && typeof state.active_operation === 'object'
             ? state.active_operation
             : (payload && payload.active_operation && typeof payload.active_operation === 'object' ? payload.active_operation : {});
-        var queueSnapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
+        var queueState = normalizeRuntimeQueueState(queueInfo);
         var operationName = String(operation || (payload && payload.operation) || activeOperation.operation || '').trim();
         if (operationName) {
             lines.push('操作：' + operationName);
         }
-        var queueId = parseInt(String((queueInfo && queueInfo.queue_id) || queueSnapshot.queue_id || activeOperation.queue_id || 0), 10) || 0;
+        var queueId = parseInt(String(queueState.queue_id || activeOperation.queue_id || 0), 10) || 0;
         if (queueId > 0) {
             lines.push('队列ID：' + queueId);
         }
-        var pageType = String(activeOperation.page_type || activeOperation.page || (queueInfo && queueInfo.page_type) || '').trim();
-        var blockId = String(activeOperation.block_id || activeOperation.block || (queueInfo && queueInfo.block_id) || '').trim();
+        var pageType = String(activeOperation.page_type || activeOperation.page || queueState.page_type || '').trim();
+        var blockId = String(activeOperation.block_id || activeOperation.block || queueState.block_id || '').trim();
         if (pageType || blockId) {
             lines.push('对象：' + [pageType, blockId].filter(function (item) { return item !== ''; }).join(' / '));
         }
-        var queueStatus = String((queueInfo && (queueInfo.status || queueInfo.queue_status)) || queueSnapshot.job_status || queueSnapshot.status || '').trim();
+        var queueStatus = String(queueState.status || queueState.queue_status || queueState.job_status || '').trim();
         if (queueStatus) {
             lines.push('队列状态：' + queueStatus);
         }
         var opMessage = resolveQueueFailureMessage(payload, operation) || String(activeOperation.message || payload.message || '').trim();
-        var resultLog = String((queueInfo && queueInfo.terminal_summary) || '').trim();
+        var resultLog = String(queueState.terminal_summary || '').trim();
         var summary = extractQueueFailureSummary(opMessage) || extractQueueFailureSummary(resultLog);
         if (summary) {
             lines.push('失败原因：' + summary);
         }
-        var queueProcess = String((queueInfo && queueInfo.process) || '').trim();
+        var queueProcess = String(queueState.process || '').trim();
         if (queueProcess && queueProcess !== opMessage && queueProcess !== summary) {
             lines.push('当前进度：' + compactQueueFailureText(queueProcess, 120));
         }
@@ -1634,11 +1640,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (status !== '') {
             return status;
         }
-        var snapshot = payload.queue_snapshot && typeof payload.queue_snapshot === 'object'
-            ? payload.queue_snapshot
+        var queueState = payload.queue_state && typeof payload.queue_state === 'object'
+            ? payload.queue_state
             : null;
-        if (snapshot) {
-            status = String(snapshot.status || snapshot.job_status || snapshot.queue_status || '').trim().toLowerCase();
+        if (queueState) {
+            status = String(queueState.status || queueState.job_status || queueState.queue_status || '').trim().toLowerCase();
             if (status !== '') {
                 return status;
             }
@@ -1646,12 +1652,12 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var state = payload.state && typeof payload.state === 'object' ? payload.state : {};
         var key = resolveRuntimeQueueInfoKey(operation || payload.operation || '');
         var queueInfo = state[key] && typeof state[key] === 'object' ? state[key] : {};
-        snapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : null;
+        queueInfo = normalizeRuntimeQueueState(queueInfo);
         return String(
             queueInfo.status
             || queueInfo.queue_status
             || queueInfo.state
-            || (snapshot ? (snapshot.status || snapshot.job_status || snapshot.queue_status || '') : '')
+            || queueInfo.job_status
             || ''
         ).trim().toLowerCase();
     }
@@ -2506,20 +2512,20 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!source || typeof source !== 'object') {
             return '';
         }
-        var snapshot = source.queue_snapshot && typeof source.queue_snapshot === 'object'
-            ? source.queue_snapshot
-            : (source.snapshot && typeof source.snapshot === 'object' ? source.snapshot : null);
-        if (!snapshot && source.queue_info && typeof source.queue_info === 'object') {
-            snapshot = source.queue_info.snapshot && typeof source.queue_info.snapshot === 'object' ? source.queue_info.snapshot : null;
+        var queueState = source.queue_state && typeof source.queue_state === 'object'
+            ? source.queue_state
+            : null;
+        if (!queueState && source.queue_info && typeof source.queue_info === 'object') {
+            queueState = normalizeRuntimeQueueState(source.queue_info);
         }
-        if (!snapshot && source.build_queue_info && typeof source.build_queue_info === 'object') {
-            snapshot = source.build_queue_info.snapshot && typeof source.build_queue_info.snapshot === 'object' ? source.build_queue_info.snapshot : null;
+        if (!queueState && source.build_queue_info && typeof source.build_queue_info === 'object') {
+            queueState = normalizeRuntimeQueueState(source.build_queue_info);
         }
         var activeOperation = source.active_operation && typeof source.active_operation === 'object' ? source.active_operation : null;
         var status = String(
             source.status
             || source.queue_status
-            || (snapshot ? (snapshot.status || snapshot.job_status || '') : '')
+            || (queueState ? (queueState.status || queueState.job_status || queueState.queue_status || '') : '')
             || source.active_operation_status
             || (activeOperation ? activeOperation.status : '')
             || ''
@@ -2979,12 +2985,12 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }
 
         function readStageQueueStatus(queueInfo) {
-            var snapshot = queueInfo && typeof queueInfo === 'object' && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
-                ? queueInfo.snapshot
-                : null;
+            var queueState = normalizeRuntimeQueueState(queueInfo);
             return String(
-                (queueInfo && typeof queueInfo === 'object' ? (queueInfo.status || queueInfo.queue_status || queueInfo.state || '') : '')
-                || (snapshot ? (snapshot.status || snapshot.job_status || '') : '')
+                queueState.status
+                || queueState.queue_status
+                || queueState.state
+                || queueState.job_status
                 || ''
             ).trim().toLowerCase();
         }

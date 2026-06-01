@@ -22,12 +22,17 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
         );
     }
 
-    public function testReturnsFalseWhenSnapshotMissing(): void
+    public function testUsesTopLevelQueueStateWhenNestedStateMissing(): void
     {
-        self::assertSame(
-            ['show' => false],
-            $this->service()->buildWorkspaceEntryQueueNotice(['operation' => 'plan'], ['plan' => ['queue_id' => 10]])
+        $result = $this->service()->buildWorkspaceEntryQueueNotice(
+            ['operation' => 'plan'],
+            ['plan' => ['queue_id' => 10, 'status' => 'running', 'name' => 'my-queue']]
         );
+
+        self::assertTrue($result['show']);
+        self::assertSame(10, $result['queue_id']);
+        self::assertSame('running', $result['queue_status']);
+        self::assertSame('my-queue', $result['queue_name']);
     }
 
     public function testReturnsFalseWhenQueueIdOrStatusMissing(): void
@@ -36,14 +41,14 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
             ['show' => false],
             $this->service()->buildWorkspaceEntryQueueNotice(
                 ['operation' => 'plan'],
-                ['plan' => ['queue_id' => 0, 'snapshot' => ['status' => 'running']]]
+                ['plan' => ['queue_id' => 0, 'status' => 'running']]
             )
         );
         self::assertSame(
             ['show' => false],
             $this->service()->buildWorkspaceEntryQueueNotice(
                 ['operation' => 'plan', 'status' => ''],
-                ['plan' => ['queue_id' => 5, 'snapshot' => ['status' => '']]]
+                ['plan' => ['queue_id' => 5, 'status' => '']]
             )
         );
     }
@@ -53,9 +58,9 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
         $result = $this->service()->buildWorkspaceEntryQueueNotice(
             [],
             [
-                'plan' => ['queue_id' => 1, 'snapshot' => ['status' => 'running', 'queue_id' => 1]],
-                'task_plan' => ['queue_id' => 2, 'snapshot' => ['status' => 'running', 'queue_id' => 2]],
-                'build' => ['queue_id' => 3, 'snapshot' => ['status' => 'running', 'queue_id' => 3]],
+                'plan' => ['queue_id' => 1, 'status' => 'running'],
+                'task_plan' => ['queue_id' => 2, 'status' => 'running'],
+                'build' => ['queue_id' => 3, 'status' => 'running'],
             ]
         );
 
@@ -69,9 +74,9 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
         $result = $this->service()->buildWorkspaceEntryQueueNotice(
             [],
             [
-                'build' => ['queue_id' => 99, 'snapshot' => ['status' => 'done', 'queue_id' => 99]],
-                'task_plan' => ['queue_id' => 88, 'snapshot' => ['status' => 'running', 'queue_id' => 88]],
-                'plan' => ['queue_id' => 77, 'snapshot' => ['status' => 'pending', 'queue_id' => 77]],
+                'build' => ['queue_id' => 99, 'status' => 'done'],
+                'task_plan' => ['queue_id' => 88, 'status' => 'running'],
+                'plan' => ['queue_id' => 77, 'status' => 'pending'],
             ]
         );
 
@@ -85,16 +90,16 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
             ['show' => false],
             $this->service()->buildWorkspaceEntryQueueNotice(
                 ['operation' => 'task_plan'],
-                ['task_plan' => ['queue_id' => 42, 'snapshot' => ['status' => 'running', 'queue_id' => 42]]]
+                ['task_plan' => ['queue_id' => 42, 'status' => 'running']]
             )
         );
     }
 
-    public function testUsesActiveStatusWhenSnapshotStatusEmpty(): void
+    public function testUsesActiveStatusWhenQueueStatusEmpty(): void
     {
         $result = $this->service()->buildWorkspaceEntryQueueNotice(
             ['operation' => 'plan', 'status' => 'pending'],
-            ['plan' => ['queue_id' => 10, 'snapshot' => ['status' => '', 'queue_id' => 10]]]
+            ['plan' => ['queue_id' => 10, 'status' => '']]
         );
 
         self::assertTrue($result['show']);
@@ -106,26 +111,26 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
     {
         $pending = $this->service()->buildWorkspaceEntryQueueNotice(
             ['operation' => 'plan'],
-            ['plan' => ['queue_id' => 10, 'snapshot' => ['status' => 'pending', 'queue_id' => 10]]]
+            ['plan' => ['queue_id' => 10, 'status' => 'pending']]
         );
         self::assertSame('warning', $pending['level']);
         self::assertStringContainsString('#10', $pending['message']);
 
         $running = $this->service()->buildWorkspaceEntryQueueNotice(
             ['operation' => 'build'],
-            ['build' => ['queue_id' => 20, 'snapshot' => ['status' => 'running', 'queue_id' => 20]]]
+            ['build' => ['queue_id' => 20, 'status' => 'running']]
         );
         self::assertSame('warning', $running['level']);
 
         $error = $this->service()->buildWorkspaceEntryQueueNotice(
             ['operation' => 'build'],
-            ['build' => ['queue_id' => 20, 'snapshot' => ['status' => 'error', 'queue_id' => 20]]]
+            ['build' => ['queue_id' => 20, 'status' => 'error']]
         );
         self::assertSame('error', $error['level']);
 
         $done = $this->service()->buildWorkspaceEntryQueueNotice(
             ['operation' => 'build'],
-            ['build' => ['queue_id' => 20, 'snapshot' => ['status' => 'done', 'queue_id' => 20]]]
+            ['build' => ['queue_id' => 20, 'status' => 'done']]
         );
         self::assertSame('success', $done['level']);
     }
@@ -134,7 +139,7 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
     {
         $result = $this->service()->buildWorkspaceEntryQueueNotice(
             ['operation' => 'build'],
-            ['build' => ['queue_id' => 20, 'snapshot' => ['status' => 'weird', 'queue_id' => 20]]]
+            ['build' => ['queue_id' => 20, 'status' => 'weird']]
         );
 
         self::assertSame('info', $result['level']);
@@ -148,7 +153,7 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
             ['operation' => 'plan'],
             ['plan' => [
                 'queue_id' => 10,
-                'snapshot' => ['status' => 'error', 'queue_id' => 10],
+                'status' => 'error',
                 'result_log' => \str_repeat('A', 700),
             ]]
         );
@@ -156,18 +161,15 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
         self::assertSame(600, \mb_strlen($result['result_excerpt']));
     }
 
-    public function testSnapshotNameBizKeyAndProcessPropagate(): void
+    public function testQueueNameBizKeyAndProcessPropagate(): void
     {
         $result = $this->service()->buildWorkspaceEntryQueueNotice(
             ['operation' => 'plan'],
             ['plan' => [
                 'queue_id' => 10,
-                'snapshot' => [
-                    'status' => 'running',
-                    'queue_id' => 10,
-                    'name' => 'my-queue',
-                    'biz_key' => 'biz-xyz',
-                ],
+                'status' => 'running',
+                'name' => 'my-queue',
+                'biz_key' => 'biz-xyz',
                 'process' => 'phase-2/5',
             ]]
         );

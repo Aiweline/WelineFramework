@@ -512,11 +512,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
 
     function sanitizeQueueInfoForMemory(info) {
         var safe = isPlainWorkspaceObject(info) ? Object.assign({}, info) : {};
+        delete safe.snapshot;
         dropWorkspaceVolatileKeys(safe);
-        if (isPlainWorkspaceObject(safe.snapshot)) {
-            safe.snapshot = Object.assign({}, safe.snapshot);
-            dropWorkspaceVolatileKeys(safe.snapshot);
-        }
         return safe;
     }
 
@@ -538,17 +535,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 safe[key] = sanitizeQueueInfoForMemory(safe[key]);
             }
         });
-        if (isPlainWorkspaceObject(safe.snapshot)) {
-            safe.snapshot = Object.assign({}, safe.snapshot);
-            dropWorkspaceVolatileKeys(safe.snapshot);
-        }
+        delete safe.snapshot;
         if (isPlainWorkspaceObject(safe.scope)) {
             safe.scope = Object.assign({}, safe.scope);
             dropWorkspaceVolatileKeys(safe.scope);
-            if (isPlainWorkspaceObject(safe.scope.snapshot)) {
-                safe.scope.snapshot = Object.assign({}, safe.scope.snapshot);
-                dropWorkspaceVolatileKeys(safe.scope.snapshot);
-            }
+            delete safe.scope.snapshot;
             ['plan_queue_info', 'build_queue_info'].forEach(function (key) {
                 if (isPlainWorkspaceObject(safe.scope[key])) {
                     safe.scope[key] = sanitizeQueueInfoForMemory(safe.scope[key]);
@@ -854,16 +845,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (!operation || typeof operation !== 'object') {
             return 0;
         }
-        var snapshot = operation.snapshot && typeof operation.snapshot === 'object' ? operation.snapshot : {};
         var candidates = [
             operation.updated_at,
             operation.finished_at,
             operation.completed_at,
-            operation.end_at,
-            snapshot.updated_at,
-            snapshot.finished_at,
-            snapshot.completed_at,
-            snapshot.end_at
+            operation.end_at
         ];
         for (var i = 0; i < candidates.length; i += 1) {
             var raw = String(candidates[i] || '').trim();
@@ -882,7 +868,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         var op = operation && typeof operation === 'object' ? operation : {};
-        var snapshot = op.snapshot && typeof op.snapshot === 'object' ? op.snapshot : {};
         var planError = state.plan_generation_last_error && typeof state.plan_generation_last_error === 'object'
             ? state.plan_generation_last_error
             : {};
@@ -894,10 +879,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             op.error,
             op.message,
             op.process,
-            snapshot.error_message,
-            snapshot.error,
-            snapshot.message,
-            snapshot.process,
             planError.message,
             planError.error_message,
             scopePlanError.message,
@@ -970,14 +951,10 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var scopePlanError = scope.plan_generation_last_error && typeof scope.plan_generation_last_error === 'object'
             ? scope.plan_generation_last_error
             : {};
-        var snapshot = op.snapshot && typeof op.snapshot === 'object' ? op.snapshot : {};
         var message = String(
             op.message
             || op.error_message
             || op.error
-            || snapshot.message
-            || snapshot.error_message
-            || snapshot.error
             || planError.message
             || planError.error_message
             || scopePlanError.message
@@ -1406,7 +1383,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var operation = findPlanSuccessOperationFromWorkspaceState(state) || state.plan_queue_info || {};
         var fingerprint = shortHashText([
             String(publicId || ''),
-            String(operation.queue_id || (operation.snapshot && operation.snapshot.queue_id) || ''),
+            String(operation.queue_id || ''),
             String(operation.updated_at || operation.finished_at || operation.completed_at || ''),
             String((currentPlanPayload && currentPlanPayload.markdown) || '').length
         ].join('|'));
@@ -2108,18 +2085,18 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (!info || typeof info !== 'object') {
             return false;
         }
-        var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
-        var semanticStatus = normalizeQueueStatusForPrompt(info.semantic_status || snapshot.semantic_status || '');
+        var currentInfo = sanitizeQueueInfoForMemory(info);
+        var semanticStatus = normalizeQueueStatusForPrompt(currentInfo.semantic_status || '');
         if (semanticStatus === 'stale' || isQueueStatusTerminalForUi(semanticStatus)) {
             return true;
         }
-        if (isTruthyQueueFlagForUi(info.queue_terminal_recovered || snapshot.queue_terminal_recovered)) {
+        if (isTruthyQueueFlagForUi(currentInfo.queue_terminal_recovered)) {
             return true;
         }
-        if (isTruthyQueueFlagForUi(info.finished || snapshot.finished)) {
+        if (isTruthyQueueFlagForUi(currentInfo.finished)) {
             return true;
         }
-        return isTruthyQueueFlagForUi(info.retry_allowed || snapshot.retry_allowed)
+        return isTruthyQueueFlagForUi(currentInfo.retry_allowed)
             && (semanticStatus === 'stale' || isQueueStatusTerminalForUi(semanticStatus));
     }
 
@@ -2127,16 +2104,12 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (!info || typeof info !== 'object') {
             return normalizeQueueStatusForPrompt(info);
         }
-        var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
-        var directStatus = normalizeQueueStatusForPrompt(info.status || info.queue_status || info.state || '');
-        var snapshotStatus = normalizeQueueStatusForPrompt(snapshot.status || snapshot.job_status || snapshot.queue_status || '');
-        if (isQueueTerminalRecoveryForUi(info)) {
-            var semanticStatus = normalizeQueueStatusForPrompt(info.semantic_status || snapshot.semantic_status || '');
+        var currentInfo = sanitizeQueueInfoForMemory(info);
+        var directStatus = normalizeQueueStatusForPrompt(currentInfo.status || currentInfo.queue_status || currentInfo.state || currentInfo.job_status || '');
+        if (isQueueTerminalRecoveryForUi(currentInfo)) {
+            var semanticStatus = normalizeQueueStatusForPrompt(currentInfo.semantic_status || '');
             if (isPlanSuccessStatusForWorkspaceUi(directStatus)) {
                 return directStatus;
-            }
-            if (isPlanSuccessStatusForWorkspaceUi(snapshotStatus)) {
-                return snapshotStatus;
             }
             if (isPlanSuccessStatusForWorkspaceUi(semanticStatus)) {
                 return semanticStatus;
@@ -2148,10 +2121,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (isQueueStatusTerminalForUi(directStatus) || isQueueStatusRunningForUi(directStatus)) {
             return directStatus;
         }
-        if (isQueueStatusTerminalForUi(snapshotStatus) || isQueueStatusRunningForUi(snapshotStatus)) {
-            return snapshotStatus;
-        }
-        return directStatus || snapshotStatus;
+        return directStatus;
     }
 
     function hasRunningQueueForUi(workspaceState, operationFilter) {
@@ -2599,6 +2569,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 syncRetryableAiFailureButton(button, operation, state);
             }
         });
+        setPlanRetryButtonVisible(shouldShowPlanRetryButtonFromWorkspaceState(state));
         var buildRetryBtn = document.getElementById('pb-ai-retry-build-failures');
         if (buildRetryBtn) {
             if (!buildRetryBtn.getAttribute('data-retryable-ai-operation')) {
@@ -13788,8 +13759,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (pqStatus !== '' && isQueueStatusTerminalForUi(pqStatus)) {
             return true;
         }
-        var snap = pq.snapshot && typeof pq.snapshot === 'object' ? pq.snapshot : {};
-        return Number(snap.finished || 0) === 1;
+        return Number(pq.finished || 0) === 1;
     }
 
     function isPlanGenerationRunningNow() {
@@ -13822,12 +13792,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var queueInfo = workspaceState.plan_queue_info && typeof workspaceState.plan_queue_info === 'object'
             ? workspaceState.plan_queue_info
             : null;
-        var snapshot = queueInfo && queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
-            ? queueInfo.snapshot
-            : null;
         var queueStatus = String(
             (queueInfo ? (queueInfo.status || queueInfo.queue_status || queueInfo.state || '') : '')
-            || (snapshot ? (snapshot.job_status || snapshot.status || snapshot.queue_status || '') : '')
             || ''
         ).trim().toLowerCase();
         if (queueStatus !== '' && runningStatuses.indexOf(queueStatus) !== -1) {
@@ -15797,16 +15763,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (status !== '' && !isPlanFailureStatusForWorkspaceUi(status)) {
             return '';
         }
-        var snapshot = source.snapshot && typeof source.snapshot === 'object' ? source.snapshot : {};
         var candidates = [
             source.message,
             source.error_message,
             source.error,
-            snapshot.message,
-            snapshot.error_message,
-            snapshot.error,
-            source.process,
-            snapshot.process
+            source.process
         ];
         for (var i = 0; i < candidates.length; i += 1) {
             var value = compactPlanTerminalErrorMessage(candidates[i]);
@@ -15884,7 +15845,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 return stateMessage;
             }
         }
-        var queueMessage = readPlanTerminalObjectFailureMessage(parsed.queue_info || parsed.queue_snapshot || parsed.active_operation || {});
+        var queueMessage = readPlanTerminalObjectFailureMessage(parsed.queue_info || parsed.queue_state || parsed.active_operation || {});
         if (queueMessage !== '') {
             return queueMessage;
         }
@@ -15960,14 +15921,16 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
 
     function resolveQueueObserverStatusMessage(payload) {
         var data = payload && typeof payload === 'object' ? payload : {};
-        var queueInfo = data.queue_info && typeof data.queue_info === 'object' ? data.queue_info : {};
-        var queueSnapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
-            ? queueInfo.snapshot
-            : ((data.queue_snapshot && typeof data.queue_snapshot === 'object') ? data.queue_snapshot : {});
+        var queueInfo = sanitizeQueueInfoForMemory(data.queue_info && typeof data.queue_info === 'object' ? data.queue_info : {});
+        var queueState = Object.assign(
+            {},
+            (data.queue_state && typeof data.queue_state === 'object') ? data.queue_state : {},
+            queueInfo
+        );
         var message = String(
             data.message
             || data.queue_process
-            || queueInfo.process
+            || queueState.process
             || data.phase
             || ''
         ).trim();
@@ -15976,15 +15939,15 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }
         var queueStatus = String(
             data.queue_status
-            || queueSnapshot.job_status
-            || queueSnapshot.status
-            || queueSnapshot.queue_status
+            || queueState.job_status
+            || queueState.status
+            || queueState.queue_status
             || ''
         ).trim();
         if (queueStatus === '') {
             return '';
         }
-        var queueId = String(data.queue_id || queueSnapshot.queue_id || queueInfo.queue_id || '').trim();
+        var queueId = String(data.queue_id || queueState.queue_id || '').trim();
         if (queueId !== '') {
             return String(
                 <?= \json_encode((string)__('队列 #%{queue_id} 当前状态：%{status}', ['queue_id' => '%{queue_id}', 'status' => '%{status}']), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
@@ -16002,14 +15965,16 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             return Math.max(0, Math.min(100, explicitPercent));
         }
         var queueInfo = data.queue_info && typeof data.queue_info === 'object' ? data.queue_info : {};
-        var queueSnapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object'
-            ? queueInfo.snapshot
-            : ((data.queue_snapshot && typeof data.queue_snapshot === 'object') ? data.queue_snapshot : {});
+        var queueState = Object.assign(
+            {},
+            (data.queue_state && typeof data.queue_state === 'object') ? data.queue_state : {},
+            sanitizeQueueInfoForMemory(queueInfo)
+        );
         var queueStatus = String(
             data.queue_status
-            || queueSnapshot.job_status
-            || queueSnapshot.status
-            || queueSnapshot.queue_status
+            || queueState.job_status
+            || queueState.status
+            || queueState.queue_status
             || ''
         ).trim().toLowerCase();
         if (queueStatus === 'done' || queueStatus === 'success' || queueStatus === 'error' || queueStatus === 'failed' || queueStatus === 'cancelled' || queueStatus === 'stop') {
@@ -16479,16 +16444,12 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     }
 
     function readPublishQueueStatus(queueInfo) {
-        var info = queueInfo && typeof queueInfo === 'object' ? queueInfo : {};
-        var snapshot = info.snapshot && typeof info.snapshot === 'object' ? info.snapshot : {};
+        var info = sanitizeQueueInfoForMemory(queueInfo && typeof queueInfo === 'object' ? queueInfo : {});
         return String(
             info.status
             || info.queue_status
             || info.state
             || info.job_status
-            || snapshot.job_status
-            || snapshot.status
-            || snapshot.queue_status
             || ''
         ).trim().toLowerCase();
     }
@@ -17762,16 +17723,12 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if ((activeOp === 'build' || activeOp === 'visual_edit') && isQueueStatusErrorForResumePrompt(activeStatus)) {
             return true;
         }
-        var queueInfo = state.build_queue_info && typeof state.build_queue_info === 'object' ? state.build_queue_info : {};
-        var snapshot = queueInfo.snapshot && typeof queueInfo.snapshot === 'object' ? queueInfo.snapshot : {};
+        var queueInfo = sanitizeQueueInfoForMemory(state.build_queue_info && typeof state.build_queue_info === 'object' ? state.build_queue_info : {});
         return isQueueStatusErrorForResumePrompt(
             queueInfo.status
             || queueInfo.queue_status
             || queueInfo.state
             || queueInfo.job_status
-            || snapshot.job_status
-            || snapshot.status
-            || snapshot.queue_status
             || ''
         );
     }

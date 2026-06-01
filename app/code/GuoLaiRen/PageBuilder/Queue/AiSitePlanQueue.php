@@ -321,7 +321,7 @@ class AiSitePlanQueue implements QueueInterface
             'plan_confirmed' => 0,
             'plan_generation_last_error' => [],
             'plan_generation_progress' => [],
-            '_plan_generation_checkpoint' => [],
+            '_unset_scope_keys' => ['_plan_generation_checkpoint'],
         ]);
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
@@ -404,7 +404,7 @@ class AiSitePlanQueue implements QueueInterface
         }
         if ((string)($request['prompt_mode'] ?? '') === 'rebuild') {
             $patch['plan_generation_progress'] = [];
-            $patch['_plan_generation_checkpoint'] = [];
+            $patch['_unset_scope_keys'] = ['_plan_generation_checkpoint'];
         }
 
         $sessionService->mergeScope((int)$fresh->getId(), $adminId, $patch);
