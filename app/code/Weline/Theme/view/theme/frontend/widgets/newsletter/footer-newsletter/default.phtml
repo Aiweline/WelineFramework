@@ -22,10 +22,10 @@
  * @param layout {default="horizontal",type="select",label="布局",options={horizontal:"横向",vertical:"纵向"}}
  */
 
-$title = $this->getData('title') ?? __('订阅我们的邮件');
-$description = $this->getData('description') ?? __('获取最新的优惠信息和新品资讯');
-$placeholder = $this->getData('placeholder') ?? __('请输入您的邮箱地址');
-$buttonText = $this->getData('button_text') ?? __('订阅');
+$title = __((string)($this->getData('title') ?: '订阅我们的邮件'));
+$description = __((string)($this->getData('description') ?: '获取最新的优惠信息和新品资讯'));
+$placeholder = __((string)($this->getData('placeholder') ?: '请输入您的邮箱地址'));
+$buttonText = __((string)($this->getData('button_text') ?: '订阅'));
 $layout = $this->getData('layout') ?? 'horizontal';
 
 $widgetId = 'footer-newsletter-' . uniqid();

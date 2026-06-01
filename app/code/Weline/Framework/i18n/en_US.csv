@@ -1864,6 +1864,8 @@ KEY,KEY
 无法创建缓存锁文件：%{1},"Unable to create cache lock file: %{1}"
 写入编译缓存失败：%{1},"Failed to write compilation cache: %{1}"
 写入元数据缓存失败：%{1},"Failed to write metadata cache: %{1}"
+"Failed to write template manifest temp file: %{1}","Failed to write template manifest temp file: %{1}"
+"Failed to write template manifest file: %{1}","Failed to write template manifest file: %{1}"
 "Failed to hash template source file: %{1}","Failed to hash template source file: %{1}"
 已安装,Installed
 安装失败,"Install Failed"
@@ -1913,4 +1915,3 @@ KEY,KEY
 异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},"Exception: The module containing the template file you specified does not exist! Module: %{1}, template used: %{2}"
 资源不存在：%{1}，模组：%{2},"Resource does not exist: %{1}, Module: %{2}"
 资源不存在：%{1},"Resource does not exist: %{1}"
-请先登录。,"Please log in."

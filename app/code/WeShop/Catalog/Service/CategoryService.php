@@ -13,6 +13,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Server\Service\MemoryStateFacade;
 use WeShop\Catalog\Model\Category;
+use WeShop\Catalog\Model\Category\LocalDescription;
 
 /**
  * 分类服务
@@ -21,6 +22,17 @@ class CategoryService
 {
     private const CATEGORY_TREE_CACHE_TTL_SECONDS = 600.0;
     private const CACHE_NAMESPACE = 'weline_site_runtime';
+
+    /**
+     * @var array<string, string>
+     */
+    private const LOCALIZED_FIELD_MAP = [
+        'local_name' => Category::schema_fields_NAME,
+        'local_description' => Category::schema_fields_DESCRIPTION,
+        'local_meta_title' => 'meta_title',
+        'local_meta_description' => 'meta_description',
+        'local_meta_keywords' => 'meta_keywords',
+    ];
 
     /**
      * Header hooks read category navigation on every frontend page. Cache only
@@ -103,17 +115,49 @@ class CategoryService
      */
     private function getAllActiveCategoriesForTree(): array
     {
-        return $this->categoryDataCacheRemember('category.active_rows', function (): array {
+        $locale = State::getLangLocal();
+
+        return $this->categoryDataCacheRemember('category.active_rows.' . $locale, function () use ($locale): array {
             /** @var Category $category */
             $category = ObjectManager::getInstance(Category::class);
 
             return $this->normalizeCategoryRows($category->clear()
+                ->loadLocalDescription($locale)
+                ->fields($this->localizedCategorySelectFields())
                 ->where(Category::schema_fields_IS_ACTIVE, 1)
                 ->order(Category::schema_fields_PARENT_ID, 'ASC')
                 ->order(Category::schema_fields_SORT_ORDER, 'ASC')
                 ->select()
                 ->fetchArray());
         });
+    }
+
+    private function localizedCategorySelectFields(): string
+    {
+        return implode(',', [
+            'main_table.*',
+            'local.' . LocalDescription::schema_fields_name . ' AS local_name',
+            'local.' . LocalDescription::schema_fields_DESCRIPTION . ' AS local_description',
+            'local.' . LocalDescription::schema_fields_META_TITLE . ' AS local_meta_title',
+            'local.' . LocalDescription::schema_fields_META_DESCRIPTION . ' AS local_meta_description',
+            'local.' . LocalDescription::schema_fields_META_KEYWORDS . ' AS local_meta_keywords',
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function mergeLocalizedCategoryRow(array $row): array
+    {
+        foreach (self::LOCALIZED_FIELD_MAP as $localField => $field) {
+            $localizedValue = trim((string)($row[$localField] ?? ''));
+            if ($localizedValue !== '') {
+                $row[$field] = $localizedValue;
+            }
+        }
+
+        return $row;
     }
 
     private function attachTreeAttributes(array &$category): void
@@ -216,7 +260,7 @@ class CategoryService
         $categoryId = (string)($category['category_id'] ?? '');
         $pathSegment = $handle !== '' ? $handle : $categoryId;
         $fullPath = $parentPath !== '' ? $parentPath . '/' . $pathSegment : $pathSegment;
-        $label = $this->localizeCategoryDisplayName((string)($category['name'] ?? ''));
+        $label = $this->localizeCategoryDisplayName((string)($category['name'] ?? ''), $category);
         if ($level > 0) {
             $indent = str_repeat('&nbsp;&nbsp;&nbsp;', $level);
             $separator = $level > 1 ? ' - ' : ' > ';
@@ -226,7 +270,7 @@ class CategoryService
         $options[] = [
             'value' => $fullPath,
             'label' => $label,
-            'display_label' => $this->localizeCategoryDisplayName((string)($category['name'] ?? '')),
+            'display_label' => $this->localizeCategoryDisplayName((string)($category['name'] ?? ''), $category),
             'level' => $level,
             'full_path' => $fullPath,
         ];
@@ -324,7 +368,7 @@ class CategoryService
         $encodedSlug = rawurlencode($rawSlug);
         $fullHandle = $parentPath === '' ? $encodedSlug : $parentPath . '/' . $encodedSlug;
         $menuItem = [
-            'text' => $this->localizeCategoryDisplayName((string)($category['name'] ?? '')),
+            'text' => (string)($category['name'] ?? ''),
             'url' => $categoryBaseUrl . $fullHandle,
         ];
 
@@ -357,7 +401,7 @@ class CategoryService
         }
 
         return [
-            'text' => $this->localizeCategoryDisplayName((string)($category['name'] ?? '')),
+            'text' => (string)($category['name'] ?? ''),
             'url' => $categoryBaseUrl . rawurlencode($categoryHandle),
             'icon' => (string)($category['icon'] ?? 'fas fa-circle'),
         ];
@@ -365,9 +409,16 @@ class CategoryService
 
     /**
      * 前台分类展示名（顶栏、面包屑、侧栏、卡片等），与数据库存储名解耦。
+     *
+     * 优先级：LocalDescription（已在分类行 merge）> i18n 词典 > 源文案。
      */
-    public function localizeCategoryDisplayName(string $name): string
+    public function localizeCategoryDisplayName(string $name, array $category = []): string
     {
+        $localName = trim((string)($category['local_name'] ?? ''));
+        if ($localName !== '') {
+            return $localName;
+        }
+
         $name = trim($name);
         if ($name === '') {
             return '';
@@ -383,6 +434,7 @@ class CategoryService
             'Empty Category Demo' => '演示分类',
             'Prime Video' => '会员视频',
             'Gift Cards' => '礼品卡',
+            'Gift Registry' => '礼品心愿单',
             'Customer Service' => '客户服务',
             'Today\'s Deals' => '今日特价',
             'Best Sellers' => '热销榜',
@@ -413,7 +465,7 @@ class CategoryService
     public function localizeCategoryRecordForStorefront(array $record): array
     {
         if (isset($record['name'])) {
-            $record['name'] = $this->localizeCategoryDisplayName((string) $record['name']);
+            $record['name'] = $this->localizeCategoryDisplayName((string) $record['name'], $record);
         }
 
         if (!empty($record['breadcrumbs']) && is_array($record['breadcrumbs'])) {
@@ -586,7 +638,7 @@ class CategoryService
             return $this->filterRightMenuTree($this->getCategoryTree($parentId, false));
         }
 
-        $cacheKey = $parentId . '|' . ($includeRightMenuOnly ? 'right' : 'all');
+        $cacheKey = $parentId . '|' . ($includeRightMenuOnly ? 'right' : 'all') . '|' . State::getLangLocal();
         $now = microtime(true);
         $cached = self::$categoryTreeCache[$cacheKey] ?? null;
         if ($cached && $cached['expires_at'] > $now) {
@@ -635,12 +687,13 @@ class CategoryService
         /** @var Category $category */
         $category = ObjectManager::getInstance(Category::class);
         
-        return $category->clear()
-            ->loadLocalDescription()
+        return $this->normalizeCategoryRows($category->clear()
+            ->loadLocalDescription(State::getLangLocal())
+            ->fields($this->localizedCategorySelectFields())
             ->where(Category::schema_fields_PARENT_ID, $parentId)
             ->order(Category::schema_fields_SORT_ORDER, 'ASC')
             ->select()
-            ->fetchArray();
+            ->fetchArray());
     }
     
     /**
@@ -809,7 +862,7 @@ class CategoryService
      */
     private function getActiveCategoryIndexes(): array
     {
-        $cacheKey = 'active_indexes';
+        $cacheKey = 'active_indexes|' . State::getLangLocal();
         $now = microtime(true);
         $cached = self::$categoryIndexCache[$cacheKey] ?? null;
         if (is_array($cached) && ($cached['expires_at'] ?? 0.0) >= $now && is_array($cached['data'] ?? null)) {
@@ -904,7 +957,7 @@ class CategoryService
         $normalized = [];
         foreach ($rows as $row) {
             if (is_array($row)) {
-                $normalized[] = $row;
+                $normalized[] = $this->mergeLocalizedCategoryRow($row);
             }
         }
 

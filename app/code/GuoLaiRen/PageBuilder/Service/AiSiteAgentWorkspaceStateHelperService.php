@@ -387,6 +387,23 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
+     * @param array<string, mixed> $summary
+     * @return array<string, int|string>
+     */
+    private function summarizeExecutionSummaryCountsForView(array $summary): array
+    {
+        return [
+            'total' => (int)($summary['total'] ?? 0),
+            'done' => (int)($summary['done'] ?? 0),
+            'pending' => (int)($summary['pending'] ?? 0),
+            'running' => (int)($summary['running'] ?? 0),
+            'failed' => (int)($summary['failed'] ?? 0),
+            'cancelled' => (int)($summary['cancelled'] ?? 0),
+            'updated_at' => (string)($summary['updated_at'] ?? ''),
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $state
      * @return array<string, mixed>
      */
@@ -400,7 +417,7 @@ class AiSiteAgentWorkspaceStateHelperService
             return [];
         }
         if (\is_array($buildPlan['execution_summary'] ?? null) && $buildPlan['execution_summary'] !== []) {
-            return $buildPlan['execution_summary'];
+            return $this->summarizeExecutionSummaryCountsForView($buildPlan['execution_summary']);
         }
 
         $summary = [
@@ -488,6 +505,10 @@ class AiSiteAgentWorkspaceStateHelperService
             }
         }
         foreach (['contract_meta', 'execution_summary'] as $key) {
+            if ($key === 'execution_summary' && \is_array($buildPlan['execution_summary'] ?? null)) {
+                $result['execution_summary'] = $this->summarizeExecutionSummaryCountsForView($buildPlan['execution_summary']);
+                continue;
+            }
             if (\is_array($buildPlan[$key] ?? null)) {
                 $result[$key] = $this->pruneRecursiveViewPayload($buildPlan[$key]);
             }
@@ -623,15 +644,19 @@ class AiSiteAgentWorkspaceStateHelperService
     {
         $json = \is_array($plan['json'] ?? null) ? $plan['json'] : [];
         $structured = \is_array($plan['structured'] ?? null) ? $plan['structured'] : [];
+        \error_log("[prunePlanForView] json=" . (\is_array($json) ? 'array(' . \count($json) . ')' : \gettype($json)) . " structured=" . (\is_array($structured) ? 'array(' . \count($structured) . ')' : \gettype($structured)) . " structured_keys=" . (\is_array($structured) ? \implode(',', \array_keys($structured)) : 'N/A'));
         if ($structured === [] && $json !== []) {
             $structured = $json;
         }
         $buildPlan = \is_array($plan['build_plan_v2'] ?? null) ? $plan['build_plan_v2'] : [];
 
+        $prunedStructured = $this->pruneStageOneStructuredPlanForView($structured);
+        \error_log("[prunePlanForView] result json_available=" . ($json !== [] ? 'true' : 'false') . " structured_available=" . ($structured !== [] ? 'true' : 'false') . " prunedStructured_keys=" . (\is_array($prunedStructured) ? \implode(',', \array_keys($prunedStructured)) : 'N/A'));
+
         return [
             'markdown' => $this->limitViewText((string)($plan['markdown'] ?? ''), 80000),
             'json' => [],
-            'structured' => $this->pruneStageOneStructuredPlanForView($structured),
+            'structured' => $prunedStructured,
             'build_plan_v2' => $buildPlan !== [] ? $this->pruneBuildPlanForView($buildPlan) : [],
             'projection' => \is_array($plan['projection'] ?? null) ? $this->pruneRecursiveViewPayload($plan['projection']) : [],
             'json_available' => $json !== [],

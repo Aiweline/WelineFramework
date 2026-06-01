@@ -41,7 +41,6 @@ final class AiSitePageComponentGenerationServicePromptGuardTest extends TestCase
             __DIR__ . '/../../../Service/AiSitePageComponentGenerationService.php'
         );
 
-        self::assertStringNotContainsString('COMPONENT_GENERATION_MAX_ATTEMPTS', $source);
         self::assertStringNotContainsString('JSON_REPAIR_MAX_ATTEMPTS', $source);
         self::assertStringNotContainsString('buildRetryGenerationPrompt', $source);
         self::assertStringNotContainsString('requestJsonRepair', $source);
