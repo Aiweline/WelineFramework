@@ -198,7 +198,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     var deferredQueueStatePollDeadline = 0;
     var deferredQueueStatePollOperation = '';
     var deferredQueueStatePollSignature = '';
-    var DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 1000;
+    var DEFERRED_QUEUE_STATE_POLL_INITIAL_DELAY_MS = 1200;
+    var DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 5000;
+    var DEFERRED_QUEUE_STATE_POLL_JITTER_MS = 1500;
     // 0 means no wall-clock cutoff: once SSE hands off to state polling,
     // the poller stops only when the real queue state becomes terminal.
     var DEFERRED_QUEUE_STATE_POLL_TTL_MS = 0;
@@ -239,7 +241,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
     function stopDeferredQueueStatePoll() {
         if (deferredQueueStatePollTimer) {
-            window.clearInterval(deferredQueueStatePollTimer);
+            window.clearTimeout(deferredQueueStatePollTimer);
             deferredQueueStatePollTimer = null;
         }
         deferredQueueStatePollInFlight = false;
@@ -404,7 +406,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!isQueueStatusInProgressForWatch(queueStatus) && !queueWaitingForScheduler) {
             return false;
         }
-        // Queue-backed progress resumes through workspace stream and read-only polling.
+        // Queue-backed progress prefers workspace SSE; read-only polling is only a fallback.
         return true;
     }
 
@@ -1416,6 +1418,12 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
     function startDeferredQueueStatePoll(operation) {
         var normalizedOperation = String(operation || '').trim().toLowerCase() || 'build';
+        if (
+            deferredQueueStatePollOperation === normalizedOperation
+            && (deferredQueueStatePollTimer || deferredQueueStatePollInFlight)
+        ) {
+            return true;
+        }
         stopDeferredQueueStatePoll();
         deferredQueueStatePollOperation = normalizedOperation;
         deferredQueueStatePollDeadline = DEFERRED_QUEUE_STATE_POLL_TTL_MS > 0
@@ -1423,7 +1431,21 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             : 0;
         deferredQueueStatePollSignature = '';
 
+        function scheduleDeferredQueueStatePollNext(initial) {
+            if (!deferredQueueStatePollOperation) {
+                return;
+            }
+            var baseDelay = initial
+                ? DEFERRED_QUEUE_STATE_POLL_INITIAL_DELAY_MS
+                : DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS;
+            var jitter = DEFERRED_QUEUE_STATE_POLL_JITTER_MS > 0
+                ? Math.floor(Math.random() * DEFERRED_QUEUE_STATE_POLL_JITTER_MS)
+                : 0;
+            deferredQueueStatePollTimer = window.setTimeout(tickDeferredQueueStatePoll, baseDelay + jitter);
+        }
+
         function tickDeferredQueueStatePoll() {
+            deferredQueueStatePollTimer = null;
             if (!deferredQueueStatePollOperation || deferredQueueStatePollInFlight) {
                 return;
             }
@@ -1446,11 +1468,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 // The next tick retries; stale responses are never buffered.
             }).then(function () {
                 deferredQueueStatePollInFlight = false;
+                scheduleDeferredQueueStatePollNext(false);
             });
         }
 
-        tickDeferredQueueStatePoll();
-        deferredQueueStatePollTimer = window.setInterval(tickDeferredQueueStatePoll, DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS);
+        scheduleDeferredQueueStatePollNext(true);
         return true;
     }
 
@@ -1524,7 +1546,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }), status), { level: 'progress' });
         }
         var operationResumed = resumeOperationStreamForQueueWatch(operation, Object.assign({ state: state }, state), sourceTag || 'load-bootstrap');
-        if (shouldSyncUi) {
+        if (shouldSyncUi && !operationResumed) {
             startDeferredQueueStatePoll(operation);
         }
         if (shouldPreferWorkspaceStreamForQueueWatch(operation, state)) {
@@ -3612,9 +3634,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 operation: operation,
                 message: fallbackMessage
             }, 'warning', fallbackMessage);
-            ensureWorkspaceStreamRunning('transport-error');
-            resumeOperationStreamForQueueWatch(operation, readCachedWorkspaceState() || {}, 'transport-error');
-            startDeferredQueueStatePoll(operation);
+            var streamRecovered = ensureWorkspaceStreamRunning('transport-error')
+                || resumeOperationStreamForQueueWatch(operation, readCachedWorkspaceState() || {}, 'transport-error');
+            if (!streamRecovered) {
+                startDeferredQueueStatePoll(operation);
+            }
             if (typeof enableNavigationAfterOperation === 'function') {
                 enableNavigationAfterOperation();
             }
@@ -3766,7 +3790,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             if (typeof previewBridge.setBuildNavigationGuard === 'function') {
                 previewBridge.setBuildNavigationGuard(false);
             }
-            toast('success', (payload && payload.message) ? String(payload.message) : (messages.buildReady || '编辑环境已就绪'));
+            toast('success', messages.buildReady || messages.operationDone || 'Editing workspace is ready.');
         });
 
             function handleOperationProgressPayload(payload, logEventType) {
@@ -4134,6 +4158,23 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             clearBlockStreamingState();
         });
 
+        function resolveOperationDoneToastMessage(doneOperation, payload) {
+            var normalized = String(doneOperation || (payload && payload.operation) || operation || '').trim().toLowerCase();
+            if (normalized === 'plan') {
+                return messages.planGenerated || messages.operationDone || 'Plan generated.';
+            }
+            if (normalized === 'build' || normalized === 'virtual_theme') {
+                return messages.buildReady || messages.operationDone || 'Build completed.';
+            }
+            if (normalized === 'publish') {
+                return messages.publishCheckPassed || messages.operationDone || 'Published.';
+            }
+            if (normalized === 'image_asset') {
+                return messages.operationDone || 'Image assets generated.';
+            }
+            return messages.operationDone || 'Operation completed.';
+        }
+
             source.addEventListener('done', function (event) {
             if (settled) {
                 return;
@@ -4177,7 +4218,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                     startObserverSyncTerminalPulse(continueTerminal);
                 }
                 markOperationSseDeferredHandoff(operation, executionToken);
-                ensureWorkspaceStreamRunning('deferred-queue-handoff');
+                if (!ensureWorkspaceStreamRunning('deferred-queue-handoff')) {
+                    startDeferredQueueStatePoll(operation);
+                }
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
@@ -4331,7 +4374,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 return;
             }
 
-            toast('success', (payload && payload.message) ? String(payload.message) : <?= \json_encode((string)__('操作执行完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            toast('success', resolveOperationDoneToastMessage(normalizedDoneOperation, payload));
             logOperationToWorkspaceTerminal('done', payload, 'done', '工作区操作执行完成');
 
             // 操作完成，恢复导航按钮
@@ -4456,7 +4499,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 settled = true;
                 closeOperationSource(source);
                 markOperationSseDeferredHandoff(operation, executionToken);
-                ensureWorkspaceStreamRunning('operation-sse-closed');
+                if (!ensureWorkspaceStreamRunning('operation-sse-closed')) {
+                    startDeferredQueueStatePoll(operation);
+                }
                 if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                     previewBridge.resumeWorkspaceStream();
                 }

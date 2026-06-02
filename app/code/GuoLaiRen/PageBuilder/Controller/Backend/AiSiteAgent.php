@@ -2125,7 +2125,7 @@ class AiSiteAgent extends BaseController
                 'plan_page_types_changed' => !empty($planStartDecision['page_types_changed']),
                 'plan_source_changed' => !empty($planStartDecision['source_signature_changed']),
                 'data' => $this->buildWorkspaceOperationPayload(
-                    $this->buildWorkspaceState($session, $adminId, 24, true),
+                    $this->buildStartPlanLightweightStatePatch($session, $currentScope, $hasPlanDraft),
                     'plan'
                 ),
             ]);
@@ -2181,7 +2181,7 @@ class AiSiteAgent extends BaseController
                 'plan_page_types_changed' => false,
                 'plan_source_changed' => false,
                 'data' => $this->buildWorkspaceOperationPayload(
-                    $this->buildWorkspaceState($session, $adminId, 24, true),
+                    $this->buildStartPlanLightweightStatePatch($session, $currentScope, $hasPlanDraft),
                     'plan'
                 ),
             ]);
@@ -2250,10 +2250,9 @@ class AiSiteAgent extends BaseController
                         'plan_locale_changed' => !empty($planStartDecision['plan_locale_changed']),
                         'plan_page_types_changed' => !empty($planStartDecision['page_types_changed']),
                         'plan_source_changed' => !empty($planStartDecision['source_signature_changed']),
-                        'data' => $this->buildWorkspaceOperationPayload(
-                            $this->buildWorkspaceState($session, $adminId, 24, true),
-                            'plan'
-                        ),
+                        'queue_id' => (int)($result['queue_id'] ?? 0),
+                        'queue_wait' => \is_array($result['queue_wait'] ?? null) ? $result['queue_wait'] : null,
+                        'data' => \is_array($result['data'] ?? null) ? $result['data'] : [],
                     ]);
                 }
                 // 鍚庣璇嗗埆鍒?plan 宸?鍗犱綅"锛屼絾缂哄皯鏈夋晥 execution_token/stream_url锛屾棤娉?SSE 澶嶇敤锛?
@@ -2294,12 +2293,7 @@ class AiSiteAgent extends BaseController
             }
         }
 
-        $responseState = \is_array($result['data'] ?? null)
-            ? $result['data']
-            : $this->buildWorkspaceOperationPayload(
-                $this->buildWorkspaceState($session, $adminId, 24, true),
-                'plan'
-            );
+        $responseState = \is_array($result['data'] ?? null) ? $result['data'] : [];
         return $this->fetchJson([
             'success' => true,
             'message' => (string)__('寤虹珯鏂规鐢熸垚浠诲姟宸插垱寤猴紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涢€氬父绾?1 鍒嗛挓鍐呭紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆'),
@@ -12062,6 +12056,53 @@ class AiSiteAgent extends BaseController
     }
 
     /**
+     * `post-start-plan` should not hydrate the complete workspace just to ask for
+     * confirmation or resume a queued operation. The page already owns full plan
+     * content; this patch carries only status fields needed by the UI.
+     *
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildStartPlanLightweightStatePatch(
+        AiSiteAgentSession $session,
+        array $scope,
+        bool $hasStageOnePlan
+    ): array {
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $workspaceStatus = \trim((string)($scope['workspace_status'] ?? ''));
+        if ($workspaceStatus === '') {
+            $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
+        }
+        $publishStatus = (string)$session->getPublishStatus();
+        $canPublish = !empty($scope['can_publish'])
+            || $workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+            || $publishStatus === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED;
+
+        $state = [
+            'public_id' => (string)$session->getPublicId(),
+            'stage' => AiSiteAgentSession::STAGE_PLAN,
+            'workspace_status' => $workspaceStatus,
+            'publish_status' => $publishStatus,
+            'can_publish' => $canPublish,
+            'latest_build_failed' => !empty($scope['latest_build_failed']),
+            'latest_build_failure' => \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [],
+            'publish_blocked_by_latest_ai_failure' => !empty($scope['publish_blocked_by_latest_ai_failure']),
+            'publish_blocked_reason' => (string)($scope['publish_blocked_reason'] ?? ''),
+            'active_operation' => $activeOperation,
+            'plan_confirmed' => (int)($scope['plan_confirmed'] ?? 0),
+            'plan_confirmed_at' => (string)($scope['plan_confirmed_at'] ?? ''),
+            'confirmed_plan_signature' => (string)($scope['confirmed_plan_signature'] ?? ''),
+            'has_stage_one_plan' => $hasStageOnePlan,
+        ];
+        $executionToken = \trim((string)($activeOperation['execution_token'] ?? ''));
+        if ($executionToken !== '') {
+            $state['plan_sse_url'] = $this->buildOperationStreamUrl($session->getPublicId(), $executionToken);
+        }
+
+        return \array_replace($state, $this->buildWorkspaceStatusEnvelope($state, 'queue'));
+    }
+
+    /**
      * Confirmation requests only need a compact state patch for the current UI.
      * Sending the full workspace state here resends large plan/scope/event
      * payloads that the browser already has in memory.
@@ -13771,16 +13812,44 @@ class AiSiteAgent extends BaseController
                 ];
             }
             if ($operation === 'plan' || $runningOperation === 'plan') {
+                $runningQueueId = (int)($runningOperationState['queue_id'] ?? 0);
+                $runningQueueRow = null;
+                if ($runningQueueId > 0) {
+                    try {
+                        $runningQueueRow = $this->findAiSiteQueueRowById($runningQueueId);
+                    } catch (\Throwable) {
+                        $runningQueueRow = null;
+                    }
+                    if (\is_object($runningQueueRow) && \method_exists($runningQueueRow, 'getData')) {
+                        $runningQueueRow = $runningQueueRow->getData();
+                    }
+                }
+                $runningOperationForState = $runningOperation !== '' ? $runningOperation : $operation;
+                $runningState = $this->buildQueuedOperationState(
+                    $session,
+                    $stage,
+                    $runningOperationForState,
+                    $runningOperationState,
+                    \is_array($runningQueueRow) ? $runningQueueRow : null
+                );
+
                 return [
                     'success' => false,
                     'http_status' => 409,
                     'status_code' => 409,
                     'message' => __('褰撳墠宸叉湁姝ｅ湪鎵ц鐨勫缓绔欐柟妗堢敓鎴愶紝璇峰厛绛夊緟瀹屾垚'),
-                    'operation' => $runningOperation,
+                    'operation' => $runningOperationForState,
                     'execution_token' => $runningExecutionToken,
-                    'stream_url' => ($runningOperation !== '' && $runningExecutionToken !== '')
+                    'stream_url' => ($runningOperationForState !== '' && $runningExecutionToken !== '')
                         ? $this->buildOperationStreamUrl($session->getPublicId(), $runningExecutionToken)
                         : '',
+                    'queue_id' => $runningQueueId,
+                    'data' => $runningState,
+                    'queue_wait' => $this->buildAiSiteQueueSchedulerWaitPayload(
+                        $runningOperationForState,
+                        $runningQueueId,
+                        'existing_active_operation'
+                    ),
                 ];
             }
             if ($this->isAiSiteQueueBackedOperation($operation) && $this->isAiSiteQueueBackedOperation($runningOperation)) {
@@ -14410,7 +14479,7 @@ class AiSiteAgent extends BaseController
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $state = $this->buildWorkspaceState($fresh, $adminId, 24, true);
+        $state = $this->buildQueuedOperationState($fresh, $stage, $runningOperation, $activeOperation, $queueRow);
         $streamUrl = $executionToken !== '' ? $this->buildOperationStreamUrl($fresh->getPublicId(), $executionToken) : '';
 
         return [
@@ -14431,7 +14500,7 @@ class AiSiteAgent extends BaseController
                 'stream_url' => $streamUrl,
                 'queue_id' => $queueId,
             ],
-            'data' => $this->buildWorkspaceOperationPayload($state, $runningOperation),
+            'data' => $state,
             'queue_wait' => $this->buildAiSiteQueueSchedulerWaitPayload($runningOperation, $queueId, 'existing_active_queue'),
         ];
     }
@@ -15015,15 +15084,25 @@ class AiSiteAgent extends BaseController
             || !empty($queueInfo['retry_allowed'])
             || \in_array(\trim((string)($queueInfo['semantic_status'] ?? '')), ['cancelled', 'canceled', 'stale'], true)
         );
+        $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+        if ($activeOperationStatus === 'pending') {
+            $activeOperationStatus = 'queued';
+        } elseif ($activeOperationStatus === 'processing') {
+            $activeOperationStatus = 'running';
+        }
         $operationStatus = \in_array($queueStatus, ['pending', 'queued', 'running'], true)
             ? ($queueStatus === 'running' ? 'running' : 'queued')
-            : (\trim((string)($activeOperation['status'] ?? '')) ?: 'queued');
+            : ($activeOperationStatus ?: 'queued');
         if ($queueRecoveredForRetry) {
             $operationStatus = 'cancelled';
         }
 
         $queueProcessLine = \is_array($queueRow) ? \trim((string)($queueRow['process'] ?? '')) : '';
-        $waitingForScheduler = !$queueRecoveredForRetry && ($queueStatus === '' || \in_array($queueStatus, ['pending', 'queued'], true));
+        $waitingForScheduler = !$queueRecoveredForRetry && (
+            $queueStatus === ''
+                ? $operationStatus !== 'running'
+                : \in_array($queueStatus, ['pending', 'queued'], true)
+        );
         $queuedMessage = $waitingForScheduler
             ? (string)__('鎿嶄綔宸茶繘鍏ョ郴缁熼槦鍒楋紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涘ぇ閮ㄥ垎鎯呭喌绾?1 鍒嗛挓鍚庡紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆')
             : ($queueStatus === 'running'

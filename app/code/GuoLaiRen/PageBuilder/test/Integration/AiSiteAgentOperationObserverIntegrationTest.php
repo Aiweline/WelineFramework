@@ -895,8 +895,11 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
 
         $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
         self::assertIsArray($queue);
-        self::assertSame('pending', (string)($queue['status'] ?? ''));
-        self::assertSame(0, (int)($queue['pid'] ?? 0));
+        $queueStatus = (string)($queue['status'] ?? '');
+        self::assertContains($queueStatus, ['pending', 'running'], \json_encode($queue, \JSON_UNESCAPED_UNICODE));
+        if ($queueStatus === 'pending') {
+            self::assertSame(0, (int)($queue['pid'] ?? 0));
+        }
 
         $queueContent = \is_array($queue['content'] ?? null)
             ? $queue['content']
@@ -904,7 +907,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertIsArray($queueContent);
         self::assertSame('stage1.requirement_expand', (string)($queueContent['job_type'] ?? ''));
         self::assertStringStartsWith('glr_aisite:session:' . (int)$session->getId() . ':job:stage1.requirement_expand', (string)($queueContent['job_key'] ?? ''));
-        self::assertSame('queued', (string)($queueContent['status'] ?? ''));
+        self::assertContains((string)($queueContent['status'] ?? ''), ['queued', 'running']);
         self::assertSame((string)($activeOperation['execution_token'] ?? ''), (string)($queueContent['token'] ?? ''));
         self::assertSame((string)($queueContent['job_key'] ?? ''), (string)($activeOperation['job_key'] ?? ''));
         self::assertSame((string)($queueContent['job_type'] ?? ''), (string)($activeOperation['job_type'] ?? ''));

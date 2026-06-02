@@ -1,0 +1,18 @@
+# Fix: AI Site post-start-plan Queue Handoff Latency
+
+## Problem
+
+`post-start-plan` is a queue handoff endpoint. It should persist the requested scope, create or reuse the PageBuilder AI queue row, and return the queue/SSE metadata needed by the browser.
+
+Some start-plan response branches were still hydrating the full workspace state through `buildWorkspaceState(..., true)`. On large AI site sessions this can resend plan content, page state, assets, events, and queue summaries before the HTTP response is returned. Online this makes the start request look blocked even though the AI work is supposed to run in the background queue.
+
+## Fix
+
+- Confirmation and reuse responses now use a compact start-plan state patch.
+- Running plan reuse responses now reuse the queue-oriented state returned by `startOperation`.
+- Existing active queue guard responses now return `buildQueuedOperationState(...)` directly instead of wrapping a full workspace state.
+- Scheduler-aware integration assertions allow the system scheduler to move the queue from `pending` to `running` before the test reads it, while still asserting that the controller did not self-dispatch the queue.
+
+## Contract
+
+Start endpoints such as `post-start-plan` should not call full workspace hydration as a fallback for queue start responses. Full workspace state is still available through the workspace state/polling endpoints; queue start responses should carry only operation status, `execution_token`, `stream_url`, `queue_id`, and `queue_wait` data.
