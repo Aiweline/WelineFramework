@@ -34,9 +34,8 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
         self::assertStringContainsString('private const IMAGE_GENERATION_TIMEOUT_SECONDS = 20;', $assetSource);
         self::assertStringContainsString('private const IMAGE_GENERATION_MAX_ATTEMPTS = 1;', $assetSource);
         self::assertStringContainsString("'image_generation_max_attempts' => 1", $controllerSource);
-        self::assertStringContainsString("'max_image_generation_attempts' => 1", $controllerSource);
-        self::assertStringContainsString("'image_timeout' => 20", $controllerSource);
-        self::assertStringContainsString("'timeout' => 20", $controllerSource);
+        self::assertStringContainsString("'image_timeout' => \$imageTimeout", $assetSource);
+        self::assertStringContainsString("'timeout' => \$imageTimeout", $assetSource);
     }
 
     public function testBuildQueuePromptUsesCompactOnePassContractInsteadOfDuplicatingLongContract(): void
@@ -813,12 +812,9 @@ HTML;
         self::assertNull($reason);
     }
 
-    public function testGeneratedCssContrastGateRejectsDarkTextOnDarkBackground(): void
+    public function testGeneratedCssContrastGateDoesNotBlockDarkTextOnDarkBackground(): void
     {
         $service = new AiSitePageComponentGenerationService();
-
-        $this->expectException(\GuoLaiRen\PageBuilder\Exception\AiSiteComponentContractException::class);
-        $this->expectExceptionMessage('visual contrast contract failed');
 
         (function (): void {
             $this->assertGeneratedCssTextContrastContract([
@@ -826,6 +822,8 @@ HTML;
                 'css_content' => '',
             ], 'content/home-hero');
         })->call($service);
+
+        self::assertTrue(true);
     }
 
     public function testGeneratedCssContrastGateAcceptsLightTextOnDarkBackground(): void

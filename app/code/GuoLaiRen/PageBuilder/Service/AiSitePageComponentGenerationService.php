@@ -31,7 +31,7 @@ class AiSitePageComponentGenerationService
     public const RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER = '_allow_deterministic_content_compiler';
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
     private const COMPONENT_GENERATION_MAX_ATTEMPTS = 3;
-    // Hard completion checks only block visitor-visible prompt/blueprint/placeholder leaks.
+    // Hard completion checks only block malformed component structure.
     private const ENFORCE_COMPONENT_QUALITY_VALIDATION = false;
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
     private const COMPONENT_CSS_CLASS_SCOPE_FALLBACK = 'pb-ai-site-component';
@@ -5188,7 +5188,7 @@ class AiSitePageComponentGenerationService
         $shouldLog = (bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)
             || $attempt >= 2
             || \str_contains($summaryLower, 'editable field contract')
-            || \str_contains($summaryLower, 'structure/prompt policy')
+            || \str_contains($summaryLower, 'structure policy')
             || \str_contains($summaryLower, 'hard policy')
             || \str_contains($summaryLower, 'visual contrast')
             || \str_contains($summaryLower, 'cta/action')
@@ -5679,8 +5679,8 @@ PROMPT
             'HTML class scope contract failed',
             'CSS structure contract failed',
             'CSS class scope contract failed',
-            'content hard policy failed',
-            'structure/prompt policy failed',
+            'structure hard policy failed',
+            'structure policy failed',
             'visual contract failed',
             'hero image contract failed',
             'hero image cover CSS contract failed',
@@ -6071,7 +6071,7 @@ PROMPT
                 $this->resolveGeneratedContentLocaleForPolicy($renderContext, $defaultConfig)
             );
             if ($hardPolicyReason !== null) {
-                throw new \RuntimeException('AI component content hard policy failed: ' . $hardPolicyReason);
+                throw new \RuntimeException('AI component structure hard policy failed: ' . $hardPolicyReason);
             }
             $actionContractReason = $this->detectCtaActionContractViolation(
                 (string)($aiData['html_content'] ?? ''),
@@ -6080,7 +6080,7 @@ PROMPT
             if ($actionContractReason !== null) {
                 throw new \RuntimeException('AI component CTA/action contract failed: ' . $actionContractReason);
             }
-            $this->assertGeneratedCssTextContrastContract($aiData, $componentCode);
+            // Visual contrast is browser QA/design guidance, not a hard structure gate.
             // Policy-page CTA choices are content strategy, not a hard completion gate.
         }
 
@@ -6091,13 +6091,13 @@ PROMPT
             $lowQualityCssSource = (string)($aiData['css_extra'] ?? '')
                 . "\n" . (string)($aiData['css_responsive'] ?? '')
                 . "\n" . (string)($aiData['css_content'] ?? '');
-            $lowQualityReason = $this->detectLowQualityGeneratedSectionHtmlReason(
+            $lowQualityReason = $this->detectStructuralGeneratedSectionHtmlReason(
                 $lowQualityInspectionSource,
                 $this->mergeSemanticComponentCode($componentCode, $semanticComponentCode),
                 $lowQualityCssSource
             );
             if ($lowQualityReason !== null) {
-                throw new \RuntimeException('AI component structure/prompt policy failed: ' . $lowQualityReason);
+                throw new \RuntimeException('AI component structure policy failed: ' . $lowQualityReason);
             }
         }
 
@@ -6109,6 +6109,9 @@ PROMPT
      */
     private function assertGeneratedCssTextContrastContract(array $aiData, string $componentCode): void
     {
+        // Visual contrast is prompt guidance and browser QA, not a hard structure gate.
+        return;
+
         $css = \trim((string)($aiData['css_extra'] ?? '') . "\n" . (string)($aiData['css_content'] ?? ''));
         if ($css === '') {
             return;
@@ -8710,7 +8713,7 @@ PROMPT;
         $html = $this->repairHtmlFragmentTagBalance($html);
         $hardPolicyReason = $this->detectHardGeneratedSectionHtmlPolicyViolation($html);
         if ($hardPolicyReason !== null) {
-            throw new \RuntimeException('AI component content hard policy failed: ' . $hardPolicyReason);
+            throw new \RuntimeException('AI component structure hard policy failed: ' . $hardPolicyReason);
         }
         $this->assertNoBrokenGeneratedImageReferences($html, $verifiedAssets);
         $html = \preg_replace('/\s{2,}/u', ' ', $html) ?? $html;
@@ -9236,44 +9239,24 @@ PROMPT;
         return \str_replace('?>', '', $html);
     }
 
-    private function isLowQualityGeneratedSectionHtml(string $html): bool
-    {
-        return $this->detectLowQualityGeneratedSectionHtmlReason($html) !== null;
-    }
-
     private function detectHardGeneratedSectionHtmlPolicyViolation(string $html, string $locale = ''): ?string
     {
+        unset($locale);
+
         $trimmed = \trim($html);
         if ($trimmed === '') {
             return null;
         }
 
-        if (\preg_match('/\bai-site-fallback\b|Image Placeholder|Text-to-image is not connected yet/iu', $trimmed) === 1) {
-            return 'plan-derived fallback visual leaked into generated content';
+        if (\preg_match('/<\s*(?:!doctype|html|head|body)\b|<\/\s*(?:html|head|body)\s*>/iu', $trimmed) === 1) {
+            return 'component html_content must be an embeddable fragment, not a full HTML document';
         }
 
-        // Inspect only visitor-visible text so valid URL and slot attributes do not false-positive.
-        $visibleText = $this->extractVisibleHtmlText($trimmed);
-        $locale = \trim($locale);
-        if ($locale !== '' && $this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($visibleText)) {
-            return 'non-target CJK copy leaked into visitor content for locale '
-                . $locale
-                . ': '
-                . $this->clipText($visibleText, 180);
+        $tagStructureReason = $this->detectHtmlTagStructureViolation($trimmed);
+        if ($tagStructureReason !== null) {
+            return $tagStructureReason;
         }
-        if ($this->containsVisibleRawHtmlFragment($visibleText)) {
-            return 'raw HTML fragment leaked into visitor content';
-        }
-        if (\preg_match('/AI content placeholder|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script|\$[a-z_][a-z0-9_]*|=>|===/iu', $visibleText) === 1) {
-            return 'prompt or placeholder text leaked';
-        }
-        $contactPlaceholderReason = $this->detectInvalidContactPlaceholderVisibleCopy($visibleText);
-        if ($contactPlaceholderReason !== null) {
-            return $contactPlaceholderReason;
-        }
-        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
-            return 'internal task identifiers leaked';
-        }
+
         return null;
     }
 
@@ -9604,156 +9587,191 @@ PROMPT;
         return \trim((string)\preg_replace('/\s+/u', ' ', $body));
     }
 
-    private function detectInlineSvgGeneratedSectionViolation(string $html): ?string
+    private function detectStructuralGeneratedSectionHtmlReason(string $html, ?string $componentCode = '', string $styleCss = ''): ?string
     {
-        if (\preg_match('/\bai-site-fallback\b|Image Placeholder|Text-to-image is not connected yet/iu', $html) === 1) {
-            return 'plan-derived fallback visual leaked into generated content';
-        }
+        unset($styleCss);
 
-        return null;
-    }
-
-    private function detectLowQualityGeneratedSectionHtmlReason(string $html, ?string $componentCode = '', string $styleCss = ''): ?string
-    {
         $trimmed = \trim($html);
         if ($trimmed === '') {
             return 'empty html';
         }
-        if (\preg_match('/\bai-site-fallback\b|Image Placeholder|Text-to-image is not connected yet/iu', $trimmed) === 1) {
-            return 'plan-derived fallback visual leaked into generated content';
+
+        $tagStructureReason = $this->detectHtmlTagStructureViolation($trimmed);
+        if ($tagStructureReason !== null) {
+            return $tagStructureReason;
         }
-        $plain = \trim((string)\preg_replace('/\s+/u', ' ', \strip_tags($trimmed)));
-        $visibleText = $this->extractVisibleHtmlText($trimmed);
-        if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script/iu', $visibleText) === 1) {
-            return 'prompt or placeholder text leaked';
-        }
-        $contactPlaceholderReason = $this->detectInvalidContactPlaceholderVisibleCopy($visibleText);
-        if ($contactPlaceholderReason !== null) {
-            return $contactPlaceholderReason;
-        }
-        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
-            return 'internal task identifiers leaked';
+
+        $nestedContainerReason = $this->detectNestedRepeatedContentContainerViolation($trimmed);
+        if ($nestedContainerReason !== null) {
+            return $nestedContainerReason;
         }
 
         $componentCode = $this->normalizeOptionalComponentCode($componentCode);
-        $isNavigationComponent = \preg_match('/(?:nav|menu|tabs?|filter|selector|series)/i', $componentCode . ' ' . $trimmed) === 1
-            || \preg_match('/<(?:nav|a|button)\b/iu', $trimmed) === 1;
-        $minimumVisibleTextLength = $isNavigationComponent ? 0 : 18;
-        if (!$isNavigationComponent && ($plain === '' || \mb_strlen($plain) < $minimumVisibleTextLength)) {
-            return 'insufficient visitor-facing text';
-        }
-        $visibleText = $this->extractVisibleHtmlText($trimmed);
-        if (\preg_match('/AI content placeholder|ai-empty|placeholder\s+(?:content|copy|section|text|block|image|visual)|example\.com|Generated visual|Visual preview generated|Generated website section|Website content language|visitor-visible copy|Do not use the|Return ONLY|prompt text|customer brief|website requirement|planning\/plan language|stage-2 planned text|source intent|Built from plan|generated from plan|confirmed stage-one content|content_fill_rule|field_content_requirements|stage3_directive|task_script/iu', $visibleText) === 1) {
-            return 'prompt or placeholder text leaked';
-        }
-        $contactPlaceholderReason = $this->detectInvalidContactPlaceholderVisibleCopy($visibleText);
-        if ($contactPlaceholderReason !== null) {
-            return $contactPlaceholderReason;
-        }
-        $roleFidelityReason = $this->detectBlockRoleFidelityViolation($componentCode, $trimmed, $visibleText, $styleCss);
-        if ($roleFidelityReason !== null) {
-            return $roleFidelityReason;
-        }
         $ctaActionReason = $this->detectCtaActionContractViolation($trimmed, $componentCode);
         if ($ctaActionReason !== null) {
             return $ctaActionReason;
-        }
-        $readabilityReason = $this->detectLabelValueReadabilityViolation($trimmed, $visibleText, $componentCode);
-        if ($readabilityReason !== null) {
-            return $readabilityReason;
-        }
-        if ($this->containsEnglishBoilerplateVisibleCopy($visibleText)) {
-            return 'English boilerplate copy leaked into visitor content';
-        }
-        $genericCtaReason = $this->detectGenericCtaIntentViolation($visibleText, $componentCode);
-        if ($genericCtaReason !== null) {
-            return $genericCtaReason;
-        }
-        if (!$isNavigationComponent) {
-            $typographyReason = $this->detectTypographyQualityViolation($styleCss);
-            if ($typographyReason !== null) {
-                return $typographyReason;
-            }
-        }
-
-        if (\preg_match('/\b(?:AI_GENERATED_[A-Z0-9_]+|task_key|section_code|block_key|page_type|plan_locale|runtime_context|content\/[a-z0-9_\/-]+|app\/code\/[a-z0-9_\/-]+|var\/[a-z0-9_\/-]+|home_page|about_page|shared:[a-z0-9:_\/-]+|page:[a-z0-9:_\/-]+)\b/iu', $visibleText) === 1) {
-            return 'internal task identifiers leaked';
-        }
-
-        if ($this->containsPlanningObservationCopy($plain)) {
-            return 'planning observation copy leaked into visitor content';
-        }
-        if (\preg_match('/\d(?:[.,]\d+)?(?:Hours?|Steps?|Years?|Days?|Rating|Reviews?|Support|Downloads?|Projects?|Clients?|Products?)\b/u', $visibleText) === 1) {
-            return 'missing whitespace between number and visible label';
         }
 
         if (\preg_match('/<(h[1-6]|p|a)\b[^>]*>\s*<\/\1>/iu', $trimmed) === 1) {
             return 'empty visitor element';
         }
-        if (\preg_match('/<a\b(?![^>]*\bclass\s*=)[^>]*>/iu', $trimmed) === 1
-            && !$this->hasVisitorArticleListStructure($trimmed)
-        ) {
-            return 'unstyled browser-default link leaked into visitor content';
-        }
-        if (\preg_match('/>\s*(?:[\p{S}\p{P}\s]{3,})\s*</u', $trimmed) === 1
-            && \preg_match('/[\p{L}\p{N}]/u', $visibleText) !== 1
-        ) {
-            return 'symbol-only decorative control leaked into visitor content';
+
+        return null;
+    }
+
+    private function detectHtmlTagStructureViolation(string $html): ?string
+    {
+        $html = \trim($html);
+        if ($html === '') {
+            return null;
         }
 
-        $hasVisual = \preg_match('/class=["\'][^"\']*(?:card|visual|panel|media|grid|badge|support|proof|stat|metric|rail|timeline|process|comparison|callout|motif|orbit|shape|detail|cluster)[^"\']*/iu', $trimmed) === 1;
-        $hasRealCopy = \mb_strlen($plain) >= 32;
-        $hasVisitorLinkCluster = $this->hasVisitorLinkCluster($trimmed);
-        $hasVisitorArticleList = $this->hasVisitorArticleListStructure($trimmed);
+        $voidTags = \array_fill_keys([
+            'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+            'link', 'meta', 'param', 'source', 'track', 'wbr',
+        ], true);
+        if (\preg_match_all('/<\s*(\/?)\s*([a-z][a-z0-9:-]*)\b([^<>]*?)(\/?)\s*>/isu', $html, $matches, \PREG_SET_ORDER) < 1) {
+            return null;
+        }
 
-        if (!$hasVisual && !$hasRealCopy && !$hasVisitorLinkCluster && !$hasVisitorArticleList) {
-            return 'missing real copy, visual hierarchy, or visitor content structure';
+        $stack = [];
+        foreach ($matches as $match) {
+            $closing = (string)($match[1] ?? '') === '/';
+            $tag = \strtolower((string)($match[2] ?? ''));
+            if ($tag === '') {
+                continue;
+            }
+
+            if ($closing) {
+                $expected = \end($stack);
+                if ($expected === false) {
+                    return 'unexpected closing HTML tag: </' . $tag . '>';
+                }
+                if ($expected !== $tag) {
+                    return 'mismatched HTML closing tag: expected </' . $expected . '> before </' . $tag . '>';
+                }
+                \array_pop($stack);
+                continue;
+            }
+
+            $selfClosing = (string)($match[4] ?? '') === '/' || isset($voidTags[$tag]);
+            if (!$selfClosing) {
+                $stack[] = $tag;
+            }
         }
-        if ($this->looksLikeSparseOversizedSection($trimmed, $plain)) {
-            return 'oversized low-density section with too much empty space';
+
+        if ($stack === []) {
+            return null;
         }
-        if ($this->looksLikeThinNonHeroTextOnlySection($trimmed, $plain, $componentCode)) {
-            return 'non-hero section lacks support/proof visual devices';
+
+        $unclosed = [];
+        foreach ($stack as $tag) {
+            $unclosed[$tag] = ($unclosed[$tag] ?? 0) + 1;
         }
-        if ($this->looksLikeSparseProofOnlyNonHeroSection($trimmed, $plain, $componentCode)) {
-            return 'non-hero proof/support group is too sparse for a premium section';
+        \ksort($unclosed);
+
+        $parts = [];
+        foreach ($unclosed as $tag => $count) {
+            $parts[] = $tag . '(' . $count . ')';
         }
-        if ($this->looksLikeTabletCollapsedProofOnlyNonHeroSection($trimmed, $plain, $componentCode, $styleCss)) {
-            return 'non-hero proof/support group collapses into full-width strips at tablet preview width';
+
+        return 'unclosed HTML tags: ' . \implode(', ', $parts);
+    }
+
+    private function detectNestedRepeatedContentContainerViolation(string $html): ?string
+    {
+        if (\trim($html) === '') {
+            return null;
         }
-        if ($this->looksLikeCenteredProofOnlyNonHeroSection($trimmed, $plain, $componentCode, $styleCss)) {
-            return 'non-hero proof/support section is a centered text stack instead of an editorial layout';
+
+        $voidTags = \array_fill_keys([
+            'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+            'link', 'meta', 'param', 'source', 'track', 'wbr',
+        ], true);
+        /** @var list<array{tag:string,classes:array<string,bool>}> $stack */
+        $stack = [];
+        if (\preg_match_all('/<\s*(\/?)\s*([a-z][a-z0-9:-]*)\b([^<>]*?)(\/?)\s*>/isu', $html, $matches, \PREG_SET_ORDER) < 1) {
+            return null;
         }
-        if ($this->looksLikeTabletOrphanProofGrid($trimmed, $plain, $componentCode, $styleCss)) {
-            return 'non-hero proof/support group creates an orphan 2+1 grid at tablet preview width';
-        }
-        if ($this->looksLikeOverPaddedProofOnlyNonHeroSection($trimmed, $plain, $componentCode, $styleCss)) {
-            return 'non-hero proof/support section has excessive empty padding for its content density';
-        }
-        if ($this->looksLikeDetachedNonHeroCtaAfterSupport($trimmed, $componentCode)) {
-            return 'non-hero CTA is detached after the support/proof group';
-        }
-        if ($this->looksLikeSparseMetricCards($trimmed, $plain)) {
-            return 'metric cards are oversized and lack supporting proof copy';
-        }
-        if ($this->looksLikeIsolatedCtaIsland($trimmed, $plain)) {
-            return 'CTA is isolated inside a mostly empty section';
-        }
-        if ($this->looksLikeStretchedCtaBar($trimmed)) {
-            return 'CTA is rendered as a full-width bar instead of a compact action button';
-        }
-        $ctaSpacingReason = $this->detectCtaSpacingRhythmViolation($trimmed, $styleCss);
-        if ($ctaSpacingReason !== null) {
-            return $ctaSpacingReason;
-        }
-        if (\str_contains(\strtolower($componentCode), 'strict_hero_cover')) {
-            $heroReason = $this->detectHeroBannerQualityViolation($trimmed . "\n" . $styleCss);
-            if ($heroReason !== null) {
-                return $heroReason;
+
+        foreach ($matches as $match) {
+            $closing = (string)($match[1] ?? '') === '/';
+            $tag = \strtolower((string)($match[2] ?? ''));
+            if ($tag === '') {
+                continue;
+            }
+
+            if ($closing) {
+                for ($index = \count($stack) - 1; $index >= 0; --$index) {
+                    if (($stack[$index]['tag'] ?? '') !== $tag) {
+                        continue;
+                    }
+                    $stack = \array_slice($stack, 0, $index);
+                    break;
+                }
+                continue;
+            }
+
+            $classes = $this->extractRepeatedContentContainerClassesFromTagAttributes((string)($match[3] ?? ''));
+            foreach (\array_keys($classes) as $className) {
+                foreach ($stack as $entry) {
+                    if (!isset($entry['classes'][$className])) {
+                        continue;
+                    }
+                    return 'nested repeated content container: .' . $className
+                        . ' appears inside another .' . $className
+                        . '; repeated cards/items/panels must be sibling elements with balanced closing tags';
+                }
+            }
+
+            $selfClosing = (string)($match[4] ?? '') === '/' || isset($voidTags[$tag]);
+            if (!$selfClosing) {
+                $stack[] = ['tag' => $tag, 'classes' => $classes];
             }
         }
 
         return null;
+    }
+
+    /**
+     * @return array<string,bool>
+     */
+    private function extractRepeatedContentContainerClassesFromTagAttributes(string $attributes): array
+    {
+        if ($attributes === ''
+            || \preg_match('/\bclass\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))/isu', $attributes, $match) !== 1
+        ) {
+            return [];
+        }
+
+        $classValue = '';
+        foreach ([1, 2, 3] as $index) {
+            if (!isset($match[$index]) || (string)$match[$index] === '') {
+                continue;
+            }
+            $classValue = (string)$match[$index];
+            break;
+        }
+        $classValue = \html_entity_decode($classValue, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+        $tokens = \preg_split('/\s+/u', \trim($classValue)) ?: [];
+        $classes = [];
+        foreach ($tokens as $token) {
+            $className = \trim((string)$token);
+            if ($className === '' || !$this->isRepeatedContentContainerClass($className)) {
+                continue;
+            }
+            $classes[\strtolower($className)] = true;
+        }
+
+        return $classes;
+    }
+
+    private function isRepeatedContentContainerClass(string $className): bool
+    {
+        return \preg_match(
+            '/^pb-c-(?:[a-z0-9]+-)*(?:card|item|panel|tile|review|testimonial|quote|step|feature|stat|channel|method|field|entry|row)$/iu',
+            $className
+        ) === 1;
     }
 
     private function detectTypographyQualityViolation(string $styleCss): ?string
@@ -14098,7 +14116,7 @@ JSON;
             . "- HTML_IN_JSON: html_content must be parsed markup, not visible source text. The decoded html_content string should begin with `<section`; do not output legacy skeleton labels, raw `<section ...>` examples, `class='...'`, CSS declarations, or escaped `&lt;section` as visitor-visible copy.\n"
             . "- Visitor text node contract: for content blocks, h2/p/small/span/div/button/a label text must be rendered as safe PHP field echoes backed by extra_fields/php_variables. The rendered defaults should be final customer-facing copy in the target locale, never JSON keys, prompt labels, slot ids, raw tag snippets, CSS source, or framework/build-plan identifiers.\n"
             . "- Visible comparison text: never use raw `<` or `>` characters in visitor copy for time, amount, or comparison wording. Write the phrase in words in the target locale instead, such as within 5 minutes / under 5 minutes. Raw `<5分钟` or `>24h` breaks HTML parsing.\n"
-            . "- Visible output contract scope: the generator is not hard-gated on source-truth factuality for marketing/support/reward wording. Blocking validation is limited to required JSON/HTML structure plus visible prompts, contracts, blueprint fields, placeholders, malformed contact fragments such as `support@ .com`, or internal example values. Rewrite those into final target-locale website copy.\n"
+            . "- Visible output contract scope: the generator is not hard-gated on source-truth factuality, wording quality, language polish, placeholders, prompt-like copy, or normal marketing/support/reward text. Blocking validation is limited to JSON shape, embeddable/balanced HTML structure, action/link/control structure, required editable image binding, and executable CSS syntax. Rewrite prompt-like or placeholder copy into final target-locale website copy as guidance, not because PHP will reject the content.\n"
             . "- Form placeholder source lock: placeholder/value attributes are visitor-visible copy and must render from safe PHP field echoes backed by extra_fields/php_variables, exactly like text nodes. Do not output example emails such as example@email.com, fake phone numbers, sample names, or English placeholder text for a non-English site; use localized generic prompts for name, email, and issue description.\n"
             . "- Contact channel value contract: exact email, phone, WhatsApp, handle, address, or domain values may appear only when that exact value is present in the frozen task context or approved site profile. If no exact value is supplied, use final localized non-numeric guidance such as the official in-app help center, secure message form, or live support channel. Never invent +91 98765 43210, 1234567890, 1800..., 800..., 000..., support@example.com, support@ .com, example domains, or sample handles.\n"
             . "- HTML fragments must be balanced and embeddable: close every non-void tag, do not output full <html>/<head>/<body> documents, and do not leave stray closing tags.\n"
@@ -14118,6 +14136,8 @@ JSON;
             . "- Typography guidance: css_extra should explicitly style both `#componentId .pb-c-title` and at least one body/root selector (`#componentId .pb-c-root`, `#componentId .pb-c-copy`, or `#componentId .pb-c-text`) with brand-appropriate font-family stacks. Use a named family first, then generic fallback when practical.\n"
             . "- Color contrast: never pair dark foreground text with dark backgrounds or light foreground text with light backgrounds; define readable text/CTA/focus states in CSS before returning.\n"
             . "- Content links/actions: generated content blocks should use `<a class='pb-c-cta'>` only when the href is a real CTX_CTA_ACTION_CONTRACT target or exactly appears in allowed_internal_paths. If no real route is available but a primary action is required, use `<button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'>` and component-scoped js_content to emit the action event. Never output `href='#'`, hash-only anchors, invented internal paths, query strings, download routes, FAQ routes, game routes, or wrap a card/div/grid/panel/section inside an `<a>` or `<button>`.\n"
+            . "- Repeated-card structure recipe: repeated content containers such as `.pb-c-card`, `.pb-c-item`, `.pb-c-panel`, `.pb-c-review`, `.pb-c-faq-item`, and `.pb-c-channel` must be direct sibling children of one rail/grid/list wrapper. Each item must close before the next item opens. A testimonial/review card should use clear internal layers: card header/author, compact meta/rating row, then a separate quote/body paragraph below that row; never put the quote paragraph inside the star/meta row, and never start the next `.pb-c-card` before the previous card's body and wrapper are closed.\n"
+            . "- Repeated-card self-check: before returning JSON, scan html_content from left to right. The valid shape is `div.pb-c-rail > div.pb-c-card ... </div> + div.pb-c-card ... </div> + div.pb-c-card ... </div>`. If one `.pb-c-card` appears while another `.pb-c-card` is still open, rewrite the HTML skeleton instead of relying on renderer repair.\n"
             . "- Page hierarchy: do not make the section one flat theme-color slab. Use palette roles, surface elevation, dividers, texture, cards, or spacing to distinguish this block from adjacent blocks.\n"
             . "- CSS class names: never use generic selectors like .card, .icon, .btn, .title, .item, .panel, .row, .container, .section, .text, .image, or .active. Use only the exact component prefix supplied later, shaped like pb-c-element, scope selectors with #componentId, and keep CSS selectors and HTML class attributes in sync. The html_content fragment is nested inside #componentId, so CSS must use descendant selectors such as `#componentId .pb-c-root`; do not write `#componentId.pb-c-root` unless the framework root itself has that class, which it will not.\n"
             . "- Images: never output broken image placeholders or visible placeholder labels. If no verified asset URL is provided, create visual rhythm with CSS-only shapes/pseudo-elements or omit media; do not use empty src, example.com, placeholder services, stock-photo services, external CDN/stock URLs, or unverified .jpg/.png/.webp URLs. If a verified asset URL is provided, put it in media.image_url as the editable field default/fallback and render a real <img> from that field.\n"
@@ -14520,6 +14540,7 @@ JSON;
             . "- Section recipe: {$recipe}\n"
             . "- Heading semantics rule: opening, hero, above-fold, and page-intro blocks must render exactly one `<h1 class='pb-c-title'>`; non-opening content blocks use `h2.pb-c-title` or lower. Do not make every section title an h2.\n"
             . "- Spacing rhythm rule: CTA/action groups must have deliberate breathing room. When a CTA follows text, channel rows, form fields, or dividers, style its action wrapper or CTA with at least one clear margin, padding, or gap so the button never touches a line or neighboring row.\n"
+            . "- Review/testimonial structure rule: if this section renders testimonials, player voices, reviews, quotes, or social proof, build a rail/grid/list wrapper whose repeated cards are siblings. Inside each card, keep author/name, location/meta/rating, and quote/body as separate child layers so labels do not collide with paragraph text.\n"
             . "- Anti-monotony rule: adjacent blocks must not share the same three-card row, same image position, same copy labels, or same pale background/card treatment. Change composition, scale, motif, and spacing per section role.\n"
             . "- Rejected output patterns: centered title plus one paragraph plus CTA with no support/proof/visual device; centered title plus three small cards plus the same image; tiny cartoon/SVG-looking media used as a substitute for a real generated image; repeated generic CTA/category labels across blocks; hero built as a boxed card next to a small image; CTA stretched into a page-width bar; large empty dark panel with only a logo or one button; CSS-only hero made only from overlapping circles/blobs with no subject-matter stage.\n"
             . "- If a verified generated image exists, use it prominently and naturally as a real editable <img>. For hero, the <img> is a cover layer behind the overlay copy; for non-hero it is a purposeful media surface, not a thumbnail afterthought.\n";
@@ -19469,22 +19490,8 @@ JSON;
      */
     private function assertRenderedHtmlMatchesLocale(string $html, array $renderContext): void
     {
-        $locale = $this->resolveGeneratedContentLocaleForPolicy($renderContext);
-        if ($locale === '' || !$this->isNonCjkLocale($locale)) {
-            return;
-        }
-
-        $visibleText = $this->extractVisibleHtmlText($html);
-        if (!$this->hasAnyCjkContent($visibleText)) {
-            return;
-        }
-
-        throw new \RuntimeException(
-            'Generated component locale gate failed: non-CJK locale '
-            . $locale
-            . ' rendered CJK planning/block-goal text: '
-            . $this->clipText($visibleText, 220)
-        );
+        // Content language is prompt guidance and browser QA, not a hard structure gate.
+        return;
     }
 
     /**
@@ -19865,17 +19872,17 @@ JSON;
             $this->resolveGeneratedContentLocaleForPolicy($renderContext)
         );
         if ($hardPolicyReason !== null) {
-            throw new \RuntimeException('Generated component content hard policy failed: ' . $hardPolicyReason);
+            throw new \RuntimeException('Generated component structure hard policy failed: ' . $hardPolicyReason);
         }
         $cssPolicyReason = $this->detectHardGeneratedSectionCssPolicyViolation($styleCss);
         if ($cssPolicyReason !== null) {
-            throw new \RuntimeException('Generated component content hard policy failed: ' . $cssPolicyReason);
+            throw new \RuntimeException('Generated component structure hard policy failed: ' . $cssPolicyReason);
         }
         if (
             $this->requiresPrimaryHeadingForRenderedComponent($componentCode, $renderContext)
             && \preg_match('/<h1\b/iu', $html) !== 1
         ) {
-            throw new \RuntimeException('Generated component content hard policy failed: opening/page-intro section must render one h1 heading.');
+            throw new \RuntimeException('Generated component structure hard policy failed: opening/page-intro section must render one h1 heading.');
         }
         // This gate is intentionally narrow: it protects the component contract
         // from invalid/leaked build structures only. Normal copy, marketing

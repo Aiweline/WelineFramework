@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteStageOneContractValidatorTest extends TestCase
 {
-    public function testVisibleCopyMustUseContentLocale(): void
+    public function testVisibleCopyLocaleMismatchIsDiagnosticOnly(): void
     {
         $validator = new AiSiteStageOneContractValidator();
         $report = $validator->validatePagePlan(
@@ -26,14 +26,15 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
             $this->singleHeroContract('pt_BR')
         );
 
-        self::assertFalse((bool)($report['passed'] ?? true));
+        self::assertTrue((bool)($report['passed'] ?? false), \json_encode($report['issues'] ?? [], \JSON_UNESCAPED_UNICODE));
+        self::assertSame(0, (int)($report['blocking_issue_count'] ?? -1));
         self::assertContains(
             'visible_copy_locale_mismatch',
             \array_map(static fn(array $issue): string => (string)($issue['code'] ?? ''), $report['issues'] ?? [])
         );
     }
 
-    public function testMissingBuildPlanBodyCopyIsBlocking(): void
+    public function testMissingBuildPlanBodyCopyIsDiagnosticOnly(): void
     {
         $validator = new AiSiteStageOneContractValidator();
         $report = $validator->validatePagePlan(
@@ -50,12 +51,12 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
             $this->singleHeroContract('en_US')
         );
 
-        self::assertFalse((bool)($report['passed'] ?? true));
+        self::assertTrue((bool)($report['passed'] ?? false), \json_encode($report['issues'] ?? [], \JSON_UNESCAPED_UNICODE));
+        self::assertSame(0, (int)($report['blocking_issue_count'] ?? -1));
         self::assertContains(
             'missing_visible_body_copy',
             \array_map(static fn(array $issue): string => (string)($issue['code'] ?? ''), $report['issues'] ?? [])
         );
-        self::assertGreaterThan(0, (int)($report['blocking_issue_count'] ?? 0));
     }
 
     public function testDashboardWorkflowSubjectWithBadgeDetailIsNotIconOnly(): void
@@ -84,7 +85,7 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
         );
     }
 
-    public function testPureIconSubjectStillFailsImageIntentContract(): void
+    public function testPureIconSubjectDoesNotBlockStructureGate(): void
     {
         $validator = new AiSiteStageOneContractValidator();
         $report = $validator->validatePagePlan(
@@ -104,8 +105,25 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
             $this->singleHeroContract('en_US')
         );
 
-        self::assertContains(
+        self::assertTrue((bool)($report['passed'] ?? false), \json_encode($report['issues'] ?? [], \JSON_UNESCAPED_UNICODE));
+        self::assertNotContains(
             'icon_only_image_subject',
+            \array_map(static fn(array $issue): string => (string)($issue['code'] ?? ''), $report['issues'] ?? [])
+        );
+    }
+
+    public function testMissingImageIntentObjectStillFailsStructureGate(): void
+    {
+        $validator = new AiSiteStageOneContractValidator();
+        $report = $validator->validatePagePlan(
+            'home_page',
+            $this->pagePlanWithBlock(['image_intent' => null]),
+            $this->singleHeroContract('en_US')
+        );
+
+        self::assertFalse((bool)($report['passed'] ?? true));
+        self::assertContains(
+            'missing_image_intent',
             \array_map(static fn(array $issue): string => (string)($issue['code'] ?? ''), $report['issues'] ?? [])
         );
     }
