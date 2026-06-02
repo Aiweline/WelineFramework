@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\E2E;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Test\Integration\AbstractAiSiteWorkbenchIntegrationHarness;
@@ -60,6 +61,25 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
                 }
 
                 $callback($this->buildThemeHeaderFooterResponse());
+            });
+        $aiService->method('runCooperativeSessionTasksSettled')
+            ->willReturnCallback(static function (array $tasks, array $options = []): array {
+                $settled = [];
+                foreach ($tasks as $key => $task) {
+                    try {
+                        $settled[(string)$key] = [
+                            'status' => 'fulfilled',
+                            'result' => \is_callable($task) ? $task([]) : [],
+                        ];
+                    } catch (\Throwable $throwable) {
+                        $settled[(string)$key] = [
+                            'status' => 'rejected',
+                            'error' => $throwable,
+                        ];
+                    }
+                }
+
+                return $settled;
             });
 
         $this->replaceObjectManagerInstance(
@@ -121,18 +141,31 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
         $queueResult = (string)($planQueue['result'] ?? '');
         self::assertStringContainsString('第一阶段方案生成完成', $queueResult);
 
-        self::assertCount(2, $calls, \json_encode($calls, \JSON_UNESCAPED_UNICODE));
-        self::assertStringContainsString('Stage-1 REQUIREMENT EXPANSION planner', (string)$calls[0]['prompt']);
-        self::assertStringContainsString('Stage-1 THEME planner', (string)$calls[1]['prompt']);
-        self::assertStringContainsString('Confirmed requirement expansion from step 1', (string)$calls[1]['prompt']);
-        self::assertSame(0, (int)($calls[0]['params']['timeout'] ?? -1));
-        self::assertFalse((bool)($calls[0]['params']['enforce_timeout_in_stream'] ?? true));
-        self::assertTrue((bool)($calls[0]['params']['disable_ai_timeout'] ?? false));
-        self::assertTrue((bool)($calls[0]['params']['disable_cli_timeout'] ?? false));
+        self::assertNotEmpty($calls, 'Stage-one plan should still call AI for theme/page contracts.');
+        $requirementCalls = \array_values(\array_filter(
+            $calls,
+            static fn(array $call): bool => \str_contains((string)($call['prompt'] ?? ''), 'Stage-1 REQUIREMENT EXPANSION planner')
+        ));
+        $themeCalls = \array_values(\array_filter(
+            $calls,
+            static fn(array $call): bool => \str_contains((string)($call['prompt'] ?? ''), 'THEME planner')
+        ));
+        $pageCalls = \array_values(\array_filter(
+            $calls,
+            static fn(array $call): bool => \str_contains((string)($call['prompt'] ?? ''), 'Page type:')
+        ));
+        self::assertCount(0, $requirementCalls, \json_encode($calls, \JSON_UNESCAPED_UNICODE));
+        self::assertCount(1, $themeCalls, \json_encode($calls, \JSON_UNESCAPED_UNICODE));
+        self::assertGreaterThanOrEqual(2, \count($pageCalls), \json_encode($calls, \JSON_UNESCAPED_UNICODE));
+        self::assertStringContainsString('Confirmed requirement expansion from step 1', (string)$themeCalls[0]['prompt']);
 
         $session = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($session);
-        $scope = $session->getScopeArray();
+        $scope = $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, [
+            'plan_json',
+            'plan_markdown',
+            'plan_workbench',
+        ]);
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
 
@@ -157,12 +190,30 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
         self::assertIsArray($queue);
         self::assertGreaterThan(0, (int)($queue['queue_id'] ?? 0), 'Queue record must exist before execution.');
 
+        if ($force) {
+            $takeover = w_query('queue', 'takeover', [
+                'queue_id' => $queueId,
+                'force' => true,
+                'owner' => 'manual_cli',
+                'reason' => 'phpunit_in_process_queue_execution',
+                'mark_force_rebuild' => true,
+                'clear_output' => true,
+                'wake_scheduler' => false,
+                'auto' => false,
+            ]);
+            self::assertIsArray($takeover);
+            self::assertTrue((bool)($takeover['success'] ?? false), \json_encode($takeover, \JSON_UNESCAPED_UNICODE));
+        } else {
+            w_query('queue', 'update', [
+                'queue_id' => $queueId,
+                'patch' => ['auto' => false],
+            ]);
+        }
+        $this->disablePlanQueueRetryForInProcessTest($queueId);
+
         /** @var QueueRunCommand $runner */
         $runner = ObjectManager::getInstance(QueueRunCommand::class);
         $args = ['id' => $queueId];
-        if ($force) {
-            $args['f'] = 1;
-        }
         $bufferLevel = \ob_get_level();
         \ob_start();
         try {
@@ -177,9 +228,33 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
         }
 
         $reloadedQueue = w_query('queue', 'get', ['queue_id' => $queueId]);
+        $deadline = \microtime(true) + 5.0;
+        while (\is_array($reloadedQueue) && (string)($reloadedQueue['status'] ?? '') === 'running' && \microtime(true) < $deadline) {
+            \usleep(200000);
+            $reloadedQueue = w_query('queue', 'get', ['queue_id' => $queueId]);
+        }
         self::assertIsArray($reloadedQueue);
 
         return $reloadedQueue;
+    }
+
+    private function disablePlanQueueRetryForInProcessTest(int $queueId): void
+    {
+        $queue = w_query('queue', 'get', ['queue_id' => $queueId]);
+        self::assertIsArray($queue);
+        $content = \json_decode((string)($queue['content'] ?? ''), true);
+        if (!\is_array($content)) {
+            return;
+        }
+
+        $content['_plan_queue_retry_count'] = 99;
+        $content['_provider_transient_retry_count'] = 99;
+        w_query('queue', 'update', [
+            'queue_id' => $queueId,
+            'patch' => [
+                'content' => (string)(\json_encode($content, \JSON_UNESCAPED_UNICODE) ?: (string)($queue['content'] ?? '')),
+            ],
+        ]);
     }
 
     /**
@@ -190,8 +265,9 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
     {
         self::assertNotSame([], $planJson);
         self::assertNotSame('', (string)($planJson['requirement_expansion']['expanded_brief'] ?? ''));
-        self::assertStringContainsString('rummy', \strtolower((string)($planJson['requirement_expansion']['expanded_brief'] ?? '')));
-        self::assertStringContainsString('APK', (string)($planJson['requirement_expansion']['expanded_brief'] ?? ''));
+        self::assertNotSame('', (string)($planJson['requirement_expansion']['planning_summary'] ?? ''));
+        self::assertNotSame('', (string)($planJson['requirement_expansion']['primary_cta'] ?? ''));
+        self::assertNotEmpty($planJson['requirement_expansion']['page_strategy'] ?? []);
         self::assertNotSame('', (string)($planJson['theme_design']['selection_reason'] ?? ''));
         self::assertIsArray($planJson['shared_components']['header'] ?? null);
         self::assertIsArray($planJson['shared_components']['footer'] ?? null);
@@ -393,8 +469,10 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
                 'primary_keywords' => ['safe rummy app', 'responsible teen patti'],
                 'secondary_keywords' => ['APK safety', 'Indian player support'],
                 'blocks' => [
-                    $this->buildPageBlock('trust_story', 'Royal India Play keeps rummy and teen patti APK access focused on safety, clear rules, and responsible play for Indian mobile players.'),
-                    $this->buildPageBlock('responsible_play', 'Responsible play guidance, privacy-aware onboarding, and visible support links help visitors decide before installing the APK.'),
+                    $this->buildPageBlock('origin_story', 'Royal India Play explains why its APK guide focuses on clear checks, readable rules, and practical mobile-first trust for Indian players.'),
+                    $this->buildPageBlock('mission_values', 'The mission values section shows safer recommendations, responsible play reminders, and concise editorial standards before any install decision.'),
+                    $this->buildPageBlock('trust_proof', 'Trust proof highlights review steps, support visibility, privacy-aware guidance, and transparent download expectations.'),
+                    $this->buildPageBlock('about_cta', 'The about CTA invites visitors to return to the main download guide after they understand the brand standards and support promise.'),
                 ],
             ]
             : [
@@ -403,8 +481,13 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
                 'primary_keywords' => ['rummy APK download', 'teen patti APK'],
                 'secondary_keywords' => ['Indian gaming app', 'safe APK install'],
                 'blocks' => [
-                    $this->buildPageBlock('hero', 'Download Royal India Play APK for rummy and teen patti with a clear install button, security reassurance, and fast mobile-first game entry.'),
-                    $this->buildPageBlock('trust_proof', 'Show secure APK checks, Indian player support, responsible-play reminders, and quick access to rummy and teen patti tables.'),
+                    $this->buildPageBlock('hero_download', 'The download hero states the APK action, install confidence, supported game categories, and visible reassurance before visitors tap the primary button.'),
+                    $this->buildPageBlock('game_showcase_or_features', 'The game showcase compares rummy, teen patti, ludo, carrom, and chess options with concise benefits for Android players.'),
+                    $this->buildPageBlock('trust_security', 'Trust and security content explains review checks, responsible-play cues, support visibility, and privacy-aware install guidance.'),
+                    $this->buildPageBlock('player_reviews', 'Player review cards summarize practical visitor concerns such as speed, clarity, responsible play, and support response quality.'),
+                    $this->buildPageBlock('faq_or_rules', 'FAQ and rules content answers install safety, account basics, game selection, troubleshooting, and responsible-use questions.'),
+                    $this->buildPageBlock('final_download_cta', 'The final download action band gives visitors one confident APK path after they have scanned games, trust proof, reviews, and FAQ details.'),
+                    $this->buildPageBlock('bonus_steps', 'Bonus steps explain the short install checklist, verification cues, and what visitors should confirm before opening the downloaded APK.'),
                 ],
             ];
 
@@ -416,8 +499,14 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
      */
     private function buildPageBlock(string $blockKey, string $content): array
     {
+        $role = \str_contains($blockKey, 'cta') || \str_contains($blockKey, 'download')
+            ? 'cta'
+            : (\str_contains($blockKey, 'trust') || \str_contains($blockKey, 'review') ? 'proof' : 'content');
+        $motif = \str_replace('_', ' ', $blockKey);
+
         return [
             'block_key' => $blockKey,
+            'page_flow_role' => $role,
             'goal' => $content,
             'keywords' => ['rummy', 'teen patti', 'APK'],
             'content' => $content,
@@ -427,7 +516,25 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
                 'interaction' => ['Download APK hover state', 'trust card tap state'],
                 'texture' => ['soft emerald gradient', 'card-table accent'],
                 'responsive' => ['mobile stacked cards', 'desktop two-column'],
+                'color_layering' => 'Emerald base, saffron action accent, and white content panels stay distinct for ' . $motif . '.',
                 'implementation_note' => 'Use theme tokens and keep Download APK visible without covering content.',
+            ],
+            'visual_signature' => [
+                'composition_pattern' => $motif . ' uses a distinct responsive section layout.',
+                'spatial_rhythm' => $motif . ' alternates dense copy with compact visual accents.',
+                'media_strategy' => 'CSS-only/no generated image: build a unique ' . $motif . ' motif with cards, chips, badges, or rule rows.',
+                'surface_treatment' => $motif . ' uses layered surfaces with a different elevation rhythm from adjacent blocks.',
+                'interaction_pattern' => $motif . ' uses subtle hover and focus states tied to its own action or proof elements.',
+            ],
+            'image_intent' => [
+                'needs_image' => false,
+                'image_role' => 'No generated image is required for this contract test block.',
+                'image_subject' => 'CSS-only ' . $motif . ' interface motif.',
+                'placement' => 'Inline with the block body.',
+                'visual_atmosphere' => 'Polished mobile gaming guide with trust-first contrast.',
+                'image_treatment' => 'CSS-only badges, cards, and table accents using the theme palette.',
+                'reuse_policy' => 'Do not reuse generated images across blocks.',
+                'css_motif' => 'Unique ' . $motif . ' CSS motif.',
             ],
             'field_plan' => [
                 ['field' => 'title', 'sample' => 'Download Royal India Play APK', 'implementation_note' => 'Use as visible section headline.'],
@@ -440,7 +547,6 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
                 'typography' => 'Use Inter/Noto Sans headline and readable body copy.',
                 'style_tone' => 'Safe gaming confidence.',
                 'background_direction' => 'Emerald surface with saffron CTA contrast.',
-                'media_assets' => ['Inline SVG cards, shield, and APK badge visual'],
             ],
             'reusable' => 'no',
             'seo_impact' => 'high',

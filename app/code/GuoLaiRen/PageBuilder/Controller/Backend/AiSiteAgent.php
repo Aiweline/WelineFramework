@@ -31,8 +31,9 @@ use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildPlanService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildPlanTaskScheduler;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonStateService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQualityGateService;
-use GuoLaiRen\PageBuilder\Service\AiSiteQueueSnapshotService;
+use GuoLaiRen\PageBuilder\Service\AiSiteQueueStateService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceDebugDefaults;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
@@ -45,7 +46,6 @@ use GuoLaiRen\PageBuilder\Service\AI\DesignDirection\DesignDirectionService;
 use GuoLaiRen\PageBuilder\Service\AI\Skill\CustomSkillRepository;
 use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use Weline\Ai\Model\AiSkill;
-use Weline\Ai\Service\AiService;
 use Weline\Ai\Service\Skill\AdapterSkillResolver;
 use Weline\Ai\Service\Skill\SkillRegistry as CoreSkillRegistry;
 use Weline\Ai\Service\Skill\SkillRepository as AiSkillRepository;
@@ -55,15 +55,20 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Sse\LastEventIdResolver;
 use Weline\Framework\Http\Sse\SseWriter;
+use Weline\Framework\Service\Query\FrameworkQueryService;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Model\AiSiteBuilderSession as WebsitesAiSiteBuilderSession;
+use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService as WebsitesDomainPurchaseWorkbenchService;
+use Weline\Websites\Service\AiWorkbench\SessionService as WebsitesSessionService;
+use Weline\Websites\Service\WebsiteAgentService;
 
-#[Acl('GuoLaiRen_PageBuilder::ai_site_agent', 'AI 建站工作台', 'mdi-robot-outline', 'PageBuilder AI 建站会话与流水线', 'Weline_Backend::page_builder_group')]
+#[Acl('GuoLaiRen_PageBuilder::ai_site_agent', 'Ai Site Agent', 'mdi-robot-outline', 'PageBuilder AI site agent permission: ai_site_agent', 'Weline_Backend::page_builder_group')]
 class AiSiteAgent extends BaseController
 {
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
@@ -77,24 +82,21 @@ class AiSiteAgent extends BaseController
     private const PARAMS_PATCH_BLOCK = ['public_id', 'page_type', 'block_id|component_code', 'instruction'];
     private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
     private const PARAMS_MUTATE_PLAN_BLOCK = ['public_id', 'page_type', 'action=create|delete|refine|rebuild', 'block_key required except create', 'block_config'];
-    private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
+    private const WORKSPACE_STREAM_STATE_PERSIST = false;
     private const STREAM_LEASE_SCOPE_KEY = '_workspace_stream_lease';
     private const STREAM_LEASE_TTL_SEC = 60;
     private const WORKSPACE_STREAM_MAX_EVENT_REPLAY = 300;
     private const WORKSPACE_FAST_VIEW_ARTIFACT_KEYS_BY_STAGE = [
         AiSiteAgentSession::STAGE_PLAN => [
             'plan_json',
-            'plan_structured',
             'plan_markdown',
         ],
         AiSiteAgentSession::STAGE_VISUAL_EDIT => [
             'plan_json',
-            'plan_structured',
             'plan_markdown',
         ],
         AiSiteAgentSession::STAGE_PUBLISH => [
             'plan_json',
-            'plan_structured',
             'plan_markdown',
         ],
     ];
@@ -111,7 +113,6 @@ class AiSiteAgent extends BaseController
         'build_summary',
         'build_task_summary',
         'can_publish',
-        'completion_gate_snapshot',
         'default_language',
         'default_locale',
         'design_direction_code',
@@ -122,8 +123,6 @@ class AiSiteAgent extends BaseController
         'design_direction_mode',
         'design_direction_snapshot',
         'draft_website_id',
-        'execution_blueprint_confirmed_at',
-        'execution_blueprint_confirmed_signature',
         'extra_page_types_panel_open',
         'fake_mode',
         'has_build_plan_v2',
@@ -172,20 +171,20 @@ class AiSiteAgent extends BaseController
         'workspace_track',
     ];
     /**
-     * 工作区 stream-sse 续约窗口：超过此时间未收到续约请求（POST post-touch-stream-lease）则视为断连，
-     * 服务端将结束事件流并清理与本 lease 关联的排队/运行中操作。
-     * 前端心跳间隔应显著小于本值（当前页面约 20s 一次 POST 续约）。
+     * 宸ヤ綔鍖?stream-sse 缁害绐楀彛锛氳秴杩囨鏃堕棿鏈敹鍒扮画绾﹁姹傦紙POST post-touch-stream-lease锛夊垯瑙嗕负鏂繛锛?
+     * 鏈嶅姟绔皢缁撴潫浜嬩欢娴佸苟娓呯悊涓庢湰 lease 鍏宠仈鐨勬帓闃?杩愯涓搷浣溿€?
+     * 鍓嶇蹇冭烦闂撮殧搴旀樉钁楀皬浜庢湰鍊硷紙褰撳墠椤甸潰绾?20s 涓€娆?POST 缁害锛夈€?
      *
-     * 注意：此值需要与 observeDuplicateOperationStream 中的 $maxIdleLoops 协调，
-     * 确保长时间运行的 AI 生成任务（如大型页面构建）不会被误判为过时。
-     * 当前设置为 600 秒（10分钟），以支持复杂的 AI 内容生成场景。
+     * 娉ㄦ剰锛氭鍊奸渶瑕佷笌 observeDuplicateOperationStream 涓殑 $maxIdleLoops 鍗忚皟锛?
+     * 纭繚闀挎椂闂磋繍琛岀殑 AI 鐢熸垚浠诲姟锛堝澶у瀷椤甸潰鏋勫缓锛変笉浼氳璇垽涓鸿繃鏃躲€?
+     * 褰撳墠璁剧疆涓?600 绉掞紙10鍒嗛挓锛夛紝浠ユ敮鎸佸鏉傜殑 AI 鍐呭鐢熸垚鍦烘櫙銆?
      */
     private const STALE_ACTIVE_OPERATION_TTL_SEC = 600;
     private const OBSERVER_QUEUE_SETTLE_DELAY_MS = 3000;
     private const OBSERVER_QUEUE_PROGRESS_POLL_INTERVAL_MS = 250;
     private const OBSERVER_QUEUE_PROGRESS_MAX_OBSERVE_MS = 720000;
     private const BUILD_TASK_MAX_GENERATION_ATTEMPTS = 3;
-    private const DEFAULT_PAGE_SECTION_BUILD_DISPATCH_WINDOW = 4;
+    private const DEFAULT_PAGE_SECTION_BUILD_DISPATCH_WINDOW = 5;
     private const AI_SITE_QUEUE_CONTENT_LIGHT_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key,process';
     private const AI_SITE_QUEUE_CONTENT_PAYLOAD_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key,content,process,result';
     private const AI_SITE_QUEUE_MAX_CONTENT_JSON_DECODE_BYTES = 262144;
@@ -205,7 +204,7 @@ class AiSiteAgent extends BaseController
     private readonly AiSiteAgentStreamCodecService $streamCodecService;
     private readonly AiSiteAgentWorkspaceBridgeService $workspaceBridgeService;
     private readonly AiSiteAgentWorkspacePreviewService $workspacePreviewService;
-    private readonly AiSiteQueueSnapshotService $queueSnapshotService;
+    private readonly AiSiteQueueStateService $queueStateService;
     private readonly AiSiteAgentQueueObserverHelperService $queueObserverHelperService;
     private readonly AiSiteAgentWebsitesMirrorService $websitesMirrorService;
     private readonly AiSiteAgentWorkspaceStateHelperService $workspaceStateHelperService;
@@ -213,6 +212,7 @@ class AiSiteAgent extends BaseController
     private readonly AiSiteAgentRegeneratePageOperationService $regeneratePageOperationService;
     private readonly AiSiteAgentWorkspaceEntryNoticeService $workspaceEntryNoticeService;
     private ?AiSiteBlockPartialPatchService $blockPartialPatchService = null;
+    private ?AiSitePlanJsonStateService $planJsonStateService = null;
     private readonly Url $url;
 
     public function __construct(
@@ -231,7 +231,7 @@ class AiSiteAgent extends BaseController
         ?AiSiteAgentStreamCodecService $streamCodecService = null,
         ?AiSiteAgentWorkspaceBridgeService $workspaceBridgeService = null,
         ?AiSiteAgentWorkspacePreviewService $workspacePreviewService = null,
-        ?AiSiteQueueSnapshotService $queueSnapshotService = null,
+        ?AiSiteQueueStateService $queueStateService = null,
         ?AiSiteAgentQueueObserverHelperService $queueObserverHelperService = null,
         ?Url $url = null,
         ?AiSiteAgentWebsitesMirrorService $websitesMirrorService = null,
@@ -269,8 +269,8 @@ class AiSiteAgent extends BaseController
             ?? ObjectManager::getInstance(AiSiteAgentWorkspaceBridgeService::class);
         $this->workspacePreviewService = $workspacePreviewService
             ?? ObjectManager::getInstance(AiSiteAgentWorkspacePreviewService::class);
-        $this->queueSnapshotService = $queueSnapshotService
-            ?? ObjectManager::getInstance(AiSiteQueueSnapshotService::class);
+        $this->queueStateService = $queueStateService
+            ?? ObjectManager::getInstance(AiSiteQueueStateService::class);
         $this->queueObserverHelperService = $queueObserverHelperService
             ?? ObjectManager::getInstance(AiSiteAgentQueueObserverHelperService::class);
         $this->url = $url ?? ObjectManager::getInstance(Url::class);
@@ -286,7 +286,7 @@ class AiSiteAgent extends BaseController
             ?? ObjectManager::getInstance(AiSiteAgentWorkspaceEntryNoticeService::class);
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_index', 'AI 建站工作台', 'mdi-robot-outline', '进入 AI 建站工作台', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_index', 'Ai Site Agent Index', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_index', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function index(): string
     {
         $startedAt = \microtime(true);
@@ -297,7 +297,7 @@ class AiSiteAgent extends BaseController
         $recent = $adminId > 0 ? $this->sessionService->listRecentSessionsForAdmin($adminId, $showAll ? 200 : 30) : [];
         $directionOptions = $adminId > 0 ? \array_values($this->designDirectionService()->listDirections($adminId, false)) : [];
 
-        $this->assign('title', __('PageBuilder AI 建站工作台'));
+        $this->assign('title', __('PageBuilder AI site workspace'));
         $this->assign('recent_sessions', $recent);
         $this->assign('workbench_home_url', $workbenchHomeUrl);
         $this->assign('show_all_sessions', $showAll);
@@ -315,22 +315,22 @@ class AiSiteAgent extends BaseController
         return $html;
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站会话', 'mdi-clipboard-text-outline', '查看与编辑 AI 建站会话', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'Ai Site Agent Workspace', 'mdi-clipboard-text-outline', 'PageBuilder AI site agent permission: ai_site_agent_workspace', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function workspace(): string
     {
         $startedAt = \microtime(true);
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            $this->assign('title', __('PageBuilder AI 建站工作台'));
-            $this->assign('error_message', __('未登录或会话令牌无效'));
+            $this->assign('title', __('PageBuilder AI site workspace'));
+            $this->assign('error_message', __('鏈櫥褰曟垨浼氳瘽浠ょ墝鏃犳晥'));
             return $this->fetch('workspace-error');
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $this->assign('title', __('PageBuilder AI 建站工作台'));
-            $this->assign('error_message', __('会话不存在或无权访问'));
+            $this->assign('title', __('PageBuilder AI site workspace'));
+            $this->assign('error_message', __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'));
             return $this->fetch('workspace-error');
         }
 
@@ -345,11 +345,6 @@ class AiSiteAgent extends BaseController
         ]);
         $expertUi = false;
         $viewState = $this->pruneWorkspaceStateForView($state);
-        \file_put_contents(
-            BP . 'var/log/emergency_fallback.log',
-            \date('Y-m-d H:i:s') . " [pruneWorkspaceStateForView] planJsonAvail=" . ($viewState['plan']['json_available'] ?? 'N/A') . " planStructuredAvail=" . ($viewState['plan']['structured_available'] ?? 'N/A') . " planJsonPages=" . (\is_array($viewState['plan']['json']['pages'] ?? null) ? \count($viewState['plan']['json']['pages']) : 'N/A') . " planStructuredPages=" . (\is_array($viewState['plan']['structured']['pages'] ?? null) ? \count($viewState['plan']['structured']['pages']) : 'N/A') . "\n",
-            \FILE_APPEND
-        );
         if (\is_array($viewState['scope'] ?? null)) {
             $viewState['scope'] = $this->applyAutoDesignDirectionToScope($viewState['scope'], $adminId);
             $directionState = $this->designDirectionService()->buildWorkspaceDirectionState($viewState['scope']);
@@ -380,7 +375,7 @@ class AiSiteAgent extends BaseController
         $recommendedRegistrarLabel = $registrarSelection['recommended_registrar_label'];
         $preferredRegistrarAccountId = $registrarSelection['preferred_registrar_account_id'];
         if ($preferredRegistrarAccountId <= 0) { $preferredRegistrarAccountId = 0; }
-            // 线上默认不预选账号，由用户主动选择。
+            // 绾夸笂榛樿涓嶉閫夎处鍙凤紝鐢辩敤鎴蜂富鍔ㄩ€夋嫨銆?
         if ($recommendedRegistrarLabel === '' && $preferredRegistrarAccountId > 0) {
             foreach ($registrarAccounts as $account) {
                 if ((int)($account['account_id'] ?? 0) !== $preferredRegistrarAccountId) {
@@ -391,7 +386,7 @@ class AiSiteAgent extends BaseController
             }
         }
 
-        $this->assign('title', __('PageBuilder AI 建站工作台'));
+        $this->assign('title', __('PageBuilder AI site workspace'));
         $this->assign('session', $session);
         $this->assign('workspace_state', $viewState);
         $this->assign('scope', $viewState['scope']);
@@ -426,13 +421,13 @@ class AiSiteAgent extends BaseController
         $this->assign('operation_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId]));
         $this->assign('workspace_stream_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/get-stream-sse', ['public_id' => $publicId]));
         $this->assign('switch_preview_page_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-switch-preview-page'));
-        $this->assign('workspace_snapshot_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-workspace-snapshot'));
+        $this->assign('workspace_state_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-workspace-state'));
         $this->assign('publish_check_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-publish-checklist'));
         $this->assign('delete_workspace_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-delete-workspace'));
-        $this->assign('recommend_domain_url', $this->url->getBackendUrlPath('websites/backend/site-builder-agent/recommend-domain'));
-        $this->assign('check_domain_url', $this->url->getBackendUrlPath('websites/backend/site-builder-agent/check-domain'));
+        $this->assign('recommend_domain_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-recommend-domain'));
+        $this->assign('check_domain_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-check-domain'));
         $this->assign('start_domain_purchase_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-domain-purchase'));
-        $this->assign('domain_purchase_sse_url', $this->url->getBackendUrlPath('websites/backend/site-builder-agent/domain-purchase-sse'));
+        $this->assign('domain_purchase_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/domain-purchase-sse'));
         $this->assign('domain_purchase_state', $domainPurchaseState);
         $this->assign('recommended_domain_list', $recommendedDomainList);
         $this->assign('recommended_registrar_label', $recommendedRegistrarLabel);
@@ -485,12 +480,12 @@ class AiSiteAgent extends BaseController
         return $html;
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_index', 'AI design directions', 'mdi-compass-outline', 'Manage AI site design directions', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_index', 'Ai Site Agent Index', 'mdi-compass-outline', 'PageBuilder AI site agent permission: ai_site_agent_index', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function designDirections(): string
     {
         $adminId = (int)$this->getLoginUserId();
         $items = $adminId > 0 ? \array_values($this->designDirectionService()->listDirections($adminId, true)) : [];
-        $this->assign('title', __('AI 设计方向模板'));
+        $this->assign('title', __('AI 璁捐鏂瑰悜妯℃澘'));
         $this->assign('design_direction_items', $items);
         $this->assign('design_direction_list_url', $this->url->getBackendUrlPath('ai/backend/style/post-catalog'));
         $this->assign('design_direction_save_url', $this->url->getBackendUrlPath('ai/backend/style/post-save'));
@@ -502,7 +497,7 @@ class AiSiteAgent extends BaseController
         return $this->fetch('design-directions');
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站工作台预览', 'mdi-eye-outline', '在 AI 建站工作台中渲染可视化预览', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'Ai Site Agent Workspace', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_workspace', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function workspacePreview(): void
     {
         $startedAt = \microtime(true);
@@ -591,7 +586,7 @@ class AiSiteAgent extends BaseController
             return null;
         }
 
-        // 仅信任该 public_id 会话下的虚拟主题；忽略 GET 中可能被拦截器注入的其它 virtual_theme_id。
+        // 浠呬俊浠昏 public_id 浼氳瘽涓嬬殑铏氭嫙涓婚锛涘拷鐣?GET 涓彲鑳借鎷︽埅鍣ㄦ敞鍏ョ殑鍏跺畠 virtual_theme_id銆?
         $virtualThemeId = (int)($context['virtual_theme_id'] ?? 0);
         $virtualPage = $virtualPages[$pageType];
         $styleCode = \trim((string)($this->request->getGet('style_code') ?: ($virtualPage['style_code'] ?? 'default')));
@@ -684,7 +679,7 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 预览 iframe 无法解析上下文时返回占位 HTML（会话有效时可引导 AI 生成，并携带细节任务规划是否已确认）。
+     * 棰勮 iframe 鏃犳硶瑙ｆ瀽涓婁笅鏂囨椂杩斿洖鍗犱綅 HTML锛堜細璇濇湁鏁堟椂鍙紩瀵?AI 鐢熸垚锛屽苟鎼哄甫缁嗚妭浠诲姟瑙勫垝鏄惁宸茬‘璁わ級銆?
      */
     /**
      * @return array{blocks?:list<array<string,mixed>>,page?:array<string,mixed>}
@@ -844,41 +839,41 @@ class AiSiteAgent extends BaseController
 
         if (\preg_match('/^th(?:[_-]|$)/i', $locale) === 1) {
             return match ($key) {
-                'home' => 'หน้าแรก',
-                'about' => 'เกี่ยวกับเรา',
-                'contact' => 'ติดต่อเรา',
-                'privacy_policy' => 'นโยบายความเป็นส่วนตัว',
-                'terms_of_service' => 'ข้อกำหนดการใช้บริการ',
+                'home' => '喔笝喙夃覆喙佮福喔',
+                'about' => '喙€喔佮傅喙堗涪喔о竵喔编笟喙€喔｀覆',
+                'contact' => '喔曕复喔斷笗喙堗腑喙€喔｀覆',
+                'privacy_policy' => '喔權箓喔⑧笟喔侧涪喔勦抚喔侧浮喙€喔涏箛喔權釜喙堗抚喔權笗喔编抚',
+                'terms_of_service' => '喔傕箟喔竵喔赤斧喔權笖喔佮覆喔｀箖喔娻箟喔氞福喔脆竵喔侧福',
                 default => '',
             };
         }
         if (\preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', $locale) === 1) {
             return match ($key) {
-                'home' => 'होम',
-                'about' => 'हमारे बारे में',
-                'contact' => 'संपर्क करें',
-                'privacy_policy' => 'गोपनीयता नीति',
-                'terms_of_service' => 'सेवा की शर्तें',
+                'home' => '啶灌啶',
+                'about' => '啶灌ぎ啶距ぐ啷?啶ぞ啶班 啶啶',
+                'contact' => '啶膏啶ぐ啷嵿 啶曕ぐ啷囙',
+                'privacy_policy' => '啶椸啶え啷€啶い啶?啶ㄠ啶むた',
+                'terms_of_service' => '啶膏啶掂ぞ 啶曕 啶多ぐ啷嵿い啷囙',
                 default => '',
             };
         }
         if (\preg_match('/^pt(?:[_-]|$)/i', $locale) === 1) {
             return match ($key) {
-                'home' => 'Início',
+                'home' => 'In铆cio',
                 'about' => 'Sobre',
                 'contact' => 'Contato',
-                'privacy_policy' => 'Política de Privacidade',
-                'terms_of_service' => 'Termos de Serviço',
+                'privacy_policy' => 'Pol铆tica de Privacidade',
+                'terms_of_service' => 'Termos de Servi莽o',
                 default => '',
             };
         }
         if (\preg_match('/^(zh|zh[_-]hans|zh[_-]cn|zh[_-]sg)/i', $locale) === 1) {
             return match ($key) {
-                'home' => '首页',
-                'about' => '关于我们',
-                'contact' => '联系我们',
-                'privacy_policy' => '隐私政策',
-                'terms_of_service' => '服务条款',
+                'home' => '棣栭〉',
+                'about' => '鍏充簬鎴戜滑',
+                'contact' => '鑱旂郴鎴戜滑',
+                'privacy_policy' => '闅愮鏀跨瓥',
+                'terms_of_service' => '鏈嶅姟鏉℃',
                 default => '',
             };
         }
@@ -915,7 +910,7 @@ class AiSiteAgent extends BaseController
                     || \in_array($buildStatus, ['pending', 'queued', 'running', 'processing'], true);
             }
         }
-        // 必须用 template() 直出 HTML：fetch() 会走 fetch_file_after，Theme 会把内容包进后台整页布局，iframe 内会出现后台顶栏/主题壳。
+        // 蹇呴』鐢?template() 鐩村嚭 HTML锛歠etch() 浼氳蛋 fetch_file_after锛孴heme 浼氭妸鍐呭鍖呰繘鍚庡彴鏁撮〉甯冨眬锛宨frame 鍐呬細鍑虹幇鍚庡彴椤舵爮/涓婚澹炽€?
         return $this->template('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace-preview-unavailable.phtml', [
             'pb_preview_unavailable_session_ok' => $sessionAccessible,
             'pb_preview_unavailable_build_plan_confirmed' => $buildPlanConfirmed,
@@ -929,53 +924,67 @@ class AiSiteAgent extends BaseController
         return $this->mutateScope(true);
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '替换 scope', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postReplaceScope(): string
     {
         return $this->mutateScope(false);
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '排序建站方案块', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postSortPlanBlocks(): string
     {
         return $this->handleSortPlanBlocks();
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '新增/删除/重建建站方案块', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postMutatePlanBlock(): string
     {
         return $this->handleMutatePlanBlock();
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '微调当前页面阶段一块树', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postRefinePlanPage(): string
     {
         return $this->handleRefinePlanPage();
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '更新阶段', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postSetStage(): string
     {
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $stage = $this->scopeCompatibilityService->normalizeStage((string)$this->getRequestBodyValue('stage', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鍙傛暟鏃犳晥')]);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+            return $this->fetchJson(['success' => false, 'message' => __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶')]);
         }
 
         $allowed = \array_column($this->getStageOptions(), 'value');
         if (!\in_array($stage, $allowed, true)) {
-            return $this->fetchJson(['success' => false, 'message' => __('无效的阶段')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鏃犳晥鐨勯樁娈')]);
         }
 
         if ($stage === AiSiteAgentSession::STAGE_PUBLISH) {
             $state = $this->buildWorkspaceFastViewState($session, $adminId);
-            $publishBlock = $this->resolvePublishBlockingAiFailureFromWorkspaceState($state);
+            $scope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForBuildOperation($session)
+            );
+            $fastScope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
+            foreach (['active_operation', 'active_operations', 'build_queue_info'] as $runtimeKey) {
+                if (\array_key_exists($runtimeKey, $fastScope)) {
+                    $scope[$runtimeKey] = $fastScope[$runtimeKey];
+                }
+            }
+            $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
+            $publishBlock = !empty($completionGate['passed']) ? ['blocked' => false] : $this->resolveLatestPublishBlockingAiBuildFailure(
+                $scope,
+                \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
+                \is_array($scope['build_queue_info'] ?? null) ? $scope['build_queue_info'] : null
+            );
             if (!empty($publishBlock['blocked'])) {
                 return $this->fetchJson([
                     'success' => false,
@@ -1005,7 +1014,7 @@ class AiSiteAgent extends BaseController
         }
 
         $this->sessionService->setStage($session->getId(), $adminId, $stage);
-        $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'stage_changed', (string)__('工作区阶段已切换'));
+        $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'stage_changed', (string)__('宸ヤ綔鍖洪樁娈靛凡鍒囨崲'));
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $viewState = $this->buildWorkspaceFastViewState($fresh, $adminId);
 
@@ -1016,86 +1025,86 @@ class AiSiteAgent extends BaseController
         ]);
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '列出 AI 建站技能', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postSkillList(): string { return $this->handleSkillList(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '列出 AI 建站技能 GET 兼容', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getPostSkillList(): string { return $this->handleSkillList(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '列出 AI 建站技能 GET', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getSkillList(): string { return $this->handleSkillList(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '保存 AI 建站技能', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postSkillSave(): string { return $this->handleSkillSave(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站技能 API', 'mdi-api', '禁用 AI 建站技能', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postSkillDisable(): string { return $this->handleSkillDisable(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'List AI site design directions', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-compass-outline', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postDesignDirectionList(): string { return $this->handleDesignDirectionList(); }
 
     public function getPostDesignDirectionList(): string { return $this->handleDesignDirectionList(); }
 
     public function getDesignDirectionList(): string { return $this->handleDesignDirectionList(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'Save AI site design direction', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-compass-outline', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postDesignDirectionSave(): string { return $this->handleDesignDirectionSave(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'Disable AI site design direction', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-compass-outline', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postDesignDirectionDisable(): string { return $this->handleDesignDirectionDisable(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'Clone builtin AI site design direction', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-compass-outline', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postDesignDirectionCloneBuiltin(): string { return $this->handleDesignDirectionCloneBuiltin(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI design direction API', 'mdi-compass-outline', 'Match AI site design direction', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-compass-outline', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postDesignDirectionMatch(): string { return $this->handleDesignDirectionMatch(); }
 
     public function getPostDesignDirectionMatch(): string { return $this->handleDesignDirectionMatch(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '生成建站方案书', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartPlan(): string { return $this->handleStartPlan(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '确认建站方案书', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postConfirmPlan(): string { return $this->handleConfirmPlan(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建建站方案书', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postPlanSse(): void { $this->handlePlanSse(); }
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建建站方案书(GET兼容)', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getPlanSse(): void { $this->handlePlanSse(); }
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '流式微调/重建建站方案书(POST路由GET兼容)', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getPostPlanSse(): void { $this->handlePlanSse(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '显式继续未完成构建', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postResumeBuild(): string { return $this->safeHandleStartBuild(true); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动主题构建', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartBuild(): string { return $this->safeHandleStartBuild(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI site agent API', 'mdi-api', 'Start AI asset generation', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartAssetGeneration(): string { return $this->handleStartAssetGeneration(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI site agent API', 'mdi-api', 'Upload AI site reference image', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postUploadReferenceImage(): string { return $this->handleUploadReferenceImage(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI site agent API', 'mdi-api', 'Start AI asset generation', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function startAssetGeneration(): string { return $this->handleStartAssetGeneration(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '执行虚拟主题编排（兼容）', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postRunVirtualTheme(): string { return $this->safeHandleStartBuild(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动单页重建', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartRegeneratePage(): string { return $this->handleStartRegeneratePage(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动区块 AI 微调', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartRefineComponent(): string { return $this->handleStartRefineComponent(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI Site Agent API', 'mdi-api', 'Start block partial patch', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartPatchBlock(): string { return $this->handleStartPatchBlock(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI Site Agent API', 'mdi-api', 'Retry AI operation', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postRetryAiOperation(): string { return $this->handleRetryAiOperation(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '区块 AI 微调（SSE）', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postBlockRefineSse(): void { $this->handleBlockRegenerateSse(true); }
     public function getBlockRefineSse(): void { $this->handleBlockRegenerateSse(true); }
     public function getPostBlockRefineSse(): void { $this->handleBlockRegenerateSse(true); }
@@ -1106,43 +1115,43 @@ class AiSiteAgent extends BaseController
 
     public function postUpdateBlockConfig(): string { return $this->handleUpdateBlockConfig(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动发布流程', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartPublish(): string { return $this->handleStartPublish(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '切换当前预览页', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postSwitchPreviewPage(): string { return $this->handleSwitchPreviewPageCompact(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '拉取工作区快照（含阶段一队列信息）', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postWorkspaceSnapshot(): string
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postWorkspaceState(): string
     {
-        return $this->handleWorkspaceSnapshot();
+        return $this->handleWorkspaceState();
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '发布前检查', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postPublishChecklist(): string { return $this->handlePublishChecklist(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站工作台', 'mdi-robot-outline', '删除 AI 建站工作台会话', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'Ai Site Agent Workspace', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_workspace', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postDeleteWorkspace(): string
     {
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鍙傛暟鏃犳晥')]);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+            return $this->fetchJson(['success' => false, 'message' => __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶')]);
         }
 
         if (!$this->sessionService->deleteSession($session->getId(), $adminId)) {
-            return $this->fetchJson(['success' => false, 'message' => __('删除工作区失败，请稍后重试')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鍒犻櫎宸ヤ綔鍖哄け璐ワ紝璇风◢鍚庨噸璇')]);
         }
 
-        return $this->fetchJson(['success' => true, 'message' => __('工作区已删除')]);
+        return $this->fetchJson(['success' => true, 'message' => __('宸ヤ綔鍖哄凡鍒犻櫎')]);
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站事件流', 'mdi-access-point', '订阅 AI 建站会话事件流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'Ai Site Agent Workspace', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_workspace', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getStreamSse(): void
     {
         if (\defined('DEV') && DEV && !\headers_sent()) {
@@ -1154,20 +1163,20 @@ class AiSiteAgent extends BaseController
     {
         return $this->fetchJson([
             'success' => true,
-            'message' => __('原生 SSE 模式无需额外续约'),
+            'message' => __('鍘熺敓 SSE 妯″紡鏃犻渶棰濆缁害'),
             'native_sse' => true,
         ]);
     }
 
     /**
-     * 测试 SSE 短轮询（无需认证）
+     * 娴嬭瘯 SSE 鐭疆璇紙鏃犻渶璁よ瘉锛?
      *
-     * 用于验证 SSE 短轮询机制是否正常工作
-     * 警告：仅用于测试，生产环境应删除此方法
+     * 鐢ㄤ簬楠岃瘉 SSE 鐭疆璇㈡満鍒舵槸鍚︽甯稿伐浣?
+     * 璀﹀憡锛氫粎鐢ㄤ簬娴嬭瘯锛岀敓浜х幆澧冨簲鍒犻櫎姝ゆ柟娉?
      */
     public function getTestSse(): void
     {
-        // 释放 PHP session 锁，避免阻塞 SSE
+        // 閲婃斁 PHP session 閿侊紝閬垮厤闃诲 SSE
         $this->releasePhpSessionLockForSse();
 
         $sse = new SseWriter();
@@ -1175,7 +1184,7 @@ class AiSiteAgent extends BaseController
         $sse->sendEvent('start', ['message' => 'Test SSE connection started']);
         $sse->sendEvent('test', ['timestamp' => time(), 'message' => 'This is a test event']);
 
-        // 非阻塞示例：只发送一组立即可用事件，不做轮询等待。
+        // 闈為樆濉炵ず渚嬶細鍙彂閫佷竴缁勭珛鍗冲彲鐢ㄤ簨浠讹紝涓嶅仛杞绛夊緟銆?
         $sse->sendEvent('poll', ['count' => 1, 'timestamp' => time()]);
         $sse->sendEvent('poll', ['count' => 2, 'timestamp' => time()]);
         $sse->sendEvent('poll', ['count' => 3, 'timestamp' => time()]);
@@ -1183,15 +1192,15 @@ class AiSiteAgent extends BaseController
         $sse->complete(['success' => true, 'message' => 'Test complete, please reconnect']);
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站操作 SSE', 'mdi-access-point-network', '执行构建/重建/发布操作流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'Ai Site Agent Workspace', 'mdi-access-point-network', 'PageBuilder AI site agent permission: ai_site_agent_workspace', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getOperationSse(): void { $this->handleOperationSse(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_create', '创建 AI 建站会话', 'mdi-plus', '创建新的 AI 建站会话', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_create', 'Ai Site Agent Create', 'mdi-plus', 'PageBuilder AI site agent permission: ai_site_agent_create', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postCreateSession(): string
     {
         $adminId = (int)$this->getLoginUserId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鏈櫥褰')]);
         }
 
         $fakeMode = $this->getRequestBodyValue('fake_mode', '0');
@@ -1260,23 +1269,165 @@ class AiSiteAgent extends BaseController
         ]);
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_domain_purchase', 'PageBuilder 域名购买', 'mdi-cart-arrow-down', '在 PageBuilder 工作台中代理 Websites 域名购买工作流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_domain_recommend', 'Ai Site Agent Domain Recommend', 'mdi-auto-fix', 'PageBuilder AI site agent permission: ai_site_agent_domain_recommend', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postRecommendDomain(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        if ($adminId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => 'Login is required.']);
+        }
+
+        $description = \trim((string)$this->getRequestBodyValue('description', ''));
+        $preferredDomain = \strtolower(\trim((string)$this->getRequestBodyValue('domain', '')));
+        $accountId = (int)$this->getRequestBodyValue('account_id', 0);
+        $deferAvailability = \in_array(
+            \strtolower(\trim((string)$this->getRequestBodyValue('defer_availability_check', ''))),
+            ['1', 'true', 'yes', 'on'],
+            true
+        );
+
+        if ($description === '' && $preferredDomain === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => 'Please describe the website goal or enter a preferred domain first.',
+                'candidate_domains' => [],
+                'checked_results' => [],
+            ]);
+        }
+
+        $effectiveAccountId = $accountId;
+        $domainChoiceEnvironment = $this->workspaceBridgeService->buildDomainChoiceEnvironment();
+        $requestHost = LocalDomainPolicy::normalizeDomain(
+            (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: '')
+        );
+        if (
+            $effectiveAccountId <= 0
+            && (!empty($domainChoiceEnvironment['is_local']) || LocalDomainPolicy::isManagedLocalDomain($requestHost))
+        ) {
+            $effectiveAccountId = (int)($domainChoiceEnvironment['local_registrar_account_id'] ?? 0);
+        }
+        if ($effectiveAccountId <= 0 && $this->isTruthyRequestFlag('fake_mode')) {
+            $effectiveAccountId = 900001;
+        }
+
+        if (!$deferAvailability && $effectiveAccountId <= 0) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => 'Please choose a registrar account before checking live availability.',
+                'candidate_domains' => [],
+                'checked_results' => [],
+            ]);
+        }
+
+        return $this->fetchJson($this->getWebsiteAgentService()->recommendAvailableDomain(
+            $description,
+            $effectiveAccountId,
+            $preferredDomain,
+            $deferAvailability
+        ));
+    }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_domain_check', 'Ai Site Agent Domain Check', 'mdi-shield-search', 'PageBuilder AI site agent permission: ai_site_agent_domain_check', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postCheckDomain(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        if ($adminId <= 0) {
+            return $this->fetchJson(['success' => false, 'available' => false, 'message' => 'Login is required.']);
+        }
+
+        $domain = \strtolower(\trim((string)$this->getRequestBodyValue('domain', '')));
+        $accountId = (int)$this->getRequestBodyValue('account_id', 0);
+        if ($domain === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'available' => false,
+                'message' => 'Please enter a target domain first.',
+                'checked_results' => [],
+            ]);
+        }
+        if ($this->isTruthyRequestFlag('fake_mode')) {
+            return $this->fetchJson([
+                'success' => true,
+                'available' => true,
+                'domain' => $domain,
+                'message' => 'Domain is treated as available in local simulation mode.',
+                'checked_results' => [
+                    [
+                        'domain' => $domain,
+                        'available' => true,
+                        'simulated' => true,
+                    ],
+                ],
+                'fake_mode' => true,
+            ]);
+        }
+        if ($accountId <= 0) {
+            return $this->fetchJson([
+                'success' => false,
+                'available' => false,
+                'domain' => $domain,
+                'message' => 'Please choose a registrar account before checking live availability.',
+                'checked_results' => [],
+            ]);
+        }
+
+        $resultsByDomain = $this->getWebsiteAgentService()->checkCandidateAvailability($accountId, [$domain]);
+        $result = null;
+        foreach ($resultsByDomain as $itemDomain => $itemResult) {
+            if (
+                \strtolower((string)$itemDomain) === $domain
+                || \strtolower((string)($itemResult['domain'] ?? '')) === $domain
+            ) {
+                $result = \is_array($itemResult) ? $itemResult : null;
+                break;
+            }
+        }
+
+        if ($result === null) {
+            return $this->fetchJson([
+                'success' => false,
+                'available' => false,
+                'domain' => $domain,
+                'message' => 'No availability result was returned for this domain.',
+                'checked_results' => [],
+            ]);
+        }
+
+        $available = !empty($result['available']);
+        $checkedResult = [
+            'domain' => (string)($result['domain'] ?? $domain),
+            'available' => $available,
+        ];
+        if (!empty($result['error']) && \is_string($result['error'])) {
+            $checkedResult['error'] = $result['error'];
+        }
+
+        return $this->fetchJson([
+            'success' => $available,
+            'available' => $available,
+            'domain' => $checkedResult['domain'],
+            'message' => $available ? 'Domain is currently available.' : (string)($checkedResult['error'] ?? 'Domain is not currently available.'),
+            'checked_results' => [$checkedResult],
+        ]);
+    }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_domain_purchase', 'Ai Site Agent Domain Purchase', 'mdi-cart-arrow-down', 'PageBuilder AI site agent permission: ai_site_agent_domain_purchase', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartDomainPurchase(): string
     {
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鍙傛暟鏃犳晥')]);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+            return $this->fetchJson(['success' => false, 'message' => __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶')]);
         }
 
         $linkedWebsitesSession = $this->ensureLinkedWebsitesMirrorSession($session, $adminId);
         if (!$linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession) {
-            return $this->fetchJson(['success' => false, 'message' => __('暂时无法创建域名购买工作区')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鏆傛椂鏃犳硶鍒涘缓鍩熷悕璐拱宸ヤ綔鍖')]);
         }
 
         $scopeError = '';
@@ -1295,7 +1446,7 @@ class AiSiteAgent extends BaseController
         if (empty($result['success'])) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => (string)($result['message'] ?? __('加入域名购买队列失败')),
+                'message' => (string)($result['message'] ?? __('鍔犲叆鍩熷悕璐拱闃熷垪澶辫触')),
             ]);
         }
 
@@ -1306,10 +1457,83 @@ class AiSiteAgent extends BaseController
 
         return $this->fetchJson([
             'success' => true,
-            'message' => (string)($result['message'] ?? __('已加入域名购买队列')),
+            'message' => (string)($result['message'] ?? __('宸插姞鍏ュ煙鍚嶈喘涔伴槦鍒')),
             'state' => $state,
             'pagebuilder_state' => $this->buildWorkspaceState($freshPageBuilderSession, $adminId, 80, true),
+            'public_id' => $freshPageBuilderSession->getPublicId(),
             'linked_public_id' => $freshWebsitesSession->getPublicId(),
+            'stream_token' => (string)($result['stream_token'] ?? ($state['execution_token'] ?? '')),
+        ]);
+    }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_domain_purchase_stream', 'Ai Site Agent Domain Purchase Stream', 'mdi-access-point-network', 'PageBuilder AI site agent permission: ai_site_agent_domain_purchase_stream', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function getDomainPurchaseSse(): void
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->start();
+
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->request->getGet('public_id', ''));
+        $executionToken = \trim((string)$this->request->getGet('execution_token', ''));
+        if ($adminId <= 0 || $publicId === '' || $executionToken === '') {
+            $sse->sendError('Invalid domain purchase stream parameters.');
+            $sse->complete(['success' => false]);
+            return;
+        }
+
+        $pageBuilderSession = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if (!$pageBuilderSession instanceof AiSiteAgentSession) {
+            $sse->sendError('PageBuilder workspace does not exist or cannot be accessed.');
+            $sse->complete(['success' => false]);
+            return;
+        }
+
+        $linkedWebsitesSession = $this->ensureLinkedWebsitesMirrorSession($pageBuilderSession, $adminId);
+        if (!$linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession) {
+            $sse->sendError('Unable to prepare the linked domain purchase workspace.');
+            $sse->complete(['success' => false]);
+            return;
+        }
+
+        $result = $this->getWebsitesDomainPurchaseWorkbenchService()->executeQueuedPurchase(
+            $linkedWebsitesSession->getId(),
+            $adminId,
+            $executionToken,
+            static function (string $event, array $data) use ($sse): void {
+                if ($sse->isAlive()) {
+                    $sse->sendEvent($event, $data);
+                }
+            }
+        );
+
+        $freshWebsitesSession = $this->getWebsitesSessionService()->loadById($linkedWebsitesSession->getId(), $adminId) ?? $linkedWebsitesSession;
+        $this->syncPageBuilderScopeFromLinkedWebsitesSession($pageBuilderSession, $freshWebsitesSession, $adminId);
+        $freshPageBuilderSession = $this->sessionService->loadById($pageBuilderSession->getId(), $adminId) ?? $pageBuilderSession;
+        $state = $result['state'] ?? $this->getWebsitesDomainPurchaseWorkbenchService()->buildViewState($freshWebsitesSession);
+
+        if (!empty($result['success'])) {
+            $sse->complete([
+                'success' => true,
+                'completed' => !empty($result['completed']),
+                'message' => (string)($result['message'] ?? 'Domain purchase stream has finished.'),
+                'state' => $state,
+                'pagebuilder_state' => $this->buildWorkspaceState($freshPageBuilderSession, $adminId, 80, true),
+            ]);
+            return;
+        }
+
+        $sse->sendEvent('error', [
+            'message' => (string)($result['message'] ?? 'Domain purchase stream failed.'),
+        ]);
+        $sse->complete([
+            'success' => false,
+            'completed' => !empty($result['completed']),
+            'message' => (string)($result['message'] ?? 'Domain purchase stream failed.'),
+            'state' => $state,
+            'pagebuilder_state' => $this->buildWorkspaceState($freshPageBuilderSession, $adminId, 80, true),
         ]);
     }
 
@@ -1592,7 +1816,7 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 自动模式下按当前 scope 重新解析设计方向（含适配器默认风格），用于只读展示。
+     * 鑷姩妯″紡涓嬫寜褰撳墠 scope 閲嶆柊瑙ｆ瀽璁捐鏂瑰悜锛堝惈閫傞厤鍣ㄩ粯璁ら鏍硷級锛岀敤浜庡彧璇诲睍绀恒€?
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
@@ -1639,7 +1863,7 @@ class AiSiteAgent extends BaseController
     {
         $adminId = (int)$this->getLoginUserId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鏈櫥褰')]);
         }
 
         try {
@@ -1665,7 +1889,7 @@ class AiSiteAgent extends BaseController
     {
         $adminId = (int)$this->getLoginUserId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鏈櫥褰')]);
         }
 
         $error = '';
@@ -1772,7 +1996,7 @@ class AiSiteAgent extends BaseController
     {
         $adminId = (int)$this->getLoginUserId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
+            return $this->fetchJson(['success' => false, 'message' => __('鏈櫥褰')]);
         }
 
         $title = \trim((string)$this->getRequestBodyValue('site_title', $this->getRequestBodyValue('title', '')));
@@ -1796,11 +2020,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
 
         $error = '';
@@ -1831,7 +2055,7 @@ class AiSiteAgent extends BaseController
         if ($targetDomain === '') {
             return $this->jsonError(
                 'TARGET_DOMAIN_REQUIRED',
-                (string)__('请先填写要绑定的目标域名'),
+                (string)__('璇峰厛濉啓瑕佺粦瀹氱殑鐩爣鍩熷悕'),
                 ['target_domain']
             );
         }
@@ -1862,7 +2086,7 @@ class AiSiteAgent extends BaseController
         }
         $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($scope, $directionPatch));
         $scopePatch = \array_replace($scopePatch, $directionPatch);
-        // 方案生成开始时先持久化用户本轮输入（域名/一句话描述/语言/页面类型等），再入队生成任务。
+        // 鏂规鐢熸垚寮€濮嬫椂鍏堟寔涔呭寲鐢ㄦ埛鏈疆杈撳叆锛堝煙鍚?涓€鍙ヨ瘽鎻忚堪/璇█/椤甸潰绫诲瀷绛夛級锛屽啀鍏ラ槦鐢熸垚浠诲姟銆?
         $persistPatch = \array_replace($scopePatch, [
             'plan_locale' => (string)$scope['plan_locale'],
             'plan_confirmed' => 0,
@@ -1883,11 +2107,11 @@ class AiSiteAgent extends BaseController
             && !$confirmRegenerate
         ) {
             $confirmMessage = (string)($planStartDecision['action'] ?? '') === 'translate'
-                ? (string)__('方案语言已变更。是否按新语言重新生成（翻译）建站方案？')
-                : (string)__('检测到建站需求已变更。是否立即重建建站方案？');
+                ? (string)__('鏂规璇█宸插彉鏇淬€傛槸鍚︽寜鏂拌瑷€閲嶆柊鐢熸垚锛堢炕璇戯級寤虹珯鏂规锛')
+                : (string)__('妫€娴嬪埌寤虹珯闇€姹傚凡鍙樻洿銆傛槸鍚︾珛鍗抽噸寤哄缓绔欐柟妗堬紵');
             return $this->fetchJson([
                 'success' => true,
-                'message' => (string)__('检测到方案配置变更，当前先保留旧方案，等待你确认后再重新生成。'),
+                'message' => (string)__('妫€娴嬪埌鏂规閰嶇疆鍙樻洿锛屽綋鍓嶅厛淇濈暀鏃ф柟妗堬紝绛夊緟浣犵‘璁ゅ悗鍐嶉噸鏂扮敓鎴愩€'),
                 'operation' => 'plan',
                 'start_sse' => false,
                 'requires_confirmation' => true,
@@ -1944,7 +2168,7 @@ class AiSiteAgent extends BaseController
         if ((string)($planStartDecision['action'] ?? '') === 'reuse' && $hasPlanDraft && !$hasRetryablePlanFailures && !\in_array($requestedPromptMode, ['refine', 'rebuild', 'resume_plan'], true)) {
             return $this->fetchJson([
                 'success' => true,
-                'message' => (string)__('当前方案无需重建，已保留并回显已有方案内容。'),
+                'message' => (string)__('褰撳墠鏂规鏃犻渶閲嶅缓锛屽凡淇濈暀骞跺洖鏄惧凡鏈夋柟妗堝唴瀹广€'),
                 'operation' => 'plan',
                 'start_sse' => false,
                 'requires_confirmation' => false,
@@ -2012,7 +2236,7 @@ class AiSiteAgent extends BaseController
                 if ($resumeExecutionToken !== '' && $resumeStreamUrl !== '') {
                     return $this->fetchJson([
                         'success' => true,
-                        'message' => (string)__('检测到建站方案任务已在执行中，已继续复用当前任务进度。'),
+                        'message' => (string)__('妫€娴嬪埌寤虹珯鏂规浠诲姟宸插湪鎵ц涓紝宸茬户缁鐢ㄥ綋鍓嶄换鍔¤繘搴︺€'),
                         'operation' => 'plan',
                         'execution_token' => $resumeExecutionToken,
                         'stream_url' => $resumeStreamUrl,
@@ -2032,8 +2256,8 @@ class AiSiteAgent extends BaseController
                         ),
                     ]);
                 }
-                // 后端识别到 plan 已"占位"，但缺少有效 execution_token/stream_url，无法 SSE 复用：
-                // 主动取消旧 active_operation 并重新发起一次启动，避免前端陷入"缺少 SSE 参数"。
+                // 鍚庣璇嗗埆鍒?plan 宸?鍗犱綅"锛屼絾缂哄皯鏈夋晥 execution_token/stream_url锛屾棤娉?SSE 澶嶇敤锛?
+                // 涓诲姩鍙栨秷鏃?active_operation 骞堕噸鏂板彂璧蜂竴娆″惎鍔紝閬垮厤鍓嶇闄峰叆"缂哄皯 SSE 鍙傛暟"銆?
                 $this->cancelActivePlanOperationForScopeChange($session, $adminId);
                 $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
                 $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
@@ -2056,15 +2280,15 @@ class AiSiteAgent extends BaseController
                 if (empty($result['success'])) {
                     return $this->fetchJson([
                         'success' => false,
-                        'message' => (string)($result['message'] ?? __('建站方案启动失败：检测到无效的历史任务记录，已自动清理，请稍后重试')),
+                        'message' => (string)($result['message'] ?? __('寤虹珯鏂规鍚姩澶辫触锛氭娴嬪埌鏃犳晥鐨勫巻鍙蹭换鍔¤褰曪紝宸茶嚜鍔ㄦ竻鐞嗭紝璇风◢鍚庨噸璇')),
                         'operation' => (string)($result['operation'] ?? 'plan'),
                     ]);
                 }
-                // 走到此处说明清理后重试启动成功，继续走下方正常成功响应路径。
+                // 璧板埌姝ゅ璇存槑娓呯悊鍚庨噸璇曞惎鍔ㄦ垚鍔燂紝缁х画璧颁笅鏂规甯告垚鍔熷搷搴旇矾寰勩€?
             } else {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => (string)($result['message'] ?? __('当前无法启动建站方案生成')),
+                    'message' => (string)($result['message'] ?? __('褰撳墠鏃犳硶鍚姩寤虹珯鏂规鐢熸垚')),
                     'operation' => (string)($result['operation'] ?? ''),
                 ]);
             }
@@ -2078,7 +2302,7 @@ class AiSiteAgent extends BaseController
             );
         return $this->fetchJson([
             'success' => true,
-            'message' => (string)__('建站方案生成任务已创建，正在等待系统定时任务调度；通常约 1 分钟内开始执行。当前进度窗口可以关闭，可以继续操作其他内容。'),
+            'message' => (string)__('寤虹珯鏂规鐢熸垚浠诲姟宸插垱寤猴紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涢€氬父绾?1 鍒嗛挓鍐呭紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆'),
             'operation' => (string)($result['operation'] ?? 'plan'),
             'execution_token' => (string)($result['execution_token'] ?? ''),
             'stream_url' => (string)($result['stream_url'] ?? ''),
@@ -2100,25 +2324,23 @@ class AiSiteAgent extends BaseController
 
     private function handleConfirmPlan(): string
     {
-        \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " handleConfirmPlan CALLED\n", \FILE_APPEND);
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
 
         $requestedStage = $this->scopeCompatibilityService->normalizeStage(
             \trim((string)$this->getRequestBodyValue('stage', ''))
         );
         $currentStage = $this->scopeCompatibilityService->normalizeStage((string)$session->getStage());
-        // Pass explicit artifact keys to bypass dehydrateScopePaths which strips plan_json/plan_structured
+        // Pass explicit artifact keys to bypass dehydrateScopePaths which strips plan_json.
         $planArtifactKeys = [
             'plan_json',
-            'plan_structured',
             'plan_markdown',
             'build_plan_v2',
             'plan_projection',
@@ -2141,116 +2363,46 @@ class AiSiteAgent extends BaseController
             $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentStageScope, $scope));
         }
         $scope = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $scope);
-        $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
         $planConfirmationPrepared = $this->executionBlueprintService->prepareStageOnePlanScopeForConfirmation($scope);
         $scope = \is_array($planConfirmationPrepared['scope'] ?? null) ? $planConfirmationPrepared['scope'] : $scope;
         $planConfirmationStage1Validation = \is_array($planConfirmationPrepared['stage1_validation'] ?? null)
             ? $planConfirmationPrepared['stage1_validation']
             : [];
-        $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
-        // Emergency: if plan_json.pages is empty, reload from filesystem artifact
-        $planJsonPages = \is_array($scope['plan_json']['pages'] ?? null) ? $scope['plan_json']['pages'] : [];
-        if ($planJsonPages === []) {
-            $sessionId = (int)$session->getId();
-            $directory = BP . 'data/pagebuilder/session-artifacts/' . $sessionId . '/plan';
-            if (\is_dir($directory)) {
-                foreach (['plan_json', 'plan_structured'] as $artifactKey) {
-                    $prefix = $artifactKey . '-';
-                    $latestFile = null;
-                    $latestMtime = 0;
-                    $handle = @\opendir($directory);
-                    if ($handle !== false) {
-                        while (($entry = \readdir($handle)) !== false) {
-                            if ($entry === '.' || $entry === '..' || !\str_starts_with($entry, $prefix) || !\str_ends_with($entry, '.json')) {
-                                continue;
-                            }
-                            $filePath = $directory . \DIRECTORY_SEPARATOR . $entry;
-                            $mtime = @\filemtime($filePath);
-                            if ($mtime !== false && $mtime > $latestMtime) {
-                                $latestMtime = $mtime;
-                                $latestFile = $filePath;
-                            }
-                        }
-                        \closedir($handle);
-                    }
-                    if ($latestFile !== null) {
-                        $json = @\file_get_contents($latestFile);
-                        if ($json !== false && \trim($json) !== '') {
-                            try {
-                                $decoded = \json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
-                                if (\is_array($decoded) && $decoded !== []) {
-                                    // artifact file has {"value": {...}} wrapper
-                                    $planData = \is_array($decoded['value'] ?? null) ? $decoded['value'] : $decoded;
-                                    if (\is_array($planData['pages'] ?? null) && $planData['pages'] !== []) {
-                                        $scope[$artifactKey] = $planData;
-                                        \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " EMERGENCY_RELOADED {$artifactKey} from {$latestFile} pages=" . \count($planData['pages']) . "\n", \FILE_APPEND);
-                                    }
-                                }
-                            } catch (\JsonException) {
-                            }
-                        }
-                    }
-                }
-            }
-        }
         $hasStageOnePayload = (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
-            || (\is_array($scope['plan_structured'] ?? null) && $scope['plan_structured'] !== [])
             || \trim((string)($scope['plan_markdown'] ?? '')) !== '';
-        $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null)
-            ? $scope['execution_blueprint_draft']
-            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
         $existingBuildPlanV2 = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        if ($executionBlueprintDraft === [] && $existingBuildPlanV2 === []) {
-            if ($hasStageOnePayload) {
-                try {
-                    $fresh = $this->persistExistingPlanDraftOrThrow($session, $adminId, 'plan_confirm');
-                    $scope = $this->scopeCompatibilityService->normalizeScope(
-                        $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN, $planArtifactKeys)
-                    );
-                    $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
-                    $planConfirmationPrepared = $this->executionBlueprintService->prepareStageOnePlanScopeForConfirmation($scope);
-                    $scope = \is_array($planConfirmationPrepared['scope'] ?? null) ? $planConfirmationPrepared['scope'] : $scope;
-                    $planConfirmationStage1Validation = \is_array($planConfirmationPrepared['stage1_validation'] ?? null)
-                        ? $planConfirmationPrepared['stage1_validation']
-                        : [];
-                    $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
-                    $executionBlueprintDraft = \is_array($scope['execution_blueprint_draft'] ?? null)
-                        ? $scope['execution_blueprint_draft']
-                        : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
-                    $existingBuildPlanV2 = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-                } catch (\Throwable) {
-                }
+        if ($hasStageOnePayload && $existingBuildPlanV2 === []) {
+            try {
+                $fresh = $this->persistExistingPlanDraftOrThrow($session, $adminId, 'plan_confirm');
+                $scope = $this->scopeCompatibilityService->normalizeScope(
+                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN, $planArtifactKeys)
+                );
+                $planConfirmationPrepared = $this->executionBlueprintService->prepareStageOnePlanScopeForConfirmation($scope);
+                $scope = \is_array($planConfirmationPrepared['scope'] ?? null) ? $planConfirmationPrepared['scope'] : $scope;
+                $planConfirmationStage1Validation = \is_array($planConfirmationPrepared['stage1_validation'] ?? null)
+                    ? $planConfirmationPrepared['stage1_validation']
+                    : [];
+                $hasStageOnePayload = (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
+                    || \trim((string)($scope['plan_markdown'] ?? '')) !== '';
+                $existingBuildPlanV2 = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+            } catch (\Throwable) {
             }
         }
-        if ($executionBlueprintDraft === [] && $existingBuildPlanV2 === []) {
-            \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " PLAN_NOT_READY: executionBlueprintDraft=" . (\is_array($executionBlueprintDraft) ? 'array(' . \count($executionBlueprintDraft) . ')' : \gettype($executionBlueprintDraft)) . " existingBuildPlanV2=" . (\is_array($existingBuildPlanV2) ? 'array(' . \count($existingBuildPlanV2) . ')' : \gettype($existingBuildPlanV2)) . " hasStageOnePayload=" . ($hasStageOnePayload ? 'true' : 'false') . "\n", \FILE_APPEND);
-            return $this->jsonError('PLAN_NOT_READY', (string)__('尚未生成方案，请先完成方案生成'), ['public_id']);
+        if (!$hasStageOnePayload && $existingBuildPlanV2 === []) {
+            return $this->jsonError('PLAN_NOT_READY', (string)__('灏氭湭鐢熸垚鏂规锛岃鍏堝畬鎴愭柟妗堢敓鎴'), ['public_id']);
         }
 
         if ($this->buildTaskService->hasRetryableAiFailures($scope, 'plan')) {
-            \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " RETRYABLE_AI_FAILURES_PENDING\n", \FILE_APPEND);
             $summary = $this->buildTaskService->summarizeRetryableAiFailures($scope, 'plan');
             return $this->jsonError(
                 'RETRYABLE_AI_FAILURES_PENDING',
-                (string)__('阶段一仍有 AI 生成失败项；当前阶段队列会继续补齐缺失页面，请等待队列续跑完成后再确认。'),
+                (string)__('闃舵涓€浠嶆湁 AI 鐢熸垚澶辫触椤癸紱褰撳墠闃舵闃熷垪浼氱户缁ˉ榻愮己澶遍〉闈紝璇风瓑寰呴槦鍒楃画璺戝畬鎴愬悗鍐嶇‘璁ゃ€'),
                 ['public_id'],
                 ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
             );
         }
-        if (empty($planConfirmationStage1Validation['passed'])) {
-            $issueDetails = \is_array($planConfirmationStage1Validation['issues'] ?? null) ? $planConfirmationStage1Validation['issues'] : [];
-            $issueJson = \json_encode(\array_slice($issueDetails, 0, 3), \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR);
-            \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " PLAN_STAGE1_INCOMPLETE: passed=" . \var_export($planConfirmationStage1Validation['passed'] ?? 'MISSING', true) . " blocking=" . ($planConfirmationStage1Validation['blocking_issue_count'] ?? '?') . " issues=" . $issueJson . "\n", \FILE_APPEND);
-            // Skip the stage1 validation gate entirely — page coverage is checked separately below.
-            // Stage1 issues (missing_section, link_href_not_in_route_contract, etc.) are non-critical contract-level checks
-            // that should not block the build when the plan already covers all selected pages.
-            \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " SKIPPING stage1 validation: page coverage checked separately\n", \FILE_APPEND);
-        }
-        \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " scope_keys=" . \implode(',', \array_keys($scope)) . " has_plan_json=" . (\is_array($scope['plan_json'] ?? null) ? 'array:' . \count($scope['plan_json']) : 'no') . " has_plan_structured=" . (\is_array($scope['plan_structured'] ?? null) ? 'array:' . \count($scope['plan_structured']) : 'no') . " page_types=" . \json_encode($scope['page_types'] ?? 'MISSING') . " plan_json_keys=" . \json_encode(\is_array($scope['plan_json'] ?? null) ? \array_keys($scope['plan_json']) : 'N/A') . " plan_structured_keys=" . \json_encode(\is_array($scope['plan_structured'] ?? null) ? \array_keys($scope['plan_structured']) : 'N/A') . "\n", \FILE_APPEND);
-        \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " plan_json_keys=" . \json_encode(\is_array($scope['plan_json'] ?? null) ? \array_keys($scope['plan_json']) : 'N/A') . " plan_json_pages_count=" . (\is_array($scope['plan_json']['pages'] ?? null) ? \count($scope['plan_json']['pages']) : 'N/A') . " plan_json_pages_keys=" . \json_encode(\is_array($scope['plan_json']['pages'] ?? null) ? \array_keys($scope['plan_json']['pages']) : 'N/A') . "\n", \FILE_APPEND);
         $missingPlanPageTypes = $this->buildTaskService->collectMissingSelectedPlanPageTypes($scope);
         if ($missingPlanPageTypes !== []) {
-            \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " PLAN_PAGE_COVERAGE_INCOMPLETE: missing=" . \implode(',', $missingPlanPageTypes) . "\n", \FILE_APPEND);
             return $this->jsonError(
                 'PLAN_PAGE_COVERAGE_INCOMPLETE',
                 (string)__('Build plan is missing selected page types: %{page_types}. Regenerate the plan until every selected page has an explicit page plan and block plan.', [
@@ -2262,10 +2414,9 @@ class AiSiteAgent extends BaseController
         }
         $planStartDecision = $this->resolvePlanStartDecision($scope);
         if (!empty($planStartDecision['rebuild_required']) || !empty($planStartDecision['source_signature_changed'])) {
-            \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " PLAN_INPUT_STALE: " . \json_encode($planStartDecision) . "\n", \FILE_APPEND);
             return $this->jsonError(
                 'PLAN_INPUT_STALE',
-                (string)__('建站资料已变更，与当前方案不一致。请先点击「重新生成方案」后再确认。'),
+                (string)__('寤虹珯璧勬枡宸插彉鏇达紝涓庡綋鍓嶆柟妗堜笉涓€鑷淬€傝鍏堢偣鍑汇€岄噸鏂扮敓鎴愭柟妗堛€嶅悗鍐嶇‘璁ゃ€'),
                 ['public_id'],
                 ['plan_start_decision' => $planStartDecision]
             );
@@ -2284,14 +2435,6 @@ class AiSiteAgent extends BaseController
         $scopePatch = \array_replace($directionLockPatch, [
             'plan_confirmed' => 1,
         ]);
-        if ($executionBlueprintDraft !== []) {
-            $scopePatch['execution_blueprint'] = $executionBlueprintDraft;
-            $scopePatch['execution_blueprint_confirmed_at'] = \date('Y-m-d H:i:s');
-            $scopePatch['execution_blueprint_confirmed_signature'] = (string)($executionBlueprintDraft['signature'] ?? '');
-        }
-        if (isset($executionBlueprintDraft['workspace_track'])) {
-            $scopePatch['workspace_track'] = (string)$executionBlueprintDraft['workspace_track'];
-        }
         $buildPlanSourceScope = \array_replace($scope, $scopePatch);
         foreach ([
             'build_plan_v2_validation',
@@ -2304,7 +2447,6 @@ class AiSiteAgent extends BaseController
         $buildPlanPatch = $this->buildPlanV2ConfirmationScopePatch($buildPlanSourceScope);
         unset($buildPlanSourceScope);
         if ((int)($buildPlanPatch['build_plan_confirmed'] ?? 0) !== 1) {
-            \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " BUILD_PLAN_V2_INVALID: confirmed=" . \var_export($buildPlanPatch['build_plan_confirmed'] ?? 'MISSING', true) . "\n", \FILE_APPEND);
             $buildPlanValidation = \is_array($buildPlanPatch['build_plan_v2_validation'] ?? null)
                 ? $buildPlanPatch['build_plan_v2_validation']
                 : [];
@@ -2315,8 +2457,8 @@ class AiSiteAgent extends BaseController
                 ? \implode('; ', \array_slice($buildPlanErrors, 0, 6))
                 : '';
             $message = $detail !== ''
-                ? (string)__('方案合同校验失败：%{detail}', ['detail' => $detail])
-                : (string)__('方案合同校验失败，请重新生成建站方案。');
+                ? (string)__('鏂规鍚堝悓鏍￠獙澶辫触锛?{detail}', ['detail' => $detail])
+                : (string)__('鏂规鍚堝悓鏍￠獙澶辫触锛岃閲嶆柊鐢熸垚寤虹珯鏂规銆');
 
             return $this->jsonError(
                 'BUILD_PLAN_V2_INVALID',
@@ -2337,15 +2479,10 @@ class AiSiteAgent extends BaseController
             (string)($confirmedScope['workspace_track'] ?? '')
         );
         $scopePatch = \array_replace($scopePatch, $this->buildTaskService->extractBuildPlanDerivedScopePatch($confirmedScope));
-        if (\is_array($confirmedScope['build_blueprint'] ?? null) && $confirmedScope['build_blueprint'] !== []) {
-            $scopePatch['build_blueprint'] = $confirmedScope['build_blueprint'];
-        }
-        if (\is_array($confirmedScope['build_tasks'] ?? null) && $confirmedScope['build_tasks'] !== []) {
-            $scopePatch['build_tasks'] = $confirmedScope['build_tasks'];
-        }
         $scopePatch['build_task_summary'] = $this->buildTaskService->summarize($confirmedScope);
+        $confirmedPlanSignature = $this->resolveConfirmedPlanSignature(\array_replace($scope, $scopePatch));
         $scopePatch['build_summary'] = [
-            'confirmed_execution_blueprint_signature' => (string)($executionBlueprintDraft['signature'] ?? ''),
+            'confirmed_plan_signature' => $confirmedPlanSignature,
             'build_plan_contract_id' => (string)($scopePatch['build_plan_v2']['contract_meta']['id'] ?? ''),
         ];
 
@@ -2354,7 +2491,6 @@ class AiSiteAgent extends BaseController
             || \strtolower(\trim((string)$this->getRequestBodyValue('start_build', '1'))) === '0';
 
         $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
-        \file_put_contents(BP . 'var/log/confirm_plan.log', \date('Y-m-d H:i:s') . " SUCCESS: plan_confirmed, confirmOnly=" . ($confirmOnly ? 'true' : 'false') . "\n", \FILE_APPEND);
         if (!$confirmOnly) {
             $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         }
@@ -2364,11 +2500,11 @@ class AiSiteAgent extends BaseController
             $adminId,
             $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
             'plan_confirmed',
-            (string)__('建站方案已确认，已创建执行蓝图，可直接进入后台构建。'),
+            (string)__('寤虹珯鏂规宸茬‘璁わ紝宸插垱寤烘瀯寤轰换鍔¤鍒掞紝鍙洿鎺ヨ繘鍏ュ悗鍙版瀯寤恒€'),
             [
                 'operation' => 'plan_confirm',
                 'details' => [
-                    'execution_blueprint_signature' => (string)($executionBlueprintDraft['signature'] ?? ''),
+                    'plan_signature' => $confirmedPlanSignature,
                     'build_plan_contract_id' => (string)($scopePatch['build_plan_v2']['contract_meta']['id'] ?? ''),
                     'build_plan_task_count' => \is_array($scopePatch['build_plan_v2']['tasks'] ?? null) ? \count($scopePatch['build_plan_v2']['tasks']) : 0,
                 ],
@@ -2398,7 +2534,7 @@ class AiSiteAgent extends BaseController
         );
         if (!empty($buildStartResult['success'])) {
             $buildStartResult['start_sse'] = true;
-            $buildStartResult['message'] = (string)__('建站方案已确认，后台构建队列已创建。');
+            $buildStartResult['message'] = (string)__('寤虹珯鏂规宸茬‘璁わ紝鍚庡彴鏋勫缓闃熷垪宸插垱寤恒€');
         }
 
         return $this->fetchJson($buildStartResult);
@@ -2415,20 +2551,24 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $promptMode = \trim((string)$this->getRequestBodyValue('prompt_mode', ''));
         if ($adminId <= 0 || $publicId === '' || !\in_array($promptMode, ['refine', 'rebuild', 'resume_plan'], true)) {
-            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('建站方案流参数无效'), ['public_id', 'prompt_mode']);
+            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('寤虹珯鏂规娴佸弬鏁版棤鏁'), ['public_id', 'prompt_mode']);
             $sse->complete(['success' => false]);
             return;
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), ['public_id'], 404);
+            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), ['public_id'], 404);
             $sse->complete(['success' => false]);
             return;
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
+            $this->sessionService->loadScopeForStage(
+                $session,
+                AiSiteAgentSession::STAGE_PLAN,
+                ['plan_json', 'plan_markdown']
+            )
         );
         $this->sendSseContractError(
             $sse,
@@ -2465,17 +2605,17 @@ class AiSiteAgent extends BaseController
         if ($planLocaleChanged && !$pageTypesChanged) {
             $targetScope = $targetScope !== '' ? $targetScope : 'locale_translation';
             $instruction = $instruction !== ''
-                ? ((string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。') . ' ' . $instruction)
-                : (string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。');
+                ? ((string)__('璇锋寜鐩爣 plan_locale 缈昏瘧褰撳墠鏂规锛屽苟淇濈暀鍘熸湁缁撴瀯涓庨〉闈㈢被鍨嬨€') . ' ' . $instruction)
+                : (string)__('璇锋寜鐩爣 plan_locale 缈昏瘧褰撳墠鏂规锛屽苟淇濈暀鍘熸湁缁撴瀯涓庨〉闈㈢被鍨嬨€');
         }
         if ($effectivePromptMode === 'rebuild') {
             $instruction = $instruction !== ''
-                ? ((string)__('本轮属于重建：请基于用户最新要求，完整重新生成建站方案。按全新方案输出，不沿用旧方案结构，不输出局部片段，必须覆盖 markdown 全文与完整 plan_json。') . ' ' . $instruction)
-                : (string)__('本轮属于重建：请基于用户最新要求，完整重新生成建站方案。按全新方案输出，不沿用旧方案结构，不输出局部片段，必须覆盖 markdown 全文与完整 plan_json。');
+                ? ((string)__('鏈疆灞炰簬閲嶅缓锛氳鍩轰簬鐢ㄦ埛鏈€鏂拌姹傦紝瀹屾暣閲嶆柊鐢熸垚寤虹珯鏂规銆傛寜鍏ㄦ柊鏂规杈撳嚭锛屼笉娌跨敤鏃ф柟妗堢粨鏋勶紝涓嶈緭鍑哄眬閮ㄧ墖娈碉紝蹇呴』瑕嗙洊 markdown 鍏ㄦ枃涓庡畬鏁?plan_json銆') . ' ' . $instruction)
+                : (string)__('鏈疆灞炰簬閲嶅缓锛氳鍩轰簬鐢ㄦ埛鏈€鏂拌姹傦紝瀹屾暣閲嶆柊鐢熸垚寤虹珯鏂规銆傛寜鍏ㄦ柊鏂规杈撳嚭锛屼笉娌跨敤鏃ф柟妗堢粨鏋勶紝涓嶈緭鍑哄眬閮ㄧ墖娈碉紝蹇呴』瑕嗙洊 markdown 鍏ㄦ枃涓庡畬鏁?plan_json銆');
         } else {
             $instruction = $instruction !== ''
-                ? ((string)__('本轮属于对话式微调：请把用户最新指令当作新的对话上下文，重新生成完整建站方案。允许保留有效历史内容，但必须严格落实本轮新增/删除/改写要求。输出必须是完整方案（非局部片段），覆盖 markdown 全文与完整 plan_json。') . ' ' . $instruction)
-                : (string)__('本轮属于对话式微调：请把用户最新指令当作新的对话上下文，重新生成完整建站方案。允许保留有效历史内容，但必须严格落实本轮新增/删除/改写要求。输出必须是完整方案（非局部片段），覆盖 markdown 全文与完整 plan_json。');
+                ? ((string)__('鏈疆灞炰簬瀵硅瘽寮忓井璋冿細璇锋妸鐢ㄦ埛鏈€鏂版寚浠ゅ綋浣滄柊鐨勫璇濅笂涓嬫枃锛岄噸鏂扮敓鎴愬畬鏁村缓绔欐柟妗堛€傚厑璁镐繚鐣欐湁鏁堝巻鍙插唴瀹癸紝浣嗗繀椤讳弗鏍艰惤瀹炴湰杞柊澧?鍒犻櫎/鏀瑰啓瑕佹眰銆傝緭鍑哄繀椤绘槸瀹屾暣鏂规锛堥潪灞€閮ㄧ墖娈碉級锛岃鐩?markdown 鍏ㄦ枃涓庡畬鏁?plan_json銆') . ' ' . $instruction)
+                : (string)__('鏈疆灞炰簬瀵硅瘽寮忓井璋冿細璇锋妸鐢ㄦ埛鏈€鏂版寚浠ゅ綋浣滄柊鐨勫璇濅笂涓嬫枃锛岄噸鏂扮敓鎴愬畬鏁村缓绔欐柟妗堛€傚厑璁镐繚鐣欐湁鏁堝巻鍙插唴瀹癸紝浣嗗繀椤讳弗鏍艰惤瀹炴湰杞柊澧?鍒犻櫎/鏀瑰啓瑕佹眰銆傝緭鍑哄繀椤绘槸瀹屾暣鏂规锛堥潪灞€閮ㄧ墖娈碉級锛岃鐩?markdown 鍏ㄦ枃涓庡畬鏁?plan_json銆');
         }
 
         if ($effectivePromptMode === 'rebuild') {
@@ -2489,8 +2629,8 @@ class AiSiteAgent extends BaseController
 
         $sse->sendEvent('start', [
             'message' => $effectivePromptMode === 'rebuild'
-                ? (string)__('正在重建建站方案')
-                : (string)__('正在微调建站方案'),
+                ? (string)__('姝ｅ湪閲嶅缓寤虹珯鏂规')
+                : (string)__('姝ｅ湪寰皟寤虹珯鏂规'),
             'prompt_mode' => $effectivePromptMode,
             'round' => $round,
             'target_scope' => $targetScope,
@@ -2498,7 +2638,7 @@ class AiSiteAgent extends BaseController
             'locale_changed_force_rebuild' => ($effectivePromptMode !== $promptMode) ? 1 : 0,
         ]);
         $sse->sendEvent('progress', [
-            'message' => (string)__('正在整理当前站点方案上下文'),
+            'message' => (string)__('姝ｅ湪鏁寸悊褰撳墠绔欑偣鏂规涓婁笅鏂'),
             'prompt_mode' => $effectivePromptMode,
             'progress_percent' => 20,
         ]);
@@ -2550,20 +2690,19 @@ class AiSiteAgent extends BaseController
                 ], $emitAiChunkProgress, $emitPlanPipelineProgress);
             $this->flushPlanSseRawChunkBuffer($sse, $effectivePromptMode, $rawChunkInfoBuffer);
             if ((int)($scope['fake_mode'] ?? 0) !== 1 && (int)($artifacts['ai_generated'] ?? 0) !== 1) {
-                throw new \RuntimeException((string)__('建站方案必须由 AI 生成，本次未成功调用 AI，请检查模型配置后重试。'));
+                throw new \RuntimeException((string)__('寤虹珯鏂规蹇呴』鐢?AI 鐢熸垚锛屾湰娆℃湭鎴愬姛璋冪敤 AI锛岃妫€鏌ユā鍨嬮厤缃悗閲嶈瘯銆'));
             }
 
             $derivedPatch = \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [];
-            $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
             $markdown = (string)($artifacts['markdown'] ?? '');
-            $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
             $planJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
+            if ($planJson === [] && \is_array($artifacts['structured'] ?? null)) {
+                $planJson = $artifacts['structured'];
+            }
             $scopePatch = \array_replace($derivedPatch, [
                 'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
-                'execution_blueprint_draft' => $executionBlueprint,
                 'plan_json' => $planJson,
                 'plan_markdown' => $markdown,
-                'plan_structured' => $structured !== [] ? $structured : $planJson,
                 'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
                 'plan_locale' => $this->resolvePlanLocale($scope),
                 'plan_ai_generated' => (int)($artifacts['ai_generated'] ?? 0),
@@ -2573,7 +2712,7 @@ class AiSiteAgent extends BaseController
                 'stage1_generation_attempts' => \is_array($planJson['stage1_generation_attempts'] ?? null) ? $planJson['stage1_generation_attempts'] : [],
                 'partial_retry_required' => (int)($artifacts['partial_retry_required'] ?? 0),
                 'plan_generated_at' => \date('Y-m-d H:i:s'),
-                // 微调在已有确认状态下默认保持已确认，避免仅做文案/区块增补后打断后续阶段。
+                // 寰皟鍦ㄥ凡鏈夌‘璁ょ姸鎬佷笅榛樿淇濇寔宸茬‘璁わ紝閬垮厤浠呭仛鏂囨/鍖哄潡澧炶ˉ鍚庢墦鏂悗缁樁娈点€?
                 'plan_confirmed' => $effectivePromptMode === 'rebuild' ? 0 : (int)($scope['plan_confirmed'] ?? 0),
                 'plan_last_prompt_mode' => $effectivePromptMode,
                 'plan_last_target_scope' => $targetScope,
@@ -2595,7 +2734,7 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
                 'plan_saved',
-                (string)__('建站方案已保存'),
+                (string)__('寤虹珯鏂规宸蹭繚瀛'),
                 [
                     'operation' => 'plan',
                     'details' => [
@@ -2613,20 +2752,20 @@ class AiSiteAgent extends BaseController
                 $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
                 $effectivePromptMode === 'rebuild' ? 'plan_rebuilt' : 'plan_refined',
                 $effectivePromptMode === 'rebuild'
-                    ? (string)__('建站方案已重建，请确认后进入构建流程')
-                    : (string)__('建站方案已微调，请确认后进入构建流程'),
+                    ? (string)__('寤虹珯鏂规宸查噸寤猴紝璇风‘璁ゅ悗杩涘叆鏋勫缓娴佺▼')
+                    : (string)__('寤虹珯鏂规宸插井璋冿紝璇风‘璁ゅ悗杩涘叆鏋勫缓娴佺▼'),
                 [
                     'operation' => $effectivePromptMode === 'rebuild' ? 'rebuild_plan' : 'refine_plan',
                     'details' => [
                         'target_scope' => $targetScope,
                         'round' => $round,
                         'plan_locale' => $requestedPlanLocale,
-                        'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? ''),
+                        'plan_signature' => (string)($executionBlueprint['signature'] ?? ''),
                     ],
                 ]
             );
             $sse->sendEvent('progress', [
-                'message' => (string)__('正在输出更新后的建站方案'),
+                'message' => (string)__('姝ｅ湪杈撳嚭鏇存柊鍚庣殑寤虹珯鏂规'),
                 'prompt_mode' => $effectivePromptMode,
                 'progress_percent' => 80,
             ]);
@@ -2646,16 +2785,15 @@ class AiSiteAgent extends BaseController
             $sse->complete([
                 'success' => true,
                 'message' => $effectivePromptMode === 'rebuild'
-                    ? (string)__('建站方案重建完成')
-                    : (string)__('建站方案微调完成'),
+                    ? (string)__('寤虹珯鏂规閲嶅缓瀹屾垚')
+                    : (string)__('寤虹珯鏂规寰皟瀹屾垚'),
                 'prompt_mode' => $effectivePromptMode,
                 'requested_prompt_mode' => $promptMode,
                 'plan_locale' => $requestedPlanLocale,
                 'plan' => [
                     'json' => $planJson,
                     'markdown' => $markdown,
-                    'structured' => $structured !== [] ? $structured : $planJson,
-                    'execution_blueprint' => $executionBlueprint,
+                    'structured' => $planJson,
                 ],
                 'state' => $state,
             ]);
@@ -2697,7 +2835,7 @@ class AiSiteAgent extends BaseController
             $aiChunkCount++;
             if ($aiChunkCount === 1 || $aiChunkCount % 12 === 0) {
                 $sse->sendEvent('progress', [
-                    'message' => (string)__('AI 正在生成建站方案内容…'),
+                    'message' => (string)__('AI 姝ｅ湪鐢熸垚寤虹珯鏂规鍐呭鈥'),
                     'prompt_mode' => $effectivePromptMode,
                     'progress_percent' => 55,
                     'ai_chunk_count' => $aiChunkCount,
@@ -2730,10 +2868,6 @@ class AiSiteAgent extends BaseController
     {
         return [
             '_artifact_refs' => [],
-            'execution_blueprint' => [],
-            'execution_blueprint_confirmed_at' => '',
-            'execution_blueprint_confirmed_signature' => '',
-            'execution_blueprint_draft' => [],
             'build_plan_v2' => [],
             'plan_projection' => [],
             'content_manifest' => [],
@@ -2753,7 +2887,6 @@ class AiSiteAgent extends BaseController
             'plan_last_round' => 1,
             'plan_json' => [],
             'plan_markdown' => '',
-            'plan_structured' => [],
             'plan_workbench' => [],
             'stage1_contract' => [],
             'stage1_validation_report' => [],
@@ -2774,15 +2907,41 @@ class AiSiteAgent extends BaseController
             'build_summary' => [],
             'build_task_summary' => [],
             '_plan_sse_request' => [],
-            'build_blueprint' => [],
             'build_workbench' => [],
             'build_contracts' => [],
             'render_data_contract' => [],
-            'build_tasks' => [],
             'task_results' => [],
             'qa_report_v2' => [],
             'repair_patch' => [],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveConfirmedPlanSignature(array $scope): string
+    {
+        $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
+        $confirmed = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
+        $contractMeta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
+
+        foreach ([
+            $confirmed['confirmed_signature'] ?? null,
+            $confirmed['plan_signature'] ?? null,
+            $confirmed['signature'] ?? null,
+            $planJson['signature'] ?? null,
+            $planJson['plan_signature'] ?? null,
+            $contractMeta['id'] ?? null,
+        ] as $candidate) {
+            $signature = \trim((string)$candidate);
+            if ($signature !== '') {
+                return $signature;
+            }
+        }
+
+        return '';
     }
 
     private function persistExistingPlanDraftOrThrow(
@@ -2794,31 +2953,17 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
         );
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        if ($planStructured === [] && $planJson !== []) {
-            $planStructured = $planJson;
-        }
-        if ($planJson === [] && $planStructured !== []) {
-            $planJson = $planStructured;
-        }
         $planMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
-        $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null)
-            ? $scope['execution_blueprint_draft']
-            : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []);
 
-        if ($planMarkdown === '' && $planJson === [] && $planStructured === [] && $executionBlueprint === []) {
+        if ($planMarkdown === '' && $planJson === []) {
             throw new \RuntimeException('Stage-one plan draft is not ready to save source=' . $source);
         }
 
         $patch = [
             'plan_json' => $planJson,
-            'plan_structured' => $planStructured,
             'plan_markdown' => $planMarkdown,
             'plan_generated_at' => (string)($scope['plan_generated_at'] ?? \date('Y-m-d H:i:s')),
         ];
-        if ($executionBlueprint !== []) {
-            $patch['execution_blueprint_draft'] = $executionBlueprint;
-        }
 
         $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $patch);
         if (!$saved) {
@@ -2827,15 +2972,15 @@ class AiSiteAgent extends BaseController
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $freshScope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
+            $this->sessionService->loadScopeForStage(
+                $fresh,
+                AiSiteAgentSession::STAGE_PLAN,
+                ['plan_json', 'plan_markdown']
+            )
         );
         $freshPlanJson = \is_array($freshScope['plan_json'] ?? null) ? $freshScope['plan_json'] : [];
-        $freshPlanStructured = \is_array($freshScope['plan_structured'] ?? null) ? $freshScope['plan_structured'] : [];
         $freshPlanMarkdown = \trim((string)($freshScope['plan_markdown'] ?? ''));
-        $freshExecutionBlueprint = \is_array($freshScope['execution_blueprint_draft'] ?? null)
-            ? $freshScope['execution_blueprint_draft']
-            : (\is_array($freshScope['execution_blueprint'] ?? null) ? $freshScope['execution_blueprint'] : []);
-        if ($freshPlanMarkdown !== '' || $freshPlanJson !== [] || $freshPlanStructured !== [] || $freshExecutionBlueprint !== []) {
+        if ($freshPlanMarkdown !== '' || $freshPlanJson !== []) {
             return $fresh;
         }
 
@@ -2857,7 +3002,7 @@ class AiSiteAgent extends BaseController
             \error_log('[AiSiteStartBuild] failed: ' . $throwable->getMessage() . ' in ' . $throwable->getFile() . ':' . $throwable->getLine());
             return $this->jsonError(
                 'START_BUILD_FAILED',
-                (string)__('启动构建失败，请刷新页面后重试。'),
+                (string)__('鍚姩鏋勫缓澶辫触锛岃鍒锋柊椤甸潰鍚庨噸璇曘€'),
                 self::PARAMS_PUBLIC_ID
             );
         }
@@ -2868,11 +3013,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
 
         $error = '';
@@ -2887,21 +3032,8 @@ class AiSiteAgent extends BaseController
             $scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
         $scopePatch = $this->dropEmptyProfileIdentityPatchValues($scopePatch);
-        $siteProfileManual = \is_array($scopePatch['site_profile_manual'] ?? null) ? $scopePatch['site_profile_manual'] : [];
-        foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'default_locale', 'plan_locale'] as $manualField) {
-            if (
-                \array_key_exists($manualField, $scopePatch)
-                && $this->isMeaningfulProfileManualValue($scopePatch[$manualField])
-                && !\array_key_exists($manualField, $siteProfileManual)
-            ) {
-                $siteProfileManual[$manualField] = true;
-            }
-        }
-        if ($siteProfileManual !== []) {
-            $scopePatch['site_profile_manual'] = $siteProfileManual;
-        }
         $currentScope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->sessionService->loadScopeForBuildOperation($session)
         );
         $currentScope = $this->normalizeBuildPlanConfirmationForBuild($currentScope);
         $scopePatch = $this->buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $currentScope);
@@ -2920,12 +3052,6 @@ class AiSiteAgent extends BaseController
                 (string)($mergedScope['workspace_track'] ?? '')
             );
             $scopePatch = \array_replace($scopePatch, $this->buildTaskService->extractBuildPlanDerivedScopePatch($mergedScope));
-            if (\is_array($mergedScope['build_blueprint'] ?? null) && $mergedScope['build_blueprint'] !== []) {
-                $scopePatch['build_blueprint'] = $mergedScope['build_blueprint'];
-            }
-            if (\is_array($mergedScope['build_tasks'] ?? null) && $mergedScope['build_tasks'] !== []) {
-                $scopePatch['build_tasks'] = $mergedScope['build_tasks'];
-            }
             $scopePatch['build_task_summary'] = $this->buildTaskService->summarize($mergedScope);
             if (\is_array($scopePatch['build_summary'] ?? null)) {
                 unset($scopePatch['build_summary']['task_summary']);
@@ -2935,7 +3061,7 @@ class AiSiteAgent extends BaseController
             $summary = $this->buildTaskService->summarizeRetryableAiFailures($mergedScope, 'plan');
             return $this->jsonError(
                 'RETRYABLE_AI_FAILURES_PENDING',
-                (string)__('仍有 AI 生成失败项；当前队列会继续补齐缺失任务，请等待续跑完成后再构建。'),
+                (string)__('浠嶆湁 AI 鐢熸垚澶辫触椤癸紱褰撳墠闃熷垪浼氱户缁ˉ榻愮己澶变换鍔★紝璇风瓑寰呯画璺戝畬鎴愬悗鍐嶆瀯寤恒€'),
                 ['public_id'],
                 ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
             );
@@ -2943,7 +3069,7 @@ class AiSiteAgent extends BaseController
         if (!$this->isBuildPlanReadyForBuild($mergedScope)) {
             return $this->jsonError(
                 'BUILD_PLAN_REQUIRED_BEFORE_BUILD',
-                (string)__('请先确认建站方案生成的执行蓝图，再开始执行构建'),
+                (string)__('璇峰厛纭寤虹珯鏂规鐢熸垚鐨勬瀯寤轰换鍔¤鍒掞紝鍐嶅紑濮嬫墽琛屾瀯寤'),
                 ['public_id', 'build_plan_confirmed']
             );
         }
@@ -2957,7 +3083,7 @@ class AiSiteAgent extends BaseController
             if ($resumeTaskCount <= 0 && $retryableFailureCount <= 0) {
                 return $this->fetchJson([
                     'success' => true,
-                    'message' => (string)__('当前没有待继续的构建任务'),
+                    'message' => (string)__('褰撳墠娌℃湁寰呯户缁殑鏋勫缓浠诲姟'),
                     'data' => $this->buildWorkspaceOperationPayload(
                         $this->buildWorkspaceState($session, $adminId, 24, true),
                         'build'
@@ -3000,6 +3126,9 @@ class AiSiteAgent extends BaseController
             if (\array_key_exists($field, $payload) && !$this->isMeaningfulProfileManualValue($payload[$field])) {
                 unset($payload[$field]);
             }
+        }
+        if (\array_key_exists('site_profile_manual', $payload) && !\is_array($payload['site_profile_manual'])) {
+            unset($payload['site_profile_manual']);
         }
         if (\is_array($payload['site_profile_manual'] ?? null)) {
             foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'default_locale', 'plan_locale'] as $field) {
@@ -3052,12 +3181,12 @@ class AiSiteAgent extends BaseController
             $slotType = 'section_image';
         }
         if ($adminId <= 0 || $publicId === '' || $slotId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), ['public_id', 'slot_id']);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), ['public_id', 'slot_id']);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -3208,12 +3337,7 @@ class AiSiteAgent extends BaseController
             if ($queueId > 0) {
                 $status = \trim((string)($existing['status'] ?? ''));
                 $normalizedStatus = \strtolower($status);
-                $isStaleRunning = false;
-                if ($normalizedStatus === 'running') {
-                    $pid = (int)($existing['pid'] ?? 0);
-                    $isStaleRunning = $pid <= 0 || !\Weline\Framework\System\Process\Processer::isRunningByPid($pid);
-                }
-                if (\in_array($normalizedStatus, ['pending', 'queued', 'running'], true) && !$isStaleRunning) {
+                if (\in_array($normalizedStatus, ['pending', 'queued', 'running'], true)) {
                     $existingContent = $existing['content'] ?? [];
                     if (\is_string($existingContent)) {
                         $decoded = \json_decode($existingContent, true);
@@ -3259,6 +3383,16 @@ class AiSiteAgent extends BaseController
                             'reused' => true,
                         ];
                     }
+                    if ($normalizedStatus === 'running') {
+                        return [
+                            'queue_id' => $queueId,
+                            'execution_token' => (string)(\is_array($existingContent)
+                                ? ($existingContent['execution_token'] ?? $existingContent['token'] ?? '')
+                                : ''),
+                            'queue_status' => $status,
+                            'reused' => true,
+                        ];
+                    }
                 }
                 $updated = w_query('queue', 'update', [
                     'queue_id' => $queueId,
@@ -3271,9 +3405,7 @@ class AiSiteAgent extends BaseController
                         'auto' => true,
                         'biz_key' => $bizKey,
                         'result' => '',
-                        'process' => $isStaleRunning
-                            ? 'Recovered stale image asset queue runtime; waiting for system scheduler.'
-                            : '',
+                        'process' => '',
                         'pid' => 0,
                         'finished' => 0,
                     ],
@@ -3623,11 +3755,11 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
         if ($adminId <= 0 || $publicId === '' || $pageType === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_REGENERATE);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_REGENERATE);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
         return $this->fetchJson($this->startOperation(
             $session,
@@ -3650,12 +3782,12 @@ class AiSiteAgent extends BaseController
         $componentLabel = \trim((string)$this->getRequestBodyValue('component_label', ''));
 
         if ($adminId <= 0 || $publicId === '' || $pageType === '' || $componentCode === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_REFINE_COMPONENT);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_REFINE_COMPONENT);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -3663,7 +3795,7 @@ class AiSiteAgent extends BaseController
         );
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
-            return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_REGENERATE);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鎵€閫夐〉闈㈢被鍨嬩笉鍦ㄥ綋鍓嶅伐浣滃尯涓'), self::PARAMS_REGENERATE);
         }
 
         $componentCodes = $this->resolveRequestedBlockComponentCodes($componentCode);
@@ -3727,7 +3859,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'component_refine_requested',
-            (string)__('已记录区块微调：%{component}', ['component' => $label]),
+            (string)__('宸茶褰曞尯鍧楀井璋冿細%{component}', ['component' => $label]),
             [
                 'operation' => 'block_regenerate',
                 'page_type' => $pageType,
@@ -3887,7 +4019,7 @@ class AiSiteAgent extends BaseController
             if (!$this->buildTaskService->hasConfirmedBuildPlanForBuild($buildScope)) {
                 return $this->jsonError(
                     'BUILD_PLAN_REQUIRED_BEFORE_BUILD',
-                    (string)__('构建缺少已确认的执行蓝图，请先重新生成并确认建站方案。'),
+                    (string)__('鏋勫缓缂哄皯宸茬‘璁ょ殑鏋勫缓浠诲姟璁″垝锛岃鍏堥噸鏂扮敓鎴愬苟纭寤虹珯鏂规銆'),
                     ['public_id', 'build_plan_confirmed']
                 );
             }
@@ -4310,13 +4442,13 @@ class AiSiteAgent extends BaseController
             $this->sendSseContractError(
                 $sse,
                 'INVALID_PARAMS',
-                (string)__('参数无效'),
+                (string)__('鍙傛暟鏃犳晥'),
                 $refine ? self::PARAMS_REFINE_COMPONENT : self::PARAMS_REGENERATE
             );
             $sse->sendEvent('done', [
                 'success' => false,
                 'operation' => $operationLabel,
-                'message' => __('参数无效'),
+                'message' => __('鍙傛暟鏃犳晥'),
                 'page_type' => $pageType,
                 'component_code' => $componentCode,
                 'realtime' => true,
@@ -4378,7 +4510,7 @@ class AiSiteAgent extends BaseController
                     $sse->sendEvent('info', [
                         'operation' => $operationLabel,
                         'component_code' => $candidateCode,
-                        'message' => (string)__('继续处理下一个区块：%{1}', [$candidateCode]),
+                        'message' => (string)__('缁х画澶勭悊涓嬩竴涓尯鍧楋細%{1}', [$candidateCode]),
                     ]);
                 }
                 $lastResult = $this->runRegenerateBlockOperation(
@@ -4393,7 +4525,7 @@ class AiSiteAgent extends BaseController
             }
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
             $sse->sendEvent('info', [
-                'event_type' => '到这里了',
+                'event_type' => '鍒拌繖閲屼簡',
                 'operation' => $operationLabel,
                 'message' => json_encode($pageTypes, JSON_UNESCAPED_UNICODE),
             ]);
@@ -4406,7 +4538,7 @@ class AiSiteAgent extends BaseController
             $sse->sendEvent('done', [
                 'success' => true,
                 'operation' => $operationLabel,
-                'message' => (string)($lastResult['message'] ?? ($refine ? __('区块微调完成') : __('区块重建完成'))),
+                'message' => (string)($lastResult['message'] ?? ($refine ? __('鍖哄潡寰皟瀹屾垚') : __('鍖哄潡閲嶅缓瀹屾垚'))),
                 'page_type' => (string)($lastResult['page_type'] ?? $pageType),
                 'component_code' => $componentCode,
                 'section_code' => (string)($lastResult['section_code'] ?? ''),
@@ -4477,7 +4609,7 @@ class AiSiteAgent extends BaseController
             }
         }
 
-        throw new \RuntimeException((string)__('未找到组件对应的构建任务：%{1}', [$componentCode]));
+        throw new \RuntimeException((string)__('鏈壘鍒扮粍浠跺搴旂殑鏋勫缓浠诲姟锛?{1}', [$componentCode]));
     }
 
     /**
@@ -4772,13 +4904,13 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'block_regenerate',
-            __('正在重建区块：%{page}', ['page' => $pageLabel]),
+            __('姝ｅ湪閲嶅缓鍖哄潡锛?{page}', ['page' => $pageLabel]),
             35,
             $pageType
         );
 
         if ($no_Ai_Generate) {
-            // 临时调试：短路真实 AI 生成，仅验证 block_refine/block_regenerate 的 SSE 收尾链路是否完整（preview_ready + done）。
+            // 涓存椂璋冭瘯锛氱煭璺湡瀹?AI 鐢熸垚锛屼粎楠岃瘉 block_refine/block_regenerate 鐨?SSE 鏀跺熬閾捐矾鏄惁瀹屾暣锛坧review_ready + done锛夈€?
             $affectedPageTypes = $sharedRegion !== ''
                 ? $this->scopeCompatibilityService->resolveScopedPageTypes($scope)
                 : [$pageType];
@@ -4796,7 +4928,7 @@ class AiSiteAgent extends BaseController
             $this->emitBlockPreviewReadyEvent(
                 $sse,
                 $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                (string)__('区块已生成（DEMO），正在刷新当前预览'),
+                (string)__('鍖哄潡宸茬敓鎴愶紙DEMO锛夛紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
                 $pageType,
                 $componentCode,
                 $sectionCode,
@@ -4809,7 +4941,7 @@ class AiSiteAgent extends BaseController
             if (\is_array($scope['build_summary'] ?? null)) {
                 unset($scope['build_summary']['task_summary']);
             }
-            $doneMessage = $instruction !== '' ? (string)__('区块微调完成（DEMO）') : (string)__('区块重建完成（DEMO）');
+            $doneMessage = $instruction !== '' ? (string)__('鍖哄潡寰皟瀹屾垚锛圖EMO锛') : (string)__('鍖哄潡閲嶅缓瀹屾垚锛圖EMO锛');
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
             if (\in_array($activeOperationName, ['block_refine', 'block_regenerate'], true)) {
@@ -4836,7 +4968,7 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
                 'task_completed',
-                (string)__('区块任务已完成（DEMO）：%{page}', ['page' => $pageLabel]),
+                (string)__('鍖哄潡浠诲姟宸插畬鎴愶紙DEMO锛夛細%{page}', ['page' => $pageLabel]),
                 [
                     'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
                     'page_type' => $pageType,
@@ -4931,7 +5063,7 @@ class AiSiteAgent extends BaseController
                 $this->emitBlockPreviewReadyEvent(
                     $sse,
                     $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                    (string)__('区块已生成，正在刷新当前预览'),
+                    (string)__('鍖哄潡宸茬敓鎴愶紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
                     $pageType,
                     $componentCode,
                     $sectionCode,
@@ -5000,7 +5132,7 @@ class AiSiteAgent extends BaseController
                 $this->emitBlockPreviewReadyEvent(
                     $sse,
                     $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                    (string)__('区块已生成，正在刷新当前预览'),
+                    (string)__('鍖哄潡宸茬敓鎴愶紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
                     $pageType,
                     $componentCode,
                     $sectionCode,
@@ -5066,7 +5198,7 @@ class AiSiteAgent extends BaseController
                 $this->emitBlockPreviewReadyEvent(
                     $sse,
                     $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                    (string)__('区块已生成，正在刷新当前预览'),
+                    (string)__('鍖哄潡宸茬敓鎴愶紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
                     $pageType,
                     $componentCode,
                     $sectionCode,
@@ -5127,7 +5259,7 @@ class AiSiteAgent extends BaseController
                 $this->emitBlockPreviewReadyEvent(
                     $sse,
                     $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                    (string)__('区块已生成，正在刷新当前预览'),
+                    (string)__('鍖哄潡宸茬敓鎴愶紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
                     $pageType,
                     $componentCode,
                     $sectionCode,
@@ -5147,7 +5279,7 @@ class AiSiteAgent extends BaseController
         if (\is_array($scope['build_summary'] ?? null)) {
             unset($scope['build_summary']['task_summary']);
         }
-        $doneMessage = $instruction !== '' ? (string)__('区块微调完成') : (string)__('区块重建完成');
+        $doneMessage = $instruction !== '' ? (string)__('鍖哄潡寰皟瀹屾垚') : (string)__('鍖哄潡閲嶅缓瀹屾垚');
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
         if (\in_array($activeOperationName, ['block_refine', 'block_regenerate'], true)) {
@@ -5181,7 +5313,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'task_completed',
-            (string)__('区块任务已完成：%{page}', ['page' => $pageLabel]),
+            (string)__('鍖哄潡浠诲姟宸插畬鎴愶細%{page}', ['page' => $pageLabel]),
             [
                 'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
                 'page_type' => $pageType,
@@ -5212,8 +5344,8 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 在组件生成完成、virtual_pages_by_type 已就绪后立即推送可刷新预览的最小状态，
-     * 不等待后续 materialize/持久化链路结束。
+     * 鍦ㄧ粍浠剁敓鎴愬畬鎴愩€乿irtual_pages_by_type 宸插氨缁悗绔嬪嵆鎺ㄩ€佸彲鍒锋柊棰勮鐨勬渶灏忕姸鎬侊紝
+     * 涓嶇瓑寰呭悗缁?materialize/鎸佷箙鍖栭摼璺粨鏉熴€?
      *
      * @param list<string> $affectedPageTypes
      * @param array<string, mixed> $scope
@@ -5254,7 +5386,7 @@ class AiSiteAgent extends BaseController
         ]);
         $sse->sendEvent('progress', [
             'operation' => $operation,
-            'message' => (string)__('区块已生成，当前预览已刷新'),
+            'message' => (string)__('鍖哄潡宸茬敓鎴愶紝褰撳墠棰勮宸插埛鏂'),
             'page_type' => $pageType,
             'component_code' => $componentCode,
             'section_code' => $sectionCode,
@@ -5270,11 +5402,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
         $state = $this->buildWorkspaceFastViewState($session, $adminId);
         $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -5287,7 +5419,6 @@ class AiSiteAgent extends BaseController
             'build_queue_info',
             'latest_build_failed',
             'publish_blocked_by_latest_ai_failure',
-            'completion_gate_snapshot',
             'workspace_status',
             'can_publish',
             'visual_edit_url',
@@ -5298,8 +5429,13 @@ class AiSiteAgent extends BaseController
                 $scope[$runtimeKey] = $fastScope[$runtimeKey];
             }
         }
-        $state['scope'] = $scope;
-        $publishBlock = $this->resolvePublishBlockingAiFailureFromWorkspaceState($state);
+        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
+        $completionGatePassed = !empty($completionGate['passed']);
+        $publishBlock = $completionGatePassed ? ['blocked' => false] : $this->resolveLatestPublishBlockingAiBuildFailure(
+            $scope,
+            \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
+            \is_array($scope['build_queue_info'] ?? null) ? $scope['build_queue_info'] : null
+        );
         if (!empty($publishBlock['blocked'])) {
             return $this->fetchJson([
                 'success' => false,
@@ -5312,8 +5448,6 @@ class AiSiteAgent extends BaseController
                 ],
             ]);
         }
-        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
-        $completionGatePassed = !empty($completionGate['passed']);
         if (!$completionGatePassed) {
             $scope['can_publish'] = 0;
             $state['can_publish'] = false;
@@ -5333,12 +5467,12 @@ class AiSiteAgent extends BaseController
                 ]);
             }
             if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
-                return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案，再进入发布流程。')]);
+                return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('璇峰厛纭寤虹珯鏂规锛屽啀杩涘叆鍙戝竷娴佺▼銆')]);
             }
             if (!$this->isBuildPlanReadyForBuild($scope) && !$buildAlreadyComplete) {
-                return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案生成的执行蓝图，再进入发布流程。')]);
+                return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('璇峰厛纭寤虹珯鏂规鐢熸垚鐨勬瀯寤轰换鍔¤鍒掞紝鍐嶈繘鍏ュ彂甯冩祦绋嬨€')]);
             }
-            return $this->fetchJson(['success' => false, 'code' => 'WORKSPACE_NOT_READY', 'message' => __('当前工作区尚未准备好发布，请先完成页面生成与编辑。')]);
+            return $this->fetchJson(['success' => false, 'code' => 'WORKSPACE_NOT_READY', 'message' => __('褰撳墠宸ヤ綔鍖哄皻鏈噯澶囧ソ鍙戝竷锛岃鍏堝畬鎴愰〉闈㈢敓鎴愪笌缂栬緫銆')]);
         }
         if ($buildAlreadyComplete && empty($state['can_publish'])) {
             $state['can_publish'] = true;
@@ -5348,7 +5482,7 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson([
                 'success' => false,
                 'code' => 'PUBLISH_STAGE2_TASK_BLOCK_MISMATCH',
-                'message' => __('阶段二构建任务与真实生成区块不一致，请先重试失败任务或重建第二阶段。'),
+                'message' => __('闃舵浜屾瀯寤轰换鍔′笌鐪熷疄鐢熸垚鍖哄潡涓嶄竴鑷达紝璇峰厛閲嶈瘯澶辫触浠诲姟鎴栭噸寤虹浜岄樁娈点€'),
                 'data' => \array_replace(['code' => 'PUBLISH_STAGE2_TASK_BLOCK_MISMATCH'], $stageTwoReadiness),
             ]);
         }
@@ -5367,7 +5501,7 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson([
                 'success' => false,
                 'code' => 'PUBLISH_QUALITY_GATE_FAILED',
-                'message' => __('发布门禁未通过，请先修复页面内容质量、破图或任务状态问题。'),
+                'message' => __('鍙戝竷闂ㄧ鏈€氳繃锛岃鍏堜慨澶嶉〉闈㈠唴瀹硅川閲忋€佺牬鍥炬垨浠诲姟鐘舵€侀棶棰樸€'),
                 'data' => \array_replace(['code' => 'PUBLISH_QUALITY_GATE_FAILED'], $qualityReport),
             ]);
         }
@@ -5380,7 +5514,7 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson([
                 'success' => false,
                 'code' => 'VISUAL_THEME_CONFIRM_REQUIRED',
-                'message' => __('请先确认虚拟主题预览效果无问题，再发布正式站点。'),
+                'message' => __('璇峰厛纭铏氭嫙涓婚棰勮鏁堟灉鏃犻棶棰橈紝鍐嶅彂甯冩寮忕珯鐐广€'),
                 'data' => [
                     'code' => 'VISUAL_THEME_CONFIRM_REQUIRED',
                     'required_param' => 'confirm_visual_theme',
@@ -5409,12 +5543,12 @@ class AiSiteAgent extends BaseController
         $region = \trim((string)$this->getRequestBodyValue('region', ''));
         $componentIndex = (int)$this->getRequestBodyValue('index', 0);
         if ($adminId <= 0 || $publicId === '' || $pageType === '' || $blockId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_UPDATE_BLOCK);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_UPDATE_BLOCK);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
 
         $error = '';
@@ -5428,7 +5562,7 @@ class AiSiteAgent extends BaseController
         );
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
-            return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_UPDATE_BLOCK);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鎵€閫夐〉闈㈢被鍨嬩笉鍦ㄥ綋鍓嶅伐浣滃尯涓'), self::PARAMS_UPDATE_BLOCK);
         }
 
         $blockConfig = $this->syncVirtualThemeEditableConfigAliases(
@@ -5464,7 +5598,7 @@ class AiSiteAgent extends BaseController
         if ($updatedBlock === null) {
             $virtualThemeId = \max((int)($scope['virtual_theme_id'] ?? 0), (int)$session->getVirtualThemeId());
             if ($virtualThemeId <= 0) {
-                return $this->fetchJson(['success' => false, 'message' => __('未找到要更新的区块')]);
+                return $this->fetchJson(['success' => false, 'message' => __('鏈壘鍒拌鏇存柊鐨勫尯鍧')]);
             }
             $scope['virtual_theme_id'] = $virtualThemeId;
             $resolvedComponentCode = $componentCode !== '' ? $componentCode : $blockId;
@@ -5502,7 +5636,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'block_config_updated',
-            (string)__('区块配置已更新：%{block}', ['block' => $blockId]),
+            (string)__('鍖哄潡閰嶇疆宸叉洿鏂帮細%{block}', ['block' => $blockId]),
             [
                 'page_type' => $pageType,
                 'details' => [
@@ -5522,7 +5656,7 @@ class AiSiteAgent extends BaseController
 
         $response = [
             'success' => true,
-            'message' => __('区块已更新'),
+            'message' => __('鍖哄潡宸叉洿鏂'),
             'data' => [
                 'public_id' => $session->getPublicId(),
                 'stage' => $this->scopeCompatibilityService->normalizeStage($session->getStage()),
@@ -6129,29 +6263,29 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 只读：返回当前 buildWorkspaceState，用于前端刷新队列信息等，不写 scope、不写事件。
+     * 鍙锛氳繑鍥炲綋鍓?buildWorkspaceState锛岀敤浜庡墠绔埛鏂伴槦鍒椾俊鎭瓑锛屼笉鍐?scope銆佷笉鍐欎簨浠躲€?
      */
-    private function handleWorkspaceSnapshot(): string
+    private function handleWorkspaceState(): string
     {
         $adminId = 0;
         $publicId = '';
-        $snapshotMode = '';
+        $stateMode = '';
         try {
             $adminId = (int)$this->getLoginUserId();
             $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
-            $snapshotMode = \strtolower(\trim((string)$this->getRequestBodyValue('snapshot_mode', '')));
+            $stateMode = \strtolower(\trim((string)$this->getRequestBodyValue('state_mode', '')));
             if ($adminId <= 0 || $publicId === '') {
-                return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+                return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
             }
             $session = $this->sessionService->loadByPublicId($publicId, $adminId);
             if ($session === null) {
-                return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+                return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
             }
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-            if ($snapshotMode === '') {
-                $snapshotMode = 'queue_poll';
+            if ($stateMode === '') {
+                $stateMode = 'queue_poll';
             }
-            if ($snapshotMode !== 'full' && $snapshotMode !== 'full_state') {
+            if ($stateMode !== 'full' && $stateMode !== 'full_state') {
                 return $this->fetchJson([
                     'success' => true,
                     'data' => $this->buildWorkspaceQueuePollState(
@@ -6166,20 +6300,20 @@ class AiSiteAgent extends BaseController
                 'success' => true,
                 'data' => $this->buildWorkspaceOperationPayload(
                     $this->buildWorkspaceState($fresh, $adminId, 12, false),
-                    'snapshot'
+                    'state'
                 ),
             ]);
         } catch (\Weline\Framework\Http\ResponseTerminateException $throwable) {
             throw $throwable;
         } catch (\Throwable $throwable) {
-            $this->logWorkspaceSnapshotFailure($throwable, $publicId, $snapshotMode, $adminId);
+            $this->logWorkspaceStateFailure($throwable, $publicId, $stateMode, $adminId);
             return $this->fetchJson([
                 'success' => false,
-                'code' => 'SNAPSHOT_FAILED',
-                'message' => (string)__('工作区状态刷新失败，请稍后重试'),
+                'code' => 'STATE_FAILED',
+                'message' => (string)__('宸ヤ綔鍖虹姸鎬佸埛鏂板け璐ワ紝璇风◢鍚庨噸璇'),
                 'data' => [
                     'public_id' => $publicId,
-                    'response_mode' => $snapshotMode === '' ? 'queue_poll' : $snapshotMode,
+                    'response_mode' => $stateMode === '' ? 'queue_poll' : $stateMode,
                     'status' => 'failed',
                     'source' => 'poller',
                     'updated_at' => \date('Y-m-d H:i:s'),
@@ -6188,7 +6322,7 @@ class AiSiteAgent extends BaseController
         }
     }
 
-    private function logWorkspaceSnapshotFailure(\Throwable $throwable, string $publicId, string $snapshotMode, int $adminId): void
+    private function logWorkspaceStateFailure(\Throwable $throwable, string $publicId, string $stateMode, int $adminId): void
     {
         static $lastLoggedAt = [];
 
@@ -6199,9 +6333,9 @@ class AiSiteAgent extends BaseController
         }
         $lastLoggedAt[$signature] = $now;
 
-        \error_log('[AiSiteWorkspaceSnapshot] failed ' . \json_encode([
+        \error_log('[AiSiteWorkspaceState] failed ' . \json_encode([
             'public_id' => $publicId,
-            'snapshot_mode' => $snapshotMode,
+            'state_mode' => $stateMode,
             'admin_id' => $adminId,
             'exception' => $throwable::class,
             'message' => $throwable->getMessage(),
@@ -6306,21 +6440,11 @@ class AiSiteAgent extends BaseController
                 $activeOperation = $operationState;
             }
         }
-        if ($queueTerminalRecovered) {
-            $scope = $this->persistRecoveredQueueOperationState(
-                $session,
-                $adminId,
-                $scope,
-                $operation,
-                $operationState,
-                $operation === 'plan' ? $planQueueInfo : $buildQueueInfo
-            );
-        }
         $websiteId = \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId());
         $virtualThemeId = \max((int)($scope['virtual_theme_id'] ?? 0), (int)$session->getVirtualThemeId());
         $buildTaskSummary = \is_array($scope['build_task_summary'] ?? null) ? $scope['build_task_summary'] : [];
         $taskReady = $this->taskSummaryIndicatesCompleted($buildTaskSummary);
-        $completionGatePassed = !empty($scope['completion_gate_snapshot']['passed']);
+        $completionGatePassed = !empty($scope['build_summary']['completion_gate']['passed']);
         $titleOk = \trim((string)($scope['website_profile']['site_title'] ?? $scope['site_title'] ?? '')) !== '';
         $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
             || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
@@ -6371,11 +6495,8 @@ class AiSiteAgent extends BaseController
             'build_plan_confirmed' => (int)($scope['build_plan_confirmed'] ?? 0),
             'build_plan_confirmed_at' => (string)($scope['build_plan_confirmed_at'] ?? ''),
             'has_build_plan_v2' => $this->workspaceFastViewHasBuildPlan($scope),
-            'has_execution_blueprint' => $this->workspaceFastViewHasExecutionBlueprint($scope),
             'has_stage_one_plan' => $this->workspaceFastViewHasStageOnePlan($scope),
             'plan_json' => \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
-            'plan_structured' => \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [],
-            'plan_markdown' => \trim((string)($scope['plan_markdown'] ?? '')),
             'stage1_validation_report' => \is_array($scope['stage1_validation_report'] ?? null) ? $scope['stage1_validation_report'] : [],
             'retryable_failures' => \is_array($scope['retryable_failures'] ?? null) ? $scope['retryable_failures'] : [],
             'plan_generation_last_error' => \is_array($scope['plan_generation_last_error'] ?? null) ? $scope['plan_generation_last_error'] : [],
@@ -6414,7 +6535,6 @@ class AiSiteAgent extends BaseController
 
         return \array_values(\array_unique(\array_merge(self::WORKSPACE_FAST_VIEW_SCOPE_KEYS, [
             'plan_json',
-            'plan_structured',
             'plan_markdown',
         ])));
     }
@@ -6434,21 +6554,8 @@ class AiSiteAgent extends BaseController
     {
         return $this->scopeCompatibilityService->hasPersistedStageOnePlan($scope)
             || (int)($scope['plan_confirmed'] ?? 0) === 1
-            || \trim((string)($scope['execution_blueprint_confirmed_signature'] ?? '')) !== ''
             || $this->workspaceScopeHasArtifactRef($scope, AiSiteAgentSession::STAGE_PLAN, 'plan_json')
-            || $this->workspaceScopeHasArtifactRef($scope, AiSiteAgentSession::STAGE_PLAN, 'plan_structured')
             || $this->workspaceScopeHasArtifactRef($scope, AiSiteAgentSession::STAGE_PLAN, 'plan_markdown');
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function workspaceFastViewHasExecutionBlueprint(array $scope): bool
-    {
-        return (\is_array($scope['execution_blueprint'] ?? null) && $scope['execution_blueprint'] !== [])
-            || (\is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== [])
-            || \trim((string)($scope['execution_blueprint_confirmed_signature'] ?? '')) !== ''
-            || \trim((string)($scope['execution_blueprint_confirmed_at'] ?? '')) !== '';
     }
 
     /**
@@ -6534,18 +6641,6 @@ class AiSiteAgent extends BaseController
         $scope = $this->discardForeignAiSiteQueueRuntimeState($scope, (int)$session->getId());
         $scope['reference_images'] = $this->resolveReferenceImagesFromScope($scope);
         $scope = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($scope);
-        if ($stage === AiSiteAgentSession::STAGE_PLAN || $stage === AiSiteAgentSession::STAGE_VISUAL_EDIT || $stage === AiSiteAgentSession::STAGE_PUBLISH) {
-            $scope = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($scope);
-        }
-        // Emergency fallback: if plan artifacts still empty, load directly from filesystem.
-        if ($stage === AiSiteAgentSession::STAGE_PLAN || $stage === AiSiteAgentSession::STAGE_VISUAL_EDIT || $stage === AiSiteAgentSession::STAGE_PUBLISH) {
-            $scope = $this->emergencyLoadPlanArtifactsFromFilesystem((int)$session->getId(), $scope);
-        }
-        \file_put_contents(
-            BP . 'var/log/emergency_fallback.log',
-            \date('Y-m-d H:i:s') . " [buildWorkspaceFastViewState] stage={$stage} planJson=" . (\is_array($scope['plan_json'] ?? null) ? 'array(' . \count($scope['plan_json']) . ')' : \gettype($scope['plan_json'] ?? 'null')) . " planJsonPages=" . (\is_array($scope['plan_json']['pages'] ?? null) ? \count($scope['plan_json']['pages']) : 'N/A') . " planStructured=" . (\is_array($scope['plan_structured'] ?? null) ? 'array(' . \count($scope['plan_structured']) . ')' : \gettype($scope['plan_structured'] ?? 'null')) . " planStructuredPages=" . (\is_array($scope['plan_structured']['pages'] ?? null) ? \count($scope['plan_structured']['pages']) : 'N/A') . "\n",
-            \FILE_APPEND
-        );
         $scope = $this->normalizeBuildPlanConfirmationForBuild($scope);
 
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
@@ -6614,11 +6709,11 @@ class AiSiteAgent extends BaseController
             ];
         }
         $hasStageOnePlan = $this->workspaceFastViewHasStageOnePlan($scope);
-        $hasExecutionBlueprint = $this->workspaceFastViewHasExecutionBlueprint($scope);
         $hasBuildPlanV2 = $this->workspaceFastViewHasBuildPlan($scope);
         $taskReady = $this->taskSummaryIndicatesCompleted($buildTaskSummary);
-        $completionGatePassed = !empty($scope['completion_gate_snapshot']['passed'])
-            || !empty($queuePatch['completion_gate_snapshot']['passed'] ?? null);
+        $completionGatePassed = !empty($scope['build_summary']['completion_gate']['passed'])
+            || !empty($queuePatch['build_summary']['completion_gate']['passed'] ?? null)
+            || !empty($queuePatch['scope']['build_summary']['completion_gate']['passed'] ?? null);
         $titleOk = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? '')) !== '';
         $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
             || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
@@ -6664,6 +6759,9 @@ class AiSiteAgent extends BaseController
             }
         }
 
+        $clientScope = $scope;
+        unset($clientScope['plan_markdown']);
+
         $state = \array_replace($queuePatch, [
             'public_id' => $session->getPublicId(),
             'stage' => $stage,
@@ -6694,20 +6792,13 @@ class AiSiteAgent extends BaseController
                 : [],
             'plan' => [
                 'json' => \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
-                'markdown' => (string)($scope['plan_markdown'] ?? ''),
-                'structured' => \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : (\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : []),
-                'execution_blueprint' => \is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== []
-                    ? $scope['execution_blueprint_draft']
-                    : (\is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : []),
                 'build_plan_v2' => \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [],
                 'projection' => \is_array($scope['plan_projection'] ?? null) ? $scope['plan_projection'] : [],
             ],
             'plan_confirmed' => (int)($scope['plan_confirmed'] ?? 0),
             'plan_confirmed_at' => (string)($scope['plan_confirmed_at'] ?? ''),
-            'confirmed_plan_markdown' => (string)($scope['plan_markdown'] ?? ''),
-            'confirmed_plan_signature' => (string)($scope['execution_blueprint_confirmed_signature'] ?? ''),
+            'confirmed_plan_signature' => $this->resolveConfirmedPlanSignature($scope),
             'has_stage_one_plan' => $hasStageOnePlan,
-            'has_execution_blueprint' => $hasExecutionBlueprint,
             'build_plan_confirmed' => (int)($scope['build_plan_confirmed'] ?? 0),
             'build_plan_confirmed_at' => (string)($scope['build_plan_confirmed_at'] ?? ''),
             'has_build_plan_v2' => $hasBuildPlanV2,
@@ -6715,7 +6806,7 @@ class AiSiteAgent extends BaseController
             'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [],
             'reference_images' => \is_array($scope['reference_images'] ?? null) ? $scope['reference_images'] : [],
-            'scope' => $scope,
+            'scope' => $clientScope,
             'events' => [],
             'top_logs' => [],
             'last_event_id' => 0,
@@ -6732,14 +6823,14 @@ class AiSiteAgent extends BaseController
         $requestedPageId = (int)$this->getRequestBodyValue('preview_page_id', 0);
         $requestedPageType = \trim((string)$this->getRequestBodyValue('preview_page_type', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
 
-        // 前端 Tab 可能对应已勾选但尚未完成 mergeScope（防抖）的页面类型；若不写入 scope，resolvePreviewPageType 会回退到首页，预览看似「切不过去」。
+        // 鍓嶇 Tab 鍙兘瀵瑰簲宸插嬀閫変絾灏氭湭瀹屾垚 mergeScope锛堥槻鎶栵級鐨勯〉闈㈢被鍨嬶紱鑻ヤ笉鍐欏叆 scope锛宺esolvePreviewPageType 浼氬洖閫€鍒伴椤碉紝棰勮鐪嬩技銆屽垏涓嶈繃鍘汇€嶃€?
         if ($requestedPageType !== '' && \array_key_exists($requestedPageType, Page::getPageTypes())) {
             $scopeArr = $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT);
             $existingTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scopeArr);
@@ -6769,7 +6860,7 @@ class AiSiteAgent extends BaseController
         );
         $previewPageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
         if ($previewPageType === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('当前还没有可切换的预览页')]);
+            return $this->fetchJson(['success' => false, 'message' => __('褰撳墠杩樻病鏈夊彲鍒囨崲鐨勯瑙堥〉')]);
         }
 
         $this->sessionService->mergeScope($session->getId(), $adminId, [
@@ -6781,7 +6872,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             $state['stage'],
             'preview_page_switched',
-            (string)__('预览页面已切换'),
+            (string)__('棰勮椤甸潰宸插垏鎹'),
             ['page_type' => $previewPageType]
         );
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
@@ -6796,7 +6887,7 @@ class AiSiteAgent extends BaseController
         $requestedPageId = (int)$this->getRequestBodyValue('preview_page_id', 0);
         $requestedPageType = \trim((string)$this->getRequestBodyValue('preview_page_type', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
@@ -6804,13 +6895,13 @@ class AiSiteAgent extends BaseController
             return $this->jsonError('SESSION_NOT_FOUND', 'Session not found.', self::PARAMS_PUBLIC_ID);
         }
 
-        $snapshot = $this->sessionService->loadPreviewSwitchScopeSnapshot($session->getId(), $adminId);
-        if ($snapshot === null) {
-            return $this->fetchJson(['success' => false, 'message' => 'Preview snapshot unavailable.']);
+        $previewState = $this->sessionService->loadPreviewSwitchScopeState($session->getId(), $adminId);
+        if ($previewState === null) {
+            return $this->fetchJson(['success' => false, 'message' => 'Preview state unavailable.']);
         }
 
         $pagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType(
-            $snapshot['pagebuilder_pages_by_type'] ?? []
+            $previewState['pagebuilder_pages_by_type'] ?? []
         );
         if ($requestedPageType === '' && $requestedPageId > 0) {
             foreach ($pagesByType as $pageType => $pageData) {
@@ -6822,10 +6913,10 @@ class AiSiteAgent extends BaseController
         }
 
         $pageTypes = $this->scopeCompatibilityService->normalizePageTypes(
-            \is_array($snapshot['page_types'] ?? null) ? $snapshot['page_types'] : []
+            \is_array($previewState['page_types'] ?? null) ? $previewState['page_types'] : []
         );
         $virtualPages = $this->scopeCompatibilityService->normalizeVirtualPagesByType(
-            $snapshot['virtual_pages_by_type'] ?? [],
+            $previewState['virtual_pages_by_type'] ?? [],
             $pageTypes
         );
         $previewPageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
@@ -6837,7 +6928,7 @@ class AiSiteAgent extends BaseController
         if (!$this->sessionService->updatePreviewSelectionScope($session->getId(), $adminId, $previewPageType, $previewPageId)) {
             return $this->fetchJson(['success' => false, 'message' => 'Preview page switch failed.']);
         }
-        $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($snapshot['workspace_track'] ?? ''));
+        $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($previewState['workspace_track'] ?? ''));
 
         $this->appendWorkspaceEvent(
             $session->getId(),
@@ -7041,8 +7132,8 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 发布门禁前刷新 qa_report_contract：构建任务全部完成后重新汇总 RenderData/SourceTruth findings，
-     * 让 inspectScope 能消费最新的 source_truth_coverage / render_data_quality 结果。
+     * 鍙戝竷闂ㄧ鍓嶅埛鏂?qa_report_contract锛氭瀯寤轰换鍔″叏閮ㄥ畬鎴愬悗閲嶆柊姹囨€?RenderData/SourceTruth findings锛?
+     * 璁?inspectScope 鑳芥秷璐规渶鏂扮殑 source_truth_coverage / render_data_quality 缁撴灉銆?
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
@@ -7069,7 +7160,7 @@ class AiSiteAgent extends BaseController
         } catch (\Throwable $throwable) {
             $scope['quality_gate_preflight_error'] = \trim($throwable->getMessage()) !== ''
                 ? $throwable->getMessage()
-                : (string)__('渲染数据契约预检失败，请先修复构建产物后再发布。');
+                : (string)__('娓叉煋鏁版嵁濂戠害棰勬澶辫触锛岃鍏堜慨澶嶆瀯寤轰骇鐗╁悗鍐嶅彂甯冦€');
 
             return $scope;
         }
@@ -7080,11 +7171,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
 
         $state = $this->buildWorkspaceFastViewState($session, $adminId);
@@ -7098,7 +7189,6 @@ class AiSiteAgent extends BaseController
             'build_queue_info',
             'latest_build_failed',
             'publish_blocked_by_latest_ai_failure',
-            'completion_gate_snapshot',
             'workspace_status',
             'can_publish',
             'visual_edit_url',
@@ -7110,7 +7200,13 @@ class AiSiteAgent extends BaseController
             }
         }
         $buildPlanScope = $scope;
-        $publishBlock = $this->resolvePublishBlockingAiFailureFromWorkspaceState($state);
+        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
+        $completionGatePassed = !empty($completionGate['passed']);
+        $publishBlock = $completionGatePassed ? ['blocked' => false] : $this->resolveLatestPublishBlockingAiBuildFailure(
+            $scope,
+            \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
+            \is_array($scope['build_queue_info'] ?? null) ? $scope['build_queue_info'] : null
+        );
         $publishBlockedItem = null;
         if (!empty($publishBlock['blocked'])) {
             $publishBlockedItem = [
@@ -7123,40 +7219,38 @@ class AiSiteAgent extends BaseController
             ];
         }
         if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
-            return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案，再检查发布条件。')]);
+            return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('璇峰厛纭寤虹珯鏂规锛屽啀妫€鏌ュ彂甯冩潯浠躲€')]);
         }
-        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
-        $completionGatePassed = !empty($completionGate['passed']);
         if (!$completionGatePassed) {
             $scope['can_publish'] = 0;
             $state['can_publish'] = false;
         }
         $buildAlreadyComplete = $completionGatePassed;
         if (!$this->isBuildPlanReadyForBuild($buildPlanScope) && !$buildAlreadyComplete) {
-            return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案生成的执行蓝图，再检查发布条件。')]);
+            return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('璇峰厛纭寤虹珯鏂规鐢熸垚鐨勬瀯寤轰换鍔¤鍒掞紝鍐嶆鏌ュ彂甯冩潯浠躲€')]);
         }
         $virtualPages = \is_array($state['virtual_pages_by_type']) ? $state['virtual_pages_by_type'] : [];
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $checkItems = [
-            ['key' => 'draft_website', 'code' => 'DRAFT_WEBSITE_READY', 'label' => __('草稿站点已创建'), 'ok' => (int)$state['draft_website_id'] > 0, 'value' => (int)$state['draft_website_id']],
+            ['key' => 'draft_website', 'code' => 'DRAFT_WEBSITE_READY', 'label' => __('鑽夌绔欑偣宸插垱寤'), 'ok' => (int)$state['draft_website_id'] > 0, 'value' => (int)$state['draft_website_id']],
             [
                 'key' => 'virtual_theme',
                 'code' => 'VIRTUAL_THEME_READY',
-                'label' => __('虚拟主题已生成'),
+                'label' => __('铏氭嫙涓婚宸茬敓鎴'),
                 'ok' => (int)$state['virtual_theme_id'] > 0,
                 'value' => (int)$state['virtual_theme_id'],
             ],
-            ['key' => 'website_profile', 'code' => 'WEBSITE_PROFILE_READY', 'label' => __('网站级资料已齐备'), 'ok' => \trim((string)($state['website_profile']['site_title'] ?? '')) !== '', 'value' => [
+            ['key' => 'website_profile', 'code' => 'WEBSITE_PROFILE_READY', 'label' => __('缃戠珯绾ц祫鏂欏凡榻愬'), 'ok' => \trim((string)($state['website_profile']['site_title'] ?? '')) !== '', 'value' => [
                 'site_title' => (string)($state['website_profile']['site_title'] ?? ''),
                 'site_tagline' => (string)($state['website_profile']['site_tagline'] ?? ''),
                 'brief_description' => (string)($state['website_profile']['brief_description'] ?? ''),
                 'default_locale' => (string)($state['website_profile']['default_locale'] ?? ''),
             ]],
-            ['key' => 'virtual_pages', 'code' => 'VIRTUAL_PAGES_READY', 'label' => __('虚拟页面已生成'), 'ok' => \count($virtualPages) >= \count($pageTypes), 'value' => \array_keys($virtualPages)],
+            ['key' => 'virtual_pages', 'code' => 'VIRTUAL_PAGES_READY', 'label' => __('铏氭嫙椤甸潰宸茬敓鎴'), 'ok' => \count($virtualPages) >= \count($pageTypes), 'value' => \array_keys($virtualPages)],
             [
                 'key' => 'visual_editor',
                 'code' => 'VISUAL_EDITOR_READY',
-                'label' => __('可视化预览/编辑地址已就绪'),
+                'label' => __('鍙鍖栭瑙?缂栬緫鍦板潃宸插氨缁'),
                 'ok' => \trim((string)$state['visual_edit_url']) !== '' && \trim((string)$state['visual_preview_url']) !== '',
                 'value' => ['visual_preview_url' => $state['visual_preview_url'], 'visual_edit_url' => $state['visual_edit_url']],
             ],
@@ -7164,7 +7258,7 @@ class AiSiteAgent extends BaseController
         $checkItems[] = [
             'key' => 'build_completion_gate',
             'code' => 'BUILD_COMPLETION_GATE',
-            'label' => __('寤虹珯鏂规椤甸潰涓庡尯鍧楀凡鍏ㄩ儴鐢熸垚'),
+            'label' => __('瀵よ櫣鐝弬瑙勵攳妞ょ敻娼版稉搴″隘閸ф鍑￠崗銊╁劥閻㈢喐鍨'),
             'ok' => $completionGatePassed,
             'value' => [
                 'passed' => $completionGatePassed,
@@ -7184,7 +7278,7 @@ class AiSiteAgent extends BaseController
         $checkItems[] = [
             'key' => 'stage2_task_block_integrity',
             'code' => 'STAGE2_TASK_BLOCK_INTEGRITY',
-            'label' => __('阶段二任务与生成区块数量一致'),
+            'label' => __('闃舵浜屼换鍔′笌鐢熸垚鍖哄潡鏁伴噺涓€鑷'),
             'ok' => !empty($stageTwoReadiness['passed']),
             'value' => [
                 'passed' => !empty($stageTwoReadiness['passed']),
@@ -7229,7 +7323,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             (string)$state['stage'],
             'publish_check',
-            $passed ? (string)__('发布检查已通过') : (string)__('发布检查尚未通过'),
+            $passed ? (string)__('鍙戝竷妫€鏌ュ凡閫氳繃') : (string)__('鍙戝竷妫€鏌ュ皻鏈€氳繃'),
             [
                 'details' => [
                     'passed' => $passed,
@@ -7246,7 +7340,7 @@ class AiSiteAgent extends BaseController
 
     private function handleStreamSse(): void
     {
-        // 先验证认证和参数，避免启动 SSE 后再发现认证失败
+        // 鍏堥獙璇佽璇佸拰鍙傛暟锛岄伩鍏嶅惎鍔?SSE 鍚庡啀鍙戠幇璁よ瘉澶辫触
         $adminId = (int)$this->getLoginUserId();
         $this->releasePhpSessionLockForSse();
         if (\defined('DEV') && DEV && !\headers_sent()) {
@@ -7268,7 +7362,7 @@ class AiSiteAgent extends BaseController
             'stream_stage' => $streamStage !== '' ? $streamStage : null,
         ]);
 
-        // 认证失败：返回 HTTP 401，不启动 SSE
+        // 璁よ瘉澶辫触锛氳繑鍥?HTTP 401锛屼笉鍚姩 SSE
         if ($adminId <= 0) {
             $this->logStreamSse('request_rejected', [
                 'reason' => 'unauthorized',
@@ -7279,12 +7373,12 @@ class AiSiteAgent extends BaseController
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(\json_encode([
                 'error' => 'UNAUTHORIZED',
-                'message' => (string)__('未登录或登录已过期'),
+                'message' => (string)__('鏈櫥褰曟垨鐧诲綍宸茶繃鏈'),
             ], JSON_UNESCAPED_UNICODE));
             return;
         }
 
-        // 参数无效：返回 HTTP 400，不启动 SSE
+        // 鍙傛暟鏃犳晥锛氳繑鍥?HTTP 400锛屼笉鍚姩 SSE
         if ($publicId === '') {
             $this->logStreamSse('request_rejected', [
                 'reason' => 'missing_public_id',
@@ -7294,24 +7388,24 @@ class AiSiteAgent extends BaseController
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(\json_encode([
                 'error' => 'INVALID_PARAMS',
-                'message' => (string)__('参数无效'),
+                'message' => (string)__('鍙傛暟鏃犳晥'),
                 'param' => self::PARAMS_PUBLIC_ID,
             ], JSON_UNESCAPED_UNICODE));
             return;
         }
 
-        // 先启动 SSE，尽快向客户端发送首字节，避免被网关判定为首包超时。
-        // 后续若校验失败，也通过 SSE 协议返回 error/done，保证前端可感知结束态。
+        // 鍏堝惎鍔?SSE锛屽敖蹇悜瀹㈡埛绔彂閫侀瀛楄妭锛岄伩鍏嶈缃戝叧鍒ゅ畾涓洪鍖呰秴鏃躲€?
+        // 鍚庣画鑻ユ牎楠屽け璐ワ紝涔熼€氳繃 SSE 鍗忚杩斿洖 error/done锛屼繚璇佸墠绔彲鎰熺煡缁撴潫鎬併€?
         $sse = new SseWriter();
         $sse->start();
         if (\defined('DEV') && DEV && !\headers_sent()) {
             \header('X-AiSite-Sse-Debug-Stage: sse-started');
         }
         $sse->sendEvent('start', [
-            'message' => __('正在建立 PageBuilder 工作区事件流...'),
+            'message' => __('姝ｅ湪寤虹珛 PageBuilder 宸ヤ綔鍖轰簨浠舵祦...'),
         ]);
 
-        // 会话不存在：通过 SSE 返回错误并完成
+        // 浼氳瘽涓嶅瓨鍦細閫氳繃 SSE 杩斿洖閿欒骞跺畬鎴?
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
             $this->logStreamSse('request_rejected', [
@@ -7321,7 +7415,7 @@ class AiSiteAgent extends BaseController
             ], 'warning');
             $sse->sendEvent('error', [
                 'error' => 'SESSION_NOT_FOUND',
-                'message' => (string)__('会话不存在或无权访问'),
+                'message' => (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'),
                 'param' => self::PARAMS_PUBLIC_ID,
             ]);
             $sse->complete(['success' => false]);
@@ -7331,11 +7425,11 @@ class AiSiteAgent extends BaseController
         $leaseToken = $this->generateWorkspaceStreamLeaseToken($tabToken);
         $this->touchStreamLeaseState($session, $adminId, $leaseToken, $tabToken);
 
-        // 验证通过，启动 SSE 长连接
+        // 楠岃瘉閫氳繃锛屽惎鍔?SSE 闀胯繛鎺?
         @\set_time_limit(0);
         @\ignore_user_abort(true);
         $sse->sendEvent('start', [
-            'message' => __('已连接 PageBuilder 工作区事件流'),
+            'message' => __('宸茶繛鎺?PageBuilder 宸ヤ綔鍖轰簨浠舵祦'),
         ]);
         $this->logStreamSse('stream_started', [
             'session_id' => $session->getId(),
@@ -7344,54 +7438,56 @@ class AiSiteAgent extends BaseController
             'stream_kind' => 'workspace',
             'tab_token' => $tabToken !== '' ? $tabToken : null,
         ]);
-        // 注册 SSE writer 到 RequestContext，让 AI 流式 chunks 能实时转发到 SSE 客户端
+        // 娉ㄥ唽 SSE writer 鍒?RequestContext锛岃 AI 娴佸紡 chunks 鑳藉疄鏃惰浆鍙戝埌 SSE 瀹㈡埛绔?
         RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
-        $snapshotSource = $this->buildWorkspaceState($session, $adminId, 40, self::WORKSPACE_STREAM_SNAPSHOT_PERSIST);
-        $snapshot = $this->buildWorkspaceStreamSnapshotPayload($snapshotSource);
+        $stateSource = $this->buildWorkspaceState($session, $adminId, 40, self::WORKSPACE_STREAM_STATE_PERSIST);
+        $statePayload = $this->buildWorkspaceStreamStatePayload($stateSource);
         if ($streamStage !== '') {
-            $snapshot = $this->filterWorkspaceSnapshotByStage($snapshot, $streamStage);
+            $statePayload = $this->filterWorkspaceStateByStage($statePayload, $streamStage);
         }
-        $snapshotLastEventId = (int)($snapshot['last_event_id'] ?? $this->resolveWorkspaceLastEventId(\is_array($snapshotSource['events'] ?? null) ? $snapshotSource['events'] : []));
-        if ($snapshotLastEventId > 0 && ($lastEventId <= 0 || ($snapshotLastEventId - $lastEventId) > self::WORKSPACE_STREAM_MAX_EVENT_REPLAY)) {
-            $lastEventId = $snapshotLastEventId;
-            $snapshot['event_replay_skipped'] = true;
-            $snapshot['event_replay_skipped_until'] = $lastEventId;
-            $snapshot['event_replay_message'] = (string)__('历史进度日志较多，已跳过旧日志，仅展示最新状态。');
+        $stateLastEventId = (int)($statePayload['last_event_id'] ?? $this->resolveWorkspaceLastEventId(\is_array($stateSource['events'] ?? null) ? $stateSource['events'] : []));
+        if ($stateLastEventId > 0 && ($lastEventId <= 0 || ($stateLastEventId - $lastEventId) > self::WORKSPACE_STREAM_MAX_EVENT_REPLAY)) {
+            $lastEventId = $stateLastEventId;
+            $statePayload['event_replay_skipped'] = true;
+            $statePayload['event_replay_skipped_until'] = $lastEventId;
+            $statePayload['event_replay_message'] = (string)__('鍘嗗彶杩涘害鏃ュ織杈冨锛屽凡璺宠繃鏃ф棩蹇楋紝浠呭睍绀烘渶鏂扮姸鎬併€');
         }
-        $streamObservedActiveOperation = $this->isWorkspaceStreamOperationActive($snapshotSource);
-        $this->logStreamSse('snapshot_built', [
+        $streamObservedActiveOperation = $this->isWorkspaceStreamOperationActive($stateSource);
+        $this->logStreamSse('state_built', [
             'session_id' => $session->getId(),
-            'snapshot_bytes' => \strlen((string)(\json_encode($snapshotSource, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '')),
-            'snapshot_sse_bytes' => \strlen((string)(\json_encode($snapshot, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '')),
-            'event_count' => \count(\is_array($snapshotSource['events'] ?? null) ? $snapshotSource['events'] : []),
-            'event_sse_count' => \count(\is_array($snapshot['events'] ?? null) ? $snapshot['events'] : []),
-            'top_log_count' => \count(\is_array($snapshotSource['top_logs'] ?? null) ? $snapshotSource['top_logs'] : []),
-            'top_log_sse_count' => \count(\is_array($snapshot['top_logs'] ?? null) ? $snapshot['top_logs'] : []),
+            'state_bytes' => \strlen((string)(\json_encode($stateSource, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '')),
+            'state_sse_bytes' => \strlen((string)(\json_encode($statePayload, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '')),
+            'event_count' => \count(\is_array($stateSource['events'] ?? null) ? $stateSource['events'] : []),
+            'event_sse_count' => \count(\is_array($statePayload['events'] ?? null) ? $statePayload['events'] : []),
+            'top_log_count' => \count(\is_array($stateSource['top_logs'] ?? null) ? $stateSource['top_logs'] : []),
+            'top_log_sse_count' => \count(\is_array($statePayload['top_logs'] ?? null) ? $statePayload['top_logs'] : []),
         ]);
-        $sse->sendEvent('snapshot', $snapshot);
-        if ($this->shouldFastFailWorkspaceStream($snapshotSource)) {
+        $sse->sendEvent('state', $statePayload);
+        $lastPlanStatePlanJson = $this->extractPlanJsonForPlanState($stateSource);
+        $lastPlanStateFingerprint = $this->planJsonStateService()->fingerprint($lastPlanStatePlanJson);
+        $sse->sendEvent('plan_state', $this->planJsonStateService()->buildPlanStatePayload([], $lastPlanStatePlanJson));
+        if ($this->shouldFastFailWorkspaceStream($stateSource)) {
             $this->logStreamSse('stream_fast_failed', [
                 'session_id' => $session->getId(),
-                'reason' => 'fatal_error_detected_in_snapshot',
+                'reason' => 'fatal_error_detected_in_state',
             ], 'warning');
             $sse->complete(['success' => false, 'last_event_id' => $lastEventId, 'fatal_error' => true]);
             return;
         }
 
-        // 使用 Fiber 协程支持长连接模式（标准 SSE）。
-        $pollInterval = 1000;  // 每秒轮询一次
+        // 浣跨敤 Fiber 鍗忕▼鏀寔闀胯繛鎺ユā寮忥紙鏍囧噯 SSE锛夈€?
+        $pollInterval = 1000;  // 姣忕杞涓€娆?
         $startTime = \time();
         $loopCount = 0;
-        // 标准 SSE 建议保持长连接，不因“空闲无事件”主动断开。
-        // 仅在连接死亡、租约失效或达到总循环兜底时退出。
+        // 鏍囧噯 SSE 寤鸿淇濇寔闀胯繛鎺ワ紝涓嶅洜鈥滅┖闂叉棤浜嬩欢鈥濅富鍔ㄦ柇寮€銆?
+        // 浠呭湪杩炴帴姝讳骸銆佺绾﹀け鏁堟垨杈惧埌鎬诲惊鐜厹搴曟椂閫€鍑恒€?
         $consecutiveIdleLoops = 0;
-        $maxTotalLoops = 86400;  // 最多运行 24 小时（兜底）
-        $probeEveryIdleLoops = 60;  // 连续空闲时定期探测连接健康
+        $maxTotalLoops = 86400;  // 鏈€澶氳繍琛?24 灏忔椂锛堝厹搴曪級
+        $probeEveryIdleLoops = 60;  // 杩炵画绌洪棽鏃跺畾鏈熸帰娴嬭繛鎺ュ仴搴?
 
         $terminalCompletePayload = null;
         while (true) {
             $loopCount++;
-            $this->observeQueuedPlanOperationFromWorkspaceStream($sse, $session, $adminId);
 
             if (!$this->isStreamLeaseAlive($session, $adminId, $leaseToken)) {
                 $this->logStreamSse('lease_lost', [
@@ -7406,7 +7502,7 @@ class AiSiteAgent extends BaseController
                 $this->touchStreamLeaseState($session, $adminId, $leaseToken, $tabToken);
             }
 
-            // 兜底：超过最大总循环次数强制退出
+            // 鍏滃簳锛氳秴杩囨渶澶ф€诲惊鐜鏁板己鍒堕€€鍑?
             if ($loopCount > $maxTotalLoops) {
                 $this->logStreamSse('max_loops_reached', [
                     'session_id' => $session->getId(),
@@ -7415,13 +7511,23 @@ class AiSiteAgent extends BaseController
                 break;
             }
 
-            // 检查连接是否还活着
+            // 妫€鏌ヨ繛鎺ユ槸鍚﹁繕娲荤潃
             if (!$sse->isAlive()) {
                 $this->logStreamSse('connection_dead', [
                     'session_id' => $session->getId(),
                     'loop_count' => $loopCount,
                 ]);
                 break;
+            }
+            $planStatePayload = $this->pollWorkspaceStreamPlanState(
+                $session,
+                $adminId,
+                $lastPlanStatePlanJson,
+                $lastPlanStateFingerprint
+            );
+            if ($planStatePayload !== null) {
+                $sse->sendEvent('plan_state', $planStatePayload);
+                $consecutiveIdleLoops = 0;
             }
             $newEvents = $this->sessionService->listEventsAfterId($session->getId(), $adminId, $lastEventId, 80);
             if ($streamStage !== '') {
@@ -7452,14 +7558,14 @@ class AiSiteAgent extends BaseController
             } else {
                 $consecutiveIdleLoops++;
 
-                // 连续多次无事件且 isAlive 仍返回 true，发送 comment 检测对端是否真的活着
+                // 杩炵画澶氭鏃犱簨浠朵笖 isAlive 浠嶈繑鍥?true锛屽彂閫?comment 妫€娴嬪绔槸鍚︾湡鐨勬椿鐫€
                 if ($consecutiveIdleLoops % $probeEveryIdleLoops === 0) {
                     $this->logStreamSse('probing_connection', [
                         'session_id' => $session->getId(),
                         'loop_count' => $loopCount,
                         'consecutive_idle_loops' => $consecutiveIdleLoops,
                     ]);
-                    // 发送一个 comment探测连接，如果写入失败 isAlive 会在下一轮返回 false
+                    // 鍙戦€佷竴涓?comment鎺㈡祴杩炴帴锛屽鏋滃啓鍏ュけ璐?isAlive 浼氬湪涓嬩竴杞繑鍥?false
                     $sse->sendComment('probe:' . \time());
                 }
 
@@ -7481,10 +7587,10 @@ class AiSiteAgent extends BaseController
             }
             if ($streamObservedActiveOperation && $this->isWorkspaceStreamOperationTerminal($terminalProbeState)) {
                 $session = $freshForTerminalCheck;
-                $terminalStateSource = $this->buildWorkspaceState($session, $adminId, 40, self::WORKSPACE_STREAM_SNAPSHOT_PERSIST);
+                $terminalStateSource = $this->buildWorkspaceState($session, $adminId, 40, self::WORKSPACE_STREAM_STATE_PERSIST);
                 $terminalCompletePayload = $this->buildWorkspaceStreamTerminalPayload($terminalStateSource, $lastEventId);
                 if ($streamStage !== '') {
-                    $terminalCompletePayload = $this->filterWorkspaceSnapshotByStage($terminalCompletePayload, $streamStage);
+                    $terminalCompletePayload = $this->filterWorkspaceStateByStage($terminalCompletePayload, $streamStage);
                 }
                 $this->logStreamSse('terminal_operation_detected', [
                     'session_id' => $session->getId(),
@@ -7495,7 +7601,7 @@ class AiSiteAgent extends BaseController
                 break;
             }
 
-            // 使用协程延迟，不阻塞 Worker
+            // 浣跨敤鍗忕▼寤惰繜锛屼笉闃诲 Worker
             $sse->maybeHeartbeat();
             SchedulerSystem::yieldDelay($pollInterval);
         }
@@ -7526,6 +7632,49 @@ class AiSiteAgent extends BaseController
         return [
             'active_operation' => \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
         ];
+    }
+
+    /**
+     * Workspace SSE progress is derived from the persisted plan_json only.
+     *
+     * @param array<string, mixed> $lastPlanJson
+     */
+    private function pollWorkspaceStreamPlanState(
+        AiSiteAgentSession $session,
+        int $adminId,
+        array &$lastPlanJson,
+        string &$lastFingerprint
+    ): ?array {
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN, ['plan_json'])
+        );
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planJson = $this->planJsonStateService()->normalizePlanJson($planJson);
+        $fingerprint = $this->planJsonStateService()->fingerprint($planJson);
+        if ($fingerprint === $lastFingerprint) {
+            return null;
+        }
+
+        $payload = $this->planJsonStateService()->buildPlanStatePayload($lastPlanJson, $planJson);
+        $lastPlanJson = $planJson;
+        $lastFingerprint = $fingerprint;
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function extractPlanJsonForPlanState(array $state): array
+    {
+        $plan = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
+        $planJson = \is_array($state['plan_json'] ?? null)
+            ? $state['plan_json']
+            : (\is_array($plan['json'] ?? null) ? $plan['json'] : []);
+
+        return $this->planJsonStateService()->normalizePlanJson($planJson);
     }
 
     /**
@@ -7560,7 +7709,7 @@ class AiSiteAgent extends BaseController
      */
     private function buildWorkspaceStreamTerminalPayload(array $state, int $lastEventId): array
     {
-        $payload = $this->buildWorkspaceStreamSnapshotPayload($state);
+        $payload = $this->buildWorkspaceStreamStatePayload($state);
         $activeOperation = \is_array($payload['active_operation'] ?? null) ? $payload['active_operation'] : [];
         $status = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
         $message = \trim((string)($activeOperation['message'] ?? ''));
@@ -7599,7 +7748,7 @@ class AiSiteAgent extends BaseController
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         $progressPercent = (int)($activeOperation['progress_percent'] ?? 0);
         $allowResumeStuckRunning = ($activeStatus === 'running' && $progressPercent <= 0);
-        // 队列消费：claim 已将状态置为 running，且可能携带上次残留的 progress_percent>0；不得静默 return，否则 queue:run 无输出且不落库。
+        // 闃熷垪娑堣垂锛歝laim 宸插皢鐘舵€佺疆涓?running锛屼笖鍙兘鎼哄甫涓婃娈嬬暀鐨?progress_percent>0锛涗笉寰楅潤榛?return锛屽惁鍒?queue:run 鏃犺緭鍑轰笖涓嶈惤搴撱€?
         $queueDbMode = $sse instanceof QueueDbWriter;
         if (!$queueDbMode) {
             $queueRow = $this->findAiSiteOperationQueueRow($fresh, 'plan', (int)($activeOperation['queue_id'] ?? 0));
@@ -7607,7 +7756,7 @@ class AiSiteAgent extends BaseController
                 $this->syncPlanActiveOperationFromQueueRow($fresh, $adminId, $activeOperation, $queueRow);
                 return;
             }
-            $schedulerWaitMessage = '等待系统调度，通常约 1 分钟，可关闭继续操作';
+            $schedulerWaitMessage = '绛夊緟绯荤粺璋冨害锛岄€氬父绾?1 鍒嗛挓锛屽彲鍏抽棴缁х画鎿嶄綔';
             if ($activeStatus !== 'queued' || \trim((string)($activeOperation['message'] ?? '')) !== $schedulerWaitMessage) {
                 $this->updateActiveOperation(
                     $fresh,
@@ -7636,14 +7785,14 @@ class AiSiteAgent extends BaseController
             return;
         }
 
-        // active_operation 已明确为 queued plan，说明是用户动作触发后的待执行任务。
-        // 这里应直接启动执行，避免“已入队后再次被误判为需点击按钮”的回退提示。
+        // active_operation 宸叉槑纭负 queued plan锛岃鏄庢槸鐢ㄦ埛鍔ㄤ綔瑙﹀彂鍚庣殑寰呮墽琛屼换鍔°€?
+        // 杩欓噷搴旂洿鎺ュ惎鍔ㄦ墽琛岋紝閬垮厤鈥滃凡鍏ラ槦鍚庡啀娆¤璇垽涓洪渶鐐瑰嚮鎸夐挳鈥濈殑鍥為€€鎻愮ず銆?
 
         // Execution reaches this point only inside the system scheduler queue worker.
         $this->updateActiveOperation(
             $fresh,
             $adminId,
-            ['status' => 'running', 'message' => (string)__('正在生成建站方案')],
+            ['status' => 'running', 'message' => (string)__('姝ｅ湪鐢熸垚寤虹珯鏂规')],
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
         );
         $this->appendWorkspaceEvent(
@@ -7651,20 +7800,20 @@ class AiSiteAgent extends BaseController
             $adminId,
             'plan',
             'operation_started',
-            (string)__('已开始执行建站方案生成'),
+            (string)__('宸插紑濮嬫墽琛屽缓绔欐柟妗堢敓鎴'),
             ['operation' => 'plan']
         );
         $sse->sendEvent('log', [
             'event_type' => 'operation_started',
             'stage_code' => 'plan',
-            'message' => (string)__('已开始执行建站方案生成'),
+            'message' => (string)__('宸插紑濮嬫墽琛屽缓绔欐柟妗堢敓鎴'),
             'payload' => ['operation' => 'plan'],
             'level' => 'info',
             'event_id' => 0,
             'created_at' => \date('Y-m-d H:i:s'),
         ]);
         $sse->sendEvent('start', [
-            'message' => (string)__('已开始执行建站方案生成'),
+            'message' => (string)__('宸插紑濮嬫墽琛屽缓绔欐柟妗堢敓鎴'),
             'operation' => 'plan',
         ]);
 
@@ -7768,7 +7917,7 @@ class AiSiteAgent extends BaseController
                 $attempt++;
                 try {
                     if ($attempt > 1) {
-                        $retryMessage = (string)__('AI 输出格式异常，正在自动重试（%{1}/%{2}）…', [$attempt, $maxAttempts]);
+                        $retryMessage = (string)__('AI 杈撳嚭鏍煎紡寮傚父锛屾鍦ㄨ嚜鍔ㄩ噸璇曪紙%{1}/%{2}锛夆€', [$attempt, $maxAttempts]);
                         $this->appendWorkspaceEvent(
                             $fresh->getId(),
                             $adminId,
@@ -7805,7 +7954,7 @@ class AiSiteAgent extends BaseController
                         if ($mutationPageType === '' || !\in_array($mutationAction, ['create', 'delete', 'refine', 'rebuild'], true)) {
                             throw new \RuntimeException('Invalid stage-1 block mutation request.');
                         }
-                        $mutationMessage = (string)__('正在后台更新阶段一页面块');
+                        $mutationMessage = (string)__('姝ｅ湪鍚庡彴鏇存柊闃舵涓€椤甸潰鍧');
                         $sse->sendEvent('progress', [
                             'message' => $mutationMessage,
                             'operation' => 'plan',
@@ -7868,15 +8017,15 @@ class AiSiteAgent extends BaseController
                         $artifacts['ai_generated'] = 1;
                     } elseif ($requestedPromptMode === 'refine' && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
                         $resumeInstruction = $requestedPromptMode === 'resume_plan'
-                            ? (string)__('请基于当前方案草稿与已完成结构继续补齐中断内容，保留已完成部分，只修复缺失、未完成或异常中断的内容，并输出完整 markdown 与完整 plan_json。')
+                            ? (string)__('璇峰熀浜庡綋鍓嶆柟妗堣崏绋夸笌宸插畬鎴愮粨鏋勭户缁ˉ榻愪腑鏂唴瀹癸紝淇濈暀宸插畬鎴愰儴鍒嗭紝鍙慨澶嶇己澶便€佹湭瀹屾垚鎴栧紓甯镐腑鏂殑鍐呭锛屽苟杈撳嚭瀹屾暣 markdown 涓庡畬鏁?plan_json銆')
                             : '';
                         $refineInstruction = $requestedInstruction;
                         $refineTargetScope = $requestedTargetScope;
                         if ($planLocaleChanged && !$pageTypesChanged) {
                             $refineTargetScope = $refineTargetScope !== '' ? $refineTargetScope : 'locale_translation';
                             $refineInstruction = $refineInstruction !== ''
-                                ? ((string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。') . ' ' . $refineInstruction)
-                                : (string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。');
+                                ? ((string)__('璇锋寜鐩爣 plan_locale 缈昏瘧褰撳墠鏂规锛屽苟淇濈暀鍘熸湁缁撴瀯涓庨〉闈㈢被鍨嬨€') . ' ' . $refineInstruction)
+                                : (string)__('璇锋寜鐩爣 plan_locale 缈昏瘧褰撳墠鏂规锛屽苟淇濈暀鍘熸湁缁撴瀯涓庨〉闈㈢被鍨嬨€');
                         }
                         $artifacts = $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                             'instruction' => $refineInstruction,
@@ -7885,7 +8034,7 @@ class AiSiteAgent extends BaseController
                             'prompt_mode' => $requestedPromptMode,
                         ], $onChunk, $onProgress);
                     } elseif ($planLocaleChanged && !$pageTypesChanged && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
-                        $translateInstruction = (string)__('请保留当前方案结构与页面类型，仅将方案内容完整翻译为目标 plan_locale，不新增或删除页面。');
+                        $translateInstruction = (string)__('璇蜂繚鐣欏綋鍓嶆柟妗堢粨鏋勪笌椤甸潰绫诲瀷锛屼粎灏嗘柟妗堝唴瀹瑰畬鏁寸炕璇戜负鐩爣 plan_locale锛屼笉鏂板鎴栧垹闄ら〉闈€');
                         $artifacts = $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                             'instruction' => $translateInstruction,
                             'target_scope' => 'locale_translation',
@@ -7897,7 +8046,7 @@ class AiSiteAgent extends BaseController
                         } else {
                             $buildPayload = [];
                             if ($requestedPromptMode === 'resume_plan') {
-                                $buildPayload['instruction'] = (string)__('请基于当前阶段一上下文与已保存的工作台信息继续补齐中断内容，优先复用已完成部分，不要从零抛弃已有进度。');
+                                $buildPayload['instruction'] = (string)__('璇峰熀浜庡綋鍓嶉樁娈典竴涓婁笅鏂囦笌宸蹭繚瀛樼殑宸ヤ綔鍙颁俊鎭户缁ˉ榻愪腑鏂唴瀹癸紝浼樺厛澶嶇敤宸插畬鎴愰儴鍒嗭紝涓嶈浠庨浂鎶涘純宸叉湁杩涘害銆');
                                 $buildPayload['target_scope'] = 'resume_generation';
                                 $buildPayload['prompt_mode'] = 'resume_plan';
                                 $buildPayload['resume_failed_tasks'] = 1;
@@ -7916,7 +8065,7 @@ class AiSiteAgent extends BaseController
                                 $scope = \array_replace($scope, $scopePatch);
                                 $this->sessionService->mergeScope($fresh->getId(), $adminId, $scopePatch);
                             };
-                            $buildPayload['on_stage1_progress_state'] = function (array $progressState) use ($fresh, $adminId, &$scope): void {
+                            $buildPayload['on_stage1_progress_state'] = function (array $progressState) use ($sse, $fresh, $adminId, &$scope): void {
                                 if ($progressState === [] || !\is_array($progressState['plan_json'] ?? null)) {
                                     return;
                                 }
@@ -7926,10 +8075,6 @@ class AiSiteAgent extends BaseController
                                     \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
                                     $progressPlanJson
                                 );
-                                $scope['plan_structured'] = $this->mergeStageOnePersistedPlanJson(
-                                    \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [],
-                                    $progressPlanJson
-                                );
                                 if ($stageOneContract !== []) {
                                     $scope['stage1_contract'] = $stageOneContract;
                                 }
@@ -7937,24 +8082,40 @@ class AiSiteAgent extends BaseController
                                     ? \array_values(\array_filter($progressState['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
                                     : [];
                                 $scope = $this->buildTaskService->replaceRetryableAiFailures($scope, 'plan', $retryableFailures);
+                                $progressMessage = \trim((string)($progressState['message'] ?? ''));
+                                $planGenerationProgress = [
+                                    'step' => (string)($progressState['step'] ?? ''),
+                                    'page_types' => \is_array($progressState['page_types'] ?? null) ? $progressState['page_types'] : [],
+                                    'failed_count' => \count($retryableFailures),
+                                    'updated_at' => (string)($progressState['updated_at'] ?? \date('Y-m-d H:i:s')),
+                                ];
                                 $progressScopePatch = [
-                                    '_unset_scope_keys' => ['_plan_generation_checkpoint'],
-                                    'plan_json' => \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
-                                    'plan_structured' => \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [],
+                                    'plan_json' => $this->planJsonStateService()->normalizePlanJson(\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : []),
                                     'retryable_ai_failures' => \is_array($scope['retryable_ai_failures'] ?? null) ? $scope['retryable_ai_failures'] : [],
                                     'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
                                     'next_stage_blocked_by_ai_failures' => (int)($scope['next_stage_blocked_by_ai_failures'] ?? 0),
-                                    'plan_generation_progress' => [
-                                        'step' => (string)($progressState['step'] ?? ''),
-                                        'page_types' => \is_array($progressState['page_types'] ?? null) ? $progressState['page_types'] : [],
-                                        'failed_count' => \count($retryableFailures),
-                                        'updated_at' => (string)($progressState['updated_at'] ?? \date('Y-m-d H:i:s')),
-                                    ],
+                                    'plan_generation_progress' => $planGenerationProgress,
                                 ];
                                 if ($stageOneContract !== []) {
                                     $progressScopePatch['stage1_contract'] = $stageOneContract;
                                 }
                                 $this->sessionService->mergeScope($fresh->getId(), $adminId, $progressScopePatch);
+                                if ($progressMessage !== '') {
+                                    $this->appendWorkspaceEvent(
+                                        $fresh->getId(),
+                                        $adminId,
+                                        'plan',
+                                        'operation_progress',
+                                        $progressMessage,
+                                        [
+                                            'operation' => 'plan',
+                                            'details' => [
+                                                'step' => (string)($progressState['step'] ?? ''),
+                                                'page_types' => \is_array($progressState['page_types'] ?? null) ? $progressState['page_types'] : [],
+                                            ],
+                                        ]
+                                    );
+                                }
                             };
                             $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream(
                                 $scope,
@@ -7979,22 +8140,24 @@ class AiSiteAgent extends BaseController
                 throw $lastAttemptThrowable;
             }
             if ((int)($scope['fake_mode'] ?? 0) !== 1 && (int)($artifacts['ai_generated'] ?? 0) !== 1) {
-                throw new \RuntimeException((string)__('建站方案必须由 AI 生成，本次未成功调用 AI，请检查模型配置后重试。'));
+                throw new \RuntimeException((string)__('寤虹珯鏂规蹇呴』鐢?AI 鐢熸垚锛屾湰娆℃湭鎴愬姛璋冪敤 AI锛岃妫€鏌ユā鍨嬮厤缃悗閲嶈瘯銆'));
             }
 
             if (!($planMarkdownStreamState['markdown_string_closed'] ?? false)) {
                 $this->emitPlanMarkdownBlocks($sse, $fresh, $adminId, (string)($artifacts['markdown'] ?? ''));
             }
             $derivedPatch = \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [];
-            $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
-            $planJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
+            $planJson = $this->mergeStageOnePersistedPlanJson(
+                \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
+                \is_array($artifacts['plan_json'] ?? null)
+                    ? $artifacts['plan_json']
+                    : (\is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [])
+            );
             $retryablePlanFailures = \is_array($artifacts['retryable_ai_failures'] ?? null)
                 ? \array_values(\array_filter($artifacts['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
                 : [];
             $scopePatchPersist = \array_replace($derivedPatch, [
-                '_unset_scope_keys' => ['_plan_generation_checkpoint'],
                 'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
-                'execution_blueprint_draft' => $executionBlueprint,
                 'plan_json' => $planJson,
                 'stage1_contract' => \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : [],
                 'stage1_validation_report' => \is_array($planJson['stage1_validation_report'] ?? null) ? $planJson['stage1_validation_report'] : [],
@@ -8005,7 +8168,6 @@ class AiSiteAgent extends BaseController
                 'shared_components' => \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [],
                 'shared_prompt_context' => \is_array($planJson['shared_prompt_context'] ?? null) ? $planJson['shared_prompt_context'] : [],
                 'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
-                'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : $planJson,
                 'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
                 'plan_locale' => $this->resolvePlanLocale($scope),
                 'plan_ai_generated' => (int)($artifacts['ai_generated'] ?? 0),
@@ -8057,12 +8219,12 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 $this->scopeCompatibilityService->normalizeStage($freshSaved->getStage()),
                 'plan_saved',
-                (string)__('建站方案已保存'),
+                (string)__('寤虹珯鏂规宸蹭繚瀛'),
                 [
                     'operation' => 'plan',
                     'details' => [
                         'plan_locale' => (string)$scope['plan_locale'],
-                        'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? ''),
+                        'plan_signature' => (string)($executionBlueprint['signature'] ?? ''),
                         'task_count' => \is_array($executionBlueprint['tasks'] ?? null) ? \count($executionBlueprint['tasks']) : 0,
                     ],
                 ]
@@ -8070,14 +8232,14 @@ class AiSiteAgent extends BaseController
             $sse->sendEvent('log', [
                 'event_type' => 'plan_saved',
                 'stage_code' => 'plan',
-                'message' => (string)__('建站方案已保存'),
+                'message' => (string)__('寤虹珯鏂规宸蹭繚瀛'),
                 'payload' => ['operation' => 'plan'],
                 'level' => 'info',
                 'event_id' => 0,
                 'created_at' => \date('Y-m-d H:i:s'),
             ]);
             $sse->sendEvent('progress', [
-                'message' => (string)__('建站方案已保存'),
+                'message' => (string)__('寤虹珯鏂规宸蹭繚瀛'),
                 'operation' => 'plan',
                 'progress_percent' => 95,
             ]);
@@ -8087,7 +8249,7 @@ class AiSiteAgent extends BaseController
                     $adminId,
                     [
                         'status' => 'error',
-                        'message' => (string)__('部分页面方案生成失败；当前阶段队列会继续补齐缺失页面。'),
+                        'message' => (string)__('閮ㄥ垎椤甸潰鏂规鐢熸垚澶辫触锛涘綋鍓嶉樁娈甸槦鍒椾細缁х画琛ラ綈缂哄け椤甸潰銆'),
                         'retry_allowed' => 1,
                         'failure_mode' => 'plan_failed',
                         'retryable_ai_failure_count' => \count($retryablePlanFailures),
@@ -8099,7 +8261,7 @@ class AiSiteAgent extends BaseController
             $this->updateActiveOperation(
                 $fresh,
                 $adminId,
-                ['status' => 'done', 'message' => (string)__('建站方案生成完成')],
+                ['status' => 'done', 'message' => (string)__('寤虹珯鏂规鐢熸垚瀹屾垚')],
                 AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
             );
             $this->appendWorkspaceEvent(
@@ -8107,11 +8269,11 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 'plan',
                 'plan_generated',
-                (string)__('已生成建站方案，请确认后继续执行构建'),
+                (string)__('宸茬敓鎴愬缓绔欐柟妗堬紝璇风‘璁ゅ悗缁х画鎵ц鏋勫缓'),
                 [
                     'operation' => 'plan',
                     'details' => [
-                        'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? ''),
+                        'plan_signature' => (string)($executionBlueprint['signature'] ?? ''),
                         'task_count' => \is_array($executionBlueprint['tasks'] ?? null) ? \count($executionBlueprint['tasks']) : 0,
                     ],
                 ]
@@ -8142,14 +8304,14 @@ class AiSiteAgent extends BaseController
             $sse->sendEvent('log', [
                 'event_type' => 'plan_generated',
                 'stage_code' => 'plan',
-                'message' => (string)__('建站方案生成完成'),
+                'message' => (string)__('寤虹珯鏂规鐢熸垚瀹屾垚'),
                 'payload' => ['operation' => 'plan'],
                 'level' => 'done',
                 'event_id' => 0,
                 'created_at' => \date('Y-m-d H:i:s'),
             ]);
             $sse->sendEvent('progress', [
-                'message' => (string)__('建站方案生成完成'),
+                'message' => (string)__('寤虹珯鏂规鐢熸垚瀹屾垚'),
                 'operation' => 'plan',
                 'progress_percent' => 99,
             ]);
@@ -8165,14 +8327,14 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 'plan',
                 'operation_failed',
-                (string)__('建站方案生成失败：%{message}', ['message' => $throwable->getMessage()]),
+                (string)__('寤虹珯鏂规鐢熸垚澶辫触锛?{message}', ['message' => $throwable->getMessage()]),
                 ['operation' => 'plan', 'details' => ['exception' => $throwable->getMessage()]],
                 AiSiteAgentSessionEvent::LEVEL_ERROR
             );
             $sse->sendEvent('log', [
                 'event_type' => 'operation_failed',
                 'stage_code' => 'plan',
-                'message' => (string)__('建站方案生成失败：%{message}', ['message' => $throwable->getMessage()]),
+                'message' => (string)__('寤虹珯鏂规鐢熸垚澶辫触锛?{message}', ['message' => $throwable->getMessage()]),
                 'payload' => ['operation' => 'plan'],
                 'level' => 'error',
                 'event_id' => 0,
@@ -8203,7 +8365,7 @@ class AiSiteAgent extends BaseController
         }
 
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
-        $schedulerWaitMessage = '操作已进入系统队列，正在等待系统定时任务调度；大部分情况约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。';
+        $schedulerWaitMessage = '鎿嶄綔宸茶繘鍏ョ郴缁熼槦鍒楋紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涘ぇ閮ㄥ垎鎯呭喌绾?1 鍒嗛挓鍚庡紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆';
         if ($activeStatus !== 'queued' || \trim((string)($activeOperation['message'] ?? '')) !== $schedulerWaitMessage) {
             $this->updateActiveOperation(
                 $fresh,
@@ -8258,7 +8420,7 @@ class AiSiteAgent extends BaseController
                 ? $queueProcess
                 : ($queueStatus === 'running'
                     ? ''
-                    : (string)__('建站方案队列正在等待 worker 执行。'));
+                    : (string)__('寤虹珯鏂规闃熷垪姝ｅ湪绛夊緟 worker 鎵ц銆'));
             $nextOperation['updated_at'] = \date('Y-m-d H:i:s');
         } elseif (\in_array($queueStatus, ['done', 'error', 'stop', 'cancelled'], true)) {
             $nextOperation = $this->reconcileActiveOperationWithQueueInfo(
@@ -8295,6 +8457,8 @@ class AiSiteAgent extends BaseController
      */
     private function mergeStageOnePersistedPlanJson(array $currentPlanJson, array $incomingPlanJson): array
     {
+        $currentPlanJson = $this->planJsonStateService()->normalizePlanJson($currentPlanJson);
+        $incomingPlanJson = $this->planJsonStateService()->normalizePlanJson($incomingPlanJson);
         if ($incomingPlanJson === []) {
             return $currentPlanJson;
         }
@@ -8303,13 +8467,47 @@ class AiSiteAgent extends BaseController
         }
 
         $merged = \array_replace($currentPlanJson, $incomingPlanJson);
-        $currentPages = \is_array($currentPlanJson['pages'] ?? null) ? $currentPlanJson['pages'] : [];
-        $incomingPages = \is_array($incomingPlanJson['pages'] ?? null) ? $incomingPlanJson['pages'] : [];
-        if ($currentPages !== [] || $incomingPages !== []) {
-            $merged['pages'] = \array_replace($currentPages, $incomingPages);
+        foreach (['pages', 'page_plans'] as $pageBucketKey) {
+            $currentPages = \is_array($currentPlanJson[$pageBucketKey] ?? null) ? $currentPlanJson[$pageBucketKey] : [];
+            $incomingPages = \is_array($incomingPlanJson[$pageBucketKey] ?? null) ? $incomingPlanJson[$pageBucketKey] : [];
+            if ($currentPages !== [] || $incomingPages !== []) {
+                $merged[$pageBucketKey] = \array_replace(
+                    $this->normalizeStageOnePlanPageMap($currentPages),
+                    $this->normalizeStageOnePlanPageMap($incomingPages)
+                );
+            }
         }
 
-        return $merged;
+        return $this->planJsonStateService()->normalizePlanJson($merged);
+    }
+
+    /**
+     * @param array<int|string, mixed> $pages
+     * @return array<int|string, mixed>
+     */
+    private function normalizeStageOnePlanPageMap(array $pages): array
+    {
+        $normalized = [];
+        foreach ($pages as $key => $page) {
+            if (!\is_array($page)) {
+                $normalized[$key] = $page;
+                continue;
+            }
+
+            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? ''));
+            if ($pageType === '' && \is_string($key) && !\ctype_digit($key)) {
+                $pageType = \trim($key);
+            }
+            if ($pageType !== '') {
+                $page['page_type'] = $pageType;
+                $normalized[$pageType] = $page;
+                continue;
+            }
+
+            $normalized[$key] = $page;
+        }
+
+        return $normalized;
     }
 
     private function emitPlanMarkdownBlocks(SseWriter $sse, AiSiteAgentSession $session, int $adminId, string $markdown): void
@@ -8356,9 +8554,9 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * @param array<string, mixed> $snapshot
+     * @param array<string, mixed> $state
      */
-    private function shouldFastFailWorkspaceStream(array $snapshot): bool
+    private function shouldFastFailWorkspaceStream(array $state): bool
     {
         $messages = [];
         $collect = static function (mixed $rows) use (&$messages): void {
@@ -8375,15 +8573,15 @@ class AiSiteAgent extends BaseController
                 }
             }
         };
-        $collect($snapshot['top_logs'] ?? []);
-        $collect($snapshot['events'] ?? []);
-        $collect($snapshot['scope']['top_logs'] ?? []);
+        $collect($state['top_logs'] ?? []);
+        $collect($state['events'] ?? []);
+        $collect($state['scope']['top_logs'] ?? []);
 
         foreach ($messages as $message) {
             $normalized = \strtolower($message);
             if (
-                \str_contains($normalized, '没有满足条件的')
-                && \str_contains($normalized, '供应商账户')
+                \str_contains($normalized, '娌℃湁婊¤冻鏉′欢鐨')
+                && \str_contains($normalized, '渚涘簲鍟嗚处鎴')
             ) {
                 return true;
             }
@@ -8396,7 +8594,7 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * P2：仅 `queued` 可认领进入执行；`running` 视为重复 operation-sse；终态拒绝，避免重复跑 build/发布。
+     * P2锛氫粎 `queued` 鍙棰嗚繘鍏ユ墽琛岋紱`running` 瑙嗕负閲嶅 operation-sse锛涚粓鎬佹嫆缁濓紝閬垮厤閲嶅璺?build/鍙戝竷銆?
      *
      * @return array{ok: bool, reason?: string, message?: string}
      */
@@ -8405,8 +8603,19 @@ class AiSiteAgent extends BaseController
         int $adminId,
         string $executionToken,
         string $operation,
-        string $claimSource = 'operation_sse'
+        string $claimSource = 'direct_operation'
     ): array {
+        $claimSource = \trim($claimSource);
+        if ($claimSource === '') {
+            $claimSource = 'direct_operation';
+        }
+        if ($this->isAiSiteQueueBackedOperation($operation) && $claimSource !== 'queue') {
+            return [
+                'ok' => false,
+                'reason' => 'queue_observer_only',
+                'message' => (string)__('队列型 AI 操作只能由系统调度器执行；SSE 只能观察队列状态。'),
+            ];
+        }
         $stageCode = $this->resolveAiSiteQueueStage($operation);
         for ($attempt = 0; $attempt < 4; $attempt++) {
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
@@ -8422,11 +8631,11 @@ class AiSiteAgent extends BaseController
                 if ($operation !== 'plan') {
                     return ['ok' => true, 'reason' => 'parallel_non_plan'];
                 }
-                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('未找到待执行的工作区操作')];
+                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('鏈壘鍒板緟鎵ц鐨勫伐浣滃尯鎿嶄綔')];
             }
 
             if (\in_array($status, ['done', 'error', 'cancelled'], true)) {
-                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('该操作已结束，请重新发起')];
+                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('璇ユ搷浣滃凡缁撴潫锛岃閲嶆柊鍙戣捣')];
             }
 
             $allowUnclaimedPlanQueueRun = false;
@@ -8434,7 +8643,7 @@ class AiSiteAgent extends BaseController
                 $claimedBy = \trim((string)($active['claimed_by'] ?? ''));
                 if (
                     $claimSource === 'queue'
-                    && \in_array($claimedBy, ['', 'operation_sse', 'queue'], true)
+                    && \in_array($claimedBy, ['', 'queue'], true)
                 ) {
                     // Queue observers may mirror the row to running before the scheduler worker claims it;
                     // the scheduler may also resume a same-token queue after the previous worker died.
@@ -8453,14 +8662,14 @@ class AiSiteAgent extends BaseController
             }
 
             if ($status !== 'queued' && !$allowUnclaimedPlanQueueRun) {
-                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('操作状态异常，请刷新后重试')];
+                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('鎿嶄綔鐘舵€佸紓甯革紝璇峰埛鏂板悗閲嶈瘯')];
             }
 
             $scope = $this->writeActiveOperationStateToScope($scope, \array_replace($active, [
                 'status' => 'running',
                 'claimed_by' => $claimSource,
                 'claimed_at' => \date('Y-m-d H:i:s'),
-                'message' => (string)__('操作开始执行'),
+                'message' => (string)__('鎿嶄綔寮€濮嬫墽琛'),
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]));
             $this->sessionService->replaceScope($fresh->getId(), $adminId, $scope);
@@ -8683,7 +8892,7 @@ class AiSiteAgent extends BaseController
         @\set_time_limit(0);
         @\ignore_user_abort(true);
 
-        // 立即释放 PHP session 锁，避免阻塞 SSE 长连接
+        // 绔嬪嵆閲婃斁 PHP session 閿侊紝閬垮厤闃诲 SSE 闀胯繛鎺?
         $this->releasePhpSessionLockForSse();
 
         $sse = new SseWriter();
@@ -8693,13 +8902,13 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $executionToken = \trim((string)$this->request->getGet('execution_token', ''));
         if ($adminId <= 0 || $publicId === '' || $executionToken === '') {
-            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_OPERATION_SSE);
+            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_OPERATION_SSE);
             $sse->complete(['success' => false]);
             return;
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_OPERATION_SSE, 404);
+            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_OPERATION_SSE, 404);
             $sse->complete(['success' => false]);
             return;
         }
@@ -8712,7 +8921,7 @@ class AiSiteAgent extends BaseController
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
         $status = \trim((string)($activeOperation['status'] ?? ''));
         if ($operation === '') {
-            $this->sendSseContractError($sse, 'OPERATION_NOT_FOUND', (string)__('未找到待执行的工作区操作'), self::PARAMS_OPERATION_SSE, 404);
+            $this->sendSseContractError($sse, 'OPERATION_NOT_FOUND', (string)__('鏈壘鍒板緟鎵ц鐨勫伐浣滃尯鎿嶄綔'), self::PARAMS_OPERATION_SSE, 404);
             $sse->complete(['success' => false]);
             return;
         }
@@ -8783,80 +8992,35 @@ class AiSiteAgent extends BaseController
                 (int)($activeOperation['queue_id'] ?? 0)
             );
             if (!\is_array($queueRow) || $queueRow === []) {
-                if (!$this->shouldEnqueueOperation($operation)) {
-                    $this->sendSseContractError(
-                        $sse,
-                        'OPERATION_QUEUE_NOT_FOUND',
-                        (string)__('未找到当前阶段对应的队列记录，请刷新后重试。'),
-                        self::PARAMS_OPERATION_SSE,
-                        404
-                    );
-                    $sse->complete(['success' => false, 'message' => (string)__('未找到当前阶段对应的队列记录')]);
-                    return;
-                }
-                try {
-                    // 断链补建无原始 HTTP 侧 scope_patch；build 等消费端会以会话库 scope 为准合并
-                    $newQueueId = $this->enqueueOperationQueueTask($session, $adminId, $operation, $executionToken);
-                    if ($newQueueId <= 0) {
-                        throw new \RuntimeException('enqueue_queue_id');
-                    }
-                    $healScope = $this->scopeCompatibilityService->normalizeScope(
-                        $this->sessionService->loadScopeForStage($session, $this->resolveAiSiteQueueStage($operation))
-                    );
-                    $healActive = $this->resolveActiveOperationForExecutionToken($healScope, $executionToken);
-                    $healScope = $this->writeActiveOperationStateToScope($healScope, \array_replace($healActive, [
-                        'operation' => $operation,
-                        'execution_token' => $executionToken,
-                        'queue_id' => $newQueueId,
-                        'updated_at' => \date('Y-m-d H:i:s'),
-                    ]));
-                    $this->sessionService->replaceScope($session->getId(), $adminId, $healScope);
-                    $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-                    $queueRow = $this->findAiSiteOperationQueueRow($session, $operation, $newQueueId);
-                } catch (\Throwable $e) {
-                    $this->logOperationSse('operation_sse_missing_queue_record', [
-                        'public_id' => $session->getPublicId(),
-                        'operation' => $operation,
-                        'error' => $e->getMessage(),
-                    ], 'error');
-                    $this->sendSseContractError(
-                        $sse,
-                        'OPERATION_QUEUE_NOT_FOUND',
-                        (string)__('无法补建队列任务，请刷新后重试。'),
-                        self::PARAMS_OPERATION_SSE,
-                        500
-                    );
-                    $sse->complete(['success' => false, 'message' => (string)__('无法补建队列任务，请刷新后重试。')]);
-                    return;
-                }
-                if (!\is_array($queueRow) || $queueRow === []) {
-                    $this->sendSseContractError(
-                        $sse,
-                        'OPERATION_QUEUE_NOT_FOUND',
-                        (string)__('补建队列后仍无法加载队列记录，请刷新后重试。'),
-                        self::PARAMS_OPERATION_SSE,
-                        500
-                    );
-                    $sse->complete(['success' => false, 'message' => (string)__('补建队列后仍无法加载队列记录，请刷新后重试。')]);
-                    return;
-                }
                 $this->logOperationSse('operation_sse_missing_queue_record', [
                     'public_id' => $session->getPublicId(),
                     'operation' => $operation,
-                    'queue_id' => (int)($queueRow['queue_id'] ?? 0),
                 ]);
-                $sse->sendEvent('info', [
-                    'message' => (string)__('已根据当前会话自动补建队列任务，进度将异步刷新。'),
+                $missingQueueMessage = (string)__('鏈壘鍒板綋鍓嶉樁娈靛搴旂殑闃熷垪璁板綍锛岃鍒锋柊鍚庨噸璇曘€');
+                $this->sendSseContractError(
+                    $sse,
+                    'OPERATION_QUEUE_NOT_FOUND',
+                    $missingQueueMessage,
+                    self::PARAMS_OPERATION_SSE,
+                    404
+                );
+                $sse->complete([
+                    'success' => false,
+                    'message' => $missingQueueMessage,
                     'operation' => $operation,
-                    'queue_id' => (int)($queueRow['queue_id'] ?? 0),
-                    'observer_detail' => true,
+                    'observer_mode' => true,
+                    'background_mode' => true,
+                    'queue_waiting_for_scheduler' => true,
+                    'can_close_stream' => true,
+                    'continue_other_operations' => true,
                 ]);
+                return;
             }
 
             $queueStatusForObserver = \trim((string)($queueRow['status'] ?? ''));
             $queueWaitingForScheduler = \in_array($queueStatusForObserver, ['pending', 'queued'], true);
             if ($queueWaitingForScheduler) {
-                $schedulerHintMessage = (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。');
+                $schedulerHintMessage = (string)__('鎿嶄綔宸茶繘鍏ョ郴缁熼槦鍒楋紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涘ぇ閮ㄥ垎鎯呭喌绾?1 鍒嗛挓鍚庡紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆');
                 $sse->sendEvent('info', [
                     'message' => $schedulerHintMessage,
                     'operation' => $operation,
@@ -8880,17 +9044,17 @@ class AiSiteAgent extends BaseController
                     'biz_key' => (string)($queueRow['biz_key'] ?? ''),
                 ]);
             }
-            $observeCheckpointOnly = !$this->shouldKeepQueuedObserverStreamOpen($operation);
+            $observeInitialStateOnly = !$this->shouldKeepQueuedObserverStreamOpen($operation);
             $observed = $this->observeDuplicateOperationStream(
                 $sse,
                 $session,
                 $adminId,
                 $operation,
                 $executionToken,
-                $observeCheckpointOnly
+                $observeInitialStateOnly
             );
             if (
-                !$observeCheckpointOnly
+                !$observeInitialStateOnly
                 && $this->shouldKeepQueuedObserverStreamOpen($operation)
                 && $sse->isAlive()
             ) {
@@ -8982,7 +9146,7 @@ class AiSiteAgent extends BaseController
                     return;
                 }
                 $sse->sendEvent('info', [
-                    'message' => (string)__('检测到已存在队列记录，已切换为观察模式并继续同步队列状态。'),
+                    'message' => (string)__('妫€娴嬪埌宸插瓨鍦ㄩ槦鍒楄褰曪紝宸插垏鎹负瑙傚療妯″紡骞剁户缁悓姝ラ槦鍒楃姸鎬併€'),
                     'operation' => $operation,
                     'observer_mode' => true,
                     'queue_id' => (int)($queueRow['queue_id'] ?? 0),
@@ -8991,13 +9155,13 @@ class AiSiteAgent extends BaseController
                 $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
                 if (!(bool)($observed['success'] ?? true)) {
                     $sse->sendError(
-                        (string)($observed['message'] ?? __('操作执行失败')),
+                        (string)($observed['message'] ?? __('鎿嶄綔鎵ц澶辫触')),
                         (int)($observed['http_code'] ?? 500)
                     );
                 }
                 $sse->complete([
                     'success' => (bool)($observed['success'] ?? true),
-                    'message' => (string)($observed['message'] ?? __('操作执行完成')),
+                    'message' => (string)($observed['message'] ?? __('鎿嶄綔鎵ц瀹屾垚')),
                     'operation' => $operation,
                     'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
                     'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
@@ -9018,13 +9182,13 @@ class AiSiteAgent extends BaseController
                 'message' => '队列型 AI 操作仅由系统调度器执行。',
                 'operation' => $operation,
                 'state' => $this->buildWorkspaceEventStatePayload(
-                    $this->buildWorkspaceState($fresh, $adminId, 80, true)
+                    $this->buildWorkspaceState($fresh, $adminId, 80, false)
                 ),
             ]);
             return;
         }
 
-        $claim = $this->claimActiveOperationExecution($session, $adminId, $executionToken, $operation);
+        $claim = $this->claimActiveOperationExecution($session, $adminId, $executionToken, $operation, 'direct_operation');
         if (!$claim['ok']) {
             $reason = (string)($claim['reason'] ?? '');
             if ($reason === 'duplicate_stream') {
@@ -9033,33 +9197,33 @@ class AiSiteAgent extends BaseController
                     'operation' => $operation,
                 ]);
                 $sse->sendEvent('warning', [
-                    'message' => (string)__('检测到重复的操作事件流连接，当前已切换为观察模式，将继续同步剩余进度。'),
+                    'message' => (string)__('妫€娴嬪埌閲嶅鐨勬搷浣滀簨浠舵祦杩炴帴锛屽綋鍓嶅凡鍒囨崲涓鸿瀵熸ā寮忥紝灏嗙户缁悓姝ュ墿浣欒繘搴︺€'),
                     'operation' => $operation,
                     'observer_mode' => true,
                 ]);
                 $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
                 if (!(bool)($observed['success'] ?? true)) {
                     $sse->sendError(
-                        (string)($observed['message'] ?? __('操作执行失败')),
+                        (string)($observed['message'] ?? __('鎿嶄綔鎵ц澶辫触')),
                         (int)($observed['http_code'] ?? 500)
                     );
                 }
                 $sse->complete([
                     'success' => (bool)($observed['success'] ?? true),
-                    'message' => (string)($observed['message'] ?? __('操作执行完成')),
+                    'message' => (string)($observed['message'] ?? __('鎿嶄綔鎵ц瀹屾垚')),
                     'operation' => $operation,
                     'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
                     'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
                 ]);
                 return;
             }
-            $terminalMessage = (string)($claim['message'] ?? (string)__('该操作已结束或不可用'));
+            $terminalMessage = (string)($claim['message'] ?? (string)__('璇ユ搷浣滃凡缁撴潫鎴栦笉鍙敤'));
             $this->sendSseContractError($sse, 'OPERATION_NOT_ACTIVE', $terminalMessage, self::PARAMS_OPERATION_SSE, 409);
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
             $sse->complete([
                 'success' => false,
                 'state' => $this->buildWorkspaceEventStatePayload(
-                    $this->buildWorkspaceState($fresh, $adminId, 80, true)
+                    $this->buildWorkspaceState($fresh, $adminId, 80, false)
                 ),
             ]);
             return;
@@ -9073,8 +9237,8 @@ class AiSiteAgent extends BaseController
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
 
         $stageCode = $this->scopeCompatibilityService->normalizeStage($session->getStage());
-        $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_started', (string)__('已开始执行操作'), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? '')]);
-        $sse->sendEvent('start', ['message' => __('已开始执行：%{operation}', ['operation' => $operation]), 'operation' => $operation]);
+        $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_started', (string)__('宸插紑濮嬫墽琛屾搷浣'), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? '')]);
+        $sse->sendEvent('start', ['message' => __('宸插紑濮嬫墽琛岋細%{operation}', ['operation' => $operation]), 'operation' => $operation]);
         RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
         RequestContext::set(self::REQUEST_CTX_AI_CHUNK_FORWARDER, function (array $payload) use ($sse, $session, $adminId, $stageCode, $operation): void {
             $chunk = (string)($payload['chunk'] ?? '');
@@ -9083,8 +9247,8 @@ class AiSiteAgent extends BaseController
             }
             $region = \trim((string)($payload['region'] ?? ''));
             $message = $region !== ''
-                ? (string)__('AI 片段（%{region}）：%{chunk}', ['region' => $region, 'chunk' => $chunk])
-                : (string)__('AI 片段：%{chunk}', ['chunk' => $chunk]);
+                ? (string)__('AI 鐗囨锛?{region}锛夛細%{chunk}', ['region' => $region, 'chunk' => $chunk])
+                : (string)__('AI 鐗囨锛?{chunk}', ['chunk' => $chunk]);
             $this->appendWorkspaceEvent(
                 $session->getId(),
                 $adminId,
@@ -9119,7 +9283,7 @@ class AiSiteAgent extends BaseController
                 );
             $sse->complete([
                 'success' => true,
-                'message' => (string)($result['message'] ?? __('操作执行完成')),
+                'message' => (string)($result['message'] ?? __('鎿嶄綔鎵ц瀹屾垚')),
                 'operation' => $operation,
                 'data' => $result,
                 'state' => $statePayload,
@@ -9127,7 +9291,7 @@ class AiSiteAgent extends BaseController
         } catch (\Throwable $throwable) {
             $failedStatus = $operation === 'publish' ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
             $this->updateActiveOperation($session, $adminId, ['status' => 'error', 'message' => $throwable->getMessage()], $failedStatus, $operation === 'publish' ? AiSiteAgentSession::PUBLISH_STATUS_FAILED : null);
-            $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_failed', (string)__('操作执行失败：%{message}', ['message' => $throwable->getMessage()]), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? ''), 'details' => ['exception' => $throwable->getMessage()]], AiSiteAgentSessionEvent::LEVEL_ERROR);
+            $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_failed', (string)__('鎿嶄綔鎵ц澶辫触锛?{message}', ['message' => $throwable->getMessage()]), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? ''), 'details' => ['exception' => $throwable->getMessage()]], AiSiteAgentSessionEvent::LEVEL_ERROR);
             $httpCode = $this->inferThrowableHttpCode($throwable);
             $sse->sendError($throwable->getMessage(), $httpCode);
             if ($httpCode === 402) {
@@ -9158,10 +9322,9 @@ class AiSiteAgent extends BaseController
         }
 
         return match ($operation) {
-            'publish' => $this->runPublishOperation($sse, $session, $adminId),
-            default => throw new \RuntimeException((string)__('未知操作：%{operation}（允许：%{allowed}）', [
+            default => throw new \RuntimeException((string)__('鏈煡鎿嶄綔锛?{operation}锛堝厑璁革細%{allowed}锛', [
                 'operation' => $operation !== '' ? $operation : '(empty)',
-                'allowed' => 'plan, build, block_regenerate, block_partial_patch, regenerate_page, publish',
+                'allowed' => 'system-scheduler queue operations only',
             ])),
         };
     }
@@ -9201,16 +9364,14 @@ class AiSiteAgent extends BaseController
         $message = \trim((string)($activeOperation['message'] ?? ''));
 
         if ($status === 'error') {
-            throw new \RuntimeException($message !== '' ? $message : (string)__('建站方案生成失败'));
+            throw new \RuntimeException($message !== '' ? $message : (string)__('寤虹珯鏂规鐢熸垚澶辫触'));
         }
 
         return [
-            'message' => $message !== '' ? $message : (string)__('建站方案生成完成'),
+            'message' => $message !== '' ? $message : (string)__('寤虹珯鏂规鐢熸垚瀹屾垚'),
             'state' => $state,
             'active_operation' => $activeOperation,
-            'plan_markdown' => (string)($scope['plan_markdown'] ?? ''),
             'plan_json' => \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
-            'execution_blueprint' => \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [],
         ];
     }
 
@@ -9227,10 +9388,10 @@ class AiSiteAgent extends BaseController
         int $adminId,
         string $operation,
         string $executionToken,
-        bool $queueCheckpointOnly = false
+        bool $queueInitialStateOnly = false
     ): array {
-        // 增加超时时间以支持长时间的AI生成任务
-        // 从240秒增加到600秒（10分钟），适应大型页面生成场景
+        // 澧炲姞瓒呮椂鏃堕棿浠ユ敮鎸侀暱鏃堕棿鐨凙I鐢熸垚浠诲姟
+        // 浠?40绉掑鍔犲埌600绉掞紙10鍒嗛挓锛夛紝閫傚簲澶у瀷椤甸潰鐢熸垚鍦烘櫙
         $maxIdleLoops = $this->getObserverMaxIdleLoops();
         $pollIntervalMs = self::OBSERVER_QUEUE_PROGRESS_POLL_INTERVAL_MS;
         $idleLoops = 0;
@@ -9248,7 +9409,9 @@ class AiSiteAgent extends BaseController
         $lastQueueProcess = '';
         $lastQueueResultLength = 0;
         $lastTaskProgressStateSignature = '';
-        $initialQueueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId);
+        $lastStageOnePageProgressSignature = '';
+        $includeQueuePayload = $operation === 'plan';
+        $initialQueueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId, $includeQueuePayload);
         $eventCorrelation = $this->buildObservedOperationEventCorrelation(
             $operation,
             $executionToken,
@@ -9285,9 +9448,15 @@ class AiSiteAgent extends BaseController
             $initialQueueRow,
             $lastTaskProgressStateSignature
         );
+        $this->emitObservedPlanStageOnePageProgressState(
+            $sse,
+            $initialQueueRow,
+            $operation,
+            $lastStageOnePageProgressSignature
+        );
 
-        if ($queueCheckpointOnly) {
-            $stateCheckpoint = $this->buildQueuedOperationCheckpointState(
+        if ($queueInitialStateOnly) {
+            $queuedState = $this->buildQueuedOperationState(
                 $session,
                 $stageCode,
                 $operation,
@@ -9297,9 +9466,9 @@ class AiSiteAgent extends BaseController
 
             return [
                 'success' => true,
-                'message' => (string)__('队列任务已提交，进度将持续同步到工作区。'),
-                'data' => $this->buildObservedOperationResultData($operation, $stateCheckpoint),
-                'state' => $stateCheckpoint,
+                'message' => (string)__('闃熷垪浠诲姟宸叉彁浜わ紝杩涘害灏嗘寔缁悓姝ュ埌宸ヤ綔鍖恒€'),
+                'data' => $this->buildObservedOperationResultData($operation, $queuedState),
+                'state' => $queuedState,
                 'http_code' => 200,
                 'deferred_queue_progress' => true,
             ];
@@ -9314,7 +9483,7 @@ class AiSiteAgent extends BaseController
             );
             $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
             $queueId = (int)($activeOperation['queue_id'] ?? $queueId);
-            $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId);
+            $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId, $includeQueuePayload);
             $eventCorrelation = $this->buildObservedOperationEventCorrelation(
                 $operation,
                 $executionToken,
@@ -9334,9 +9503,10 @@ class AiSiteAgent extends BaseController
                 $lastQueueStatus,
                 $lastQueuePid,
             ];
+            $stageOneProgressBefore = $lastStageOnePageProgressSignature;
             if ($newEvents !== []) {
                 $freshAfterEvents = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
-                $queueRowAfterEvents = $this->findAiSiteOperationQueueRow($freshAfterEvents, $operation, $queueId);
+                $queueRowAfterEvents = $this->findAiSiteOperationQueueRow($freshAfterEvents, $operation, $queueId, $includeQueuePayload);
                 if (\is_array($queueRowAfterEvents) && $queueRowAfterEvents !== []) {
                     $fresh = $freshAfterEvents;
                     $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -9363,6 +9533,13 @@ class AiSiteAgent extends BaseController
                 $lastQueueStatus,
                 $lastQueuePid,
             ];
+            $this->emitObservedPlanStageOnePageProgressState(
+                $sse,
+                $queueRow,
+                $operation,
+                $lastStageOnePageProgressSignature
+            );
+            $queueProgressChanged = $queueProgressChanged || $stageOneProgressBefore !== $lastStageOnePageProgressSignature;
             $this->emitObservedBuildTaskProgressState(
                 $sse,
                 $scope,
@@ -9372,7 +9549,7 @@ class AiSiteAgent extends BaseController
             );
             if (!$this->isObservedOperationStillRunning($activeOperation, $operation, $executionToken, $queueRow)) {
                 $loopQueueStatus = \trim((string)($queueRow['status'] ?? ''));
-                // 只要队列仍在 pending/queued/running，就继续保持观察连接，避免过早 done。
+                // 鍙闃熷垪浠嶅湪 pending/queued/running锛屽氨缁х画淇濇寔瑙傚療杩炴帴锛岄伩鍏嶈繃鏃?done銆?
                 if (!$this->isObservedQueueInProgress($queueRow)) {
                     break;
                 }
@@ -9403,7 +9580,7 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage($fresh, $stageCode)
         );
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
-        $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, (int)($activeOperation['queue_id'] ?? $queueId));
+        $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, (int)($activeOperation['queue_id'] ?? $queueId), $includeQueuePayload);
         $queueStatus = \trim((string)($queueRow['status'] ?? ''));
         [$fresh, $scope, $activeOperation, $queueRow, $queueStatus] = $this->settleObservedQueueStateIfNeeded(
             $sse,
@@ -9436,12 +9613,9 @@ class AiSiteAgent extends BaseController
                 'message' => $completeMessage,
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]);
-            $scope = $this->writeActiveOperationStateToScope($scope, $activeOperation);
-            $this->sessionService->replaceScope($fresh->getId(), $adminId, $scope);
-            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
         }
         $state = $this->buildWorkspaceEventStatePayload(
-            $this->buildWorkspaceState($fresh, $adminId, 80, true)
+            $this->buildWorkspaceState($fresh, $adminId, 80, false)
         );
         if (\is_array($state['active_operation'] ?? null)) {
             $stateActiveOperation = $state['active_operation'];
@@ -9467,23 +9641,23 @@ class AiSiteAgent extends BaseController
         }
         $message = \trim((string)($activeOperation['message'] ?? ''));
         if ($timedOut) {
-            // 提供更详细的超时信息和操作建议
-            $message = (string)__('操作仍在执行中，但进度观察已超时（10分钟无响应）。这可能发生在大型页面生成或复杂任务中。建议：1）刷新页面查看最新状态；2）如果操作未完成，可重新触发；3）检查系统日志了解详细信息');
+            // 鎻愪緵鏇磋缁嗙殑瓒呮椂淇℃伅鍜屾搷浣滃缓璁?
+            $message = (string)__('鎿嶄綔浠嶅湪鎵ц涓紝浣嗚繘搴﹁瀵熷凡瓒呮椂锛?0鍒嗛挓鏃犲搷搴旓級銆傝繖鍙兘鍙戠敓鍦ㄥぇ鍨嬮〉闈㈢敓鎴愭垨澶嶆潅浠诲姟涓€傚缓璁細1锛夊埛鏂伴〉闈㈡煡鐪嬫渶鏂扮姸鎬侊紱2锛夊鏋滄搷浣滄湭瀹屾垚锛屽彲閲嶆柊瑙﹀彂锛?锛夋鏌ョ郴缁熸棩蹇椾簡瑙ｈ缁嗕俊鎭');
         } elseif ($message === '') {
             $message = $this->resolveObservedQueueMessage($queueRow, $success);
         }
         if ($queueStatus === 'done' && $sse->isAlive()) {
-            $queueSnapshot = $this->buildQueueObserverPublicSnapshot($queueRow);
+            $queueState = $this->buildQueueObserverPublicState($queueRow);
             $queueInfo = $this->buildQueueObserverPanelPayload($queueRow);
             $sse->sendEvent('info', [
                 'message' => $message,
                 'operation' => $operation,
                 'queue_id' => (int)($queueRow['queue_id'] ?? 0),
                 'queue_status' => $queueStatus,
-                'queue_state' => $queueSnapshot,
+                'queue_state' => $queueState,
                 'queue_info' => $queueInfo,
                 'state' => $state,
-                'token_usage' => \is_array($queueSnapshot['token_usage'] ?? null) ? $queueSnapshot['token_usage'] : [],
+                'token_usage' => \is_array($queueState['token_usage'] ?? null) ? $queueState['token_usage'] : [],
                 'progress_kind' => 'queue_info',
                 'observer_detail' => true,
                 'queue_panel_update' => true,
@@ -9493,7 +9667,7 @@ class AiSiteAgent extends BaseController
         if (!$timedOut && !$success && ($activeInProgress || $queueInProgress)) {
             return [
                 'success' => true,
-                'message' => $message !== '' ? $message : (string)__('操作仍在执行中，工作区将继续同步后台队列进度。'),
+                'message' => $message !== '' ? $message : (string)__('鎿嶄綔浠嶅湪鎵ц涓紝宸ヤ綔鍖哄皢缁х画鍚屾鍚庡彴闃熷垪杩涘害銆'),
                 'data' => $this->buildObservedOperationResultData($operation, $state),
                 'state' => $state,
                 'http_code' => 200,
@@ -9524,6 +9698,7 @@ class AiSiteAgent extends BaseController
         $lastQueueStatus = '';
         $lastQueuePid = 0;
         $lastTaskProgressStateSignature = '';
+        $lastStageOnePageProgressSignature = '';
         $pollIntervalMs = self::OBSERVER_QUEUE_PROGRESS_POLL_INTERVAL_MS;
         $maxObserveCycles = (int)\ceil(self::OBSERVER_QUEUE_PROGRESS_MAX_OBSERVE_MS / \max(1, $pollIntervalMs));
 
@@ -9537,7 +9712,7 @@ class AiSiteAgent extends BaseController
             if ($effectiveQueueId <= 0) {
                 $effectiveQueueId = $queueId;
             }
-            $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $effectiveQueueId);
+            $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $effectiveQueueId, $operation === 'plan');
             if (\is_array($queueRow) && $queueRow !== []) {
                 $queueId = (int)($queueRow['queue_id'] ?? $queueId);
             }
@@ -9550,6 +9725,12 @@ class AiSiteAgent extends BaseController
                 $lastQueueResultLength,
                 $lastQueueStatus,
                 $lastQueuePid
+            );
+            $this->emitObservedPlanStageOnePageProgressState(
+                $sse,
+                $queueRow,
+                $operation,
+                $lastStageOnePageProgressSignature
             );
             $this->emitObservedBuildTaskProgressState(
                 $sse,
@@ -9572,15 +9753,15 @@ class AiSiteAgent extends BaseController
         }
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId);
+        $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId, $operation === 'plan');
         if ($this->isObservedQueueInProgress($queueRow)) {
             $sse->sendEvent('info', [
-                'message' => (string)__('队列仍在执行，观察连接已达到本次最长保持时间；工作区会继续通过队列状态同步最新进度。'),
+                'message' => (string)__('闃熷垪浠嶅湪鎵ц锛岃瀵熻繛鎺ュ凡杈惧埌鏈鏈€闀夸繚鎸佹椂闂达紱宸ヤ綔鍖轰細缁х画閫氳繃闃熷垪鐘舵€佸悓姝ユ渶鏂拌繘搴︺€'),
                 'operation' => $operation,
                 'queue_id' => $queueId,
                 'queue_status' => (string)($queueRow['status'] ?? 'running'),
                 'queue_process' => (string)($queueRow['process'] ?? ''),
-                'queue_state' => \is_array($queueRow) ? $this->buildQueueObserverPublicSnapshot($queueRow) : [],
+                'queue_state' => \is_array($queueRow) ? $this->buildQueueObserverPublicState($queueRow) : [],
                 'queue_info' => \is_array($queueRow) ? $this->buildQueueObserverPanelPayload($queueRow) : [],
                 'progress_kind' => 'queue_info',
                 'observer_detail' => true,
@@ -9593,7 +9774,7 @@ class AiSiteAgent extends BaseController
         }
 
         $state = $this->buildWorkspaceEventStatePayload(
-            $this->buildWorkspaceState($fresh, $adminId, 80, true)
+            $this->buildWorkspaceState($fresh, $adminId, 80, false)
         );
         $queueStatus = \trim((string)($queueRow['status'] ?? ''));
         $success = $queueStatus === 'done';
@@ -9654,7 +9835,7 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage($fresh, $stageCode)
         );
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
-        $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, (int)($activeOperation['queue_id'] ?? $queueId));
+        $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, (int)($activeOperation['queue_id'] ?? $queueId), $operation === 'plan');
         $queueStatus = \trim((string)($queueRow['status'] ?? ''));
 
         return [$fresh, $scope, $activeOperation, $queueRow, $queueStatus];
@@ -9697,8 +9878,8 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 观察流终态判定直接以队列真实状态为准。
-     * error/stop/cancelled 一旦落库，SSE 应立即收敛，不再继续心跳等待 finished/end_at。
+     * 瑙傚療娴佺粓鎬佸垽瀹氱洿鎺ヤ互闃熷垪鐪熷疄鐘舵€佷负鍑嗐€?
+     * error/stop/cancelled 涓€鏃﹁惤搴擄紝SSE 搴旂珛鍗虫敹鏁涳紝涓嶅啀缁х画蹇冭烦绛夊緟 finished/end_at銆?
      *
      * @param array<string, mixed>|null $queueRow
      */
@@ -9724,9 +9905,9 @@ class AiSiteAgent extends BaseController
         }
         $status = \trim((string)($queueRow['status'] ?? ''));
         if (\in_array($status, ['running', 'processing'], true)) {
-            // 队列 status 是系统调度器写入的权威信号。HTTP/SSE 请求 worker 与调度 worker
-            // 可能跨进程/容器，跨进程 PID 探活会把活着的队列误判为「死了」，触发误自愈与重试抢锁。
-            // 历史 PID 兜底已删除，仅信任 queue.status。
+            // 闃熷垪 status 鏄郴缁熻皟搴﹀櫒鍐欏叆鐨勬潈濞佷俊鍙枫€侶TTP/SSE 璇锋眰 worker 涓庤皟搴?worker
+            // 鍙兘璺ㄨ繘绋?瀹瑰櫒锛岃法杩涚▼ PID 鎺㈡椿浼氭妸娲荤潃鐨勯槦鍒楄鍒や负銆屾浜嗐€嶏紝瑙﹀彂璇嚜鎰堜笌閲嶈瘯鎶㈤攣銆?
+            // 鍘嗗彶 PID 鍏滃簳宸插垹闄わ紝浠呬俊浠?queue.status銆?
             return true;
         }
 
@@ -9734,20 +9915,18 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 供观察模式 SSE 输出的队列行快照（不含完整 content/result，避免泄露敏感字段）。
-     *
+     * 渚涜瀵熸ā寮?SSE 杈撳嚭鐨勯槦鍒楄鐘舵€侊紙涓嶅惈瀹屾暣 content/result锛岄伩鍏嶆硠闇叉晱鎰熷瓧娈碉級銆?     *
      * @param array<string, mixed> $queueRow
      *
      * @return array<string, mixed>
      */
-    private function buildQueueObserverPublicSnapshot(array $queueRow): array
+    private function buildQueueObserverPublicState(array $queueRow): array
     {
-        return $this->queueSnapshotService()->buildObserverPublicSnapshot($queueRow);
+        return $this->queueStateService()->buildObserverPublicState($queueRow);
     }
 
     /**
-     * PageBuilder operation 对应 weline_queue 行：queue_id + 快照 + process + result 尾部，供侧栏进度区展示。
-     *
+     * PageBuilder operation 瀵瑰簲 weline_queue 琛岋細queue_id + 鐘舵€?+ process + result 灏鹃儴锛屼緵渚ф爮杩涘害鍖哄睍绀恒€?     *
      * @param array<string, mixed> $activeOperation
      *
      * @return array<string, mixed>|null
@@ -9765,7 +9944,7 @@ class AiSiteAgent extends BaseController
         if (\trim((string)($activeOperation['operation'] ?? '')) === $operation) {
             $queueId = (int)($activeOperation['queue_id'] ?? 0);
         }
-        $queueRow = $this->findAiSiteOperationQueueRow($session, $operation, $queueId);
+        $queueRow = $this->findAiSiteOperationQueueRow($session, $operation, $queueId, $operation === 'plan');
         if (!\is_array($queueRow) || $queueRow === []) {
             return null;
         }
@@ -9782,11 +9961,11 @@ class AiSiteAgent extends BaseController
         return $this->buildOperationStageQueueInfoPayload($session, $activeOperation, 'plan');
     }
 
-    private function queueSnapshotService(): AiSiteQueueSnapshotService
+    private function queueStateService(): AiSiteQueueStateService
     {
-        return isset($this->queueSnapshotService)
-            ? $this->queueSnapshotService
-            : ObjectManager::getInstance(AiSiteQueueSnapshotService::class);
+        return isset($this->queueStateService)
+            ? $this->queueStateService
+            : ObjectManager::getInstance(AiSiteQueueStateService::class);
     }
 
     private function queueObserverHelperService(): AiSiteAgentQueueObserverHelperService
@@ -9824,6 +10003,15 @@ class AiSiteAgent extends BaseController
         }
 
         return $this->blockPartialPatchService;
+    }
+
+    private function planJsonStateService(): AiSitePlanJsonStateService
+    {
+        if ($this->planJsonStateService === null) {
+            $this->planJsonStateService = ObjectManager::getInstance(AiSitePlanJsonStateService::class);
+        }
+
+        return $this->planJsonStateService;
     }
 
     private function assetManifestService(): AiSiteAssetManifestService
@@ -9915,10 +10103,6 @@ class AiSiteAgent extends BaseController
         ?array $queueInfo,
         string $operation
     ): array {
-        if (!empty($activeOperation['preflight_failed']) && \strtolower(\trim((string)($activeOperation['status'] ?? ''))) === 'error') {
-            return $activeOperation;
-        }
-
         return $this->queueObserverStreamService()->reconcileActiveOperationWithQueueInfo(
             $activeOperation,
             $queueInfo,
@@ -9948,16 +10132,7 @@ class AiSiteAgent extends BaseController
      */
     private function buildQueueObserverPanelPayload(array $queueRow): array
     {
-        $payload = $this->queueObserverHelperService()->buildPanelPayload($queueRow, $this->buildQueueObserverPublicSnapshot($queueRow));
-        $status = \strtolower(\trim((string)($queueRow['status'] ?? '')));
-        if (\in_array($status, ['running', 'processing'], true) && !$this->isObservedQueueInProgress($queueRow)) {
-            return $this->markQueueInfoPayloadAsRecoveredForRetry($payload, [
-                'message' => 'Linked queue process ended without a terminal queue status; retry is allowed.',
-                'queue_id' => (int)($queueRow['queue_id'] ?? 0),
-            ]);
-        }
-
-        return $payload;
+        return $this->queueObserverHelperService()->buildPanelPayload($queueRow, $this->buildQueueObserverPublicState($queueRow));
     }
 
     /**
@@ -9988,69 +10163,6 @@ class AiSiteAgent extends BaseController
         unset($queueInfo['snapshot']);
 
         return $queueInfo;
-    }
-
-    /**
-     * Persist only semantic recovery metadata. This does not execute or mutate
-     * generated content; it prevents stale queue state from re-locking UI.
-     *
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $operationState
-     * @param array<string, mixed>|null $queueInfo
-     * @return array<string, mixed>
-     */
-    private function persistRecoveredQueueOperationState(
-        AiSiteAgentSession $session,
-        int $adminId,
-        array $scope,
-        string $operation,
-        array $operationState,
-        ?array $queueInfo
-    ): array {
-        if (empty($operationState['queue_terminal_recovered'])) {
-            return $scope;
-        }
-
-        $scope = $this->writeActiveOperationStateToScope($scope, \array_replace($operationState, [
-            'operation' => $operation,
-        ]));
-        if ($operation === 'plan') {
-            if (\is_array($queueInfo)) {
-                $scope['plan_queue_info'] = $queueInfo;
-            }
-        } elseif (\is_array($queueInfo)) {
-            $scope['build_queue_info'] = $queueInfo;
-        }
-        if (\in_array((string)($scope['workspace_status'] ?? ''), [
-            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
-            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING,
-        ], true)) {
-            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
-        }
-
-        try {
-            $patch = [
-                'active_operation' => \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
-                'active_operations' => \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [],
-                'workspace_status' => (string)($scope['workspace_status'] ?? ''),
-            ];
-            if ($operation === 'plan') {
-                if (\array_key_exists('plan_queue_info', $scope)) {
-                    $patch['plan_queue_info'] = \is_array($scope['plan_queue_info'] ?? null) ? $scope['plan_queue_info'] : [];
-                }
-            } elseif (\array_key_exists('build_queue_info', $scope)) {
-                $patch['build_queue_info'] = \is_array($scope['build_queue_info'] ?? null) ? $scope['build_queue_info'] : [];
-            }
-            $this->sessionService->mergeScope($session->getId(), $adminId, $patch);
-        } catch (\Throwable $throwable) {
-            \error_log('[AiSiteWorkspaceQueueRecovery] failed to persist recovered operation state ' . \json_encode([
-                'session_id' => (int)$session->getId(),
-                'operation' => $operation,
-                'message' => $throwable->getMessage(),
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-        }
-
-        return $scope;
     }
 
     /**
@@ -10122,7 +10234,7 @@ class AiSiteAgent extends BaseController
             if ((int)($freshTaskSummary['total'] ?? 0) > 0) {
                 $taskSummary = $freshTaskSummary;
                 $result['task_summary'] = $freshTaskSummary;
-                foreach (['build_blueprint', 'build_tasks', 'build_plan_v2', 'plan_projection', 'content_manifest', 'build_plan_confirmed'] as $scopeKey) {
+                foreach (['build_plan_v2', 'plan_projection', 'content_manifest', 'build_plan_confirmed'] as $scopeKey) {
                     if (\array_key_exists($scopeKey, $freshScope)) {
                         $normalized[$scopeKey] = $freshScope[$scopeKey];
                     }
@@ -10399,14 +10511,14 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 一个会话在工作区中只应观察当前阶段对应的队列，避免提前触发后续阶段队列恢复/补建。
+     * 涓€涓細璇濆湪宸ヤ綔鍖轰腑鍙簲瑙傚療褰撳墠闃舵瀵瑰簲鐨勯槦鍒楋紝閬垮厤鎻愬墠瑙﹀彂鍚庣画闃舵闃熷垪鎭㈠/琛ュ缓銆?
      *
      * @param array<string, mixed> $activeOperation
      */
     private function shouldInspectOperationQueueInWorkspace(string $currentStage, array $activeOperation, string $operation): bool
     {
-        // 当前需求：一个会话同一时刻只跟踪“当前活跃操作”的唯一队列。
-        // $currentStage 作为签名保留，便于后续扩展。
+        // 褰撳墠闇€姹傦細涓€涓細璇濆悓涓€鏃跺埢鍙窡韪€滃綋鍓嶆椿璺冩搷浣溾€濈殑鍞竴闃熷垪銆?
+        // $currentStage 浣滀负绛惧悕淇濈暀锛屼究浜庡悗缁墿灞曘€?
         $activeName = \trim((string)($activeOperation['operation'] ?? ''));
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
         return $activeName === $operation && \in_array($activeStatus, ['queued', 'running', 'done', 'error', 'stop', 'cancelled', 'canceled'], true);
@@ -10438,8 +10550,7 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 队列创建/连接观察流后，向前台打印可读的队列元数据（多行 detail_lines + 结构化快照）。
-     *
+     * 闃熷垪鍒涘缓/杩炴帴瑙傚療娴佸悗锛屽悜鍓嶅彴鎵撳嵃鍙鐨勯槦鍒楀厓鏁版嵁锛堝琛?detail_lines + 缁撴瀯鍖栫姸鎬侊級銆?     *
      * @param array<string, mixed> $queueRow
      */
     private function emitQueueObserverQueueDetailEvents(SseWriter $sse, array $queueRow, string $operation): void
@@ -10468,6 +10579,64 @@ class AiSiteAgent extends BaseController
             $lastQueueStatus,
             $lastQueuePid
         );
+    }
+
+    /**
+     * @param array<string, mixed>|null $queueRow
+     */
+    private function emitObservedPlanStageOnePageProgressState(
+        SseWriter $sse,
+        ?array $queueRow,
+        string $operation,
+        string &$lastSignature
+    ): void {
+        if ($operation !== 'plan' || !$sse->isAlive() || !\is_array($queueRow) || $queueRow === []) {
+            return;
+        }
+
+        $queueState = $this->buildQueueObserverPublicState($queueRow);
+        $progress = \is_array($queueState['stage1_page_progress'] ?? null) ? $queueState['stage1_page_progress'] : [];
+        if ($progress === []) {
+            return;
+        }
+
+        $signature = \sha1((string)\json_encode($progress, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR));
+        if ($signature === $lastSignature) {
+            return;
+        }
+        $lastSignature = $signature;
+
+        $total = (int)($progress['total'] ?? 0);
+        $done = (int)($progress['done_count'] ?? 0);
+        $running = \max(0, (int)($progress['running_count'] ?? (\is_array($progress['running'] ?? null) ? \count($progress['running']) : 0)));
+        $pending = \max(0, (int)($progress['pending_count'] ?? (\is_array($progress['pending'] ?? null) ? \count($progress['pending']) : 0)));
+        $failed = \max(0, (int)($progress['failed_count'] ?? (\is_array($progress['failed'] ?? null) ? \count($progress['failed']) : 0)));
+        $remaining = \array_key_exists('remaining_count', $progress)
+            ? \max(0, (int)$progress['remaining_count'])
+            : (($running + $pending) > 0 ? $running + $pending : \max(0, $total - $done - $failed));
+        $progressPercent = $total > 0 ? 60 + (int)\floor(($done / \max(1, $total)) * 22) : (int)($queueRow['progress_percent'] ?? 0);
+        $message = \trim((string)($queueRow['process'] ?? ''));
+        if ($message === '' || \str_starts_with($message, 'Stage 1 page fanout:')) {
+            $message = 'Stage 1 page fanout: total ' . $total . ' | done ' . $done . ' | remaining ' . $remaining;
+        }
+        $queueInfo = $this->queueObserverHelperService()->buildPanelPayload($queueRow, $queueState);
+
+        $sse->sendEvent('progress', [
+            'message' => $message,
+            'operation' => 'plan',
+            'progress_percent' => \max(0, \min(99, $progressPercent)),
+            'progress_kind' => 'queue_info',
+            'stage1_step' => 'page_plan',
+            'stage1_phase' => 'fanout_progress',
+            'stage1_page_progress' => $progress,
+            'queue_id' => (int)($queueRow['queue_id'] ?? 0),
+            'queue_status' => (string)($queueRow['status'] ?? ''),
+            'queue_process' => $message,
+            'queue_state' => $queueState,
+            'queue_info' => $queueInfo,
+            'observer_detail' => true,
+            'queue_panel_update' => true,
+        ]);
     }
 
     /**
@@ -10514,8 +10683,8 @@ class AiSiteAgent extends BaseController
         $lastSignature = $signature;
 
         $message = $queueStatus === 'running'
-            ? (string)__('AI 正在生成页面任务')
-            : (string)__('AI 构建任务同步中');
+            ? (string)__('AI 姝ｅ湪鐢熸垚椤甸潰浠诲姟')
+            : (string)__('AI 鏋勫缓浠诲姟鍚屾涓');
         $progressPercent = isset($activeOperation['progress_percent']) ? (int)$activeOperation['progress_percent'] : $this->resolveTaskSummaryProgressPercent($summary);
 
         $payload = $this->buildTaskProgressStatePayload(
@@ -10553,6 +10722,8 @@ class AiSiteAgent extends BaseController
             'task_summary' => $summary,
             'build_task_summary' => $summary,
             'page_block_progress' => $this->buildTaskService->summarizePageBlockProgress($summary),
+            'build_plan_block_progress' => $this->buildTaskProgressBlockRows($summary),
+            'active_concurrency' => \max(0, (int)($summary['running'] ?? 0)),
             'ai_generating' => $aiGenerating,
             'active_operation_status' => $activeStatus,
         ];
@@ -10560,16 +10731,58 @@ class AiSiteAgent extends BaseController
         if (\is_array($queueRow) && $queueRow !== []) {
             $payload['queue_id'] = (int)($queueRow['queue_id'] ?? 0);
             $payload['queue_status'] = \trim((string)($queueRow['status'] ?? ''));
-            $payload['queue_state'] = $this->buildQueueObserverPublicSnapshot($queueRow);
+            $payload['queue_state'] = $this->buildQueueObserverPublicState($queueRow);
         }
 
         return $payload;
     }
 
     /**
-     * 统一发任务进度事件：
-     * - task_progress: 任务面板专用实时事件（前端按 task summary 直接刷新）
-     * - progress: 兼容旧订阅方，避免一次改动影响其它流转逻辑
+     * @param array<string, mixed> $summary
+     * @return list<array<string, mixed>>
+     */
+    private function buildTaskProgressBlockRows(array $summary): array
+    {
+        $rows = [];
+        foreach (\is_array($summary['groups'] ?? null) ? $summary['groups'] : [] as $groupKey => $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            $pageType = \trim((string)($group['page_type'] ?? $groupKey));
+            if ($pageType === '' || $pageType === 'shared') {
+                continue;
+            }
+            foreach (\is_array($group['tasks'] ?? null) ? $group['tasks'] : [] as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                $sectionKey = \trim((string)($task['section_code'] ?? ($task['component'] ?? $taskKey)));
+                if ($taskKey === '' && $sectionKey === '') {
+                    continue;
+                }
+                $rows[] = [
+                    'page_type' => $pageType,
+                    'block_id' => $taskKey,
+                    'section_key' => $sectionKey,
+                    'label' => \trim((string)($task['label'] ?? ($sectionKey !== '' ? $sectionKey : $taskKey))),
+                    'status' => \trim((string)($task['status'] ?? 'pending')) ?: 'pending',
+                    'message' => \trim((string)($task['message'] ?? '')),
+                    'updated_at' => \trim((string)($task['updated_at'] ?? ($task['finished_at'] ?? ''))),
+                ];
+                if (\count($rows) >= 160) {
+                    return $rows;
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * 缁熶竴鍙戜换鍔¤繘搴︿簨浠讹細
+     * - task_progress: 浠诲姟闈㈡澘涓撶敤瀹炴椂浜嬩欢锛堝墠绔寜 task summary 鐩存帴鍒锋柊锛?
+     * - progress: 鍏煎鏃ц闃呮柟锛岄伩鍏嶄竴娆℃敼鍔ㄥ奖鍝嶅叾瀹冩祦杞€昏緫
      *
      * @param array<string, mixed> $payload
      */
@@ -10909,7 +11122,7 @@ class AiSiteAgent extends BaseController
 
         return match ($eventType) {
             'start' => [
-                'message' => (string)($payload['message'] ?? __('已开始执行操作')),
+                'message' => (string)($payload['message'] ?? __('宸插紑濮嬫墽琛屾搷浣')),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'page_type' => (string)($payload['page_type'] ?? ''),
             ],
@@ -10923,39 +11136,39 @@ class AiSiteAgent extends BaseController
             ],
             'progress' => $this->buildObservedProgressPayload($payload),
             'ai_raw_chunk' => [
-                'message' => (string)__('AI 正在生成内容，正文流已从队列 SSE 中省略。'),
+                'message' => (string)__('AI 姝ｅ湪鐢熸垚鍐呭锛屾鏂囨祦宸蹭粠闃熷垪 SSE 涓渷鐣ャ€'),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
                 'suppressed_content' => true,
             ],
             'plan_chunk' => [
-                'message' => (string)__('阶段方案内容已生成并写入草案，正文流已从队列 SSE 中省略。'),
+                'message' => (string)__('闃舵鏂规鍐呭宸茬敓鎴愬苟鍐欏叆鑽夋锛屾鏂囨祦宸蹭粠闃熷垪 SSE 涓渷鐣ャ€'),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
                 'suppressed_content' => true,
             ],
             'chunk' => [
-                'message' => (string)__('阶段内容已更新，正文流已从队列 SSE 中省略。'),
+                'message' => (string)__('闃舵鍐呭宸叉洿鏂帮紝姝ｆ枃娴佸凡浠庨槦鍒?SSE 涓渷鐣ャ€'),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'region' => (string)($details['region'] ?? $payload['region'] ?? ''),
                 'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
                 'suppressed_content' => true,
             ],
             'error' => [
-                'message' => (string)($payload['message'] ?? __('操作执行失败')),
+                'message' => (string)($payload['message'] ?? __('鎿嶄綔鎵ц澶辫触')),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'page_type' => (string)($payload['page_type'] ?? ''),
                 'details' => $details,
                 'http_code' => isset($payload['code']) ? (int)$payload['code'] : 500,
             ],
             'operation_started' => [
-                'message' => (string)($payload['message'] ?? __('已开始执行操作')),
+                'message' => (string)($payload['message'] ?? __('宸插紑濮嬫墽琛屾搷浣')),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'page_type' => (string)($payload['page_type'] ?? ''),
             ],
             'operation_progress' => $this->buildObservedProgressPayload($payload),
             'ai_chunk' => [
-                'message' => (string)__('AI 正在生成内容，正文流已从队列 SSE 中省略。'),
+                'message' => (string)__('AI 姝ｅ湪鐢熸垚鍐呭锛屾鏂囨祦宸蹭粠闃熷垪 SSE 涓渷鐣ャ€'),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'region' => (string)($details['region'] ?? $payload['region'] ?? ''),
                 'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
@@ -10965,7 +11178,7 @@ class AiSiteAgent extends BaseController
             'page_generated' => $this->buildObservedPageGeneratedPayload($session, $adminId, $payload, $details),
             'task_completed' => $this->buildObservedTaskCompletedPayload($session, $adminId, $payload, $details),
             'operation_failed' => [
-                'message' => (string)($payload['message'] ?? __('操作执行失败')),
+                'message' => (string)($payload['message'] ?? __('鎿嶄綔鎵ц澶辫触')),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'page_type' => (string)($payload['page_type'] ?? ''),
                 'details' => $details,
@@ -11171,8 +11384,8 @@ class AiSiteAgent extends BaseController
             }
             if (\str_contains($message, 'http 402')
                 || \str_contains($message, 'insufficient balance')
-                || \str_contains($message, '余额不足')
-                || \str_contains($message, '额度不足')
+                || \str_contains($message, '浣欓涓嶈冻')
+                || \str_contains($message, '棰濆害涓嶈冻')
             ) {
                 return 402;
             }
@@ -11273,8 +11486,7 @@ class AiSiteAgent extends BaseController
         $normalized['reference_images'] = $referenceImages;
         $normalized = $this->scopeCompatibilityService->normalizeConfirmedPlanFlag($normalized);
         $normalized = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $normalized);
-        $normalized = $this->hydrateStageOnePlanPayloadFromExecutionBlueprint($normalized);
-        // 读取工作区状态时避免触发外部 AI 生成，防止首开/轮询被远程调用阻塞。
+        // 璇诲彇宸ヤ綔鍖虹姸鎬佹椂閬垮厤瑙﹀彂澶栭儴 AI 鐢熸垚锛岄槻姝㈤寮€/杞琚繙绋嬭皟鐢ㄩ樆濉炪€?
         $profileStartedAt = \microtime(true);
         $normalized['website_profile'] = $this->profileGenerationService->generate($normalized, false);
         $this->logHotPathStage('build_workspace_state.website_profile', $profileStartedAt, [
@@ -11418,23 +11630,82 @@ class AiSiteAgent extends BaseController
         $activeOperations = \array_intersect_key($activeOperations, $supportedWorkspaceOperations);
         $planOperation = $this->resolveWorkspaceQueueOperationState($activeOperation, $activeOperations, 'plan');
         $buildOperation = $this->resolveWorkspaceQueueOperationState($activeOperation, $activeOperations, 'build');
+        $publishOperation = $this->resolveWorkspaceQueueOperationState($activeOperation, $activeOperations, 'publish');
         $existingPlanQueueInfo = \is_array($normalized['plan_queue_info'] ?? null) ? $normalized['plan_queue_info'] : null;
         $existingBuildQueueInfo = \is_array($normalized['build_queue_info'] ?? null) ? $normalized['build_queue_info'] : null;
-        $planQueueInfo = $this->shouldInspectOperationQueueInWorkspace($stage, $planOperation, 'plan')
+        $existingBuildQueueOperation = \is_array($existingBuildQueueInfo)
+            ? $this->workspaceStateHelperService()->resolveStatusQueueInfoOperation($existingBuildQueueInfo)
+            : '';
+        $sharedBuildQueueOperations = [
+            'build' => true,
+            'publish' => true,
+            'regenerate_page' => true,
+            'block_regenerate' => true,
+            'block_partial_patch' => true,
+            'image_asset' => true,
+        ];
+        $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
+        $buildQueueOperationCandidate = '';
+        foreach ([$activeOperationName, $existingBuildQueueOperation] as $operationCandidate) {
+            $operationCandidate = \trim((string)$operationCandidate);
+            if ($operationCandidate !== '' && isset($sharedBuildQueueOperations[$operationCandidate])) {
+                $buildQueueOperationCandidate = $operationCandidate;
+                break;
+            }
+        }
+        if ($buildQueueOperationCandidate === '') {
+            foreach (['publish', 'image_asset', 'block_partial_patch', 'block_regenerate', 'regenerate_page', 'build'] as $operationCandidate) {
+                if (\is_array($activeOperations[$operationCandidate] ?? null) && $activeOperations[$operationCandidate] !== []) {
+                    $buildQueueOperationCandidate = $operationCandidate;
+                    break;
+                }
+            }
+        }
+        $buildQueueOperation = 'build';
+        $buildQueueOperationState = $buildOperation;
+        if ($buildQueueOperationCandidate !== '' && $buildQueueOperationCandidate !== 'build') {
+            $buildQueueOperation = $buildQueueOperationCandidate;
+            $buildQueueOperationState = $this->resolveWorkspaceQueueOperationState(
+                $activeOperation,
+                $activeOperations,
+                $buildQueueOperationCandidate
+            );
+        }
+        $shouldInspectPlanQueue = $this->shouldInspectOperationQueueInWorkspace($stage, $planOperation, 'plan')
+            || (
+                \is_array($existingPlanQueueInfo)
+                && \in_array($this->readAiQueueInfoStatus($existingPlanQueueInfo), ['pending', 'queued', 'running', 'processing'], true)
+            );
+        $shouldInspectBuildQueue = $this->shouldInspectOperationQueueInWorkspace($stage, $buildQueueOperationState, $buildQueueOperation)
+            || (
+                \is_array($existingBuildQueueInfo)
+                && \in_array($this->readAiQueueInfoStatus($existingBuildQueueInfo), ['pending', 'queued', 'running', 'processing'], true)
+            );
+        $planQueueInfo = $shouldInspectPlanQueue
             ? $this->buildPlanStageQueueInfoPayload($session, $planOperation)
             : $existingPlanQueueInfo;
         if ($planQueueInfo === null) {
             $planQueueInfo = $existingPlanQueueInfo;
         }
-        $buildQueueInfo = $this->shouldInspectOperationQueueInWorkspace($stage, $buildOperation, 'build')
-            ? $this->buildOperationStageQueueInfoPayload($session, $buildOperation, 'build')
+        $buildQueueInfo = $shouldInspectBuildQueue
+            ? $this->buildOperationStageQueueInfoPayload($session, $buildQueueOperationState, $buildQueueOperation)
             : $existingBuildQueueInfo;
         if ($buildQueueInfo === null) {
             $buildQueueInfo = $existingBuildQueueInfo;
         }
+        if (\is_array($buildQueueInfo) && $buildQueueInfo !== []) {
+            $resolvedBuildQueueOperation = $this->workspaceStateHelperService()->resolveStatusQueueInfoOperation($buildQueueInfo);
+            if ($resolvedBuildQueueOperation === 'publish') {
+                $buildQueueOperation = 'publish';
+                $buildQueueOperationState = $publishOperation;
+            } elseif ($resolvedBuildQueueOperation !== '' && $resolvedBuildQueueOperation !== 'plan') {
+                $buildQueueOperation = $resolvedBuildQueueOperation;
+                $buildQueueOperationState = $this->resolveWorkspaceQueueOperationState($activeOperation, $activeOperations, $resolvedBuildQueueOperation);
+            }
+        }
         foreach ([
             'plan' => [$planOperation, $planQueueInfo],
-            'build' => [$buildOperation, $buildQueueInfo],
+            $buildQueueOperation => [$buildQueueOperationState, $buildQueueInfo],
         ] as $queueOperation => [$operationState, $queueInfo]) {
             $operationState = $this->reconcileActiveOperationWithQueueInfo($operationState, $queueInfo, $queueOperation);
             if ($operationState !== []) {
@@ -11456,20 +11727,22 @@ class AiSiteAgent extends BaseController
         }
         $normalized['active_operations'] = $activeOperations;
         $normalized['active_operation'] = $activeOperation;
-        [
-            'normalized' => $normalized,
-            'active_operation' => $activeOperation,
-            'build_queue_info' => $buildQueueInfo,
-            'task_summary' => $taskSummary,
-        ] = $this->autoResumeBuildQueueWhenTasksIncomplete(
-            $session,
-            $adminId,
-            $stage,
-            $normalized,
-            $activeOperation,
-            $buildQueueInfo,
-            $taskSummary
-        );
+        if ($persist) {
+            [
+                'normalized' => $normalized,
+                'active_operation' => $activeOperation,
+                'build_queue_info' => $buildQueueInfo,
+                'task_summary' => $taskSummary,
+            ] = $this->autoResumeBuildQueueWhenTasksIncomplete(
+                $session,
+                $adminId,
+                $stage,
+                $normalized,
+                $activeOperation,
+                $buildQueueInfo,
+                $taskSummary
+            );
+        }
         $completionGateForWorkspace = $this->buildTaskService->inspectBuildCompletionGate($normalized);
         $completionGateForWorkspacePassed = !empty($completionGateForWorkspace['passed']);
         if ($completionGateForWorkspacePassed) {
@@ -11477,7 +11750,7 @@ class AiSiteAgent extends BaseController
             $taskSummary = \is_array($completionGateForWorkspace['summary'] ?? null)
                 ? $completionGateForWorkspace['summary']
                 : $taskSummary;
-            $doneMessage = (string)__('构建完成。');
+            $doneMessage = (string)__('鏋勫缓瀹屾垚銆');
             $buildDoneState = [
                 'operation' => 'build',
                 'status' => 'done',
@@ -11515,7 +11788,7 @@ class AiSiteAgent extends BaseController
         }
         $workspaceEntryQueueNotice = $this->buildWorkspaceEntryQueueNotice($activeOperation, [
             'plan' => $planQueueInfo,
-            'build' => $buildQueueInfo,
+            $buildQueueOperation => $buildQueueInfo,
         ]);
         $titleOk = \trim((string)($normalized['website_profile']['site_title'] ?? '')) !== '';
         $normalized = $this->buildTaskService->syncBuildTaskFailuresToRetryableLedger($normalized);
@@ -11545,7 +11818,7 @@ class AiSiteAgent extends BaseController
         ) {
             $activeOperation = \array_replace($activeOperation, [
                 'status' => 'cancelled',
-                'message' => (string)__('检测到历史构建流已中断，下一次继续生成将按任务单位重新开始'),
+                'message' => (string)__('妫€娴嬪埌鍘嗗彶鏋勫缓娴佸凡涓柇锛屼笅涓€娆＄户缁敓鎴愬皢鎸変换鍔″崟浣嶉噸鏂板紑濮'),
                 'updated_at' => \date('Y-m-d H:i:s'),
                 'details' => \array_replace(
                     \is_array($activeOperation['details'] ?? null) ? $activeOperation['details'] : [],
@@ -11616,6 +11889,7 @@ class AiSiteAgent extends BaseController
         $clientScope = $normalized;
         $clientScope['virtual_pages_by_type'] = $clientVirtualPagesByType;
         $clientScope['reference_images'] = $referenceImages;
+        unset($clientScope['plan_markdown']);
         $designDirectionState = $this->designDirectionService()->buildWorkspaceDirectionState($normalized);
         unset($clientScope['_ai_generated_shared_components']);
         if (\is_array($clientScope['shared_components'] ?? null)) {
@@ -11660,17 +11934,10 @@ class AiSiteAgent extends BaseController
             'build_task_summary' => $taskSummary,
             'plan' => [
                 'json' => \is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : [],
-                'markdown' => (string)($normalized['plan_markdown'] ?? ''),
-                'structured' => \is_array($normalized['plan_structured'] ?? null) ? $normalized['plan_structured'] : (\is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : []),
-                'execution_blueprint' => \is_array($normalized['execution_blueprint_draft'] ?? null) && $normalized['execution_blueprint_draft'] !== []
-                    ? $normalized['execution_blueprint_draft']
-                    : (\is_array($normalized['execution_blueprint'] ?? null) ? $normalized['execution_blueprint'] : []),
                 'build_plan_v2' => \is_array($normalized['build_plan_v2'] ?? null) ? $normalized['build_plan_v2'] : [],
                 'projection' => \is_array($normalized['plan_projection'] ?? null) ? $normalized['plan_projection'] : [],
             ],
             'plan_json' => \is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : [],
-            'plan_markdown' => (string)($normalized['plan_markdown'] ?? ''),
-            'plan_structured' => \is_array($normalized['plan_structured'] ?? null) ? $normalized['plan_structured'] : (\is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : []),
             'plan_workbench' => \is_array($normalized['plan_workbench'] ?? null) ? $normalized['plan_workbench'] : [],
             'stage1_contract' => \is_array($normalized['stage1_contract'] ?? null) ? $normalized['stage1_contract'] : [],
             'stage1_validation_report' => \is_array($normalized['stage1_validation_report'] ?? null) ? $normalized['stage1_validation_report'] : [],
@@ -11679,7 +11946,6 @@ class AiSiteAgent extends BaseController
             'stage1_visual_qa_report' => \is_array($normalized['stage1_visual_qa_report'] ?? null) ? $normalized['stage1_visual_qa_report'] : [],
             'plan_confirmed' => (int)($normalized['plan_confirmed'] ?? 0),
             'has_stage_one_plan' => $hasStageOnePlan,
-            'has_execution_blueprint' => \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== [],
             'build_plan_v2' => \is_array($normalized['build_plan_v2'] ?? null) ? $normalized['build_plan_v2'] : [],
             'plan_projection' => \is_array($normalized['plan_projection'] ?? null) ? $normalized['plan_projection'] : [],
             'content_manifest' => \is_array($normalized['content_manifest'] ?? null) ? $normalized['content_manifest'] : [],
@@ -11689,11 +11955,8 @@ class AiSiteAgent extends BaseController
             'plan_confirmed_at' => (string)($normalized['plan_confirmed_at'] ?? ''),
             'plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'),
             'refine_plan_page_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-refine-plan-page'),
-            // T36: 历史确认方案数据
-            'confirmed_plan_markdown' => (string)($normalized['plan_markdown'] ?? ''),
-            'confirmed_plan_signature' => (string)($normalized['execution_blueprint_confirmed_signature'] ?? ''),
-            // 阶段二预览契约：始终读取“草稿态”——
-            //  - markdown 仅取 draft（confirmed_markdown 不再注入前端，避免确认态展示）；
+            // T36: 鍘嗗彶纭鏂规鏁版嵁
+            'confirmed_plan_signature' => $this->resolveConfirmedPlanSignature($normalized),
             'has_pending_build_tasks' => (int)($taskSummary['pending'] ?? 0) > 0,
             'auto_start_build_after_stream' => false,
             'preview_page_options' => \is_array($normalized['preview_page_options']) ? $normalized['preview_page_options'] : [],
@@ -11743,147 +12006,6 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * Project the confirmed execution blueprint back to the workspace plan view when
-     * the original structured plan payload was intentionally compacted after confirm.
-     *
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function hydrateStageOnePlanPayloadFromExecutionBlueprint(array $scope): array
-    {
-        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        if ($planJson !== [] || $planStructured !== []) {
-            return $scope;
-        }
-
-        $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
-        if ($executionBlueprint === []) {
-            $executionBlueprint = \is_array($scope['execution_blueprint_draft'] ?? null) ? $scope['execution_blueprint_draft'] : [];
-        }
-        if ($executionBlueprint === []) {
-            return $scope;
-        }
-
-        $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null) ? $executionBlueprint['page_plans'] : [];
-        $pages = \is_array($executionBlueprint['pages'] ?? null) ? $executionBlueprint['pages'] : [];
-        $sharedComponents = \is_array($executionBlueprint['shared_components'] ?? null) ? $executionBlueprint['shared_components'] : [];
-        $headerPlan = \is_array($executionBlueprint['navigation_plan'] ?? null)
-            ? $executionBlueprint['navigation_plan']
-            : (\is_array($sharedComponents['header'] ?? null) ? $sharedComponents['header'] : []);
-        $footerPlan = \is_array($executionBlueprint['footer_plan'] ?? null)
-            ? $executionBlueprint['footer_plan']
-            : (\is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : []);
-
-        if ($pagePlans === [] && $pages === [] && $sharedComponents === [] && $headerPlan === [] && $footerPlan === []) {
-            return $scope;
-        }
-
-        $structured = [];
-        if ($pages !== []) {
-            $structured['pages'] = $pages;
-        }
-        if ($pagePlans !== []) {
-            $structured['page_plans'] = $pagePlans;
-        }
-        if ($sharedComponents !== []) {
-            $structured['shared_components'] = $sharedComponents;
-        }
-        if ($headerPlan !== []) {
-            $structured['navigation_plan'] = $headerPlan;
-        }
-        if ($footerPlan !== []) {
-            $structured['footer_plan'] = $footerPlan;
-        }
-        if (\is_array($executionBlueprint['signature'] ?? null) === false) {
-            $signature = \trim((string)($executionBlueprint['signature'] ?? ''));
-            if ($signature !== '') {
-                $structured['execution_blueprint_signature'] = $signature;
-            }
-        }
-
-        if ($structured !== []) {
-            $scope['plan_structured'] = $structured;
-            $scope['plan_json'] = $structured;
-        }
-
-        return $scope;
-    }
-
-    /**
-     * Emergency fallback: load plan artifacts directly from filesystem when all other
-     * hydration methods have failed (e.g., DB artifact metadata missing or stale refs).
-     *
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function emergencyLoadPlanArtifactsFromFilesystem(int $sessionId, array $scope): array
-    {
-        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        \file_put_contents(
-            BP . 'var/log/emergency_fallback.log',
-            \date('Y-m-d H:i:s') . " CALLED sessionId={$sessionId} planJson=" . (\is_array($planJson) ? 'array(' . \count($planJson) . ')' : \gettype($planJson)) . " planStructured=" . (\is_array($planStructured) ? 'array(' . \count($planStructured) . ')' : \gettype($planStructured)) . "\n",
-            \FILE_APPEND
-        );
-        if ($planJson !== [] || $planStructured !== []) {
-            return $scope;
-        }
-
-        $directory = BP . 'data/pagebuilder/session-artifacts/' . $sessionId . '/plan';
-        \file_put_contents(
-            BP . 'var/log/emergency_fallback.log',
-            \date('Y-m-d H:i:s') . " directory={$directory} exists=" . (\is_dir($directory) ? 'yes' : 'no') . "\n",
-            \FILE_APPEND
-        );
-        if (!\is_dir($directory)) {
-            return $scope;
-        }
-
-        foreach (['plan_json', 'plan_structured'] as $artifactKey) {
-            $prefix = $artifactKey . '-';
-            $latestFile = null;
-            $latestMtime = 0;
-            $handle = @\opendir($directory);
-            if ($handle === false) {
-                continue;
-            }
-            while (($entry = \readdir($handle)) !== false) {
-                if ($entry === '.' || $entry === '..' || !\str_starts_with($entry, $prefix) || !\str_ends_with($entry, '.json')) {
-                    continue;
-                }
-                $filePath = $directory . \DIRECTORY_SEPARATOR . $entry;
-                $mtime = @\filemtime($filePath);
-                if ($mtime !== false && $mtime > $latestMtime) {
-                    $latestMtime = $mtime;
-                    $latestFile = $filePath;
-                }
-            }
-            \closedir($handle);
-
-            if ($latestFile === null) {
-                continue;
-            }
-
-            $json = @\file_get_contents($latestFile);
-            if ($json === false || \trim($json) === '') {
-                continue;
-            }
-            try {
-                $decoded = \json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
-            } catch (\JsonException) {
-                continue;
-            }
-            if (\is_array($decoded) && $decoded !== []) {
-                $scope[$artifactKey] = $decoded;
-                \error_log("[emergencyLoadPlanArtifacts] Loaded {$artifactKey} from {$latestFile} (" . \strlen($json) . ' bytes)');
-            }
-        }
-
-        return $scope;
-    }
-
-    /**
      * Copy the already persisted plan-stage payload into the current workspace stage.
      *
      * @param array<string, mixed> $scope
@@ -11895,14 +12017,13 @@ class AiSiteAgent extends BaseController
         array $scope
     ): array {
         $hasStageOnePayload = (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
-            || (\is_array($scope['plan_structured'] ?? null) && $scope['plan_structured'] !== [])
             || \trim((string)($scope['plan_markdown'] ?? '')) !== '';
         if ($hasStageOnePayload) {
             return $scope;
         }
 
         $planStageScope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, ['plan_json', 'plan_structured', 'plan_markdown'])
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, ['plan_json', 'plan_markdown'])
         );
         if ($planStageScope === [] || $planStageScope === $scope) {
             return $scope;
@@ -11910,16 +12031,11 @@ class AiSiteAgent extends BaseController
 
         foreach ([
             'plan_json',
-            'plan_structured',
             'plan_markdown',
             'plan_workbench',
-            'execution_blueprint_draft',
-            'execution_blueprint',
             'plan_generated_at',
             'plan_confirmed',
             'plan_confirmed_at',
-            'execution_blueprint_confirmed_signature',
-            'execution_blueprint_confirmed_at',
         ] as $key) {
             if (!\array_key_exists($key, $scope) || $scope[$key] === [] || $scope[$key] === '' || $scope[$key] === 0 || $scope[$key] === null) {
                 if (\array_key_exists($key, $planStageScope)) {
@@ -11934,7 +12050,7 @@ class AiSiteAgent extends BaseController
     /**
      * Polling responses keep the full workspace state for existing UI hydration,
      * but expose the same compact status-envelope fields that SSE state payloads
-     * carry. This keeps SSE and `post-workspace-snapshot` aligned to one truth
+     * carry. This keeps SSE and `post-workspace-state` aligned to one truth
      * source without replacing the legacy polling response shape.
      *
      * @param array<string, mixed> $state
@@ -11947,7 +12063,7 @@ class AiSiteAgent extends BaseController
 
     /**
      * Confirmation requests only need a compact state patch for the current UI.
-     * Sending the full workspace snapshot here resends large plan/scope/event
+     * Sending the full workspace state here resends large plan/scope/event
      * payloads that the browser already has in memory.
      *
      * @param array<string, mixed> $state
@@ -11989,7 +12105,6 @@ class AiSiteAgent extends BaseController
             $payload['plan_confirmed_at'] = (string)($state['plan_confirmed_at'] ?? '');
             $payload['confirmed_plan_signature'] = (string)($state['confirmed_plan_signature'] ?? '');
             $payload['has_stage_one_plan'] = !empty($state['has_stage_one_plan']);
-            $payload['has_execution_blueprint'] = !empty($state['has_execution_blueprint']);
             $payload['plan_sse_url'] = (string)($state['plan_sse_url'] ?? '');
             $payload['refine_plan_page_url'] = (string)($state['refine_plan_page_url'] ?? '');
             return $payload;
@@ -12038,7 +12153,6 @@ class AiSiteAgent extends BaseController
             'plan_confirmed_at' => (string)($state['plan_confirmed_at'] ?? ''),
             'confirmed_plan_signature' => (string)($state['confirmed_plan_signature'] ?? ''),
             'has_stage_one_plan' => !empty($state['has_stage_one_plan']),
-            'has_execution_blueprint' => !empty($state['has_execution_blueprint']),
             'has_pending_build_tasks' => !empty($state['has_pending_build_tasks']),
             'plan_sse_url' => (string)($state['plan_sse_url'] ?? ''),
             'refine_plan_page_url' => (string)($state['refine_plan_page_url'] ?? ''),
@@ -12085,7 +12199,7 @@ class AiSiteAgent extends BaseController
     /**
      * @param array<string, mixed> $scope
      */
-    private function buildWorkspaceStreamSnapshotPayload(array $state): array
+    private function buildWorkspaceStreamStatePayload(array $state): array
     {
         return $this->buildWorkspaceSseStatePayload($state, [], true);
     }
@@ -12126,7 +12240,6 @@ class AiSiteAgent extends BaseController
             'plan_confirmed' => (int)($state['plan_confirmed'] ?? 0),
             'plan_confirmed_at' => (string)($state['plan_confirmed_at'] ?? ''),
             'has_stage_one_plan' => !empty($state['has_stage_one_plan']),
-            'has_execution_blueprint' => !empty($state['has_execution_blueprint']),
             'build_plan_v2' => \is_array($state['build_plan_v2'] ?? null) ? $state['build_plan_v2'] : [],
             'plan_projection' => \is_array($state['plan_projection'] ?? null) ? $state['plan_projection'] : [],
             'content_manifest' => \is_array($state['content_manifest'] ?? null) ? $state['content_manifest'] : [],
@@ -12153,24 +12266,14 @@ class AiSiteAgent extends BaseController
 
         if ($workspaceStream) {
             $plan = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
-            $planMarkdown = \trim((string)($plan['markdown'] ?? $state['plan_markdown'] ?? ''));
             $planJson = \is_array($plan['json'] ?? null)
                 ? $plan['json']
                 : (\is_array($state['plan_json'] ?? null) ? $state['plan_json'] : []);
-            $planStructured = \is_array($plan['structured'] ?? null)
-                ? $plan['structured']
-                : (\is_array($state['plan_structured'] ?? null) ? $state['plan_structured'] : $planJson);
-            if ($planMarkdown !== '' || $planJson !== [] || $planStructured !== []) {
+            if ($planJson !== []) {
                 $payload['plan'] = [
                     'json' => $planJson,
-                    'markdown' => $planMarkdown,
-                    'structured' => $planStructured,
-                    'execution_blueprint' => \is_array($plan['execution_blueprint'] ?? null) ? $plan['execution_blueprint'] : [],
                 ];
-                $payload['plan_markdown'] = $planMarkdown;
                 $payload['plan_json'] = $planJson;
-                $payload['plan_structured'] = $planStructured;
-                $payload['confirmed_plan_markdown'] = $planMarkdown;
                 $payload['confirmed_plan_signature'] = (string)($state['confirmed_plan_signature'] ?? '');
             }
             $payload['auto_start_build_after_stream'] = !empty($state['auto_start_build_after_stream']);
@@ -12695,14 +12798,14 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * @param array<string, mixed> $queueSnapshot
+     * @param array<string, mixed> $queueState
      * @param array<string, mixed> $queueInfo
      * @param array<string, mixed> $activeOperation
      * @return array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string,mixed>|null}
      */
-    private function resolveWorkspaceEnvelopeTokenUsage(array $queueSnapshot, array $queueInfo, array $activeOperation): array
+    private function resolveWorkspaceEnvelopeTokenUsage(array $queueState, array $queueInfo, array $activeOperation): array
     {
-        return $this->workspaceStateHelperService()->resolveEnvelopeTokenUsage($queueSnapshot, $queueInfo, $activeOperation);
+        return $this->workspaceStateHelperService()->resolveEnvelopeTokenUsage($queueState, $queueInfo, $activeOperation);
     }
 
     /**
@@ -12717,11 +12820,11 @@ class AiSiteAgent extends BaseController
     /**
      * @param array<string, mixed> $state
      * @param array<string, mixed> $activeOperation
-     * @param array<string, mixed> $queueSnapshot
+     * @param array<string, mixed> $queueState
      */
-    private function resolveWorkspaceEnvelopeUpdatedAt(array $state, array $activeOperation, array $queueSnapshot): string
+    private function resolveWorkspaceEnvelopeUpdatedAt(array $state, array $activeOperation, array $queueState): string
     {
-        return $this->workspaceStateHelperService()->resolveEnvelopeUpdatedAt($state, $activeOperation, $queueSnapshot);
+        return $this->workspaceStateHelperService()->resolveEnvelopeUpdatedAt($state, $activeOperation, $queueState);
     }
 
     /**
@@ -12770,12 +12873,12 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * @param array<string, mixed> $snapshot
+     * @param array<string, mixed> $state
      * @return array<string, mixed>
      */
-    private function filterWorkspaceSnapshotByStage(array $snapshot, string $streamStage): array
+    private function filterWorkspaceStateByStage(array $state, string $streamStage): array
     {
-        return $this->workspaceStateHelperService()->filterSnapshotByStage($snapshot, $streamStage);
+        return $this->workspaceStateHelperService()->filterStateByStage($state, $streamStage);
     }
 
     /**
@@ -12800,7 +12903,7 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * HTML 工作台首屏只需要轻量状态，避免把大块 scope/events 重复塞进模板。
+     * HTML 宸ヤ綔鍙伴灞忓彧闇€瑕佽交閲忕姸鎬侊紝閬垮厤鎶婂ぇ鍧?scope/events 閲嶅濉炶繘妯℃澘銆?
      *
      * @param array<string, mixed> $state
      * @return array<string, mixed>
@@ -13163,7 +13266,7 @@ class AiSiteAgent extends BaseController
                 $item['ok'] = true;
                 $item['blocking'] = true;
                 $item['level'] = 'pass';
-                $item['detail'] = (string)__('阶段二任务已全部完成，BuildPlan 区块证据已对齐。');
+                $item['detail'] = (string)__('闃舵浜屼换鍔″凡鍏ㄩ儴瀹屾垚锛孊uildPlan 鍖哄潡璇佹嵁宸插榻愩€');
                 $taskSummary = \is_array($stageTwoReadiness['task_summary'] ?? null) ? $stageTwoReadiness['task_summary'] : [];
                 $item['value'] = [
                     'total' => (int)($taskSummary['total'] ?? 0),
@@ -13177,7 +13280,7 @@ class AiSiteAgent extends BaseController
                 $item['ok'] = true;
                 $item['blocking'] = false;
                 $item['level'] = 'warning';
-                $item['detail'] = (string)__('图片槽位缺失会保留在资产面板供重试，但只要页面没有破图，不阻断发布。');
+                $item['detail'] = (string)__('鍥剧墖妲戒綅缂哄け浼氫繚鐣欏湪璧勪骇闈㈡澘渚涢噸璇曪紝浣嗗彧瑕侀〉闈㈡病鏈夌牬鍥撅紝涓嶉樆鏂彂甯冦€');
             }
             $items[] = $item;
         }
@@ -13258,7 +13361,7 @@ class AiSiteAgent extends BaseController
     {
         $failures = \array_values(\array_filter(\array_map('strval', \is_array($report['failures'] ?? null) ? $report['failures'] : [])));
         if ($failures === []) {
-            return (string)__('阶段二任务树、生成区块和共享组件数量一致。');
+            return (string)__('闃舵浜屼换鍔℃爲銆佺敓鎴愬尯鍧楀拰鍏变韩缁勪欢鏁伴噺涓€鑷淬€');
         }
 
         return \implode('; ', \array_slice($failures, 0, 6));
@@ -13343,8 +13446,8 @@ class AiSiteAgent extends BaseController
         if ($session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHING || ($operation === 'publish' && \in_array($activeStatus, ['queued', 'running'], true))) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHING;
         }
-        // 优先识别"正在构建中"：如果某 publish-blocking AI 操作还在 queued/running，
-        // 即便 scope.workspace_status 残留 FAILED 也应当显示 BUILDING，避免 UI 把活着的队列误标为已失败。
+        // 浼樺厛璇嗗埆"姝ｅ湪鏋勫缓涓?锛氬鏋滄煇 publish-blocking AI 鎿嶄綔杩樺湪 queued/running锛?
+        // 鍗充究 scope.workspace_status 娈嬬暀 FAILED 涔熷簲褰撴樉绀?BUILDING锛岄伩鍏?UI 鎶婃椿鐫€鐨勯槦鍒楄鏍囦负宸插け璐ャ€?
         if (\in_array($activeStatus, ['queued', 'running'], true) && $this->isPublishBlockingAiBuildOperation($operation)) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
         }
@@ -13525,7 +13628,7 @@ class AiSiteAgent extends BaseController
             [$pageType]
         );
         $sse->sendEvent('environment_ready', [
-            'message' => (string)__('编辑环境已准备好，可先调整已生成页面'),
+            'message' => (string)__('缂栬緫鐜宸插噯澶囧ソ锛屽彲鍏堣皟鏁村凡鐢熸垚椤甸潰'),
             'page_type' => $pageType,
             'page_label' => $pageLabel,
             'page_id' => $pageId,
@@ -13565,7 +13668,7 @@ class AiSiteAgent extends BaseController
         ) {
             $scope['active_operation'] = \array_replace($activeOperation, [
                 'status' => 'cancelled',
-                'message' => (string)__('检测到历史操作长时间无进展，已自动回收并允许重新开始'),
+                'message' => (string)__('妫€娴嬪埌鍘嗗彶鎿嶄綔闀挎椂闂存棤杩涘睍锛屽凡鑷姩鍥炴敹骞跺厑璁搁噸鏂板紑濮'),
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]);
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
@@ -13575,7 +13678,7 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 $this->scopeCompatibilityService->normalizeStage($session->getStage()),
                 'operation_cancelled',
-                (string)__('历史操作已超时回收，可重新发起构建'),
+                (string)__('鍘嗗彶鎿嶄綔宸茶秴鏃跺洖鏀讹紝鍙噸鏂板彂璧锋瀯寤'),
                 ['details' => ['reason' => 'stale_active_operation']]
             );
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
@@ -13604,16 +13707,16 @@ class AiSiteAgent extends BaseController
                 $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
             }
         }
-        // 残留无效状态：active_operation 处于 queued/running 但 execution_token 缺失
-        // （可能因前次任务异常中断/部分写入未清理）。这种状态下既无法复用 SSE，也无法继续推进，
-        // 必须主动回收，否则会导致前端拿到空的 execution_token/stream_url 而陷入"操作已创建但缺少 SSE 参数"循环。
+        // 娈嬬暀鏃犳晥鐘舵€侊細active_operation 澶勪簬 queued/running 浣?execution_token 缂哄け
+        // 锛堝彲鑳藉洜鍓嶆浠诲姟寮傚父涓柇/閮ㄥ垎鍐欏叆鏈竻鐞嗭級銆傝繖绉嶇姸鎬佷笅鏃㈡棤娉曞鐢?SSE锛屼篃鏃犳硶缁х画鎺ㄨ繘锛?
+        // 蹇呴』涓诲姩鍥炴敹锛屽惁鍒欎細瀵艰嚧鍓嶇鎷垮埌绌虹殑 execution_token/stream_url 鑰岄櫡鍏?鎿嶄綔宸插垱寤轰絾缂哄皯 SSE 鍙傛暟"寰幆銆?
         if (
             \in_array($activeStatus, ['queued', 'running'], true)
             && \trim((string)($activeOperation['execution_token'] ?? '')) === ''
         ) {
             $scope['active_operation'] = \array_replace($activeOperation, [
                 'status' => 'cancelled',
-                'message' => (string)__('检测到无效的历史操作记录（缺少执行令牌），已自动回收并允许重新开始'),
+                'message' => (string)__('妫€娴嬪埌鏃犳晥鐨勫巻鍙叉搷浣滆褰曪紙缂哄皯鎵ц浠ょ墝锛夛紝宸茶嚜鍔ㄥ洖鏀跺苟鍏佽閲嶆柊寮€濮'),
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]);
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
@@ -13672,7 +13775,7 @@ class AiSiteAgent extends BaseController
                     'success' => false,
                     'http_status' => 409,
                     'status_code' => 409,
-                    'message' => __('当前已有正在执行的建站方案生成，请先等待完成'),
+                    'message' => __('褰撳墠宸叉湁姝ｅ湪鎵ц鐨勫缓绔欐柟妗堢敓鎴愶紝璇峰厛绛夊緟瀹屾垚'),
                     'operation' => $runningOperation,
                     'execution_token' => $runningExecutionToken,
                     'stream_url' => ($runningOperation !== '' && $runningExecutionToken !== '')
@@ -13728,11 +13831,9 @@ class AiSiteAgent extends BaseController
             unset($scope['_artifact_refs']);
             foreach ([
                 'plan_json',
-                'plan_structured',
                 'build_plan_v2',
                 'plan_projection',
                 'content_manifest',
-                'build_blueprint',
                 'build_workbench',
                 'build_contracts',
                 'render_data_contract',
@@ -13770,12 +13871,6 @@ class AiSiteAgent extends BaseController
                 \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
                 (string)($scope['workspace_track'] ?? '')
             );
-            if (\is_array($scope['build_blueprint'] ?? null) && $scope['build_blueprint'] !== []) {
-                $scopePatch['build_blueprint'] = $scope['build_blueprint'];
-            }
-            if (\is_array($scope['build_tasks'] ?? null) && $scope['build_tasks'] !== []) {
-                $scopePatch['build_tasks'] = $scope['build_tasks'];
-            }
             $scopePatch['build_task_summary'] = $this->buildTaskService->summarize($scope);
             if (\is_array($scopePatch['build_summary'] ?? null)) {
                 unset($scopePatch['build_summary']['task_summary']);
@@ -13787,22 +13882,7 @@ class AiSiteAgent extends BaseController
             unset($scope['latest_build_failure'], $scope['publish_blocked_reason']);
         }
         if ($pageType !== '' && !\in_array($pageType, $scope['page_types'], true)) {
-            return ['success' => false, 'message' => __('所选页面类型不在当前工作区中')];
-        }
-
-        if ((int)($scope['fake_mode'] ?? 0) !== 1 && $this->requiresFrontendAiProviderReadinessCheck($operation)) {
-            try {
-                $this->assertFrontendAiProviderReadyBeforeQueue($operation);
-            } catch (\Throwable $throwable) {
-                return $this->buildFrontendAiProviderReadinessFailureResult(
-                    $session,
-                    $adminId,
-                    $operation,
-                    $stage,
-                    $scope,
-                    $throwable
-                );
-            }
+            return ['success' => false, 'message' => __('鎵€閫夐〉闈㈢被鍨嬩笉鍦ㄥ綋鍓嶅伐浣滃尯涓')];
         }
 
         $executionToken = \bin2hex(\random_bytes(16));
@@ -13828,7 +13908,7 @@ class AiSiteAgent extends BaseController
             'retry_allowed' => 0,
             'queue_terminal_recovered' => 0,
             'progress_percent' => 0,
-            'message' => (string)__('等待开始'),
+            'message' => (string)__('绛夊緟寮€濮'),
         ], $operationEnvelope);
         if ($operationDetails !== []) {
             $scope['active_operation'] = $this->applyOperationDetailsToPayload($scope['active_operation'], $operationDetails);
@@ -13889,10 +13969,10 @@ class AiSiteAgent extends BaseController
         if ($queueId > 0) {
             $queueWait = $this->buildAiSiteQueueSchedulerWaitPayload($operation, $queueId);
         }
-        $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'operation_queued', (string)__('已加入操作队列'), ['operation' => $operation, 'page_type' => $pageType]);
+        $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'operation_queued', (string)__('宸插姞鍏ユ搷浣滈槦鍒'), ['operation' => $operation, 'page_type' => $pageType]);
 
-        // 把刚入队的真实 queue row 喂给 checkpoint state，前端首次拿到响应就能正确显示 queued/running，
-        // 不再依赖 SSE 第一帧；同时避免 PID/进程探活路径。
+        // 鎶婂垰鍏ラ槦鐨勭湡瀹?queue row 鍠傜粰 operation state锛屽墠绔娆℃嬁鍒板搷搴斿氨鑳芥纭樉绀?queued/running锛?
+        // 涓嶅啀渚濊禆 SSE 绗竴甯э紱鍚屾椂閬垮厤 PID/杩涚▼鎺㈡椿璺緞銆?
         $queueRow = null;
         if ($queueId > 0) {
             try {
@@ -13905,7 +13985,7 @@ class AiSiteAgent extends BaseController
             }
         }
         $activeOperationForResponse = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-        $state = $this->buildQueuedOperationCheckpointState(
+        $state = $this->buildQueuedOperationState(
             $freshForQueue,
             $stage,
             $operation,
@@ -13914,7 +13994,7 @@ class AiSiteAgent extends BaseController
         );
         return [
             'success' => true,
-            'message' => __('操作已启动'),
+            'message' => __('鎿嶄綔宸插惎鍔'),
             'execution_token' => $executionToken,
             'queue_id' => $queueId,
             'operation' => $operation,
@@ -14107,122 +14187,6 @@ class AiSiteAgent extends BaseController
         return $operation !== '' ? $operation : \trim($fallbackOperation);
     }
 
-    private function requiresFrontendAiProviderReadinessCheck(string $operation): bool
-    {
-        return false;
-    }
-
-    private function assertFrontendAiProviderReadyBeforeQueue(string $operation): void
-    {
-        $response = AiService::generateText(
-            'PageBuilder AI readiness check. Reply with OK only.',
-            null,
-            $this->resolveFrontendAiProviderReadinessScenario($operation),
-            null,
-            [
-                'allow_zero_balance_provider' => true,
-                'temperature' => 0.0,
-                'max_tokens' => 8,
-                'timeout' => 45,
-                'disable_conversation_history' => true,
-                'disable_conversation_persist' => true,
-                'session_id' => 'pagebuilder_ai_provider_preflight',
-            ]
-        );
-        // 预检探针偶发返回空串（例如模型/网关短暂抖动），
-        // 这里不应阻断真实业务请求入队；由实际队列任务继续执行并在运行态给出真实错误。
-        if (\trim((string)$response) === '') {
-            return;
-        }
-    }
-
-    private function resolveFrontendAiProviderReadinessScenario(string $operation): string
-    {
-        $operation = \strtolower(\trim($operation));
-        if ($operation === 'plan') {
-            return 'pagebuilder_plan_generation';
-        }
-
-        return 'pagebuilder_component_generation';
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function buildFrontendAiProviderReadinessFailureResult(
-        AiSiteAgentSession $session,
-        int $adminId,
-        string $operation,
-        string $stage,
-        array $scope,
-        \Throwable $throwable
-    ): array {
-        $message = $this->formatFrontendAiProviderReadinessFailureMessage($throwable);
-        $now = \date('Y-m-d H:i:s');
-        $activeOperation = [
-            'operation' => $operation,
-            'execution_token' => '',
-            'status' => 'error',
-            'page_type' => '',
-            'queue_id' => 0,
-            'started_at' => $now,
-            'updated_at' => $now,
-            'message' => $message,
-            'preflight_failed' => 1,
-        ];
-        $scope['active_operation'] = $activeOperation;
-        $scope = $this->writeActiveOperationStateToScope($scope, $activeOperation);
-        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
-        $failure = ['blocked' => false, 'operation' => $operation, 'status' => 'error', 'message' => $message];
-        if ($this->isPublishBlockingAiBuildOperation($operation)) {
-            $failure = $this->buildPublishBlockingAiFailurePayload($operation, 'error', $message);
-            $scope['latest_build_failed'] = 1;
-            $scope['latest_build_failure'] = $failure;
-            $scope['publish_blocked_by_latest_ai_failure'] = 1;
-            $scope['publish_blocked_reason'] = $this->formatPublishBlockedByAiFailureMessage($failure);
-        }
-
-        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-        $this->sessionService->setStage($session->getId(), $adminId, $stage);
-        $this->appendWorkspaceEvent(
-            $session->getId(),
-            $adminId,
-            $stage,
-            'ai_provider_preflight_failed',
-            $message,
-            ['operation' => $operation, 'queue_id' => 0],
-            AiSiteAgentSessionEvent::LEVEL_ERROR
-        );
-
-        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $state = $this->buildWorkspaceState($fresh, $adminId, 24, true);
-
-        return [
-            'success' => false,
-            'code' => 'AI_PROVIDER_NOT_READY',
-            'message' => $message,
-            'operation' => $operation,
-            'queue_id' => 0,
-            'start_sse' => false,
-            'latest_build_failure' => $failure,
-            'publish_blocked_by_latest_ai_failure' => !empty($failure['blocked']),
-            'data' => $this->buildWorkspaceOperationPayload($state, $operation),
-        ];
-    }
-
-    private function formatFrontendAiProviderReadinessFailureMessage(\Throwable $throwable): string
-    {
-        $raw = \trim((string)$throwable->getMessage());
-        if ($raw === '') {
-            $raw = 'Unknown AI provider error.';
-        }
-        if (\strlen($raw) > 2000) {
-            $raw = \substr($raw, 0, 2000) . '...';
-        }
-
-        return 'AI provider readiness check failed before queue creation. Real AI generation cannot start. Error: ' . $raw;
-    }
 
     private function shouldEnqueueOperation(string $operation): bool
     {
@@ -14255,22 +14219,22 @@ class AiSiteAgent extends BaseController
         $requestedOperation = \trim($requestedOperation);
         $runningOperation = \trim($runningOperation);
         if ($runningOperation === 'build' && \in_array($requestedOperation, ['block_regenerate', 'block_partial_patch'], true)) {
-            return (string)__('当前站点构建仍在运行，暂不能发起区块微调或重建；请等待构建完成后再试。');
+            return (string)__('褰撳墠绔欑偣鏋勫缓浠嶅湪杩愯锛屾殏涓嶈兘鍙戣捣鍖哄潡寰皟鎴栭噸寤猴紱璇风瓑寰呮瀯寤哄畬鎴愬悗鍐嶈瘯銆');
         }
         if ($runningOperation === 'build' && $requestedOperation === 'regenerate_page') {
-            return (string)__('当前站点构建仍在运行，暂不能重新生成页面；请等待构建完成后再试。');
+            return (string)__('褰撳墠绔欑偣鏋勫缓浠嶅湪杩愯锛屾殏涓嶈兘閲嶆柊鐢熸垚椤甸潰锛涜绛夊緟鏋勫缓瀹屾垚鍚庡啀璇曘€');
         }
         if ($requestedOperation === 'build' && \in_array($runningOperation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
-            return (string)__('当前页面或区块 AI 操作仍在运行，暂不能启动整站构建；请等待完成后再试。');
+            return (string)__('褰撳墠椤甸潰鎴栧尯鍧?AI 鎿嶄綔浠嶅湪杩愯锛屾殏涓嶈兘鍚姩鏁寸珯鏋勫缓锛涜绛夊緟瀹屾垚鍚庡啀璇曘€');
         }
         if ($runningOperation === 'build') {
-            return (string)__('当前站点构建仍在运行，暂不能发起新的 AI 队列操作；请等待完成后再试。');
+            return (string)__('褰撳墠绔欑偣鏋勫缓浠嶅湪杩愯锛屾殏涓嶈兘鍙戣捣鏂扮殑 AI 闃熷垪鎿嶄綔锛涜绛夊緟瀹屾垚鍚庡啀璇曘€');
         }
         if (\in_array($runningOperation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
-            return (string)__('当前页面或区块 AI 操作仍在运行，请等待完成后再试。');
+            return (string)__('褰撳墠椤甸潰鎴栧尯鍧?AI 鎿嶄綔浠嶅湪杩愯锛岃绛夊緟瀹屾垚鍚庡啀璇曘€');
         }
 
-        return (string)__('当前已有 AI 队列操作运行中，请等待完成后再试。');
+        return (string)__('褰撳墠宸叉湁 AI 闃熷垪鎿嶄綔杩愯涓紝璇风瓑寰呭畬鎴愬悗鍐嶈瘯銆');
     }
 
     /**
@@ -14357,7 +14321,7 @@ class AiSiteAgent extends BaseController
             if (!\is_array($queueRow) || $queueRow === []) {
                 return [];
             }
-            if (!$this->isObservedQueueInProgress($queueRow)) {
+            if (!$this->isAiSiteQueueRowLiveInProgress($queueRow)) {
                 return [];
             }
             $queueStatus = \trim((string)($queueRow['status'] ?? ''));
@@ -14530,14 +14494,7 @@ class AiSiteAgent extends BaseController
             return false;
         }
 
-        $status = \strtolower(\trim((string)($queueRow['status'] ?? '')));
-        if (!\in_array($status, ['running', 'processing'], true)) {
-            return true;
-        }
-
-        $pid = (int)($queueRow['pid'] ?? 0);
-
-        return $pid > 0 && \Weline\Framework\System\Process\Processer::isRunningByPid($pid);
+        return true;
     }
 
     /**
@@ -14571,7 +14528,7 @@ class AiSiteAgent extends BaseController
             ];
         }
 
-        if ($this->isObservedQueueInProgress($queueRow)) {
+        if ($this->isAiSiteQueueRowLiveInProgress($queueRow)) {
             return [];
         }
 
@@ -14734,8 +14691,8 @@ class AiSiteAgent extends BaseController
             $detail = $createFailureMessage !== '' ? $createFailureMessage : $reuseFailureMessage;
             throw new \RuntimeException(
                 $detail !== ''
-                    ? (string)__('创建队列任务失败：%{1}', [$detail])
-                    : (string)__('创建队列任务失败。')
+                    ? (string)__('鍒涘缓闃熷垪浠诲姟澶辫触锛?{1}', [$detail])
+                    : (string)__('鍒涘缓闃熷垪浠诲姟澶辫触銆')
             );
         }
         $this->stopSupersededPendingAiSiteQueueRows($bizKey, $queueId, $operation);
@@ -14774,8 +14731,6 @@ class AiSiteAgent extends BaseController
         $selectedSkillCodes = $scopePatch[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] ?? null;
         $scopePatch = $this->buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, []);
         foreach ([
-            'build_blueprint',
-            'build_tasks',
             'build_task_summary',
             'build_plan_v2',
             'plan_projection',
@@ -14896,13 +14851,7 @@ class AiSiteAgent extends BaseController
 
         $status = \strtolower(\trim((string)($queueRow['status'] ?? '')));
         if (\in_array($status, ['running', 'processing'], true)) {
-            if ($preserveRunningQueueRow) {
-                return false;
-            }
-            $pid = (int)($queueRow['pid'] ?? 0);
-            if ($pid > 0 && \Weline\Framework\System\Process\Processer::isRunningByPid($pid)) {
-                return false;
-            }
+            return false;
         }
 
         return true;
@@ -14999,7 +14948,7 @@ class AiSiteAgent extends BaseController
     {
         $typeId = (int)w_query('queue', 'getTypeIdByClass', ['class' => $queueClass]);
         if ($typeId <= 0) {
-            throw new \RuntimeException((string)__('解析队列类型失败。'));
+            throw new \RuntimeException((string)__('瑙ｆ瀽闃熷垪绫诲瀷澶辫触銆'));
         }
 
         return $typeId;
@@ -15048,7 +14997,7 @@ class AiSiteAgent extends BaseController
      * @param array<string, mixed>|null $queueRow
      * @return array<string, mixed>
      */
-    private function buildQueuedOperationCheckpointState(
+    private function buildQueuedOperationState(
         AiSiteAgentSession $session,
         string $stageCode,
         string $operation,
@@ -15075,8 +15024,8 @@ class AiSiteAgent extends BaseController
 
         $queueProcessLine = \is_array($queueRow) ? \trim((string)($queueRow['process'] ?? '')) : '';
         $waitingForScheduler = !$queueRecoveredForRetry && ($queueStatus === '' || \in_array($queueStatus, ['pending', 'queued'], true));
-        $checkpointMessage = $waitingForScheduler
-            ? (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。')
+        $queuedMessage = $waitingForScheduler
+            ? (string)__('鎿嶄綔宸茶繘鍏ョ郴缁熼槦鍒楋紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涘ぇ閮ㄥ垎鎯呭喌绾?1 鍒嗛挓鍚庡紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆')
             : ($queueStatus === 'running'
                 ? $queueProcessLine
                 : (string)($activeOperation['message'] ?? ''));
@@ -15086,7 +15035,7 @@ class AiSiteAgent extends BaseController
             'status' => $operationStatus,
             'queue_id' => \is_array($queueRow) ? (int)($queueRow['queue_id'] ?? 0) : (int)($activeOperation['queue_id'] ?? 0),
             'job_type' => $this->resolveAiSiteQueueJobType($operation),
-            'message' => $checkpointMessage,
+            'message' => $queuedMessage,
             'queue_waiting_for_scheduler' => $waitingForScheduler,
             'can_close_stream' => true,
             'continue_other_operations' => !$queueRecoveredForRetry,
@@ -15097,13 +15046,13 @@ class AiSiteAgent extends BaseController
             $activeOperation['semantic_status'] = 'cancelled';
         }
 
-        $checkpointWorkspaceStatus = $operation === 'publish'
+        $queuedWorkspaceStatus = $operation === 'publish'
             ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHING
             : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
         $state = [
             'public_id' => (string)$session->getPublicId(),
             'stage' => $stageCode,
-            'workspace_status' => $checkpointWorkspaceStatus,
+            'workspace_status' => $queuedWorkspaceStatus,
             'can_publish' => false,
             'latest_build_failed' => false,
             'latest_build_failure' => [],
@@ -15124,7 +15073,7 @@ class AiSiteAgent extends BaseController
 
     private function buildAiSiteQueueSchedulerWaitMessage(string $operation, int $queueId): string
     {
-        return (string)__('队列 #%{queue_id} 正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。', [
+        return (string)__('闃熷垪 #%{queue_id} 姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛岄€氬父绾?1 鍒嗛挓鍐呭紑濮嬫墽琛岋紱浣犲彲浠ュ叧闂綋鍓嶈繘搴︾獥鍙ｏ紝缁х画鎿嶄綔鍏朵粬鍐呭銆', [
             'queue_id' => (string)$queueId,
             'operation' => $operation,
         ]);
@@ -15192,22 +15141,23 @@ class AiSiteAgent extends BaseController
     private function findAiSiteOperationQueueRow(
         AiSiteAgentSession $session,
         string $operation,
-        int $queueId = 0
+        int $queueId = 0,
+        bool $includePayload = false
     ): ?array {
         if ($queueId > 0) {
-            $row = $this->findAiSiteQueueRowById($queueId);
+            $row = $this->findAiSiteQueueRowById($queueId, $includePayload);
             if (\is_array($row) && $row !== [] && $this->isAiSiteQueueRowForOperation($row, $operation)) {
                 return $row;
             }
         }
 
-        $row = $this->findAiSiteQueueRowByBizKey($this->buildAiSiteQueueBizKey((int)$session->getId(), $operation));
+        $row = $this->findAiSiteQueueRowByBizKey($this->buildAiSiteQueueBizKey((int)$session->getId(), $operation), $includePayload);
         if (\is_array($row) && $row !== [] && $this->isAiSiteQueueRowForOperation($row, $operation)) {
             return $row;
         }
 
         foreach ($this->resolveAiSiteLegacyQueueBizKeys((int)$session->getId(), $operation) as $legacyBizKey) {
-            $row = $this->findAiSiteQueueRowByBizKey($legacyBizKey);
+            $row = $this->findAiSiteQueueRowByBizKey($legacyBizKey, $includePayload);
             if (\is_array($row) && $row !== [] && $this->isAiSiteQueueRowForOperation($row, $operation)) {
                 return $row;
             }
@@ -15407,7 +15357,7 @@ class AiSiteAgent extends BaseController
 
 
     /**
-     * 默认 HTML 区块轨：不创建虚拟主题，仅填充 scope.virtual_pages_by_type.blocks
+     * 榛樿 HTML 鍖哄潡杞細涓嶅垱寤鸿櫄鎷熶富棰橈紝浠呭～鍏?scope.virtual_pages_by_type.blocks
      *
      * @return array<string, mixed>
      */
@@ -15431,10 +15381,10 @@ class AiSiteAgent extends BaseController
         } else {
             $scope = $this->buildTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
         }
-        // 续生成入口防御：把上次硬崩（OOM/kill -9/Worker 进程死亡，未走 PHP catch）残留的
-        // status=running 任务清回 pending+attempt_no=0，避免反复重启把 attempt_no 累计到
-        // BUILD_TASK_MAX_GENERATION_ATTEMPTS 后被永久标 failed。已 reconcile 过的产物已 done，
-        // 不会被这里二次扰动。
+        // 缁敓鎴愬叆鍙ｉ槻寰★細鎶婁笂娆＄‖宕╋紙OOM/kill -9/Worker 杩涚▼姝讳骸锛屾湭璧?PHP catch锛夋畫鐣欑殑
+        // status=running 浠诲姟娓呭洖 pending+attempt_no=0锛岄伩鍏嶅弽澶嶉噸鍚妸 attempt_no 绱鍒?
+        // BUILD_TASK_MAX_GENERATION_ATTEMPTS 鍚庤姘镐箙鏍?failed銆傚凡 reconcile 杩囩殑浜х墿宸?done锛?
+        // 涓嶄細琚繖閲屼簩娆℃壈鍔ㄣ€?
         $scope = $this->buildTaskService->resetRunningTasksForInterruptedBuild(
             $scope,
             'Build entry: clearing stale running tasks before scheduling.'
@@ -15501,7 +15451,7 @@ class AiSiteAgent extends BaseController
                 if ($this->buildTaskService->hasUnfinishedBlueprintTasks($scope)) {
                     $resetScope = $this->buildTaskService->resetRunningTasksForInterruptedBuild(
                         $scope,
-                        (string)__('构建调度：无可派发任务，已重置滞留的执行中任务以便断点续生成。')
+                        (string)__('鏋勫缓璋冨害锛氭棤鍙淳鍙戜换鍔★紝宸查噸缃粸鐣欑殑鎵ц涓换鍔′互渚挎柇鐐圭画鐢熸垚銆')
                     );
                     if ($resetScope !== $scope && $buildLoopStallPasses < 32) {
                         $buildLoopStallPasses++;
@@ -15511,7 +15461,7 @@ class AiSiteAgent extends BaseController
                             $sse,
                             $scope,
                             'build',
-                            (string)__('断点续生成：正在恢复滞留任务'),
+                            (string)__('鏂偣缁敓鎴愶細姝ｅ湪鎭㈠婊炵暀浠诲姟'),
                             $this->resolveTaskSummaryProgressPercent($this->buildTaskService->summarize($scope))
                         );
                         continue;
@@ -15664,7 +15614,7 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 'build',
-                (string)__('AI 正在生成页面任务'),
+                (string)__('AI 姝ｅ湪鐢熸垚椤甸潰浠诲姟'),
                 $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
             );
 
@@ -15863,7 +15813,7 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 'build',
-                (string)__('页面区块批次完成：%{done}/%{total}', [
+                (string)__('椤甸潰鍖哄潡鎵规瀹屾垚锛?{done}/%{total}', [
                     'done' => (string)(int)($this->buildTaskService->summarize($scope)['done'] ?? 0),
                     'total' => (string)(int)($this->buildTaskService->summarize($scope)['total'] ?? 0),
                 ]),
@@ -15902,7 +15852,7 @@ class AiSiteAgent extends BaseController
         $hasBuildFailures = (int)($taskSummary['failed'] ?? 0) > 0 || $this->buildTaskService->hasRetryableAiFailures($scope, 'build');
         $hasOutstandingTasks = empty($completionGate['passed']);
         if (!$htmlTrackReady && !$hasBuildFailures) {
-            throw new \RuntimeException((string)__('HTML 区块构建未完整产出，请重新调度构建队列'));
+            throw new \RuntimeException((string)__('HTML 鍖哄潡鏋勫缓鏈畬鏁翠骇鍑猴紝璇烽噸鏂拌皟搴︽瀯寤洪槦鍒'));
         }
         $canPublishBuild = !$hasOutstandingTasks && $htmlTrackReady && !$hasBuildFailures;
         $scope['build_summary'] = [
@@ -15923,7 +15873,7 @@ class AiSiteAgent extends BaseController
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
                     ? (string)__('HTML block build failed; unfinished AI items will retry on the same queue.')
-                    : (string)__('仍存在未归档的构建任务；请在工作区刷新后重试未完成任务再继续。'),
+                    : (string)__('浠嶅瓨鍦ㄦ湭褰掓。鐨勬瀯寤轰换鍔★紱璇峰湪宸ヤ綔鍖哄埛鏂板悗閲嶈瘯鏈畬鎴愪换鍔″啀缁х画銆'),
                 'retry_allowed' => 0,
                 'failure_mode' => 'build_failed',
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
@@ -15949,7 +15899,7 @@ class AiSiteAgent extends BaseController
             ($hasBuildFailures || $hasOutstandingTasks)
                 ? ($hasBuildFailures
                     ? __('HTML block build failed; unfinished AI items will retry on the same queue.')
-                    : __('仍存在未归档的 HTML 区块任务；请刷新后完成剩余任务后再试。'))
+                    : __('浠嶅瓨鍦ㄦ湭褰掓。鐨?HTML 鍖哄潡浠诲姟锛涜鍒锋柊鍚庡畬鎴愬墿浣欎换鍔″悗鍐嶈瘯銆'))
                 : __('HTML blocks ready for preview or publish'),
             100,
             '',
@@ -15961,7 +15911,7 @@ class AiSiteAgent extends BaseController
             'message' => $hasBuildFailures
                 ? (string)__('HTML block build failed; unfinished AI items will retry on the same queue.')
                 : ($hasOutstandingTasks
-                    ? (string)__('HTML 区块构建未完全归档；请刷新并完成剩余任务。')
+                    ? (string)__('HTML 鍖哄潡鏋勫缓鏈畬鍏ㄥ綊妗ｏ紱璇峰埛鏂板苟瀹屾垚鍓╀綑浠诲姟銆')
                     : (string)__('HTML block build complete')),
             'draft_website_id' => (int)$draftWebsite['website_id'],
             'virtual_theme_id' => 0,
@@ -16760,8 +16710,6 @@ class AiSiteAgent extends BaseController
             'auto_asset_prebuild_identity_only',
             'stage1_contract',
             'plan_generated_source_signature',
-            'theme_context_snapshot',
-            'plan_workbench',
         ];
         $assetScope = [];
         foreach ($keys as $key) {
@@ -16962,7 +16910,7 @@ class AiSiteAgent extends BaseController
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $this->emitBuildInfoEvent(
             $sse,
-            (string)__('Build task failed without automatic retry: %{task} — %{reason}', [
+            (string)__('Build task failed without automatic retry: %{task} 鈥?%{reason}', [
                 'task' => $taskKey,
                 'reason' => $reason,
             ]),
@@ -16975,12 +16923,12 @@ class AiSiteAgent extends BaseController
             $sse,
             $scope,
             'build',
-            (string)__('Build task failed: %{task} — %{reason}', ['task' => $taskKey, 'reason' => $reason]),
+            (string)__('Build task failed: %{task} 鈥?%{reason}', ['task' => $taskKey, 'reason' => $reason]),
             $progressPercent,
             'failed'
         );
         $sse->sendEvent('task_failed', $this->enrichTaskEventPayload($scope, \array_replace($basePayload, [
-            'message' => 'Build task failed: ' . $taskKey . ' — ' . $reason,
+            'message' => 'Build task failed: ' . $taskKey . ' 鈥?' . $reason,
         ])));
 
         return [
@@ -17061,14 +17009,14 @@ class AiSiteAgent extends BaseController
     private function runBuildOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId): array
     {
         $this->assertActiveStreamLeaseAlive($session, $adminId);
-        // 队列/CLI 下首条可见进度：后续虚拟主题路径会先跑 profile 生成，可能耗时较长，避免认领后长时间无 SSE。
+        // 闃熷垪/CLI 涓嬮鏉″彲瑙佽繘搴︼細鍚庣画铏氭嫙涓婚璺緞浼氬厛璺?profile 鐢熸垚锛屽彲鑳借€楁椂杈冮暱锛岄伩鍏嶈棰嗗悗闀挎椂闂存棤 SSE銆?
         $this->sendOperationProgress(
             $sse,
             $session,
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'build',
-            (string)__('正在执行，请稍候...'),
+            (string)__('姝ｅ湪鎵ц锛岃绋嶅€?..'),
             1
         );
         $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -17145,7 +17093,7 @@ class AiSiteAgent extends BaseController
             '/\b(?:AI_GENERATED_SECTION|task_key|section_code|block_key|page_type|field_content_requirements|build_plan|implementation_detail|realtime_content|content_plan|image_slot|slot_id)\b/iu',
             '/\bcontent\/[a-z0-9_-]+\/[a-z0-9_-]+\b/iu',
             '/\b(?:AI content placeholder|ai-empty|placeholder content|placeholder|lorem ipsum|dummy copy|sample text|todo copy)\b/iu',
-            '/Default Page Template|This is the default page|欢迎访问|默认页面模板/iu',
+            '/Default Page Template|This is the default page|娆㈣繋璁块棶|榛樿椤甸潰妯℃澘/iu',
             '/^(?:key message|next action|design intent|content plan|task split|implementation detail|primary subject|image brief|slot label)\b/iu',
             '/^(?:[a-z0-9]+[_\/:][a-z0-9_\/:-]+|[a-z0-9]+(?:-[a-z0-9]+){2,})$/iu',
             '/\b(?:visitors?|users?|customers?)\s+(?:see|can\s+review|can\s+verify|understand|are\s+guided|will\s+find)\b/iu',
@@ -17252,7 +17200,7 @@ class AiSiteAgent extends BaseController
             );
         }
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-        // queue:run -f：_queue_force_build.active=1 时强制走 AI，并绕过共享 Header/Footer 的进程内静态缓存。
+        // queue:run -f锛歘queue_force_build.active=1 鏃跺己鍒惰蛋 AI锛屽苟缁曡繃鍏变韩 Header/Footer 鐨勮繘绋嬪唴闈欐€佺紦瀛樸€?
         $pageTypeLabels = Page::getPageTypes();
         // Keep one queue owner, but generate independent virtual-theme sections in bounded parallel batches.
         $dispatchWindow = $this->resolvePageSectionBuildDispatchWindow();
@@ -17320,7 +17268,7 @@ class AiSiteAgent extends BaseController
                 if ($this->buildTaskService->hasUnfinishedBlueprintTasks($scope)) {
                     $resetScope = $this->buildTaskService->resetRunningTasksForInterruptedBuild(
                         $scope,
-                        (string)__('构建调度：无可派发任务，已重置滞留的执行中任务以便断点续生成。')
+                        (string)__('鏋勫缓璋冨害锛氭棤鍙淳鍙戜换鍔★紝宸查噸缃粸鐣欑殑鎵ц涓换鍔′互渚挎柇鐐圭画鐢熸垚銆')
                     );
                     if ($resetScope !== $scope && $buildLoopStallPasses < 32) {
                         $buildLoopStallPasses++;
@@ -17330,7 +17278,7 @@ class AiSiteAgent extends BaseController
                             $sse,
                             $scope,
                             'build',
-                            (string)__('断点续生成：正在恢复滞留任务'),
+                            (string)__('鏂偣缁敓鎴愶細姝ｅ湪鎭㈠婊炵暀浠诲姟'),
                             $this->resolveTaskSummaryProgressPercent($this->buildTaskService->summarize($scope))
                         );
                         continue;
@@ -17488,7 +17436,7 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 'build',
-                (string)__('AI 正在生成页面任务'),
+                (string)__('AI 姝ｅ湪鐢熸垚椤甸潰浠诲姟'),
                 $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
             );
 
@@ -17773,7 +17721,7 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 'build',
-                (string)__('页面区块批次完成：%{done}/%{total}', [
+                (string)__('椤甸潰鍖哄潡鎵规瀹屾垚锛?{done}/%{total}', [
                     'done' => (string)(int)($this->buildTaskService->summarize($scope)['done'] ?? 0),
                     'total' => (string)(int)($this->buildTaskService->summarize($scope)['total'] ?? 0),
                 ]),
@@ -17823,7 +17771,7 @@ class AiSiteAgent extends BaseController
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
                     ? (string)__('Virtual theme build failed; unfinished AI items will retry on the same queue.')
-                    : (string)__('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'),
+                    : (string)__('浠嶅瓨鍦ㄦ湭褰掓。鐨勮櫄鎷熶富棰樻瀯寤轰换鍔★紱璇峰埛鏂板悗閲嶈瘯鏈畬鎴愪换鍔″啀缁х画銆'),
                 'retry_allowed' => 0,
                 'failure_mode' => 'build_failed',
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
@@ -17881,7 +17829,7 @@ class AiSiteAgent extends BaseController
             ($hasBuildFailures || $hasOutstandingTasks)
                 ? ($hasBuildFailures
                     ? __('Virtual theme build failed; unfinished AI items will retry on the same queue.')
-                    : __('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'))
+                    : __('浠嶅瓨鍦ㄦ湭褰掓。鐨勮櫄鎷熶富棰樻瀯寤轰换鍔★紱璇峰埛鏂板悗閲嶈瘯鏈畬鎴愪换鍔″啀缁х画銆'))
                 : __('Virtual theme ready for editing'),
             100,
             '',
@@ -17892,7 +17840,7 @@ class AiSiteAgent extends BaseController
             'message' => $hasBuildFailures
                 ? (string)__('Virtual theme build failed; unfinished AI items will retry on the same queue.')
                 : ($hasOutstandingTasks
-                    ? (string)__('虚拟主题构建未完全归档；请刷新并完成剩余任务。')
+                    ? (string)__('铏氭嫙涓婚鏋勫缓鏈畬鍏ㄥ綊妗ｏ紱璇峰埛鏂板苟瀹屾垚鍓╀綑浠诲姟銆')
                     : (string)__('Virtual theme build complete')),
             'draft_website_id' => (int)$draftWebsite['website_id'],
             'virtual_theme_id' => (int)($scope['virtual_theme_id'] ?? 0),
@@ -17965,13 +17913,13 @@ class AiSiteAgent extends BaseController
         $virtualThemeId = \max((int)($scope['virtual_theme_id'] ?? 0), (int)$session->getVirtualThemeId());
         $workspaceTrack = AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
         if ($websiteId <= 0 || $virtualThemeId <= 0) {
-            throw new \RuntimeException((string)__('发布前请先完成主题构建'));
+            throw new \RuntimeException((string)__('鍙戝竷鍓嶈鍏堝畬鎴愪富棰樻瀯寤'));
         }
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('正在校验阶段二任务与区块数量'), 10);
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('姝ｅ湪鏍￠獙闃舵浜屼换鍔′笌鍖哄潡鏁伴噺'), 10);
         $stageTwoReadiness = $this->buildStageTwoPublishReadinessReport($scope);
         $scope['stage2_publish_readiness'] = $stageTwoReadiness;
         if (empty($stageTwoReadiness['passed'])) {
-            throw new \RuntimeException((string)__('阶段二构建任务与真实生成区块不一致，请先重试失败任务或重建第二阶段。') . ' ' . $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness));
+            throw new \RuntimeException((string)__('闃舵浜屾瀯寤轰换鍔′笌鐪熷疄鐢熸垚鍖哄潡涓嶄竴鑷达紝璇峰厛閲嶈瘯澶辫触浠诲姟鎴栭噸寤虹浜岄樁娈点€') . ' ' . $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness));
         }
         $scope = $this->refreshScopeQualityContractsForPublishGate($scope);
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
@@ -17980,10 +17928,10 @@ class AiSiteAgent extends BaseController
             $stageTwoReadiness
         );
         if (empty($qualityReport['passed'])) {
-            throw new \RuntimeException((string)__('发布门禁未通过，请先修复页面内容质量、破图或任务状态问题。'));
+            throw new \RuntimeException((string)__('鍙戝竷闂ㄧ鏈€氳繃锛岃鍏堜慨澶嶉〉闈㈠唴瀹硅川閲忋€佺牬鍥炬垨浠诲姟鐘舵€侀棶棰樸€'));
         }
 
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('正在创建正式页面并发布上线'), 25);
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('姝ｅ湪鍒涘缓姝ｅ紡椤甸潰骞跺彂甯冧笂绾'), 25);
         $published = $this->publishService->publish(
             $websiteId,
             $virtualThemeId,
@@ -18013,7 +17961,7 @@ class AiSiteAgent extends BaseController
                 'operation' => 'publish',
                 'status' => 'done',
                 'updated_at' => \date('Y-m-d H:i:s'),
-                'message' => (string)__('发布完成'),
+                'message' => (string)__('鍙戝竷瀹屾垚'),
             ]
         ));
 
@@ -18021,8 +17969,8 @@ class AiSiteAgent extends BaseController
         $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED);
         $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_PUBLISH);
 
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('正式页面已创建并上线'), 100);
-        return ['message' => (string)__('发布完成'), 'published' => $published];
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('姝ｅ紡椤甸潰宸插垱寤哄苟涓婄嚎'), 100);
+        return ['message' => (string)__('鍙戝竷瀹屾垚'), 'published' => $published];
     }
 
     private function sendOperationProgress(
@@ -18147,12 +18095,6 @@ class AiSiteAgent extends BaseController
         if ($runtime !== []) {
             return $runtime;
         }
-        $stateMap = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
-        $state = \is_array($stateMap[$taskKey] ?? null) ? $stateMap[$taskKey] : [];
-        $runtime = \is_array($state['runtime_context'] ?? null) ? $state['runtime_context'] : [];
-        if ($runtime !== []) {
-            return $runtime;
-        }
         $sessionScope = \trim((string)($scope['public_id'] ?? $scope['session_id'] ?? ''));
         return [
             'session_id' => $sessionScope,
@@ -18258,11 +18200,11 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 当前连接持有的 lease 是否因过期而失效（排除「scope 已被其它标签页改写 token」的情况）。
+     * 褰撳墠杩炴帴鎸佹湁鐨?lease 鏄惁鍥犺繃鏈熻€屽け鏁堬紙鎺掗櫎銆宻cope 宸茶鍏跺畠鏍囩椤垫敼鍐?token銆嶇殑鎯呭喌锛夈€?
      */
     private function assertActiveStreamLeaseAlive(AiSiteAgentSession $session, int $adminId, string $leaseToken = ''): void
     {
-        // 标准 SSE 模式下不做 lease 校验，连接生命周期由浏览器/TCP 自然管理。
+        // 鏍囧噯 SSE 妯″紡涓嬩笉鍋?lease 鏍￠獙锛岃繛鎺ョ敓鍛藉懆鏈熺敱娴忚鍣?TCP 鑷劧绠＄悊銆?
     }
 
     private function releaseStreamLeaseState(AiSiteAgentSession $session, int $adminId, string $leaseToken): void
@@ -18369,11 +18311,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
         }
         $jsonKey = $merge ? 'scope_patch' : 'scope';
         $isAutosave = \in_array(\strtolower(\trim((string)$this->getRequestBodyValue('autosave', '0'))), ['1', 'true', 'yes', 'on'], true);
@@ -18394,13 +18336,13 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 $this->scopeCompatibilityService->normalizeStage($session->getStage()),
                 'plan_draft_saved',
-                (string)__('建站方案草稿已保存'),
+                (string)__('寤虹珯鏂规鑽夌宸蹭繚瀛'),
                 ['details' => ['autosave' => 1, 'source' => 'save_button']]
             );
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => (string)__('建站方案草稿已保存'),
+                'message' => (string)__('寤虹珯鏂规鑽夌宸蹭繚瀛'),
                 'autosave' => true,
             ]);
         }
@@ -18408,19 +18350,6 @@ class AiSiteAgent extends BaseController
             $payload[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
         $payload = $this->dropEmptyProfileIdentityPatchValues($payload);
-        $siteProfileManual = \is_array($payload['site_profile_manual'] ?? null) ? $payload['site_profile_manual'] : [];
-        foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'default_locale', 'plan_locale'] as $manualField) {
-            if (
-                \array_key_exists($manualField, $payload)
-                && $this->isMeaningfulProfileManualValue($payload[$manualField])
-                && !\array_key_exists($manualField, $siteProfileManual)
-            ) {
-                $siteProfileManual[$manualField] = true;
-            }
-        }
-        if ($siteProfileManual !== []) {
-            $payload['site_profile_manual'] = $siteProfileManual;
-        }
         $scopeForDirection = $this->scopeCompatibilityService->normalizeScope(\array_replace(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN),
             $payload
@@ -18437,7 +18366,7 @@ class AiSiteAgent extends BaseController
         }
         $saved = $merge ? $this->sessionService->mergeScope($session->getId(), $adminId, $payload) : $this->sessionService->replaceScope($session->getId(), $adminId, $payload);
         if (!$saved) {
-            return $this->fetchJson(['success' => false, 'message' => __('保存失败')]);
+            return $this->fetchJson(['success' => false, 'message' => __('淇濆瓨澶辫触')]);
         }
         $this->appendWorkspaceEvent(
             $session->getId(),
@@ -18445,14 +18374,14 @@ class AiSiteAgent extends BaseController
             $this->scopeCompatibilityService->normalizeStage($session->getStage()),
             $isAutosave ? 'autosave_saved' : ($merge ? 'scope_merged' : 'scope_replaced'),
             $isAutosave
-                ? (string)__('工作区已自动保存')
-                : ($merge ? (string)__('工作区信息已合并保存') : (string)__('工作区信息已整体替换')),
+                ? (string)__('宸ヤ綔鍖哄凡鑷姩淇濆瓨')
+                : ($merge ? (string)__('宸ヤ綔鍖轰俊鎭凡鍚堝苟淇濆瓨') : (string)__('宸ヤ綔鍖轰俊鎭凡鏁翠綋鏇挎崲')),
             ['details' => ['keys' => \array_values(\array_map('strval', \array_keys($payload))), 'autosave' => $isAutosave ? 1 : 0]]
         );
         if ($isAutosave) {
             return $this->fetchJson([
                 'success' => true,
-                'message' => (string)__('工作区已自动保存'),
+                'message' => (string)__('宸ヤ綔鍖哄凡鑷姩淇濆瓨'),
                 'autosave' => true,
             ]);
         }
@@ -18502,19 +18431,15 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
         }
 
-        $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
         $saved = $this->sessionService->mergeScope($session->getId(), $adminId, [
             'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
-            'execution_blueprint_draft' => $executionBlueprint,
             'plan_json' => \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
             'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
-            'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],
             'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
             'plan_last_prompt_mode' => 'refine_page',
             'plan_last_target_scope' => $targetScope !== '' ? $targetScope : ('pages.' . $pageType),
             'plan_last_round' => $round,
             'plan_confirmed' => (int)($scope['plan_confirmed'] ?? 0),
-            'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? $scope['execution_blueprint_signature'] ?? ''),
             'plan_change_scope_report' => \is_array($artifacts['page_refine_summary'] ?? null) ? $artifacts['page_refine_summary'] : [],
         ]);
         if (!$saved) {
@@ -18576,14 +18501,10 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
         }
 
-        $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
         $saved = $this->sessionService->mergeScope($session->getId(), $adminId, [
-            'execution_blueprint_draft' => $executionBlueprint,
             'plan_json' => \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
             'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
-            'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],
             'plan_workbench' => \is_array($artifacts['plan_workbench'] ?? null) ? $artifacts['plan_workbench'] : [],
-            'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? $scope['execution_blueprint_signature'] ?? ''),
             'plan_confirmed' => 0,
         ]);
         if (!$saved) {
@@ -18682,8 +18603,8 @@ class AiSiteAgent extends BaseController
             }
         }
 
-        // 阶段一块级 mutate 实时执行：底层 mutateDraftPlanBlock 仅做本地结构计算/重排，
-        // 不调用 AI；为了避免"等队列调度"的体感成本，统一在当前请求内同步落库返回。
+        // 闃舵涓€鍧楃骇 mutate 瀹炴椂鎵ц锛氬簳灞?mutateDraftPlanBlock 浠呭仛鏈湴缁撴瀯璁＄畻/閲嶆帓锛?
+        // 涓嶈皟鐢?AI锛涗负浜嗛伩鍏?绛夐槦鍒楄皟搴?鐨勪綋鎰熸垚鏈紝缁熶竴鍦ㄥ綋鍓嶈姹傚唴鍚屾钀藉簱杩斿洖銆?
         try {
             $workingScope = $scope;
             $mutationSummaries = [];
@@ -18713,8 +18634,6 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
         }
 
-        $structured = \is_array($resultArtifacts['structured'] ?? null) ? $resultArtifacts['structured'] : [];
-        $executionBlueprint = \is_array($resultArtifacts['execution_blueprint'] ?? null) ? $resultArtifacts['execution_blueprint'] : [];
         $planJson = \is_array($resultArtifacts['plan_json'] ?? null) ? $resultArtifacts['plan_json'] : [];
         $planMarkdown = (string)($resultArtifacts['markdown'] ?? '');
         $planWorkbench = \is_array($resultArtifacts['plan_workbench'] ?? null) ? $resultArtifacts['plan_workbench'] : [];
@@ -18725,10 +18644,7 @@ class AiSiteAgent extends BaseController
         $scopePatch = [
             'plan_json' => $planJson,
             'plan_markdown' => $planMarkdown,
-            'plan_structured' => $structured,
             'plan_workbench' => $planWorkbench,
-            'execution_blueprint_draft' => $executionBlueprint,
-            'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? $scope['execution_blueprint_signature'] ?? ''),
             'plan_confirmed' => 0,
             'plan_last_prompt_mode' => 'mutate_plan_block',
             'plan_last_target_scope' => $targetScope,
@@ -18742,10 +18658,10 @@ class AiSiteAgent extends BaseController
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
 
         $doneMessage = match ($action) {
-            'create' => (string)__('建站方案块已新增。'),
-            'delete' => (string)__('建站方案块已删除。'),
-            'rebuild' => (string)__('建站方案块已重建。'),
-            default => (string)__('建站方案块已微调。'),
+            'create' => (string)__('寤虹珯鏂规鍧楀凡鏂板銆'),
+            'delete' => (string)__('寤虹珯鏂规鍧楀凡鍒犻櫎銆'),
+            'rebuild' => (string)__('寤虹珯鏂规鍧楀凡閲嶅缓銆'),
+            default => (string)__('寤虹珯鏂规鍧楀凡寰皟銆'),
         };
         $this->appendWorkspaceEvent(
             $session->getId(),
@@ -18780,15 +18696,6 @@ class AiSiteAgent extends BaseController
     private function mergePlanBlockMutationArtifactsToScope(array $scope, array $artifacts): array
     {
         $next = $scope;
-        if (\is_array($artifacts['structured'] ?? null)) {
-            $next['plan_structured'] = $artifacts['structured'];
-        }
-        if (\is_array($artifacts['execution_blueprint'] ?? null)) {
-            $next['execution_blueprint_draft'] = $artifacts['execution_blueprint'];
-            if (isset($artifacts['execution_blueprint']['signature'])) {
-                $next['execution_blueprint_signature'] = (string)$artifacts['execution_blueprint']['signature'];
-            }
-        }
         if (\is_array($artifacts['plan_json'] ?? null)) {
             $next['plan_json'] = $artifacts['plan_json'];
         }
@@ -18906,11 +18813,11 @@ class AiSiteAgent extends BaseController
         try {
             $decoded = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
         } catch (\JsonException $jsonException) {
-            $error = (string)__('JSON 无效：%{1}', [$jsonException->getMessage()]);
+            $error = (string)__('JSON 鏃犳晥锛?{1}', [$jsonException->getMessage()]);
             return [];
         }
         if (!\is_array($decoded)) {
-            $error = (string)__('请求体必须是 JSON 对象');
+            $error = (string)__('璇锋眰浣撳繀椤绘槸 JSON 瀵硅薄');
             return [];
         }
         return $decoded;
@@ -18959,6 +18866,11 @@ class AiSiteAgent extends BaseController
         return ObjectManager::getInstance(WebsitesDomainPurchaseWorkbenchService::class);
     }
 
+    private function getWebsiteAgentService(): WebsiteAgentService
+    {
+        return ObjectManager::getInstance(WebsiteAgentService::class);
+    }
+
     /**
      * @return list<array{account_id:int,label:string,registrar_name:string,registrar_code:string,account_name:string}>
      */
@@ -18982,7 +18894,7 @@ class AiSiteAgent extends BaseController
             $accountName = \trim((string)($row['account_name'] ?? ''));
             $label = $registrarName !== ''
                 ? $registrarName . ($accountName !== '' ? (' - ' . $accountName) : '')
-                : ($accountName !== '' ? $accountName : (string)__('服务商'));
+                : ($accountName !== '' ? $accountName : (string)__('鏈嶅姟鍟'));
             $options[] = [
                 'account_id' => $accountId,
                 'label' => $label,
@@ -18995,10 +18907,10 @@ class AiSiteAgent extends BaseController
         if (\defined('DEV') && DEV) {
             $localDemo = [
                 'account_id' => 900001,
-                'label' => (string)__('本地供应商 - 本地默认账号'),
-                'registrar_name' => (string)__('本地供应商'),
+                'label' => (string)__('鏈湴渚涘簲鍟?- 鏈湴榛樿璐﹀彿'),
+                'registrar_name' => (string)__('鏈湴渚涘簲鍟'),
                 'registrar_code' => 'local_demo',
-                'account_name' => (string)__('本地默认账号'),
+                'account_name' => (string)__('鏈湴榛樿璐﹀彿'),
             ];
             $hasLocalDemo = false;
             foreach ($options as $option) {
@@ -19030,8 +18942,8 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 薄壳转发：定位/创建 Websites 侧镜像会话。
-     * 实际实现迁移到 {@see AiSiteAgentWebsitesMirrorService::ensureMirrorSession}（R4.3）。
+     * 钖勫３杞彂锛氬畾浣?鍒涘缓 Websites 渚ч暅鍍忎細璇濄€?
+     * 瀹為檯瀹炵幇杩佺Щ鍒?{@see AiSiteAgentWebsitesMirrorService::ensureMirrorSession}锛圧4.3锛夈€?
      */
     private function ensureLinkedWebsitesMirrorSession(AiSiteAgentSession $session, int $adminId): ?WebsitesAiSiteBuilderSession
     {
@@ -19039,8 +18951,8 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 薄壳转发：把 PageBuilder scope 归一化成 Websites 可写 scope。
-     * 实际实现迁移到 {@see AiSiteAgentWebsitesMirrorService::buildScopeFromSource}（R4.3）。
+     * 钖勫３杞彂锛氭妸 PageBuilder scope 褰掍竴鍖栨垚 Websites 鍙啓 scope銆?
+     * 瀹為檯瀹炵幇杩佺Щ鍒?{@see AiSiteAgentWebsitesMirrorService::buildScopeFromSource}锛圧4.3锛夈€?
      *
      * @return array<string, mixed>
      */
@@ -19050,8 +18962,8 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * 薄壳转发：把 Websites 侧 scope 变更 merge 回 PageBuilder 会话。
-     * 实际实现迁移到 {@see AiSiteAgentWebsitesMirrorService::syncScopeBack}（R4.3）。
+     * 钖勫３杞彂锛氭妸 Websites 渚?scope 鍙樻洿 merge 鍥?PageBuilder 浼氳瘽銆?
+     * 瀹為檯瀹炵幇杩佺Щ鍒?{@see AiSiteAgentWebsitesMirrorService::syncScopeBack}锛圧4.3锛夈€?
      */
     private function syncPageBuilderScopeFromLinkedWebsitesSession(
         AiSiteAgentSession $pageBuilderSession,
@@ -19295,7 +19207,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             [
                 'status' => 'cancelled',
-                'message' => (string)__('检测到阶段一输入已变更，已取消旧任务并准备重新生成'),
+                'message' => (string)__('妫€娴嬪埌闃舵涓€杈撳叆宸插彉鏇达紝宸插彇娑堟棫浠诲姟骞跺噯澶囬噸鏂扮敓鎴'),
             ],
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
         );
@@ -19304,7 +19216,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             'plan',
             'operation_cancelled',
-            (string)__('检测到阶段一输入变更，已取消旧任务并重新排队生成'),
+            (string)__('妫€娴嬪埌闃舵涓€杈撳叆鍙樻洿锛屽凡鍙栨秷鏃т换鍔″苟閲嶆柊鎺掗槦鐢熸垚'),
             ['operation' => 'plan', 'details' => ['reason' => 'plan_scope_changed']]
         );
     }
@@ -19315,9 +19227,9 @@ class AiSiteAgent extends BaseController
     private function getStageOptions(): array
     {
         return [
-            ['value' => AiSiteAgentSession::STAGE_PLAN, 'label' => (string)__('计划阶段')],
-            ['value' => AiSiteAgentSession::STAGE_VISUAL_EDIT, 'label' => (string)__('虚拟编辑')],
-            ['value' => AiSiteAgentSession::STAGE_PUBLISH, 'label' => (string)__('确认发布')],
+            ['value' => AiSiteAgentSession::STAGE_PLAN, 'label' => (string)__('璁″垝闃舵')],
+            ['value' => AiSiteAgentSession::STAGE_VISUAL_EDIT, 'label' => (string)__('铏氭嫙缂栬緫')],
+            ['value' => AiSiteAgentSession::STAGE_PUBLISH, 'label' => (string)__('纭鍙戝竷')],
         ];
     }
 
@@ -19408,8 +19320,8 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * FPM 场景下，SSE 长连接需要尽快释放 session 文件锁，
-     * 避免同一用户的并发请求（含 EventSource 重连）互相阻塞。
+     * FPM 鍦烘櫙涓嬶紝SSE 闀胯繛鎺ラ渶瑕佸敖蹇噴鏀?session 鏂囦欢閿侊紝
+     * 閬垮厤鍚屼竴鐢ㄦ埛鐨勫苟鍙戣姹傦紙鍚?EventSource 閲嶈繛锛変簰鐩搁樆濉炪€?
      */
     private function releasePhpSessionLockForSse(): void
     {

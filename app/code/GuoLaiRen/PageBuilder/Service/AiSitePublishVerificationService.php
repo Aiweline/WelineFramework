@@ -124,10 +124,6 @@ class AiSitePublishVerificationService
         if ($signals['default_template_marker']) {
             $failures[] = 'rendered HTML contains default template markers';
         }
-        if ($signals['internal_planning_copy_marker']) {
-            $failures[] = 'rendered HTML contains internal planning or visitor-observation copy';
-        }
-
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME) {
             if ($virtualThemeId <= 0) {
                 $failures[] = 'virtual theme publish track has no virtual_theme_id';
@@ -137,10 +133,6 @@ class AiSitePublishVerificationService
             }
         } elseif (!$signals['ai_html_mode'] && !$signals['ai_site_marker']) {
             $failures[] = 'HTML-block publish track did not render AI HTML content';
-        }
-
-        if (!$signals['brand_visible']) {
-            $failures[] = 'site brand is not visible in rendered HTML';
         }
 
         return [

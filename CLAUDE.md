@@ -1,27 +1,49 @@
 # CLAUDE.md
 
-Quick index for Claude and Claude-like AI assistants.
+Claude / Claude Code entry point. This file is an index only.
 
-Full AI rules are maintained in one place only:
+Read `AI-ENTRY.md`, then follow `dev/ai/global-constraints.md` as the single source of repository-wide AI rules.
 
-- `dev/ai/global-constraints.md`（第 5.1 节：禁止批量替换与批量脚本改代码；第 8 节：layout 仅默认骨架、占位与 Hook/插槽挂载，禁止交互与业务逻辑）
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
 
-Start with `AI-ENTRY.md`, then read `dev/ai/global-constraints.md` before any implementation or verification work. Section 0 is mandatory for Claude / Claude Code / CC: every request starts as product-manager decomposition, then architecture splitting, then senior full-stack implementation and product acceptance loops.
+This project is indexed by GitNexus as **dev-workspace** (43094 symbols, 156688 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
-## Quick Commands
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
-```bash
-php bin/w setup:upgrade [--route]  # Schema/route sync
-php bin/w http:request / [-b|-api] # Route test
-php bin/w server:start -p 9502 -n ai-test-{unique-id}  # Start test instance
-php bin/w server:reload|restart -r # WLS lifecycle for test instance
-php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance
-```
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
 
 ## Resources
 
-- AI general rules: `dev/ai/global-constraints.md`
-- AI entry index: `AI-ENTRY.md`
-- Diagrams: `dev/ai/diagrams/00-INDEX.txt`
-- Module docs: `dev/ai/diagrams/08-module-docs-index.txt`
-- Skills: `dev/ai/skills/_index.md`
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/dev-workspace/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/dev-workspace/clusters` | All functional areas |
+| `gitnexus://repo/dev-workspace/processes` | All execution flows |
+| `gitnexus://repo/dev-workspace/process/{name}` | Step-by-step execution trace |
+
+## CLI
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+<!-- gitnexus:end -->

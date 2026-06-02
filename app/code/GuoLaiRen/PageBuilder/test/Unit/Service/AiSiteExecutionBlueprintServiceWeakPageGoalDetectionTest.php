@@ -11,6 +11,34 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteExecutionBlueprintServiceWeakPageGoalDetectionTest extends TestCase
 {
+    public function testDetailedBriefUsesLocalRequirementExpansion(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $shouldUse = new \ReflectionMethod($service, 'shouldUseLocalStageOneRequirementExpansion');
+        $shouldUse->setAccessible(true);
+        $builder = new \ReflectionMethod($service, 'buildLocalStageOneRequirementExpansion');
+        $builder->setAccessible(true);
+
+        $pageTypes = [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT, Page::TYPE_BLOG_LIST];
+        $brief = 'India Card Game APK Guide recommends safe rummy, teen patti, ludo, carrom, chess, and casual card game APK downloads for Indian Android players.';
+        $scope = [
+            'brief_description' => $brief,
+            'site_title' => 'India Card Game APK Guide',
+        ];
+        $websiteProfile = [
+            'brief_description' => $brief,
+            'site_title' => 'India Card Game APK Guide',
+        ];
+
+        self::assertTrue($shouldUse->invoke($service, $scope, $websiteProfile, $pageTypes, $brief));
+
+        $expansion = $builder->invoke($service, $scope, $websiteProfile, $pageTypes, $brief);
+        self::assertNotSame('', (string)($expansion['expanded_brief'] ?? ''));
+        self::assertNotSame('', (string)($expansion['planning_summary'] ?? ''));
+        self::assertNotSame('', (string)($expansion['primary_cta'] ?? ''));
+        self::assertCount(\count($pageTypes), $expansion['page_strategy'] ?? []);
+    }
+
     public function testCollectStageOneIssuesMarksLegacyRefundPolicyPageGoalAsInvalid(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());

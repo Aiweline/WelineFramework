@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceStateHelperService;
-use GuoLaiRen\PageBuilder\Service\AiSiteQueueSnapshotService;
+use GuoLaiRen\PageBuilder\Service\AiSiteQueueStateService;
 use PHPUnit\Framework\TestCase;
 
 final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
@@ -79,7 +79,7 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertFalse($service->eventMatchesStage(['event_type' => 'task_plan_refined'], 'task_plan'));
     }
 
-    public function testFilterEventsAndSnapshotByStage(): void
+    public function testFilterEventsAndStateByStage(): void
     {
         $service = new AiSiteAgentWorkspaceStateHelperService();
         $rows = [
@@ -94,8 +94,8 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertCount(1, $service->filterEventsByStage($rows, 'build'));
         self::assertCount(0, $service->filterEventsByStage($rows, 'task_plan'));
 
-        $snapshot = ['events' => $rows, 'top_logs' => $rows, 'other' => 'kept'];
-        $filtered = $service->filterSnapshotByStage($snapshot, 'plan');
+        $state = ['events' => $rows, 'top_logs' => $rows, 'other' => 'kept'];
+        $filtered = $service->filterStateByStage($state, 'plan');
         self::assertSame('kept', $filtered['other']);
         self::assertCount(1, $filtered['events']);
         self::assertCount(1, $filtered['top_logs']);
@@ -171,10 +171,8 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
             'plan_confirmed' => 1,
             'build_plan_confirmed' => 1,
             'plan_json' => ['raw' => 1],
-            'plan_structured' => [1],
             'virtual_pages_by_type' => ['HOME' => ['blocks' => [1]]],
             'build_plan_v2' => ['id' => 'bp_1'],
-            'task_plan_structured' => [1],
             'task_plan_confirmed' => 1,
             'virtual_theme_plan' => [1],
             'build_blueprint' => [1],
@@ -212,8 +210,6 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
             'task_plan' => ['markdown' => 'old'],
             'events' => [1],
             'plan_json' => [1],
-            'plan_structured' => [1],
-            'task_plan_structured' => [1],
             'virtual_theme_plan' => [1],
         ];
 
@@ -225,9 +221,7 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertTrue($pruned['plan']['build_plan_v2_available']);
         self::assertArrayNotHasKey('execution_blueprint', $pruned['plan']);
         self::assertArrayNotHasKey('plan_json', $pruned);
-        self::assertArrayNotHasKey('plan_structured', $pruned);
         self::assertArrayNotHasKey('task_plan', $pruned);
-        self::assertArrayNotHasKey('task_plan_structured', $pruned);
         self::assertArrayNotHasKey('virtual_theme_plan', $pruned);
         self::assertArrayNotHasKey('events', $pruned);
     }
@@ -385,19 +379,25 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertArrayNotHasKey('scope', $pruned);
     }
 
-    public function testSelectStatusQueueInfoUsesPlanAndBuildBucketsOnly(): void
+    public function testSelectStatusQueueInfoUsesOperationMarkersBeforeSharedBuckets(): void
     {
         $service = new AiSiteAgentWorkspaceStateHelperService();
         $state = [
-            'plan_queue_info' => ['queue_id' => 1],
-            'build_queue_info' => ['queue_id' => 3],
+            'plan_queue_info' => ['queue_id' => 1, 'job_type' => 'stage1.requirement_expand'],
+            'build_queue_info' => ['queue_id' => 3, 'job_type' => 'virtual_theme.publish'],
         ];
 
-        self::assertSame(['queue_id' => 1], $service->selectStatusQueueInfo($state, 'plan'));
-        self::assertSame(['queue_id' => 3], $service->selectStatusQueueInfo($state, 'build'));
-        self::assertSame(['queue_id' => 3], $service->selectStatusQueueInfo($state, 'block_partial_patch'));
-        self::assertSame(['queue_id' => 1], $service->selectStatusQueueInfo($state, 'task_plan'));
+        self::assertSame($state['plan_queue_info'], $service->selectStatusQueueInfo($state, 'plan'));
+        self::assertSame([], $service->selectStatusQueueInfo($state, 'build'));
+        self::assertSame($state['build_queue_info'], $service->selectStatusQueueInfo($state, 'publish'));
+        self::assertSame($state['plan_queue_info'], $service->selectStatusQueueInfo($state, 'task_plan'));
         self::assertSame([], $service->selectStatusQueueInfo([], 'plan'));
+
+        $imageState = [
+            'build_queue_info' => ['queue_id' => 4, 'job_type' => 'image.asset.generate'],
+        ];
+        self::assertSame($imageState['build_queue_info'], $service->selectStatusQueueInfo($imageState, 'image_asset'));
+        self::assertSame([], $service->selectStatusQueueInfo($imageState, 'publish'));
     }
 
     public function testEnvelopeStatusProgressCursorAndJobType(): void
@@ -421,6 +421,8 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertSame('stage1.requirement_expand', $service->resolveQueueJobType('plan'));
         self::assertSame('virtual_theme.tree.build', $service->resolveQueueJobType('build'));
         self::assertSame('virtual_theme.block.partial_patch', $service->resolveQueueJobType('block_partial_patch'));
+        self::assertSame('image.asset.generate', $service->resolveQueueJobType('image_asset'));
+        self::assertSame('virtual_theme.publish', $service->resolveQueueJobType('publish'));
         self::assertSame('', $service->resolveQueueJobType('task_plan'));
     }
 
@@ -448,7 +450,7 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
 
     public function testResolveEnvelopeTokenUsageMergesQueueInfoAndActiveOperation(): void
     {
-        $service = new AiSiteAgentWorkspaceStateHelperService(new AiSiteQueueSnapshotService());
+        $service = new AiSiteAgentWorkspaceStateHelperService(new AiSiteQueueStateService());
         $result = $service->resolveEnvelopeTokenUsage(
             ['input_tokens' => 111],
             ['output_tokens' => 222, 'token_cost_meta' => ['currency' => 'USD']],
@@ -463,7 +465,7 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
 
     public function testBuildStatusEnvelopeAssemblesBuildPlanV2Fields(): void
     {
-        $service = new AiSiteAgentWorkspaceStateHelperService(new AiSiteQueueSnapshotService());
+        $service = new AiSiteAgentWorkspaceStateHelperService(new AiSiteQueueStateService());
         $state = [
             'public_id' => 'pub_envelope_1',
             'workspace_status' => 'running',
@@ -501,9 +503,37 @@ final class AiSiteAgentWorkspaceStateHelperServiceTest extends TestCase
         self::assertSame('poller', $service->buildStatusEnvelope($state, 'poller')['source']);
     }
 
+    public function testBuildStatusEnvelopeReadsPublishQueueFromSharedBuildBucket(): void
+    {
+        $service = new AiSiteAgentWorkspaceStateHelperService(new AiSiteQueueStateService());
+        $state = [
+            'public_id' => 'pub_publish_1',
+            'workspace_status' => 'publishing',
+            'events' => [],
+            'active_operation' => [
+                'operation' => 'publish',
+                'status' => 'queued',
+            ],
+            'build_queue_info' => [
+                'queue_id' => 88,
+                'status' => 'running',
+                'job_key' => 'glr_aisite:session:1:job:virtual_theme.publish',
+                'job_type' => 'virtual_theme.publish',
+                'total_tokens' => 321,
+            ],
+        ];
+
+        $envelope = $service->buildStatusEnvelope($state, 'queue');
+        self::assertSame('glr_aisite:session:1:job:virtual_theme.publish', $envelope['job_key']);
+        self::assertSame('virtual_theme.publish', $envelope['job_type']);
+        self::assertSame('running', $envelope['status']);
+        self::assertSame('publish', $envelope['cursor']);
+        self::assertSame(321, $envelope['token_usage']['total_tokens']);
+    }
+
     public function testBuildStatusEnvelopeDoesNotMapLegacyTaskPlanJobType(): void
     {
-        $service = new AiSiteAgentWorkspaceStateHelperService(new AiSiteQueueSnapshotService());
+        $service = new AiSiteAgentWorkspaceStateHelperService(new AiSiteQueueStateService());
         $envelope = $service->buildStatusEnvelope([
             'public_id' => 'pub_minimal',
             'active_operation' => ['operation' => 'task_plan', 'status' => 'queued'],

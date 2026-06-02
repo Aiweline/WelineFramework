@@ -241,8 +241,7 @@ class AiService
     /**
      * Run independent AI subtasks and return a settled result map.
      *
-     * This dev branch does not yet carry the Fiber runner used by the feature
-     * branch, so keep the contract stable with sequential execution.
+     * Uses the local Fiber runner when multiple cooperative tasks are requested.
      *
      * @param array<string|int, callable(array<string,mixed>, string|int):mixed> $tasks
      * @param array<string, mixed> $options
@@ -250,7 +249,7 @@ class AiService
      */
     public function supportsCooperativeConcurrency(int $concurrency): bool
     {
-        return false;
+        return $concurrency > 1 && \class_exists(\Fiber::class);
     }
 
     public function runCooperativeSessionTasksSettled(array $tasks, array $options = []): array

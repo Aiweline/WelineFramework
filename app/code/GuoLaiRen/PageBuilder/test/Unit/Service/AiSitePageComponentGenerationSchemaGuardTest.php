@@ -88,6 +88,57 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
         self::assertSame(6144, $tokens['content_non_build']);
     }
 
+    public function testBuildQueueContentDeterministicCompilersRequireExplicitOptIn(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+
+        $matches = (function (): array {
+            $heroContext = [
+                'build_plan_task' => [
+                    'task_key' => 'page:home_page:content/home-page-hero',
+                    'block_key' => 'hero',
+                    'block_type' => 'hero',
+                    'page_flow_role' => 'opening',
+                ],
+                'visual_contract' => [
+                    'strict_hero_cover' => 1,
+                    'page_flow_role' => 'opening',
+                    'section_template' => 'hero',
+                ],
+            ];
+            $proofContext = [
+                'build_plan_task' => [
+                    'task_key' => 'page:home_page:content/home-page-brand-promise',
+                    'block_key' => 'brand_promise',
+                    'block_type' => 'brand_promise',
+                    'page_flow_role' => 'proof',
+                ],
+                'visual_contract' => [
+                    'page_flow_role' => 'proof',
+                    'section_template' => 'section',
+                ],
+            ];
+
+            return [
+                'hero' => $this->shouldCompileDeterministicStrictHeroComponent(
+                    'content/home-page-hero',
+                    'content',
+                    [],
+                    $heroContext
+                ),
+                'proof_grid' => $this->shouldCompileDeterministicCardGridComponent(
+                    'content/home-page-brand-promise',
+                    'content',
+                    [],
+                    $proofContext
+                ),
+            ];
+        })->call($service);
+
+        self::assertFalse($matches['hero']);
+        self::assertFalse($matches['proof_grid']);
+    }
+
     public function testStrictHeroBuildQueueUsesDeterministicCompilerPayload(): void
     {
         $service = new AiSitePageComponentGenerationService();
@@ -145,6 +196,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'runtime.section_name' => 'Home hero',
                 ],
                 [
+                    AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                     '_build_plan_task' => [
                         'task_key' => 'page:home_page:content/home-page-hero',
                         'page_type' => 'home_page',
@@ -179,6 +231,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'runtime.section_name' => 'Home hero',
                 ],
                 [
+                    AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                     'build_plan_task' => [
                         'task_key' => 'page:home_page:content/home-page-hero',
                         'page_type' => 'home_page',
@@ -267,6 +320,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'runtime.section_name' => 'Origin story',
                 ],
                 [
+                    AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                     'build_plan_task' => [
                         'task_key' => 'page:about_page:content/about-page-origin-story',
                         'page_type' => 'about_page',
@@ -327,6 +381,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'runtime.section_name' => 'Support form guidance',
                 ],
                 [
+                    AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                     'build_plan_task' => [
                         'task_key' => 'page:contact_page:content/contact-page-support-form-guidance',
                         'page_type' => 'contact_page',
@@ -374,6 +429,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'runtime.section_name' => 'Support FAQ',
                 ],
                 [
+                    AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                     'build_plan_task' => [
                         'task_key' => 'page:contact_page:content/contact-page-support-faq',
                         'page_type' => 'contact_page',
@@ -425,6 +481,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'runtime.section_name' => 'Frequently asked questions',
                 ],
                 [
+                    AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                     'build_plan_task' => [
                         'task_key' => 'page:contact_page:content/contact-page-support-faq',
                         'page_type' => 'contact_page',
@@ -462,6 +519,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'content',
                     [],
                     [
+                        AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                         'build_plan_task' => $task,
                         'visual_contract' => $visualContract,
                     ]
@@ -513,6 +571,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'runtime.section_name' => 'Final CTA',
                 ],
                 [
+                    AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                     'build_plan_task' => [
                         'task_key' => 'page:home_page:content/home-page-final-cta',
                         'page_type' => 'home_page',
@@ -548,6 +607,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
             'runtime.section_name' => 'Map, automate, measure',
         ];
         $renderContext = [
+            AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
             'build_plan_task' => [
                 'task_key' => 'page:home_page:content/home-page-brand-promise',
                 'page_type' => 'home_page',
@@ -614,6 +674,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'content',
                     [],
                     [
+                        AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                         'build_plan_task' => $task,
                         'visual_contract' => $visualContract,
                     ]
@@ -652,6 +713,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     'content',
                     [],
                     [
+                        AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                         'build_plan_task' => $task,
                         'visual_contract' => $visualContract,
                     ]

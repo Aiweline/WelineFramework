@@ -54,7 +54,7 @@ class AiSiteProfileGenerationServiceTest extends TestCase
                 'default_locale' => 'zh_Hans_CN',
                 'locales' => ['zh_Hans_CN', 'en_US'],
             ],
-        ]);
+        ], false);
 
         self::assertSame('Existing Title', $profile['site_title']);
         self::assertSame('Existing Tagline', $profile['site_tagline']);
@@ -74,7 +74,7 @@ class AiSiteProfileGenerationServiceTest extends TestCase
             'website_profile' => [
                 'target_domain' => 'p11005ce4.weline.test',
             ],
-        ]);
+        ], false);
 
         self::assertSame('apk-cookie-56a3cf.weline.test', $profile['target_domain']);
     }
@@ -108,7 +108,7 @@ class AiSiteProfileGenerationServiceTest extends TestCase
                 'site_title' => 'AI Site',
                 'site_tagline' => '',
             ],
-        ]);
+        ], false);
 
         self::assertSame('面向欧美市场的宠物用品独立站', $profile['site_title']);
         self::assertSame('突出天然成分、安心配方和快速发货服务', $profile['site_tagline']);
@@ -135,6 +135,102 @@ class AiSiteProfileGenerationServiceTest extends TestCase
         self::assertSame('', $profile['site_tagline']);
     }
 
+    public function testGenerateDoesNotLockUnmanagedScopeTitleFromExistingManagedProfile(): void
+    {
+        $generator = new class extends AiSiteProfileAiGenerationService {
+            public int $calls = 0;
+            public array $lastContext = [];
+
+            public function generateProfile(array $context): array
+            {
+                $this->calls++;
+                $this->lastContext = $context;
+
+                return [
+                    'site_title' => 'Pixel Sentinel',
+                    'site_tagline' => 'Validate every conversion signal before launch',
+                    'brief_description' => 'Pixel Sentinel helps marketing teams catch broken tracking before campaigns ship.',
+                    'meta_title' => 'Pixel Sentinel | Conversion Tracking QA',
+                    'meta_description' => 'Catch broken event tracking before campaigns ship.',
+                    'meta_keywords' => 'pixel qa, event tracking, campaign validation',
+                ];
+            }
+        };
+        $service = new AiSiteProfileGenerationService($generator);
+
+        $profile = $service->generate([
+            'site_title' => 'Weline Pixel Event Instrumentation 2606',
+            'brief_description' => 'Create a polished English SaaS website for conversion pixel quality assurance.',
+            'target_domain' => 'pixel-sentinel.example.com',
+            'site_profile_manual' => [
+                'site_title' => false,
+            ],
+            'website_profile' => [
+                'site_title' => 'Weline Pixel Event Instrumentation 2606',
+                '_ai_profile' => [
+                    'version' => 6,
+                    'signature' => 'legacy',
+                ],
+            ],
+        ]);
+
+        self::assertSame('Pixel Sentinel', $profile['site_title']);
+        self::assertSame('Validate every conversion signal before launch', $profile['site_tagline']);
+        self::assertTrue($profile['_ai_profile']['managed_fields']['site_title']);
+        self::assertSame(1, $generator->calls);
+    }
+
+    public function testGenerateScrubsInternalSkillAndDesignTermsFromGeneratedProfileFields(): void
+    {
+        $generator = new class extends AiSiteProfileAiGenerationService {
+            public array $lastContext = [];
+
+            public function generateProfile(array $context): array
+            {
+                $this->lastContext = $context;
+
+                return [
+                    'site_title' => 'claude-design',
+                    'site_tagline' => 'Built with 霓虹棋牌暗色娱乐页',
+                    'brief_description' => 'Claude Design creates the profile for visitors.',
+                    'meta_title' => 'claude-design | 霓虹棋牌暗色娱乐页',
+                    'meta_description' => 'Claude Design generated content for 霓虹棋牌暗色娱乐页.',
+                    'meta_keywords' => 'claude-design, 霓虹棋牌暗色娱乐页, analytics',
+                ];
+            }
+        };
+        $service = new AiSiteProfileGenerationService($generator);
+
+        $profile = $service->generate([
+            'brief_description' => 'Pixel Sentinel, a premium analytics QA website for validating tracking pixels.',
+            'target_domain' => 'pixel-sentinel.example.com',
+            'selected_skill_codes' => ['claude-design'],
+            'skill_snapshots' => [
+                [
+                    'code' => 'claude-design',
+                    'name' => 'Claude Design',
+                    'description' => 'Internal skill description must not become copy.',
+                ],
+            ],
+            'design_direction_code' => 'india-card-game-apk-dark-neon',
+            'design_direction_snapshot' => [
+                'code' => 'india-card-game-apk-dark-neon',
+                'name' => '霓虹棋牌暗色娱乐页',
+            ],
+        ]);
+
+        self::assertSame('Pixel Sentinel', $profile['site_title']);
+        self::assertNotSame('claude-design', $profile['site_title']);
+        self::assertStringNotContainsString('claude-design', $profile['site_title']);
+        self::assertStringNotContainsString('Claude Design', $profile['brief_description']);
+        self::assertStringNotContainsString('霓虹棋牌暗色娱乐页', $profile['site_tagline']);
+        self::assertStringNotContainsString('claude-design', $profile['seo']['meta_title']);
+        self::assertStringNotContainsString('霓虹棋牌暗色娱乐页', $profile['seo']['meta_description']);
+        self::assertContains('claude-design', $generator->lastContext['forbidden_visible_terms'] ?? []);
+        self::assertContains('Claude Design', $generator->lastContext['forbidden_visible_terms'] ?? []);
+        self::assertContains('霓虹棋牌暗色娱乐页', $generator->lastContext['forbidden_visible_terms'] ?? []);
+    }
+
     public function testGenerateReplacesLegacyPlaceholderAssetsWithFreshSvgBrandAssets(): void
     {
         $service = new AiSiteProfileGenerationService();
@@ -147,7 +243,7 @@ class AiSiteProfileGenerationServiceTest extends TestCase
                 'icon' => self::LEGACY_PLACEHOLDER_SVG,
                 'favicon' => self::LEGACY_PLACEHOLDER_SVG,
             ],
-        ]);
+        ], false);
 
         self::assertSame('高客单家居品牌官网', $profile['site_title']);
         self::assertNotSame(self::LEGACY_PLACEHOLDER_SVG, $profile['logo']);
@@ -284,7 +380,7 @@ class AiSiteProfileGenerationServiceTest extends TestCase
                 'icon' => 'data:image/svg+xml;base64,' . \base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path d="M8 8 L32 32</div></svg>'),
                 'favicon' => 'data:image/svg+xml;base64,' . \base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><path d="M8 8 L32 32</div></svg>'),
             ],
-        ]);
+        ], false);
 
         $logoSvg = \base64_decode((string)\substr((string)$profile['logo'], 26), true);
         $iconSvg = \base64_decode((string)\substr((string)$profile['icon'], 26), true);

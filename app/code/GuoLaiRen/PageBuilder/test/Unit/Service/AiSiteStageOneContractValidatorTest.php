@@ -110,6 +110,51 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
         );
     }
 
+    public function testPartialValidationTargetsDoNotShrinkRouteContract(): void
+    {
+        $validator = new AiSiteStageOneContractValidator();
+        $contract = [
+            ...$this->singleHeroContract('en_US'),
+            'page_types' => ['home_page', 'about_page'],
+            'shared_link_requirements' => [
+                'navigation_plan.header_items',
+                'footer_plan.featured',
+            ],
+            'page_route_contract' => [
+                'allowed_internal_paths' => ['/', '/about'],
+                'link_groups' => [
+                    'navigation_plan.header_items' => ['allowed_paths' => ['/', '/about']],
+                    'footer_plan.featured' => ['allowed_paths' => ['/', '/about']],
+                ],
+            ],
+        ];
+        $report = $validator->validateFullPlan(
+            [
+                'navigation_plan' => [
+                    'header_items' => [
+                        ['label' => 'Home', 'href' => '/'],
+                        ['label' => 'About', 'href' => '/about'],
+                    ],
+                ],
+                'footer_plan' => [
+                    'featured' => [
+                        ['label' => 'About', 'href' => '/about'],
+                    ],
+                ],
+                'pages' => [
+                    'home_page' => $this->pagePlanWithBlock([]),
+                ],
+            ],
+            $contract,
+            ['validation_page_types' => ['home_page']]
+        );
+        $issueCodes = \array_map(static fn(array $issue): string => (string)($issue['code'] ?? ''), $report['issues'] ?? []);
+
+        self::assertTrue((bool)($report['passed'] ?? false), \json_encode($report['issues'] ?? [], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        self::assertNotContains('missing_page', $issueCodes);
+        self::assertNotContains('link_href_not_in_route_contract', $issueCodes);
+    }
+
     /**
      * @param array<string, mixed> $blockPatch
      * @return array<string, mixed>

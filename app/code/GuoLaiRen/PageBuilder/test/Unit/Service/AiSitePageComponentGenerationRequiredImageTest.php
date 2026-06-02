@@ -334,14 +334,64 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
         $service = new AiSitePageComponentGenerationService();
         $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'buildRenderContext');
         $reflection->setAccessible(true);
+        $buildPlanTask = [
+            'task_key' => 'page:home_page:content/home-page-hero',
+            'task_type' => 'page_section',
+            'page_type' => 'home_page',
+            'region' => 'content',
+            'section_code' => 'content/home-page-hero',
+            'section_key' => 'hero',
+            'block_key' => 'hero',
+            'block_id' => 'home_page.hero',
+            'block_type' => 'hero',
+        ];
+        $scope = [
+            'website_profile' => ['content_locale' => 'fr_FR'],
+            'build_plan_v2' => [
+                'contract_meta' => [
+                    'status' => 'confirmed',
+                    'signature' => 'unit-render-context-locale',
+                ],
+                'i18n' => ['primary_locale' => 'fr_FR'],
+                'pages' => [
+                    [
+                        'page_id' => 'home_page',
+                        'page_type' => 'home_page',
+                    ],
+                ],
+                'blocks' => [
+                    [
+                        'block_id' => 'home_page.hero',
+                        'page_id' => 'home_page',
+                        'page_type' => 'home_page',
+                        'section_key' => 'hero',
+                        'block_type' => 'hero',
+                        'page_flow_role' => 'hero',
+                        'content_keys' => ['hero.headline'],
+                    ],
+                ],
+                'content_manifest' => [
+                    'primary_locale' => 'fr_FR',
+                    'items' => [
+                        'hero.headline' => 'Bienvenue',
+                    ],
+                ],
+            ],
+        ];
 
         /** @var array<string,mixed> $context */
         $context = $reflection->invoke(
             $service,
             'home_page',
             ['content_locale' => 'fr_FR'],
-            ['website_profile' => ['content_locale' => 'fr_FR']],
-            ['runtime.content_locale' => 'fr_FR']
+            $scope,
+            [
+                'runtime.content_locale' => 'fr_FR',
+                'runtime.build_plan_task_json' => (string)\json_encode(
+                    $buildPlanTask,
+                    \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+                ),
+            ]
         );
 
         self::assertSame('fr_FR', $context['content_locale'] ?? null);

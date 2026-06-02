@@ -360,7 +360,11 @@ final class FiberOutputBuffer
         }
 
         $projectedAppendBytes = $currentBytes + $chunkBytes + self::MIN_MEMORY_HEADROOM_BYTES;
-        $memoryUsage = \memory_get_usage(true);
+        // In persistent workers memory_get_usage(true) includes arena pages that
+        // PHP may reuse after previous large requests. Guard against live memory
+        // pressure, while logging real usage separately for diagnostics.
+        $memoryUsage = \memory_get_usage(false);
+        $realMemoryUsage = \memory_get_usage(true);
 
         if ($memoryUsage + $projectedAppendBytes >= $memoryLimit) {
             return self::buildOverflowContext(
@@ -369,7 +373,8 @@ final class FiberOutputBuffer
                 $chunkBytes,
                 $memoryUsage,
                 $memoryLimit,
-                $projectedAppendBytes
+                $projectedAppendBytes,
+                $realMemoryUsage
             );
         }
 
@@ -385,9 +390,12 @@ final class FiberOutputBuffer
         int $chunkBytes,
         int $memoryUsage,
         int $memoryLimit,
-        int $projectedAppendBytes
+        int $projectedAppendBytes,
+        int $realMemoryUsage = 0
     ): array {
         $fiber = \Fiber::getCurrent();
+        $memoryUsage = $memoryUsage > 0 ? $memoryUsage : \memory_get_usage(false);
+        $realMemoryUsage = $realMemoryUsage > 0 ? $realMemoryUsage : \memory_get_usage(true);
 
         return [
             'reason' => $reason,
@@ -397,7 +405,8 @@ final class FiberOutputBuffer
             'current_bytes' => $currentBytes,
             'chunk_bytes' => $chunkBytes,
             'max_capture_bytes' => self::MAX_CAPTURE_BYTES,
-            'memory_usage' => $memoryUsage > 0 ? $memoryUsage : \memory_get_usage(true),
+            'memory_usage' => $memoryUsage,
+            'memory_real_usage' => $realMemoryUsage,
             'memory_limit' => $memoryLimit,
             'min_memory_headroom' => self::MIN_MEMORY_HEADROOM_BYTES,
             'projected_append_bytes' => $projectedAppendBytes,
@@ -420,6 +429,7 @@ final class FiberOutputBuffer
             'chunk_bytes',
             'max_capture_bytes',
             'memory_usage',
+            'memory_real_usage',
             'memory_limit',
             'min_memory_headroom',
             'projected_append_bytes',

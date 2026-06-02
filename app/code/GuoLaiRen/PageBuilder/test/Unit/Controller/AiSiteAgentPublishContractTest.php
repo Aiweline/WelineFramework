@@ -97,10 +97,10 @@ final class AiSiteAgentPublishContractTest extends TestCase
         self::assertStringContainsString('operation_sse_missing_queue_record', $methodSource);
     }
 
-    public function testWorkspaceSnapshotHandlerRemainsReadOnlyForWorkbenchStepStatus(): void
+    public function testWorkspaceStateHandlerRemainsReadOnlyForWorkbenchStepStatus(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
-        $methodSource = $this->extractMethodSource($source, 'handleWorkspaceSnapshot');
+        $methodSource = $this->extractMethodSource($source, 'handleWorkspaceState');
 
         self::assertStringNotContainsString('workbench_step_status', $methodSource);
         self::assertStringNotContainsString('mergeScope(', $methodSource);
@@ -133,7 +133,6 @@ final class AiSiteAgentPublishContractTest extends TestCase
             'mergeScope(',
             'replaceScope(',
             'appendWorkspaceEvent(',
-            'persistRecoveredQueueOperationState(',
             'autoResumeBuildQueueWhenTasksIncomplete(',
             'buildWorkspaceState(',
             'buildWorkspaceFastViewState(',
@@ -172,6 +171,21 @@ final class AiSiteAgentPublishContractTest extends TestCase
         self::assertIsInt($persistGuardOffset);
         self::assertIsInt($autoResumeOffset);
         self::assertLessThan($autoResumeOffset, $persistGuardOffset);
+    }
+
+    public function testWorkspaceStateResolvesPublishQueueFromSharedBuildQueueBucket(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractMethodSource($source, 'buildWorkspaceState');
+
+        self::assertStringContainsString("\$publishOperation = \$this->resolveWorkspaceQueueOperationState(\$activeOperation, \$activeOperations, 'publish');", $methodSource);
+        self::assertStringContainsString("\$existingBuildQueueOperation = \\is_array(\$existingBuildQueueInfo)", $methodSource);
+        self::assertStringContainsString("\$sharedBuildQueueOperations = [", $methodSource);
+        self::assertStringContainsString("'image_asset' => true,", $methodSource);
+        self::assertStringContainsString("\$buildQueueOperationCandidate = \$operationCandidate;", $methodSource);
+        self::assertStringContainsString("buildOperationStageQueueInfoPayload(\$session, \$buildQueueOperationState, \$buildQueueOperation)", $methodSource);
+        self::assertStringContainsString("\$buildQueueOperation => [\$buildQueueOperationState, \$buildQueueInfo]", $methodSource);
+        self::assertStringContainsString("\$buildQueueOperation => \$buildQueueInfo", $methodSource);
     }
 
     private function extractMethodSource(string $source, string $methodName): string
