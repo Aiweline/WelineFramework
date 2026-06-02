@@ -140,7 +140,6 @@ final class AiSiteStageOneContractValidator
         $forbiddenBlockKeys = \array_fill_keys(\array_map('strval', \is_array($pageContract['forbidden_block_keys'] ?? null) ? $pageContract['forbidden_block_keys'] : AiSiteStageOneContractService::GENERIC_BLOCK_KEYS), true);
         $seen = [];
         $visualSignatures = [];
-        $contentFingerprints = [];
         $requiredImageBlockKeys = [];
 
         foreach ($blocks as $index => $block) {
@@ -202,7 +201,6 @@ final class AiSiteStageOneContractValidator
             $this->validateBuildPlanVisibleBodyCopy($block, $path, $pageType, $blockKey, $issues);
             $this->validateBlockVisibleCopyLocale($block, $path, $pageType, $blockKey, $contract, $context, $issues);
             $this->validateBlockSourceTruthAndPolicyCopy($block, $path, $pageType, $blockKey, $context, $issues);
-            $this->validateBlockContentDiversity($block, $path, $pageType, $blockKey, $contentFingerprints, $issues);
             $visualSignatures[] = [
                 'index' => $index,
                 'page_type' => $pageType,
@@ -482,10 +480,10 @@ final class AiSiteStageOneContractValidator
             return;
         }
 
-        $issues[] = $this->issue('missing_visible_body_copy', $path . '.field_plan', 'high', [
+        $issues[] = $this->issue('missing_visible_body_copy', $path . '.field_plan', 'medium', [
             'page_type' => $pageType,
             'block_key' => $blockKey,
-            'expected' => 'Every Stage-1 block must provide visitor-visible body copy that BuildPlan can consume: execution_script.core_copy, a field_plan supporting_copy/body/copy row, realtime_content.supporting_copy, feature_points, or block.content. Layout/planning instructions do not count.',
+            'expected' => 'Diagnostic only: content richness is prompt guidance, not a blocking Stage-1 structure gate.',
         ]);
     }
 
@@ -515,13 +513,13 @@ final class AiSiteStageOneContractValidator
                 continue;
             }
 
-            $issues[] = $this->issue('visible_copy_locale_mismatch', (string)($row['path'] ?? $path), 'high', [
+            $issues[] = $this->issue('visible_copy_locale_mismatch', (string)($row['path'] ?? $path), 'medium', [
                 'page_type' => $pageType,
                 'block_key' => $blockKey,
                 'content_locale' => $contentLocale,
                 'field_name' => (string)($row['field_name'] ?? ''),
                 'snippet' => $this->clip($text),
-                'expected' => 'Visitor-visible Stage-1 copy must use content_locale. Plan language and customer brief language are context only.',
+                'expected' => 'Diagnostic only: visible-copy locale is prompt guidance, not a blocking Stage-1 structure gate.',
             ]);
         }
     }
@@ -955,68 +953,27 @@ final class AiSiteStageOneContractValidator
             ]);
         }
 
-        foreach ($this->collectPlaceholderImagePlanningTexts($block, $path) as $row) {
-            $text = (string)($row['text'] ?? '');
-            if (!$this->isPlaceholderImagePlanningText($text)) {
+        $requiredKeys = \is_array($pageContract['image_intent_keys'] ?? null)
+            ? $pageContract['image_intent_keys']
+            : [
+                'needs_image',
+                'image_role',
+                'image_subject',
+                'placement',
+                'visual_atmosphere',
+                'image_treatment',
+                'reuse_policy',
+                'css_motif',
+            ];
+        foreach ($requiredKeys as $field) {
+            $field = \trim((string)$field);
+            if ($field === '' || \array_key_exists($field, $intent)) {
                 continue;
             }
-            $issues[] = $this->issue('placeholder_image_planning_forbidden', (string)($row['path'] ?? ($path . '.image_intent')), 'high', [
+            $issues[] = $this->issue('invalid_image_intent_field', $path . '.image_intent.' . $field, 'high', [
                 'page_type' => $pageType,
                 'block_key' => $blockKey,
-                'snippet' => $this->clip($text),
-                'expected' => 'Image/media planning must describe a real generated asset slot or a complete CSS-only motif; placeholders, dummy images, fake images, and temporary media are forbidden.',
-            ]);
-        }
-
-        if ($needsImage) {
-            foreach (['image_role', 'image_subject', 'placement', 'visual_atmosphere', 'image_treatment', 'reuse_policy'] as $field) {
-                $value = $this->normalizeSignatureText($intent[$field] ?? null);
-                if ($value === '' || $this->isPromptLikeText($value)) {
-                    $issues[] = $this->issue('invalid_image_intent_field', $path . '.image_intent.' . $field, 'high', [
-                        'page_type' => $pageType,
-                        'block_key' => $blockKey,
-                        'expected' => 'concrete image role, subject, placement, visual atmosphere, image treatment, and reuse policy',
-                    ]);
-                }
-            }
-            $subject = $this->normalizeSignatureText($intent['image_subject'] ?? null);
-            if ($this->isIconOnlyImageSubject($subject)) {
-                $issues[] = $this->issue('icon_only_image_subject', $path . '.image_intent.image_subject', 'high', [
-                    'page_type' => $pageType,
-                    'block_key' => $blockKey,
-                    'expected' => 'block-level scene, editorial photo, product visual, or premium illustration subject',
-                    'actual' => $this->clip($subject),
-                ]);
-            }
-            if ($this->blockDeclaresCssOnlyVisual($block)) {
-                $issues[] = $this->issue('image_intent_conflicts_with_block_plan', $path . '.image_intent.needs_image', 'high', [
-                    'page_type' => $pageType,
-                    'block_key' => $blockKey,
-                    'expected' => 'needs_image=true requires visual_signature.media_strategy to describe the real generated image asset and must not declare CSS-only/no generated image',
-                    'actual' => 'image_intent.needs_image=true but media planning declares CSS-only/no generated image',
-                ]);
-            }
-            return;
-        }
-
-        foreach (['css_motif', 'visual_atmosphere', 'image_treatment'] as $field) {
-            $value = $this->normalizeSignatureText($intent[$field] ?? null);
-            if ($value === '' || $this->isPromptLikeText($value)) {
-                $issues[] = $this->issue('missing_css_motif_for_no_image_block', $path . '.image_intent.' . $field, 'high', [
-                    'page_type' => $pageType,
-                    'block_key' => $blockKey,
-                    'expected' => 'needs_image=false must still declare css_motif, visual_atmosphere, and image_treatment so build does not guess the visual companion',
-                ]);
-            }
-        }
-
-        $imageConflict = $this->detectNoImageIntentPlanConflict($block);
-        if ($imageConflict !== null) {
-            $issues[] = $this->issue('image_intent_conflicts_with_block_plan', $path . '.image_intent.needs_image', 'high', [
-                'page_type' => $pageType,
-                'block_key' => $blockKey,
-                'expected' => 'needs_image=true with concrete image role, subject, placement, and reuse policy, or remove media asset planning and declare a CSS-only motif',
-                'actual' => $imageConflict,
+                'expected' => 'image_intent must keep every required structural key; image wording and image presence are not gate criteria.',
             ]);
         }
     }

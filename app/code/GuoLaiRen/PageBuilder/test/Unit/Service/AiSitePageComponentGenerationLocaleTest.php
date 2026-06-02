@@ -174,7 +174,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         ));
     }
 
-    public function testPortugueseRenderedHtmlLocaleGateRejectsChineseBlockGoalCopy(): void
+    public function testPortugueseRenderedHtmlLocaleGateDoesNotBlockChineseBlockGoalCopy(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
@@ -184,20 +184,17 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
             $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
         };
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Generated component locale gate failed');
-
-        $assertMatchesLocale->call(
+        self::assertNull($assertMatchesLocale->call(
             $service,
             '<section><h2>Regras Antes de Jogar</h2><p>Teenipiya '
                 . "\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}"
                 . "\u{3001}\u{4FE1}\u{4EFB}\u{4FE1}\u{606F}\u{548C}\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}"
                 . '</p></section>',
             ['content_locale' => 'pt_BR']
-        );
+        ));
     }
 
-    public function testPortugueseHardHtmlPolicyRejectsVisibleChinesePlanningCopy(): void
+    public function testPortugueseHardHtmlPolicyDoesNotBlockVisibleChinesePlanningCopy(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
@@ -215,8 +212,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
             'pt_BR'
         );
 
-        self::assertIsString($reason);
-        self::assertStringContainsString('non-target CJK copy leaked', $reason);
+        self::assertNull($reason);
         self::assertNull($detectHardPolicyViolation->call(
             $service,
             '<section><p>Baixe o APK com seguranca e consulte as regras principais.</p></section>',
@@ -229,7 +225,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         ));
     }
 
-    public function testPortugueseRenderedHtmlLocaleGateRejectsShortChineseCtaLabel(): void
+    public function testPortugueseRenderedHtmlLocaleGateDoesNotBlockShortChineseCtaLabel(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
@@ -239,14 +235,11 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
             $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
         };
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Generated component locale gate failed');
-
-        $assertMatchesLocale->call(
+        self::assertNull($assertMatchesLocale->call(
             $service,
             '<section><h2>Teen Patti de Confianca</h2><button type="button">' . "\u{4E0B}\u{8F7D}Teenipiya APK" . '</button></section>',
             ['content_locale' => 'pt_BR']
-        );
+        ));
     }
 
     public function testVirtualThemeAdaptationFrameworkPromptRequiresStableShellAndActionEvents(): void
@@ -328,14 +321,14 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         self::assertStringContainsString('data-pb-ai-action', $reason);
     }
 
-    public function testLowQualityGateReachesCtaRoleChecksAfterLeakChecks(): void
+    public function testStructuralGateRejectsStaticCtaRole(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
         );
 
         $detect = function (string $html, string $componentCode, string $css): ?string {
-            return $this->detectLowQualityGeneratedSectionHtmlReason($html, $componentCode, $css);
+            return $this->detectStructuralGeneratedSectionHtmlReason($html, $componentCode, $css);
         };
 
         $reason = $detect->call(
@@ -346,7 +339,49 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         );
 
         self::assertIsString($reason);
-        self::assertStringContainsString('CTA block role fidelity failed', $reason);
+        self::assertStringContainsString('primary CTA class must be on an actionable', $reason);
+    }
+
+    public function testStructuralGateRejectsNestedRepeatedCardContainers(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $detect = function (string $html, string $componentCode, string $css): ?string {
+            return $this->detectStructuralGeneratedSectionHtmlReason($html, $componentCode, $css);
+        };
+
+        $reason = $detect->call(
+            $service,
+            "<section class='pb-c-root'><div class='pb-c-rail'>"
+                . "<div class='pb-c-card'><h3>Arjun</h3><p>Safe tables.</p>"
+                . "<div class='pb-c-card'><h3>Priya</h3><p>Fair play.</p></div>"
+                . "</div></div></section>",
+            'content/home-page-customer-proof',
+            '#componentId .pb-c-rail{display:flex;gap:18px;}#componentId .pb-c-card{padding:20px;}'
+        );
+
+        self::assertIsString($reason);
+        self::assertStringContainsString('nested repeated content container', $reason);
+    }
+
+    public function testComponentPromptIncludesRepeatedCardStructureRecipe(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $buildPrompt = function (): string {
+            return $this->buildComponentJsonPhpSafetyRulesEn();
+        };
+
+        $prompt = $buildPrompt->call($service);
+
+        self::assertStringContainsString('Repeated-card structure recipe', $prompt);
+        self::assertStringContainsString('direct sibling children of one rail/grid/list wrapper', $prompt);
+        self::assertStringContainsString('never put the quote paragraph inside the star/meta row', $prompt);
+        self::assertStringContainsString('Repeated-card self-check', $prompt);
     }
 
     public function testContentFrameworkKeepsResponsiveCssTopLevelAndInstallsActionBridge(): void
