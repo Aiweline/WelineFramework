@@ -703,17 +703,47 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return {};
     }
 
+    function collectStageOnePlanWorkbenchPreviewCandidates(workbench) {
+        var wb = workbench && typeof workbench === 'object' ? workbench : {};
+        var confirmed = wb.confirmed && typeof wb.confirmed === 'object' ? wb.confirmed : {};
+        var planBook = confirmed.plan_book && typeof confirmed.plan_book === 'object' ? confirmed.plan_book : {};
+        var stage1 = wb.stage1 && typeof wb.stage1 === 'object' ? wb.stage1 : {};
+        var candidates = [
+            confirmed.structured_plan,
+            confirmed.plan_json,
+            planBook.structured
+        ];
+        if (hasNonEmptyPlanArtifact(stage1.page_plans)) {
+            candidates.push(Object.assign({}, stage1, { pages: stage1.page_plans }));
+        }
+        return candidates;
+    }
+
     function buildStageOnePlanPayloadFromWorkspaceState(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         var plan = state.plan && typeof state.plan === 'object' ? state.plan : {};
+        var stateWorkbenchCandidates = collectStageOnePlanWorkbenchPreviewCandidates(state.plan_workbench);
+        var scopeWorkbenchCandidates = collectStageOnePlanWorkbenchPreviewCandidates(scope.plan_workbench);
         var payload = {
-            json: pickFirstNonEmptyPlanObject(plan.json, state.plan_json, scope.plan_json),
+            json: pickFirstNonEmptyPlanObject.apply(null, [
+                plan.json,
+                state.plan_json,
+                scope.plan_json
+            ].concat(stateWorkbenchCandidates, scopeWorkbenchCandidates)),
+            structured: pickFirstNonEmptyPlanObject.apply(null, [
+                plan.structured,
+                plan.json,
+                state.structured_plan,
+                state.plan_json,
+                scope.structured_plan,
+                scope.plan_json
+            ].concat(stateWorkbenchCandidates, scopeWorkbenchCandidates)),
             build_plan_v2: pickFirstNonEmptyPlanObject(plan.build_plan_v2, state.build_plan_v2, scope.build_plan_v2)
         };
-        payload.structured = payload.json;
         if (
             hasNonEmptyPlanArtifact(payload.json)
+            || hasNonEmptyPlanArtifact(payload.structured)
             || hasNonEmptyPlanArtifact(payload.build_plan_v2)
         ) {
             return payload;
@@ -12033,6 +12063,26 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }
         if (hasNonEmptyPlanArtifact(payload.plan_json)) {
             return normalizeStageOneStructuredRootForPreview(payload.plan_json);
+        }
+        if (hasNonEmptyPlanArtifact(payload.structured_plan)) {
+            return normalizeStageOneStructuredRootForPreview(payload.structured_plan);
+        }
+        if (payload.plan_book && typeof payload.plan_book === 'object' && hasNonEmptyPlanArtifact(payload.plan_book.structured)) {
+            return normalizeStageOneStructuredRootForPreview(payload.plan_book.structured);
+        }
+        var payloadWorkbenchCandidates = collectStageOnePlanWorkbenchPreviewCandidates(payload.plan_workbench);
+        for (var i = 0; i < payloadWorkbenchCandidates.length; i += 1) {
+            if (hasNonEmptyPlanArtifact(payloadWorkbenchCandidates[i])) {
+                return normalizeStageOneStructuredRootForPreview(payloadWorkbenchCandidates[i]);
+            }
+        }
+        if (payload.confirmed && typeof payload.confirmed === 'object') {
+            var confirmedCandidates = collectStageOnePlanWorkbenchPreviewCandidates({ confirmed: payload.confirmed });
+            for (var j = 0; j < confirmedCandidates.length; j += 1) {
+                if (hasNonEmptyPlanArtifact(confirmedCandidates[j])) {
+                    return normalizeStageOneStructuredRootForPreview(confirmedCandidates[j]);
+                }
+            }
         }
         return null;
     }
