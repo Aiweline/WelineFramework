@@ -553,7 +553,8 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
             
             error_clear_last();
             
-            $response = curl_exec($ch);
+            $curlResult = $this->executeJsonCurl($ch);
+            $response = (string)$curlResult['body'];
             
             // 检查是否超时
             $lastError = error_get_last();
@@ -569,10 +570,10 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
             
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
+            $httpCode = (int)$curlResult['http_code'];
+            $error = (string)$curlResult['error'];
 
-            if ($response === false) {
+            if ($error !== '') {
                 if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
@@ -582,16 +583,19 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
             $result = json_decode($response, true);
             
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                $this->delayBeforeRetry($retryCount);
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
 
             if ($httpCode !== 200) {
+                if (!\is_array($result)) {
+                    throw new Exception('API returned invalid JSON with HTTP status: ' . $httpCode);
+                }
                 $errorMsg = $result['error']['message'] ?? "HTTP错误: {$httpCode}";
                 throw new Exception("API返回错误: {$errorMsg}");
             }
 
-            if (empty($result['content'])) {
+            if (!\is_array($result) || empty($result['content'])) {
                 throw new Exception("API响应格式错误");
             }
 
@@ -604,7 +608,7 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
             }
             
             if ($retryCount < self::MAX_RETRIES) {
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                $this->delayBeforeRetry($retryCount);
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
             throw new Exception("API调用失败（已重试{$retryCount}次）: " . $e->getMessage());
@@ -622,6 +626,59 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
      * @param int $timeout
      * @throws Exception
      */
+    /**
+     * @return array{body:string,http_code:int,error:string}
+     */
+    private function executeJsonCurl(\CurlHandle $ch): array
+    {
+        $pump = \Weline\Framework\Php\FiberTaskRunner::currentPump();
+        if ($pump !== null) {
+            $handleId = $pump->register($ch);
+            $body = '';
+            $curlResult = ['ok' => false, 'errno' => 0, 'error' => ''];
+
+            try {
+                while (($chunk = $pump->awaitChunk($handleId)) !== null) {
+                    if ($chunk !== '') {
+                        $body .= $chunk;
+                    }
+                }
+                $curlResult = $pump->finalize($handleId);
+                $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = (string)(curl_error($ch) ?: ($curlResult['error'] ?? ''));
+                curl_close($ch);
+
+                return [
+                    'body' => $body,
+                    'http_code' => $httpCode,
+                    'error' => !empty($curlResult['ok'])
+                        ? $error
+                        : ($error !== '' ? $error : (string)($curlResult['error'] ?? '')),
+                ];
+            } catch (\Throwable $throwable) {
+                $pump->abort($handleId);
+                curl_close($ch);
+                throw $throwable;
+            }
+        }
+
+        $response = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = (string)curl_error($ch);
+        curl_close($ch);
+
+        return [
+            'body' => $response === false ? '' : (string)$response,
+            'http_code' => $httpCode,
+            'error' => $error,
+        ];
+    }
+
+    private function delayBeforeRetry(int $retryCount): void
+    {
+        \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(self::RETRY_DELAY * ($retryCount + 1) * 1000);
+    }
+
     private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout): void
     {
         $startTime = microtime(true);
@@ -645,12 +702,12 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
         $hasValidChunk = false;
         
         // 设置流式处理回调
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk) {
+        $consumeStreamChunk = function (string $data) use ($callback, $startTime, $timeLimit, $timeout, &$rawResponseBuffer, &$hasValidChunk): void {
             // 检查是否超时
             if ($timeLimit !== null) {
                 $elapsedTime = microtime(true) - $startTime;
                 if ($elapsedTime >= ($timeLimit - 2)) {
-                    return -1;
+                    throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
             }
             
@@ -707,25 +764,22 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
                 }
             }
             
-            return strlen($data);
-        });
+        };
 
-        curl_exec($ch);
+        $curlResult = $this->executeStreamCurl($ch, $consumeStreamChunk);
         
         // 获取 HTTP 状态码
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = $curlResult['http_code'];
         
         $lastError = error_get_last();
         if ($lastError && (
             strpos($lastError['message'], 'Maximum execution time') !== false ||
             strpos($lastError['message'], 'exceeded') !== false
         )) {
-            curl_close($ch);
             throw new Exception($this->getTimeoutErrorMessage($timeout));
         }
         
-        $error = curl_error($ch);
-        curl_close($ch);
+        $error = $curlResult['error'];
 
         if ($error) {
             if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
@@ -748,8 +802,62 @@ class AnthropicProvider implements ProviderInterface, ModelListingProviderInterf
     }
 
     /**
-     * 初始化CURL（Anthropic特定配置）
-     * 
+     * @param callable(string):void $consumeChunk
+     * @return array{http_code:int,error:string}
+     */
+    private function executeStreamCurl(\CurlHandle $ch, callable $consumeChunk): array
+    {
+        $pump = \Weline\Framework\Php\FiberTaskRunner::currentPump();
+        if ($pump !== null) {
+            $handleId = $pump->register($ch);
+            $curlResult = ['ok' => false, 'errno' => 0, 'error' => ''];
+
+            try {
+                while (($chunk = $pump->awaitChunk($handleId)) !== null) {
+                    if ($chunk !== '') {
+                        $consumeChunk($chunk);
+                    }
+                }
+                $curlResult = $pump->finalize($handleId);
+                $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = (string)(curl_error($ch) ?: ($curlResult['error'] ?? ''));
+                curl_close($ch);
+
+                return [
+                    'http_code' => $httpCode,
+                    'error' => !empty($curlResult['ok'])
+                        ? $error
+                        : ($error !== '' ? $error : (string)($curlResult['error'] ?? '')),
+                ];
+            } catch (\Throwable $throwable) {
+                $pump->abort($handleId);
+                curl_close($ch);
+                throw $throwable;
+            }
+        }
+
+        try {
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, string $data) use ($consumeChunk): int {
+                $consumeChunk($data);
+
+                return strlen($data);
+            });
+            curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = (string)curl_error($ch);
+            curl_close($ch);
+        } catch (\Throwable $throwable) {
+            curl_close($ch);
+            throw $throwable;
+        }
+
+        return [
+            'http_code' => $httpCode,
+            'error' => $error,
+        ];
+    }
+
+    /**
      * @param string $url
      * @param string $apiKey
      * @param array $data

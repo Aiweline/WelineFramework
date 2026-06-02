@@ -92,6 +92,8 @@ Rules:
 - Keep locked fields exactly if they are provided.
 - If the customer brief clearly names a brand/site title, site_title MUST be exactly that compact brand name. Do not append a sentence, product description, locale rule, or SEO phrase to site_title.
 - Create customer-facing content, not internal placeholders.
+- Skills, design-direction names/codes, style-template names, adapter names, and tool labels are internal generation guidance only. Never use them as site_title, logo text, meta_title, tagline, description, keywords, or visible SVG text.
+- If forbidden_visible_terms are provided in the input, those exact terms are banned from every customer-facing string and every SVG text node. Rewrite them into visitor-facing business language instead of copying them.
 - Site title should feel like a real brand or website name.
 - Site tagline should be concise and marketable.
 - Brief description should be 1-2 polished sentences suitable for preview/meta/brand usage.
@@ -109,6 +111,7 @@ PROMPT;
      */
     private function buildUserPrompt(array $context): string
     {
+        $forbiddenTerms = $this->normalizeForbiddenVisibleTerms($context['forbidden_visible_terms'] ?? []);
         $payload = [
             'customer_brief' => (string)($context['brief_description'] ?? ''),
             'target_domain' => (string)($context['target_domain'] ?? ''),
@@ -124,9 +127,44 @@ PROMPT;
                 'generate_icon_svg' => empty($context['locked_icon']),
             ],
         ];
+        if ($forbiddenTerms !== []) {
+            $payload['forbidden_visible_terms'] = $forbiddenTerms;
+        }
 
         return "Generate the website profile JSON from this input:\n"
             . \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeForbiddenVisibleTerms(mixed $raw): array
+    {
+        if (!\is_array($raw)) {
+            return [];
+        }
+
+        $terms = [];
+        foreach ($raw as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $term = \trim((string)$item);
+            $term = (string)\preg_replace('/\s+/u', ' ', $term);
+            if ($term === '') {
+                continue;
+            }
+            $length = \function_exists('mb_strlen') ? \mb_strlen($term) : \strlen($term);
+            if ($length < 3 || $length > 80 || \in_array($term, $terms, true)) {
+                continue;
+            }
+            $terms[] = $term;
+            if (\count($terms) >= 20) {
+                break;
+            }
+        }
+
+        return $terms;
     }
 
     private function getSkillRegistry(): AiSiteSkillRegistry

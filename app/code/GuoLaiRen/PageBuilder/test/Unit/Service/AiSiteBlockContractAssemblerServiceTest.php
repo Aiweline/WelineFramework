@@ -57,14 +57,14 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
         $requiredImageBlocks = \array_values(\array_filter($blocks, static function (array $block): bool {
             return !empty($block['block_contract']['media_strategy']['needs_real_image']);
         }));
-        self::assertGreaterThanOrEqual(3, \count($requiredImageBlocks));
+        self::assertGreaterThanOrEqual(4, \count($requiredImageBlocks));
         self::assertGreaterThanOrEqual(
-            2,
+            3,
             (int)($assembled['asset_distribution_policy']['per_page']['home_page']['non_hero_required_image_count'] ?? 0)
         );
         self::assertSame('home_page', $assembled['asset_distribution_policy']['per_page']['home_page']['page_type'] ?? null);
-        self::assertSame(3, (int)($assembled['asset_distribution_policy']['per_page']['home_page']['target_real_image_slots'] ?? 0));
-        self::assertSame(2, (int)($assembled['asset_distribution_policy']['per_page']['home_page']['min_non_hero_real_image_slots'] ?? 0));
+        self::assertSame(4, (int)($assembled['asset_distribution_policy']['per_page']['home_page']['target_real_image_slots'] ?? 0));
+        self::assertSame(3, (int)($assembled['asset_distribution_policy']['per_page']['home_page']['min_non_hero_real_image_slots'] ?? 0));
 
         foreach ($requiredImageBlocks as $block) {
             self::assertTrue($block['image_intent']['needs_image'] ?? false);
@@ -118,9 +118,9 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
         $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $pagePlans, $siteDesignSystem);
         $policy = $assembled['asset_distribution_policy']['per_page']['services_page'] ?? [];
 
-        self::assertGreaterThanOrEqual(3, (int)($policy['target_real_image_slots'] ?? 0));
-        self::assertGreaterThanOrEqual(3, (int)($policy['min_non_hero_real_image_slots'] ?? 0));
-        self::assertGreaterThanOrEqual(3, (int)($policy['non_hero_required_image_count'] ?? 0));
+        self::assertGreaterThanOrEqual(5, (int)($policy['target_real_image_slots'] ?? 0));
+        self::assertGreaterThanOrEqual(4, (int)($policy['min_non_hero_real_image_slots'] ?? 0));
+        self::assertGreaterThanOrEqual(4, (int)($policy['non_hero_required_image_count'] ?? 0));
         self::assertContains('details', $policy['preferred_roles'] ?? []);
     }
 
@@ -191,8 +191,9 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
         self::assertStringContainsString('neon card-game lobby hero scene', $subjectsByKey['hero'] ?? '');
         self::assertStringContainsString('neon card-game feature scene', $subjectsByKey['game_features'] ?? '');
         self::assertStringContainsString('player trust proof scene', $subjectsByKey['player_proof'] ?? '');
+        self::assertStringContainsString('VIP support desk', $subjectsByKey['support_center'] ?? '');
         self::assertNotSame($subjectsByKey['hero'] ?? '', $subjectsByKey['player_proof'] ?? '');
-        self::assertStringContainsString('support-console', (string)($blocks[3]['block_contract']['media_strategy']['css_motif'] ?? ''));
+        self::assertTrue((bool)($blocks[3]['image_intent']['needs_image'] ?? false));
     }
 
     public function testBlockContractPreservesPlannedGeneratedImageSubject(): void

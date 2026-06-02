@@ -345,29 +345,29 @@ final class AiSiteBlockContractAssemblerService
 
         if (!$lowImagery && !$policyPage && $blockCount > 0) {
             if (\in_array($normalizedPageType, ['home', 'homepage', 'home_page'], true)) {
-                $target = $blockCount >= 4 ? 3 : \min(2, $blockCount);
-                $minNonHero = $blockCount >= 4 ? 2 : \max(0, $target - 1);
-                $max = \min(5, $blockCount);
-                $preferred = ['opening', 'proof', 'details', 'support'];
+                $target = $blockCount >= 6 ? \min(5, $blockCount - 1) : ($blockCount >= 4 ? \min(4, $blockCount) : \min(2, $blockCount));
+                $minNonHero = $blockCount >= 6 ? \min(4, \max(0, $target - 1)) : ($blockCount >= 4 ? \min(3, \max(0, $target - 1)) : \max(0, $target - 1));
+                $max = \min(6, $blockCount);
+                $preferred = ['opening', 'proof', 'details', 'support', 'feature', 'content'];
             } elseif (\str_contains($normalizedPageType, 'service')) {
-                $target = \min(\max(3, $blockCount >= 5 ? 4 : 3), $blockCount);
-                $minNonHero = \min(3, \max(1, $target - 1));
-                $max = \min(5, $blockCount);
-                $preferred = ['details', 'proof', 'support', 'opening'];
+                $target = \min(\max(4, $blockCount >= 6 ? 5 : 4), $blockCount);
+                $minNonHero = \min(4, \max(2, $target - 1));
+                $max = \min(6, $blockCount);
+                $preferred = ['details', 'proof', 'support', 'feature', 'opening'];
             } elseif (\str_contains($normalizedPageType, 'about')) {
+                $target = \min(\max(3, $blockCount >= 5 ? 4 : 3), $blockCount);
+                $minNonHero = \min(3, \max(2, $target - 1));
+                $max = \min(5, $blockCount);
+                $preferred = ['proof', 'details', 'support', 'story', 'opening'];
+            } elseif (\str_contains($normalizedPageType, 'contact') || \str_contains($normalizedPageType, 'support')) {
                 $target = \min(\max(2, $blockCount >= 4 ? 3 : 2), $blockCount);
                 $minNonHero = \min(2, \max(1, $target - 1));
                 $max = \min(4, $blockCount);
-                $preferred = ['proof', 'details', 'support', 'opening'];
-            } elseif (\str_contains($normalizedPageType, 'contact') || \str_contains($normalizedPageType, 'support')) {
-                $target = \min(\max(1, $blockCount >= 3 ? 2 : 1), $blockCount);
-                $minNonHero = \min(1, \max(0, $target - 1));
-                $max = \min(3, $blockCount);
-                $preferred = ['support', 'details', 'opening'];
+                $preferred = ['support', 'details', 'proof', 'opening'];
             } else {
-                $target = $blockCount >= 4 ? \min(3, $blockCount) : \min(1, $blockCount);
-                $minNonHero = $blockCount >= 4 ? \min(2, \max(0, $target - 1)) : 0;
-                $max = \min(4, $blockCount);
+                $target = $blockCount >= 4 ? \min(4, $blockCount) : \min(2, $blockCount);
+                $minNonHero = $blockCount >= 4 ? \min(3, \max(1, $target - 1)) : \max(0, $target - 1);
+                $max = \min(5, $blockCount);
             }
         }
 

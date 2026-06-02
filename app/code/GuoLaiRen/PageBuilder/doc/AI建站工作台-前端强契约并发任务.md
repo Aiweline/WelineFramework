@@ -22,7 +22,7 @@
 | FE-06 SSE 日志、关闭与重连 | Weline-前端主题工程师 + Weline-WLS运行时工程师 | 可与 FE-02 至 FE-05 并行 | `operation-sse`、`stream-sse`、`last_event_id`、`tab_token`、`queue_status`、`terminal_status`、`can_close_stream` | 日志面板、断线重连、关闭日志后不丢任务、超时提示、终态快照恢复 | WLS SSE 事件样本；E2E SSE probing；手工关闭日志证据 | 需要 WLS 确认终态事件和 lease 规则 |
 | FE-07 i18n 与用户提示 | Weline-前端主题工程师 | 可与所有前端任务并行 | 后端 `message`、`code`、`errors`、前端 i18n 字典 | 可翻译按钮、失败文案、等待提示、重试提示、超时提示 | 文案 key 清单；截图；无硬编码可见英文/中文检查 | 不引入原生弹窗；提示必须可追踪到状态字段 |
 | BE-CONTRACT-01 接口字段确认 | Weline-业务模块工程师 | 与前端、WLS、E2E 并行 | 下方接口矩阵所有 endpoint、status field、错误码、阻断原因 | 字段说明、成功/失败样本、阻断样本 | specialist evidence：业务模块评论/样本 | 是前端最终落地的字段所有者 |
-| WLS-SSE-01 运行时事件确认 | Weline-WLS运行时工程师 | 与前端、业务、E2E 并行 | SSE `start`、`snapshot`、`log`、`info`、`warning`、`progress`、`chunk`、`error`、`done`、`complete`、timeout | 事件序列、关闭/重连、排队等待、终态规则 | specialist evidence：WLS 评论/日志 | 需要确认 stop/cancelled 是否独立终态 |
+| WLS-SSE-01 运行时事件确认 | Weline-WLS运行时工程师 | 与前端、业务、E2E 并行 | SSE `start`、`state`、`log`、`info`、`warning`、`progress`、`chunk`、`error`、`done`、`complete`、timeout | 事件序列、关闭/重连、排队等待、终态规则 | specialist evidence：WLS 评论/日志 | 需要确认 stop/cancelled 是否独立终态 |
 | E2E-01 验收用例自动化 | Weline-E2E自动化工程师 | 可在接口样本冻结前先建 skeleton | 下方验收清单、README 运行命令、fake/mock 模式 | spec 列表、grep 标签、截图/trace、失败复现命令 | `php bin/w e2e:run ...` 输出；trace 截图 | 运行方式变更时同步 `tests/e2e/README.md` |
 | DOC-01 证据合并与变更记录 | Weline-文档知识库工程师 | 跟随所有任务增量更新 | specialist evidence、changed files、commands、remaining risks | 本文更新、证据登记、README 同步判断 | markdown 人工检查；diff；评论证据 | 只记录执行所需契约，不写流水账报告 |
 
@@ -37,8 +37,8 @@
 | `post-confirm-plan` | POST，`public_id`，确认已生成 draft plan | `success`、`stage`、`plan_confirmed`、阻断码、retryable failure 信息 | 无 | 确认计划按钮、阻断提示、下一阶段解锁 | 业务模块 | E2E confirm plan；失败阻断样本 |
 | `post-start-build` / `post-resume-build` | POST，`public_id`、`scope_patch`；恢复构建使用当前 workspace pending work | `success`、`operation=build`、`start_sse`、`execution_token`、`stream_url`、`queue_id`、`queue_wait`、`stage`、`active_operation` | 通过 `operation-sse` 或返回 `stream_url` 观察 | 构建按钮、恢复构建、构建进度、失败重试 | 业务模块 + WLS | E2E build/resume；队列样本 |
 | `operation-sse` | GET，`public_id`、`execution_token` | `queue_id`、`queue_status`、`token_usage`、`queue_waiting_for_scheduler`、`can_close_stream`、`continue_other_operations`、`terminal_status` | `info`、`warning`、`progress`、`chunk`、`error`、`done`、`complete` | 通用日志面板、队列状态详情、关闭/重连 | WLS | WLS SSE 日志；E2E SSE probing |
-| `stream-sse` | GET，`public_id`，可选 `last_event_id`、`tab_token`、`stage` | `success`、`terminal_status`、`last_event_id`、active operation 快照 | `start`、`snapshot`、`log`、complete | 工作台快照流、断线恢复、跨 tab lease | WLS | WLS lease 证据；E2E reconnect |
-| `post-workspace-snapshot` | POST，`public_id` | `success`、workspace operation payload、`stage`、`active_operation`、页面/区块摘要 | 无 | 关闭日志后刷新、断线恢复、阶段同步 | 业务模块 | E2E snapshot；手工刷新 |
+| `stream-sse` | GET，`public_id`，可选 `last_event_id`、`tab_token`、`stage` | `success`、`terminal_status`、`last_event_id`、active operation 状态 | `start`、`state`、`log`、complete | 工作台状态流、断线恢复、跨 tab lease | WLS | WLS lease 证据；E2E reconnect |
+| `post-workspace-state` | POST，`public_id` | `success`、workspace operation payload、`stage`、`active_operation`、页面/区块摘要 | 无 | 关闭日志后刷新、断线恢复、阶段同步 | 业务模块 | E2E state；手工刷新 |
 | `post-publish-checklist` | POST，`public_id` | `passed`、`items`、`stage`、`workspace_status`、`publish_status`、`quality_gate`、阻断项 | 无 | 发布前检查清单、发布按钮禁用原因 | 业务模块 | E2E publish blocked/pass |
 | `post-start-publish` | POST，`public_id` | `success`、`operation=publish`、`workspace_status=publishing`、`execution_token`、`stream_url`、阻断码、`publish_blocked_by_latest_ai_failure` | 通过 `operation-sse` 观察 | 发布按钮、发布中、发布成功/失败 | 业务模块 + WLS | E2E publish flow |
 | `post-switch-preview-page` | POST，`public_id`，`preview_page_id` 或 `preview_page_type` | `success`、preview page compact fields、当前页面标识 | 无 | 预览 tab、iframe 切换、页面类型切换 | 业务模块 + 前端 | E2E preview tabs |
@@ -49,12 +49,12 @@
 
 | 字段组 | 字段/枚举 | 前端消费规则 | 验收证据槽位 |
 | --- | --- | --- | --- |
-| Workspace status | `preparing`、`building`、`editing`、`can_publish`、`publishing`、`published`、`failed` | 驱动阶段卡、主操作按钮、发布入口和失败态；不得只靠 DOM 本地状态推断 | 工作台截图；workspace snapshot 样本 |
-| Active operation | `operation`、`status`、`execution_token`、`queue_id`、`stream_url`、`message`、`progress_percent`、`updated_at`、`retry_allowed`、`failure_mode`、`retryable_ai_failure_count`、`queue_waiting_for_scheduler`、`can_close_stream`、`continue_other_operations` | `queued/running` 禁用冲突操作；`done` 解锁下一阶段；`error/failed/fail` 显示失败和重试；`stop/stopped/cancelled/canceled` 按可关闭终态处理并允许 snapshot 恢复 | WLS/业务样本；前端状态截图 |
-| Queue snapshot | `queue_id`、`name`、`module`、`biz_key`、`status`、`pid`、`type_id`、`finished`、`start_at`、`end_at`、`public_id_hint`、`job_key`、`job_type`、`job_status`、`token`、`token_usage` | 显示排队、运行、完成、错误、token 使用和后台任务详情；`pending/queued` 显示等待调度器 | WLS queue_info 日志；E2E queue detail |
+| Workspace status | `preparing`、`building`、`editing`、`can_publish`、`publishing`、`published`、`failed` | 驱动阶段卡、主操作按钮、发布入口和失败态；不得只靠 DOM 本地状态推断 | 工作台截图；workspace state 样本 |
+| Active operation | `operation`、`status`、`execution_token`、`queue_id`、`stream_url`、`message`、`progress_percent`、`updated_at`、`retry_allowed`、`failure_mode`、`retryable_ai_failure_count`、`queue_waiting_for_scheduler`、`can_close_stream`、`continue_other_operations` | `queued/running` 禁用冲突操作；`done` 解锁下一阶段；`error/failed/fail` 显示失败和重试；`stop/stopped/cancelled/canceled` 按可关闭终态处理并允许 state 恢复 | WLS/业务样本；前端状态截图 |
+| Queue state | `queue_id`、`name`、`module`、`biz_key`、`status`、`pid`、`type_id`、`finished`、`start_at`、`end_at`、`public_id_hint`、`job_key`、`job_type`、`job_status`、`token`、`token_usage` | 显示排队、运行、完成、错误、token 使用和后台任务详情；`pending/queued` 显示等待调度器 | WLS queue_info 日志；E2E queue detail |
 | Build/task progress | `build_tasks`、`plan_queue_info`、`build_queue_info`、任务 `pending/running/done/error/failed` | 阶段内列表必须支持等待、运行、成功、失败和重试；失败任务不能误标成功 | E2E phase progress；接口样本 |
 | Publish gates | `can_publish`、`site_ready`、`plan_confirmed`、`build_plan_confirmed`、`publish_status`、`quality_gate`、`publish_blocked_by_latest_ai_failure`、`latest_build_failure` | 发布按钮和检查清单必须给出明确阻断原因；发布中禁用二次提交 | publish checklist 样本；E2E publish guard |
-| Terminal and timeout | `terminal_status`、`last_event_id`、observer timeout message、`can_close_stream` | SSE 终态或超时时不丢失 workspace；关闭日志后通过 snapshot 恢复；重连带 `last_event_id` | WLS timeout/lease 证据；E2E reconnect |
+| Terminal and timeout | `terminal_status`、`last_event_id`、observer timeout message、`can_close_stream` | SSE 终态或超时时不丢失 workspace；关闭日志后通过 state 恢复；重连带 `last_event_id` | WLS timeout/lease 证据；E2E reconnect |
 
 注意：当前观察到的队列协调逻辑存在一个需要确认的语义点，部分路径会把 `stop/cancelled` 队列终态合并到 active operation 的 `done`。前端应优先保留并展示原始 `queue_status` 或明确的 `terminal_status`，WLS/业务模块需要确认取消态是否要求独立 UI 终态。
 
@@ -66,9 +66,9 @@
 | AC-02 接口或队列失败 | start/confirm/build/publish 返回错误或队列 `error` | mock 失败响应或真实失败任务 | 显示后端 message/code，保留当前阶段，出现允许的重试入口，发布被阻断 | 失败响应样本；E2E error grep；截图 | 业务 + 前端 + E2E |
 | AC-03 等待/排队 | 队列 `pending/queued`，调度器尚未接手 | start endpoint 返回 `queue_waiting_for_scheduler` 或 queue wait | 显示等待调度器、允许关闭日志且提示可继续其他操作，不误报失败 | WLS queue_info 样本；手工关闭日志截图 | WLS + 前端 |
 | AC-04 运行中 | 队列 `running`，持续 `progress/chunk/log` | operation stream 推送进度 | 按钮禁用冲突操作，日志增量展示，任务/阶段进度不闪退 | WLS stream log；E2E SSE probing | WLS + 前端 + E2E |
-| AC-05 取消或关闭日志 | 用户关闭日志、tab lease 切换，或任务终态为 `stop/cancelled/canceled` | 关闭日志面板或模拟终态 | UI 进入可恢复终态；snapshot 后仍能看到最新状态；不重复启动任务 | WLS lease 证据；手工关闭日志视频/截图 | WLS + 前端 |
+| AC-05 取消或关闭日志 | 用户关闭日志、tab lease 切换，或任务终态为 `stop/cancelled/canceled` | 关闭日志面板或模拟终态 | UI 进入可恢复终态；state 后仍能看到最新状态；不重复启动任务 | WLS lease 证据；手工关闭日志视频/截图 | WLS + 前端 |
 | AC-06 重试 | plan/build 出现 retryable AI failures | 后端返回 `retryable_ai_failure_summary` 或 retry action | 显示对应阶段重试按钮，只重试允许的失败项，不清空已成功内容 | 前端截图；业务失败样本；E2E retry grep | 业务 + 前端 + E2E |
-| AC-07 超时或断线 | observer idle timeout、网络断开、SSE reconnect | 中断 SSE 或模拟 timeout | 显示超时/断线提示；可重新连接或 snapshot 恢复；不误解锁发布 | WLS timeout 日志；E2E reconnect/trace | WLS + E2E |
+| AC-07 超时或断线 | observer idle timeout、网络断开、SSE reconnect | 中断 SSE 或模拟 timeout | 显示超时/断线提示；可重新连接或 state 恢复；不误解锁发布 | WLS timeout 日志；E2E reconnect/trace | WLS + E2E |
 | AC-08 发布阻断 | `can_publish=false`、质量门禁失败、latest build failed、BuildPlan 未确认 | 调用 checklist 或加载阻断 workspace | 发布按钮禁用，阻断项逐条展示，不能提交发布 | publish checklist 样本；E2E publish guard | 业务 + 前端 + E2E |
 | AC-09 预览和页面编辑 | 切换预览页、页面再生成、组件精修、区块修补、配置保存 | preview page endpoint 和视觉编辑接口组 | iframe/tab 正确切换，局部操作显示进度和结果，失败不污染其他区块 | `php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="preview|repick|block" --headless --project=chromium` | 前端 + E2E |
 | AC-10 删除工作台 | 删除当前 workspace | `post-delete-workspace` | 删除成功后回到列表或关闭当前上下文；失败显示原因 | 手工证据或 E2E delete | 业务 + 前端 |

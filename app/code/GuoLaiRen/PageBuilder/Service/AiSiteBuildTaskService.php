@@ -61,7 +61,7 @@ class AiSiteBuildTaskService
     ];
 
     /**
-     * 页级 rollup / checkpoint：按 page_type 统计块级任务完成情况；可与 skip_remaining_blocks 联动跳过后续 section。
+     * 页级 rollup：按 page_type 统计块级任务完成情况；可与 skip_remaining_blocks 联动跳过后续 section。
      *
      * @see self::rollupBuildPageProgressForPageType()
      */
@@ -80,7 +80,6 @@ class AiSiteBuildTaskService
         'plan_confirmed_at',
         'plan_json',
         'plan_markdown',
-        'plan_structured',
         'plan_workbench',
         'plan_generated_at',
         'plan_generated_locale',
@@ -99,6 +98,16 @@ class AiSiteBuildTaskService
         'build_plan_confirmed_at',
         'build_plan_v2_validation',
         'has_build_plan_v2',
+        'execution_blueprint',
+        'execution_blueprint_draft',
+        'execution_blueprint_confirmed_signature',
+        'execution_blueprint_confirmed_at',
+        'build_blueprint',
+        'build_tasks',
+        'task_plan',
+        'task_plan_markdown',
+        'task_plan_confirmed',
+        'task_plan_confirmed_at',
     ];
     /**
      * Execution rows are stored on build_plan_v2; duplicate definition fields
@@ -339,22 +348,29 @@ class AiSiteBuildTaskService
     public function collectMissingSelectedPlanPageTypes(array $scope): array
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        if ($planJson === []) {
-            $planJson = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        }
         $expected = $this->normalizeBuildPlanStringList($scope['page_types'] ?? []);
         if ($expected === []) {
             return [];
         }
 
         $actual = [];
-        foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $key => $page) {
-            if (!\is_array($page)) {
-                continue;
-            }
-            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($key) ? $key : '')));
-            if ($pageType !== '') {
-                $actual[$pageType] = true;
+        foreach ([
+            $planJson['pages'] ?? null,
+            $planJson['page_plans'] ?? null,
+            $scope['plan_workbench']['stage1']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['structured_plan']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['structured_plan']['page_plans'] ?? null,
+        ] as $pageSource) {
+            foreach (\is_array($pageSource) ? $pageSource : [] as $key => $page) {
+                if (!\is_array($page)) {
+                    continue;
+                }
+                $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($key) ? $key : '')));
+                if ($pageType !== '') {
+                    $actual[$pageType] = true;
+                }
             }
         }
 
@@ -994,59 +1010,6 @@ class AiSiteBuildTaskService
         $sectionSlug = $this->slugifyForTask($section);
 
         return 'content/' . $this->slugifyForTask($pageType !== '' ? $pageType : 'page') . '-' . $sectionSlug;
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     */
-    private function resolveStageBlockTypeForBuild(array $block): string
-    {
-        foreach ([
-            $block['block_type'] ?? null,
-            $block['type'] ?? null,
-            $block['template'] ?? null,
-            $block['display_role'] ?? null,
-        ] as $candidate) {
-            if (!\is_scalar($candidate)) {
-                continue;
-            }
-            $token = $this->normalizeBuildPlanRoleToken((string)$candidate);
-            if ($token !== '' && $token !== 'page_block') {
-                return $token;
-            }
-        }
-
-        return 'section';
-    }
-
-    /**
-     * @param array<string, mixed> $visualSignature
-     */
-    private function resolveSectionTemplateFromPlannedIdentity(
-        string $blockType,
-        string $pageFlowRole,
-        array $visualSignature = []
-    ): string {
-        $blockType = $this->normalizeBuildPlanRoleToken($blockType);
-        $pageFlowRole = $this->normalizeBuildPlanRoleToken($pageFlowRole);
-        $composition = $this->normalizeBuildPlanRoleToken((string)($visualSignature['composition_pattern'] ?? ''));
-
-        if (\in_array($blockType, ['hero', 'banner', 'home_hero', 'hero_banner', 'above_fold'], true)) {
-            return 'hero';
-        }
-        if (\in_array($blockType, ['cta', 'final_cta', 'download_cta', 'conversion_cta'], true)
-            || \in_array($pageFlowRole, ['conversion', 'final_cta'], true)
-            || \in_array($composition, ['cta_band', 'download_band', 'conversion_band'], true)
-        ) {
-            return 'cta';
-        }
-        if (\in_array($blockType, ['checklist', 'feature_grid', 'features', 'values', 'proof_grid', 'trust_grid', 'cards'], true)
-            || \in_array($composition, ['feature_grid', 'feature_rail', 'proof_band', 'badge_wall', 'metric_strip'], true)
-        ) {
-            return 'checklist';
-        }
-
-        return 'section';
     }
 
     /**
@@ -1930,33 +1893,6 @@ class AiSiteBuildTaskService
     }
 
     /**
-     * @param array<string, mixed> $payload buildRenderDataContractPayload
-     */
-    private function aggregateRenderPayloadHtmlForAssetQa(array $payload): string
-    {
-        $parts = [];
-        $shared = \is_array($payload['shared_components'] ?? null) ? $payload['shared_components'] : [];
-        foreach ($shared as $comp) {
-            if (\is_array($comp)) {
-                $parts[] = (string)($comp['html'] ?? '');
-            }
-        }
-        foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $layout) {
-            if (!\is_array($layout)) {
-                continue;
-            }
-            foreach (\is_array($layout['content'] ?? null) ? $layout['content'] : [] as $block) {
-                if (!\is_array($block)) {
-                    continue;
-                }
-                $parts[] = (string)($block['html'] ?? $block['html_content'] ?? '');
-            }
-        }
-
-        return \implode("\n", \array_filter($parts, static fn(string $s): bool => $s !== ''));
-    }
-
-    /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $buildPlan
      * @param array<string, mixed> $summary
@@ -2451,9 +2387,6 @@ class AiSiteBuildTaskService
     private function collectExpectedStageOnePlanPageBlocks(array $scope): array
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        if ($planJson === []) {
-            $planJson = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        }
         $selected = $this->buildStringSet($this->normalizeBuildPlanStringList($scope['page_types'] ?? []));
         $blocksByPage = [];
         foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $pageKey => $page) {
@@ -3396,15 +3329,6 @@ class AiSiteBuildTaskService
         }
 
         return true;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function isTaskDone(array $scope, string $taskKey): bool
-    {
-        $taskState = $this->extractTaskState($scope);
-        return (string)($taskState[$taskKey]['status'] ?? self::TASK_STATUS_PENDING) === self::TASK_STATUS_DONE;
     }
 
     /**
@@ -4503,14 +4427,6 @@ class AiSiteBuildTaskService
 
     /**
      * @param array<string, mixed> $layout
-     */
-    private function layoutContainsSectionCode(array $layout, string $sectionCode): bool
-    {
-        return $this->findLayoutSectionByCode($layout, $sectionCode) !== null;
-    }
-
-    /**
-     * @param array<string, mixed> $layout
      * @return array<string, mixed>|null
      */
     private function findLayoutSectionByCode(array $layout, string $sectionCode): ?array
@@ -4656,26 +4572,6 @@ class AiSiteBuildTaskService
         }
     }
 
-    /**
-     * @param array<string, mixed> $virtualPage
-     */
-    private function virtualPageContainsSectionCode(array $virtualPage, string $sectionCode): bool
-    {
-        $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
-        foreach ($blocks as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            foreach (['section_code', 'code', 'block_code', 'component', 'component_code'] as $key) {
-                if ($this->sectionIdentityMatches((string)($block[$key] ?? ''), $sectionCode)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
     private function sectionIdentityMatches(string $candidate, string $sectionCode): bool
     {
         $candidate = \trim($candidate);
@@ -4734,113 +4630,6 @@ class AiSiteBuildTaskService
             self::TASK_STATUS_FAILED,
             self::TASK_STATUS_CANCELLED,
         ], true) ? $status : self::TASK_STATUS_PENDING;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $tasks
-     * @return array<string, array<string, mixed>>
-     */
-    private function buildTaskLookup(array $tasks): array
-    {
-        $lookup = [];
-        foreach ($tasks as $task) {
-            if (!\is_array($task)) {
-                continue;
-            }
-            $taskKey = \trim((string)($task['task_key'] ?? ''));
-            if ($taskKey === '') {
-                continue;
-            }
-            $lookup[$taskKey] = $task;
-        }
-
-        return $lookup;
-    }
-
-    /**
-     * @param array<string, list<array<string, mixed>>> $pageTasks
-     * @return array<string, array<string, mixed>>
-     */
-    private function buildPageTaskLookup(array $pageTasks): array
-    {
-        $lookup = [];
-        foreach ($pageTasks as $tasks) {
-            if (!\is_array($tasks)) {
-                continue;
-            }
-            foreach ($tasks as $task) {
-                if (!\is_array($task)) {
-                    continue;
-                }
-                $taskKey = \trim((string)($task['task_key'] ?? ''));
-                if ($taskKey === '') {
-                    continue;
-                }
-                $lookup[$taskKey] = $task;
-            }
-        }
-
-        return $lookup;
-    }
-
-    /**
-     * @param array<string, mixed> $meta
-     */
-    private function resolveSharedRegionFromTask(string $taskKey, array $meta): string
-    {
-        $region = \trim((string)($meta['region'] ?? ''));
-        if ($region !== '') {
-            return $region;
-        }
-        if (\str_starts_with($taskKey, 'shared:')) {
-            return \trim(\substr($taskKey, 7));
-        }
-
-        return 'shared';
-    }
-
-    /**
-     * @param array<string, mixed> $meta
-     */
-    private function resolveSectionCodeFromTask(string $taskKey, array $meta): string
-    {
-        $sectionCode = \trim((string)($meta['section_code'] ?? ''));
-        $sectionKey = \trim((string)($meta['section_key'] ?? $meta['block_key'] ?? ''));
-        $taskKeyTail = '';
-        if (\preg_match('/^[^:]+:[^:]+:(.+)$/', $taskKey, $matches) === 1) {
-            $taskKeyTail = \trim((string)($matches[1] ?? ''));
-        }
-
-        if ($sectionCode !== '' && !\in_array(\strtolower($sectionCode), ['section', 'content', 'block'], true)) {
-            return $sectionCode;
-        }
-        if ($sectionKey !== '') {
-            return $sectionKey;
-        }
-        if ($taskKeyTail !== '') {
-            return $taskKeyTail;
-        }
-
-        return \trim((string)($meta['block_key'] ?? ''));
-    }
-
-    /**
-     * @param array<string, mixed> $meta
-     */
-    private function resolveScopeKeyForTask(string $pageType, string $region, string $sectionCode, array $meta): string
-    {
-        $scopeKey = \trim((string)($meta['scope_key'] ?? ''));
-        if ($scopeKey !== '') {
-            return $scopeKey;
-        }
-        if ($pageType === '') {
-            return 'shared_components.' . ($region !== '' ? $region : 'shared');
-        }
-        if ($sectionCode !== '') {
-            return 'page_sections.' . $pageType . '.' . $sectionCode;
-        }
-
-        return 'page_sections.' . $pageType;
     }
 
     /**

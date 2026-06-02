@@ -28,6 +28,7 @@ class AiSitePageComponentGenerationService
     private const INLINE_IMAGE_GENERATION_DISABLED_REASON = 'disabled_by_test_switch';
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
     public const REQUEST_KEY_FAST_BLOCK_ARTIFACT = 'pagebuilder.ai.fast_block_artifact';
+    public const RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER = '_allow_deterministic_content_compiler';
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
     private const COMPONENT_GENERATION_MAX_ATTEMPTS = 3;
     // Hard completion checks only block visitor-visible prompt/blueprint/placeholder leaks.
@@ -1667,16 +1668,12 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * Keep AI HTTP component generation conservative by default.
-     *
-     * The external provider can low-speed timeout when multiple long prompts are
-     * streamed at once, so production defaults to sequential generation unless
-     * an operator explicitly raises pagebuilder.ai_site.max_http_concurrency.
+     * Keep AI HTTP component generation bounded while allowing real fanout.
      */
     private function resolveConcurrency(int $taskCount): int
     {
         $taskCount = \max(1, $taskCount);
-        $maxConcurrent = (int) Env::get('pagebuilder.ai_site.max_http_concurrency', 1);
+        $maxConcurrent = (int) Env::get('pagebuilder.ai_site.max_http_concurrency', 5);
         $maxConcurrent = \max(1, \min(32, $maxConcurrent));
 
         return \min($taskCount, $maxConcurrent);
@@ -2156,19 +2153,23 @@ class AiSitePageComponentGenerationService
         $isHeroComponent = $this->renderContextRequiresStrictHeroCover($renderContext, $defaultConfig);
         $componentPrefix = $this->normalizeComponentCssPrefix($componentCode);
         $lastThrowable = null;
+        $attemptsRun = 0;
         for ($attempt = 0; $attempt < self::COMPONENT_GENERATION_MAX_ATTEMPTS; $attempt++) {
+            $attemptsRun = $attempt + 1;
             $promptForAttempt = $attemptPrompt;
             $aiData = [];
             if ($attempt > 0) {
-                $promptForAttempt = $this->buildStrictComponentRecoveryPrompt(
-                    $componentCode,
-                    $region,
-                    $defaultConfig,
-                    $renderContext,
-                    $lastThrowable ?? new \RuntimeException('unknown strict contract failure'),
-                    $isHeroComponent,
-                    $componentPrefix
-                );
+                if (!$this->isTransientAiProviderFailure($lastThrowable)) {
+                    $promptForAttempt = $this->buildStrictComponentRecoveryPrompt(
+                        $componentCode,
+                        $region,
+                        $defaultConfig,
+                        $renderContext,
+                        $lastThrowable ?? new \RuntimeException('unknown strict contract failure'),
+                        $isHeroComponent,
+                        $componentPrefix
+                    );
+                }
             }
 
             try {
@@ -2212,7 +2213,8 @@ class AiSitePageComponentGenerationService
 
         $finalReason = $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown component generation failure'));
         $this->emitComponentFallbackNotice($region, $componentCode, $finalReason);
-        throw new \RuntimeException('AI component generation failed: ' . $finalReason, 0, $lastThrowable);
+        $attemptLabel = (string)\max(1, $attemptsRun) . ' real-AI attempt' . ($attemptsRun === 1 ? '' : 's');
+        throw new \RuntimeException('AI component generation failed after ' . $attemptLabel . ': ' . $finalReason, 0, $lastThrowable);
     }
 
     /**
@@ -2282,7 +2284,7 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): bool {
-        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+        if ($region !== 'content' || !$this->shouldUseDeterministicContentCompiler($renderContext)) {
             return false;
         }
 
@@ -2519,7 +2521,7 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): bool {
-        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+        if ($region !== 'content' || !$this->shouldUseDeterministicContentCompiler($renderContext)) {
             return false;
         }
 
@@ -2566,7 +2568,7 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): bool {
-        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+        if ($region !== 'content' || !$this->shouldUseDeterministicContentCompiler($renderContext)) {
             return false;
         }
 
@@ -2621,7 +2623,7 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): bool {
-        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+        if ($region !== 'content' || !$this->shouldUseDeterministicContentCompiler($renderContext)) {
             return false;
         }
 
@@ -2665,7 +2667,7 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): bool {
-        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+        if ($region !== 'content' || !$this->shouldUseDeterministicContentCompiler($renderContext)) {
             return false;
         }
 
@@ -2754,7 +2756,7 @@ class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): bool {
-        if ($region !== 'content' || !$this->isBuildQueueComponentContext($renderContext)) {
+        if ($region !== 'content' || !$this->shouldUseDeterministicContentCompiler($renderContext)) {
             return false;
         }
 
@@ -5689,6 +5691,16 @@ PROMPT
             'Required image slot is missing editor attributes',
             'Generated image source is outside verified asset allowlist',
             'render-data quality gate',
+            'visible copy does not match website content locale',
+            'model unavailable',
+            'temporarily unavailable',
+            'tls connect error',
+            'ssl routines',
+            'unexpected eof',
+            'empty reply from server',
+            'connection reset',
+            'connection closed',
+            'http/2 stream',
         ] as $needle) {
             if (\stripos($message, $needle) !== false) {
                 return true;
@@ -8307,6 +8319,34 @@ PROMPT;
     private function isBuildQueueComponentContext(array $renderContext): bool
     {
         return $this->resolveBuildQueueComponentTaskContext($renderContext) !== [];
+    }
+
+    /**
+     * Production build queues must use real AI generation for visitor-facing
+     * content blocks. Deterministic compilers stay available only for explicit
+     * tests/diagnostics so local fallback output cannot masquerade as a fresh
+     * generated section and make every block look structurally identical.
+     *
+     * @param array<string,mixed> $renderContext
+     */
+    private function shouldUseDeterministicContentCompiler(array $renderContext): bool
+    {
+        if (!$this->isBuildQueueComponentContext($renderContext)) {
+            return false;
+        }
+
+        foreach (
+            [
+                self::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER,
+                'allow_deterministic_content_compiler',
+            ] as $key
+        ) {
+            if (\array_key_exists($key, $renderContext)) {
+                return $this->isTruthyRuntimeSwitchValue($renderContext[$key]);
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -11319,26 +11359,95 @@ PROMPT;
             'task_key' => (string)($renderContext['build_plan_task']['task_key'] ?? ''),
         ]);
         $maxTokens = $this->resolveComponentGenerationMaxTokens($region, $renderContext, $retry);
-        $fullContent = (string)$this->callAiOperation('generate', [
-            'prompt' => $guardedPrompt,
-            'scenario_code' => 'pagebuilder_component_generation',
-            'test_region' => $region,
-            'test_default_config' => $defaultConfig,
-            'test_render_context' => $renderContext,
-            'params' => $this->buildAiRuntimeParams([
-                'allow_zero_balance_provider' => true,
-                'response_format' => $this->buildComponentResponseFormat($region),
-                'temperature' => $retry ? 0.05 : 0.15,
-                'max_tokens' => $maxTokens,
-                'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
-            ], false),
-        ]);
+        $fullContent = '';
+        $runtimeParams = [
+            'allow_zero_balance_provider' => true,
+            'response_format' => $this->buildComponentResponseFormat($region),
+            'temperature' => $retry ? 0.05 : 0.15,
+            'max_tokens' => $maxTokens,
+            'timeout' => self::AI_REQUEST_TIMEOUT_SECONDS,
+        ];
+        $streamParams = $this->buildAiRuntimeParams($runtimeParams, true);
+        try {
+            $streamResult = $this->callAiOperation('generateStream', [
+                'prompt' => $guardedPrompt,
+                'on_chunk' => static function (string $chunk) use (&$fullContent): void {
+                    $fullContent .= $chunk;
+                },
+                'scenario_code' => 'pagebuilder_component_generation',
+                'test_region' => $region,
+                'test_default_config' => $defaultConfig,
+                'test_render_context' => $renderContext,
+                'params' => $streamParams,
+            ]);
+        } catch (\Throwable $streamThrowable) {
+            if (!$this->shouldFallbackToNonStreamComponentGeneration($streamThrowable)) {
+                throw $streamThrowable;
+            }
+            $fullContent = (string)$this->callAiOperation('generate', [
+                'prompt' => $guardedPrompt,
+                'scenario_code' => 'pagebuilder_component_generation',
+                'test_region' => $region,
+                'test_default_config' => $defaultConfig,
+                'test_render_context' => $renderContext,
+                'params' => $this->buildAiRuntimeParams($runtimeParams, false),
+            ]);
+            $streamResult = [];
+        }
+        if ($fullContent === '' && \is_array($streamResult) && \is_scalar($streamResult['content'] ?? null)) {
+            $fullContent = (string)$streamResult['content'];
+        }
 
         return $this->decodeAndNormalizeComponentContent(
             $fullContent,
             $region,
             'AI did not return a valid component JSON payload'
         );
+    }
+
+    private function shouldFallbackToNonStreamComponentGeneration(\Throwable $throwable): bool
+    {
+        $message = \mb_strtolower($this->collectThrowableMessages($throwable));
+        foreach ([
+            'tls connect error',
+            'ssl routines',
+            'unexpected eof',
+            'empty reply from server',
+            'connection reset',
+            'connection closed',
+            'http/2 stream',
+        ] as $needle) {
+            if (\str_contains($message, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isTransientAiProviderFailure(?\Throwable $throwable): bool
+    {
+        if (!$throwable instanceof \Throwable) {
+            return false;
+        }
+        $message = \mb_strtolower($this->collectThrowableMessages($throwable));
+        foreach ([
+            'model unavailable',
+            'temporarily unavailable',
+            'tls connect error',
+            'ssl routines',
+            'unexpected eof',
+            'empty reply from server',
+            'connection reset',
+            'connection closed',
+            'http/2 stream',
+        ] as $needle) {
+            if (\str_contains($message, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -11696,10 +11805,10 @@ PROMPT;
         }
 
         if (\PHP_SAPI === 'cli' && $isStream) {
-            $params['timeout'] = (int)($params['timeout'] ?? self::AI_REQUEST_TIMEOUT_SECONDS);
-            $params['disable_ai_timeout'] = false;
-            $params['disable_cli_timeout'] = false;
-            $params['enforce_timeout_in_stream'] = true;
+            $params['timeout'] = 0;
+            $params['disable_ai_timeout'] = true;
+            $params['disable_cli_timeout'] = true;
+            $params['enforce_timeout_in_stream'] = false;
         }
 
         return $params;
@@ -13097,6 +13206,11 @@ PROMPT;
         $sectionVisualContractPrompt = $this->buildSectionVisualContractPromptAddon($sectionVisualContract, $sectionThemePalette);
         $blockVisualSignaturePrompt = $this->buildBlockVisualSignaturePromptAddon($buildPlanTask, $section);
         $siblingDiversityPrompt = $this->buildSiblingBlockDiversityPromptAddon($pageType, $buildPlanTask, $scope);
+        $pageLabel = $this->normalizePromptVisibleLabel(
+            (string)($blueprint['page_label'] ?? ''),
+            $this->localizePageTypeTitle($pageType, $locale),
+            $locale
+        );
         $currentPageAssignmentPrompt = $this->buildCurrentPageAssignmentPromptAddon(
             $pageType,
             $pageLabel,
@@ -13122,11 +13236,6 @@ PROMPT;
         $claudeDesignSkill = $this->buildClaudeDesignSkillPromptAddon('stage3', $scope);
         $visibleCopyRule = $this->buildVisibleCopyGovernancePromptAddon($websiteProfile, $scope);
         $templateScaffoldGuard = $this->buildTemplateScaffoldGuardPromptAddon($websiteProfile, $scope, $locale, 'section');
-        $pageLabel = $this->normalizePromptVisibleLabel(
-            (string)($blueprint['page_label'] ?? ''),
-            $this->localizePageTypeTitle($pageType, $locale),
-            $locale
-        );
         $policyPageActionPrompt = $this->isPolicyPageType($pageType)
             ? "Policy page identity: this page is for compliance, rights, rules, and support clarity. Do not inherit the site's download/install/play/reward CTA in body blocks. Use target-locale policy/support actions such as policy info, rights review, terms summary, data protection help, or contact support.\n"
             : '';
@@ -14894,7 +15003,6 @@ JSON;
                 'theme_style' => \is_array($scope['theme_style'] ?? null) ? $scope['theme_style'] : [],
                 'palette' => \is_array($scope['palette'] ?? null) ? $scope['palette'] : [],
             ],
-            \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [],
             \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
         ] as $candidate) {
             if (!\is_array($candidate) || $candidate === []) {
@@ -17680,13 +17788,6 @@ JSON;
         return ObjectManager::getInstance(DesignDirectionService::class);
     }
 
-    /**
-     * @deprecated 浠呯敤浜庢棦鏈変緷璧栨鏌ワ紱鏂颁唬鐮佸繀椤昏蛋 {@see self::callAiOperation()}锛?     *             浠ラ伒瀹?unified-query-provider 瑙勮寖锛堟ā鍧楅棿閫氳繃 w_query('ai', ...) 瑙﹁揪 AI锛夈€?     */
-    private function getAiService(): AiService
-    {
-        return $this->aiService ?? ObjectManager::getInstance(AiService::class);
-    }
-
     private function getBuildTaskService(): AiSiteBuildTaskService
     {
         return ObjectManager::getInstance(AiSiteBuildTaskService::class);
@@ -17698,8 +17799,11 @@ JSON;
     }
 
     /**
-     * 缁熶竴鐨勮法妯″潡 AI 璋冪敤鍏ュ彛锛?     *  - 鏋勯€犳敞鍏ヤ簡 {@see AiService} 鏃剁洿鎺ュ鐢紝鍏煎鏃㈡湁 mock 娴嬭瘯锛?     *  - 鍚﹀垯璧?`w_query('ai', $operation, $params)`锛岀敱 {@see \Weline\Ai\Extends\Module\Weline_Framework\Query\AiQueryProvider} 鎺ョ銆?     *
-     * 鏀寔鐨?operation锛?     *  - generate(prompt, model_code?, scenario_code?, locale?, params?, user_id?, is_backend?) -> string
+     * Dispatches AI generation through the injected service when available, or the
+     * framework AI query provider in normal runtime.
+     *
+     * Supported operations:
+     *  - generate(prompt, model_code?, scenario_code?, locale?, params?, user_id?, is_backend?) -> string
      *  - generateStream(prompt, on_chunk, model_code?, scenario_code?, locale?, params?) -> ['status'=>'fulfilled']
      *
      * @param array<string, mixed> $params
@@ -17715,14 +17819,26 @@ JSON;
         $testRenderContext = \is_array($params['test_render_context'] ?? null) ? $params['test_render_context'] : [];
         unset($params['test_region'], $params['test_default_config'], $params['test_render_context']);
         if (
-            $operation === 'generate'
+            \in_array($operation, ['generate', 'generateStream'], true)
+            && $this->aiService === null
             && $this->isTestEnvironment()
             && !(bool)RequestContext::get(self::REQUEST_KEY_FORCE_REAL_AI_IN_TEST, false)
         ) {
-            return \json_encode(
+            $deterministicPayload = \json_encode(
                 $this->buildDeterministicPhpunitAiPayload($testRegion, $testDefaultConfig, $testRenderContext),
                 \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
             ) ?: '{}';
+            if ($operation === 'generateStream') {
+                $callback = $params['on_chunk'] ?? null;
+                if (!\is_callable($callback)) {
+                    throw new \InvalidArgumentException('on_chunk callable is required for generateStream');
+                }
+                $callback($deterministicPayload);
+
+                return ['status' => 'fulfilled'];
+            }
+
+            return $deterministicPayload;
         }
 
         if ($this->aiService !== null) {
@@ -17858,7 +17974,6 @@ JSON;
         foreach ([
             $scope['plan_generated_locale'] ?? null,
             $scope['plan_workbench']['confirmed']['plan_generated_locale'] ?? null,
-            $scope['plan_structured']['plan_generated_locale'] ?? null,
             $scope['plan_json']['plan_generated_locale'] ?? null,
         ] as $candidate) {
             $locale = \trim((string)$candidate);
@@ -17894,8 +18009,6 @@ JSON;
             $scope['ai_content_locale'] ?? null,
             $scope['plan_json']['stage1_contract']['content_locale'] ?? null,
             $scope['plan_json']['i18n']['content_locale'] ?? null,
-            $scope['plan_structured']['stage1_contract']['content_locale'] ?? null,
-            $scope['plan_structured']['i18n']['content_locale'] ?? null,
             $scope['build_plan_v2']['content_locale'] ?? null,
             $scope['build_plan_v2']['i18n']['primary_locale'] ?? null,
             $scope['plan_workbench']['confirmed']['content_locale'] ?? null,
@@ -17910,7 +18023,6 @@ JSON;
             $scope['content_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
             $scope['website_profile']['content_locale'] ?? null,
-            $scope['plan_structured']['content_locale'] ?? null,
             $scope['plan_json']['content_locale'] ?? null,
             $scope['plan_json']['i18n']['content_locale'] ?? null,
             $scope['locale'] ?? null,
