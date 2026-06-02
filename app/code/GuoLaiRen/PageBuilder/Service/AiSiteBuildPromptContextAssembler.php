@@ -82,7 +82,6 @@ final class AiSiteBuildPromptContextAssembler
         $forbidden = [
             'scope' => true,
             'plan_json' => true,
-            'plan_structured' => true,
             'plan_workbench' => true,
             'presentation_projection' => true,
             'ui_projection' => true,

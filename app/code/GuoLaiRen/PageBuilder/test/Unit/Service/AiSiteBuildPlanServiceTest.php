@@ -79,7 +79,7 @@ final class AiSiteBuildPlanServiceTest extends TestCase
         self::assertSame(true, $contract['presentation_projection']['never_feed_to_build'] ?? null);
     }
 
-    public function testBuildUsesStructuredPlanWhenPlanJsonHasNoPages(): void
+    public function testBuildUsesPlanJsonAsSingleStageOneSource(): void
     {
         $service = new AiSiteBuildPlanService();
 
@@ -90,11 +90,9 @@ final class AiSiteBuildPlanServiceTest extends TestCase
             'default_locale' => 'en_US',
             'plan_json' => [
                 'content_locale' => 'en_US',
-            ],
-            'plan_structured' => [
-                'signature' => 'structured-stage1-signature',
+                'signature' => 'plan-json-stage1-signature',
                 'site_strategy' => [
-                    'site_display_name' => 'Structured Source Site',
+                    'site_display_name' => 'Plan JSON Source Site',
                 ],
                 'pages' => [
                     'home_page' => [
@@ -104,9 +102,9 @@ final class AiSiteBuildPlanServiceTest extends TestCase
                             [
                                 'block_key' => 'hero',
                                 'page_flow_role' => 'opening',
-                                'title' => 'Structured plan hero',
-                                'content' => 'A concise proof-led hero section for a complete structured source plan.',
-                                'goal' => 'Use the structured artifact as the source of truth.',
+                                'title' => 'Plan JSON hero',
+                                'content' => 'A concise proof-led hero section for a complete plan_json source plan.',
+                                'goal' => 'Use plan_json as the source of truth.',
                                 'execution_script' => [
                                     'core_copy' => 'Guests see signature dishes, trust proof, and a clear reservation path.',
                                 ],
@@ -136,7 +134,7 @@ final class AiSiteBuildPlanServiceTest extends TestCase
 
         self::assertTrue($result['valid'], \implode("\n", $result['errors']));
         self::assertSame('home_page', $contract['pages'][0]['page_type'] ?? null);
-        self::assertSame('Structured plan hero', $contract['content_manifest']['items']['block.home_page.hero.title'] ?? null);
+        self::assertSame('Guests see signature dishes, trust', $contract['content_manifest']['items']['block.home_page.hero.title'] ?? null);
     }
 
     public function testBuildPlanRejectsStageOnePagesMissingSelectedPageTypes(): void

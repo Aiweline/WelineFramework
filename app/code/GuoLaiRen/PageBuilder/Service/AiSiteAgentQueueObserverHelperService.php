@@ -15,7 +15,7 @@ namespace GuoLaiRen\PageBuilder\Service;
  *
  * 抽出动机：
  *  - 纯函数、无副作用，与控制器/会话解耦成本最低，可单元测试锁定；
- *  - 作为 R4.2 SOLID 拆分的第二块"安全样本"，范式沿用 AiSiteQueueSnapshotService；
+ *  - 作为 R4.2 SOLID 拆分的第二块"安全样本"，范式沿用 AiSiteQueueStateService；
  *  - 让下一轮抽 `buildQueueObserverPanelPayload / emitQueueObserverQueueDetailEvents`
  *    等依赖 SSE 状态的方法时，可以直接复用这里的判定逻辑，避免跨层复制。
  *
@@ -150,6 +150,7 @@ class AiSiteAgentQueueObserverHelperService
             'shared_component_generated' => 'shared_component_generated',
             'page_generated' => 'page_generated',
             'build_plan_block_completed' => 'build_plan_block_completed',
+            'task_completed' => 'task_completed',
             // Build-plan block lifecycle events are forwarded with the same public SSE names.
             'build_plan_block_failed' => 'build_plan_block_failed',
             'operation_failed' => 'error',
@@ -184,6 +185,7 @@ class AiSiteAgentQueueObserverHelperService
             'shared_component_generated',
             'page_generated',
             'build_plan_block_completed',
+            'task_completed',
             // build_plan_block_failed must be forwardable by forwardObservedOperationEvents.
             // 否则 mapOperationEventName 即便有映射也会被 isOperationEventRelevant 的白名单挡掉。
             'build_plan_block_failed',

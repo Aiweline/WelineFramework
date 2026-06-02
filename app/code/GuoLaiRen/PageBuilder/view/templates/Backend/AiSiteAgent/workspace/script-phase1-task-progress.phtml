@@ -11,7 +11,7 @@
         ? window.PbAiWorkspacePreview
         : {};
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var workspaceSnapshotUrl = <?= \json_encode((string)($workspaceSnapshotUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var workspaceStateUrl = <?= \json_encode((string)($workspaceStateUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var queueMessages = {
         empty: <?= \json_encode((string)__('当前没有可展示的建站方案队列记录（尚未入队或队列已清理）。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         refreshed: <?= \json_encode((string)__('队列信息已刷新'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
@@ -281,6 +281,28 @@
             + '</div>';
     }
 
+    function parsePlanQueueNonNegativeCount(value, fallback) {
+        var parsed = parseInt(String(value), 10);
+        if (!isFinite(parsed)) {
+            if (fallback === null || fallback === undefined) {
+                return null;
+            }
+            parsed = parseInt(String(fallback), 10);
+        }
+        return Math.max(0, parsed || 0);
+    }
+
+    function resolvePlanQueueRemainingCount(source, total, doneCount, runningCount, failedCount, pendingCount) {
+        var explicit = parsePlanQueueNonNegativeCount(source.remaining_count, null);
+        if (explicit !== null) {
+            return explicit;
+        }
+        if (runningCount + pendingCount > 0) {
+            return runningCount + pendingCount;
+        }
+        return Math.max(0, total - doneCount - failedCount);
+    }
+
     function normalizePlanQueuePageProgress(progress, fallbackMessage) {
         var source = progress && typeof progress === 'object' ? progress : {};
         var total = parseInt(String(source.total || 0), 10) || 0;
@@ -290,12 +312,26 @@
         var pending = Array.isArray(source.pending) ? source.pending : [];
         var details = Array.isArray(source.details) ? source.details : [];
         if (total > 0) {
+            var doneCount = parsePlanQueueNonNegativeCount(source.done_count, done.length);
+            var runningCount = parsePlanQueueNonNegativeCount(source.running_count, running.length);
+            var failedCount = parsePlanQueueNonNegativeCount(source.failed_count, failed.length);
+            var pendingCount = parsePlanQueueNonNegativeCount(source.pending_count, pending.length);
+            var concurrency = parsePlanQueueNonNegativeCount(source.concurrency, runningCount);
+            if (concurrency <= 0 && runningCount > 0) {
+                concurrency = runningCount;
+            }
             return {
                 total: total,
+                concurrency: concurrency,
                 done: done,
+                done_count: doneCount,
                 running: running,
+                running_count: runningCount,
                 failed: failed,
+                failed_count: failedCount,
                 pending: pending,
+                pending_count: pendingCount,
+                remaining_count: resolvePlanQueueRemainingCount(source, total, doneCount, runningCount, failedCount, pendingCount),
                 details: details
             };
         }
@@ -325,11 +361,94 @@
             total: total,
             done: doneList,
             done_count: doneCount,
+            running_count: runningList.length,
+            concurrency: runningList.length,
             running: runningList,
             failed: [],
+            failed_count: 0,
             pending: new Array(pendingCount).fill('pending'),
+            pending_count: pendingCount,
+            remaining_count: Math.max(0, runningList.length + pendingCount),
             details: details
         };
+    }
+
+    function planQueueStatusBadgeClass(status) {
+        status = String(status || '').trim().toLowerCase();
+        if (status === 'done' || status === 'passed' || status === 'persisted') {
+            return 'success';
+        }
+        if (status === 'failed' || status === 'error' || status === 'retryable_failure') {
+            return 'danger';
+        }
+        if (status === 'running' || status === 'retrying') {
+            return 'info';
+        }
+        return 'secondary';
+    }
+
+    function normalizePlanQueueBlockRows(row) {
+        row = row && typeof row === 'object' ? row : {};
+        var blocks = Array.isArray(row.blocks)
+            ? row.blocks
+            : (Array.isArray(row.block_statuses) ? row.block_statuses : []);
+        return blocks.map(function (block) {
+            block = block && typeof block === 'object' ? block : {};
+            return {
+                block_key: String(block.block_key || block.key || '').trim(),
+                status: String(block.status || 'pending').trim() || 'pending',
+                message: String(block.message || block.error_message || '').trim()
+            };
+        }).filter(function (block) {
+            return block.block_key !== '';
+        });
+    }
+
+    function renderPlanQueueBlockDetails(row) {
+        var blocks = normalizePlanQueueBlockRows(row);
+        if (blocks.length === 0) {
+            return '';
+        }
+        var counts = { done: 0, failed: 0, running: 0, pending: 0 };
+        blocks.forEach(function (block) {
+            var status = String(block.status || '').toLowerCase();
+            if (status === 'done' || status === 'passed' || status === 'persisted') {
+                counts.done += 1;
+            } else if (status === 'failed' || status === 'error' || status === 'retryable_failure') {
+                counts.failed += 1;
+            } else if (status === 'running' || status === 'retrying') {
+                counts.running += 1;
+            } else {
+                counts.pending += 1;
+            }
+        });
+        var blockTotal = Math.max(blocks.length, parseInt(String(row.block_total || 0), 10) || 0);
+        var doneCount = parseInt(String(row.block_done_count != null ? row.block_done_count : counts.done), 10) || 0;
+        var runningCount = parseInt(String(row.block_running_count != null ? row.block_running_count : counts.running), 10) || 0;
+        var failedCount = parseInt(String(row.block_failed_count != null ? row.block_failed_count : counts.failed), 10) || 0;
+        var pendingCount = parseInt(String(row.block_pending_count != null ? row.block_pending_count : counts.pending), 10) || 0;
+        var hiddenBlockCount = Math.max(0, blockTotal - Math.min(blocks.length, 24));
+        var summary = [
+            'blocks ' + blockTotal,
+            'done ' + doneCount,
+            'running ' + runningCount,
+            'failed ' + failedCount,
+            'pending ' + pendingCount
+        ].join(' · ');
+        return '<div class="w-100 ps-4 pb-1">'
+            + '<div class="text-muted small mb-1">' + escapeHtml(summary) + '</div>'
+            + '<div class="d-grid gap-1">'
+            + blocks.slice(0, 24).map(function (block) {
+                var badge = planQueueStatusBadgeClass(block.status);
+                return '<div class="d-flex flex-wrap align-items-start gap-2 small">'
+                    + '<span class="badge text-bg-' + badge + '">' + escapeHtml(block.status) + '</span>'
+                    + '<code>' + escapeHtml(block.block_key) + '</code>'
+                    + '<span class="text-muted flex-grow-1">' + escapeHtml(block.message || '-') + '</span>'
+                    + '</div>';
+            }).join('')
+            + (hiddenBlockCount > 0 ? '<div class="text-muted small">+' + hiddenBlockCount + ' more blocks</div>' : '')
+            + '</div>'
+            + '</div>';
     }
 
     function renderPlanQueueTaskDetails(details) {
@@ -344,13 +463,23 @@
                 var status = String(row.status || '').trim() || 'pending';
                 var pageType = String(row.page_type || '').trim() || '-';
                 var message = String(row.error_message || row.message || '').trim();
-                var badge = status === 'done' || status === 'passed' || status === 'checkpoint'
-                    ? 'success'
-                    : (status === 'failed' || status === 'error' || status === 'retryable_failure' ? 'danger' : (status === 'running' || status === 'retrying' ? 'info' : 'secondary'));
+                var badge = planQueueStatusBadgeClass(status);
+                var blockSummary = '';
+                if (row.block_total || row.block_done_count || row.block_failed_count || row.block_running_count || row.block_pending_count) {
+                    blockSummary = ' · blocks '
+                        + String(row.block_done_count || 0) + '/'
+                        + String(row.block_total || 0)
+                        + ' done, '
+                        + String(row.block_running_count || 0)
+                        + ' running, '
+                        + String(row.block_failed_count || 0)
+                        + ' failed';
+                }
                 return '<div class="d-flex flex-wrap align-items-start gap-2 py-1 border-bottom">'
                     + '<span class="badge text-bg-' + badge + '">' + escapeHtml(status) + '</span>'
                     + '<code class="small">' + escapeHtml(pageType) + '</code>'
-                    + '<span class="text-muted flex-grow-1">' + escapeHtml(message || '-') + '</span>'
+                    + '<span class="text-muted flex-grow-1">' + escapeHtml((message || '-') + blockSummary) + '</span>'
+                    + renderPlanQueueBlockDetails(row)
                     + '</div>';
             }).join('')
             + '</div>';
@@ -373,16 +502,24 @@
         var doneCount = parseInt(String(normalized.done_count != null ? normalized.done_count : done.length), 10) || 0;
         var failedCount = parseInt(String(normalized.failed_count != null ? normalized.failed_count : failed.length), 10) || 0;
         var runningCount = parseInt(String(normalized.running_count != null ? normalized.running_count : running.length), 10) || 0;
-        var remainingCount = parseInt(String(normalized.remaining_count != null ? normalized.remaining_count : Math.max(0, total - doneCount - failedCount)), 10) || 0;
+        var pendingCount = parseInt(String(normalized.pending_count != null ? normalized.pending_count : pending.length), 10) || 0;
+        var concurrency = parsePlanQueueNonNegativeCount(normalized.concurrency, runningCount);
+        if (concurrency <= 0 && runningCount > 0) {
+            concurrency = runningCount;
+        }
+        var remainingCount = parsePlanQueueNonNegativeCount(normalized.remaining_count, null);
+        if (remainingCount === null) {
+            remainingCount = resolvePlanQueueRemainingCount(normalized, total, doneCount, runningCount, failedCount, pendingCount);
+        }
         latestEl.innerHTML = '<div class="d-flex align-items-center justify-content-between gap-2 mb-2">'
             + '<span class="fw-semibold">Stage 1 page fanout</span>'
-            + '<span class="text-muted">total ' + total + ' · done ' + doneCount + ' · remaining ' + remainingCount + '</span>'
+            + '<span class="text-muted">total ' + total + ' · concurrency ' + concurrency + ' · done ' + doneCount + ' · remaining ' + remainingCount + '</span>'
             + '</div>'
             + '<div class="mb-2">' + escapeHtml(String(fallbackMessage || '').trim()) + '</div>'
             + renderPlanQueueProgressBar('Running', runningCount, total, 'info', running)
             + renderPlanQueueProgressBar('Done', doneCount, total, 'success', done)
             + renderPlanQueueProgressBar('Failed', failedCount, total, 'danger', failed)
-            + renderPlanQueueProgressBar('Pending', pending.length, total, 'secondary', pending)
+            + renderPlanQueueProgressBar('Pending', pendingCount, total, 'secondary', pending)
             + renderPlanQueueTaskDetails(normalized.details);
         latestEl.classList.remove('d-none');
         return true;
@@ -406,16 +543,47 @@
         latestEl.classList.toggle('d-none', text === '');
     }
 
+    function publishPlanQueueLatestProgressFromInfo(info) {
+        var queueInfo = info && typeof info === 'object' ? info : {};
+        var latestMessage = resolvePlanQueueLatestMessage(queueInfo);
+        if (publishPlanQueueLatestPageProgress(resolvePlanQueueLatestPageProgress(queueInfo), latestMessage)) {
+            return true;
+        }
+        publishPlanQueueLatestMessage(latestMessage);
+        return true;
+    }
+
+    function resolvePlanQueueLatestPageProgress(info) {
+        var queueInfo = info && typeof info === 'object' ? info : {};
+        if (hasNonEmptyStageOneProgress(queueInfo.stage1_page_progress)) {
+            return queueInfo.stage1_page_progress;
+        }
+        if (queueInfo.queue_state && typeof queueInfo.queue_state === 'object' && hasNonEmptyStageOneProgress(queueInfo.queue_state.stage1_page_progress)) {
+            return queueInfo.queue_state.stage1_page_progress;
+        }
+        return null;
+    }
+
     function resolvePlanQueueLatestMessage(info) {
         var queueInfo = info && typeof info === 'object' ? info : {};
-        var candidates = [
-            queueInfo.latest_message,
-            queueInfo.process,
-            queueInfo.terminal_summary,
-            queueInfo.message,
-            queueInfo.result_tail,
-            queueInfo.result
-        ];
+        var status = String(queueInfo.semantic_status || queueInfo.job_status || queueInfo.queue_status || queueInfo.status || '').toLowerCase();
+        var active = ['pending', 'queued', 'running', 'processing', 'retrying'].indexOf(status) >= 0;
+        var candidates = active
+            ? [
+                queueInfo.process,
+                queueInfo.message,
+                queueInfo.latest_message,
+                queueInfo.result_tail,
+                queueInfo.result
+            ]
+            : [
+                queueInfo.latest_message,
+                queueInfo.process,
+                queueInfo.terminal_summary,
+                queueInfo.message,
+                queueInfo.result_tail,
+                queueInfo.result
+            ];
         for (var i = 0; i < candidates.length; i += 1) {
             var text = String(candidates[i] || '').trim();
             if (text !== '') {
@@ -423,14 +591,6 @@
             }
         }
         return '';
-    }
-
-    function resolvePlanQueueLatestPageProgress(info) {
-        var queueInfo = info && typeof info === 'object' ? info : {};
-        if (queueInfo.stage1_page_progress && typeof queueInfo.stage1_page_progress === 'object') {
-            return queueInfo.stage1_page_progress;
-        }
-        return null;
     }
 
     function renderPlanQueueInfoPanel(workspaceState) {
@@ -478,9 +638,7 @@
         procEl.textContent = String(info.process || '').trim() || '—';
         renderLiveLogSummary(String(info.terminal_summary || info.message || '').trim());
         var latestMessage = resolvePlanQueueLatestMessage(info);
-        if (!publishPlanQueueLatestPageProgress(resolvePlanQueueLatestPageProgress(info), latestMessage)) {
-            publishPlanQueueLatestMessage(latestMessage);
-        }
+        publishPlanQueueLatestProgressFromInfo(info);
         if (statusEl) {
             statusEl.textContent = String(info.job_status || info.status || info.queue_status || '').trim();
         }
@@ -498,7 +656,7 @@
 
     function rememberPlanQueueInfo(info) {
         var state = sanitizeWorkspaceStateForMemory(getLastWorkspaceState());
-        state.plan_queue_info = sanitizeQueueInfoForMemory(info);
+        state.plan_queue_info = mergeIncomingPlanQueueInfoWithRememberedProgress(info);
         var remembered = sanitizeWorkspaceStateForMemory(state);
         try {
             window.__pbLastWorkspaceState = remembered;
@@ -518,7 +676,7 @@
             : {};
         var op = String(active.operation || '').toLowerCase();
         var status = String(active.status || '').toLowerCase();
-        var shouldOpen = op === 'plan' && (status === 'queued' || status === 'running');
+        var shouldOpen = op === 'plan' && ['pending', 'queued', 'running', 'processing'].indexOf(status) >= 0;
         if (shouldOpen && panelEl.dataset.pbUserClosed !== '1') {
             panelEl.open = true;
         } else if (!shouldOpen) {
@@ -554,11 +712,45 @@
 
     function sanitizeQueueInfoForMemory(info) {
         var safe = info && typeof info === 'object' ? Object.assign({}, info) : {};
-        delete safe.snapshot;
         ['result_log', 'queue_result_delta', 'chunk', 'content', 'events', 'top_logs'].forEach(function (key) {
             delete safe[key];
         });
         return safe;
+    }
+
+    function hasNonEmptyStageOneProgress(progress) {
+        if (!progress || typeof progress !== 'object') {
+            return false;
+        }
+        if (parseInt(String(progress.total || 0), 10) > 0) {
+            return true;
+        }
+        return ['running', 'done', 'failed', 'pending', 'details'].some(function (key) {
+            return Array.isArray(progress[key]) && progress[key].length > 0;
+        });
+    }
+
+    function mergeIncomingPlanQueueInfoWithRememberedProgress(info) {
+        var incoming = sanitizeQueueInfoForMemory(info);
+        if (hasNonEmptyStageOneProgress(incoming.stage1_page_progress)) {
+            return incoming;
+        }
+
+        var remembered = getLastWorkspaceState();
+        var rememberedInfo = remembered && remembered.plan_queue_info && typeof remembered.plan_queue_info === 'object'
+            ? remembered.plan_queue_info
+            : {};
+        var incomingQueueId = normalizeQueueId(incoming.queue_id);
+        var rememberedQueueId = normalizeQueueId(rememberedInfo.queue_id);
+        if (
+            incomingQueueId > 0
+            && incomingQueueId === rememberedQueueId
+            && hasNonEmptyStageOneProgress(rememberedInfo.stage1_page_progress)
+        ) {
+            incoming.stage1_page_progress = rememberedInfo.stage1_page_progress;
+        }
+
+        return incoming;
     }
 
     function sanitizeWorkspaceStateForMemory(workspaceState) {
@@ -571,14 +763,12 @@
             ['events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'].forEach(function (key) {
                 delete state.scope[key];
             });
-            delete state.scope.snapshot;
             ['plan_queue_info', 'build_queue_info'].forEach(function (key) {
                 if (state.scope[key] && typeof state.scope[key] === 'object') {
                     state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);
                 }
             });
         }
-        delete state.snapshot;
         if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
             state.plan_queue_info = sanitizeQueueInfoForMemory(state.plan_queue_info);
         }
@@ -663,10 +853,10 @@
             return null;
         }
         if (payload.state && payload.state.plan_queue_info && typeof payload.state.plan_queue_info === 'object') {
-            return sanitizeQueueInfoForMemory(payload.state.plan_queue_info);
+            return mergeIncomingPlanQueueInfoWithRememberedProgress(payload.state.plan_queue_info);
         }
         if (payload.queue_info && typeof payload.queue_info === 'object') {
-            return sanitizeQueueInfoForMemory(payload.queue_info);
+            return mergeIncomingPlanQueueInfoWithRememberedProgress(payload.queue_info);
         }
 
         var hasQueueSignal = !!(
@@ -680,13 +870,13 @@
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')
             || Object.prototype.hasOwnProperty.call(payload, 'job_key')
             || Object.prototype.hasOwnProperty.call(payload, 'job_type')
-            || Object.prototype.hasOwnProperty.call(payload, 'stage1_page_progress')
             || Object.prototype.hasOwnProperty.call(payload, 'token')
             || Object.prototype.hasOwnProperty.call(payload, 'execution_token')
             || Object.prototype.hasOwnProperty.call(payload, 'token_usage')
             || Object.prototype.hasOwnProperty.call(payload, 'input_tokens')
             || Object.prototype.hasOwnProperty.call(payload, 'output_tokens')
             || Object.prototype.hasOwnProperty.call(payload, 'total_tokens')
+            || Object.prototype.hasOwnProperty.call(payload, 'stage1_page_progress')
             || String(payload.progress_kind || '') === 'queue_info'
         );
         if (!hasQueueSignal) {
@@ -698,9 +888,14 @@
             ? state.plan_queue_info
             : {};
         var queueState = Object.assign({}, existing);
-        delete queueState.snapshot;
         if (payload.queue_state && typeof payload.queue_state === 'object') {
             queueState = Object.assign(queueState, payload.queue_state);
+        }
+        if (payload.queue_state && payload.queue_state.stage1_page_progress && typeof payload.queue_state.stage1_page_progress === 'object') {
+            queueState.stage1_page_progress = payload.queue_state.stage1_page_progress;
+        }
+        if (payload.stage1_page_progress && typeof payload.stage1_page_progress === 'object') {
+            queueState.stage1_page_progress = payload.stage1_page_progress;
         }
 
         var payloadQueueId = normalizeQueueId(payload.queue_id);
@@ -826,12 +1021,10 @@
             input_tokens: queueState.input_tokens,
             output_tokens: queueState.output_tokens,
             total_tokens: queueState.total_tokens,
+            stage1_page_progress: queueState.stage1_page_progress && typeof queueState.stage1_page_progress === 'object' ? queueState.stage1_page_progress : {},
             process: process,
             terminal_summary: terminalSummary,
-            latest_message: latestMessage,
-            stage1_page_progress: payload.stage1_page_progress && typeof payload.stage1_page_progress === 'object'
-                ? payload.stage1_page_progress
-                : null
+            latest_message: latestMessage
         };
     }
 
@@ -845,6 +1038,14 @@
         }
         var state = rememberPlanQueueInfo(info);
         renderPlanQueueInfoPanel(state);
+        if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.syncStageOnePlanPreviewFromWorkspaceState === 'function') {
+            window.__pbWorkspaceApi.syncStageOnePlanPreviewFromWorkspaceState(Object.assign({}, state, payload && typeof payload === 'object' ? payload : {}));
+        }
+        if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.updateStageStatusSummary === 'function') {
+            window.__pbWorkspaceApi.updateStageStatusSummary(state);
+        } else if (typeof window.updateStageStatusSummary === 'function') {
+            window.updateStageStatusSummary(state);
+        }
         var queueStatus = String(payload.queue_status || payload.job_status || payload.status || info.job_status || info.status || info.queue_status || '').toLowerCase();
         syncPanelOpenState(Object.assign({}, state, {
             active_operation: { operation: 'plan', status: queueStatus || 'running' }
@@ -859,12 +1060,23 @@
             return;
         }
         var safeState = sanitizeWorkspaceStateForMemory(workspaceState);
+        if (safeState.plan_queue_info && typeof safeState.plan_queue_info === 'object') {
+            safeState.plan_queue_info = mergeIncomingPlanQueueInfoWithRememberedProgress(safeState.plan_queue_info);
+        }
         try {
             window.__pbLastWorkspaceState = safeState;
         } catch (e) {
             // ignore
         }
         renderPlanQueueInfoPanel(safeState);
+        if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.syncStageOnePlanPreviewFromWorkspaceState === 'function') {
+            window.__pbWorkspaceApi.syncStageOnePlanPreviewFromWorkspaceState(safeState);
+        }
+        if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.updateStageStatusSummary === 'function') {
+            window.__pbWorkspaceApi.updateStageStatusSummary(safeState);
+        } else if (typeof window.updateStageStatusSummary === 'function') {
+            window.updateStageStatusSummary(safeState);
+        }
         syncPanelOpenState(safeState);
     }
 
@@ -900,6 +1112,7 @@
         syncFromWorkspaceState: syncFromWorkspaceState,
         syncFromSsePayload: syncFromSsePayload,
         renderPlanQueueInfoPanel: renderPlanQueueInfoPanel,
+        publishPlanQueueLatestProgressFromInfo: publishPlanQueueLatestProgressFromInfo,
         disposeLiveStream: disposeLiveStream,
         bindPlanQueueInfoRefresh: bindPlanQueueInfoRefresh
     };

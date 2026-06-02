@@ -33,8 +33,8 @@ final class AiSiteSseEventContractTest extends TestCase
         'done' => ['side' => 'backend_only', 'reason' => 'startOperationStream 总入口统一处理 done 终止'],
         // visual edit 流 block partial patch 时后端发，前端未直接消费（功能预留）
         'ai_chunk' => ['side' => 'backend_only', 'reason' => 'visual edit block 流预留，前端尚未消费'],
-        // workspace stream 首帧推送完整 state 快照（与 operation stream 是两条不同 EventSource）
-        'snapshot' => ['side' => 'backend_only', 'reason' => 'workspaceStream 端点专用首帧，不在 operation SSE 入口'],
+        // workspace stream 首帧推送完整 state（与 operation stream 是两条不同 EventSource）
+        'state' => ['side' => 'backend_only', 'reason' => 'workspaceStream 端点专用首帧，不在 operation SSE 入口'],
         // 队列原始日志查看流（QueueLogStream / PlanQueue / BuildQueue）专用，与 workspace operation stream 解耦
         'log' => ['side' => 'backend_only', 'reason' => '队列原始日志流专用，operation stream 不消费'],
     ];
@@ -47,7 +47,7 @@ final class AiSiteSseEventContractTest extends TestCase
         $unknown = \array_values(\array_diff($backendEvents, $authoritative));
         $unknown = \array_values(\array_filter(
             $unknown,
-            static fn(string $name): bool => !$this->isContractTestSelfReferential($name)
+            fn(string $name): bool => !$this->isContractTestSelfReferential($name)
         ));
 
         self::assertSame(
@@ -184,7 +184,7 @@ final class AiSiteSseEventContractTest extends TestCase
     }
 
     /**
-     * 扫描前端 workspace script-runtime.phtml 的 source.addEventListener('xxx', ...) 监听。
+     * 扫描前端 workspace script-runtime.phtml 的 EventSource / workspaceTerminal 监听。
      *
      * @return list<string>
      */
@@ -193,9 +193,14 @@ final class AiSiteSseEventContractTest extends TestCase
         $file = \dirname(__DIR__, 3) . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml';
         $content = (string)\file_get_contents($file);
         $names = [];
-        if (\preg_match_all("/source\.addEventListener\(\s*['\"]([a-z][a-z0-9_]*)['\"]/u", $content, $matches) !== false) {
-            foreach ($matches[1] as $name) {
-                $names[$name] = true;
+        foreach ([
+            "/source\.addEventListener\(\s*['\"]([a-z][a-z0-9_]*)['\"]/u",
+            "/workspaceTerminal\.on\(\s*['\"]([a-z][a-z0-9_]*)['\"]/u",
+        ] as $pattern) {
+            if (\preg_match_all($pattern, $content, $matches) !== false) {
+                foreach ($matches[1] as $name) {
+                    $names[$name] = true;
+                }
             }
         }
         $list = \array_keys($names);

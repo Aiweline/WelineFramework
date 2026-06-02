@@ -22,7 +22,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
 
         self::assertTrue($report['passed'], \json_encode($report, \JSON_UNESCAPED_UNICODE));
         self::assertSame(
-            ['build_plan_blocks_done', 'required_pages_render', 'shared_blocks_ready', 'render_data_quality'],
+            ['build_plan_blocks_done', 'required_pages_render', 'shared_blocks_ready', 'responsive_support', 'render_data_quality'],
             \array_map(static fn(array $item): string => (string)$item['key'], $report['items'])
         );
     }
@@ -68,6 +68,18 @@ final class AiSiteQualityGateServiceTest extends TestCase
         self::assertFalse($report['passed']);
         self::assertFalse((bool)($this->findItem($report['items'], 'shared_blocks_ready')['ok'] ?? true));
     }
+
+    public function testInspectScopeBlocksWhenResponsiveBreakpointsAreMissing(): void
+    {
+        $service = $this->createService();
+        $report = $service->inspectScope($this->buildScope(), [
+            'home_page' => '<header data-region="header">Neon Chess Casino</header><main><section><h1>No responsive CSS</h1></section></main><footer data-region="footer">Support</footer>',
+        ]);
+
+        self::assertFalse($report['passed']);
+        self::assertFalse((bool)($this->findItem($report['items'], 'responsive_support')['ok'] ?? true));
+    }
+
 
     public function testInspectScopeBlocksMalformedGeneratedHtmlOnlyAsStructureError(): void
     {
@@ -158,7 +170,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
 
         self::assertTrue($report['passed'], \json_encode($report, \JSON_UNESCAPED_UNICODE));
         self::assertSame(
-            ['build_plan_blocks_done', 'required_pages_render', 'shared_blocks_ready', 'render_data_quality'],
+            ['build_plan_blocks_done', 'required_pages_render', 'shared_blocks_ready', 'responsive_support', 'render_data_quality'],
             \array_map(static fn(array $item): string => (string)$item['key'], $report['items'])
         );
     }
@@ -189,6 +201,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
                             'code' => 'content/home-page-hero-banner',
                             'block_id' => 'home-page-hero-banner',
                             'type' => 'ai_generated_section',
+                            'html' => '<section class="pb-c-root"><h2>Neon chess room</h2></section>',
                         ],
                     ],
                 ],
@@ -200,7 +213,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
                     'style_code' => 'neon_chess_casino_dark',
                     'blocks' => [
                         ['block_id' => 'header-ai-site-header', 'type' => 'ai_generated_shared_header'],
-                        ['block_id' => 'home-page-hero-banner', 'section_code' => 'content/home-page-hero-banner', 'code' => 'content/home-page-hero-banner', 'type' => 'ai_generated_section'],
+                        ['block_id' => 'home-page-hero-banner', 'section_code' => 'content/home-page-hero-banner', 'code' => 'content/home-page-hero-banner', 'type' => 'ai_generated_section', 'html' => '<section class="pb-c-root"><h2>Neon chess room</h2></section>'],
                         ['block_id' => 'footer-ai-site-footer', 'type' => 'ai_generated_shared_footer'],
                     ],
                 ],
@@ -257,6 +270,6 @@ final class AiSiteQualityGateServiceTest extends TestCase
 
     private function pageHtml(string $main): string
     {
-        return '<header data-region="header">Neon Chess Casino</header><main>' . $main . '</main><footer data-region="footer">Support</footer>';
+        return '<header data-region="header">Neon Chess Casino</header><main>' . $main . '</main><footer data-region="footer">Support</footer><style>@media (max-width: 768px){.pb-c-root{max-width:100%;}}@media (max-width: 420px){.pb-c-root{width:100%;}}</style>';
     }
 }

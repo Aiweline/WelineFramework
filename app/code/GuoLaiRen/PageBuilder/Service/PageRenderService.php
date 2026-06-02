@@ -2364,9 +2364,9 @@ HTML;
         }
     }
 
-    private function renderAiHtmlBlocks(Page $page, bool $useDraftInsteadOfSnapshot = false, bool $visualEditor = false): string
+    private function renderAiHtmlBlocks(Page $page, bool $useDraftLayout = false, bool $visualEditor = false): string
     {
-        $layout = $page->resolveAiLayoutForFrontend($useDraftInsteadOfSnapshot);
+        $layout = $page->resolveAiLayoutForFrontend($useDraftLayout);
         $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
         if ($blocks === []) {
             return '';

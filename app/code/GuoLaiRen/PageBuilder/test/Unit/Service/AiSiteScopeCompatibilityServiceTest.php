@@ -202,6 +202,21 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         self::assertArrayNotHasKey('execution_blueprint', $scope['plan_workbench']['confirmed'] ?? []);
     }
 
+    public function testStripDuplicatedStageOneStorageFieldsDropsInternalPlanGenerationRuntimeFields(): void
+    {
+        $scope = AiSiteScopeCompatibilityService::stripDuplicatedStageOneStorageFields([
+            'confirmed_stage1_plan_book' => ['large' => true],
+            '_internal_plan_generation_state' => ['large' => true],
+            'plan_generation_progress' => ['done' => 2],
+            'plan_generation_last_error' => ['message' => 'retryable'],
+        ]);
+
+        self::assertArrayNotHasKey('confirmed_stage1_plan_book', $scope);
+        self::assertArrayNotHasKey('_internal_plan_generation_state', $scope);
+        self::assertSame(['done' => 2], $scope['plan_generation_progress'] ?? null);
+        self::assertSame(['message' => 'retryable'], $scope['plan_generation_last_error'] ?? null);
+    }
+
     public function testNormalizeConfirmedPlanFlagDoesNotRestoreWithoutConfirmedBuildPlan(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
@@ -233,11 +248,6 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                 'theme_design' => [
                     'tone' => 'Practical',
                     'typography' => 'Readable sans',
-                ],
-            ],
-            'plan_structured' => [
-                'pages' => [
-                    Page::TYPE_HOME => ['title' => 'Home'],
                 ],
             ],
             'plan_markdown' => '# Legacy seeded test plan',

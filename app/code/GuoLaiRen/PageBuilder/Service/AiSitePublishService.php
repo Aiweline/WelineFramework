@@ -68,7 +68,7 @@ class AiSitePublishService
             $pageTypeLayouts,
             $virtualPagesByType
         );
-        $this->applyPublishSnapshotsForMaterializedPages($materialized['pagebuilder_pages_by_type'] ?? []);
+        $this->sanitizeAiLayoutsForMaterializedPages($materialized['pagebuilder_pages_by_type'] ?? []);
         $this->ensureWebsiteDomainBinding($websiteId, $websiteProfile);
 
         if ($virtualThemeId > 0 && $this->virtualThemeModel !== null) {
@@ -118,7 +118,7 @@ class AiSitePublishService
 
     /**
      * The generated virtual theme is the source of truth at publish time. Older
-     * callers may still pass the pre-generation layout snapshot, which would
+     * callers may still pass pre-generation layouts, which would
      * materialize default/stale components instead of the AI site components.
      *
      * @param list<string> $pageTypes
@@ -344,7 +344,7 @@ class AiSitePublishService
     /**
      * @param array<string, array<string, mixed>> $pagesByType
      */
-    private function applyPublishSnapshotsForMaterializedPages(array $pagesByType): void
+    private function sanitizeAiLayoutsForMaterializedPages(array $pagesByType): void
     {
         foreach ($pagesByType as $row) {
             if (!\is_array($row)) {
@@ -361,7 +361,7 @@ class AiSitePublishService
             }
             $draft = $page->getAiLayoutArray();
             $sanitized = $this->htmlSanitizer->sanitizeAiLayout($draft);
-            $page->appendAiPublishSnapshot($sanitized);
+            $page->setData(Page::schema_fields_AI_PUBLISH_SNAPSHOTS, null);
             $page->setAiLayoutArray($sanitized);
             $page->save(true);
         }

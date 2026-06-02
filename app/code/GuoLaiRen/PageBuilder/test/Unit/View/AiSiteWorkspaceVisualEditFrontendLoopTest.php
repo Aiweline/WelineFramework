@@ -139,13 +139,25 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('function buildStageOnePlanPayloadFromWorkspaceState(workspaceState)', $script);
         self::assertStringContainsString('function syncStageOnePlanPreviewFromWorkspaceState(workspaceState)', $script);
         self::assertStringContainsString('syncStageOnePlanPreviewFromWorkspaceState(workspaceState);', $script);
+        self::assertStringNotContainsString('stage1_page_progress', $script);
+        self::assertStringNotContainsString('_stage1_progress_only', $script);
+        self::assertStringNotContainsString('renderStageOnePageProgressPlaceholder', $script);
+        self::assertStringContainsString('function resolvePlanPageStatus(page)', $script);
+        self::assertStringContainsString('data-plan-node-status', $script);
+        self::assertStringContainsString('workspaceApi.syncStageOnePlanPreviewFromWorkspaceState = syncStageOnePlanPreviewFromWorkspaceState;', $script);
 
-        // 多源候选拼装契约：markdown / json / structured / build_plan_v2 参与回退，不再读取 execution_blueprint。
-        self::assertStringContainsString('markdown: pickFirstNonEmptyPlanText(plan.markdown, state.plan_markdown, scope.plan_markdown)', $script);
+        // 多源候选拼装契约：预览只消费 json / structured / build_plan_v2，不再读取原始 markdown；
+        // 缺页检测只读取当前 plan_json/page_plans 与 plan_workbench 来源，与后端完成门禁保持一致。
         self::assertStringContainsString('json: pickFirstNonEmptyPlanObject(plan.json, state.plan_json, scope.plan_json)', $script);
-        self::assertStringContainsString('structured: pickFirstNonEmptyPlanObject(plan.structured, state.plan_structured, scope.plan_structured)', $script);
+        self::assertStringNotContainsString('state.plan_structured', $script);
+        self::assertStringNotContainsString('scope.plan_structured', $script);
         self::assertStringContainsString('build_plan_v2: pickFirstNonEmptyPlanObject(plan.build_plan_v2, state.build_plan_v2, scope.build_plan_v2)', $script);
-        self::assertStringNotContainsString('execution_blueprint', $script);
+        self::assertStringNotContainsString('scope.execution_blueprint && scope.execution_blueprint.page_plans', $script);
+        self::assertStringNotContainsString('pickFirstNonEmptyPlanText(plan.markdown', $script);
+        self::assertStringNotContainsString("setPlanViewMode('pb-ai-plan-md-content')", $script);
+        self::assertStringNotContainsString('pb-ai-plan-md-view', $script);
+        self::assertStringNotContainsString('pb-ai-plan-md-content', $script);
+        self::assertStringNotContainsString('pb-ai-plan-markdown', $script);
 
         // 结构化 plan 归一化链：pickStructuredPlanRoot → normalizeStageOneStructuredRootForPreview。
         self::assertStringContainsString('function pickStructuredPlanRoot(payload)', $script);
@@ -153,15 +165,32 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('var structuredRoot = pickStructuredPlanRoot(currentPlanPayload);', $script);
         self::assertStringContainsString('currentPlanPayload.structured = normalizeStageOneStructuredRootForPreview(structuredRoot);', $script);
 
-        // 后端契约同步：confirmedScope 中的 plan 字段必须被串行序列化进 scope，前端才能消费。
+        // 后端契约同步：前端预览 payload 只下发结构化方案，plan_markdown 仅保留为后端内部产物。
         self::assertStringContainsString("'plan_json'", $controller);
-        self::assertStringContainsString("'plan_structured'", $controller);
+        self::assertStringNotContainsString("'plan_structured'", $controller);
         self::assertStringContainsString("'plan_markdown'", $controller);
+        self::assertStringNotContainsString("'markdown' => (string)(\$normalized['plan_markdown'] ?? '')", $controller);
+        self::assertStringNotContainsString("'confirmed_plan_markdown'", $controller);
         self::assertStringContainsString("'has_build_plan_v2'", $controller);
 
         // 旧的 workbench contracts 中间层不应再出现（防回退）。
         self::assertStringNotContainsString('buildStructuredPlanRootFromWorkbenchContracts(', $script);
         self::assertStringNotContainsString('extractStageOneStructuredPlanFromContracts', $controller);
+    }
+
+    public function testPlanPreviewNormalizesNumericPageKeysBeforeRenderingTabs(): void
+    {
+        $script = $this->workspaceScript();
+        $normalizeBody = $this->extractFunctionBody($script, 'normalizePlanPreviewPages');
+        $keyBody = $this->extractFunctionBody($script, 'resolvePlanPreviewPageKey');
+        $renderBody = $this->extractFunctionBody($script, 'renderPlanStructuredPreviewHtml');
+
+        self::assertStringContainsString('function isNumericPreviewPageKey(key)', $script);
+        self::assertStringContainsString('!isNumericPreviewPageKey(key)', $keyBody);
+        self::assertStringContainsString('!isNumericPreviewPageKey(fallback) ? fallback :', $keyBody);
+        self::assertStringContainsString('pushPage(pageType, pages[pageType], false);', $normalizeBody);
+        self::assertStringContainsString('pushPage(\'page_\' + (idx + 1), page, true);', $normalizeBody);
+        self::assertStringContainsString('pages = normalizePlanPreviewPages(pages);', $renderBody);
     }
 
     public function testVisualEditPreviewTabsHydrateFromVirtualPagesWithoutEntityPageIds(): void
@@ -254,7 +283,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
         self::assertIsString($runtime);
         self::assertStringContainsString("source.addEventListener('asset_generation_done'", $runtime);
-        self::assertStringContainsString("operation !== 'image_asset'", $runtime);
+        self::assertStringContainsString("String(operation || '') === 'image_asset' || normalizedDoneOperation === 'image_asset'", $runtime);
 
         $controller = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
         self::assertIsString($controller);
@@ -437,9 +466,31 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $ignoreTerminalBody = $this->extractFunctionBody($script, 'shouldIgnoreResolvedPlanTerminalFailure');
         $queueUiBody = $this->extractFunctionBody($script, 'renderQueueUiState');
         $retryBody = $this->extractFunctionBody($script, 'setPlanRetryButtonVisible');
+        $rebuildVisibilityBody = $this->extractFunctionBody($script, 'syncPlanRebuildButtonVisibility');
+        $generatedTypesBody = $this->extractFunctionBody($script, 'resolveGeneratedPlanPageTypesFromState');
+        $missingPagesBody = $this->extractFunctionBody($script, 'resolveMissingSelectedPlanPageTypes');
+        $evidenceBody = $this->extractFunctionBody($script, 'hasStageOnePlanEvidenceForBlockingCheck');
+        $statusBannerBody = $this->extractFunctionBody($script, 'syncPlanRegenerateStatusBanner');
 
         self::assertStringContainsString('shouldTreatPlanFailureAsResolvedBySuccess(state, failedOperation)', $blockingBody);
         self::assertStringContainsString('shouldTreatPlanFailureAsResolvedBySuccess(state, planError)', $blockingBody);
+        self::assertStringContainsString('function hasStageOnePlanEvidenceForBlockingCheck(workspaceState)', $script);
+        self::assertStringContainsString('if (hasStageOnePlanEvidenceForBlockingCheck(state)) {', $blockingBody);
+        self::assertStringContainsString('hasStageOnePlanEvidenceForBlockingCheck(state) && resolveMissingSelectedPlanPageTypes(state).length > 0', $rebuildVisibilityBody);
+        self::assertStringContainsString('state.plan_json && state.plan_json.page_plans', $generatedTypesBody);
+        self::assertStringNotContainsString('execution_blueprint', $generatedTypesBody);
+        self::assertStringContainsString('scope.plan_workbench && scope.plan_workbench.stage1 && scope.plan_workbench.stage1.page_plans', $generatedTypesBody);
+        self::assertStringContainsString('scope.plan_workbench && scope.plan_workbench.confirmed && scope.plan_workbench.confirmed.structured_plan && scope.plan_workbench.confirmed.structured_plan.page_plans', $generatedTypesBody);
+        self::assertStringContainsString('var actual = resolveGeneratedPlanPageTypesFromState(state);', $missingPagesBody);
+        self::assertStringContainsString('actual.length === 0 && !phaseOnePlanPresentFromWorkspaceState(state) && !hasCurrentPhaseOnePlanDraft()', $missingPagesBody);
+        self::assertStringContainsString('var missingFromActual = expected.length > 0 ? expected.filter(function (pageType)', $missingPagesBody);
+        self::assertStringContainsString('var normalizePersistedMissing = function (values)', $missingPagesBody);
+        self::assertStringContainsString('if (actual.indexOf(pageType) !== -1)', $missingPagesBody);
+        self::assertStringContainsString('return persistedMissing.length > 0 ? persistedMissing : missingFromActual;', $missingPagesBody);
+        self::assertStringContainsString('return resolveGeneratedPlanPageTypesFromState(state).length > 0;', $evidenceBody);
+        self::assertStringContainsString('var missingPages = hasStageOnePlanEvidenceForBlockingCheck(state)', $statusBannerBody);
+        self::assertStringContainsString('var blockingMessage = getPhaseOnePlanBlockingErrorMessage(state);', $statusBannerBody);
+        self::assertStringContainsString("applyStatusTone(statusEl, blockingMessage, 'error');", $statusBannerBody);
         self::assertStringContainsString("hasRetryableAiFailures(state, 'plan')", $resolvedBody);
         self::assertStringContainsString('phaseOnePlanPresentFromWorkspaceState(state)', $resolvedBody);
         self::assertStringContainsString('isPlanCompletionMessageForWorkspaceUi(explicitMessage)', $resolvedBody);
@@ -509,6 +560,23 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringNotContainsString("active_operation: { operation: normalized, status: 'running' }", $source);
     }
 
+    public function testBuildQueueProgressRendersPersistedBlockRowsWithoutDuplicatingDebugState(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-build-queue-progress.phtml');
+        self::assertIsString($source);
+
+        self::assertStringContainsString('function compactBuildPlanBlockProgressForMemory(progress)', $source);
+        self::assertStringContainsString('var BUILD_PLAN_BLOCK_PROGRESS_MAX_ROWS = 240;', $source);
+        self::assertStringContainsString('var BUILD_PLAN_BLOCK_MESSAGE_MAX_CHARS = 240;', $source);
+        self::assertStringContainsString('build_plan_block_progress: Array.isArray(queueState.build_plan_block_progress)', $source);
+        self::assertStringContainsString('payload.state.build_plan_block_progress', $source);
+        self::assertStringContainsString('safeState.build_plan_block_progress', $source);
+        self::assertStringContainsString('renderBuildPlanBlockProgressRows(row.block_rows)', $source);
+        self::assertStringContainsString('data-build-plan-block-progress', $source);
+        self::assertStringContainsString('delete debugInfo.build_plan_block_progress;', $source);
+        self::assertStringContainsString('delete copy.block_rows;', $source);
+    }
+
     public function testGuidedQueueTelemetryDoesNotHijackPreviewViewport(): void
     {
         $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
@@ -571,7 +639,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("'block_partial_patch' => true,", $body);
         self::assertStringContainsString("'image_asset' => true,", $body);
         self::assertStringContainsString("'plan' => \$planQueueInfo", $body);
-        self::assertStringContainsString("'build' => \$buildQueueInfo", $body);
+        self::assertStringContainsString('$buildQueueOperation => $buildQueueInfo', $body);
         self::assertStringNotContainsString("'task_plan' => [", $body);
         self::assertStringNotContainsString("'task_plan_queue_info'", $body);
         self::assertStringNotContainsString('task_plan_stage_entry', $body);
@@ -651,20 +719,20 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('window.clearBlockStreamingState = clearBlockStreamingState;', $runtime);
     }
 
-    public function testBlockRefreshUsesOperationRunnerWithoutLegacyBlockSseSnapshotFallback(): void
+    public function testBlockRefreshUsesOperationRunnerWithoutLegacyBlockSseStateFallback(): void
     {
         $script = $this->workspaceScript();
 
-        self::assertStringNotContainsString('fetchWorkspaceSnapshotStateForBlockRefresh', $script);
+        self::assertStringNotContainsString('ForBlockRefresh', $script);
         self::assertStringNotContainsString('resolvePendingBlockSseResultTarget', $script);
-        self::assertStringNotContainsString('applyPendingBlockSseResultWithSnapshot', $script);
+        self::assertStringNotContainsString('applyPendingBlockSseResultWith', $script);
         self::assertStringNotContainsString('pendingBlockSseResult', $script);
         self::assertStringNotContainsString('pendingBlockSseStart', $script);
 
         $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
         self::assertIsString($runtime);
-        self::assertStringContainsString('function fetchWorkspaceSnapshotState()', $runtime);
-        self::assertStringContainsString('workspaceApiRef.fetchWorkspaceSnapshotState = fetchWorkspaceSnapshotState;', $runtime);
+        self::assertStringContainsString('function fetchWorkspaceState()', $runtime);
+        self::assertStringContainsString('workspaceApiRef.fetchWorkspaceState = fetchWorkspaceStateForRuntime;', $runtime);
     }
 
     public function testVisualPreviewEmitsComponentActionPayloadWithBlockIdentity(): void
@@ -935,12 +1003,13 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertNotFalse($doneHandlerOffset, 'operation stream done handler missing');
         $doneHandler = \substr($doneBody, $doneHandlerOffset, 2600);
 
-        self::assertStringContainsString('resumeOperationStreamForQueueWatch(operation, payload', $doneHandler);
+        self::assertStringContainsString('markOperationSseDeferredHandoff(operation, executionToken)', $doneHandler);
+        self::assertStringContainsString("ensureWorkspaceStreamRunning('deferred-queue-handoff')", $doneHandler);
         self::assertStringContainsString('deferred-queue-handoff', $doneHandler);
         self::assertStringContainsString('workspaceStateHasBlockingPlanFailures', $runtime);
     }
 
-    public function testRuntimeStartsSseWhenStreamParametersArePresentDespiteQueueWaitHints(): void
+    public function testRuntimePrefersWorkspacePollForQueueBackedProgress(): void
     {
         $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
         self::assertIsString($runtime);
@@ -952,7 +1021,10 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('var shouldDeferToQueuePoll = !hasObservableStreamStart && !!(', $startBody);
         self::assertStringContainsString('isWorkspaceSseResumeBlockedByTerminal', $bootstrapBody);
         self::assertStringContainsString('resumeOperationStreamForQueueWatch', $bootstrapBody);
-        self::assertStringNotContainsString('!!active.queue_waiting_for_scheduler || !!active.can_close_stream', $preferBody);
+        self::assertStringContainsString('queueWaitingForScheduler', $preferBody);
+        self::assertStringContainsString('Queue-backed progress resumes through workspace stream and read-only polling.', $preferBody);
+        self::assertStringNotContainsString("queueStatus === 'running' || queueStatus === 'processing'", $preferBody);
+        self::assertStringNotContainsString('pid > 0', $preferBody);
     }
 
     public function testRetryableAiFailuresExposeManualContinueButtonsForPlanAndBuildOnly(): void
@@ -1084,15 +1156,15 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertIsString($runtime);
         self::assertStringContainsString('function resolveLivePreviewBridge()', $runtime);
         self::assertStringContainsString('function syncTerminalActiveOperationForRuntimeUi(active)', $runtime);
-        self::assertStringContainsString('var workspaceSnapshotUrl =', $runtime);
+        self::assertStringContainsString('var workspaceStateUrl =', $runtime);
         self::assertStringContainsString('function resolveRuntimeQueueInfoKey(operation)', $runtime);
         self::assertStringContainsString('function startDeferredQueueStatePoll(operation)', $runtime);
-        self::assertStringContainsString('submitWorkspaceForm(workspaceSnapshotUrl, { public_id: publicId })', $runtime);
+        self::assertStringContainsString('return submitWorkspaceForm(workspaceStatePollUrl', $runtime);
         self::assertStringContainsString('startDeferredQueueStatePoll(operation);', $runtime);
         self::assertStringContainsString('stopDeferredQueueStatePoll();', $runtime);
         self::assertStringContainsString('offerRetryForFailedOperation(op, failurePayload);', $runtime);
-        self::assertStringContainsString('var transportErrorSnapshotProbeStarted = false;', $runtime);
-        self::assertStringContainsString('fetchWorkspaceSnapshotState().then(function (workspaceState)', $runtime);
+        self::assertStringContainsString('var transportErrorStateProbeStarted = false;', $runtime);
+        self::assertStringContainsString('fetchWorkspaceState().then(function (workspaceState)', $runtime);
         self::assertStringContainsString('syncDeferredQueueWorkspaceState(operation, workspaceState)', $runtime);
         self::assertStringContainsString('function normalizeTerminalOperationStatus(status)', $runtime);
         self::assertStringContainsString("return 'error';", $runtime);
@@ -1135,12 +1207,105 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
         self::assertIsString($runtime);
         $syncBody = $this->extractFunctionBody($runtime, 'syncDeferredQueueWorkspaceState');
-        $loadBody = $this->extractFunctionBody($runtime, 'startActiveQueueObservationOnLoad');
+        $loadBody = $this->extractFunctionBody($runtime, 'resolveWorkspaceLoadResumeContext')
+            . $this->extractFunctionBody($runtime, 'bootstrapWorkspaceSseOnLoad')
+            . $this->extractFunctionBody($runtime, 'startActiveQueueObservationOnLoad');
         self::assertStringContainsString("normalizedOperation === 'build' && isQueueStatusInProgressForWatch(queueStatus)", $syncBody);
         self::assertStringContainsString('workspaceState.latest_build_failed = false;', $syncBody);
         self::assertStringContainsString("workspaceState.workspace_status = 'building';", $syncBody);
         self::assertStringContainsString("readQueueStatusForDeferredState(state, 'build')", $loadBody);
         self::assertStringContainsString("operation: 'build'", $loadBody);
+    }
+
+    public function testDeferredQueuePollingUsesFreshProgressStateInsteadOfCachedFallback(): void
+    {
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+
+        $fetchBody = $this->extractFunctionBody($runtime, 'fetchWorkspaceStateForRuntime');
+        self::assertStringContainsString('return submitWorkspaceForm(workspaceStatePollUrl', $fetchBody);
+        self::assertStringNotContainsString('}).catch(function (error)', $fetchBody);
+        self::assertStringContainsString('DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 1000', $runtime);
+
+        $signatureBody = $this->extractFunctionBody($runtime, 'buildDeferredQueueStatePollSignature');
+        $progressBody = $this->extractFunctionBody($runtime, 'buildDeferredQueueProgressSignature');
+        $blockSignatureBody = $this->extractFunctionBody($runtime, 'buildDeferredQueueBlockProgressSignature');
+
+        self::assertStringContainsString('buildDeferredQueueProgressSignature(queueInfo)', $signatureBody);
+        self::assertStringContainsString('queueInfo.stage1_page_progress', $progressBody);
+        self::assertStringContainsString('progress.concurrency', $progressBody);
+        self::assertStringContainsString('progress.done_count', $progressBody);
+        self::assertStringContainsString('progress.running_count', $progressBody);
+        self::assertStringContainsString('progress.remaining_count', $progressBody);
+        self::assertStringContainsString('progress.updated_at', $progressBody);
+        self::assertStringContainsString('detail.page_type', $progressBody);
+        self::assertStringContainsString('detail.message || detail.error_message', $progressBody);
+        self::assertStringContainsString('detail.updated_at', $progressBody);
+        self::assertStringContainsString('detail.block_done_count', $progressBody);
+        self::assertStringContainsString('detail.block_running_count', $progressBody);
+        self::assertStringContainsString('buildDeferredQueueBlockProgressSignature(detail.blocks)', $progressBody);
+        self::assertStringContainsString('item.message || item.error_message', $blockSignatureBody);
+        self::assertStringContainsString('item.updated_at', $blockSignatureBody);
+
+        $taskProgress = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml');
+        self::assertIsString($taskProgress);
+        $latestProgressBody = $this->extractFunctionBody($taskProgress, 'publishPlanQueueLatestPageProgress');
+        self::assertStringContainsString('var remainingCount = parsePlanQueueNonNegativeCount(normalized.remaining_count, null);', $latestProgressBody);
+        self::assertStringContainsString('remainingCount = resolvePlanQueueRemainingCount(normalized, total, doneCount, runningCount, failedCount, pendingCount);', $latestProgressBody);
+    }
+
+    public function testRuntimeQueueProgressReadsPersistentQueueStateFromAllPayloadShapes(): void
+    {
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+
+        $resolverBody = $this->extractFunctionBody($runtime, 'resolveRuntimeQueueInfoFromState');
+        $belongsBody = $this->extractFunctionBody($runtime, 'queueInfoBelongsToRuntimeOperation');
+        self::assertStringContainsString('var op = normalizeRuntimeQueueOperation(operation);', $belongsBody);
+        self::assertStringContainsString('var resolvedOperation = resolveRuntimeQueueInfoOperation(queueInfo);', $belongsBody);
+        self::assertStringContainsString('return resolvedOperation === op;', $belongsBody);
+        self::assertStringContainsString("op === 'image_asset' || op === 'publish'", $this->extractFunctionBody($runtime, 'resolveRuntimeQueueInfoKey'));
+        self::assertStringContainsString('function resolveRuntimeQueueInfoOperation(queueInfo)', $runtime);
+        $markerBody = $this->extractFunctionBody($runtime, 'resolveRuntimeQueueOperationMarker');
+        self::assertStringContainsString("return 'image_asset';", $markerBody);
+        self::assertStringContainsString("return 'publish';", $markerBody);
+        self::assertStringNotContainsString("|| marker.indexOf('publish') !== -1", $belongsBody);
+        self::assertStringContainsString('workspaceState[key]', $resolverBody);
+        self::assertStringContainsString('scope[key]', $resolverBody);
+        self::assertStringContainsString('nestedState[key]', $resolverBody);
+        self::assertStringContainsString('scopedActive.queue_info', $resolverBody);
+        self::assertStringContainsString('active.queue_info', $resolverBody);
+        self::assertStringContainsString('workspaceState.queue_info', $resolverBody);
+        self::assertStringContainsString('queueInfoBelongsToRuntimeOperation(queueInfo, op)', $resolverBody);
+
+        $statusBody = $this->extractFunctionBody($runtime, 'readQueueStatusForDeferredState');
+        $messageBody = $this->extractFunctionBody($runtime, 'readQueueMessageForDeferredState');
+        self::assertStringContainsString('resolveRuntimeQueueInfoFromState(workspaceState, operation)', $statusBody);
+        self::assertStringContainsString('resolveRuntimeQueueInfoFromState(workspaceState, operation)', $messageBody);
+
+        $syncBody = $this->extractFunctionBody($runtime, 'syncDeferredQueueWorkspaceState');
+        $progressPosition = \strpos($syncBody, 'if (isQueueStatusInProgressForWatch(queueStatus))');
+        $failurePosition = \strpos($syncBody, "normalizedOperation === 'plan' && workspaceStateHasBlockingPlanFailures(workspaceState)");
+        self::assertNotFalse($progressPosition);
+        self::assertNotFalse($failurePosition);
+        self::assertLessThan($failurePosition, $progressPosition);
+
+        $stageBody = $this->extractFunctionBody($runtime, 'normalizeStageStatusPresentation');
+        self::assertStringContainsString("var planQueueInfo = resolveRuntimeQueueInfoFromState(state, 'plan');", $stageBody);
+        self::assertStringContainsString("var buildQueueInfo = resolveRuntimeQueueInfoFromState(state, 'build');", $stageBody);
+        self::assertStringContainsString("readStageQueueStatus(resolveRuntimeQueueInfoFromState(state, 'plan'))", $stageBody);
+        self::assertStringNotContainsString('系统不会自动重试', $runtime);
+
+        $resumeBody = $this->extractFunctionBody($runtime, 'resolveWorkspaceLoadResumeContext');
+        $publishResumePosition = \strpos($resumeBody, "readQueueStatusForDeferredState(state, 'publish')");
+        $buildResumePosition = \strpos($resumeBody, "readQueueStatusForDeferredState(state, 'build')");
+        self::assertNotFalse($publishResumePosition);
+        self::assertNotFalse($buildResumePosition);
+        self::assertLessThan(
+            $buildResumePosition,
+            $publishResumePosition,
+            'Publish queue progress reuses build_queue_info, so load resume must claim publish before generic build.'
+        );
     }
 
     public function testRuntimeFailureDialogShowsDecisionSummaryInsteadOfRawQueueLog(): void

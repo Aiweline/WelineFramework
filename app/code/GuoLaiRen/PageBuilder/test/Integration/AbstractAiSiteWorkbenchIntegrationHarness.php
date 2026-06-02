@@ -348,7 +348,6 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
                 'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
                 'plan_json' => \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
                 'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
-                'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],
                 'plan_locale' => (string)($scope['plan_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? ''),
                 'plan_ai_generated' => 0,
                 'plan_ai_fallback' => 1,

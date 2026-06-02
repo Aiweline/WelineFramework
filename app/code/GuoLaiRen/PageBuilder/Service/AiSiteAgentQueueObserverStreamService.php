@@ -17,7 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
  *  - `forwardObservedQueueSignals`：SSE 观察流轮询阶段，将 status 变更 / PID 领取 / process 镜像 / result 增量推为 SSE 事件。
  *
  * 构造注入：
- *  - `AiSiteQueueSnapshotService`：产出 `queue_state`（公共字段子集 + token_usage 归一）；
+ *  - `AiSiteQueueStateService`：产出 `queue_state`（公共字段子集 + token_usage 归一）；
  *  - `AiSiteAgentQueueObserverHelperService`：产出 panel payload + `shouldSuppressProcessMirror` / `shouldSkipResultLine` 判定。
  *
  * `SseWriter` **不** 构造注入，统一作为方法参数传入（保持服务无状态、随请求生命周期绑定）。
@@ -27,26 +27,26 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class AiSiteAgentQueueObserverStreamService
 {
-    private ?AiSiteQueueSnapshotService $queueSnapshotService;
+    private ?AiSiteQueueStateService $queueStateService;
     private ?AiSiteAgentQueueObserverHelperService $queueObserverHelperService;
     private ?AiSiteSsePayloadNormalizer $ssePayloadNormalizer;
 
     public function __construct(
-        ?AiSiteQueueSnapshotService $queueSnapshotService = null,
+        ?AiSiteQueueStateService $queueStateService = null,
         ?AiSiteAgentQueueObserverHelperService $queueObserverHelperService = null,
         ?AiSiteSsePayloadNormalizer $ssePayloadNormalizer = null
     ) {
-        $this->queueSnapshotService = $queueSnapshotService;
+        $this->queueStateService = $queueStateService;
         $this->queueObserverHelperService = $queueObserverHelperService;
         $this->ssePayloadNormalizer = $ssePayloadNormalizer;
     }
 
-    private function queueSnapshotService(): AiSiteQueueSnapshotService
+    private function queueStateService(): AiSiteQueueStateService
     {
-        if ($this->queueSnapshotService === null) {
-            $this->queueSnapshotService = ObjectManager::getInstance(AiSiteQueueSnapshotService::class);
+        if ($this->queueStateService === null) {
+            $this->queueStateService = ObjectManager::getInstance(AiSiteQueueStateService::class);
         }
-        return $this->queueSnapshotService;
+        return $this->queueStateService;
     }
 
     private function queueObserverHelperService(): AiSiteAgentQueueObserverHelperService
@@ -135,10 +135,7 @@ class AiSiteAgentQueueObserverStreamService
         if ($queueInfo === null) {
             return [];
         }
-        $current = $queueInfo;
-        unset($current['snapshot']);
-
-        return $current;
+        return $queueInfo;
     }
 
     public function reconcileActiveOperationWithQueueInfo(
@@ -278,42 +275,42 @@ class AiSiteAgentQueueObserverStreamService
         if (!$sse->isAlive()) {
             return;
         }
-        $snap = $this->queueSnapshotService()->buildObserverPublicSnapshot($queueRow);
-        $queueInfo = $this->queueObserverHelperService()->buildPanelPayload($queueRow, $snap);
-        $tokenUsage = \is_array($snap['token_usage'] ?? null) ? $snap['token_usage'] : [];
+        $queueState = $this->queueStateService()->buildObserverPublicState($queueRow);
+        $queueInfo = $this->queueObserverHelperService()->buildPanelPayload($queueRow, $queueState);
+        $tokenUsage = \is_array($queueState['token_usage'] ?? null) ? $queueState['token_usage'] : [];
         $lines = [
             (string)__('【队列】任务已就绪，以下为队列当前状态（进度请在工作区自动刷新）。'),
-            (string)__('队列编号：%{id}', ['id' => (string)$snap['queue_id']]),
-            (string)__('业务键 biz_key：%{k}', ['k' => ($snap['biz_key'] !== '' ? (string)$snap['biz_key'] : '-')]),
+            (string)__('队列编号：%{id}', ['id' => (string)$queueState['queue_id']]),
+            (string)__('业务键 biz_key：%{k}', ['k' => ($queueState['biz_key'] !== '' ? (string)$queueState['biz_key'] : '-')]),
             (string)__('任务：%{name}（模块 %{module}）', [
-                'name' => ($snap['name'] !== '' ? (string)$snap['name'] : '-'),
-                'module' => ($snap['module'] !== '' ? (string)$snap['module'] : '-'),
+                'name' => ($queueState['name'] !== '' ? (string)$queueState['name'] : '-'),
+                'module' => ($queueState['module'] !== '' ? (string)$queueState['module'] : '-'),
             ]),
             (string)__('状态：%{status}；调度 PID：%{pid}', [
-                'status' => (string)$snap['status'],
-                'pid' => (string)$snap['pid'],
+                'status' => (string)$queueState['status'],
+                'pid' => (string)$queueState['pid'],
             ]),
             (string)__('类型 ID：%{tid}；完成标记：%{fin}', [
-                'tid' => (string)$snap['type_id'],
-                'fin' => (string)$snap['finished'],
+                'tid' => (string)$queueState['type_id'],
+                'fin' => (string)$queueState['finished'],
             ]),
         ];
-        if (($snap['start_at'] ?? '') !== '' || ($snap['end_at'] ?? '') !== '') {
+        if (($queueState['start_at'] ?? '') !== '' || ($queueState['end_at'] ?? '') !== '') {
             $lines[] = (string)__('开始/结束：%{s} / %{e}', [
-                's' => ($snap['start_at'] !== '' ? (string)$snap['start_at'] : '-'),
-                'e' => ($snap['end_at'] !== '' ? (string)$snap['end_at'] : '-'),
+                's' => ($queueState['start_at'] !== '' ? (string)$queueState['start_at'] : '-'),
+                'e' => ($queueState['end_at'] !== '' ? (string)$queueState['end_at'] : '-'),
             ]);
         }
-        if (($snap['public_id_hint'] ?? '') !== '') {
+        if (($queueState['public_id_hint'] ?? '') !== '') {
             $lines[] = (\defined('DEV') && DEV)
-                ? (string)__('会话 public_id：%{h}', ['h' => (string)$snap['public_id_hint']])
-                : (string)__('会话 public_id（脱敏）：%{h}', ['h' => (string)$snap['public_id_hint']]);
+                ? (string)__('会话 public_id：%{h}', ['h' => (string)$queueState['public_id_hint']])
+                : (string)__('会话 public_id（脱敏）：%{h}', ['h' => (string)$queueState['public_id_hint']]);
         }
 
-        $queueStatus = \trim((string)($snap['status'] ?? ''));
-        $queuePid = (int)($snap['pid'] ?? 0);
+        $queueStatus = \trim((string)($queueState['status'] ?? ''));
+        $queuePid = (int)($queueState['pid'] ?? 0);
         $waitingForScheduler = $this->isQueueWaitingForSystemScheduler($queueStatus, $queuePid);
-        $schedulerWaitMessage = $this->buildSystemSchedulerWaitMessage((int)($snap['queue_id'] ?? 0));
+        $schedulerWaitMessage = $this->buildSystemSchedulerWaitMessage((int)($queueState['queue_id'] ?? 0));
         if ($waitingForScheduler) {
             $lines[] = $schedulerWaitMessage;
         }
@@ -321,11 +318,11 @@ class AiSiteAgentQueueObserverStreamService
         $this->emitNormalizedSseEvent($sse, 'info', [
             'message' => $waitingForScheduler ? $schedulerWaitMessage : (string)($lines[0] ?? ''),
             'detail_lines' => $lines,
-            'queue_state' => $snap,
+            'queue_state' => $queueState,
             'queue_info' => $queueInfo,
             'operation' => $operation,
-            'queue_id' => (int)$snap['queue_id'],
-            'queue_status' => (string)$snap['status'],
+            'queue_id' => (int)$queueState['queue_id'],
+            'queue_status' => (string)$queueState['status'],
             'token_usage' => $tokenUsage,
             'progress_kind' => 'queue_info',
             'observer_detail' => true,
@@ -360,11 +357,11 @@ class AiSiteAgentQueueObserverStreamService
         $queueId = (int)($queueRow['queue_id'] ?? 0);
         $queueStatus = \trim((string)($queueRow['status'] ?? ''));
         $queuePid = (int)($queueRow['pid'] ?? 0);
-        $snapshotService = $this->queueSnapshotService();
+        $queueStateService = $this->queueStateService();
         $helperService = $this->queueObserverHelperService();
-        $queueSnapshot = $snapshotService->buildObserverPublicSnapshot($queueRow);
-        $queuePanelInfo = $helperService->buildPanelPayload($queueRow, $queueSnapshot);
-        $tokenUsage = \is_array($queueSnapshot['token_usage'] ?? null) ? $queueSnapshot['token_usage'] : [];
+        $queueState = $queueStateService->buildObserverPublicState($queueRow);
+        $queuePanelInfo = $helperService->buildPanelPayload($queueRow, $queueState);
+        $tokenUsage = \is_array($queueState['token_usage'] ?? null) ? $queueState['token_usage'] : [];
         $process = \trim((string)($queueRow['process'] ?? ''));
         // 调度器 worker 是队列存活的唯一权威源：只要 weline_queue.status 处于 running/processing，
         // 当前 HTTP/SSE worker 就以「队列活着」对待，不再对 PID 做跨进程探活。
@@ -380,7 +377,7 @@ class AiSiteAgentQueueObserverStreamService
                 'operation' => $operation,
                 'queue_id' => $queueId,
                 'queue_status' => $queueStatus,
-                'queue_state' => $queueSnapshot,
+                'queue_state' => $queueState,
                 'queue_info' => $queuePanelInfo,
                 'token_usage' => $tokenUsage,
                 'progress_kind' => 'queue_info',
@@ -393,7 +390,7 @@ class AiSiteAgentQueueObserverStreamService
                 'operation' => $operation,
                 'queue_id' => $queueId,
                 'queue_status' => $queueStatus,
-                'queue_state' => $queueSnapshot,
+                'queue_state' => $queueState,
                 'queue_info' => $queuePanelInfo,
                 'token_usage' => $tokenUsage,
                 'progress_kind' => 'queue_info',
@@ -410,7 +407,7 @@ class AiSiteAgentQueueObserverStreamService
                 'operation' => $operation,
                 'queue_id' => $queueId,
                 'queue_status' => $queueStatus,
-                'queue_state' => $queueSnapshot,
+                'queue_state' => $queueState,
                 'queue_info' => $queuePanelInfo,
                 'token_usage' => $tokenUsage,
                 'progress_kind' => 'queue_info',
@@ -433,7 +430,7 @@ class AiSiteAgentQueueObserverStreamService
                 'operation' => $operation,
                 'queue_id' => $queueId,
                 'queue_status' => $queueStatus,
-                'queue_state' => $queueSnapshot,
+                'queue_state' => $queueState,
                 'queue_info' => $queuePanelInfo,
                 'queue_process' => $process,
                 'token_usage' => $tokenUsage,
@@ -451,7 +448,7 @@ class AiSiteAgentQueueObserverStreamService
                     'operation' => $operation,
                     'queue_id' => $queueId,
                     'queue_status' => $queueStatus,
-                    'queue_state' => $queueSnapshot,
+                    'queue_state' => $queueState,
                     'queue_info' => $queuePanelInfo,
                     'queue_process' => $process,
                     'token_usage' => $tokenUsage,
@@ -466,7 +463,7 @@ class AiSiteAgentQueueObserverStreamService
                     'progress_percent' => 0,
                     'queue_id' => $queueId,
                     'queue_status' => $queueStatus,
-                    'queue_state' => $queueSnapshot,
+                    'queue_state' => $queueState,
                     'queue_info' => $queuePanelInfo,
                     'queue_process' => $process,
                     'token_usage' => $tokenUsage,

@@ -380,11 +380,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             });
         }
 
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) use (
+        $consumeStreamChunk = function (string $data) use (
             &$fullContent, &$fullReasoning, &$toolCallsAccum, &$finishReason, &$modelName,
             &$rawResponseBuffer, &$hasValidChunk, &$sseLineBuffer, $startTime, $timeout,
             $onReasoning, $onContent, $onHeartbeat
-        ) {
+        ): void {
             if (strlen($rawResponseBuffer) < 4096) {
                 $rawResponseBuffer .= $data;
             }
@@ -461,14 +461,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                     }
                 }
             }
+        };
 
-            return strlen($data);
-        });
-
-        curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
+        $curlResult = $this->executeStreamCurl($ch, $consumeStreamChunk);
+        $httpCode = $curlResult['http_code'];
+        $error = $curlResult['error'];
 
         if ($error) {
             if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
@@ -975,7 +972,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             // 清除之前的错误
             error_clear_last();
             
-            $response = curl_exec($ch);
+            $curlResult = $this->executeJsonCurl($ch);
+            $response = (string)$curlResult['body'];
             
             // 检查 PHP 超时（SSE 模式下跳过）
             if (!$isSseMode) {
@@ -994,10 +992,10 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 }
             }
             
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
+            $httpCode = (int)$curlResult['http_code'];
+            $error = (string)$curlResult['error'];
 
-            if ($response === false) {
+            if ($error !== '') {
                 // 检查是否是超时错误
                 if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
@@ -1009,23 +1007,29 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
                 // 服务器错误，重试
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                $this->delayBeforeRetry($retryCount);
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
 
             if ($httpCode !== 200) {
+                if (!\is_array($result)) {
+                    throw new Exception('API returned invalid JSON with HTTP status: ' . $httpCode);
+                }
                 $errorMsg = $result['error']['message'] ?? "HTTP错误: {$httpCode}";
                 throw new Exception("API返回错误: {$errorMsg}");
             }
 
             if (str_ends_with($url, '/images/generations')) {
+                if (!\is_array($result)) {
+                    throw new Exception('API image response format error');
+                }
                 if (!isset($result['data']) || !is_array($result['data'])) {
                     throw new Exception('API image response format error');
                 }
                 return $result;
             }
 
-            if (!isset($result['choices'][0]['message']['content'])) {
+            if (!\is_array($result) || !isset($result['choices'][0]['message']['content'])) {
                 throw new Exception("API响应格式错误");
             }
 
@@ -1039,7 +1043,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             }
             
             if ($retryCount < self::MAX_RETRIES) {
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                $this->delayBeforeRetry($retryCount);
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
             throw new Exception("API调用失败（已重试{$retryCount}次，URL: {$url}）: " . $e->getMessage());
@@ -1057,6 +1061,59 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
      * @param int $timeout
      * @throws Exception
      */
+    /**
+     * @return array{body:string,http_code:int,error:string}
+     */
+    private function executeJsonCurl(\CurlHandle $ch): array
+    {
+        $pump = \Weline\Framework\Php\FiberTaskRunner::currentPump();
+        if ($pump !== null) {
+            $handleId = $pump->register($ch);
+            $body = '';
+            $curlResult = ['ok' => false, 'errno' => 0, 'error' => ''];
+
+            try {
+                while (($chunk = $pump->awaitChunk($handleId)) !== null) {
+                    if ($chunk !== '') {
+                        $body .= $chunk;
+                    }
+                }
+                $curlResult = $pump->finalize($handleId);
+                $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = (string)(curl_error($ch) ?: ($curlResult['error'] ?? ''));
+                curl_close($ch);
+
+                return [
+                    'body' => $body,
+                    'http_code' => $httpCode,
+                    'error' => !empty($curlResult['ok'])
+                        ? $error
+                        : ($error !== '' ? $error : (string)($curlResult['error'] ?? '')),
+                ];
+            } catch (\Throwable $throwable) {
+                $pump->abort($handleId);
+                curl_close($ch);
+                throw $throwable;
+            }
+        }
+
+        $response = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = (string)curl_error($ch);
+        curl_close($ch);
+
+        return [
+            'body' => $response === false ? '' : (string)$response,
+            'http_code' => $httpCode,
+            'error' => $error,
+        ];
+    }
+
+    private function delayBeforeRetry(int $retryCount): void
+    {
+        \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(self::RETRY_DELAY * ($retryCount + 1) * 1000);
+    }
+
     private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout, ?callable $reasoningCallback = null): void
     {
         // SSE 模式下不做 PHP 层面的超时检测，由 SseWriter 和 curl 自身控制
@@ -1088,12 +1145,12 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         
         // 设置流式处理回调
         $sseLineBuffer = '';
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk, &$sseLineBuffer) {
+        $consumeStreamChunk = function (string $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, $timeout, &$rawResponseBuffer, &$hasValidChunk, &$sseLineBuffer): void {
             // 检查是否超时
             if ($timeLimit !== null) {
                 $elapsedTime = microtime(true) - $startTime;
                 if ($elapsedTime >= ($timeLimit - 2)) {
-                    return -1; // 返回 -1 会中断 curl_exec
+                    throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
             }
             
@@ -1135,13 +1192,12 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 }
             }
             
-            return strlen($data);
-        });
+        };
 
-        curl_exec($ch);
+        $curlResult = $this->executeStreamCurl($ch, $consumeStreamChunk);
         
         // 获取 HTTP 状态码
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = $curlResult['http_code'];
         
         // 检查 PHP 超时（SSE 模式下跳过，因为已设 set_time_limit(0)）
         if (!$isSseMode) {
@@ -1150,13 +1206,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 strpos($lastError['message'], 'Maximum execution time') !== false ||
                 strpos($lastError['message'], 'exceeded') !== false
             )) {
-                curl_close($ch);
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
         }
         
-        $error = curl_error($ch);
-        curl_close($ch);
+        $error = $curlResult['error'];
 
         if ($error) {
             // curl 超时错误始终需要检测（非 PHP 层面超时）
@@ -1229,8 +1283,62 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
     }
 
     /**
-     * 初始化CURL
-     * 
+     * @param callable(string):void $consumeChunk
+     * @return array{http_code:int,error:string}
+     */
+    private function executeStreamCurl(\CurlHandle $ch, callable $consumeChunk): array
+    {
+        $pump = \Weline\Framework\Php\FiberTaskRunner::currentPump();
+        if ($pump !== null) {
+            $handleId = $pump->register($ch);
+            $curlResult = ['ok' => false, 'errno' => 0, 'error' => ''];
+
+            try {
+                while (($chunk = $pump->awaitChunk($handleId)) !== null) {
+                    if ($chunk !== '') {
+                        $consumeChunk($chunk);
+                    }
+                }
+                $curlResult = $pump->finalize($handleId);
+                $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = (string)(curl_error($ch) ?: ($curlResult['error'] ?? ''));
+                curl_close($ch);
+
+                return [
+                    'http_code' => $httpCode,
+                    'error' => !empty($curlResult['ok'])
+                        ? $error
+                        : ($error !== '' ? $error : (string)($curlResult['error'] ?? '')),
+                ];
+            } catch (\Throwable $throwable) {
+                $pump->abort($handleId);
+                curl_close($ch);
+                throw $throwable;
+            }
+        }
+
+        try {
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, string $data) use ($consumeChunk): int {
+                $consumeChunk($data);
+
+                return strlen($data);
+            });
+            curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = (string)curl_error($ch);
+            curl_close($ch);
+        } catch (\Throwable $throwable) {
+            curl_close($ch);
+            throw $throwable;
+        }
+
+        return [
+            'http_code' => $httpCode,
+            'error' => $error,
+        ];
+    }
+
+    /**
      * @param string $url
      * @param string $apiKey
      * @param array $data

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Queue;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
-use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSiteQueueLogWriter;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
 use GuoLaiRen\PageBuilder\Service\AiSiteWorkflowTrace;
@@ -27,7 +27,14 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     private const CONTENT_LAST_GATE_REASON_KEY = 'last_gate_reason';
     private const CONTENT_LAST_GATE_AT_KEY = 'last_gate_at';
     private const CONTENT_LAST_GATE_DECISION_KEY = 'completion_gate_decision';
-    private const CONTENT_LAST_GATE_SNAPSHOT_KEY = 'completion_gate_snapshot';
+    private const QUEUE_CONTENT_PROGRESS_MERGE_MAX_BYTES = 262144;
+    private const QUEUE_CONTENT_PROGRESS_KEYS = [
+        'build_task_summary' => true,
+        'page_block_progress' => true,
+        'build_plan_block_progress' => true,
+        'progress_percent' => true,
+        'active_concurrency' => true,
+    ];
     private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';
     private const QUEUE_SCOPE_PATCH_REDUNDANT_KEYS = [
         'build_plan_v2' => true,
@@ -61,7 +68,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
 
     public function tip(): string
     {
-        return '异步执行 PageBuilder 建站构建任务，并通过 SSE 同步构建进度。';
+        return '异步执行 PageBuilder 建站构建任务，并写入构建状态与队列日志。';
     }
 
     public function attributes(): array
@@ -145,9 +152,6 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $scopePatch = \is_array($content['scope_patch'] ?? null) ? $content['scope_patch'] : [];
 
         $sse = null;
-        $previousSseContextExists = false;
-        $previousSseContext = null;
-        $sseContextRegistered = false;
         $previousAiRuntimeParamsExists = false;
         $previousAiRuntimeParams = [];
         $aiRuntimeParamsRegistered = false;
@@ -268,7 +272,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 throw new \RuntimeException('请先确认建站方案，再开始执行构建。');
             }
 
-            $sse = new QueueDbWriter(
+            $sse = new AiSiteQueueLogWriter(
                 (int)$session->getId(),
                 $adminId,
                 $queueId,
@@ -278,16 +282,12 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 \trim((string)($content['job_key'] ?? '')),
                 \trim((string)($content['job_type'] ?? ''))
             );
-            $previousSseContextExists = RequestContext::has(RequestContext::SSE_WRITER_KEY);
-            $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
-            RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
-            $sseContextRegistered = true;
             $previousAiRuntimeParamsExists = AiRuntimeContext::hasDefaultParams();
             $previousAiRuntimeParams = AiRuntimeContext::getDefaultParams();
             AiRuntimeContext::setDefaultParams(AiRuntimeContext::thinkingModeParams());
             $aiRuntimeParamsRegistered = true;
             $this->queueTrace($sse, 'AI thinking mode enabled for queue execution; reasoning_content is kept separate from output content.');
-            $this->queueTrace($sse, 'QueueDbWriter created; build progress is streamed as lightweight SSE telemetry.');
+            $this->queueTrace($sse, 'Queue log writer created; build progress is recorded as compact queue telemetry.');
 
             /** @var AiSiteAgent $controller */
             $controller = AiSiteAgentForQueue::create();
@@ -456,10 +456,10 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $this->mirrorToCli('[' . \date('H:i:s') . '] ERROR_DIAGNOSTIC ' . $diagnostic);
             $throwable = new \RuntimeException($surfaceMessage, 0, $throwable);
             $diagnostic = $surfaceMessage;
-            if ($sse instanceof QueueDbWriter) {
+            if ($sse instanceof AiSiteQueueLogWriter) {
                 $this->queueTrace($sse, '异常：' . $diagnostic);
             } else {
-                $this->appendQueueLifecycleLine($queue, '异常（SSE 未初始化）：' . $diagnostic);
+                $this->appendQueueLifecycleLine($queue, '异常（队列日志未初始化）：' . $diagnostic);
             }
             $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $throwable->getMessage());
             throw new \RuntimeException('构建失败：' . $throwable->getMessage(), 0, $throwable);
@@ -471,13 +471,6 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                     AiRuntimeContext::removeDefaultParams();
                 }
             }
-            if ($sseContextRegistered) {
-                if ($previousSseContextExists) {
-                    RequestContext::set(RequestContext::SSE_WRITER_KEY, $previousSseContext);
-                } else {
-                    RequestContext::remove(RequestContext::SSE_WRITER_KEY);
-                }
-            }
             if ($inlineImageDisabledRegistered) {
                 if ($previousInlineImageDisabledExists) {
                     RequestContext::set(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED, $previousInlineImageDisabled);
@@ -485,7 +478,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                     RequestContext::remove(self::REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED);
                 }
             }
-            if ($sse instanceof QueueDbWriter) {
+            if ($sse instanceof AiSiteQueueLogWriter) {
                 $sse->complete();
             }
         }
@@ -1051,8 +1044,6 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $content[self::CONTENT_MAX_ATTEMPTS_KEY] = $maxAttempts;
         $content[self::CONTENT_LAST_GATE_REASON_KEY] = (string)($gate['reason'] ?? ($gate['passed'] ? 'passed' : 'completion_gate_failed'));
         $content[self::CONTENT_LAST_GATE_AT_KEY] = \date('Y-m-d H:i:s');
-        $content[self::CONTENT_LAST_GATE_SNAPSHOT_KEY] = $this->stripGateSummary($gate);
-
         if (!empty($gate['passed'])) {
             $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'passed';
             $this->saveQueueContent($queue, $content);
@@ -1089,7 +1080,6 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                     'attempt' => $attempt,
                     'max_attempts' => $maxAttempts,
                     'last_gate_reason' => (string)($gate['reason'] ?? 'completion_gate_failed'),
-                    'completion_gate_snapshot' => $this->stripGateSummary($gate),
                 ],
                 AiSiteAgentSession::STAGE_VISUAL_EDIT
             );
@@ -1156,7 +1146,6 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             'retry_allowed' => 0,
             'retryable_ai_failure_count' => 0,
             'last_gate_reason' => $fullBuildGatePassed ? '' : (string)($gate['reason'] ?? ''),
-            'completion_gate_snapshot' => $this->stripGateSummary($gate),
             'queue_waiting_for_scheduler' => false,
             'can_close_stream' => true,
             'continue_other_operations' => false,
@@ -1382,7 +1371,6 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             'attempt' => $attempt,
             'max_attempts' => $maxAttempts,
             'last_gate_reason' => (string)($gate['reason'] ?? 'completion_gate_failed'),
-            'completion_gate_snapshot' => $this->stripGateSummary($gate),
             'can_close_stream' => true,
             'continue_other_operations' => true,
         ]);
@@ -1424,7 +1412,6 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             'attempt' => $attempt,
             'max_attempts' => $maxAttempts,
             'last_gate_reason' => (string)($gate['reason'] ?? 'completion_gate_failed'),
-            'completion_gate_snapshot' => $this->stripGateSummary($gate),
             'can_close_stream' => false,
             'continue_other_operations' => false,
         ]);
@@ -1802,7 +1789,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $this->mirrorToCli($line);
     }
 
-    private function queueTrace(QueueDbWriter $sse, string $message): void
+    private function queueTrace(AiSiteQueueLogWriter $sse, string $message): void
     {
         if ($message === '') {
             return;
@@ -1954,12 +1941,12 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $content[self::CONTENT_LAST_GATE_REASON_KEY] = '';
         $content[self::CONTENT_LAST_GATE_AT_KEY] = '';
         $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'running';
-        $content[self::CONTENT_LAST_GATE_SNAPSHOT_KEY] = [];
         if ($effectiveExecutionToken !== '') {
             $content['execution_token'] = $effectiveExecutionToken;
         }
+        $content = $this->clearQueueContentProgressFields($content);
         $content = $this->compactQueueContentForStorage($content);
-        $this->saveQueueContent($queue, $content);
+        $this->saveQueueContent($queue, $content, false);
 
         return [$content, $attempt, $maxAttempts];
     }
@@ -1967,10 +1954,74 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     /**
      * @param array<string, mixed> $content
      */
-    private function saveQueueContent(Queue &$queue, array $content): void
+    private function saveQueueContent(Queue &$queue, array $content, bool $preserveExistingProgress = true): void
     {
+        if ($preserveExistingProgress) {
+            $content = $this->mergeExistingQueueContentProgress($queue, $content);
+        }
         $content = $this->compactQueueContentForStorage($content);
         $queue->setContent($this->encodeQueueContent($content))->save();
+    }
+
+    /**
+     * QueueDbWriter persists compact progress while the worker is running. The
+     * queue model may still hold the start-of-run content, so merge those small
+     * fields back before lifecycle saves overwrite the row.
+     *
+     * @param array<string, mixed> $content
+     * @return array<string, mixed>
+     */
+    private function mergeExistingQueueContentProgress(Queue &$queue, array $content): array
+    {
+        $queueId = (int)$queue->getId();
+        if ($queueId <= 0) {
+            return $content;
+        }
+
+        try {
+            $row = w_query('queue', 'get', ['queue_id' => $queueId]);
+        } catch (\Throwable) {
+            return $content;
+        }
+        if (!\is_array($row) || $row === []) {
+            return $content;
+        }
+
+        $rawContent = $row['content'] ?? null;
+        $existing = [];
+        if (\is_array($rawContent)) {
+            $existing = $rawContent;
+        } elseif (\is_string($rawContent)) {
+            $rawContent = \trim($rawContent);
+            if ($rawContent !== '' && \strlen($rawContent) <= self::QUEUE_CONTENT_PROGRESS_MERGE_MAX_BYTES) {
+                $decoded = \json_decode($rawContent, true);
+                $existing = \is_array($decoded) ? $decoded : [];
+            }
+        }
+        if ($existing === []) {
+            return $content;
+        }
+
+        foreach (self::QUEUE_CONTENT_PROGRESS_KEYS as $key => $_) {
+            if (!\array_key_exists($key, $content) && \array_key_exists($key, $existing)) {
+                $content[$key] = $existing[$key];
+            }
+        }
+
+        return $content;
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     * @return array<string, mixed>
+     */
+    private function clearQueueContentProgressFields(array $content): array
+    {
+        foreach (self::QUEUE_CONTENT_PROGRESS_KEYS as $key => $_) {
+            unset($content[$key]);
+        }
+
+        return $content;
     }
 
     /**
@@ -2002,6 +2053,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     {
         $content = $this->compactQueueContentForStorage($content);
         $content['retry_queue_id'] = $retryQueueId;
+        $content = $this->mergeExistingQueueContentProgress($queue, $content);
         $line = '[' . \date('H:i:s') . '] QUEUE_RETRY same_queue=' . $retryQueueId . ' ' . $message;
         $queue->setStatus(Queue::status_pending)
             ->setContent($this->encodeQueueContent($content))
