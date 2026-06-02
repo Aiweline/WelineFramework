@@ -1441,6 +1441,29 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringNotContainsString('buildWorkspaceOperationPayload($state, $operation)', $body);
     }
 
+    public function testStartPlanUsesCompactStatePatchesForStartResponses(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $body = $this->extractControllerMethodSource($source, 'handleStartPlan');
+
+        self::assertStringContainsString('buildStartPlanLightweightStatePatch($session, $currentScope, $hasPlanDraft)', $body);
+        self::assertStringContainsString("\$responseState = \\is_array(\$result['data'] ?? null) ? \$result['data'] : [];", $body);
+        self::assertStringContainsString("'data' => \\is_array(\$result['data'] ?? null) ? \$result['data'] : []", $body);
+        self::assertStringNotContainsString('buildWorkspaceState($session, $adminId, 24, true)', $body);
+        self::assertStringNotContainsString('buildWorkspaceState($fresh, $adminId, 24, true)', $body);
+    }
+
+    public function testActiveQueueStartGuardReturnsQueuedStateWithoutFullWorkspaceHydration(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $body = $this->extractControllerMethodSource($source, 'buildActiveAiSiteQueueAlreadyRunningResult');
+
+        self::assertStringContainsString('buildQueuedOperationState($fresh, $stage, $runningOperation, $activeOperation, $queueRow)', $body);
+        self::assertStringContainsString("'data' => \$state", $body);
+        self::assertStringNotContainsString('buildWorkspaceState(', $body);
+        self::assertStringNotContainsString('buildWorkspaceOperationPayload(', $body);
+    }
+
     public function testQueueTableStartGuardScansAllSessionSlotsAndTrustsQueueRunningStatus(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
