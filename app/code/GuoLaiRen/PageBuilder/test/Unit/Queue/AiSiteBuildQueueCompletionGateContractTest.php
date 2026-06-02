@@ -15,7 +15,7 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
         self::assertStringContainsString("private const CONTENT_ATTEMPT_KEY = 'attempt';", $source);
         self::assertStringContainsString("private const CONTENT_MAX_ATTEMPTS_KEY = 'max_attempts';", $source);
         self::assertStringContainsString("private const CONTENT_LAST_GATE_REASON_KEY = 'last_gate_reason';", $source);
-        self::assertStringContainsString("private const CONTENT_LAST_GATE_SNAPSHOT_KEY = 'completion_gate_snapshot';", $source);
+        self::assertStringNotContainsString('completion_gate_snapshot', $source);
         self::assertStringContainsString("private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';", $source);
         self::assertStringContainsString('finalizeBuildTaskStatesAfterRunLoop($scope)', $source);
         self::assertStringContainsString('inspectBuildCompletionGate($scope)', $source);
@@ -39,7 +39,7 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
 
         $passedGateSource = $this->extractMethodSource($source, 'markQueueBuildOperationPassedGate');
         self::assertStringContainsString("'last_gate_reason' => \$fullBuildGatePassed ? ''", $passedGateSource);
-        self::assertStringContainsString("'completion_gate_snapshot' => \$this->stripGateSummary(\$gate)", $passedGateSource);
+        self::assertStringNotContainsString('completion_gate_snapshot', $passedGateSource);
         self::assertStringContainsString('syncPageTypeLayoutsWithSharedComponents($scope)', $passedGateSource);
         self::assertStringContainsString("\$buildSummary['completion_gate'] = \$this->stripGateSummary(\$gate);", $passedGateSource);
         self::assertStringContainsString("\$buildSummary['page_block_progress']", $source);

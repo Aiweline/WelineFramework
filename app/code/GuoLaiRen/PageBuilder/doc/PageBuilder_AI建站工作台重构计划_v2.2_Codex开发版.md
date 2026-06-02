@@ -156,7 +156,7 @@ AiSiteHtmlBlocksBuildService.php
 AiSiteMaterializationService.php
 AiSitePageBlueprintService.php
 AiSiteQualityGateService.php
-AiSiteQueueSnapshotService.php
+AiSiteQueueStateService.php
 AiSiteTaskPlanSseService.php
 AiSiteVirtualThemePlanService.php
 AiSiteVirtualThemeService.php

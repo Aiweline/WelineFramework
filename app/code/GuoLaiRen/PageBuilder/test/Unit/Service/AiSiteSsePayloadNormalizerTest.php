@@ -65,15 +65,16 @@ final class AiSiteSsePayloadNormalizerTest extends TestCase
             'chunk',
             'done',
             'error',
-            'build_plan_progress',
             'build_plan_block_completed',
             'build_plan_block_failed',
+            'task_progress',
+            'task_completed',
+            'task_failed',
         ] as $eventName) {
             self::assertContains($eventName, $events);
         }
 
-        self::assertNotContains('task_progress', $events);
-        self::assertNotContains('task_failed', $events);
+        self::assertNotContains('build_plan_progress', $events);
         foreach ($events as $name) {
             self::assertSame($name, \strtolower($name));
             self::assertSame(1, \preg_match('/^[a-z][a-z0-9_]*$/', $name));

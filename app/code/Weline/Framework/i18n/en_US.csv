@@ -1351,6 +1351,7 @@ HTTP方法,"HTTP method"
 标签注册表收集时发生错误：%{1}，但将继续执行。,"Error occurred during tag registry collection: %{1}, but execution will continue."
 注册表已在本次升级中收集过，跳过重复收集,"The registry has already been collected in this upgrade, skipping duplicate collection"
 检测到模块安装或升级，正在重新收集所有注册表信息...,"Detected module installation or upgrade, re-collecting all registry information..."
+检测到新部署模块，先写入模块注册表：%{1},检测到新部署模块，先写入模块注册表：%{1}
 "指定模块升级模式：仅升级 %{1}","Specified module upgrade mode: upgrade %{1} only"
 "未知阶段 code：%{1}。可选：%{2}","Unknown stage code: %{1}. Options: %{2}"
 仅运行指定阶段：%{1},"Only run the specified phase: %{1}"

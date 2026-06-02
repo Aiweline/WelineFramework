@@ -28,8 +28,8 @@ final class AiSiteWorkbenchBlockSseChatIntegrationTest extends AbstractAiSiteWor
         self::assertStringNotContainsString('confirmLabel: messages.blockSseConfirmRebuild', $script);
         self::assertStringNotContainsString('confirmLabel: messages.blockSseConfirmRefine', $script);
         self::assertStringNotContainsString('pendingBlockSseResult', $script);
-        self::assertStringNotContainsString('applyPendingBlockSseResultWithSnapshot', $script);
-        self::assertStringNotContainsString('fetchWorkspaceSnapshotStateForBlockRefresh', $script);
+        self::assertStringNotContainsString('applyPendingBlockSseResultWith', $script);
+        self::assertStringNotContainsString('ForBlockRefresh', $script);
         self::assertStringContainsString("resolveUpdatedBlockFromResponse(context.page_type, context.block_id, saveResult);", $script);
         self::assertStringContainsString("updateVirtualBlockState(context.page_type, refreshedBlock);", $script);
         self::assertStringContainsString("replaceCurrentBlockHtml(context.page_type, refreshedBlock);", $script);

@@ -33,7 +33,6 @@ class AiSiteAgentSession extends Model
     private const ARTIFACT_BACKED_SCOPE_PATHS = [
         self::STAGE_PLAN => [
             'plan_json' => [['plan_json'], []],
-            'plan_structured' => [['plan_structured'], []],
             'build_plan_v2' => [['build_plan_v2'], []],
             'plan_projection' => [['plan_projection'], []],
             'content_manifest' => [['content_manifest'], []],
@@ -41,7 +40,6 @@ class AiSiteAgentSession extends Model
         ],
         self::STAGE_VISUAL_EDIT => [
             'plan_json' => [['plan_json'], []],
-            'plan_structured' => [['plan_structured'], []],
             'build_plan_v2' => [['build_plan_v2'], []],
             'plan_projection' => [['plan_projection'], []],
             'content_manifest' => [['content_manifest'], []],
@@ -364,21 +362,21 @@ class AiSiteAgentSession extends Model
             }
         }
 
-        $scope = $this->compactPlanWorkbenchSnapshotsForStorage($scope);
+        $scope = $this->compactPlanWorkbenchArtifactsForStorage($scope);
         $scope = $this->compactConfirmedStageOnePlanPayloadsForStorage($scope);
-        $scope = $this->removePersistentSnapshotBackupsForStorage($scope);
+        $scope = $this->removeDuplicatedStageOneFieldsForStorage($scope);
 
         return $scope;
     }
 
     /**
-     * Keep only the latest confirmed stage-one snapshot plus the request summary
+     * Keep only the latest confirmed stage-one artifact plus the request summary
      * needed by later stages.
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function compactPlanWorkbenchSnapshotsForStorage(array $scope): array
+    private function compactPlanWorkbenchArtifactsForStorage(array $scope): array
     {
         $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
         $confirmed = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
@@ -417,7 +415,7 @@ class AiSiteAgentSession extends Model
      */
     private function hasMaterializedStageOnePlanArtifacts(array $scope): bool
     {
-        foreach (['plan_structured', 'plan_json', 'build_plan_v2'] as $key) {
+        foreach (['plan_json', 'build_plan_v2'] as $key) {
             if (\is_array($scope[$key] ?? null) && $scope[$key] !== []) {
                 return true;
             }
@@ -433,13 +431,6 @@ class AiSiteAgentSession extends Model
      */
     private function materializeConfirmedStageOnePlanArtifactsForStorage(array $scope, array $confirmed): array
     {
-        if (
-            (!\is_array($scope['plan_structured'] ?? null) || $scope['plan_structured'] === [])
-            && \is_array($confirmed['structured_plan'] ?? null)
-            && $confirmed['structured_plan'] !== []
-        ) {
-            $scope['plan_structured'] = $confirmed['structured_plan'];
-        }
         if (
             (!\is_array($scope['plan_json'] ?? null) || $scope['plan_json'] === [])
             && \is_array($confirmed['plan_json'] ?? null)
@@ -528,15 +519,9 @@ class AiSiteAgentSession extends Model
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function removePersistentSnapshotBackupsForStorage(array $scope): array
+    private function removeDuplicatedStageOneFieldsForStorage(array $scope): array
     {
-        unset(
-            $scope['confirmed_stage1_plan_book'],
-            $scope['theme_context_snapshot'],
-            $scope['shared_prompt_context']
-        );
-
-        return $scope;
+        return AiSiteScopeCompatibilityService::stripDuplicatedStageOneStorageFields($scope);
     }
 
     /**

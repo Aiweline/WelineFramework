@@ -909,7 +909,6 @@ final class AiSiteAssetManifestService
             ? [$buildPlan]
             : [
                 $scope['plan_json'] ?? [],
-                $scope['plan_structured'] ?? [],
                 $scope['plan_projection'] ?? [],
                 $scope['content_manifest'] ?? [],
             ];
@@ -2375,10 +2374,7 @@ final class AiSiteAssetManifestService
 
         foreach ([
             $scope['plan_json'] ?? null,
-            $scope['plan_structured'] ?? null,
-            $scope['theme_context_snapshot'] ?? null,
-            $scope['plan_workbench']['confirmed'] ?? null,
-            $scope['plan_workbench']['draft'] ?? null,
+            $scope['stage1_contract'] ?? null,
         ] as $source) {
             if (\is_array($source)) {
                 $this->appendPaletteCandidates($candidates, $source);

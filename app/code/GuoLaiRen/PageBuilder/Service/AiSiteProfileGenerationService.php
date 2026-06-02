@@ -8,7 +8,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteProfileGenerationService
 {
-    private const PROFILE_VERSION = 6;
+    private const PROFILE_VERSION = 7;
 
     public function __construct(
         private readonly ?AiSiteProfileAiGenerationService $aiProfileGenerator = null,
@@ -24,6 +24,7 @@ class AiSiteProfileGenerationService
         $existing = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         $manualFlags = $this->normalizeManualFlags($scope['site_profile_manual'] ?? null);
         $hasManualMap = \is_array($scope['site_profile_manual'] ?? null);
+        $internalVisibleCopyTerms = $this->buildInternalVisibleCopyTerms($scope);
 
         $defaultLocale = $this->pickString(
             $scope['default_locale'] ?? null,
@@ -32,7 +33,7 @@ class AiSiteProfileGenerationService
             'en_US'
         );
         $locales = $this->resolveLocales($scope, $existing, $defaultLocale);
-        $sourceBrief = $this->resolveSourceBrief($scope, $existing, $manualFlags);
+        $sourceBrief = $this->resolveSourceBrief($scope, $existing, $manualFlags, $internalVisibleCopyTerms);
         $contentLocale = $this->resolveContentLocale($scope, $existing, $sourceBrief);
         if ($contentLocale !== '') {
             $locales = $this->prependLocaleToList($locales, $contentLocale);
@@ -43,14 +44,17 @@ class AiSiteProfileGenerationService
         $taglineLocked = $this->hasManualOverride($scope, 'site_tagline', $manualFlags);
         $briefLocked = $this->hasManualOverride($scope, 'brief_description', $manualFlags);
 
-        $scopeTitle = $this->normalizeMeaningfulTitle($scope['site_title'] ?? null);
+        $scopeTitle = $this->normalizeMeaningfulTitle($scope['site_title'] ?? null, $internalVisibleCopyTerms);
+        $scopeTitleCanLock = !$hasManualMap && !$this->hasManagedProfileMeta($existing);
         $lockedTitle = $titleLocked
-            ? $this->normalizeMeaningfulTitle($scope['site_title'] ?? null)
-            : ($scopeTitle !== '' ? $scopeTitle : $this->resolveLegacyLockedTitle($existing, $hasManualMap));
+            ? $this->normalizeMeaningfulTitle($scope['site_title'] ?? null, $internalVisibleCopyTerms)
+            : ($scopeTitleCanLock && $scopeTitle !== ''
+                ? $scopeTitle
+                : $this->resolveLegacyLockedTitle($existing, $hasManualMap, $internalVisibleCopyTerms));
         $lockedTagline = $taglineLocked
-            ? $this->normalizeProfileTagline($this->readScopeString($scope, 'site_tagline'), $lockedTitle)
-            : $this->resolveLegacyLockedTagline($existing, $hasManualMap);
-        $lockedBrief = $briefLocked ? $this->normalizeProfileBriefDescription($this->readScopeString($scope, 'brief_description')) : '';
+            ? $this->normalizeProfileTagline($this->readScopeString($scope, 'site_tagline'), $lockedTitle, $internalVisibleCopyTerms)
+            : $this->resolveLegacyLockedTagline($existing, $hasManualMap, $internalVisibleCopyTerms);
+        $lockedBrief = $briefLocked ? $this->normalizeProfileBriefDescription($this->readScopeString($scope, 'brief_description'), $internalVisibleCopyTerms) : '';
 
         $lockedLogo = $this->resolveLockedAsset($scope, $existing, 'logo', $hasManualMap);
         $lockedIcon = $this->resolveLockedIcon($scope, $existing, $hasManualMap);
@@ -70,7 +74,8 @@ class AiSiteProfileGenerationService
             $logoLocked,
             $lockedLogo,
             $iconLocked,
-            $lockedIcon
+            $lockedIcon,
+            $internalVisibleCopyTerms
         );
 
         $generated = $this->canReuseGeneratedProfile($existing, $signature)
@@ -85,6 +90,7 @@ class AiSiteProfileGenerationService
                 $lockedBrief,
                 $lockedLogo,
                 $lockedIcon,
+                $internalVisibleCopyTerms,
                 $allowAi
             );
 
@@ -92,18 +98,19 @@ class AiSiteProfileGenerationService
             ? $lockedTitle
             : $this->pickString(
                 $generated['site_title'] ?? null,
-                $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain)
+                $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain, $internalVisibleCopyTerms)
             );
 
-        $siteTitle = $this->normalizeMeaningfulTitle($siteTitle) ?: $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain);
+        $siteTitle = $this->normalizeMeaningfulTitle($siteTitle, $internalVisibleCopyTerms)
+            ?: $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain, $internalVisibleCopyTerms);
 
         $siteTagline = ($taglineLocked || $lockedTagline !== '')
             ? $lockedTagline
             : $this->pickString(
                 $generated['site_tagline'] ?? null,
-                $this->deriveSiteTaglineFromBrief($sourceBrief, $siteTitle)
+                $this->deriveSiteTaglineFromBrief($sourceBrief, $siteTitle, $internalVisibleCopyTerms)
             );
-        $siteTagline = $this->normalizeProfileTagline($siteTagline, $siteTitle);
+        $siteTagline = $this->normalizeProfileTagline($siteTagline, $siteTitle, $internalVisibleCopyTerms);
 
         $briefDescription = $briefLocked
             ? $lockedBrief
@@ -111,7 +118,7 @@ class AiSiteProfileGenerationService
                 $generated['brief_description'] ?? null,
                 $sourceBrief
             );
-        $briefDescription = $this->normalizeProfileBriefDescription($briefDescription);
+        $briefDescription = $this->normalizeProfileBriefDescription($briefDescription, $internalVisibleCopyTerms);
 
         $logo = $logoLocked
             ? $lockedLogo
@@ -148,7 +155,7 @@ class AiSiteProfileGenerationService
             $this->profileTitleLabelPatterns(),
             $this->profileTaglineLabelPatterns()
         )));
-        $metaTitle = $this->stripInternalProfileTokens($metaTitle);
+        $metaTitle = $this->stripInternalProfileTokens($metaTitle, $internalVisibleCopyTerms);
         if ($metaTitle === '') {
             $metaTitle = $siteTitle;
         }
@@ -160,7 +167,7 @@ class AiSiteProfileGenerationService
                 $this->clipText($briefDescription !== '' ? $briefDescription : ($siteTagline !== '' ? $siteTagline : $siteTitle), 160)
             );
         }
-        $metaDescription = $this->clipText($this->normalizeProfileBriefDescription($metaDescription), 160);
+        $metaDescription = $this->clipText($this->normalizeProfileBriefDescription($metaDescription, $internalVisibleCopyTerms), 160);
 
         $metaKeywords = \trim((string)($seoInput['meta_keywords'] ?? ''));
         if ($metaKeywords === '') {
@@ -205,11 +212,12 @@ class AiSiteProfileGenerationService
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $existing
      * @param array<string, bool> $manualFlags
+     * @param list<string> $internalVisibleCopyTerms
      */
-    private function resolveSourceBrief(array $scope, array $existing, array $manualFlags): string
+    private function resolveSourceBrief(array $scope, array $existing, array $manualFlags, array $internalVisibleCopyTerms = []): string
     {
         if ($this->hasManualOverride($scope, 'brief_description', $manualFlags)) {
-            return $this->normalizeProfileBriefDescription($this->readScopeString($scope, 'brief_description'));
+            return $this->normalizeProfileBriefDescription($this->readScopeString($scope, 'brief_description'), $internalVisibleCopyTerms);
         }
 
         $existingMeta = \is_array($existing['_ai_profile'] ?? null) ? $existing['_ai_profile'] : [];
@@ -220,7 +228,7 @@ class AiSiteProfileGenerationService
             $scope['user_description'] ?? null,
             $existingMeta['source_brief'] ?? null,
             $existing['brief_description'] ?? null
-        ));
+        ), $internalVisibleCopyTerms);
     }
 
     /**
@@ -361,26 +369,32 @@ class AiSiteProfileGenerationService
 
     /**
      * @param array<string, mixed> $existing
+     * @param list<string> $internalVisibleCopyTerms
      */
-    private function resolveLegacyLockedTitle(array $existing, bool $hasManualMap): string
+    private function resolveLegacyLockedTitle(array $existing, bool $hasManualMap, array $internalVisibleCopyTerms = []): string
     {
         if ($hasManualMap || $this->hasManagedProfileMeta($existing)) {
             return '';
         }
 
-        return $this->normalizeMeaningfulTitle($existing['site_title'] ?? null);
+        return $this->normalizeMeaningfulTitle($existing['site_title'] ?? null, $internalVisibleCopyTerms);
     }
 
     /**
      * @param array<string, mixed> $existing
+     * @param list<string> $internalVisibleCopyTerms
      */
-    private function resolveLegacyLockedTagline(array $existing, bool $hasManualMap): string
+    private function resolveLegacyLockedTagline(array $existing, bool $hasManualMap, array $internalVisibleCopyTerms = []): string
     {
         if ($hasManualMap || $this->hasManagedProfileMeta($existing)) {
             return '';
         }
 
-        return $this->normalizeProfileTagline($this->pickString($existing['site_tagline'] ?? null), $this->pickString($existing['site_title'] ?? null));
+        return $this->normalizeProfileTagline(
+            $this->pickString($existing['site_tagline'] ?? null),
+            $this->pickString($existing['site_title'] ?? null),
+            $internalVisibleCopyTerms
+        );
     }
 
     /**
@@ -459,13 +473,17 @@ class AiSiteProfileGenerationService
         bool $logoLocked,
         string $lockedLogo,
         bool $iconLocked,
-        string $lockedIcon
+        string $lockedIcon,
+        array $internalVisibleCopyTerms = []
     ): string {
         $signatureSource = [
             'version' => self::PROFILE_VERSION,
             'source_brief' => $sourceBrief,
             'target_domain' => $targetDomain,
             'default_locale' => $defaultLocale,
+            'internal_visible_copy_terms_hash' => $internalVisibleCopyTerms !== []
+                ? \sha1(\implode("\n", $internalVisibleCopyTerms))
+                : '',
             'locks' => [
                 'site_title' => ['enabled' => $titleLocked, 'value' => $lockedTitle],
                 'site_tagline' => ['enabled' => $taglineLocked, 'value' => $lockedTagline],
@@ -504,11 +522,12 @@ class AiSiteProfileGenerationService
         string $lockedBrief,
         string $lockedLogo,
         string $lockedIcon,
+        array $internalVisibleCopyTerms,
         bool $allowAi
     ): array {
-        $fallbackTitle = $lockedTitle !== '' ? $lockedTitle : $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain);
-        $fallbackTagline = $lockedTagline !== '' ? $lockedTagline : $this->deriveSiteTaglineFromBrief($sourceBrief, $fallbackTitle);
-        $fallbackBrief = $lockedBrief !== '' ? $lockedBrief : $sourceBrief;
+        $fallbackTitle = $lockedTitle !== '' ? $lockedTitle : $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain, $internalVisibleCopyTerms);
+        $fallbackTagline = $lockedTagline !== '' ? $lockedTagline : $this->deriveSiteTaglineFromBrief($sourceBrief, $fallbackTitle, $internalVisibleCopyTerms);
+        $fallbackBrief = $lockedBrief !== '' ? $lockedBrief : $this->normalizeProfileBriefDescription($sourceBrief, $internalVisibleCopyTerms);
 
         $generated = [];
         if ($allowAi) {
@@ -522,15 +541,26 @@ class AiSiteProfileGenerationService
                     'locked_brief_description' => $lockedBrief,
                     'locked_logo' => $lockedLogo,
                     'locked_icon' => $lockedIcon,
+                    'forbidden_visible_terms' => $internalVisibleCopyTerms,
                 ]);
             } catch (\Throwable) {
                 $generated = [];
             }
         }
 
-        $siteTitle = $this->pickString($generated['site_title'] ?? null, $fallbackTitle);
-        $siteTagline = $this->pickString($generated['site_tagline'] ?? null, $fallbackTagline);
-        $briefDescription = $this->pickString($generated['brief_description'] ?? null, $fallbackBrief);
+        $siteTitle = $this->normalizeMeaningfulTitle(
+            $this->pickString($generated['site_title'] ?? null, $fallbackTitle),
+            $internalVisibleCopyTerms
+        ) ?: $fallbackTitle;
+        $siteTagline = $this->normalizeProfileTagline(
+            $this->pickString($generated['site_tagline'] ?? null, $fallbackTagline),
+            $siteTitle,
+            $internalVisibleCopyTerms
+        ) ?: $fallbackTagline;
+        $briefDescription = $this->normalizeProfileBriefDescription(
+            $this->pickString($generated['brief_description'] ?? null, $fallbackBrief),
+            $internalVisibleCopyTerms
+        ) ?: $fallbackBrief;
         $logo = $this->normalizeGeneratedSvgAsset($this->pickString($generated['logo_svg'] ?? null, $generated['logo'] ?? null));
         $icon = $this->normalizeGeneratedSvgAsset($this->pickString($generated['icon_svg'] ?? null, $generated['icon'] ?? null));
 
@@ -547,9 +577,21 @@ class AiSiteProfileGenerationService
             'brief_description' => $briefDescription,
             'logo' => $logo,
             'icon' => $icon,
-            'meta_title' => $this->pickString($generated['meta_title'] ?? null, $siteTagline !== '' ? ($siteTitle . ' | ' . $siteTagline) : $siteTitle),
-            'meta_description' => $this->pickString($generated['meta_description'] ?? null, $this->clipText($briefDescription, 160)),
-            'meta_keywords' => $this->pickString($generated['meta_keywords'] ?? null, $this->buildKeywordString($siteTitle, $targetDomain, $briefDescription)),
+            'meta_title' => $this->stripInternalProfileTokens(
+                $this->pickString($generated['meta_title'] ?? null, $siteTagline !== '' ? ($siteTitle . ' | ' . $siteTagline) : $siteTitle),
+                $internalVisibleCopyTerms
+            ),
+            'meta_description' => $this->clipText(
+                $this->normalizeProfileBriefDescription(
+                    $this->pickString($generated['meta_description'] ?? null, $this->clipText($briefDescription, 160)),
+                    $internalVisibleCopyTerms
+                ),
+                160
+            ),
+            'meta_keywords' => $this->stripInternalProfileTokens(
+                $this->pickString($generated['meta_keywords'] ?? null, $this->buildKeywordString($siteTitle, $targetDomain, $briefDescription)),
+                $internalVisibleCopyTerms
+            ),
             '_ai_profile' => [
                 'version' => self::PROFILE_VERSION,
                 'signature' => $signature,
@@ -649,7 +691,171 @@ class AiSiteProfileGenerationService
         );
     }
 
-    private function normalizeProfileTagline(string $value, string $siteTitle): string
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<string>
+     */
+    private function buildInternalVisibleCopyTerms(array $scope): array
+    {
+        $terms = [];
+
+        foreach ([
+            $scope['_plan_sse_request']['selected_skill_codes'] ?? null,
+            $scope['selected_skill_codes'] ?? null,
+            $scope['plan_workbench']['confirmed']['contract_context']['selected_skill_codes'] ?? null,
+            $scope['plan_workbench']['contract_context']['selected_skill_codes'] ?? null,
+            $scope['contract_context']['selected_skill_codes'] ?? null,
+        ] as $candidate) {
+            $this->collectInternalVisibleCopyTerms($candidate, $terms);
+        }
+
+        foreach ([
+            $scope['skill_snapshots'] ?? null,
+            $scope['plan_workbench']['confirmed']['contract_context']['skill_snapshots'] ?? null,
+            $scope['plan_workbench']['contract_context']['skill_snapshots'] ?? null,
+            $scope['contract_context']['skill_snapshots'] ?? null,
+        ] as $candidate) {
+            $this->collectInternalVisibleCopyTerms($candidate, $terms);
+        }
+
+        foreach ([
+            $scope['design_direction_code'] ?? null,
+            $scope['design_direction_hash'] ?? null,
+            $scope['design_direction_match_reason'] ?? null,
+            $scope['design_direction'] ?? null,
+            $scope['design_direction_snapshot'] ?? null,
+            $scope['plan_workbench']['confirmed']['contract_context']['design_direction_code'] ?? null,
+            $scope['plan_workbench']['confirmed']['contract_context']['design_direction_snapshot'] ?? null,
+            $scope['plan_workbench']['contract_context']['design_direction_code'] ?? null,
+            $scope['plan_workbench']['contract_context']['design_direction_snapshot'] ?? null,
+            $scope['contract_context']['design_direction_code'] ?? null,
+            $scope['contract_context']['design_direction_snapshot'] ?? null,
+        ] as $candidate) {
+            $this->collectInternalVisibleCopyTerms($candidate, $terms);
+        }
+
+        return \array_values($terms);
+    }
+
+    /**
+     * @param array<string, string> $terms
+     */
+    private function collectInternalVisibleCopyTerms(mixed $raw, array &$terms): void
+    {
+        if (\is_array($raw)) {
+            foreach ($raw as $key => $value) {
+                if (\is_array($value)) {
+                    foreach (['code', 'name', 'title', 'label'] as $field) {
+                        $this->addInternalVisibleCopyTerm($value[$field] ?? null, $terms);
+                    }
+                    continue;
+                }
+                if (\is_scalar($key) && \in_array((string)$key, ['code', 'name', 'title', 'label'], true)) {
+                    $this->addInternalVisibleCopyTerm($value, $terms);
+                    continue;
+                }
+                if (\is_int($key)) {
+                    $this->addInternalVisibleCopyTerm($value, $terms);
+                }
+            }
+            return;
+        }
+
+        if (!\is_string($raw)) {
+            $this->addInternalVisibleCopyTerm($raw, $terms);
+            return;
+        }
+
+        $text = \trim($raw);
+        if ($text === '') {
+            return;
+        }
+
+        $decoded = \json_decode($text, true);
+        if (\is_array($decoded)) {
+            $this->collectInternalVisibleCopyTerms($decoded, $terms);
+            return;
+        }
+
+        $items = \preg_split('/[,;]+/u', $text, -1, \PREG_SPLIT_NO_EMPTY) ?: [$text];
+        foreach ($items as $item) {
+            $this->addInternalVisibleCopyTerm($item, $terms);
+        }
+    }
+
+    /**
+     * @param array<string, string> $terms
+     */
+    private function addInternalVisibleCopyTerm(mixed $value, array &$terms): void
+    {
+        if (!\is_scalar($value)) {
+            return;
+        }
+
+        $term = $this->normalizeInternalVisibleCopyTerm((string)$value);
+        if ($term === '') {
+            return;
+        }
+
+        foreach (\array_values(\array_unique([
+            $term,
+            \str_replace(['-', '_'], ' ', $term),
+            \ucwords(\str_replace(['-', '_'], ' ', $term)),
+        ])) as $variant) {
+            $variant = $this->normalizeInternalVisibleCopyTerm($variant);
+            if ($variant === '') {
+                continue;
+            }
+            $key = \function_exists('mb_strtolower') ? \mb_strtolower($variant) : \strtolower($variant);
+            $terms[$key] = $variant;
+        }
+    }
+
+    private function normalizeInternalVisibleCopyTerm(string $value): string
+    {
+        $value = $this->normalizeWhitespace(\trim($value, " \t\n\r\0\x0B\"'`"));
+        if ($value === '' || $this->isUnsafeInternalCopyTerm($value)) {
+            return '';
+        }
+
+        return $value;
+    }
+
+    private function isUnsafeInternalCopyTerm(string $value): bool
+    {
+        $length = \function_exists('mb_strlen') ? \mb_strlen($value) : \strlen($value);
+        if ($length < 3 || $length > 80) {
+            return true;
+        }
+        if (\preg_match('/^\d+$/u', $value) === 1) {
+            return true;
+        }
+        if (\str_contains($value, '://') || \str_contains($value, '{') || \str_contains($value, '}')) {
+            return true;
+        }
+
+        $normalized = \strtolower($value);
+
+        return \in_array($normalized, [
+            'ai',
+            'css',
+            'html',
+            'json',
+            'site',
+            'skill',
+            'style',
+            'design',
+            'prompt',
+            'profile',
+            'website',
+            'pagebuilder',
+        ], true);
+    }
+
+    /**
+     * @param list<string> $internalVisibleCopyTerms
+     */
+    private function normalizeProfileTagline(string $value, string $siteTitle, array $internalVisibleCopyTerms = []): string
     {
         $value = $this->normalizeWhitespace($value);
         if ($value === '') {
@@ -662,11 +868,15 @@ class AiSiteProfileGenerationService
             $value = $this->stripProfileFieldLabelPrefix($value, $this->profileTaglineLabelPatterns());
         }
         $value = $this->stripRepeatedTitlePrefix($value, $siteTitle);
+        $value = $this->stripInternalProfileTokens($value, $internalVisibleCopyTerms);
 
         return $this->clipText($value, 96);
     }
 
-    private function normalizeProfileBriefDescription(string $value): string
+    /**
+     * @param list<string> $internalVisibleCopyTerms
+     */
+    private function normalizeProfileBriefDescription(string $value, array $internalVisibleCopyTerms = []): string
     {
         $value = $this->normalizeWhitespace($value);
         if ($value === '') {
@@ -682,6 +892,7 @@ class AiSiteProfileGenerationService
             '',
             $value
         );
+        $value = $this->stripInternalProfileTokens($value, $internalVisibleCopyTerms);
 
         return $this->normalizeWhitespace($value);
     }
@@ -750,7 +961,10 @@ class AiSiteProfileGenerationService
         ];
     }
 
-    private function normalizeMeaningfulTitle(mixed $value): string
+    /**
+     * @param list<string> $internalVisibleCopyTerms
+     */
+    private function normalizeMeaningfulTitle(mixed $value, array $internalVisibleCopyTerms = []): string
     {
         if (!\is_scalar($value)) {
             return '';
@@ -763,7 +977,8 @@ class AiSiteProfileGenerationService
         } else {
             $title = $this->stripProfileFieldLabelPrefix($title, $this->profileTitleLabelPatterns());
         }
-        $title = $this->stripInternalProfileTokens($title);
+        $title = $this->stripInternalProfileTokens($title, $internalVisibleCopyTerms);
+        $title = $this->stripGeneratedRunSuffixFromTitle($title);
         if ($title === '' || $this->isPlaceholderSiteTitle($title)) {
             return '';
         }
@@ -771,7 +986,10 @@ class AiSiteProfileGenerationService
         return $this->clipSiteTitle($title);
     }
 
-    private function stripInternalProfileTokens(string $value): string
+    /**
+     * @param list<string> $internalVisibleCopyTerms
+     */
+    private function stripInternalProfileTokens(string $value, array $internalVisibleCopyTerms = []): string
     {
         $value = $this->normalizeWhitespace($value);
         if ($value === '') {
@@ -782,14 +1000,55 @@ class AiSiteProfileGenerationService
             ' ',
             $value
         );
+        foreach ($internalVisibleCopyTerms as $term) {
+            $term = $this->normalizeWhitespace($term);
+            if ($term === '' || $this->isUnsafeInternalCopyTerm($term)) {
+                continue;
+            }
+            $termPattern = \preg_quote($term, '/');
+            if (\preg_match('/^' . $termPattern . '$/iu', $value) === 1) {
+                return '';
+            }
+            $value = (string)\preg_replace(
+                '/(?<![\p{L}\p{N}])' . $termPattern . '(?![\p{L}\p{N}])/iu',
+                ' ',
+                $value
+            );
+        }
         $value = (string)\preg_replace('/\s*[-:|]\s*$/u', '', $value);
+        if (\preg_match('/^(?:built|created|generated|designed|powered)\s+(?:with|by)$/iu', $value) === 1) {
+            return '';
+        }
 
         return $this->normalizeWhitespace($value);
     }
 
-    private function deriveSiteTitleFromBrief(string $briefDescription, string $targetDomain): string
+    private function stripGeneratedRunSuffixFromTitle(string $title): string
+    {
+        $title = $this->normalizeWhitespace($title);
+        if ($title === '') {
+            return '';
+        }
+        if (\preg_match('/^(.*\D)\s+(\d{4,})$/u', $title, $matches) !== 1) {
+            return $title;
+        }
+
+        $suffix = (int)($matches[2] ?? 0);
+        $currentYear = (int)\date('Y');
+        if ($suffix < 1900 || $suffix > ($currentYear + 5) || \strlen((string)($matches[2] ?? '')) >= 5) {
+            return $this->normalizeWhitespace((string)($matches[1] ?? $title));
+        }
+
+        return $title;
+    }
+
+    /**
+     * @param list<string> $internalVisibleCopyTerms
+     */
+    private function deriveSiteTitleFromBrief(string $briefDescription, string $targetDomain, array $internalVisibleCopyTerms = []): string
     {
         $explicitTitle = $this->extractExplicitSiteTitleFromBrief($briefDescription);
+        $explicitTitle = $this->normalizeMeaningfulTitle($explicitTitle, $internalVisibleCopyTerms);
         if ($explicitTitle !== '' && !$this->isPlaceholderSiteTitle($explicitTitle)) {
             return $this->clipSiteTitle($explicitTitle);
         }
@@ -797,6 +1056,7 @@ class AiSiteProfileGenerationService
         $candidates = $this->buildDescriptionSegments($briefDescription);
         foreach ($candidates as $candidate) {
             $candidate = $this->stripTitleLeadIn($candidate);
+            $candidate = $this->normalizeMeaningfulTitle($candidate, $internalVisibleCopyTerms);
             if ($candidate === '' || $this->isPlaceholderSiteTitle($candidate)) {
                 continue;
             }
@@ -845,22 +1105,27 @@ class AiSiteProfileGenerationService
         return \count($words) > 4;
     }
 
-    private function deriveSiteTaglineFromBrief(string $briefDescription, string $siteTitle): string
+    /**
+     * @param list<string> $internalVisibleCopyTerms
+     */
+    private function deriveSiteTaglineFromBrief(string $briefDescription, string $siteTitle, array $internalVisibleCopyTerms = []): string
     {
         $explicit = $this->extractLabeledProfileSegment($briefDescription, $this->profileTaglineLabelPatterns());
         if ($explicit !== '') {
-            return $this->normalizeProfileTagline($explicit, $siteTitle);
+            return $this->normalizeProfileTagline($explicit, $siteTitle, $internalVisibleCopyTerms);
         }
 
         $segments = $this->buildDescriptionSegments($briefDescription);
         foreach ($segments as $segment) {
             $candidate = $this->stripRepeatedTitlePrefix($segment, $siteTitle);
+            $candidate = $this->stripInternalProfileTokens($candidate, $internalVisibleCopyTerms);
             if ($candidate !== '' && $candidate !== $siteTitle) {
                 return $this->clipText($candidate, 72);
             }
         }
 
         $candidate = $this->stripRepeatedTitlePrefix($this->normalizeWhitespace($briefDescription), $siteTitle);
+        $candidate = $this->stripInternalProfileTokens($candidate, $internalVisibleCopyTerms);
         if ($candidate === '' || $candidate === $siteTitle) {
             return '';
         }
@@ -907,6 +1172,9 @@ class AiSiteProfileGenerationService
         }
 
         $patterns = [
+            '/^(?:please\s+)?(?:create|build|generate|make|design|develop|produce)\s+(?:a|an|the)?\s*(?:(?:polished|premium|english|official|mobile-first|responsive|seo-friendly|recommendation)\s+)*(?:website|site|homepage|landing\s+page)\s+(?:for|about)\s*/iu',
+            '/^(?:a|an|the)\s+(?:(?:polished|premium|english|official|mobile-first|responsive|seo-friendly|recommendation)\s+)*(?:website|site|homepage|landing\s+page)\s+(?:for|about)\s*/iu',
+            '/^(?:please\s+)?(?:create|build|generate|make|design|develop|produce)\s+(?:a|an|the)?\s*/iu',
             '/^(?:请帮我|帮我|帮忙|我要|我想|我需要|需要|想做|想要|希望|打算|准备|计划)\s*/u',
             '/^(?:做|做个|做一个|做一套|搭建|创建|生成|制作|开发|设计|建立)\s*/u',
             '/^(?:一个|个|一套|一款)\s*/u',

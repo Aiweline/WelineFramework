@@ -6,6 +6,7 @@ namespace Weline\Ai\Service\Provider;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Ai\Model\AiModel;
 use Weline\Framework\App\Exception;
+use Weline\Framework\Php\FiberTaskRunner;
 
 class GeminiProvider implements ProviderInterface, ImageGenerationProviderInterface, ModelListingProviderInterface, ProviderConnectionTestInterface
 {
@@ -284,12 +285,12 @@ class GeminiProvider implements ProviderInterface, ImageGenerationProviderInterf
             }
         }
 
-        $response = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
+        $curlResult = $this->executeJsonCurl($ch);
+        $response = (string)($curlResult['body'] ?? '');
+        $httpCode = (int)($curlResult['http_code'] ?? 0);
+        $curlError = (string)($curlResult['error'] ?? '');
 
-        if ($response === false || $curlError !== '') {
+        if ($response === '' || $curlError !== '') {
             throw new Exception('Gemini API request failed: ' . ($curlError !== '' ? $curlError : 'empty response'));
         }
 
@@ -299,7 +300,7 @@ class GeminiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
-            sleep(self::RETRY_DELAY * ($retryCount + 1));
+            $this->delayBeforeRetry($retryCount);
             return $this->requestJson($url, $data, $proxyInfo, $timeout, $apiKey, $retryCount + 1);
         }
 
@@ -309,6 +310,59 @@ class GeminiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         return $result;
+    }
+
+    /**
+     * @return array{body:string,http_code:int,error:string}
+     */
+    private function executeJsonCurl(\CurlHandle $ch): array
+    {
+        $pump = FiberTaskRunner::currentPump();
+        if ($pump !== null) {
+            $handleId = $pump->register($ch);
+            $body = '';
+            $curlResult = ['ok' => false, 'errno' => 0, 'error' => ''];
+
+            try {
+                while (($chunk = $pump->awaitChunk($handleId)) !== null) {
+                    if ($chunk !== '') {
+                        $body .= $chunk;
+                    }
+                }
+                $curlResult = $pump->finalize($handleId);
+                $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = (string)(curl_error($ch) ?: ($curlResult['error'] ?? ''));
+                curl_close($ch);
+
+                return [
+                    'body' => $body,
+                    'http_code' => $httpCode,
+                    'error' => !empty($curlResult['ok'])
+                        ? $error
+                        : ($error !== '' ? $error : (string)($curlResult['error'] ?? '')),
+                ];
+            } catch (\Throwable $throwable) {
+                $pump->abort($handleId);
+                curl_close($ch);
+                throw $throwable;
+            }
+        }
+
+        $response = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = (string)curl_error($ch);
+        curl_close($ch);
+
+        return [
+            'body' => $response === false ? '' : (string)$response,
+            'http_code' => $httpCode,
+            'error' => $curlError,
+        ];
+    }
+
+    private function delayBeforeRetry(int $retryCount): void
+    {
+        \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(self::RETRY_DELAY * ($retryCount + 1) * 1000);
     }
 
     private function extractText(array $response): string

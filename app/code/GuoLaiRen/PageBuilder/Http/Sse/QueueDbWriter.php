@@ -54,15 +54,26 @@ class QueueDbWriter extends SseWriter
 
     private const QUEUE_EVENT_TEXT_MAX_BYTES = 512;
 
+    private const QUEUE_CONTENT_PROGRESS_MERGE_MAX_DECODE_BYTES = 262144;
+
     private const QUEUE_RESULT_TRUNCATION_MARKER = '[... queue log truncated ...]';
 
     private const TELEMETRY_DUPLICATE_SUPPRESSION_SECONDS = 5;
+
+    private const STAGE_ONE_PROGRESS_LIST_LIMIT = 64;
+
+    private const STAGE_ONE_PROGRESS_DETAIL_LIMIT = 32;
+
+    private const STAGE_ONE_PROGRESS_BLOCK_LIMIT = 48;
+
+    private const BUILD_PLAN_BLOCK_PROGRESS_LIMIT = 64;
+
+    private const BUILD_PLAN_BLOCK_PROGRESS_MESSAGE_BYTES = 160;
 
     private const HEAVY_QUEUE_EVENT_FIELDS = [
         'state',
         'workspace_state',
         'scope',
-        'snapshot',
         'events',
         'top_logs',
         'result_log',
@@ -721,6 +732,27 @@ class QueueDbWriter extends SseWriter
      */
     private function sanitizePayloadForQueueEvent(string $event, array $payload): array
     {
+        $payload = $this->discardLegacyStatePayloadFields($payload);
+        if (\is_array($payload['stage1_page_progress'] ?? null)) {
+            $payload['stage1_page_progress'] = $this->compactStageOnePageProgress($payload['stage1_page_progress']);
+        }
+        if (\is_array($payload['task_summary'] ?? null)) {
+            $payload['task_summary'] = $this->compactBuildTaskSummary($payload['task_summary']);
+        }
+        if (\is_array($payload['task_progress'] ?? null)) {
+            $payload['task_progress'] = $this->compactBuildTaskSummary($payload['task_progress']);
+        }
+        if (\is_array($payload['build_task_summary'] ?? null)) {
+            $payload['build_task_summary'] = $this->compactBuildTaskSummary($payload['build_task_summary']);
+        }
+        if (\is_array($payload['page_block_progress'] ?? null)) {
+            $payload['page_block_progress'] = $this->compactBuildPageBlockProgress($payload['page_block_progress']);
+        }
+        if (\is_array($payload['build_plan_block_progress'] ?? null)) {
+            $payload['build_plan_block_progress'] = $this->compactBuildPlanBlockProgress($payload['build_plan_block_progress']);
+        } elseif (\is_array($payload['state']['build_plan_block_progress'] ?? null)) {
+            $payload['build_plan_block_progress'] = $this->compactBuildPlanBlockProgress($payload['state']['build_plan_block_progress']);
+        }
         if (!$this->isContentBearingStreamPayload($event, $payload)) {
             return $this->capQueueEventPayloadBytes($this->pruneHeavyQueuePayloadFields($payload));
         }
@@ -762,6 +794,23 @@ class QueueDbWriter extends SseWriter
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
+    private function discardLegacyStatePayloadFields(array $payload): array
+    {
+        unset($payload['snapshot'], $payload['queue_snapshot'], $payload['checkpoint']);
+        foreach (['payload', 'details', 'terminal_summary'] as $nestedField) {
+            if (!\is_array($payload[$nestedField] ?? null)) {
+                continue;
+            }
+            unset($payload[$nestedField]['snapshot'], $payload[$nestedField]['queue_snapshot'], $payload[$nestedField]['checkpoint']);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
     private function pruneHeavyQueuePayloadFields(array $payload): array
     {
         foreach (self::HEAVY_QUEUE_EVENT_FIELDS as $field) {
@@ -771,7 +820,7 @@ class QueueDbWriter extends SseWriter
             $this->replaceHeavyPayloadValueWithRef($payload, $field, $payload[$field]);
         }
 
-        foreach (['payload', 'details', 'checkpoint', 'terminal_summary'] as $nestedField) {
+        foreach (['payload', 'details', 'terminal_summary'] as $nestedField) {
             if (!\is_array($payload[$nestedField] ?? null)) {
                 continue;
             }
@@ -828,7 +877,7 @@ class QueueDbWriter extends SseWriter
             return $payload;
         }
 
-        foreach (['details', 'payload', 'checkpoint', 'task_runtime_context', 'queue_snapshot', 'token_cost_meta'] as $field) {
+        foreach (['details', 'payload', 'task_runtime_context', 'queue_state', 'token_cost_meta'] as $field) {
             if (!\array_key_exists($field, $payload)) {
                 continue;
             }
@@ -851,7 +900,6 @@ class QueueDbWriter extends SseWriter
             'job_type',
             'queue_status',
             'queue_process',
-            'stage1_page_progress',
             'status',
             'task_key',
             'task_type',
@@ -863,6 +911,12 @@ class QueueDbWriter extends SseWriter
             'terminal',
             'terminal_summary',
             'token_usage',
+            'stage1_page_progress',
+            'task_summary',
+            'task_progress',
+            'build_task_summary',
+            'page_block_progress',
+            'build_plan_block_progress',
         ] as $field) {
             if (\array_key_exists($field, $payload)) {
                 $compact[$field] = $payload[$field];
@@ -970,6 +1024,7 @@ class QueueDbWriter extends SseWriter
         $resultLine = $this->shouldPersistQueueResultLine($event, $payload) ? $line : '';
         $patch = $this->buildQueueResultPatch($resultLine, $summary);
         $this->mergeStageOnePageProgressIntoQueueContentPatch($patch, $payload);
+        $this->mergeBuildProgressIntoQueueContentPatch($patch, $payload);
         if ($patch === []) {
             return true;
         }
@@ -984,83 +1039,6 @@ class QueueDbWriter extends SseWriter
         }
 
         return true;
-    }
-
-    /**
-     * Persist only the current compact Stage-1 page fanout progress so a browser
-     * refresh can recover total/done/remaining without replaying SSE logs.
-     *
-     * @param array<string, mixed> $patch
-     * @param array<string, mixed> $payload
-     */
-    private function mergeStageOnePageProgressIntoQueueContentPatch(array &$patch, array $payload): void
-    {
-        if ($this->queueId <= 0 || !\is_array($payload['stage1_page_progress'] ?? null)) {
-            return;
-        }
-
-        $row = w_query('queue', 'get', ['queue_id' => $this->queueId]);
-        if (!\is_array($row) || $row === []) {
-            return;
-        }
-
-        $content = \json_decode((string)($row['content'] ?? ''), true);
-        if (!\is_array($content)) {
-            $content = [];
-        }
-        $content['stage1_page_progress'] = $this->compactStageOnePageProgress($payload['stage1_page_progress']);
-        $encoded = \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
-        if (\is_string($encoded) && $encoded !== '') {
-            $patch['content'] = $encoded;
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $progress
-     * @return array<string, mixed>
-     */
-    private function compactStageOnePageProgress(array $progress): array
-    {
-        $compact = [];
-        foreach ([
-            'total',
-            'done_count',
-            'failed_count',
-            'running_count',
-            'pending_count',
-            'remaining_count',
-            'updated_at',
-        ] as $key) {
-            if (\array_key_exists($key, $progress)) {
-                $compact[$key] = $progress[$key];
-            }
-        }
-        foreach (['running', 'done', 'failed', 'pending'] as $key) {
-            $compact[$key] = \array_values(\array_slice(
-                \array_filter(\array_map('strval', \is_array($progress[$key] ?? null) ? $progress[$key] : [])),
-                0,
-                32
-            ));
-        }
-        $details = [];
-        foreach (\is_array($progress['details'] ?? null) ? $progress['details'] : [] as $detail) {
-            if (!\is_array($detail)) {
-                continue;
-            }
-            $details[] = [
-                'page_type' => $this->strcutQueueTail((string)($detail['page_type'] ?? ''), 80),
-                'status' => $this->strcutQueueTail((string)($detail['status'] ?? ''), 40),
-                'message' => $this->strcutQueueTail((string)($detail['message'] ?? ''), 180),
-                'error_message' => $this->strcutQueueTail((string)($detail['error_message'] ?? ''), 180),
-                'updated_at' => $this->strcutQueueTail((string)($detail['updated_at'] ?? ''), 40),
-            ];
-            if (\count($details) >= 32) {
-                break;
-            }
-        }
-        $compact['details'] = $details;
-
-        return $compact;
     }
 
     /**
@@ -1102,7 +1080,7 @@ class QueueDbWriter extends SseWriter
             return true;
         }
 
-        if (!empty($payload['checkpoint']) || !empty($payload['terminal']) || !empty($payload['terminal_summary'])) {
+        if (!empty($payload['terminal']) || !empty($payload['terminal_summary'])) {
             return true;
         }
 
@@ -1145,7 +1123,8 @@ class QueueDbWriter extends SseWriter
 
         $operation = \trim((string)($payload['operation'] ?? $this->operation));
         $stage = \trim((string)($payload['stage'] ?? $this->stage));
-        $signature = \sha1($eventType . '|' . $operation . '|' . $stage . '|' . $summary);
+        $progressSignature = $this->buildQueueProgressPayloadSignature($payload);
+        $signature = \sha1($eventType . '|' . $operation . '|' . $stage . '|' . $summary . '|' . $progressSignature);
         $now = \time();
         $lastSeenAt = (int)($this->lastTelemetrySignatures[$signature] ?? 0);
         if ($lastSeenAt > 0 && ($now - $lastSeenAt) < self::TELEMETRY_DUPLICATE_SUPPRESSION_SECONDS) {
@@ -1158,6 +1137,643 @@ class QueueDbWriter extends SseWriter
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function buildQueueProgressPayloadSignature(array $payload): string
+    {
+        $progress = [];
+        foreach ([
+            'stage1_page_progress',
+            'task_summary',
+            'task_progress',
+            'build_task_summary',
+            'page_block_progress',
+            'build_plan_block_progress',
+        ] as $field) {
+            if (\is_array($payload[$field] ?? null)) {
+                $progress[$field] = $payload[$field];
+            }
+        }
+        if ($progress === []) {
+            return '';
+        }
+
+        return \sha1((string)\json_encode(
+            $progress,
+            \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR
+        ));
+    }
+
+    /**
+     * @param array<string, mixed> $patch
+     * @param array<string, mixed> $payload
+     */
+    private function mergeStageOnePageProgressIntoQueueContentPatch(array &$patch, array $payload): void
+    {
+        if ($this->queueId <= 0 || !\is_array($payload['stage1_page_progress'] ?? null)) {
+            return;
+        }
+
+        try {
+            $row = w_query('queue', 'get', ['queue_id' => $this->queueId]);
+            if (\is_object($row) && \method_exists($row, 'getData')) {
+                $row = $row->getData();
+            }
+            $content = [];
+            if (\is_array($row)) {
+                $rawContent = $row['content'] ?? null;
+                if (\is_array($rawContent)) {
+                    $content = $rawContent;
+                } elseif (\is_string($rawContent) && \trim($rawContent) !== '') {
+                    if (\strlen($rawContent) > self::QUEUE_CONTENT_PROGRESS_MERGE_MAX_DECODE_BYTES) {
+                        $encodedProgress = \json_encode(
+                            $this->compactStageOnePageProgress($payload['stage1_page_progress']),
+                            \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+                        );
+                        if (\is_string($encodedProgress) && $encodedProgress !== '') {
+                            $largeContent = $this->replaceLargeQueueContentStageOneProgress($rawContent, $encodedProgress);
+                            if ($largeContent !== '') {
+                                $patch['content'] = $largeContent;
+                            }
+                        }
+                        return;
+                    }
+                    $decoded = \json_decode($rawContent, true);
+                    if (\is_array($decoded)) {
+                        $content = $decoded;
+                    }
+                }
+            }
+
+            $content['stage1_page_progress'] = $this->compactStageOnePageProgress($payload['stage1_page_progress']);
+            $encoded = \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            if (\is_string($encoded) && $encoded !== '') {
+                $patch['content'] = $encoded;
+            }
+        } catch (\Throwable) {
+            // Progress persistence must never interrupt the queue worker.
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $patch
+     * @param array<string, mixed> $payload
+     */
+    private function mergeBuildProgressIntoQueueContentPatch(array &$patch, array $payload): void
+    {
+        if ($this->queueId <= 0) {
+            return;
+        }
+        $progress = $this->buildQueueContentBuildProgressValues($payload);
+        if ($progress === []) {
+            return;
+        }
+
+        try {
+            $row = w_query('queue', 'get', ['queue_id' => $this->queueId]);
+            if (\is_object($row) && \method_exists($row, 'getData')) {
+                $row = $row->getData();
+            }
+            $content = [];
+            if (\is_array($row)) {
+                $rawContent = $row['content'] ?? null;
+                if (\is_array($rawContent)) {
+                    $content = $rawContent;
+                } elseif (\is_string($rawContent) && \trim($rawContent) !== '') {
+                    if (\strlen($rawContent) > self::QUEUE_CONTENT_PROGRESS_MERGE_MAX_DECODE_BYTES) {
+                        $largeContent = $this->replaceLargeQueueContentProgressValues($rawContent, $progress);
+                        if ($largeContent !== '') {
+                            $patch['content'] = $largeContent;
+                        }
+                        return;
+                    }
+                    $decoded = \json_decode($rawContent, true);
+                    if (\is_array($decoded)) {
+                        $content = $decoded;
+                    }
+                }
+            }
+
+            foreach ($progress as $key => $value) {
+                $content[$key] = $value;
+            }
+            $encoded = \json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            if (\is_string($encoded) && $encoded !== '') {
+                $patch['content'] = $encoded;
+            }
+        } catch (\Throwable) {
+            // Progress persistence must never interrupt the queue worker.
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function buildQueueContentBuildProgressValues(array $payload): array
+    {
+        $progress = [];
+        $summary = \is_array($payload['build_task_summary'] ?? null)
+            ? $payload['build_task_summary']
+            : (\is_array($payload['task_summary'] ?? null)
+                ? $payload['task_summary']
+                : (\is_array($payload['task_progress'] ?? null) ? $payload['task_progress'] : []));
+        if ($summary !== []) {
+            $progress['build_task_summary'] = $this->compactBuildTaskSummary($summary);
+        }
+        if (\is_array($payload['page_block_progress'] ?? null)) {
+            $progress['page_block_progress'] = $this->compactBuildPageBlockProgress($payload['page_block_progress']);
+        }
+        if (\is_array($payload['build_plan_block_progress'] ?? null)) {
+            $progress['build_plan_block_progress'] = $this->compactBuildPlanBlockProgress($payload['build_plan_block_progress']);
+        }
+        if (\array_key_exists('progress_percent', $payload)) {
+            $progress['progress_percent'] = \max(0, \min(100, (int)$payload['progress_percent']));
+        }
+        if (\array_key_exists('active_concurrency', $payload)) {
+            $progress['active_concurrency'] = \max(0, (int)$payload['active_concurrency']);
+        }
+
+        return $progress;
+    }
+
+    /**
+     * @param array<string, mixed> $values
+     */
+    private function replaceLargeQueueContentProgressValues(string $rawContent, array $values): string
+    {
+        $trimmed = \rtrim($rawContent);
+        if ($trimmed === '' || !\str_starts_with(\ltrim($trimmed), '{') || !\str_ends_with($trimmed, '}')) {
+            return '';
+        }
+
+        foreach ($values as $key => $value) {
+            $encodedValue = \json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            if (!\is_string($encodedValue) || $encodedValue === '') {
+                continue;
+            }
+            $next = $this->replaceLargeQueueContentTopLevelValue($trimmed, (string)$key, $encodedValue);
+            if ($next === '') {
+                return '';
+            }
+            $trimmed = $next;
+        }
+
+        return $trimmed;
+    }
+
+    private function replaceLargeQueueContentTopLevelValue(string $rawContent, string $key, string $encodedValue): string
+    {
+        $range = $this->findLargeQueueContentJsonValueRange($rawContent, $key);
+        if ($range !== null) {
+            return \substr($rawContent, 0, $range[0]) . $encodedValue . \substr($rawContent, $range[1]);
+        }
+
+        $insertAt = \strrpos($rawContent, '}');
+        if ($insertAt === false) {
+            return '';
+        }
+        $encodedKey = \json_encode($key, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        if (!\is_string($encodedKey) || $encodedKey === '') {
+            return '';
+        }
+        $prefix = \rtrim(\substr($rawContent, 0, $insertAt));
+        $needsComma = !\str_ends_with($prefix, '{');
+
+        return $prefix . ($needsComma ? ',' : '') . $encodedKey . ':' . $encodedValue . \substr($rawContent, $insertAt);
+    }
+
+    private function replaceLargeQueueContentStageOneProgress(string $rawContent, string $encodedProgress): string
+    {
+        $trimmed = \rtrim($rawContent);
+        if ($trimmed === '' || !\str_starts_with(\ltrim($trimmed), '{') || !\str_ends_with($trimmed, '}')) {
+            return '';
+        }
+
+        $range = $this->findLargeQueueContentJsonValueRange($trimmed, 'stage1_page_progress');
+        if ($range !== null) {
+            return \substr($trimmed, 0, $range[0]) . $encodedProgress . \substr($trimmed, $range[1]);
+        }
+
+        $insertAt = \strrpos($trimmed, '}');
+        if ($insertAt === false) {
+            return '';
+        }
+        $prefix = \rtrim(\substr($trimmed, 0, $insertAt));
+        $needsComma = !\str_ends_with($prefix, '{');
+
+        return $prefix . ($needsComma ? ',' : '') . '"stage1_page_progress":' . $encodedProgress . \substr($trimmed, $insertAt);
+    }
+
+    /**
+     * @return array{0:int,1:int}|null
+     */
+    private function findLargeQueueContentJsonValueRange(string $json, string $key): ?array
+    {
+        $length = \strlen($json);
+        $i = 0;
+        while ($i < $length && \ctype_space($json[$i])) {
+            $i++;
+        }
+        if ($i >= $length || $json[$i] !== '{') {
+            return null;
+        }
+        $i++;
+
+        while ($i < $length) {
+            while ($i < $length && (\ctype_space($json[$i]) || $json[$i] === ',')) {
+                $i++;
+            }
+            if ($i >= $length || $json[$i] === '}') {
+                return null;
+            }
+            if ($json[$i] !== '"') {
+                return null;
+            }
+
+            $keyStart = $i;
+            $keyEnd = $this->findLargeQueueContentJsonStringEnd($json, $keyStart);
+            if ($keyEnd === null) {
+                return null;
+            }
+
+            $rawKey = \substr($json, $keyStart, $keyEnd - $keyStart);
+            $decodedKey = \str_contains($rawKey, '\\')
+                ? \json_decode($rawKey, true)
+                : \substr($rawKey, 1, -1);
+            $i = $keyEnd;
+            while ($i < $length && \ctype_space($json[$i])) {
+                $i++;
+            }
+            if ($i >= $length || $json[$i] !== ':') {
+                return null;
+            }
+            $i++;
+            while ($i < $length && \ctype_space($json[$i])) {
+                $i++;
+            }
+            if ($i >= $length) {
+                return null;
+            }
+
+            $valueStart = $i;
+            $valueEnd = $this->findLargeQueueContentJsonValueEnd($json, $valueStart);
+            if ($valueEnd === null) {
+                return null;
+            }
+            if ($decodedKey === $key) {
+                return [$valueStart, $valueEnd];
+            }
+
+            $i = $valueEnd;
+        }
+
+        return null;
+    }
+
+    private function findLargeQueueContentJsonValueEnd(string $json, int $start): ?int
+    {
+        $length = \strlen($json);
+        if ($start >= $length) {
+            return null;
+        }
+
+        $first = $json[$start];
+        if ($first === '"') {
+            return $this->findLargeQueueContentJsonStringEnd($json, $start);
+        }
+
+        if ($first === '{' || $first === '[') {
+            $stack = [$first === '{' ? '}' : ']'];
+            $inString = false;
+            $escaped = false;
+            for ($i = $start + 1; $i < $length; $i++) {
+                $char = $json[$i];
+                if ($inString) {
+                    if ($escaped) {
+                        $escaped = false;
+                        continue;
+                    }
+                    if ($char === '\\') {
+                        $escaped = true;
+                        continue;
+                    }
+                    if ($char === '"') {
+                        $inString = false;
+                    }
+                    continue;
+                }
+                if ($char === '"') {
+                    $inString = true;
+                    continue;
+                }
+                if ($char === '{' || $char === '[') {
+                    $stack[] = $char === '{' ? '}' : ']';
+                    continue;
+                }
+                if ($stack !== [] && $char === $stack[\count($stack) - 1]) {
+                    \array_pop($stack);
+                    if ($stack === []) {
+                        return $i + 1;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        for ($i = $start; $i < $length; $i++) {
+            if ($json[$i] === ',' || $json[$i] === '}') {
+                return $i;
+            }
+        }
+
+        return null;
+    }
+
+    private function findLargeQueueContentJsonStringEnd(string $json, int $start): ?int
+    {
+        $length = \strlen($json);
+        if ($start >= $length || $json[$start] !== '"') {
+            return null;
+        }
+
+        $escaped = false;
+        for ($i = $start + 1; $i < $length; $i++) {
+            $char = $json[$i];
+            if ($escaped) {
+                $escaped = false;
+                continue;
+            }
+            if ($char === '\\') {
+                $escaped = true;
+                continue;
+            }
+            if ($char === '"') {
+                return $i + 1;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $progress
+     * @return array<string, mixed>
+     */
+    private function compactBuildTaskSummary(array $summary): array
+    {
+        $compact = [];
+        foreach (['total', 'done', 'pending', 'todo', 'queued', 'running', 'failed', 'cancelled', 'stale'] as $key) {
+            $compact[$key] = \max(0, (int)($summary[$key] ?? 0));
+        }
+
+        $groups = [];
+        foreach (\is_array($summary['groups'] ?? null) ? $summary['groups'] : [] as $groupKey => $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            $pageType = \trim((string)($group['page_type'] ?? $groupKey));
+            if ($pageType === '') {
+                continue;
+            }
+            $row = ['page_type' => $pageType];
+            foreach (['total', 'done', 'pending', 'todo', 'queued', 'running', 'failed', 'cancelled', 'stale'] as $key) {
+                $row[$key] = \max(0, (int)($group[$key] ?? 0));
+            }
+            $tasks = [];
+            foreach (\is_array($group['tasks'] ?? null) ? $group['tasks'] : [] as $task) {
+                if (!\is_array($task)) {
+                    continue;
+                }
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $tasks[] = [
+                    'task_key' => $taskKey,
+                    'label' => $this->strcutQueueTail(\trim((string)($task['label'] ?? $taskKey)), 120),
+                    'section_code' => \trim((string)($task['section_code'] ?? '')),
+                    'component' => \trim((string)($task['component'] ?? '')),
+                    'task_type' => \trim((string)($task['task_type'] ?? '')),
+                    'page_type' => \trim((string)($task['page_type'] ?? $pageType)),
+                    'group_key' => \trim((string)($task['group_key'] ?? $groupKey)),
+                    'status' => \trim((string)($task['status'] ?? 'pending')) ?: 'pending',
+                    'attempt_no' => \max(0, (int)($task['attempt_no'] ?? 0)),
+                    'message' => $this->strcutQueueTail(\trim((string)($task['message'] ?? '')), 180),
+                    'updated_at' => \trim((string)($task['updated_at'] ?? '')),
+                    'finished_at' => \trim((string)($task['finished_at'] ?? '')),
+                ];
+                if (\count($tasks) >= 80) {
+                    break;
+                }
+            }
+            if ($tasks !== []) {
+                $row['tasks'] = $tasks;
+            }
+            $groups[(string)$groupKey] = $row;
+            if (\count($groups) >= 80) {
+                break;
+            }
+        }
+        if ($groups !== []) {
+            $compact['groups'] = $groups;
+        }
+
+        return $compact;
+    }
+
+    /**
+     * @param array<int|string, mixed> $progress
+     * @return list<array<string, mixed>>
+     */
+    private function compactBuildPageBlockProgress(array $progress): array
+    {
+        $rows = [];
+        foreach ($progress as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $pageType = \trim((string)($row['page_type'] ?? ''));
+            if ($pageType === '') {
+                continue;
+            }
+            $rows[] = [
+                'page_type' => $pageType,
+                'done' => \max(0, (int)($row['done'] ?? 0)),
+                'total' => \max(0, (int)($row['total'] ?? 0)),
+                'running' => \max(0, (int)($row['running'] ?? 0)),
+                'queued' => \max(0, (int)($row['queued'] ?? 0)),
+                'pending' => \max(0, (int)($row['pending'] ?? ($row['todo'] ?? 0))),
+                'failed' => \max(0, (int)($row['failed'] ?? 0)),
+                'cancelled' => \max(0, (int)($row['cancelled'] ?? 0)),
+                'stale' => \max(0, (int)($row['stale'] ?? 0)),
+                'complete' => !empty($row['complete']),
+            ];
+            if (\count($rows) >= 120) {
+                break;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<int|string, mixed> $progress
+     * @return list<array<string, string>>
+     */
+    private function compactBuildPlanBlockProgress(array $progress): array
+    {
+        $rows = [];
+        foreach ($progress as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $pageType = \trim((string)($row['page_type'] ?? ''));
+            $blockId = \trim((string)($row['block_id'] ?? ($row['id'] ?? '')));
+            $sectionKey = \trim((string)($row['section_key'] ?? ($row['block_key'] ?? ($row['section_code'] ?? ''))));
+            $label = \trim((string)($row['label'] ?? ($row['title'] ?? ($sectionKey !== '' ? $sectionKey : $blockId))));
+            if ($pageType === '' && $blockId === '' && $sectionKey === '' && $label === '') {
+                continue;
+            }
+            $rows[] = [
+                'page_type' => $this->strcutQueueTail($pageType, 96),
+                'block_id' => $this->strcutQueueTail($blockId, 96),
+                'section_key' => $this->strcutQueueTail($sectionKey, 96),
+                'label' => $this->strcutQueueTail($label, 120),
+                'status' => $this->normalizeCompactBlockStatus((string)($row['status'] ?? ($row['state'] ?? ($row['execution_status'] ?? 'pending')))),
+                'message' => $this->strcutQueueTail(\trim((string)($row['message'] ?? ($row['error_message'] ?? ($row['failure_reason'] ?? '')))), self::BUILD_PLAN_BLOCK_PROGRESS_MESSAGE_BYTES),
+                'updated_at' => $this->strcutQueueTail(\trim((string)($row['updated_at'] ?? ($row['finished_at'] ?? ''))), 96),
+            ];
+            if (\count($rows) >= self::BUILD_PLAN_BLOCK_PROGRESS_LIMIT) {
+                break;
+            }
+        }
+
+        return $rows;
+    }
+
+    private function normalizeCompactBlockStatus(string $status): string
+    {
+        $status = \strtolower(\trim($status));
+        return match ($status) {
+            'complete', 'completed', 'success' => 'done',
+            'processing', 'in_progress' => 'running',
+            'error', 'failure' => 'failed',
+            'canceled' => 'cancelled',
+            'done', 'running', 'queued', 'failed', 'cancelled', 'stale' => $status,
+            default => 'pending',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $progress
+     * @return array<string, mixed>
+     */
+    private function compactStageOnePageProgress(array $progress): array
+    {
+        $compact = [
+            'total' => \max(0, (int)($progress['total'] ?? 0)),
+            'concurrency' => \max(0, (int)($progress['concurrency'] ?? ($progress['running_count'] ?? 0))),
+            'done_count' => \max(0, (int)($progress['done_count'] ?? 0)),
+            'failed_count' => \max(0, (int)($progress['failed_count'] ?? 0)),
+            'running_count' => \max(0, (int)($progress['running_count'] ?? 0)),
+            'pending_count' => \max(0, (int)($progress['pending_count'] ?? 0)),
+            'remaining_count' => \max(0, (int)($progress['remaining_count'] ?? 0)),
+            'running' => $this->compactStageOneProgressStringList(\is_array($progress['running'] ?? null) ? $progress['running'] : []),
+            'done' => $this->compactStageOneProgressStringList(\is_array($progress['done'] ?? null) ? $progress['done'] : []),
+            'failed' => $this->compactStageOneProgressStringList(\is_array($progress['failed'] ?? null) ? $progress['failed'] : []),
+            'pending' => $this->compactStageOneProgressStringList(\is_array($progress['pending'] ?? null) ? $progress['pending'] : []),
+            'updated_at' => \trim((string)($progress['updated_at'] ?? '')),
+        ];
+
+        $details = [];
+        foreach (\is_array($progress['details'] ?? null) ? $progress['details'] : [] as $detail) {
+            if (!\is_array($detail)) {
+                continue;
+            }
+            $pageType = \trim((string)($detail['page_type'] ?? ''));
+            if ($pageType === '') {
+                continue;
+            }
+            $row = [
+                'page_type' => $pageType,
+                'status' => \trim((string)($detail['status'] ?? 'pending')) ?: 'pending',
+                'message' => $this->strcutQueueTail(\trim((string)($detail['message'] ?? '')), 180),
+                'updated_at' => \trim((string)($detail['updated_at'] ?? '')),
+            ];
+            foreach (['error_message', 'block_total', 'block_done_count', 'block_failed_count', 'block_running_count', 'block_pending_count'] as $field) {
+                if (!\array_key_exists($field, $detail)) {
+                    continue;
+                }
+                $row[$field] = \is_int($detail[$field])
+                    ? \max(0, (int)$detail[$field])
+                    : $this->strcutQueueTail(\trim((string)$detail[$field]), 180);
+            }
+            if (\is_array($detail['blocks'] ?? null)) {
+                $row['blocks'] = $this->compactStageOneBlockProgressList($detail['blocks']);
+            }
+            $details[] = $row;
+            if (\count($details) >= self::STAGE_ONE_PROGRESS_DETAIL_LIMIT) {
+                break;
+            }
+        }
+        if ($details !== []) {
+            $compact['details'] = $details;
+        }
+
+        return $compact;
+    }
+
+    /**
+     * @param array<int|string, mixed> $items
+     * @return list<string>
+     */
+    private function compactStageOneProgressStringList(array $items): array
+    {
+        $normalized = [];
+        foreach ($items as $item) {
+            $value = \trim((string)$item);
+            if ($value === '' || \in_array($value, $normalized, true)) {
+                continue;
+            }
+            $normalized[] = $this->strcutQueueTail($value, 80);
+            if (\count($normalized) >= self::STAGE_ONE_PROGRESS_LIST_LIMIT) {
+                break;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<int|string, mixed> $blocks
+     * @return list<array<string, string>>
+     */
+    private function compactStageOneBlockProgressList(array $blocks): array
+    {
+        $normalized = [];
+        foreach ($blocks as $key => $block) {
+            $row = \is_array($block) ? $block : ['status' => (string)$block];
+            $blockKey = \trim((string)($row['block_key'] ?? (\is_string($key) ? $key : '')));
+            if ($blockKey === '') {
+                continue;
+            }
+            $normalized[] = [
+                'block_key' => $this->strcutQueueTail($blockKey, 80),
+                'status' => \trim((string)($row['status'] ?? 'pending')) ?: 'pending',
+                'message' => $this->strcutQueueTail(\trim((string)($row['message'] ?? '')), 160),
+                'updated_at' => \trim((string)($row['updated_at'] ?? '')),
+            ];
+            if (\count($normalized) >= self::STAGE_ONE_PROGRESS_BLOCK_LIMIT) {
+                break;
+            }
+        }
+
+        return $normalized;
     }
 
     /**

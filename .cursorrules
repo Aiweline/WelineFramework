@@ -1,37 +1,14 @@
 # Cursor Rules for WelineFramework
 
-⚠️ **CRITICAL: Read AI-ENTRY.md first for architecture & token optimization**
+Read `AI-ENTRY.md`, then follow `dev/ai/global-constraints.md` as the single source of repository-wide AI rules.
 
-## Quick Start
-1. Read `AI-ENTRY.md` (universal AI entry, complete rules)
-2. Read `CLAUDE.md` (framework quick reference)
-3. Check `dev/ai/diagrams/00-INDEX.txt` (architecture diagrams)
-4. Load `dev/ai/skills/` on-demand
+Cursor-specific always-on summaries live in `.cursor/rules/*.mdc` and mirror selected rules from `dev/ai/global-constraints.md`; if they conflict, `dev/ai/global-constraints.md` wins.
 
-## Core Protocols (MANDATORY)
-- **Multi-Agent Delivery**: `dev/ai/rules/multi-agent-protocol.md` (HIGHEST PRIORITY)
-- **Agent Supervisor**: `dev/ai/rules/agent-supervisor-protocol.md` (when you see @AgentID markers)
-- **Quality System**: `dev/ai/rules/QUALITY_SYSTEM_CURSOR_RULES.md`
-- **Efficiency Rules**: `dev/ai/rules/efficiency_rules.md`
+Additional legacy Cursor protocols remain reference-only unless explicitly triggered by task markers:
 
-## Critical Constraints
-- EVERY request must follow `dev/ai/global-constraints.md` §0: product-manager requirement decomposition → architect atomic task splitting → senior full-stack implementation → product acceptance loop until the visible/product problem is actually solved.
-- The current AI receiving the user request is the final requirement owner: monitor subtasks, review evidence, and accept/reject completion against the original user input before reporting done.
-- NEVER batch-replace or run one-off scripts to mechanically rewrite multiple source files; edit file-by-file with context review (see `dev/ai/global-constraints.md` §5.1)
-- NEVER edit `generated/` directory
-- NEVER use `routes.xml` (routing is auto-discovered)
-- NEVER use JS `alert()/confirm()` (use BackendToast/BackendConfirm)
-- ALWAYS use i18n: `__('text')` or `<lang>text</lang>`
-- ALWAYS end ORM chains with `.fetch()` or `.fetchArray()`
+- `dev/ai/rules/agent-supervisor-protocol.md` when files contain `@AgentID` or `[SUPERVISOR_TASK]`
+- `dev/ai/rules/QUALITY_SYSTEM_CURSOR_RULES.md`
+- `dev/ai/rules/multi-agent-protocol.md`
+- `dev/ai/rules/efficiency_rules.md`
 
-## Commands
-```bash
-php bin/w setup:upgrade [--route]  # Schema/route sync
-php bin/w http:request / [-b|-api] # Route test
-php bin/w server:reload|restart -r # WLS lifecycle
-```
-
-## Skills Reference
-ORM→database-model-standards | Routing→weline-routing | Events→extension-points | WLS→runtime-and-process | Theme→theme-development | Components→frontend-components | I18n→i18n-internationalization | Query→unified-query-provider | ACL→acl-permission-system
-
-Full index: `dev/ai/skills/_index.md`
+Quick commands and skill routing are maintained in `AI-ENTRY.md` and `dev/ai/skills/_index.md`.

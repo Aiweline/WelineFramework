@@ -1,28 +1,14 @@
 # AI-ENTRY.md
 
-Universal AI entry index for WelineFramework development.
-
-This file is an index only. The single source of AI rules is:
-
-- `dev/ai/global-constraints.md`
-
-## Read First
-
-1. **AI general rules** -> `dev/ai/global-constraints.md`（先执行第 0 节：**产品经理 -> 架构师 -> 高级全栈开发工程师闭环**；含第 5.1 节：**禁止批量替换与批量脚本改代码**；第 8 节：**layout 仅默认骨架/占位/挂载点，禁止交互与业务逻辑**）
-2. **Architecture diagrams** -> `dev/ai/diagrams/00-INDEX.txt`
-3. **Module docs** -> `dev/ai/diagrams/08-module-docs-index.txt`
-4. **Skills** -> `dev/ai/skills/_index.md` (on demand; frontend API tasks must read `dev/ai/skills/前端主题工程师-前端API交互/SKILL.md`; any browser-visible frontend UI work must automatically use `dev/ai/skills/ui-ux-pro-max/SKILL.md` even if the user does not mention it)
-5. **Source code** -> last resort after docs and diagrams
+Universal AI entry index for WelineFramework development. This file only routes readers; repository-wide rules live in `dev/ai/global-constraints.md`.
 
 ## Reading Order
 
-```text
-Step 0: dev/ai/global-constraints.md
-Step 1: dev/ai/diagrams/00-INDEX.txt + 01-framework-overview.txt
-Step 2: dev/ai/diagrams/08-module-docs-index.txt -> app/code/Weline/{Module}/doc/README.md
-Step 3: dev/ai/skills/_index.md -> matched dev/ai/skills/{skill}/SKILL.md
-Step 4: Source code (LAST RESORT)
-```
+1. `dev/ai/global-constraints.md`
+2. `dev/ai/diagrams/00-INDEX.txt` and relevant architecture diagrams
+3. `dev/ai/diagrams/08-module-docs-index.txt` and relevant module docs
+4. `dev/ai/skills/_index.md` and only the skills matched to the task
+5. Targeted source files for the actual call chain; broad source scans only after docs and indexes are insufficient
 
 ## Quick Commands
 
@@ -33,8 +19,6 @@ php bin/w server:start -p 9502 -n ai-test-{unique-id}  # Start test instance
 php bin/w server:reload|restart -r # WLS lifecycle for test instance
 php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance
 ```
-
-Product-manager requirement decomposition, architecture splitting, senior full-stack implementation, command safety, WLS isolation, documentation rules, SaaS deployment flow, adversarial thinking, and multi-agent splitting rules are maintained only in `dev/ai/global-constraints.md`.
 
 ## Resources
 

@@ -301,7 +301,8 @@ class Template extends DataObject
 
         if ($this->isRequestRuntime()) {
             // 请求级数据必须每次请求都重新绑定，避免单例状态泄漏。
-            $this->view_dir = $this->request->getRouterData('module_path') . DataInterface::dir . DS;
+            $modulePath = $this->request->getModulePath();
+            $this->view_dir = $modulePath === '' ? '' : rtrim($modulePath, DS) . DS . DataInterface::dir . DS;
             $this->setData('title', $this->request->getModuleName());
             $this->request->setData('url', $this->request->getUrlBuilder()->getCurrentUrl());
             $this->setData('req', new TemplateRequestView());

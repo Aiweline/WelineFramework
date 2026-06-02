@@ -2,7 +2,7 @@
 
 ## 输入字段
 
-本次前端状态只消费 PageBuilder AI workbench 已确认的工作台快照和 SSE 字段，不新增后端流程。核心输入包括 `active_operation.operation/status/message/progress_percent/queue_id/retry_allowed/failure_mode/queue_waiting_for_scheduler/can_close_stream`，以及 `plan_queue_info`、`build_queue_info` 下的 `snapshot.status/job_status/queue_status/message/error/progress_percent/retry_allowed/failure_mode`。
+本次前端状态只消费 PageBuilder AI workbench 已确认的工作台状态和 SSE 字段，不新增后端流程。核心输入包括 `active_operation.operation/status/message/progress_percent/queue_id/retry_allowed/failure_mode/queue_waiting_for_scheduler/can_close_stream`，以及 `plan_queue_info`、`build_queue_info` 下的 `status/job_status/queue_status/message/error/progress_percent/retry_allowed/failure_mode`。
 
 发布阶段同时读取 `can_publish`、`workspace_status`、`publish_status`、`latest_build_failed`、`publish_blocked_by_latest_ai_failure`、`publish_blocked_reason`、`retryable_ai_failure_count`、`retryable_ai_failures`。这些字段只决定按钮启停、阻断提示和重试入口显示，不直接触发新的取消或重试接口。
 
@@ -16,10 +16,10 @@
 | `queued` | queued | 显示已进入后台队列 | 主启动按钮保持锁定，发布按钮锁定 |
 | `running`、`processing`、`in_progress` | running | 显示生成中或构建中 | 主启动按钮保持锁定，发布按钮锁定 |
 | `cancelled`、`canceled`、`stop`、`stopped` | cancelled | 显示队列已取消，不再自动推进 | 不当作成功；如有 retryable 字段则显示重试失败项 |
-| `stale`、`expired`、`outdated` | stale | 显示状态过期并要求以最新快照为准 | 不自动推进；等待快照刷新或重试入口 |
+| `stale`、`expired`、`outdated` | stale | 显示状态过期并要求以最新工作区状态为准 | 不自动推进；等待状态刷新或重试入口 |
 | `partial_retry_required` 或 `retry_allowed=true` | retryable | 显示需重试 | 显示现有重试失败项入口；发布按钮锁定 |
-| `timeout`、`timed_out`、`connection_timeout` | timeout | 显示长时间未收到队列终态 | 切换为快照轮询兜底，发布按钮锁定 |
-| `connection_lost`、`sse_interrupted`、`disconnected`、`interrupted` | connection_lost | 显示 SSE 连接中断并切换快照轮询 | 不标记业务失败；通过快照确认终态 |
+| `timeout`、`timed_out`、`connection_timeout` | timeout | 显示长时间未收到队列终态 | 切换为工作区状态轮询兜底，发布按钮锁定 |
+| `connection_lost`、`sse_interrupted`、`disconnected`、`interrupted` | connection_lost | 显示 SSE 连接中断并切换工作区状态轮询 | 不标记业务失败；通过持久化状态确认终态 |
 
 ## 按钮矩阵
 
@@ -31,10 +31,10 @@
 
 ```text
 event: progress
-data: {"operation":"build","queue_status":"running","progress_kind":"queue_info","queue_info":{"snapshot":{"status":"running"}}}
+data: {"operation":"build","queue_status":"running","progress_kind":"queue_info","queue_info":{"status":"running"}}
 
 event: error
 data: {"operation":"plan","status":"timeout","message":"长时间未收到队列终态"}
 ```
 
-当前 `operation-sse` 断连且没有服务端错误 payload 时，前端不会把业务状态改成失败，而是渲染 `connection_lost` 并启动 workspace snapshot 轮询，等待真实终态。
+当前 `operation-sse` 断连且没有服务端错误 payload 时，前端不会把业务状态改成失败，而是渲染 `connection_lost` 并启动 workspace state 轮询，等待真实终态。

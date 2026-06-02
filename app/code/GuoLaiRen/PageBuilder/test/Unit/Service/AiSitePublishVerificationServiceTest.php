@@ -39,7 +39,7 @@ final class AiSitePublishVerificationServiceTest extends TestCase
         );
     }
 
-    public function testRejectsPublishedPageWithPlanningObservationCopy(): void
+    public function testPublishVerificationDoesNotGateOnGeneratedPlanningCopy(): void
     {
         $page = $this->createPageModel(false);
         $renderer = $this->createMock(PageRenderService::class);
@@ -58,14 +58,16 @@ final class AiSitePublishVerificationServiceTest extends TestCase
 
         $service = new AiSitePublishVerificationService($page, $renderer);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('internal planning or visitor-observation copy');
-        $service->assertPublishedPagesRenderable(
+        $report = $service->assertPublishedPagesRenderable(
             ['home_page' => ['page_id' => 74]],
             185,
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
             ['site_title' => 'Teen Patti Royal APK']
         );
+
+        self::assertTrue($report['passed']);
+        self::assertTrue((bool)($report['pages']['home_page']['signals']['internal_planning_copy_marker'] ?? false));
+        self::assertSame([], $report['pages']['home_page']['failures'] ?? null);
     }
 
     public function testPassesPublishedVirtualThemePageWithAiThemeMarkersAndBrand(): void
@@ -94,6 +96,33 @@ final class AiSitePublishVerificationServiceTest extends TestCase
         self::assertTrue($report['passed']);
         self::assertTrue((bool)($report['pages']['home_page']['signals']['virtual_theme_marker'] ?? false));
         self::assertTrue((bool)($report['pages']['home_page']['signals']['brand_visible'] ?? false));
+    }
+
+    public function testPublishVerificationDoesNotGateOnGeneratedBrandCopy(): void
+    {
+        $page = $this->createPageModel(false);
+        $renderer = $this->createMock(PageRenderService::class);
+        $renderer->expects(self::once())
+            ->method('render')
+            ->willReturn(
+                '<html><body class="pb-ai-site">'
+                . '<!-- Component content/home-page-hero-banner resolved via Weline_Theme virtual theme (theme_id=185) -->'
+                . '<main><section class="pb-ai-generated-section"><h1>Fresh Android game picks</h1></section></main>'
+                . '<footer>Download guidance</footer>'
+                . '</body></html>'
+            );
+
+        $service = new AiSitePublishVerificationService($page, $renderer);
+        $report = $service->assertPublishedPagesRenderable(
+            ['home_page' => ['page_id' => 74]],
+            185,
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            ['site_title' => 'India Card Game APK Guide']
+        );
+
+        self::assertTrue($report['passed']);
+        self::assertFalse((bool)($report['pages']['home_page']['signals']['brand_visible'] ?? true));
+        self::assertSame([], $report['pages']['home_page']['failures'] ?? null);
     }
 
     public function testPublishServiceCallsVerificationBeforeReturningSuccess(): void

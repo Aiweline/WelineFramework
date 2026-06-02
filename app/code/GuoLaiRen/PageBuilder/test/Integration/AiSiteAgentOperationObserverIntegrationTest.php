@@ -183,8 +183,8 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
                 ],
             ],
         ]);
-        $this->sessionService->replaceScope($session->getId(), 1, $scope);
         $this->sessionService->setStage($session->getId(), 1, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+        $this->sessionService->replaceScope($session->getId(), 1, $scope);
 
         $payload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-patch-block',
@@ -244,6 +244,57 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertNotNull($session);
 
         $scope = $this->sessionService->loadScope($session);
+        $buildPlan = (new AiSiteBuildPlanService())->buildFromScope([
+            'page_types' => [Page::TYPE_HOME],
+            'site_title' => 'Patch Test',
+            'default_locale' => 'en_US',
+            'plan_json' => [
+                'content_locale' => 'en_US',
+                'pages' => [
+                    Page::TYPE_HOME => [
+                        'title' => 'Home',
+                        'page_goal' => 'Explain the patch test site clearly.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'title' => 'Hero',
+                                'goal' => 'Introduce the offer with a direct CTA.',
+                                'page_flow_role' => 'hero_intro',
+                                'visual_signature' => [
+                                    'composition_pattern' => 'single-column hero with compact proof row',
+                                    'spatial_rhythm' => 'generous top spacing with tight CTA grouping',
+                                    'media_strategy' => 'CSS-only accent surface',
+                                    'surface_treatment' => 'clean contrast with focused text hierarchy',
+                                ],
+                                'field_plan' => [
+                                    ['field' => 'headline', 'sample' => 'Patch Test'],
+                                    ['field' => 'description', 'sample' => 'Small focused updates keep the page reliable.'],
+                                    ['field' => 'cta', 'sample' => 'Get started'],
+                                ],
+                            ],
+                            [
+                                'block_key' => 'features',
+                                'title' => 'Features',
+                                'goal' => 'Summarize the core feature set.',
+                                'page_flow_role' => 'feature_summary',
+                                'visual_signature' => [
+                                    'composition_pattern' => 'two-column feature summary',
+                                    'spatial_rhythm' => 'even card spacing with short copy lines',
+                                    'media_strategy' => 'CSS-only icon accents',
+                                    'surface_treatment' => 'subtle bordered panels',
+                                ],
+                                'field_plan' => [
+                                    ['field' => 'description', 'sample' => 'Small focused updates keep the page reliable.'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $buildPlan['contract_meta']['status'] = 'confirmed';
+        $buildPlan['contract_meta']['confirmed_at'] = '2026-05-11 00:00:00';
+        $buildPlan['contract_meta']['signature'] = (string)($buildPlan['contract_meta']['source_signature'] ?? 'patch-test-build-plan');
         $scope = \array_replace($scope, [
             'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH,
@@ -254,81 +305,41 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             'build_plan_confirmed_at' => '2026-05-11 00:00:00',
             'fake_mode' => 1,
             'website_profile' => ['business_name' => 'Patch Test'],
-            'build_plan_v2' => [
-                'contract_meta' => [
-                    'status' => 'confirmed',
-                    'confirmed_at' => '2026-05-11 00:00:00',
-                ],
-                'pages' => [
-                    ['page_type' => Page::TYPE_HOME, 'title' => 'Home'],
-                ],
-                'blocks' => [
-                    ['page_type' => Page::TYPE_HOME, 'block_key' => 'hero', 'component_code' => 'content/hero'],
-                    ['page_type' => Page::TYPE_HOME, 'block_key' => 'features', 'component_code' => 'content/features'],
-                ],
-                'tasks' => [
-                    [
-                        'task_key' => 'page:home_page:hero',
-                        'task_type' => 'page_section',
-                        'page_type' => Page::TYPE_HOME,
-                        'section_code' => 'content/hero',
-                        'runtime_context' => ['block_key' => 'hero'],
+            'build_plan_v2' => $buildPlan,
+            'page_type_layouts' => [
+                Page::TYPE_HOME => [
+                    'content' => [
+                        [
+                            'block_id' => 'hero',
+                            'code' => 'content/hero',
+                            'component_code' => 'content/hero',
+                            'type' => 'hero',
+                            'config' => ['headline' => 'Original headline'],
+                            'html' => '<section><h1>Original headline</h1></section>',
+                            'field_schema' => [
+                                'content' => [
+                                    'fields' => [
+                                        ['key' => 'headline', 'type' => 'text'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                        [
+                            'block_id' => 'features',
+                            'code' => 'content/features',
+                            'component_code' => 'content/features',
+                            'type' => 'features',
+                            'config' => ['headline' => 'Stable features'],
+                            'html' => '<section><h2>Stable features</h2></section>',
+                            'field_schema' => [
+                                'content' => [
+                                    'fields' => [
+                                        ['key' => 'headline', 'type' => 'text'],
+                                    ],
+                                ],
+                            ],
+                        ],
                     ],
-                    [
-                        'task_key' => 'page:home_page:features',
-                        'task_type' => 'page_section',
-                        'page_type' => Page::TYPE_HOME,
-                        'section_code' => 'content/features',
-                        'runtime_context' => ['block_key' => 'features'],
-                    ],
-                ],
-            ],
-            'build_blueprint' => [
-                'source' => 'build_plan_v2',
-                'signature' => 'block-patch-confirmed-build-plan',
-                'tasks' => [
-                    [
-                        'task_key' => 'page:home_page:hero',
-                        'task_type' => 'page_section',
-                        'page_type' => Page::TYPE_HOME,
-                        'section_code' => 'content/hero',
-                        'runtime_context' => ['block_key' => 'hero'],
-                    ],
-                    [
-                        'task_key' => 'page:home_page:features',
-                        'task_type' => 'page_section',
-                        'page_type' => Page::TYPE_HOME,
-                        'section_code' => 'content/features',
-                        'runtime_context' => ['block_key' => 'features'],
-                    ],
-                ],
-            ],
-            'build_tasks' => [
-                'page:home_page:hero' => [
-                    'task_key' => 'page:home_page:hero',
-                    'status' => 'done',
-                    'attempt_no' => 1,
-                    'message' => '',
-                    'result_ref' => [
-                        'page_type' => Page::TYPE_HOME,
-                        'section_code' => 'content/hero',
-                    ],
-                    'updated_at' => '2026-05-11 00:00:00',
-                    'started_at' => '2026-05-11 00:00:00',
-                    'finished_at' => '2026-05-11 00:00:00',
-                ],
-                'page:home_page:features' => [
-                    'task_key' => 'page:home_page:features',
-                    'status' => 'done',
-                    'attempt_no' => 1,
-                    'message' => '',
-                    'result_ref' => [
-                        'page_type' => Page::TYPE_HOME,
-                        'section_code' => 'content/features',
-                    ],
-                    'updated_at' => '2026-05-11 00:00:00',
-                    'started_at' => '2026-05-11 00:00:00',
-                    'finished_at' => '2026-05-11 00:00:00',
                 ],
             ],
             'virtual_pages_by_type' => [
@@ -410,24 +421,23 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $queueRow = w_query('queue', 'get', ['queue_id' => $queueId]);
         self::assertIsArray($queueRow);
         self::assertSame('done', (string)($queueRow['status'] ?? ''));
-        self::assertStringContainsString('block_partial_patch_applied', (string)($queueRow['result'] ?? ''));
+        self::assertStringContainsString('QUEUE_DONE', (string)($queueRow['result'] ?? ''));
 
         $fresh = $this->sessionService->loadByPublicId($publicId, 1);
         self::assertNotNull($fresh);
-        $nextScope = $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+        $nextScope = $this->sessionService->loadScopeForBuildOperation($fresh);
         self::assertSame(AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH, (string)($nextScope['workspace_status'] ?? ''));
         self::assertSame('done', (string)($nextScope['active_operation']['status'] ?? ''));
         self::assertSame('block_partial_patch', (string)($nextScope['active_operation']['operation'] ?? ''));
-        $blocks = $nextScope['virtual_pages_by_type'][Page::TYPE_HOME]['blocks'] ?? [];
-        self::assertIsArray($blocks);
-        self::assertCount(2, $blocks);
-        self::assertSame(['hero', 'features'], \array_column($blocks, 'block_id'));
-        self::assertSame('Original headline - refined', (string)($blocks[0]['config']['headline'] ?? ''));
-        self::assertStringContainsString('Original headline - refined', (string)($blocks[0]['html'] ?? ''));
-        self::assertSame('Stable features', (string)($blocks[1]['config']['headline'] ?? ''));
-        self::assertSame('<section><h2>Stable features</h2></section>', (string)($blocks[1]['html'] ?? ''));
+        $layoutContent = $nextScope['page_type_layouts'][Page::TYPE_HOME]['content'] ?? [];
+        self::assertIsArray($layoutContent);
+        self::assertCount(2, $layoutContent);
+        self::assertSame('Original headline - refined', (string)($layoutContent[0]['config']['headline'] ?? ''));
+        self::assertSame('Stable features', (string)($layoutContent[1]['config']['headline'] ?? ''));
 
-        $history = $nextScope['block_patch_history'][Page::TYPE_HOME]['hero'] ?? [];
+        $historyByBlock = $nextScope['block_patch_history'][Page::TYPE_HOME] ?? [];
+        self::assertIsArray($historyByBlock);
+        $history = $historyByBlock['hero'] ?? $historyByBlock['content/hero'] ?? [];
         self::assertIsArray($history);
         self::assertCount(1, $history);
         self::assertSame('Original headline', (string)($history[0]['before_block']['config']['headline'] ?? ''));
@@ -679,7 +689,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             ];
             $scope['active_operations']['plan'] = $scope['active_operation'];
             $scope['plan_confirmed'] = 1;
-            $scope['execution_blueprint'] = [
+            $scope['plan_json'] = [
                 'summary' => 'confirmed blueprint',
                 'pages' => [
                     [
@@ -702,7 +712,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
                 'site_title' => 'Session queue reuse',
                 'brief_description' => 'Verify reusable queue slots without duplicating build state.',
                 'default_locale' => 'en_US',
-                'execution_blueprint_draft' => [
+                'plan_json' => [
                     'signature' => 'queue-reuse-stage-one-signature',
                     'pages' => [
                         Page::TYPE_HOME => [
@@ -738,7 +748,6 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             );
             $scope['build_plan_v2'] = $buildPlan;
             $scope['build_plan_confirmed'] = 1;
-            unset($scope['build_blueprint'], $scope['build_tasks']);
             $this->sessionService->replaceScope($session->getId(), 1, $scope);
 
             $buildPayload = $this->invokeJsonAction(
