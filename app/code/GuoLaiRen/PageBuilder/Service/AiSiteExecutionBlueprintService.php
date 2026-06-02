@@ -1366,22 +1366,21 @@ final class AiSiteExecutionBlueprintService
         if (!\is_bool($intent['needs_image'])) {
             return false;
         }
-        $needsImage = (bool)$intent['needs_image'];
-        foreach (['image_role', 'placement', 'reuse_policy'] as $key) {
-            if (\trim((string)($intent[$key] ?? '')) === '') {
+        foreach ([
+            'image_role',
+            'image_subject',
+            'placement',
+            'visual_atmosphere',
+            'image_treatment',
+            'reuse_policy',
+            'css_motif',
+        ] as $key) {
+            if (!\array_key_exists($key, $intent)) {
                 return false;
             }
         }
-        $mediaStrategy = \trim((string)($block['visual_signature']['media_strategy'] ?? ''));
-        if ($needsImage) {
-            return \trim((string)($intent['image_subject'] ?? '')) !== ''
-                && !\str_contains($mediaStrategy, 'CSS-only/no generated image');
-        }
 
-        return \trim((string)($intent['css_motif'] ?? '')) !== ''
-            && \trim((string)($intent['visual_atmosphere'] ?? '')) !== ''
-            && \trim((string)($intent['image_treatment'] ?? '')) !== ''
-            && \str_starts_with($mediaStrategy, 'CSS-only/no generated image');
+        return true;
     }
 
     /**
@@ -4576,12 +4575,6 @@ final class AiSiteExecutionBlueprintService
             if (\trim((string)($block['page_flow_role'] ?? '')) === '') {
                 $issues[] = $this->stageOneSegmentRetryIssue('missing_page_flow_role', $path . '.page_flow_role', $pageType, $segmentKey);
             }
-            if (\trim((string)($block['content'] ?? '')) === '') {
-                $issues[] = $this->stageOneSegmentRetryIssue('instruction_like_or_empty', $path . '.content', $pageType, $segmentKey);
-            }
-            foreach ($this->collectStageOneVisibleCopyLocaleRetryIssues($block, $path, $pageType, $segmentKey, $contentLocale !== '' ? $contentLocale : $planLocale) as $localeIssue) {
-                $issues[] = $localeIssue;
-            }
             if (!$this->hasCompleteStageOneDesignTags($block)) {
                 $issues[] = $this->stageOneSegmentRetryIssue('missing_design_tag', $path . '.design_tags', $pageType, $segmentKey);
             }
@@ -4596,9 +4589,9 @@ final class AiSiteExecutionBlueprintService
                     continue;
                 }
                 $value = \trim((string)($signature[$visualKey] ?? ''));
-                if ($value === '' || \in_array(\mb_strtolower($value), ['none', 'same as above', 'string'], true)) {
+                if ($value === '') {
                     $issues[] = $this->stageOneSegmentRetryIssue('invalid_visual_signature', $path . '.visual_signature.' . $visualKey, $pageType, $segmentKey, [
-                        'expected' => 'non-empty concrete visual_signature.' . $visualKey,
+                        'expected' => 'present visual_signature.' . $visualKey,
                         'actual' => $value,
                     ]);
                 }
@@ -4617,18 +4610,9 @@ final class AiSiteExecutionBlueprintService
                 continue;
             }
 
-            $needsImage = (bool)$intent['needs_image'];
             if (!$this->hasCompleteStageOneImageIntent($block)) {
-                $issues[] = $this->stageOneSegmentRetryIssue(
-                    $needsImage ? 'invalid_image_intent_field' : 'missing_css_motif_for_no_image_block',
-                    $path . '.image_intent',
-                    $pageType,
-                    $segmentKey
-                );
-            }
-            if (!$needsImage && $this->stageOneSegmentHasMediaAssets($block)) {
-                $issues[] = $this->stageOneSegmentRetryIssue('image_intent_conflicts_with_block_plan', $path . '.execution_script.media_assets', $pageType, $segmentKey, [
-                    'expected' => 'CSS-only blocks must use execution_script.media_assets=[]',
+                $issues[] = $this->stageOneSegmentRetryIssue('invalid_image_intent_field', $path . '.image_intent', $pageType, $segmentKey, [
+                    'expected' => 'image_intent must keep every required structural key; image wording and image presence are generation guidance only.',
                 ]);
             }
         }
@@ -4981,11 +4965,11 @@ final class AiSiteExecutionBlueprintService
     private function stageOneGeneratedImageTargetExamplesJson(): string
     {
         $examples = [
-            'home_page' => 'hero',
-            'about_page' => 'origin_story',
-            'contact_page' => 'contact_methods',
-            'blog_post' => 'article_hero',
-            'blog_category' => 'category_hero',
+            'home_page' => 'hero plus major body sections such as game_showcase, comparison, proof, support, and final_cta when the page is visually rich',
+            'about_page' => 'origin_story plus proof/team/process sections when the page is visually rich',
+            'contact_page' => 'contact_methods plus support/help desk sections when the page is visually rich',
+            'blog_post' => 'article_hero plus one contextual editorial image section',
+            'blog_category' => 'category_hero plus featured article media',
         ];
 
         return \json_encode($examples, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
@@ -5014,11 +4998,7 @@ final class AiSiteExecutionBlueprintService
                 ];
                 continue;
             }
-            if (\is_array($cssOnlyExamples[$segmentKey] ?? null)) {
-                $examples[$segmentKey] = $cssOnlyExamples[$segmentKey];
-                continue;
-            }
-            if (\preg_match('/(?:review|testimonial|faq|rules|trust|security|proof|cta|download|support|policy)/i', $segmentKey) === 1) {
+            if (\preg_match('/(?:faq|rules|policy|legal|terms|privacy|cookie|refund|shipping)/i', $segmentKey) === 1) {
                 $examples[$segmentKey] = [
                     'needs_image' => false,
                     'image_role' => 'css_motif',
@@ -5030,6 +5010,20 @@ final class AiSiteExecutionBlueprintService
                     'css_motif' => 'concrete CSS motif matching this block key',
                     'media_strategy' => 'CSS-only/no generated image; describe the block-specific motif in visual_signature.media_strategy',
                 ];
+                continue;
+            }
+            if (\preg_match('/(?:game|table|room|showcase|feature|comparison|download|install|bonus|apk|trust|security|proof|review|testimonial|support|contact|cta)/i', $segmentKey) === 1) {
+                $examples[$segmentKey] = [
+                    'needs_image' => 'prefer true for large body panels, game cards, comparison rows, proof/support scenes, and download CTAs when the page asks for rich imagery',
+                    'image_role' => 'section_image when true; css_motif when the block is compact or text-only',
+                    'image_subject' => 'concrete block-level scene, product/interface mockup, room/table visual, support moment, or editorial product image when true; none when false',
+                    'placement' => 'media_panel, inline_visual, side_poster, phone_mockup, or background_layer when true; inline_visual/background_layer when false',
+                    'media_strategy' => 'Give large empty card areas a real image plan or a concrete CSS companion. This is generation guidance only, not a validation gate.',
+                ];
+                continue;
+            }
+            if (\is_array($cssOnlyExamples[$segmentKey] ?? null)) {
+                $examples[$segmentKey] = $cssOnlyExamples[$segmentKey];
             }
         }
 
@@ -5169,8 +5163,8 @@ final class AiSiteExecutionBlueprintService
                         'page_flow_role' => 'cta',
                         'goal' => 'make the room path and play action obvious',
                         'content_focus' => 'room entry steps and CTA label',
-                        'visual_signature_hint' => 'compact game-room rail with CSS table chips',
-                        'image_intent_hint' => 'CSS-only table step motif',
+                        'visual_signature_hint' => 'game-room rail with table preview media and clear action chips',
+                        'image_intent_hint' => 'generated table-room preview with phone UI, card table, chip stacks, and text-safe action area',
                         'handoff_rule' => 'cta block row 2 must be cta_label or action_label',
                     ],
                     [
@@ -5187,17 +5181,17 @@ final class AiSiteExecutionBlueprintService
                         'page_flow_role' => 'proof',
                         'goal' => 'make fair-play confidence visible before reviews',
                         'content_focus' => 'clear rules, responsible-play cues, account safety, and support',
-                        'visual_signature_hint' => 'trust checklist band with neon status chips and fair-play badges',
-                        'image_intent_hint' => 'CSS-only fair-play and account-safety motif',
-                        'handoff_rule' => 'must include full CSS-only image_intent if no generated image',
+                        'visual_signature_hint' => 'trust checklist band with one security/support media panel and fair-play badges',
+                        'image_intent_hint' => 'generated secure-table or support-console scene when space allows; CSS-only only for compact checklist rows',
+                        'handoff_rule' => 'must include full image_intent structure whichever media path is selected',
                     ],
                     [
                         'block_key' => 'customer_proof',
                         'page_flow_role' => 'proof',
                         'goal' => 'add customer proof without another hero shell',
                         'content_focus' => 'short player reviews and table trust metrics',
-                        'visual_signature_hint' => 'staggered testimonial cards with metric badges',
-                        'image_intent_hint' => 'CSS-only initials and star badges',
+                        'visual_signature_hint' => 'staggered testimonial cards with avatar/media rail and metric badges',
+                        'image_intent_hint' => 'generated player-proof rail or app review interface image when the proof panel is large; CSS-only initials only for compact rows',
                         'handoff_rule' => 'proof block row 2 should be proof_detail',
                     ],
                     [
@@ -5214,8 +5208,8 @@ final class AiSiteExecutionBlueprintService
                         'page_flow_role' => 'cta',
                         'goal' => 'close the page with one confident play action',
                         'content_focus' => 'final reassurance and table-entry action label',
-                        'visual_signature_hint' => 'compact CTA stage with clear button and trust chips',
-                        'image_intent_hint' => 'CSS-only CTA rail and neon chip texture',
+                        'visual_signature_hint' => 'CTA stage with cards/chips media backdrop, clear button, and trust chips',
+                        'image_intent_hint' => 'generated final table-entry scene with cards, chips, phone action UI, and text-safe CTA glow',
                         'handoff_rule' => 'row 2 must be cta_label/action_label/button_text',
                     ],
                 ],
@@ -5533,7 +5527,9 @@ final class AiSiteExecutionBlueprintService
             'Visible-copy rule: content, field_plan.sample, and execution_script.core_copy are visitor-facing copy seeds. Do not put layout recipes, hover notes, CSS values, or why-this-block explanations in those fields.',
             'Output budget: each block.content/core_copy <= 110 chars; feature_points max 2 and <= 12 chars; field_plan.sample <= 56 chars; implementation_note <= 32 chars; visual_signature values <= 56 chars; design_tags arrays max 2 items.',
             'Creativity rule: obey the block schema but invent the block-specific composition, motion, surface, and visitor message from the page goal. Do not copy examples verbatim or make every block a generic card grid.',
-            'Image richness rule: non-policy pages should prefer real generated scene/product/interface images where they strengthen the page, but image count is not a completion gate. Every image_intent must include all required keys. If needs_image=false or generated media is unstable, visual_signature.media_strategy must start with "CSS-only/no generated image" and image_intent.css_motif/visual_atmosphere/image_treatment must be filled with a polished visual companion.',
+            'Image richness guidance: non-policy marketing pages that ask for rich imagery should plan a strong opening image plus several block-level section images for large body panels such as game cards, comparison rows, proof/review rails, support scenes, and download CTAs. This is prompt guidance only: image count, image subject, and generated copy are not validation gates.',
+            'Large-card media guidance: if a block would otherwise render as a wide empty card grid with only small dots/icons/badges, prefer image_intent.needs_image=true and describe a concrete scene/product/interface/editorial subject sized for that block. Use CSS-only only for compact FAQ/legal/text rows or when a generated image is unstable.',
+            'Image intent structural rule: every image_intent must include all required keys. If needs_image=false, fill css_motif/visual_atmosphere/image_treatment as a visual companion so build has structure to consume; the exact wording and image choice are creative output, not a hard gate.',
             $generatedImageSegmentRule,
             'Media decision examples for this exact segment: ' . $segmentMediaDecisionExamplesJson . '. Use this to choose generated-image vs CSS-only path before writing the block JSON; rewrite the wording for the current brand and block.',
             'needs_image type rule: image_intent.needs_image MUST be the JSON boolean true or false. Never return "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text; put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment.',
@@ -6572,7 +6568,8 @@ final class AiSiteExecutionBlueprintService
             '- CSS-only image_intent examples by common block_key: ' . $cssOnlyImageIntentExamplesJson,
             '- Complete block examples (copy the shape, not the exact content; rewrite for this page/locale/block): ' . $blockReturnExamplesJson,
             '- When image_intent.needs_image=true, image_subject must be a concrete block-level generated visual: a scene, product/editorial photograph, interface/product mockup, environment, people moment, or premium illustration tied to the block goal. When needs_image=false, image_subject must be "none" and css_motif carries the visual plan.',
-            '- Non-policy page visual asset preference: marketing pages should usually include real generated image slots when they strengthen the narrative. This is guidance for richer design, not a completion gate; complete CSS-only visual planning is acceptable when generated-image planning is unstable.',
+            '- Non-policy page visual asset preference: marketing pages that ask for rich imagery should usually plan a strong opening image plus several block-level section images for large body panels such as game cards, comparison rows, proof/review rails, support scenes, and download CTAs. This is guidance for richer design, not a completion gate; complete CSS-only visual planning is acceptable when generated-image planning is unstable.',
+            '- Large-card media guidance: if a block would otherwise render as a wide empty card grid with only small dots/icons/badges, prefer image_intent.needs_image=true and describe a concrete scene/product/interface/editorial subject sized for that block. Use CSS-only only for compact FAQ/legal/text rows or when a generated image is unstable.',
             '- Preferred generated-image target examples by page type: ' . $this->stageOneGeneratedImageTargetExamplesJson() . '. Prefer these required/opening/support/article blocks when present, but keep narrative fit, allow CSS-only alternatives, and still return all required blocks.',
             '- Non-policy opening image direction: for home_page, about_page, contact_page, and custom marketing pages, prefer a concrete generated scene/product/interface subject early in the page when it supports the narrative, but do not force block index 0 to be the generated-image block.',
             '- Do not use icon-only image subjects for page blocks. Invalid page-block subjects include app icon, shield badge, logo mark, sparkle glyph, line icon, avatar badge, chevron, symbol, SVG icon, download arrow, coin mark, or any subject that is only a decorative mark.',
@@ -13387,7 +13384,7 @@ final class AiSiteExecutionBlueprintService
                     'visual_atmosphere' => 'dark neon gaming, card-table texture, cyan and magenta rim light, gold chip highlights, text-safe composition',
                     'image_treatment' => 'cinematic neon card-room crop with readable dark scrim and block-specific props',
                     'reuse_policy' => 'reuse_when_intent_matches',
-                    'css_motif' => $cssMotif,
+                    'css_motif' => '',
                 ];
             }
 

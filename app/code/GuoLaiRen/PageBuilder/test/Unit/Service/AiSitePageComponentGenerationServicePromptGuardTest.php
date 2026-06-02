@@ -47,18 +47,49 @@ final class AiSitePageComponentGenerationServicePromptGuardTest extends TestCase
         self::assertStringNotContainsString('emitComponentRetryNotice', $source);
     }
 
-    public function testLowQualityDetectionRejectsNumberWordGlue(): void
+    public function testStructuralGateAllowsVisibleCopySpacingIssues(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
         );
 
         $reason = (function (): ?string {
-            return $this->detectLowQualityGeneratedSectionHtmlReason(
+            return $this->detectStructuralGeneratedSectionHtmlReason(
                 "<section><h2>24Hours support</h2><p>Get 3Steps from quote to install with 7Day follow-up.</p></section>"
             );
         })->call($service);
 
-        self::assertSame('missing whitespace between number and visible label', $reason);
+        self::assertNull($reason);
+    }
+
+    public function testStructuralGateRejectsMismatchedHtmlTags(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $reason = (function (): ?string {
+            return $this->detectStructuralGeneratedSectionHtmlReason(
+                "<section><div class='pb-c-card'><h2>Player voices</h2></section>"
+            );
+        })->call($service);
+
+        self::assertIsString($reason);
+        self::assertStringContainsString('mismatched HTML closing tag', $reason);
+    }
+
+    public function testStructuralGateDoesNotRejectPromptLikeVisibleCopy(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $reason = (function (): ?string {
+            return $this->detectStructuralGeneratedSectionHtmlReason(
+                "<section><div><h2>Showcase testimonials</h2><p>Introduce trust proof and explain primary actions for users.</p></div></section>"
+            );
+        })->call($service);
+
+        self::assertNull($reason);
     }
 }

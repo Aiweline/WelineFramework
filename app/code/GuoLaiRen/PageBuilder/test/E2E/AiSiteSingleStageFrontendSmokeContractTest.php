@@ -49,6 +49,19 @@ final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
         self::assertStringContainsString("displayKind = 'build_plan'", $script);
     }
 
+    public function testStageOnePreviewReadsPrunedStructuredPlanFields(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 2);
+        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+
+        self::assertIsString($script);
+        self::assertStringContainsString('collectStageOnePlanWorkbenchPreviewCandidates', $script);
+        self::assertStringContainsString('plan.structured', $script);
+        self::assertStringContainsString('confirmed.structured_plan', $script);
+        self::assertStringContainsString('confirmed.plan_json', $script);
+        self::assertStringContainsString('planBook.structured', $script);
+    }
+
     public function testConfirmedPlanModalBindsPreviewInteractionsAfterRendering(): void
     {
         $moduleRoot = \dirname(__DIR__, 2);
