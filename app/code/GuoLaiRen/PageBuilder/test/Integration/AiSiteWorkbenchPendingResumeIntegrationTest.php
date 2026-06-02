@@ -18,7 +18,7 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
         self::assertStringContainsString('function startPlanGenerationForSelection(triggerBtn, selectedTypes, options)', $script, 'missing plan start function');
         self::assertStringContainsString('function confirmCurrentPlanAndMaybeBuild()', $script, 'missing confirm/build function');
         self::assertStringContainsString('id="pb-ai-confirm-plan"', $planPanel, 'missing confirm plan button');
-        self::assertStringNotContainsString('function maybeAutoStartBuildAfterWorkspaceSnapshot(data)', $script);
+        self::assertStringNotContainsString('function maybeAutoStartBuildAfterWorkspaceState(data)', $script);
         self::assertStringNotContainsString('autoResumeActiveOperation', $script);
     }
 

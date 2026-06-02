@@ -26,7 +26,6 @@ class AiSiteBlockPartialPatchService
         private readonly ?AiSiteAgentSessionService $sessionService = null,
         private readonly ?AiSiteScopeCompatibilityService $scopeCompatibilityService = null,
         private readonly ?AiSiteBuildTaskService $buildTaskService = null,
-        private readonly ?AiSiteHtmlBlocksBuildService $htmlBlocksBuildService = null,
         private readonly ?AiSiteVirtualThemeService $virtualThemeService = null,
         private readonly ?AiResponseJsonParser $jsonParser = null,
         private readonly ?AiService $aiService = null,
@@ -51,7 +50,7 @@ class AiSiteBlockPartialPatchService
         }
 
         $scope = $this->normalizeScope(
-            $this->sessionService()->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->sessionService()->loadScopeForBuildOperation($session)
         );
 
         return $this->readCurrentBlockFromScope($scope, $pageType, $blockId);
@@ -122,6 +121,30 @@ class AiSiteBlockPartialPatchService
                     'html' => (string)($virtualThemeBlock['html'] ?? ''),
                     'field_schema' => \is_array($virtualThemeBlock['field_schema'] ?? null) ? $virtualThemeBlock['field_schema'] : [],
                     'template_metadata' => $this->extractTemplateMetadata($virtualThemeBlock),
+                    'page_context' => $this->buildPageContext($scope, $pageType),
+                    'layout_context' => $this->buildLayoutContext($scope, $pageType, $componentCode, $actualBlockId),
+                ];
+            }
+
+            $layoutBlock = $this->buildLayoutContentBlockFromScope($scope, $pageType, $blockId);
+            if ($layoutBlock !== null) {
+                $actualBlockId = \trim((string)($layoutBlock['block_id'] ?? $blockId));
+                $componentCode = $this->resolveBlockComponentCode($layoutBlock);
+
+                return [
+                    'success' => true,
+                    'source' => 'page_type_layouts.content',
+                    'page_type' => $pageType,
+                    'block_id' => $actualBlockId,
+                    'requested_block_id' => $blockId,
+                    'component_code' => $componentCode,
+                    'index' => (int)($layoutBlock['_pb_server_layout_index'] ?? -1),
+                    'block' => $layoutBlock,
+                    'type' => (string)($layoutBlock['type'] ?? ''),
+                    'config' => \is_array($layoutBlock['config'] ?? null) ? $layoutBlock['config'] : [],
+                    'html' => (string)($layoutBlock['html'] ?? ''),
+                    'field_schema' => \is_array($layoutBlock['field_schema'] ?? null) ? $layoutBlock['field_schema'] : [],
+                    'template_metadata' => $this->extractTemplateMetadata($layoutBlock),
                     'page_context' => $this->buildPageContext($scope, $pageType),
                     'layout_context' => $this->buildLayoutContext($scope, $pageType, $componentCode, $actualBlockId),
                 ];
@@ -242,6 +265,7 @@ class AiSiteBlockPartialPatchService
         }
 
         $currentBlock = \is_array($read['block'] ?? null) ? $read['block'] : [];
+        $replacementProvidedTemplate = $this->replacementProvidesServerTemplate($replacementBlock);
         $candidate = $this->normalizeReplacementBlock($currentBlock, $replacementBlock);
         $validation = $this->validateReplacementBlock($currentBlock, $candidate);
         if (empty($validation['valid'])) {
@@ -253,7 +277,7 @@ class AiSiteBlockPartialPatchService
             ]);
         }
 
-        $renderValidation = $this->validateReplacementRenderable($candidate);
+        $renderValidation = $this->validateReplacementRenderable($candidate, !$replacementProvidedTemplate);
         if (empty($renderValidation['valid'])) {
             return $this->error('BLOCK_RENDER_FAILED', 'Replacement block cannot be rendered.', [
                 'page_type' => $pageType,
@@ -301,6 +325,9 @@ class AiSiteBlockPartialPatchService
 
         if ((string)($read['source'] ?? '') === 'virtual_theme_component') {
             return $this->applyVirtualThemeComponentReplacement($scope, $pageType, $read, $currentBlock, $candidate, $metadata);
+        }
+        if ((string)($read['source'] ?? '') === 'page_type_layouts.content') {
+            return $this->applyLayoutContentReplacement($scope, $pageType, $read, $currentBlock, $candidate, $metadata);
         }
 
         $virtualPages = $this->buildTargetVirtualPagesPreservingScope($scope, $pageType);
@@ -397,7 +424,7 @@ class AiSiteBlockPartialPatchService
         }
 
         $scope = $this->normalizeScope(
-            $this->sessionService()->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->sessionService()->loadScopeForBuildOperation($session)
         );
         $result = $this->applyReplacementBlockToScope($scope, $pageType, $blockId, $replacementBlock, $metadata);
         if (!empty($result['success']) && \is_array($result['scope'] ?? null)) {
@@ -421,7 +448,7 @@ class AiSiteBlockPartialPatchService
         ?callable $streamCallback = null
     ): array {
         $scope = $this->normalizeScope(
-            $this->sessionService()->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->sessionService()->loadScopeForBuildOperation($session)
         );
         $read = $this->readCurrentBlockFromScope($scope, $pageType, $blockId);
         if (empty($read['success'])) {
@@ -523,6 +550,18 @@ class AiSiteBlockPartialPatchService
         string $instruction,
         ?callable $streamCallback = null
     ): array {
+        if ($this->truthyScopeValue($scope['fake_mode'] ?? false)) {
+            $result = $this->buildFakeModeReplacementBlock($read, $instruction);
+            if ($streamCallback !== null) {
+                $streamCallback('fake_patch', [
+                    'message' => 'Generated deterministic fake-mode block patch.',
+                    'changed_fields' => $result['changed_fields'],
+                ]);
+            }
+
+            return $result;
+        }
+
         $prompt = $this->buildPatchPrompt($read, $scope, $instruction);
         $buffer = '';
         $this->aiService()->generateStream(
@@ -817,27 +856,6 @@ class AiSiteBlockPartialPatchService
 
     /**
      * @param array<string, mixed> $scope
-     * @return list<string>
-     */
-    private function resolvePageTypes(array $scope, string $fallbackPageType): array
-    {
-        if ($this->scopeCompatibilityService !== null) {
-            $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
-        } else {
-            $pageTypes = \array_values(\array_filter(\array_map(
-                'strval',
-                \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : \array_keys(\is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [])
-            )));
-        }
-        if ($fallbackPageType !== '' && !\in_array($fallbackPageType, $pageTypes, true)) {
-            $pageTypes[] = $fallbackPageType;
-        }
-
-        return \array_values(\array_unique($pageTypes));
-    }
-
-    /**
-     * @param array<string, mixed> $scope
      * @param list<string> $pageTypes
      * @return array<string, array<string, mixed>>
      */
@@ -1035,6 +1053,235 @@ class AiSiteBlockPartialPatchService
             '_pb_server_component_name' => $component->getName(),
             '_pb_server_sort_order' => (int)($layoutRow['sort_order'] ?? 0),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $read
+     * @return array<string, mixed>
+     */
+    private function buildFakeModeReplacementBlock(array $read, string $instruction): array
+    {
+        $currentBlock = \is_array($read['block'] ?? null) ? $read['block'] : [];
+        $block = $currentBlock;
+        unset($block[self::META_TEMPLATE_PHTML]);
+
+        $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
+        $currentHeadline = $this->resolveFakeModeHeadline($block);
+        $headline = $currentHeadline !== '' ? $currentHeadline . ' - refined' : 'Refined section headline';
+        if (\array_key_exists('headline', $config) || !\array_key_exists('title', $config)) {
+            $config['headline'] = $headline;
+        }
+        if (\array_key_exists('title', $config)) {
+            $config['title'] = $headline;
+        }
+
+        $html = (string)($block['html'] ?? $read['html'] ?? '');
+        if ($html !== '' && $currentHeadline !== '') {
+            $html = \str_replace($currentHeadline, $headline, $html);
+        }
+        if (\trim($html) === '' || ($currentHeadline !== '' && !\str_contains($html, $headline))) {
+            $html = '<section><h2>' . \htmlspecialchars($headline, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '</h2></section>';
+        }
+
+        $block['config'] = $config;
+        $block['html'] = $html;
+        if (!\array_key_exists('block_id', $block)) {
+            $block['block_id'] = (string)($read['block_id'] ?? '');
+        }
+        if (!\array_key_exists('type', $block)) {
+            $block['type'] = (string)($read['type'] ?? 'ai_generated_section');
+        }
+        if (!\array_key_exists('field_schema', $block)) {
+            $block['field_schema'] = \is_array($currentBlock['field_schema'] ?? null) ? $currentBlock['field_schema'] : [];
+        }
+
+        return [
+            'block' => $block,
+            'change_summary' => 'Applied deterministic fake-mode block refinement.',
+            'changed_fields' => ['config.headline', 'html'],
+            'reason' => \trim($instruction) !== '' ? 'fake_mode: ' . $this->clipText($instruction, 120) : 'fake_mode',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolveFakeModeHeadline(array $block): string
+    {
+        $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
+        foreach ([$config['headline'] ?? null, $config['title'] ?? null, $block['headline'] ?? null, $block['title'] ?? null] as $candidate) {
+            if (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
+                return \trim((string)$candidate);
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>|null
+     */
+    private function buildLayoutContentBlockFromScope(array $scope, string $pageType, string $requestedBlockId): ?array
+    {
+        $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $requestedBlockId);
+        $layoutRow = \is_array($layoutMatch['row'] ?? null) ? $layoutMatch['row'] : [];
+        if ($layoutRow === []) {
+            return null;
+        }
+
+        $componentCode = \trim((string)($layoutRow['code'] ?? $layoutRow['component'] ?? $layoutRow['component_code'] ?? ''));
+        $blockId = \trim((string)($layoutRow['block_id'] ?? $layoutRow['id'] ?? $componentCode));
+        if ($blockId === '') {
+            $blockId = $requestedBlockId;
+        }
+        if ($componentCode === '') {
+            $componentCode = $blockId;
+        }
+
+        return [
+            'block_id' => $blockId,
+            'type' => \trim((string)($layoutRow['type'] ?? 'section')),
+            'component_code' => $componentCode,
+            'code' => $componentCode,
+            'config' => \is_array($layoutRow['config'] ?? null) ? $layoutRow['config'] : [],
+            'html' => (string)($layoutRow['html'] ?? ''),
+            'field_schema' => \is_array($layoutRow['field_schema'] ?? null) ? $layoutRow['field_schema'] : [],
+            self::META_COMPONENT_CODE => $componentCode,
+            self::META_REGION => 'content',
+            self::META_TEMPLATE_PHTML => (string)($layoutRow[self::META_TEMPLATE_PHTML] ?? $layoutRow['template_phtml'] ?? $layoutRow['html'] ?? ''),
+            '_pb_server_layout_index' => (int)($layoutMatch['index'] ?? -1),
+            '_pb_server_sort_order' => (int)($layoutRow['sort_order'] ?? 0),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $read
+     * @param array<string, mixed> $currentBlock
+     * @param array<string, mixed> $candidate
+     * @param array<string, mixed> $metadata
+     * @return array<string, mixed>
+     */
+    private function applyLayoutContentReplacement(
+        array $scope,
+        string $pageType,
+        array $read,
+        array $currentBlock,
+        array $candidate,
+        array $metadata
+    ): array {
+        $componentCode = $this->resolveBlockComponentCode($candidate);
+        if ($componentCode === '') {
+            $componentCode = \trim((string)($read['component_code'] ?? $read['block_id'] ?? ''));
+        }
+        $requestedBlockId = \trim((string)($read['requested_block_id'] ?? $read['block_id'] ?? $componentCode));
+        $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $requestedBlockId);
+        if ($layoutMatch === null && $componentCode !== '') {
+            $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $componentCode);
+        }
+        $layoutIndex = (int)($layoutMatch['index'] ?? -1);
+        if ($layoutIndex < 0) {
+            return $this->error('BLOCK_NOT_FOUND', 'Current layout block not found during replacement.', [
+                'page_type' => $pageType,
+                'block_id' => $requestedBlockId,
+            ]);
+        }
+
+        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
+        $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        if (!\array_key_exists($layoutIndex, $content) || !\is_array($content[$layoutIndex])) {
+            return $this->error('BLOCK_NOT_FOUND', 'Current layout block index is invalid during replacement.', [
+                'page_type' => $pageType,
+                'block_id' => $requestedBlockId,
+            ]);
+        }
+
+        $blockId = \trim((string)($candidate['block_id'] ?? $currentBlock['block_id'] ?? $requestedBlockId));
+        if ($blockId === '') {
+            $blockId = $requestedBlockId;
+        }
+        $config = \is_array($candidate['config'] ?? null) ? $candidate['config'] : [];
+        $fieldSchema = \is_array($candidate['field_schema'] ?? null) ? $candidate['field_schema'] : [];
+        $html = (string)($candidate['html'] ?? '');
+        $createdAt = \date('Y-m-d H:i:s');
+
+        $content[$layoutIndex] = \array_replace($content[$layoutIndex], [
+            'block_id' => $blockId,
+            'code' => $componentCode !== '' ? $componentCode : (string)($content[$layoutIndex]['code'] ?? ''),
+            'component_code' => $componentCode,
+            'type' => (string)($candidate['type'] ?? $currentBlock['type'] ?? 'section'),
+            'config' => $config,
+            'html' => $html,
+            'field_schema' => $fieldSchema,
+            'enabled' => true,
+        ]);
+        $layout['content'] = \array_values($content);
+        $layouts[$pageType] = $layout;
+        $scope['page_type_layouts'] = $layouts;
+
+        $scope = $this->syncVirtualPageBlockIfPresent($scope, $pageType, $requestedBlockId, $candidate, $createdAt);
+        $scope['preview_page_type'] = $pageType;
+        $scope['build_plan_execution_summary'] = $this->safeSummarize($scope);
+        $scope['block_patch_history'] = $this->appendPatchHistory(
+            \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
+            $pageType,
+            $blockId,
+            $currentBlock,
+            $candidate,
+            $metadata,
+            $createdAt
+        );
+
+        return [
+            'success' => true,
+            'page_type' => $pageType,
+            'block_id' => $blockId,
+            'component_code' => $componentCode,
+            'source' => (string)($read['source'] ?? 'page_type_layouts.content'),
+            'scope' => $scope,
+            'before_block' => $currentBlock,
+            'after_block' => $candidate,
+            'change_summary' => \trim((string)($metadata['change_summary'] ?? '')),
+            'changed_fields' => $this->normalizeChangedFields($metadata['changed_fields'] ?? []),
+            'reason' => \trim((string)($metadata['reason'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $candidate
+     * @return array<string, mixed>
+     */
+    private function syncVirtualPageBlockIfPresent(
+        array $scope,
+        string $pageType,
+        string $requestedBlockId,
+        array $candidate,
+        string $createdAt
+    ): array {
+        if (!\is_array($scope['virtual_pages_by_type'][$pageType] ?? null)) {
+            return $scope;
+        }
+        $blocks = \is_array($scope['virtual_pages_by_type'][$pageType]['blocks'] ?? null)
+            ? $scope['virtual_pages_by_type'][$pageType]['blocks']
+            : [];
+        $match = $this->findBlockInBlocks($blocks, $requestedBlockId);
+        if ($match === null) {
+            $componentCode = $this->resolveBlockComponentCode($candidate);
+            if ($componentCode !== '') {
+                $match = $this->findBlockInBlocks($blocks, $componentCode);
+            }
+        }
+        $index = (int)($match['index'] ?? -1);
+        if ($index >= 0 && \array_key_exists($index, $blocks)) {
+            $blocks[$index] = $candidate;
+            $scope['virtual_pages_by_type'][$pageType]['blocks'] = \array_values($blocks);
+        }
+        $scope['virtual_pages_by_type'][$pageType]['last_generated_at'] = $createdAt;
+
+        return $scope;
     }
 
     /**
@@ -1361,6 +1608,17 @@ class AiSiteBlockPartialPatchService
     }
 
     /**
+     * @param array<string, mixed> $block
+     */
+    private function replacementProvidesServerTemplate(array $block): bool
+    {
+        if (\array_key_exists(self::META_TEMPLATE_PHTML, $block)) {
+            return true;
+        }
+        return \is_array($block['block'] ?? null) && \array_key_exists(self::META_TEMPLATE_PHTML, $block['block']);
+    }
+
+    /**
      * @param array<string, mixed> $schema
      */
     private function isLegalFieldSchema(array $schema): bool
@@ -1416,11 +1674,14 @@ class AiSiteBlockPartialPatchService
      * @param array<string, mixed> $block
      * @return array{valid:bool,errors:list<string>}
      */
-    private function validateReplacementRenderable(array $block): array
+    private function validateReplacementRenderable(array $block, bool $allowPhpTemplate = true): array
     {
         $phtml = \trim((string)($block[self::META_TEMPLATE_PHTML] ?? ''));
         if ($phtml === '') {
             return ['valid' => true, 'errors' => []];
+        }
+        if (!$allowPhpTemplate && \preg_match('/<\?(?:php|=)?/i', $phtml)) {
+            return ['valid' => false, 'errors' => ['replacement._pb_server_template_phtml must be static HTML when supplied by the patch']];
         }
 
         $renderer = new PreviewRenderer();
@@ -2254,6 +2515,23 @@ class AiSiteBlockPartialPatchService
             : $scope;
     }
 
+    private function truthyScopeValue(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value !== 0;
+        }
+        if (\is_string($value)) {
+            $normalized = \strtolower(\trim($value));
+
+            return \in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+        }
+
+        return !empty($value);
+    }
+
     /**
      * @param array<string, mixed> $details
      * @return array<string, mixed>
@@ -2276,11 +2554,6 @@ class AiSiteBlockPartialPatchService
     private function buildTaskService(): AiSiteBuildTaskService
     {
         return $this->buildTaskService ?? ObjectManager::getInstance(AiSiteBuildTaskService::class);
-    }
-
-    private function htmlBlocksBuildService(): AiSiteHtmlBlocksBuildService
-    {
-        return $this->htmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
     }
 
     private function clipText(string $value, int $limit): string

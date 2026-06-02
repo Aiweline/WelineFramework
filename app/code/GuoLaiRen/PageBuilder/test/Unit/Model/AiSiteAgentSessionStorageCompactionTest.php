@@ -115,7 +115,6 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
             'workspace_track' => 'virtual_theme',
             'plan_confirmed' => 1,
             'plan_json' => ['pages' => ['home_page' => ['goal' => 'Keep me']]],
-            'plan_structured' => ['pages' => ['home_page' => ['goal' => 'Keep me']]],
             'execution_blueprint' => [
                 'signature' => 'legacy-stage1-signature',
                 'page_types' => ['home_page'],
@@ -166,7 +165,6 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         self::assertArrayNotHasKey('execution_blueprint_draft', $stored);
         self::assertArrayNotHasKey('build_blueprint', $stored);
         self::assertArrayNotHasKey('build_tasks', $stored);
-        self::assertSame(['pages' => ['home_page' => ['goal' => 'Keep me']]], $stored['plan_structured'] ?? null);
         self::assertSame(['pages' => ['home_page' => ['goal' => 'Keep me']]], $stored['plan_json'] ?? null);
         self::assertArrayNotHasKey('execution_blueprint', $stored['plan_workbench']['confirmed'] ?? []);
         self::assertArrayNotHasKey('structured_plan', $stored['plan_workbench']['confirmed'] ?? []);
@@ -184,7 +182,6 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
             'workspace_track' => 'virtual_theme',
             'plan_confirmed' => 0,
             'plan_json' => ['pages' => ['home_page' => ['goal' => 'Draft plan']]],
-            'plan_structured' => ['pages' => ['home_page' => ['goal' => 'Draft plan']]],
             'plan_workbench' => [
                 'contract_context' => ['selected_skill_codes' => ['virtual_theme']],
                 'stage1' => [
@@ -228,7 +225,6 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
             '_artifact_refs' => [
                 AiSiteAgentSession::STAGE_PLAN => [
                     'plan_json' => ['storage' => 'session_artifact_v1', 'hash' => 'plan-json-hash'],
-                    'plan_structured' => ['storage' => 'session_artifact_v1', 'hash' => 'plan-structured-hash'],
                     'build_plan_v2' => ['storage' => 'session_artifact_v1', 'hash' => 'build-plan-hash'],
                     'plan_projection' => ['storage' => 'session_artifact_v1', 'hash' => 'projection-hash'],
                     'content_manifest' => ['storage' => 'session_artifact_v1', 'hash' => 'manifest-hash'],
@@ -240,7 +236,6 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
                 ],
             ],
             'plan_json' => ['pages' => ['home_page' => ['heavy' => \str_repeat('a', 1024)]]],
-            'plan_structured' => ['pages' => ['home_page' => ['heavy' => \str_repeat('b', 1024)]]],
             'build_plan_v2' => ['tasks' => [['task_key' => 'page:home_page:hero', 'heavy' => \str_repeat('c', 1024)]]],
             'plan_projection' => ['pages' => ['home_page' => ['blocks' => ['hero']]]],
             'content_manifest' => ['pages' => ['home_page' => ['copy' => \str_repeat('d', 1024)]]],
@@ -252,7 +247,6 @@ final class AiSiteAgentSessionStorageCompactionTest extends TestCase
         $stored = $session->getScopeArray();
 
         self::assertSame([], $stored['plan_json'] ?? null);
-        self::assertSame([], $stored['plan_structured'] ?? null);
         self::assertSame([], $stored['build_plan_v2'] ?? null);
         self::assertSame([], $stored['plan_projection'] ?? null);
         self::assertSame([], $stored['content_manifest'] ?? null);

@@ -165,13 +165,13 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
     {
         $service = new AiSiteAgentQueueObserverHelperService();
 
-        $snapshot = ['queue_id' => 4321, 'status' => 'running'];
+        $queueState = ['queue_id' => 4321, 'status' => 'running'];
         $payload = $service->buildPanelPayload(
             [
                 'process' => '  正在执行  ',
                 'result' => "line-a\nline-b",
             ],
-            $snapshot
+            $queueState
         );
 
         self::assertSame(
@@ -221,12 +221,12 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
             [
                 'process' => '',
                 'content' => \json_encode(['operation' => 'plan'], \JSON_THROW_ON_ERROR),
-                'result' => "legacy markdown body\n[12:34:56] INFO legacy checkpoint",
+                'result' => "legacy markdown body\n[12:34:56] INFO legacy state",
             ],
             ['queue_id' => 3],
         );
         self::assertSame(
-            "legacy markdown body\n[12:34:56] INFO legacy checkpoint",
+            "legacy markdown body\n[12:34:56] INFO legacy state",
             $legacyPlanPayload['result_log'],
             'legacy queue.result is kept only as a byte-bounded tail excerpt, not filtered into replay lines'
         );
@@ -261,7 +261,7 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         self::assertSame('error', $service->mapOperationEventName('operation_failed'));
         self::assertSame('build_plan_block_completed', $service->mapOperationEventName('build_plan_block_completed'));
         self::assertSame('build_plan_block_failed', $service->mapOperationEventName('build_plan_block_failed'));
-        self::assertSame('', $service->mapOperationEventName('task_completed'));
+        self::assertSame('task_completed', $service->mapOperationEventName('task_completed'));
 
         self::assertSame('', $service->mapOperationEventName('unknown'));
         self::assertSame('', $service->mapOperationEventName(''));

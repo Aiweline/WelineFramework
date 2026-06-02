@@ -129,4 +129,59 @@ final class FiberTaskRunnerTest extends TestCase
         ], $results);
         self::assertTrue(SchedulerSystem::isSchedulerActive());
     }
+
+    public function testNestedFiberPoolRunsTasksConcurrentlyInsideOuterFiber(): void
+    {
+        if (!\class_exists(\Fiber::class)) {
+            self::markTestSkipped('PHP Fibers not available');
+        }
+
+        $events = [];
+        $outer = new FiberTaskRunner(defaultConcurrency: 2);
+
+        $results = $outer->run([
+            'outer' => static function () use (&$events): array {
+                self::assertInstanceOf(\Fiber::class, \Fiber::getCurrent());
+
+                $nested = new FiberTaskRunner(defaultConcurrency: 3);
+                $nestedResults = [];
+                foreach ($nested->runEvents([
+                    'a' => static function () use (&$events): string {
+                        $events[] = 'a:start';
+                        SchedulerSystem::yieldDelay(10);
+                        $events[] = 'a:end';
+
+                        return 'a-result';
+                    },
+                    'b' => static function () use (&$events): string {
+                        $events[] = 'b:start';
+                        SchedulerSystem::yieldDelay(10);
+                        $events[] = 'b:end';
+
+                        return 'b-result';
+                    },
+                    'c' => static function () use (&$events): string {
+                        $events[] = 'c:start';
+                        SchedulerSystem::yieldDelay(10);
+                        $events[] = 'c:end';
+
+                        return 'c-result';
+                    },
+                ]) as $taskKey => $event) {
+                    self::assertSame('fulfilled', $event['status']);
+                    $nestedResults[$taskKey] = $event['result'] ?? null;
+                }
+
+                return $nestedResults;
+            },
+        ]);
+
+        self::assertSame(['a:start', 'b:start', 'c:start'], \array_slice($events, 0, 3));
+        self::assertSame([
+            'a' => 'a-result',
+            'b' => 'b-result',
+            'c' => 'c-result',
+        ], $results['outer']);
+        self::assertFalse(SchedulerSystem::isSchedulerActive());
+    }
 }

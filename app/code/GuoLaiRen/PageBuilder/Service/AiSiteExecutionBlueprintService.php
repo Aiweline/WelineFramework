@@ -228,16 +228,12 @@ final class AiSiteExecutionBlueprintService
             \is_array($scope['plan_json'] ?? null) && \is_array($scope['plan_json']['i18n'] ?? null)
                 ? ($scope['plan_json']['i18n']['content_locale'] ?? null)
                 : null,
-            \is_array($scope['plan_structured'] ?? null) && \is_array($scope['plan_structured']['stage1_contract'] ?? null)
-                ? ($scope['plan_structured']['stage1_contract']['content_locale'] ?? null)
-                : null,
             \is_array($scope['plan_json'] ?? null) ? ($scope['plan_json']['content_locale'] ?? null) : null,
-            \is_array($scope['plan_structured'] ?? null) ? ($scope['plan_structured']['content_locale'] ?? null) : null,
-            \is_array($scope['stage1_contract'] ?? null) ? ($scope['stage1_contract']['content_locale'] ?? null) : null,
             $scope['plan_generated_locale'] ?? null,
             $scope['content_locale'] ?? null,
-            $scope['plan_locale'] ?? null,
             $scope['website_profile']['content_locale'] ?? null,
+            \is_array($scope['stage1_contract'] ?? null) ? ($scope['stage1_contract']['content_locale'] ?? null) : null,
+            $scope['plan_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['website_profile']['default_locale'] ?? null,
             $scope['default_language'] ?? null,
@@ -547,7 +543,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 真实 AI 流式生成阶段一方案；失败时回退到本地规划器。
+     * 鐪熷疄 AI 娴佸紡鐢熸垚闃舵涓€鏂规锛涘け璐ユ椂鍥為€€鍒版湰鍦拌鍒掑櫒銆?
      *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
@@ -571,7 +567,7 @@ final class AiSiteExecutionBlueprintService
     ): array
     {
         if ((int)($scope['fake_mode'] ?? 0) === 1) {
-            throw new \RuntimeException((string)__('AI 建站阶段一不允许使用 deterministic/fake 回退方案'));
+            throw new \RuntimeException((string)__('AI 寤虹珯闃舵涓€涓嶅厑璁镐娇鐢?deterministic/fake 鍥為€€鏂规'));
         }
 
         return $this->buildPlanArtifactsByStagedAiStream($scope, $websiteProfile, $payload, $onChunk, $onProgress);
@@ -619,7 +615,7 @@ final class AiSiteExecutionBlueprintService
         ) {
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '检测到参考图片，正在先执行图片理解并提取风格洞察',
+                '妫€娴嬪埌鍙傝€冨浘鐗囷紝姝ｅ湪鍏堟墽琛屽浘鐗囩悊瑙ｅ苟鎻愬彇椋庢牸娲炲療',
                 8,
                 'reference_image_understanding',
                 'start',
@@ -644,7 +640,7 @@ final class AiSiteExecutionBlueprintService
             }
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '参考图片理解完成，继续生成阶段一方案',
+                '鍙傝€冨浘鐗囩悊瑙ｅ畬鎴愶紝缁х画鐢熸垚闃舵涓€鏂规',
                 10,
                 'reference_image_understanding',
                 'done',
@@ -703,20 +699,38 @@ final class AiSiteExecutionBlueprintService
         $stageOneAdapterRequestParams = $this->buildStageOneAiAdapterRequestParams($scope, $websiteProfile);
 
         try {
-            if ($this->hasStageOneRequirementCheckpoint($planJson)) {
+            if ($this->hasPersistedStageOneRequirementExpansion($planJson)) {
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
-                    '已复用已保存的需求扩写结果，继续生成阶段一方案',
+                    '宸插鐢ㄥ凡淇濆瓨鐨勯渶姹傛墿鍐欑粨鏋滐紝缁х画鐢熸垚闃舵涓€鏂规',
                     24,
                     'requirement_expand',
-                    'checkpoint',
+                    'persisted',
                     ['page_total' => \count($pageTypes)]
                 );
+            } elseif ($this->shouldUseLocalStageOneRequirementExpansion($scope, $websiteProfile, $pageTypes, $oneLineRequirement)) {
+                $this->emitStageOnePipelineProgress(
+                    $onProgress,
+                    'Using local requirement expansion from the supplied brief.',
+                    24,
+                    'requirement_expand',
+                    'local',
+                    ['page_total' => \count($pageTypes)]
+                );
+                $planJson['requirement_expansion'] = $this->buildLocalStageOneRequirementExpansion(
+                    $scope,
+                    $websiteProfile,
+                    $pageTypes,
+                    $oneLineRequirement
+                );
+                $planJson = $this->syncStageOneOverviewFieldsFromRequirementExpansion($planJson);
+                $this->assertStageOneRequirementExpansionIsGenerated($planJson);
+                $this->emitStageOnePlanProgressState($onProgressState, $progressSignature, $planJson, 'requirement_expand', $pageTypes);
             } else {
                 $stageOneGenerationAttempts['requirement_expand'] = 1;
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
-                    '正在扩展用户需求，生成阶段一总设计输入',
+                    'Expanding user requirements for stage-one design input.',
                     12,
                     'requirement_expand',
                     'start',
@@ -736,14 +750,14 @@ final class AiSiteExecutionBlueprintService
             }
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                $this->hasStageOneThemeCheckpoint($planJson) ? '已复用已保存的总主题设计，继续生成页面总设计' : '需求扩写已完成，正在生成总主题设计',
+                $this->hasPersistedStageOneThemeDesign($planJson) ? 'Reusing persisted theme design.' : 'Generating theme design.',
                 28,
                 'theme_design',
-                $this->hasStageOneThemeCheckpoint($planJson) ? 'checkpoint' : 'start',
+                $this->hasPersistedStageOneThemeDesign($planJson) ? 'persisted' : 'start',
                 ['page_total' => \count($pageTypes)]
             );
 
-            if (!$this->hasStageOneThemeCheckpoint($planJson)) {
+            if (!$this->hasPersistedStageOneThemeDesign($planJson)) {
                 $stageOneGenerationAttempts['theme_design'] = 1;
                 $stageOneThemeRequestParams = $stageOneAdapterRequestParams;
                 $stageOneThemeRequestParams['response_format'] = $this->buildStageOneThemeResponseFormat($pageTypes);
@@ -800,7 +814,7 @@ final class AiSiteExecutionBlueprintService
             );
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '总主题设计已完成，正在整理共享 Header/Footer 规划',
+                'Theme design completed; preparing shared header/footer plan.',
                 44,
                 'header_footer',
                 'start',
@@ -808,7 +822,7 @@ final class AiSiteExecutionBlueprintService
             );
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '共享 Header/Footer 规划已就绪，正在并发生成各页面总设计',
+                'Shared header/footer plan ready; generating page plans.',
                 60,
                 'page_fanout',
                 'start',
@@ -820,7 +834,7 @@ final class AiSiteExecutionBlueprintService
                 : (\is_array($scope['stage1_contract'] ?? null) ? $scope['stage1_contract'] : []);
             $pendingPageTypes = \array_values(\array_filter(
                 $pageTypes,
-                fn(string $pageType): bool => !$this->hasStageOnePagePlanCheckpoint($existingPagePlans, $pageType, $stageOneContract, $scope)
+                fn(string $pageType): bool => !$this->hasPersistedStageOnePagePlan($existingPagePlans, $pageType, $stageOneContract, $scope)
                     || !$this->stageOnePagePlanPassesStrictValidation($existingPagePlans, $pageType, $stageOneContract, $scope)
             ));
             if ($isResumeRepair) {
@@ -840,10 +854,10 @@ final class AiSiteExecutionBlueprintService
             if ($pendingPageTypes === []) {
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
-                    '已复用已保存的页面总设计，正在装配阶段一总设计',
+                    'Reusing persisted page plans; assembling stage-one plan.',
                     84,
                     'page_fanout',
-                    'checkpoint',
+                    'persisted',
                     ['page_total' => \count($pageTypes)]
                 );
             }
@@ -907,7 +921,7 @@ final class AiSiteExecutionBlueprintService
 
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '各页面总设计已完成，正在装配阶段一总设计',
+                'Page plans completed; assembling stage-one plan.',
                 88,
                 'plan_assemble',
                 'start',
@@ -917,7 +931,7 @@ final class AiSiteExecutionBlueprintService
                 ? $pageTypes
                 : \array_values(\array_filter(
                     $pageTypes,
-                    fn(string $pageType): bool => $this->hasStageOnePagePlanCheckpoint(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [], $pageType, $stageOneContract, $scope)
+                    fn(string $pageType): bool => $this->hasPersistedStageOnePagePlan(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [], $pageType, $stageOneContract, $scope)
                 ));
             $artifacts = $this->mapAiPlanToArtifacts(
                 $scope,
@@ -948,7 +962,7 @@ final class AiSiteExecutionBlueprintService
             $this->emitStageOnePlanProgressState($onProgressState, $progressSignature, $planJson, 'plan_assemble', $pageTypes, $combinedRetryableFailures);
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '阶段一总设计装配完成，正在写入方案草案',
+                '闃舵涓€鎬昏璁¤閰嶅畬鎴愶紝姝ｅ湪鍐欏叆鏂规鑽夋',
                 92,
                 'plan_assemble',
                 'done',
@@ -1026,8 +1040,7 @@ final class AiSiteExecutionBlueprintService
             return $planJson;
         }
 
-        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        return $structured !== [] && $this->planJsonHasResumableStageOneProgress($structured) ? $structured : [];
+        return [];
     }
 
     /**
@@ -1078,7 +1091,7 @@ final class AiSiteExecutionBlueprintService
         if ($planJson === []) {
             return false;
         }
-        if ($this->hasStageOneRequirementCheckpoint($planJson) || $this->hasStageOneThemeCheckpoint($planJson)) {
+        if ($this->hasPersistedStageOneRequirementExpansion($planJson) || $this->hasPersistedStageOneThemeDesign($planJson)) {
             return true;
         }
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
@@ -1112,10 +1125,16 @@ final class AiSiteExecutionBlueprintService
                 $failedPageTypes[] = $pageType;
             }
         }
+        if ($failedPageTypes !== []) {
+            return \array_values(\array_unique(\array_filter(
+                $failedPageTypes,
+                static fn(string $pageType): bool => \in_array($pageType, $pageTypes, true)
+            )));
+        }
         $missing = [];
         foreach ($pageTypes as $pageType) {
             if (
-                !$this->hasStageOnePagePlanCheckpoint($existingPagePlans, $pageType, $stageOneContract, $scope)
+                !$this->hasPersistedStageOnePagePlan($existingPagePlans, $pageType, $stageOneContract, $scope)
                 || !$this->stageOnePagePlanPassesStrictValidation($existingPagePlans, $pageType, $stageOneContract, $scope)
             ) {
                 $missing[] = $pageType;
@@ -1137,14 +1156,14 @@ final class AiSiteExecutionBlueprintService
             $page,
             $contract,
             $this->buildStageOneValidatorContext($scope, (string)($scope['plan_locale'] ?? ''), [
-                'generation_attempts' => ['resume_checkpoint_validation' => 1],
+                'generation_attempts' => ['resume_persisted_validation' => 1],
             ])
         );
 
         return !empty($report['passed']);
     }
 
-    private function hasStageOneRequirementCheckpoint(array $planJson): bool
+    private function hasPersistedStageOneRequirementExpansion(array $planJson): bool
     {
         try {
             $this->assertStageOneRequirementExpansionIsGenerated($planJson);
@@ -1154,7 +1173,7 @@ final class AiSiteExecutionBlueprintService
         }
     }
 
-    private function hasStageOneThemeCheckpoint(array $planJson): bool
+    private function hasPersistedStageOneThemeDesign(array $planJson): bool
     {
         try {
             $this->assertStageOneThemePlanIsGenerated($planJson);
@@ -1290,7 +1309,7 @@ final class AiSiteExecutionBlueprintService
     /**
      * @param array<string, mixed> $pagePlans
      */
-    private function hasStageOnePagePlanCheckpoint(array $pagePlans, string $pageType, array $contract = [], array $scope = []): bool
+    private function hasPersistedStageOnePagePlan(array $pagePlans, string $pageType, array $contract = [], array $scope = []): bool
     {
         $page = \is_array($pagePlans[$pageType] ?? null) ? $pagePlans[$pageType] : [];
         if ($page === []) {
@@ -1302,14 +1321,14 @@ final class AiSiteExecutionBlueprintService
             [$pageType],
             \trim((string)($scope['plan_locale'] ?? '')),
             $this->resolveStageOneContentLocale($scope),
-            'page_checkpoint'
+            'page_persisted_validation'
         );
         $report = $this->getStageOneContractValidator()->validatePagePlan(
             $pageType,
             $page,
             $contract,
             $this->buildStageOneValidatorContext($scope, (string)($scope['plan_locale'] ?? ''), [
-                'generation_attempts' => ['page_checkpoint' => 1],
+                'generation_attempts' => ['page_persisted_validation' => 1],
             ])
         );
 
@@ -1333,32 +1352,6 @@ final class AiSiteExecutionBlueprintService
 
         return \trim((string)($designTags['color_layering'] ?? '')) !== ''
             && \trim((string)($designTags['implementation_note'] ?? '')) !== '';
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     * @param array<string, mixed> $pageContract
-     */
-    private function hasCompleteStageOneVisualSignature(array $block, array $pageContract): bool
-    {
-        $signature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
-        if ($signature === []) {
-            return false;
-        }
-        $requiredKeys = \is_array($pageContract['visual_signature_keys'] ?? null)
-            ? $pageContract['visual_signature_keys']
-            : AiSiteStageOneContractService::VISUAL_SIGNATURE_KEYS;
-        foreach ($requiredKeys as $key) {
-            $key = \trim((string)$key);
-            if ($key === '') {
-                continue;
-            }
-            if (\trim((string)($signature[$key] ?? '')) === '') {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**
@@ -1392,11 +1385,11 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param callable(array<string, mixed>):void|null $onCheckpoint
+     * @param callable(array<string, mixed>):void|null $onPlanState
      * @param list<string> $pageTypes
      */
     private function emitStageOnePlanProgressState(
-        ?callable $onCheckpoint,
+        ?callable $onPlanState,
         string $signature,
         array $planJson,
         string $step,
@@ -1404,11 +1397,11 @@ final class AiSiteExecutionBlueprintService
         array $retryableFailures = []
     ): void
     {
-        if ($onCheckpoint === null || $signature === '' || $planJson === []) {
+        if ($onPlanState === null || $signature === '' || $planJson === []) {
             return;
         }
 
-        $onCheckpoint([
+        $onPlanState([
             'signature' => $signature,
             'step' => $step,
             'plan_json' => $planJson,
@@ -1419,21 +1412,39 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param callable(array<string, mixed>):void|null $onCheckpoint
+     * @param callable(array<string, mixed>):void|null $onPlanState
      * @param array<string, mixed> $planJson
      * @param array<string, mixed> $pagePlan
      * @param list<string> $pageTypes
      */
     private function emitStageOnePageProgressState(
-        ?callable $onCheckpoint,
+        ?callable $onPlanState,
         string $signature,
         array $planJson,
         string $pageType,
         array $pagePlan,
         array $pageTypes
     ): void {
-        if ($onCheckpoint === null || $signature === '' || $pageType === '' || $pagePlan === []) {
+        if ($onPlanState === null || $signature === '' || $pageType === '' || $pagePlan === []) {
             return;
+        }
+
+        $pagePlan['status'] = 'done';
+        $pagePlan['updated_at'] = \date('Y-m-d H:i:s');
+        if (\is_array($pagePlan['blocks'] ?? null)) {
+            foreach ($pagePlan['blocks'] as &$block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $block['status'] = $this->normalizeStageOneFanoutStatusForPlanJson((string)($block['status'] ?? 'done'));
+                if ($block['status'] === 'pending') {
+                    $block['status'] = 'done';
+                }
+                if (\trim((string)($block['updated_at'] ?? '')) === '') {
+                    $block['updated_at'] = $pagePlan['updated_at'];
+                }
+            }
+            unset($block);
         }
 
         $progressPlanJson = $planJson;
@@ -1442,13 +1453,13 @@ final class AiSiteExecutionBlueprintService
             [$pageType => $pagePlan]
         );
 
-        $onCheckpoint([
+        $onPlanState([
             'signature' => $signature,
             'step' => 'page_plan',
             'completed_task' => 'page_plan:' . $pageType,
             'plan_json' => $progressPlanJson,
             'page_types' => \array_values($pageTypes),
-            'page_checkpoint' => [
+            'page_state' => [
                 'page_type' => $pageType,
                 'status' => 'passed',
                 'updated_at' => \date('Y-m-d H:i:s'),
@@ -1518,9 +1529,9 @@ final class AiSiteExecutionBlueprintService
 
     private function buildStageOnePagePipelineMessage(bool $completed, int $current, int $totalPages, string $pageKey): string
     {
-        $prefix = $completed ? '页面总设计已生成' : '正在生成页面总设计';
+        $prefix = $completed ? 'Page plan generated' : 'Generating page plan';
 
-        return $prefix . '（' . $current . '/' . $totalPages . '）：' . $pageKey;
+        return $prefix . ' (' . $current . '/' . $totalPages . '): ' . $pageKey;
     }
 
     /**
@@ -1539,7 +1550,7 @@ final class AiSiteExecutionBlueprintService
         foreach ($pageTypes as $pageType) {
             $pageStatuses[$pageType] = [
                 'status' => isset($completedLookup[$pageType]) ? 'done' : 'pending',
-                'message' => isset($completedLookup[$pageType]) ? 'Reused saved page plan checkpoint.' : 'Waiting for page fanout worker.',
+                'message' => isset($completedLookup[$pageType]) ? 'Reused persisted page plan state.' : 'Waiting for page fanout worker.',
                 'updated_at' => \date('Y-m-d H:i:s'),
             ];
         }
@@ -1561,7 +1572,11 @@ final class AiSiteExecutionBlueprintService
         array &$fanoutProgress,
         string $pageType,
         string $status,
-        array $context = []
+        array $context = [],
+        ?callable $onPlanState = null,
+        string $signature = '',
+        array $basePlanJson = [],
+        array $pageTypes = []
     ): void {
         if ($onProgress === null) {
             return;
@@ -1572,23 +1587,61 @@ final class AiSiteExecutionBlueprintService
         $message = \trim((string)($context['message'] ?? ''));
         if ($pageType !== '') {
             $pageStatuses = \is_array($fanoutProgress['page_statuses'] ?? null) ? $fanoutProgress['page_statuses'] : [];
+            $currentPageStatus = \is_array($pageStatuses[$pageType] ?? null) ? $pageStatuses[$pageType] : [];
+            $blockStatuses = \is_array($currentPageStatus['block_statuses'] ?? null) ? $currentPageStatus['block_statuses'] : [];
+            $blockUpdates = \is_array($context['block_statuses'] ?? null)
+                ? $this->normalizeStageOneBlockProgressList($context['block_statuses'])
+                : [];
+            if ($blockUpdates !== []) {
+                $blockByKey = [];
+                foreach ($this->normalizeStageOneBlockProgressList($blockStatuses) as $blockStatus) {
+                    $blockKey = \trim((string)($blockStatus['block_key'] ?? ''));
+                    if ($blockKey !== '') {
+                        $blockByKey[$blockKey] = $blockStatus;
+                    }
+                }
+                foreach ($blockUpdates as $blockStatus) {
+                    $blockKey = \trim((string)($blockStatus['block_key'] ?? ''));
+                    if ($blockKey !== '') {
+                        $blockByKey[$blockKey] = \array_replace($blockByKey[$blockKey] ?? [], $blockStatus);
+                    }
+                }
+                $blockStatuses = \array_values($blockByKey);
+            }
             $pageStatuses[$pageType] = \array_replace(
-                \is_array($pageStatuses[$pageType] ?? null) ? $pageStatuses[$pageType] : [],
+                $currentPageStatus,
                 [
                     'status' => $status,
                     'message' => $message !== '' ? $message : $status,
                     'updated_at' => \date('Y-m-d H:i:s'),
                 ]
             );
+            if ($blockStatuses !== []) {
+                $pageStatuses[$pageType]['block_statuses'] = \array_slice($this->normalizeStageOneBlockProgressList($blockStatuses), 0, 48);
+            }
             if (isset($context['error_message']) && \trim((string)$context['error_message']) !== '') {
                 $pageStatuses[$pageType]['error_message'] = \trim((string)$context['error_message']);
             }
             $fanoutProgress['page_statuses'] = $pageStatuses;
         }
 
-        $snapshot = $this->summarizeStageOnePageFanoutProgress($fanoutProgress);
-        $progressMessage = $this->buildStageOnePageFanoutProgressMessage($snapshot);
-        $progressPercent = \max(60, \min(82, 60 + (int)\floor(((int)$snapshot['done_count'] / \max(1, (int)$snapshot['total'])) * 22)));
+        $summary = $this->summarizeStageOnePageFanoutProgress($fanoutProgress);
+        if (
+            $onPlanState !== null
+            && $signature !== ''
+            && $basePlanJson !== []
+            && $this->normalizeStageOneFanoutStatusForPlanJson($status) !== 'done'
+        ) {
+            $this->emitStageOnePlanProgressState(
+                $onPlanState,
+                $signature,
+                $this->mergeStageOneFanoutProgressIntoPlanJson($basePlanJson, $fanoutProgress),
+                'page_fanout',
+                $pageTypes
+            );
+        }
+        $progressMessage = $this->buildStageOnePageFanoutProgressMessage($summary);
+        $progressPercent = \max(60, \min(82, 60 + (int)\floor(((int)$summary['done_count'] / \max(1, (int)$summary['total'])) * 22)));
         $this->emitStageOnePipelineProgress(
             $onProgress,
             $progressMessage,
@@ -1597,11 +1650,110 @@ final class AiSiteExecutionBlueprintService
             'fanout_progress',
             \array_replace([
                 'page_type' => $pageType,
-                'page_total' => (int)$snapshot['total'],
-                'stage1_page_progress' => $snapshot,
+                'page_total' => (int)$summary['total'],
                 'queue_process' => $progressMessage,
+                'stage1_page_progress' => $summary,
             ], $context)
         );
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $fanoutProgress
+     * @return array<string, mixed>
+     */
+    private function mergeStageOneFanoutProgressIntoPlanJson(array $planJson, array $fanoutProgress): array
+    {
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $pageStatuses = \is_array($fanoutProgress['page_statuses'] ?? null) ? $fanoutProgress['page_statuses'] : [];
+        foreach ($pageStatuses as $pageType => $pageState) {
+            $pageKey = \trim((string)$pageType);
+            if ($pageKey === '' || !\is_array($pageState)) {
+                continue;
+            }
+            $status = $this->normalizeStageOneFanoutStatusForPlanJson((string)($pageState['status'] ?? 'pending'));
+            if ($status === 'done') {
+                continue;
+            }
+            $page = \is_array($pages[$pageKey] ?? null) ? $pages[$pageKey] : ['page_type' => $pageKey];
+            $page['status'] = $status;
+            $message = \trim((string)($pageState['message'] ?? ''));
+            if ($message !== '') {
+                $page['message'] = $message;
+            }
+            $errorMessage = \trim((string)($pageState['error_message'] ?? ''));
+            if ($errorMessage !== '') {
+                $page['error_message'] = $errorMessage;
+            } elseif ($page['status'] !== 'failed') {
+                unset($page['error_message']);
+            }
+            $updatedAt = \trim((string)($pageState['updated_at'] ?? ''));
+            if ($updatedAt !== '') {
+                $page['updated_at'] = $updatedAt;
+            }
+
+            $blockStatuses = \is_array($pageState['block_statuses'] ?? null) ? $pageState['block_statuses'] : [];
+            if ($blockStatuses !== []) {
+                $blocks = \is_array($page['blocks'] ?? null) ? \array_values($page['blocks']) : [];
+                $blockIndex = [];
+                foreach ($blocks as $idx => $block) {
+                    if (!\is_array($block)) {
+                        continue;
+                    }
+                    $blockKey = \trim((string)($block['block_key'] ?? ($block['key'] ?? ($block['section_code'] ?? ''))));
+                    if ($blockKey !== '') {
+                        $blockIndex[$blockKey] = $idx;
+                    }
+                }
+                foreach ($this->normalizeStageOneBlockProgressList($blockStatuses) as $blockState) {
+                    $blockKey = \trim((string)($blockState['block_key'] ?? ''));
+                    if ($blockKey === '') {
+                        continue;
+                    }
+                    $idx = $blockIndex[$blockKey] ?? null;
+                    $block = \is_int($idx) && \is_array($blocks[$idx] ?? null) ? $blocks[$idx] : ['block_key' => $blockKey];
+                    $block['status'] = $this->normalizeStageOneFanoutStatusForPlanJson((string)($blockState['status'] ?? 'pending'));
+                    $blockMessage = \trim((string)($blockState['message'] ?? ''));
+                    if ($blockMessage !== '') {
+                        $block['message'] = $blockMessage;
+                    }
+                    $blockError = \trim((string)($blockState['error_message'] ?? ''));
+                    if ($blockError !== '') {
+                        $block['error_message'] = $blockError;
+                    } elseif ($block['status'] !== 'failed') {
+                        unset($block['error_message']);
+                    }
+                    $blockUpdatedAt = \trim((string)($blockState['updated_at'] ?? ''));
+                    if ($blockUpdatedAt !== '') {
+                        $block['updated_at'] = $blockUpdatedAt;
+                    }
+                    if (\is_int($idx)) {
+                        $blocks[$idx] = $block;
+                    } else {
+                        $blockIndex[$blockKey] = \count($blocks);
+                        $blocks[] = $block;
+                    }
+                }
+                $page['blocks'] = $blocks;
+            }
+
+            $pages[$pageKey] = $page;
+        }
+        $planJson['pages'] = $pages;
+
+        return $planJson;
+    }
+
+    private function normalizeStageOneFanoutStatusForPlanJson(string $status): string
+    {
+        $status = \strtolower(\trim($status));
+        return match ($status) {
+            'done', 'passed', 'persisted', 'complete', 'completed', 'success', 'succeeded' => 'done',
+            'running', 'retrying', 'processing', 'generating', 'queued', 'in_progress' => 'running',
+            'failed', 'error', 'retryable_failure', 'failure' => 'failed',
+            'skipped', 'skip' => 'skipped',
+            default => 'pending',
+        };
     }
 
     /**
@@ -1632,8 +1784,37 @@ final class AiSiteExecutionBlueprintService
             if ($errorMessage !== '') {
                 $detail['error_message'] = $this->clipText($errorMessage, 180);
             }
+            $blockStatuses = $this->normalizeStageOneBlockProgressList(
+                \is_array($pageStatuses[$pageType]['block_statuses'] ?? null) ? $pageStatuses[$pageType]['block_statuses'] : []
+            );
+            if ($blockStatuses !== []) {
+                $blockGroups = [
+                    'done' => 0,
+                    'failed' => 0,
+                    'running' => 0,
+                    'pending' => 0,
+                ];
+                foreach ($blockStatuses as $blockStatus) {
+                    $blockState = \strtolower(\trim((string)($blockStatus['status'] ?? 'pending')));
+                    if (\in_array($blockState, ['done', 'passed', 'persisted'], true)) {
+                        $blockGroups['done']++;
+                    } elseif (\in_array($blockState, ['failed', 'error', 'retryable_failure'], true)) {
+                        $blockGroups['failed']++;
+                    } elseif (\in_array($blockState, ['running', 'retrying'], true)) {
+                        $blockGroups['running']++;
+                    } else {
+                        $blockGroups['pending']++;
+                    }
+                }
+                $detail['blocks'] = \array_slice($blockStatuses, 0, 48);
+                $detail['block_total'] = \count($blockStatuses);
+                $detail['block_done_count'] = $blockGroups['done'];
+                $detail['block_failed_count'] = $blockGroups['failed'];
+                $detail['block_running_count'] = $blockGroups['running'];
+                $detail['block_pending_count'] = $blockGroups['pending'];
+            }
             $details[] = $detail;
-            if (\in_array($status, ['done', 'passed', 'checkpoint'], true)) {
+            if (\in_array($status, ['done', 'passed', 'persisted'], true)) {
                 $groups['done'][] = $pageType;
             } elseif (\in_array($status, ['failed', 'error', 'retryable_failure'], true)) {
                 $groups['failed'][] = $pageType;
@@ -1646,6 +1827,7 @@ final class AiSiteExecutionBlueprintService
 
         return [
             'total' => \count($pageTypes),
+            'concurrency' => \max(0, (int)($fanoutProgress['concurrency'] ?? 0)),
             'running' => $groups['running'],
             'done' => $groups['done'],
             'failed' => $groups['failed'],
@@ -1661,9 +1843,9 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param array<string, mixed> $snapshot
+     * @param array<string, mixed> $summary
      */
-    private function buildStageOnePageFanoutProgressMessage(array $snapshot): string
+    private function buildStageOnePageFanoutProgressMessage(array $summary): string
     {
         $formatList = static function (array $items): string {
             $items = \array_values(\array_filter(\array_map('strval', $items), static fn(string $item): bool => $item !== ''));
@@ -1674,13 +1856,126 @@ final class AiSiteExecutionBlueprintService
             return \implode(', ', \array_slice($items, 0, 8)) . (\count($items) > 8 ? ', +' . ((string)(\count($items) - 8)) : '');
         };
 
-        return 'Stage 1 page fanout: total ' . (string)((int)($snapshot['total'] ?? 0))
-            . ' | done ' . (string)((int)($snapshot['done_count'] ?? 0))
-            . ' | remaining ' . (string)((int)($snapshot['remaining_count'] ?? 0))
-            . ' | running [' . $formatList(\is_array($snapshot['running'] ?? null) ? $snapshot['running'] : []) . ']'
-            . ' | done pages [' . $formatList(\is_array($snapshot['done'] ?? null) ? $snapshot['done'] : []) . ']'
-            . ' | failed [' . $formatList(\is_array($snapshot['failed'] ?? null) ? $snapshot['failed'] : []) . ']'
-            . ' | pending [' . $formatList(\is_array($snapshot['pending'] ?? null) ? $snapshot['pending'] : []) . ']';
+        $concurrency = \max(0, (int)($summary['concurrency'] ?? 0));
+
+        return 'Stage 1 page fanout: total ' . (string)((int)($summary['total'] ?? 0))
+            . ($concurrency > 0 ? ' | concurrency ' . (string)$concurrency : '')
+            . ' | done ' . (string)((int)($summary['done_count'] ?? 0))
+            . ' | remaining ' . (string)((int)($summary['remaining_count'] ?? 0))
+            . ' | running [' . $formatList(\is_array($summary['running'] ?? null) ? $summary['running'] : []) . ']'
+            . ' | done pages [' . $formatList(\is_array($summary['done'] ?? null) ? $summary['done'] : []) . ']'
+            . ' | failed [' . $formatList(\is_array($summary['failed'] ?? null) ? $summary['failed'] : []) . ']'
+            . ' | pending [' . $formatList(\is_array($summary['pending'] ?? null) ? $summary['pending'] : []) . ']';
+    }
+
+    /**
+     * @param array<int|string, mixed> $blocks
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeStageOneBlockProgressList(array $blocks): array
+    {
+        $normalized = [];
+        foreach ($blocks as $key => $block) {
+            $row = \is_array($block) ? $block : ['status' => (string)$block];
+            $blockKey = \trim((string)($row['block_key'] ?? (\is_string($key) ? $key : '')));
+            if ($blockKey === '') {
+                continue;
+            }
+            $normalizedRow = [
+                'block_key' => $blockKey,
+                'status' => \trim((string)($row['status'] ?? 'pending')) ?: 'pending',
+                'message' => $this->clipText(\trim((string)($row['message'] ?? '')), 160),
+                'updated_at' => \trim((string)($row['updated_at'] ?? \date('Y-m-d H:i:s'))),
+            ];
+            $errorMessage = \trim((string)($row['error_message'] ?? ''));
+            if ($errorMessage !== '') {
+                $normalizedRow['error_message'] = $this->clipText($errorMessage, 160);
+            }
+            $normalized[] = $normalizedRow;
+            if (\count($normalized) >= 64) {
+                break;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param list<string> $blockKeys
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageOneBlockStatusUpdates(array $blockKeys, string $status, string $message): array
+    {
+        $updates = [];
+        foreach ($blockKeys as $blockKey) {
+            $blockKey = \trim((string)$blockKey);
+            if ($blockKey === '') {
+                continue;
+            }
+            $updates[] = [
+                'block_key' => $blockKey,
+                'status' => $status,
+                'message' => $this->clipText($message, 160),
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+        }
+
+        return $updates;
+    }
+
+    /**
+     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $validationReport
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageOneBlockStatusUpdatesFromPagePlan(
+        array $pagePlan,
+        array $validationReport,
+        bool $passed
+    ): array {
+        $blocks = \is_array($pagePlan['blocks'] ?? null) ? \array_values($pagePlan['blocks']) : [];
+        if ($blocks === []) {
+            return [];
+        }
+
+        $issuesByIndex = [];
+        foreach (\array_values(\is_array($validationReport['issues'] ?? null) ? $validationReport['issues'] : []) as $issue) {
+            if (!\is_array($issue)) {
+                continue;
+            }
+            $path = \trim((string)($issue['path'] ?? $issue['field_path'] ?? ''));
+            if ($path === '' || \preg_match('/(?:^|\\.)blocks\\.(\\d+)(?:\\.|$)/', $path, $match) !== 1) {
+                continue;
+            }
+            $index = (int)$match[1];
+            $summary = \trim((string)($issue['reason_code'] ?? $issue['code'] ?? $issue['message'] ?? 'block contract issue'));
+            if ($summary !== '') {
+                $issuesByIndex[$index][] = $summary;
+            }
+        }
+
+        $updates = [];
+        foreach ($blocks as $index => $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockKey = \trim((string)($block['block_key'] ?? ('block_' . ((int)$index + 1))));
+            if ($blockKey === '') {
+                continue;
+            }
+            $hasIssue = !empty($issuesByIndex[(int)$index]);
+            $message = $passed || !$hasIssue
+                ? 'Block contract passed.'
+                : \implode('; ', \array_slice($issuesByIndex[(int)$index], 0, 3));
+            $updates[] = [
+                'block_key' => $blockKey,
+                'status' => $passed || !$hasIssue ? 'done' : 'failed',
+                'message' => $this->clipText($message, 160),
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+        }
+
+        return $updates;
     }
 
     /**
@@ -2542,8 +2837,16 @@ final class AiSiteExecutionBlueprintService
     {
         for ($current = $throwable; $current instanceof \Throwable; $current = $current->getPrevious()) {
             $message = $current->getMessage();
-            if (\str_contains($message, '流式生成完成但未返回任何内容')
-                || \str_contains($message, '流式生成完成但未返回任何正文')
+            if (\str_contains($message, 'AI 流式生成完成但未返回任何内容')
+                || \str_contains($message, 'AI流式生成完成但未返回任何内容')
+                || \str_contains($message, '流式生成完成但未返回任何内容')
+                || \str_contains($message, 'completed but returned no content')
+                || \str_contains($message, 'completed without returning any content')
+            ) {
+                return true;
+            }
+            if (\str_contains($message, '娴佸紡鐢熸垚瀹屾垚浣嗘湭杩斿洖浠讳綍鍐呭')
+                || \str_contains($message, '娴佸紡鐢熸垚瀹屾垚浣嗘湭杩斿洖浠讳綍姝ｆ枃')
                 || \str_contains($message, 'streaming completed without final content')
             ) {
                 return true;
@@ -2577,7 +2880,7 @@ final class AiSiteExecutionBlueprintService
      */
     private function sanitizeStageOneJsonRequestParams(array $params): array
     {
-        // 阶段一结构化 JSON 任务：强制禁用 thinking，避免只返回 reasoning_content。
+        // 闃舵涓€缁撴瀯鍖?JSON 浠诲姟锛氬己鍒剁鐢?thinking锛岄伩鍏嶅彧杩斿洖 reasoning_content銆?
         $params['thinking'] = ['type' => 'disabled'];
         $params['thinking_mode'] = 'disabled';
         $params['enable_thinking'] = false;
@@ -2643,6 +2946,148 @@ final class AiSiteExecutionBlueprintService
         }
 
         return 'Create a complete website plan with clear positioning, navigation, content strategy, and conversion goals.';
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     */
+    private function shouldUseLocalStageOneRequirementExpansion(
+        array $scope,
+        array $websiteProfile,
+        array $pageTypes,
+        string $oneLineRequirement
+    ): bool {
+        if ((int)\Weline\Framework\App\Env::get('pagebuilder.ai_site.force_requirement_expansion_ai', 0) === 1) {
+            return false;
+        }
+        if ($pageTypes === []) {
+            return false;
+        }
+
+        $brief = \trim(\implode(' ', \array_filter(\array_map('strval', [
+            $oneLineRequirement,
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+            $websiteProfile['brief_description'] ?? null,
+        ]), static fn(string $value): bool => \trim($value) !== '')));
+        if ($brief === '') {
+            return false;
+        }
+
+        $wordCount = \count(\preg_split('/\s+/u', $brief, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+
+        return \mb_strlen($brief) >= 80 || $wordCount >= 12;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function buildLocalStageOneRequirementExpansion(
+        array $scope,
+        array $websiteProfile,
+        array $pageTypes,
+        string $oneLineRequirement
+    ): array {
+        $brief = \trim($oneLineRequirement);
+        if ($brief === '') {
+            $brief = $this->resolveStageOneRequirementSeed(
+                $scope,
+                $websiteProfile,
+                $pageTypes,
+                \trim((string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? '')),
+                \trim((string)($scope['site_summary'] ?? $websiteProfile['brief_description'] ?? ''))
+            );
+        }
+
+        $lowerBrief = \strtolower($brief);
+        $isDownloadSite = \preg_match('/\b(apk|download|install|android)\b/i', $brief) === 1;
+        $isGameSite = \preg_match('/\b(rummy|teen\s*patti|ludo|card|game|chess|carrom)\b/i', $brief) === 1;
+        $primaryCta = $isDownloadSite
+            ? 'Download safely'
+            : (\str_contains($lowerBrief, 'booking') ? 'Book now' : 'Get started');
+        $contentDirection = $isDownloadSite
+            ? 'Create clear, trustworthy download guidance with safety checks, install steps, comparison points, and support content.'
+            : 'Create clear page-specific content that explains the offer, builds trust, and guides visitors to the next action.';
+        if ($isGameSite) {
+            $contentDirection .= ' Keep the copy focused on Indian card and casual game players.';
+        }
+        $conversionStrategy = $isDownloadSite
+            ? 'Lead visitors from game comparison and safety proof to a confident APK download action.'
+            : 'Move visitors from problem awareness to proof, details, and a clear call to action.';
+
+        $pageStrategy = [];
+        foreach ($pageTypes as $pageType) {
+            $pageType = (string)$pageType;
+            $label = \str_replace('_', ' ', $pageType);
+            $pageStrategy[] = [
+                'page_type' => $pageType,
+                'intent' => 'Serve the ' . $label . ' audience need for this website.',
+                'content_focus' => $this->buildLocalStageOnePageFocus($pageType, $brief, $isDownloadSite, $isGameSite),
+                'conversion_role' => $this->buildLocalStageOnePageConversionRole($pageType, $primaryCta),
+            ];
+        }
+
+        return $this->normalizeStageOneRequirementExpansion([
+            'expanded_brief' => $brief,
+            'planning_summary' => $brief,
+            'site_goal' => $brief,
+            'business_goals' => [
+                $isDownloadSite ? 'Help visitors find safe APK downloads.' : 'Help visitors understand and act on the offer.',
+                'Build trust with page-specific proof and clear next steps.',
+            ],
+            'target_users' => $isGameSite
+                ? ['Indian Android game players', 'Rummy and Teen Patti players', 'Casual mobile card game users']
+                : ['Prospective customers', 'Returning visitors'],
+            'business_context' => $brief,
+            'content_direction' => $contentDirection,
+            'conversion_strategy' => $conversionStrategy,
+            'primary_cta' => $primaryCta,
+            'page_strategy' => $pageStrategy,
+            'technical_direction' => [
+                'Keep page structure scannable and mobile friendly.',
+                'Use image intent only where it supports comprehension or conversion.',
+            ],
+        ], $brief, $pageTypes);
+    }
+
+    private function buildLocalStageOnePageFocus(string $pageType, string $brief, bool $isDownloadSite, bool $isGameSite): string
+    {
+        return match ($pageType) {
+            'home_page' => $isDownloadSite
+                ? 'Summarize the APK download promise, game categories, safety proof, install path, and final download CTA.'
+                : 'Introduce the offer, proof, benefits, workflow, and primary CTA.',
+            'about_page' => 'Explain credibility, mission, selection standards, and why visitors should trust the site.',
+            'contact_page' => 'Make support paths, response expectations, and common questions easy to scan.',
+            'privacy_policy' => 'Explain data collection, cookies, user rights, and privacy contact points in plain language.',
+            'terms_of_service' => 'Clarify usage rules, visitor responsibilities, limitations, and support escalation.',
+            'refund_policy' => $isDownloadSite
+                ? 'Explain digital download expectations, non-payment disclaimers, and help steps for failed installs.'
+                : 'Explain refund eligibility, evidence, timelines, and next steps.',
+            'shipping_policy' => $isDownloadSite
+                ? 'Explain digital delivery, download timing, APK access, and troubleshooting.'
+                : 'Explain fulfillment, delivery timing, and support paths.',
+            'cookie_policy' => 'Explain cookie types, preferences, analytics, and visitor controls.',
+            'blog_post' => $isGameSite
+                ? 'Provide an actionable guide around safe Indian game APK downloads and install decisions.'
+                : 'Provide a focused educational article that supports the main conversion path.',
+            'blog_category', 'blog_list' => 'Organize educational resources and guide visitors toward the most relevant next article.',
+            'custom_page' => $isDownloadSite
+                ? 'Create a focused install guide or recommendation page tied to the APK download journey.'
+                : 'Create a focused supporting page tied to the main visitor journey.',
+            default => 'Create page-specific content grounded in the supplied brief: ' . $brief,
+        };
+    }
+
+    private function buildLocalStageOnePageConversionRole(string $pageType, string $primaryCta): string
+    {
+        return match ($pageType) {
+            'home_page', 'custom_page' => 'Drive the primary action: ' . $primaryCta . '.',
+            'contact_page' => 'Resolve hesitation and route visitors to support.',
+            'about_page' => 'Build trust before visitors continue to conversion pages.',
+            'blog_post', 'blog_category', 'blog_list' => 'Educate visitors and send them back to the main conversion path.',
+            default => 'Reduce legal or operational uncertainty so visitors can proceed confidently.',
+        };
     }
 
     /**
@@ -3132,11 +3577,11 @@ final class AiSiteExecutionBlueprintService
         $expansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
         foreach (['original_brief', 'expanded_brief', 'planning_summary', 'site_goal'] as $key) {
             if (\trim((string)($expansion[$key] ?? '')) === '') {
-                throw new \RuntimeException('第一阶段方案生成失败：生成主题规划前必须先完成需求扩展。');
+                throw new \RuntimeException('Stage-one plan generation failed: requirement expansion is incomplete.');
             }
         }
         if (!\is_array($expansion['page_strategy'] ?? null) || $expansion['page_strategy'] === []) {
-            throw new \RuntimeException('第一阶段方案生成失败：生成主题规划前必须先完成需求扩展。');
+            throw new \RuntimeException('Stage-one plan generation failed: requirement expansion page strategy is missing.');
         }
     }
 
@@ -3160,12 +3605,12 @@ final class AiSiteExecutionBlueprintService
 
         foreach ($requiredStrings as $value) {
             if (!\is_string($value) || \trim($value) === '') {
-                throw new \RuntimeException('第一阶段方案生成失败：生成页面方案前必须先完成主题方案。');
+                throw new \RuntimeException('Stage-one plan generation failed: theme plan is incomplete.');
             }
         }
 
         if (!\is_array($themeDesign['visual_keywords'] ?? null) || $themeDesign['visual_keywords'] === []) {
-            throw new \RuntimeException('第一阶段方案生成失败：生成页面方案前必须先完成主题方案。');
+            throw new \RuntimeException('Stage-one plan generation failed: theme visual keywords are missing.');
         }
         $seoStrategy = \is_array($planJson['seo_strategy'] ?? null) ? $planJson['seo_strategy'] : [];
         $seoRequiredStrings = [
@@ -3176,14 +3621,14 @@ final class AiSiteExecutionBlueprintService
         ];
         foreach ($seoRequiredStrings as $value) {
             if (!\is_string($value) || \trim($value) === '') {
-                throw new \RuntimeException('第一阶段方案生成失败：生成页面方案前必须先完成 SEO 策略合同。');
+                throw new \RuntimeException('Stage-one plan generation failed: SEO strategy contract is incomplete.');
             }
         }
         if (!\is_array($seoStrategy['primary_keywords'] ?? null) || $seoStrategy['primary_keywords'] === []) {
-            throw new \RuntimeException('第一阶段方案生成失败：生成页面方案前必须先完成 SEO 策略关键词。');
+            throw new \RuntimeException('Stage-one plan generation failed: SEO primary keywords are missing.');
         }
         if (!\is_array($seoStrategy['keyword_page_map'] ?? null) || $seoStrategy['keyword_page_map'] === []) {
-            throw new \RuntimeException('第一阶段方案生成失败：生成页面方案前必须先完成 SEO 页面映射。');
+            throw new \RuntimeException('Stage-one plan generation failed: SEO keyword page map is missing.');
         }
         $sharedComponents = \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [];
         foreach (['header', 'footer'] as $component) {
@@ -3196,7 +3641,7 @@ final class AiSiteExecutionBlueprintService
                     \array_keys($sharedComponents)
                 ), static fn(string $key): bool => $key !== ''));
                 throw new \RuntimeException(
-                    '第一阶段方案生成失败：生成页面方案前必须先完成主题/Header/Footer 方案。'
+                    'Stage-one plan generation failed: shared header/footer plan is incomplete.'
                     . ' component=' . $component
                     . ' shared_keys=' . ($sharedKeys === [] ? '[none]' : \implode(',', $sharedKeys))
                     . ' goal=' . ($goal === '' ? '0' : '1')
@@ -3213,8 +3658,8 @@ final class AiSiteExecutionBlueprintService
      * @param list<string> $pageTypes
      * @param callable(string):void|null $onChunk
      * @param callable(array<string, mixed>):void|null $onProgress
-     * @param callable(array<string, mixed>):void|null $onCheckpoint
-     * @param list<string> $checkpointPageTypes
+     * @param callable(array<string, mixed>):void|null $onPlanState
+     * @param list<string> $progressPageTypes
      * @return array<string, mixed>
      */
     private function generateStageOnePagePlansByAi(
@@ -3230,9 +3675,9 @@ final class AiSiteExecutionBlueprintService
         ?callable $onProgress = null,
         ?array &$retryableFailures = null,
         ?array &$generationAttempts = null,
-        ?callable $onCheckpoint = null,
-        string $checkpointSignature = '',
-        array $checkpointPageTypes = []
+        ?callable $onPlanState = null,
+        string $progressSignature = '',
+        array $progressPageTypes = []
     ): array {
         if ($retryableFailures === null) {
             $retryableFailures = [];
@@ -3242,9 +3687,9 @@ final class AiSiteExecutionBlueprintService
         }
 
         $totalPages = \count($pageTypes);
-        $checkpointPageTypes = $checkpointPageTypes === []
+        $progressPageTypes = $progressPageTypes === []
             ? \array_values($pageTypes)
-            : \array_values($checkpointPageTypes);
+            : \array_values($progressPageTypes);
         $prebuiltResults = [];
         $existingPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         $stageOneContract = \is_array($planJson['stage1_contract'] ?? null)
@@ -3265,7 +3710,7 @@ final class AiSiteExecutionBlueprintService
             }
 
             $existingPage = \is_array($existingPages[$pageKey] ?? null) ? $existingPages[$pageKey] : [];
-            if ($existingPage === [] || !$this->hasStageOnePagePlanCheckpoint([$pageKey => $existingPage], $pageKey, $stageOneContract, $scope)) {
+            if ($existingPage === [] || !$this->hasPersistedStageOnePagePlan([$pageKey => $existingPage], $pageKey, $stageOneContract, $scope)) {
                 continue;
             }
 
@@ -3273,14 +3718,14 @@ final class AiSiteExecutionBlueprintService
             $generationAttempts['page_fanout'][$pageKey] = [
                 'primary' => 0,
                 'recovery' => 0,
-                'status' => 'checkpoint',
+                'status' => 'persisted',
             ];
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '已复用已保存的页面总设计，跳过 AI 生成：' . $pageKey,
+                'Reusing persisted page plan, skipping AI: ' . $pageKey,
                 60,
                 'page_plan',
-                'checkpoint',
+                'persisted',
                 ['page_type' => $pageKey]
             );
         }
@@ -3297,15 +3742,20 @@ final class AiSiteExecutionBlueprintService
             \array_values(\array_unique(\array_merge(\array_keys($prebuiltResults), $pageTypes))),
             \array_keys($prebuiltResults)
         );
+        $concurrency = $this->resolveStageOnePageFanoutConcurrency(\count($pageTypes));
+        $fanoutProgress['concurrency'] = $concurrency;
         $this->emitStageOnePageFanoutProgress(
             $onProgress,
             $fanoutProgress,
             '',
             'pending',
-            ['message' => 'Stage 1 page fanout queued with ' . \count($pageTypes) . ' active page tasks.']
+            ['message' => 'Stage 1 page fanout queued with ' . \count($pageTypes) . ' active page tasks; concurrency=' . $concurrency . '.'],
+            $onPlanState,
+            $progressSignature,
+            $planJson,
+            $progressPageTypes
         );
 
-        $concurrency = \max(1, \count($pageTypes));
         $ai = $this->getAiService();
         $adapterRequestParams = $this->buildStageOneAiAdapterRequestParams($scope, $websiteProfile);
 
@@ -3328,18 +3778,38 @@ final class AiSiteExecutionBlueprintService
                 'recovery' => 0,
                 'status' => 'pending',
             ];
-            $tasks[$pageKey] = function (array $sessionParams) use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onProgress, &$completedPages, $totalPages, &$generationAttempts, $adapterRequestParams, $onCheckpoint, $checkpointSignature, $checkpointPageTypes, &$fanoutProgress): array {
+            $tasks[$pageKey] = function (array $sessionParams) use ($scope, $websiteProfile, $planJson, $pageKey, $planLocale, $contentLocale, $instruction, $targetScope, $onProgress, &$completedPages, $totalPages, &$generationAttempts, $adapterRequestParams, $onPlanState, $progressSignature, $progressPageTypes, &$fanoutProgress): array {
                 $this->emitStageOnePageFanoutProgress(
                     $onProgress,
                     $fanoutProgress,
                     $pageKey,
                     'running',
-                    ['message' => 'Page plan worker running: ' . $pageKey]
+                    ['message' => 'Page plan worker running: ' . $pageKey],
+                    $onPlanState,
+                    $progressSignature,
+                    $planJson,
+                    $progressPageTypes
                 );
                 $baselinePage = \is_array($planJson['pages'][$pageKey] ?? null) ? $planJson['pages'][$pageKey] : [];
                 $requestParams = \array_merge($adapterRequestParams, $sessionParams);
                 $useSegmentedPagePlan = $this->shouldUseSegmentedStageOnePagePlan($pageKey, $scope);
                 $priorRetryInstruction = $this->buildStageOneRetryablePageFailureInstruction($scope, $pageKey);
+                $emitBlockProgress = function (array $blockStatuses, string $message, string $pageStatus = 'running') use ($onProgress, &$fanoutProgress, $pageKey, $onPlanState, $progressSignature, $planJson, $progressPageTypes): void {
+                    $this->emitStageOnePageFanoutProgress(
+                        $onProgress,
+                        $fanoutProgress,
+                        $pageKey,
+                        $pageStatus,
+                        [
+                            'message' => $message,
+                            'block_statuses' => $blockStatuses,
+                        ],
+                        $onPlanState,
+                        $progressSignature,
+                        $planJson,
+                        $progressPageTypes
+                    );
+                };
                 if ($useSegmentedPagePlan) {
                     $pagePlan = $this->generateStageOneSegmentedPagePlanByAi(
                         $scope,
@@ -3353,7 +3823,8 @@ final class AiSiteExecutionBlueprintService
                         $requestParams,
                         null,
                         $onProgress,
-                        $priorRetryInstruction
+                        $priorRetryInstruction,
+                        $emitBlockProgress
                     );
                 } else {
                     $decoded = $this->generateStageOneJsonByAi(
@@ -3372,7 +3843,7 @@ final class AiSiteExecutionBlueprintService
                     $pageKey
                 );
                 $stageOneContract = \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : (\is_array($scope['stage1_contract'] ?? null) ? $scope['stage1_contract'] : []);
-                $pagePlan = $this->finalizeStageOneAiPagePlanForCheckpoint(
+                $pagePlan = $this->finalizeStageOneAiPagePlanForValidation(
                     $pagePlan,
                     $pageKey,
                     $stageOneContract,
@@ -3389,9 +3860,9 @@ final class AiSiteExecutionBlueprintService
                         'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? '')),
                     ])
                 );
-                $pageCheckpointPassed = $this->hasStageOnePagePlanCheckpoint([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)
+                $pageValidationPassed = $this->hasPersistedStageOnePagePlan([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)
                     && !empty($pageValidationReport['passed']);
-                if (!$pageCheckpointPassed) {
+                if (!$pageValidationPassed) {
                     $primaryValidationIssues = \is_array($pageValidationReport['issues'] ?? null) ? $pageValidationReport['issues'] : [];
                     $generationAttempts['page_fanout'][$pageKey]['primary_issues'] = \array_slice(
                         $primaryValidationIssues,
@@ -3412,10 +3883,14 @@ final class AiSiteExecutionBlueprintService
                     $this->emitStageOnePageFanoutProgress(
                         $onProgress,
                         $fanoutProgress,
-                        $pageKey,
-                        'retrying',
-                        ['message' => 'Page plan worker retrying strict recovery: ' . $pageKey]
-                    );
+                    $pageKey,
+                    'retrying',
+                    ['message' => 'Page plan worker retrying strict recovery: ' . $pageKey],
+                    $onPlanState,
+                    $progressSignature,
+                    $planJson,
+                    $progressPageTypes
+                );
                     if ($useSegmentedPagePlan) {
                         $segmentedRecoveryInstruction = 'Previous segmented page plan failed Stage-1 page validation: '
                             . $generationAttempts['page_fanout'][$pageKey]['primary_failure_summary'];
@@ -3435,7 +3910,8 @@ final class AiSiteExecutionBlueprintService
                             $requestParams,
                             null,
                             $onProgress,
-                            $this->clipText($segmentedRecoveryInstruction, 1600)
+                            $this->clipText($segmentedRecoveryInstruction, 1600),
+                            $emitBlockProgress
                         );
                     } else {
                         $decoded = $this->generateStageOneJsonByAi(
@@ -3464,7 +3940,7 @@ final class AiSiteExecutionBlueprintService
                         $baselinePage,
                         $pageKey
                     );
-                    $pagePlan = $this->finalizeStageOneAiPagePlanForCheckpoint(
+                    $pagePlan = $this->finalizeStageOneAiPagePlanForValidation(
                         $pagePlan,
                         $pageKey,
                         $stageOneContract,
@@ -3484,9 +3960,14 @@ final class AiSiteExecutionBlueprintService
                         'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? '')),
                     ])
                 );
-                $finalCheckpointPassed = $this->hasStageOnePagePlanCheckpoint([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)
+                $finalValidationPassed = $this->hasPersistedStageOnePagePlan([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)
                     && !empty($finalPageValidationReport['passed']);
-                if (!$finalCheckpointPassed) {
+                $blockStatusUpdates = $this->buildStageOneBlockStatusUpdatesFromPagePlan(
+                    $pagePlan,
+                    $finalPageValidationReport,
+                    $finalValidationPassed
+                );
+                if (!$finalValidationPassed) {
                     $generationAttempts['page_fanout'][$pageKey]['final_issues'] = \array_slice(
                         \is_array($finalPageValidationReport['issues'] ?? null) ? $finalPageValidationReport['issues'] : [],
                         0,
@@ -3495,38 +3976,43 @@ final class AiSiteExecutionBlueprintService
                     $generationAttempts['page_fanout'][$pageKey]['final_failure_summary'] = $this->summarizeStageOneValidationReport($finalPageValidationReport);
                     $generationAttempts['page_fanout'][$pageKey]['ai_response_summary'] = $this->summarizeStageOneAiPagePlanForFailureDiagnostics($pagePlan, $pageKey);
                 }
-                $generationAttempts['page_fanout'][$pageKey]['status'] = $finalCheckpointPassed ? 'passed' : 'failed';
-                if ($finalCheckpointPassed) {
+                $generationAttempts['page_fanout'][$pageKey]['status'] = $finalValidationPassed ? 'passed' : 'failed';
+                if ($finalValidationPassed) {
                     $this->emitStageOnePageProgressState(
-                        $onCheckpoint,
-                        $checkpointSignature,
+                        $onPlanState,
+                        $progressSignature,
                         $planJson,
                         $pageKey,
                         $pagePlan,
-                        $checkpointPageTypes
+                        $progressPageTypes
                     );
                 }
                 $this->emitStageOnePageFanoutProgress(
                     $onProgress,
                     $fanoutProgress,
                     $pageKey,
-                    $finalCheckpointPassed ? 'done' : 'failed',
+                    $finalValidationPassed ? 'done' : 'failed',
                     [
-                        'message' => $finalCheckpointPassed
+                        'message' => $finalValidationPassed
                             ? 'Page plan worker completed: ' . $pageKey
                             : 'Page plan worker failed validation: ' . $pageKey,
-                        'error_message' => $finalCheckpointPassed ? '' : (string)($generationAttempts['page_fanout'][$pageKey]['final_failure_summary'] ?? ''),
-                    ]
+                        'error_message' => $finalValidationPassed ? '' : (string)($generationAttempts['page_fanout'][$pageKey]['final_failure_summary'] ?? ''),
+                        'block_statuses' => $blockStatusUpdates,
+                    ],
+                    $onPlanState,
+                    $progressSignature,
+                    $finalValidationPassed ? $this->mergeStageOneFanoutProgressIntoPlanJson($planJson, $fanoutProgress) : $planJson,
+                    $progressPageTypes
                 );
                 $pageProgress = 60 + (int)\floor(($completedPages / \max(1, $totalPages)) * 22);
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
-                    $finalCheckpointPassed
+                    $finalValidationPassed
                         ? $this->buildStageOnePagePipelineMessage(true, $completedPages, $totalPages, $pageKey)
-                        : 'Page plan generated but failed Stage-1 contract checkpoint and is waiting for retry: ' . $pageKey,
+                        : 'Page plan generated but failed Stage-1 contract validation and is waiting for retry: ' . $pageKey,
                     $pageProgress,
                     'page_plan',
-                    $finalCheckpointPassed ? 'done' : 'failed',
+                    $finalValidationPassed ? 'done' : 'failed',
                     ['page_type' => $pageKey]
                 );
 
@@ -3551,7 +4037,7 @@ final class AiSiteExecutionBlueprintService
             if (($entry['status'] ?? '') === 'fulfilled' && \is_array($entry['result'] ?? null) && $entry['result'] !== []) {
                 $result = $entry['result'];
                 $stageOneContract = \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : (\is_array($scope['stage1_contract'] ?? null) ? $scope['stage1_contract'] : []);
-                if ($this->hasStageOnePagePlanCheckpoint([$pageKey => $result], $pageKey, $stageOneContract, $scope)) {
+                if ($this->hasPersistedStageOnePagePlan([$pageKey => $result], $pageKey, $stageOneContract, $scope)) {
                     $results[$pageKey] = $result;
                     $generationAttempts['page_fanout'][$pageKey]['status'] = 'passed';
                     continue;
@@ -3572,7 +4058,11 @@ final class AiSiteExecutionBlueprintService
                     [
                         'message' => 'Page plan worker produced no usable blocks: ' . $pageKey,
                         'error_message' => $retryableFailures[$pageKey]['message'],
-                    ]
+                    ],
+                    $onPlanState,
+                    $progressSignature,
+                    $planJson,
+                    $progressPageTypes
                 );
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
@@ -3600,11 +4090,15 @@ final class AiSiteExecutionBlueprintService
                 $fanoutProgress,
                 $pageKey,
                 'failed',
-                [
-                    'message' => 'Page plan worker failed: ' . $pageKey,
-                    'error_message' => $retryableFailures[$pageKey]['message'],
-                ]
-            );
+                    [
+                        'message' => 'Page plan worker failed: ' . $pageKey,
+                        'error_message' => $retryableFailures[$pageKey]['message'],
+                    ],
+                    $onPlanState,
+                    $progressSignature,
+                    $planJson,
+                    $progressPageTypes
+                );
             $this->emitStageOnePipelineProgress(
                 $onProgress,
                 'Page plan generation failed and is waiting for retry: ' . $pageKey,
@@ -3623,6 +4117,30 @@ final class AiSiteExecutionBlueprintService
         $budget = $this->resolveStageOneBlockBudget($pageType, $scope);
 
         return (int)($budget['target'] ?? 0) >= self::STAGE_ONE_SEGMENTED_PAGE_TARGET_THRESHOLD;
+    }
+
+    private function resolveStageOnePageFanoutConcurrency(int $taskCount): int
+    {
+        $taskCount = \max(1, $taskCount);
+        $configured = (int)\Weline\Framework\App\Env::get(
+            'pagebuilder.ai_site.stage1_page_fanout_concurrency',
+            \Weline\Framework\App\Env::get('pagebuilder.ai_site.max_http_concurrency', 5)
+        );
+        $configured = \max(1, \min(8, $configured));
+
+        return \min($taskCount, $configured);
+    }
+
+    private function resolveStageOneBlockSegmentConcurrency(int $segmentCount): int
+    {
+        $segmentCount = \max(1, $segmentCount);
+        $configured = (int)\Weline\Framework\App\Env::get(
+            'pagebuilder.ai_site.stage1_block_segment_concurrency',
+            \Weline\Framework\App\Env::get('pagebuilder.ai_site.max_http_concurrency', 4)
+        );
+        $configured = \max(1, \min(4, $configured));
+
+        return \min($segmentCount, $configured);
     }
 
     /**
@@ -3678,7 +4196,8 @@ final class AiSiteExecutionBlueprintService
         array $requestParams,
         ?callable $onChunk = null,
         ?callable $onProgress = null,
-        string $recoveryInstruction = ''
+        string $recoveryInstruction = '',
+        ?callable $onBlockProgress = null
     ): array {
         $blockBudget = $this->resolveStageOneBlockBudget($pageType, $scope);
         $this->emitStageOnePipelineProgress(
@@ -3718,6 +4237,13 @@ final class AiSiteExecutionBlueprintService
             throw new \RuntimeException('Segmented Stage-1 page skeleton AI failed for ' . $pageType . ': no block keys.');
         }
         $blueprintsByKey = $this->buildStageOneSegmentedBlueprintMap($skeleton);
+        if ($onBlockProgress !== null) {
+            $onBlockProgress(
+                $this->buildStageOneBlockStatusUpdates($orderedBlockKeys, 'pending', 'Waiting for block segment generation.'),
+                'Segmented page skeleton ready: ' . $pageType,
+                'running'
+            );
+        }
 
         $pagePlan = [
             'page_goal' => \trim((string)($skeleton['page_goal'] ?? '')),
@@ -3730,37 +4256,34 @@ final class AiSiteExecutionBlueprintService
 
         $blocksByKey = [];
         $segments = \array_chunk($orderedBlockKeys, self::STAGE_ONE_PAGE_BLOCK_SEGMENT_SIZE);
-        foreach ($segments as $segmentIndex => $segmentKeys) {
-            $segmentKeys = \array_values(\array_filter(\array_map('strval', $segmentKeys), static fn(string $value): bool => \trim($value) !== ''));
-            if ($segmentKeys === []) {
-                continue;
-            }
+        $segmentTotal = \count($segments);
+        $segmentConcurrency = $this->resolveStageOneBlockSegmentConcurrency($segmentTotal);
+        $canRunSegmentFanout = $this->getAiService()->supportsCooperativeConcurrency($segmentConcurrency)
+            && \Weline\Framework\Php\FiberTaskRunner::currentPump() === null;
+
+        if ($canRunSegmentFanout) {
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                'Generating Stage-1 block segment ' . ((int)$segmentIndex + 1) . '/' . \count($segments) . ' for ' . $pageType . ': ' . \implode(', ', $segmentKeys),
-                66 + (int)\floor(((int)$segmentIndex / \max(1, \count($segments))) * 10),
+                'Stage-1 block segment fanout queued for ' . $pageType . ': total ' . (string)$segmentTotal . '; concurrency=' . (string)$segmentConcurrency . '.',
+                66,
                 'page_plan',
                 'segment_blocks',
-                ['page_type' => $pageType, 'block_keys' => $segmentKeys]
+                ['page_type' => $pageType, 'page_total' => $segmentTotal]
             );
-            $segmentBlocksByKey = [];
-            $segmentRecoveryInstruction = $recoveryInstruction;
-            $missingSegmentKeys = $segmentKeys;
-            $segmentValidationIssues = [];
-            for ($segmentAttempt = 0; $segmentAttempt < 3; $segmentAttempt++) {
-                $segmentAttemptRequestParams = $requestParams;
-                if (\count($segmentKeys) === 1) {
-                    $singleSegmentKey = \trim((string)($segmentKeys[0] ?? ''));
-                    if ($singleSegmentKey !== '') {
-                        $segmentAttemptRequestParams['response_format'] = $this->buildStageOneBlockSegmentResponseFormat(
-                            $singleSegmentKey,
-                            \is_array($blueprintsByKey[$singleSegmentKey] ?? null) ? $blueprintsByKey[$singleSegmentKey] : [],
-                            $segmentIndex === 0
-                        );
-                    }
+            $segmentTasks = [];
+            $segmentSpecs = [];
+            foreach ($segments as $segmentIndex => $segmentKeys) {
+                $segmentKeys = \array_values(\array_filter(\array_map('strval', $segmentKeys), static fn(string $value): bool => \trim($value) !== ''));
+                if ($segmentKeys === []) {
+                    continue;
                 }
-                $segmentDecoded = $this->generateStageOneJsonByAi(
-                    $this->buildAiStageOnePageBlockSegmentPrompt(
+                $taskKey = 'segment_' . (string)$segmentIndex;
+                $segmentSpecs[$taskKey] = [
+                    'index' => (int)$segmentIndex,
+                    'keys' => $segmentKeys,
+                ];
+                $segmentTasks[$taskKey] = function (array $sessionParams) use ($scope, $websiteProfile, $planJson, $pageType, $planLocale, $contentLocale, $instruction, $targetScope, $blockBudget, $skeleton, $blueprintsByKey, $requestParams, $onProgress, $onBlockProgress, $recoveryInstruction, $segmentIndex, $segmentTotal, $segmentKeys): array {
+                    return $this->generateStageOneBlockSegmentByAi(
                         $scope,
                         $websiteProfile,
                         $planJson,
@@ -3771,61 +4294,74 @@ final class AiSiteExecutionBlueprintService
                         $targetScope,
                         $blockBudget,
                         $skeleton,
+                        $blueprintsByKey,
                         $segmentKeys,
-                        $this->buildStageOneSegmentedBlueprintSubset($blueprintsByKey, $segmentKeys),
-                        $segmentRecoveryInstruction
-                    ),
-                    'pagebuilder_plan_generation',
-                    self::STAGE_ONE_PAGE_BLOCK_SEGMENT_MAX_TOKENS,
-                    210,
-                    $onChunk,
-                    $segmentAttemptRequestParams
-                );
-                $segmentBlocksByKey = [];
-                foreach ($this->extractStageOneAiBlockSegment($segmentDecoded) as $block) {
-                    if (!\is_array($block)) {
-                        continue;
-                    }
-                    $blockKey = \trim((string)($block['block_key'] ?? ''));
-                    if ($blockKey === '') {
-                        continue;
-                    }
-                    $segmentBlocksByKey[$blockKey] = $block;
-                }
-                $missingSegmentKeys = \array_values(\array_filter(
-                    $segmentKeys,
-                    static fn(string $requiredSegmentKey): bool => !\is_array($segmentBlocksByKey[$requiredSegmentKey] ?? null)
-                ));
-                if ($missingSegmentKeys === []) {
-                    $stageOneContract = \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : (\is_array($scope['stage1_contract'] ?? null) ? $scope['stage1_contract'] : []);
-                    $segmentValidationIssues = $this->validateStageOneBlockSegmentForPromptRetry(
-                        $segmentBlocksByKey,
-                        $segmentKeys,
-                        $pageType,
-                        $stageOneContract,
-                        $scope,
-                        $planLocale,
-                        $contentLocale,
-                        \trim((string)($skeleton['generated_image_target_block_key'] ?? ''))
+                        (int)$segmentIndex,
+                        $segmentTotal,
+                        \array_merge($requestParams, $sessionParams),
+                        null,
+                        $onProgress,
+                        $recoveryInstruction,
+                        $onBlockProgress
                     );
-                    if ($segmentValidationIssues === []) {
-                        break;
+                };
+            }
+            $settled = $this->getAiService()->runCooperativeSessionTasksSettled($segmentTasks, [
+                'concurrency' => $segmentConcurrency,
+                'session_id' => $this->resolveStageOneCooperativeSessionId($scope, 'page_block_segment') . '.' . $pageType,
+                'disable_conversation_history' => true,
+                'disable_conversation_persist' => true,
+            ]);
+            foreach ($segmentSpecs as $taskKey => $spec) {
+                $entry = \is_array($settled[$taskKey] ?? null) ? $settled[$taskKey] : [];
+                if (($entry['status'] ?? '') === 'fulfilled' && \is_array($entry['result'] ?? null)) {
+                    foreach ($entry['result'] as $blockKey => $block) {
+                        $blocksByKey[(string)$blockKey] = $block;
                     }
+                    continue;
                 }
-                $segmentRecoveryInstruction = $missingSegmentKeys !== []
-                    ? ('Previous segment attempt missed required block keys: '
-                        . \implode(', ', $missingSegmentKeys)
-                        . '. Return exactly the requested block keys and do not rename them.')
-                    : ('Previous segment attempt returned the requested block key but failed the Stage-1 block contract: '
-                        . $this->summarizeStageOneValidationReport(['issues' => $segmentValidationIssues])
-                        . '. ' . \implode(' ', $this->buildStageOneIssueSpecificRecoveryRules($segmentValidationIssues))
-                        . ' Return a complete block object for exactly the requested key; shorten copy instead of omitting visual_signature, image_intent, field_plan, or execution_script.core_copy.');
+                $segmentKeys = \is_array($spec['keys'] ?? null) ? $spec['keys'] : [];
+                $throwable = ($entry['error'] ?? null) instanceof \Throwable
+                    ? $entry['error']
+                    : new \RuntimeException('Stage-1 block segment task did not return usable blocks.');
+                if ($onBlockProgress !== null) {
+                    $onBlockProgress(
+                        $this->buildStageOneBlockStatusUpdates($segmentKeys, 'failed', $throwable->getMessage()),
+                        'Segmented Stage-1 page block AI failed for ' . $pageType . ': ' . $throwable->getMessage(),
+                        'retrying'
+                    );
+                }
+                throw $throwable;
             }
-            if ($missingSegmentKeys !== []) {
-                throw new \RuntimeException('Segmented Stage-1 page block AI failed for ' . $pageType . ': missing block ' . \implode(', ', $missingSegmentKeys) . '.');
-            }
-            foreach ($segmentBlocksByKey as $blockKey => $block) {
-                $blocksByKey[$blockKey] = $block;
+        } else {
+            foreach ($segments as $segmentIndex => $segmentKeys) {
+                $segmentKeys = \array_values(\array_filter(\array_map('strval', $segmentKeys), static fn(string $value): bool => \trim($value) !== ''));
+                if ($segmentKeys === []) {
+                    continue;
+                }
+                foreach ($this->generateStageOneBlockSegmentByAi(
+                    $scope,
+                    $websiteProfile,
+                    $planJson,
+                    $pageType,
+                    $planLocale,
+                    $contentLocale,
+                    $instruction,
+                    $targetScope,
+                    $blockBudget,
+                    $skeleton,
+                    $blueprintsByKey,
+                    $segmentKeys,
+                    (int)$segmentIndex,
+                    $segmentTotal,
+                    $requestParams,
+                    $onChunk,
+                    $onProgress,
+                    $recoveryInstruction,
+                    $onBlockProgress
+                ) as $blockKey => $block) {
+                    $blocksByKey[(string)$blockKey] = $block;
+                }
             }
         }
 
@@ -3836,6 +4372,155 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $pagePlan;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $blockBudget
+     * @param array<string, mixed> $skeleton
+     * @param array<string, array<string, mixed>> $blueprintsByKey
+     * @param list<string> $segmentKeys
+     * @param array<string, mixed> $requestParams
+     * @return array<string, mixed>
+     */
+    private function generateStageOneBlockSegmentByAi(
+        array $scope,
+        array $websiteProfile,
+        array $planJson,
+        string $pageType,
+        string $planLocale,
+        string $contentLocale,
+        string $instruction,
+        string $targetScope,
+        array $blockBudget,
+        array $skeleton,
+        array $blueprintsByKey,
+        array $segmentKeys,
+        int $segmentIndex,
+        int $segmentTotal,
+        array $requestParams,
+        ?callable $onChunk = null,
+        ?callable $onProgress = null,
+        string $recoveryInstruction = '',
+        ?callable $onBlockProgress = null
+    ): array {
+        $segmentMessage = 'Generating Stage-1 block segment ' . ((int)$segmentIndex + 1) . '/' . $segmentTotal . ' for ' . $pageType . ': ' . \implode(', ', $segmentKeys);
+        if ($onBlockProgress !== null) {
+            $onBlockProgress(
+                $this->buildStageOneBlockStatusUpdates($segmentKeys, 'running', $segmentMessage),
+                $segmentMessage,
+                'running'
+            );
+        } else {
+            $this->emitStageOnePipelineProgress(
+                $onProgress,
+                $segmentMessage,
+                66 + (int)\floor(((int)$segmentIndex / \max(1, $segmentTotal)) * 10),
+                'page_plan',
+                'segment_blocks',
+                ['page_type' => $pageType, 'block_keys' => $segmentKeys]
+            );
+        }
+
+        $segmentBlocksByKey = [];
+        $segmentRecoveryInstruction = $recoveryInstruction;
+        $missingSegmentKeys = $segmentKeys;
+        $segmentValidationIssues = [];
+        for ($segmentAttempt = 0; $segmentAttempt < 3; $segmentAttempt++) {
+            $segmentAttemptRequestParams = $requestParams;
+            if (\count($segmentKeys) === 1) {
+                $singleSegmentKey = \trim((string)($segmentKeys[0] ?? ''));
+                if ($singleSegmentKey !== '') {
+                    $segmentAttemptRequestParams['response_format'] = $this->buildStageOneBlockSegmentResponseFormat(
+                        $singleSegmentKey,
+                        \is_array($blueprintsByKey[$singleSegmentKey] ?? null) ? $blueprintsByKey[$singleSegmentKey] : [],
+                        $segmentIndex === 0
+                    );
+                }
+            }
+            $segmentDecoded = $this->generateStageOneJsonByAi(
+                $this->buildAiStageOnePageBlockSegmentPrompt(
+                    $scope,
+                    $websiteProfile,
+                    $planJson,
+                    $pageType,
+                    $planLocale,
+                    $contentLocale,
+                    $instruction,
+                    $targetScope,
+                    $blockBudget,
+                    $skeleton,
+                    $segmentKeys,
+                    $this->buildStageOneSegmentedBlueprintSubset($blueprintsByKey, $segmentKeys),
+                    $segmentRecoveryInstruction
+                ),
+                'pagebuilder_plan_generation',
+                self::STAGE_ONE_PAGE_BLOCK_SEGMENT_MAX_TOKENS,
+                210,
+                $onChunk,
+                $segmentAttemptRequestParams
+            );
+            $segmentBlocksByKey = [];
+            foreach ($this->extractStageOneAiBlockSegment($segmentDecoded) as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $blockKey = \trim((string)($block['block_key'] ?? ''));
+                if ($blockKey === '') {
+                    continue;
+                }
+                $segmentBlocksByKey[$blockKey] = $block;
+            }
+            $missingSegmentKeys = \array_values(\array_filter(
+                $segmentKeys,
+                static fn(string $requiredSegmentKey): bool => !\is_array($segmentBlocksByKey[$requiredSegmentKey] ?? null)
+            ));
+            if ($missingSegmentKeys === []) {
+                $stageOneContract = \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : (\is_array($scope['stage1_contract'] ?? null) ? $scope['stage1_contract'] : []);
+                $segmentValidationIssues = $this->validateStageOneBlockSegmentForPromptRetry(
+                    $segmentBlocksByKey,
+                    $segmentKeys,
+                    $pageType,
+                    $stageOneContract,
+                    $scope,
+                    $planLocale,
+                    $contentLocale,
+                    \trim((string)($skeleton['generated_image_target_block_key'] ?? ''))
+                );
+                if ($segmentValidationIssues === []) {
+                    break;
+                }
+            }
+            $segmentRecoveryInstruction = $missingSegmentKeys !== []
+                ? ('Previous segment attempt missed required block keys: '
+                    . \implode(', ', $missingSegmentKeys)
+                    . '. Return exactly the requested block keys and do not rename them.')
+                : ('Previous segment attempt returned the requested block key but failed the Stage-1 block contract: '
+                    . $this->summarizeStageOneValidationReport(['issues' => $segmentValidationIssues])
+                    . '. ' . \implode(' ', $this->buildStageOneIssueSpecificRecoveryRules($segmentValidationIssues))
+                    . ' Return a complete block object for exactly the requested key; shorten copy instead of omitting visual_signature, image_intent, field_plan, or execution_script.core_copy.');
+        }
+        if ($missingSegmentKeys !== []) {
+            if ($onBlockProgress !== null) {
+                $onBlockProgress(
+                    $this->buildStageOneBlockStatusUpdates($missingSegmentKeys, 'failed', 'Segment generation missed required block.'),
+                    'Segmented Stage-1 page block AI failed for ' . $pageType . ': missing block ' . \implode(', ', $missingSegmentKeys) . '.',
+                    'retrying'
+                );
+            }
+            throw new \RuntimeException('Segmented Stage-1 page block AI failed for ' . $pageType . ': missing block ' . \implode(', ', $missingSegmentKeys) . '.');
+        }
+        if ($onBlockProgress !== null) {
+            $onBlockProgress(
+                $this->buildStageOneBlockStatusUpdates($segmentKeys, 'done', 'Block segment generated.'),
+                'Stage-1 block segment generated for ' . $pageType . ': ' . \implode(', ', $segmentKeys),
+                'running'
+            );
+        }
+
+        return $segmentBlocksByKey;
     }
 
     /**
@@ -3894,6 +4579,9 @@ final class AiSiteExecutionBlueprintService
             if (\trim((string)($block['content'] ?? '')) === '') {
                 $issues[] = $this->stageOneSegmentRetryIssue('instruction_like_or_empty', $path . '.content', $pageType, $segmentKey);
             }
+            foreach ($this->collectStageOneVisibleCopyLocaleRetryIssues($block, $path, $pageType, $segmentKey, $contentLocale !== '' ? $contentLocale : $planLocale) as $localeIssue) {
+                $issues[] = $localeIssue;
+            }
             if (!$this->hasCompleteStageOneDesignTags($block)) {
                 $issues[] = $this->stageOneSegmentRetryIssue('missing_design_tag', $path . '.design_tags', $pageType, $segmentKey);
             }
@@ -3946,6 +4634,76 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \array_slice($issues, 0, 16);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return list<array<string, mixed>>
+     */
+    private function collectStageOneVisibleCopyLocaleRetryIssues(
+        array $block,
+        string $path,
+        string $pageType,
+        string $blockKey,
+        string $contentLocale
+    ): array {
+        if (\trim($contentLocale) === '') {
+            return [];
+        }
+
+        $rows = [];
+        $content = \trim((string)($block['content'] ?? ''));
+        if ($content !== '') {
+            $rows[] = ['path' => $path . '.content', 'field_name' => 'content', 'text' => $content];
+        }
+
+        foreach (\is_array($block['field_plan'] ?? null) ? \array_values($block['field_plan']) : [] as $fieldIndex => $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $sample = \trim((string)($row['sample'] ?? $row['value'] ?? $row['text'] ?? ''));
+            if ($sample === '') {
+                continue;
+            }
+            $rows[] = [
+                'path' => $path . '.field_plan.' . $fieldIndex . '.sample',
+                'field_name' => \trim((string)($row['field'] ?? $row['name'] ?? '')),
+                'text' => $sample,
+            ];
+        }
+
+        $executionScript = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+        $coreCopy = \trim((string)($executionScript['core_copy'] ?? ''));
+        if ($coreCopy !== '') {
+            $rows[] = ['path' => $path . '.execution_script.core_copy', 'field_name' => 'core_copy', 'text' => $coreCopy];
+        }
+        foreach (\is_array($executionScript['feature_points'] ?? null) ? \array_values($executionScript['feature_points']) : [] as $pointIndex => $point) {
+            $text = \is_scalar($point) ? \trim((string)$point) : '';
+            if ($text === '') {
+                continue;
+            }
+            $rows[] = [
+                'path' => $path . '.execution_script.feature_points.' . $pointIndex,
+                'field_name' => 'feature_point',
+                'text' => $text,
+            ];
+        }
+
+        $issues = [];
+        foreach ($rows as $row) {
+            $text = (string)($row['text'] ?? '');
+            if (!$this->stageOneVisibleTextHasLocaleMismatch($text, $contentLocale)) {
+                continue;
+            }
+            $issues[] = $this->stageOneSegmentRetryIssue('visible_copy_locale_mismatch', (string)($row['path'] ?? $path), $pageType, $blockKey, [
+                'content_locale' => $contentLocale,
+                'field_name' => (string)($row['field_name'] ?? ''),
+                'snippet' => $this->clipText($text, 120),
+                'prompt_hint' => 'Regenerate this Stage-1 block segment with visitor-visible copy in content_locale.',
+            ]);
+        }
+
+        return \array_slice($issues, 0, 8);
     }
 
     /**
@@ -4657,7 +5415,7 @@ final class AiSiteExecutionBlueprintService
 
         return \implode("\n", \array_values(\array_filter([
             ...$this->buildStageOnePromptRolePrelude(),
-            '銆愮郴缁熸彁绀鸿瘝銆?',
+            '閵嗘劗閮寸紒鐔稿絹缁€楦跨槤閵?',
             'You are PageBuilder Stage-1 PAGE SKELETON planner for one large page.',
             'Return STRICT JSON only. Create the page-level art direction and ordered block blueprint; do not generate full block field_plan details in this call.',
             'Accepted shape: {"page":{...}}.',
@@ -4674,9 +5432,9 @@ final class AiSiteExecutionBlueprintService
             'Creativity rule: the contract is a frame, not a template. Invent a page-specific rhythm, block sequence, media idea, and surface language inside the required keys; do not produce a generic compliance checklist.',
             'Block blueprint intent rule: page_flow_role should describe the block job (opening/proof/details/cta/support), and image_intent_hint should say either a concrete generated scene/product/interface subject or a CSS-only motif such as badges, chips, dividers, patterns, cards, or icon-led UI.',
             'Output budget: page_goal/theme_alignment_summary <= 120 chars; each page_design_plan value <= 70 chars; arrays max 2 items; each block_blueprints value <= 60 chars.',
-            '銆愮敤鎴锋彁绀鸿瘝銆態rief: ' . ($brief !== '' ? $brief : '-'),
-            '銆愮敤鎴锋彁绀鸿瘝銆慖nstruction: ' . ($instruction !== '' ? $instruction : '-'),
-            '銆愰€氱敤鎻愮ず璇嶃€?',
+            '閵嗘劗鏁ら幋閿嬪絹缁€楦跨槤閵嗘厠rief: ' . ($brief !== '' ? $brief : '-'),
+            '閵嗘劗鏁ら幋閿嬪絹缁€楦跨槤閵嗘厲nstruction: ' . ($instruction !== '' ? $instruction : '-'),
+            '閵嗘劙鈧氨鏁ら幓鎰仛鐠囧秲鈧?',
             'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
             'Confirmed requirement expansion: ' . $requirementExpansion,
             'Shared theme_design: ' . $themeDesign,
@@ -4763,7 +5521,7 @@ final class AiSiteExecutionBlueprintService
 
         return \implode("\n", \array_values(\array_filter([
             ...$this->buildStageOnePromptRolePrelude(),
-            '銆愮郴缁熸彁绀鸿瘝銆?',
+            '閵嗘劗閮寸紒鐔稿絹缁€楦跨槤閵?',
             'You are PageBuilder Stage-1 BLOCK SEGMENT planner. Generate full Stage-1 block objects only for the requested keys. The assembler will combine segments without changing your block content.',
             'Return STRICT JSON only. Accepted shape: {"blocks":[...]}',
             'Page type: ' . $pageType,
@@ -4798,9 +5556,9 @@ final class AiSiteExecutionBlueprintService
             $ctaSegmentRule,
             'Policy/legal safety: if this is a policy page, body blocks must be policy/support/rights focused and must not use download/install/play/register/claim/reward/bonus/coins conversion copy.',
             'Visible copy boundary: content fields are final website copy seeds. Do not output prompt instructions, blueprint explanations, validator wording, field names, layout recipes, or internal labels as visitor-facing copy.',
-            '銆愮敤鎴锋彁绀鸿瘝銆態rief: ' . ($brief !== '' ? $brief : '-'),
-            '銆愮敤鎴锋彁绀鸿瘝銆慖nstruction: ' . ($instruction !== '' ? $instruction : '-'),
-            '銆愰€氱敤鎻愮ず璇嶃€?',
+            '閵嗘劗鏁ら幋閿嬪絹缁€楦跨槤閵嗘厠rief: ' . ($brief !== '' ? $brief : '-'),
+            '閵嗘劗鏁ら幋閿嬪絹缁€楦跨槤閵嗘厲nstruction: ' . ($instruction !== '' ? $instruction : '-'),
+            '閵嗘劙鈧氨鏁ら幓鎰仛鐠囧秲鈧?',
             'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
             'Shared theme_design: ' . $themeDesign,
             'Theme-level page overview: ' . $pageTypeOverview,
@@ -5032,16 +5790,7 @@ final class AiSiteExecutionBlueprintService
         return \is_array($scope['retryable_ai_failures']['plan']['items'][$pageKey] ?? null);
     }
 
-    private function resolveStageOneRetryablePageFailureMessage(array $scope, string $pageKey): string
-    {
-        $item = \is_array($scope['retryable_ai_failures']['plan']['items'][$pageKey] ?? null)
-            ? $scope['retryable_ai_failures']['plan']['items'][$pageKey]
-            : [];
-
-        return \trim((string)($item['message'] ?? ''));
-    }
-
-    private function buildStageOneRetryablePageFailureInstruction(array $scope, string $pageKey): string
+        private function buildStageOneRetryablePageFailureInstruction(array $scope, string $pageKey): string
     {
         $item = \is_array($scope['retryable_ai_failures']['plan']['items'][$pageKey] ?? null)
             ? $scope['retryable_ai_failures']['plan']['items'][$pageKey]
@@ -5079,16 +5828,16 @@ final class AiSiteExecutionBlueprintService
         $aiResponseSummary = \trim((string)($context['ai_response_summary'] ?? ''));
         $detailLines = [];
         if ($validationSummary !== '') {
-            $detailLines[] = '门禁摘要：' . $validationSummary;
+            $detailLines[] = 'Gate summary: ' . $validationSummary;
         }
         if ($validationIssues !== []) {
-            $detailLines[] = '门禁明细：' . $this->clipText(
+            $detailLines[] = 'Gate details: ' . $this->clipText(
                 (string)(\json_encode(\array_slice($validationIssues, 0, 6), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: ''),
                 900
             );
         }
         if ($aiResponseSummary !== '') {
-            $detailLines[] = 'AI 产出摘要：' . $aiResponseSummary;
+            $detailLines[] = 'AI output summary: ' . $aiResponseSummary;
         }
         $composedMessage = $message;
         if ($detailLines !== []) {
@@ -5136,7 +5885,7 @@ final class AiSiteExecutionBlueprintService
             || ($context['validation_issues'] ?? []) !== []
             || \trim((string)($context['validation_summary'] ?? '')) !== ''
         ) {
-            return 'gate_checkpoint';
+            return 'gate_validation';
         }
 
         return 'ai_generation';
@@ -5145,10 +5894,10 @@ final class AiSiteExecutionBlueprintService
     private function describeStageOneRetryableFailureClass(string $failureSource): string
     {
         return match ($failureSource) {
-            'platform' => '平台/代码异常（非 AI 文案问题）',
-            'gate_checkpoint' => '阶段一门禁/契约校验未通过',
-            'ai_generation' => 'AI 生成或解析失败',
-            default => '阶段一页面生成失败',
+            'platform' => 'Platform/code exception',
+            'gate_validation' => 'Stage-one gate validation failed',
+            'ai_generation' => 'AI generation or parsing failed',
+            default => 'Stage-one page generation failed',
         };
     }
 
@@ -5158,7 +5907,7 @@ final class AiSiteExecutionBlueprintService
     private function summarizeStageOneAiPagePlanForFailureDiagnostics(array $pagePlan, string $pageType): string
     {
         if ($pagePlan === []) {
-            return 'AI 未返回可用 page 对象。';
+            return 'AI did not return a usable page object.';
         }
         $blocks = \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [];
         $blockKeys = [];
@@ -5195,7 +5944,7 @@ final class AiSiteExecutionBlueprintService
             : (\is_array($fanoutAttempt['primary_issues'] ?? null) ? $fanoutAttempt['primary_issues'] : []);
         $message = \trim($fallbackMessage);
         if ($message === '' && $validationSummary !== '') {
-            $message = '阶段一页面未通过契约校验：' . $validationSummary;
+            $message = 'Stage-one page did not pass contract validation: ' . $validationSummary;
         }
 
         return $this->buildStageOneRetryablePageFailure($pageType, $message, [
@@ -5271,7 +6020,7 @@ final class AiSiteExecutionBlueprintService
                 $pageKey
             );
             $stageOneContract = \is_array($planJson['stage1_contract'] ?? null) ? $planJson['stage1_contract'] : (\is_array($scope['stage1_contract'] ?? null) ? $scope['stage1_contract'] : []);
-            if (!$this->hasStageOnePagePlanCheckpoint([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)) {
+            if (!$this->hasPersistedStageOnePagePlan([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)) {
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
                     'Page plan contract failed; retrying strict recovery for page: ' . $pageKey,
@@ -5323,7 +6072,7 @@ final class AiSiteExecutionBlueprintService
                     $pageKey
                 );
             }
-            if ($this->hasStageOnePagePlanCheckpoint([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)) {
+            if ($this->hasPersistedStageOnePagePlan([$pageKey => $pagePlan], $pageKey, $stageOneContract, $scope)) {
                 $results[$pageKey] = $pagePlan;
             } else {
                 throw new \RuntimeException('Stage-one page plan AI failed for ' . $pageKey . ': returned no usable blocks.');
@@ -5398,7 +6147,7 @@ final class AiSiteExecutionBlueprintService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function finalizeStageOneAiPagePlanForCheckpoint(
+    private function finalizeStageOneAiPagePlanForValidation(
         array $pagePlan,
         string $pageType,
         array $contract,
@@ -5528,15 +6277,15 @@ final class AiSiteExecutionBlueprintService
     private function buildStageOnePromptRolePrelude(): array
     {
         $lines = [
-            '【提示词角色与优先级】',
-            '- 【用户提示词】= 用户原始需求、用户后续指令、当前聚焦页面或区块目标；这是页面身份、内容重点、转化目标和视觉偏好的最高优先级。',
-            '- 【系统提示词】= 输出 JSON/schema、阶段强契约、语言、本地化、可执行边界和提示词泄漏防护；这些约束保证规划能被后续构建消费。',
-            '- 【通用提示词】= PageBuilder 底座规划规则、审美质量、视觉多样性和默认建议；它只能补足用户没有说明的部分。',
-            '- 优先级规则：当【用户提示词】与【通用提示词】或系统中的设计/内容建议冲突时，以【用户提示词】为准；JSON/schema、语言、安全、可执行边界和提示词泄漏防护仍必须保持有效。',
+            'Prompt role and priority:',
+            '- User prompt: original requirement, follow-up instructions, and current page/block goal are the highest priority for identity, content focus, conversion goal, and visual preference.',
+            '- System prompt: JSON/schema, stage contracts, language, localization, executable boundaries, and prompt-injection protections remain mandatory.',
+            '- General PageBuilder guidance is fallback context only and must yield to user requirements.',
+            '- Priority rule: when user requirements conflict with generic design/content suggestions, follow the user requirements while preserving schema, language, safety, executable boundaries, and prompt-injection protections.',
         ];
         $lines[] = 'BuildPlan no-reason field rule: do not add extra explanatory keys named reason, why, rationale, thinking, analysis, explanation, chain_of_thought, design_reason, or reasoning anywhere unless the active schema explicitly lists that exact key. Theme selection_reason is allowed only in theme_style, palette, and theme_design when the schema lists it; do not invent selection_reason on pages, blocks, image_intent, visual_signature, field_plan, or execution_script.';
         $lines[] = 'Template scaffold translation rule: style templates, default configs, layout JSON, and examples are structural references only. Treat #download, #contact, #faq, href="#", fake URLs, fake media names, old brands, old CTA targets, and sample social/support links as stale scaffold values. Do not copy them into Stage-1 output; use exact route-contract paths when provided, otherwise omit the link or describe a button/event action.';
-        $lines[] = 'Negative-intent rule: words after avoid, do not, no, without, exclude, forbid, 禁止, 避免, 不要, 不得, 排除, or 请勿 are hard exclusions, not requirements. If the brief says to avoid gaming, casino, APK, reward, card, neon, gambling, or similar terms, never use those excluded words as the site category, CTA, visual style, image subject, or copy direction.';
+        $lines[] = 'Negative-intent rule: words after avoid, do not, no, without, exclude, forbid, 绂佹, 閬垮厤, 涓嶈, 涓嶅緱, 鎺掗櫎, or 璇峰嬁 are hard exclusions, not requirements. If the brief says to avoid gaming, casino, APK, reward, card, neon, gambling, or similar terms, never use those excluded words as the site category, CTA, visual style, image subject, or copy direction.';
         $lines[] = 'Output vocabulary gate: do not write internal filler tokens, HTML input hint attribute names, or localized filler-media words in any returned JSON value. For form inputs, return the final hint text itself, such as "Describe your issue in one sentence"; never describe the field as an input-hint attribute or filler value.';
         return $lines;
     }
@@ -5556,7 +6305,7 @@ final class AiSiteExecutionBlueprintService
         $brief = $this->resolveStageOneRequirementSeed($scope, $websiteProfile, $pageTypes, $siteDisplayName, $siteSummary);
         return \implode("\n", [
             ...$this->buildStageOnePromptRolePrelude(),
-            '【系统提示词】',
+            'System prompt:',
             'You are PageBuilder Stage-1 REQUIREMENT EXPANSION planner.',
             'Step 1 only: expand the user one-line requirement into a concrete website planning brief. Do not generate theme, Header/Footer, or page blocks.',
             'Decision order: first rewrite the one-line requirement into concrete business intent, then map intent to page-by-page roles, then derive technical direction.',
@@ -5567,9 +6316,9 @@ final class AiSiteExecutionBlueprintService
             'Locale: ' . ($planLocale !== '' ? $planLocale : 'zh_Hans_CN'),
             'Site: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
             $this->buildStageOneIdentityGuardPrompt($scope, $websiteProfile, $siteDisplayName),
-            '【用户提示词】User one-line requirement: ' . ($brief !== '' ? $brief : '-'),
-            '【用户提示词】Instruction: ' . ($instruction !== '' ? $instruction : '-'),
-            '【通用提示词】',
+            'User one-line requirement: ' . ($brief !== '' ? $brief : '-'),
+            'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
+            'General prompt context:',
             'Selected page types: ' . \implode(', ', $pageTypes),
             'Site summary: ' . ($siteSummary !== '' ? $siteSummary : '-'),
             'Reference image insights (if any): ' . $this->buildReferenceImageInsightsPromptText($scope),
@@ -5589,7 +6338,7 @@ final class AiSiteExecutionBlueprintService
             '{"requirement_expansion":{"original_brief":"string","expanded_brief":"string","planning_summary":"string","site_goal":"string","business_goals":["string"],"target_users":["string"],"business_context":"string","content_direction":"string","conversion_strategy":"string","primary_cta":"string","page_strategy":[{"page_type":"string","intent":"string","content_focus":"string","conversion_role":"string"}],"technical_direction":["string"]}}',
             'Example return shape (copy the structure, not the content; rewrite for the current brief): ' . $this->stageOneRequirementExpansionExampleJson(),
             'Hard rules: expanded_brief must be a larger concrete version of the user requirement; business_goals, content_direction, conversion_strategy, and primary_cta are required because they feed the editable plan overview; page_strategy must cover every selected page type; all values must be customer-visible planning content, not prompt instructions.',
-            'Self-check before return: remove any sentence that still reads like "围绕/突出/说明/优化"; replace with named offers, nouns, and visible outcomes.',
+            'Self-check before return: remove any sentence that still reads like "鍥寸粫/绐佸嚭/璇存槑/浼樺寲"; replace with named offers, nouns, and visible outcomes.',
         ]);
     }
 
@@ -5612,7 +6361,7 @@ final class AiSiteExecutionBlueprintService
         $requirementExpansionJson = \json_encode($requirementExpansion, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
         return \implode("\n", [
             ...$this->buildStageOnePromptRolePrelude(),
-            '【系统提示词】',
+            'System prompt:',
             'You are PageBuilder single-stage THEME planner.',
             'Single-stage shared pass: use the confirmed requirement expansion to generate the shared theme, Header, Footer, and compact page-type design overviews. Do not include page-specific block plans in this shared pass.',
             'Decision order: lock theme_design first, then shared Header/Footer content structure, then page_type_overviews. Do not reverse this order.',
@@ -5628,7 +6377,7 @@ final class AiSiteExecutionBlueprintService
             'Website content locale: ' . ($contentLocale !== '' ? $contentLocale : ($planLocale !== '' ? $planLocale : 'zh_Hans_CN')),
             'Language rule: Header/Footer labels, CTA labels, link labels, media text, and other customer-visible website copy MUST use Website content locale. Do not use Plan locale for visible website copy unless both locales are identical.',
             'Site: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
-            '【用户提示词】Brief: ' . ($brief !== '' ? $brief : '-'),
+            '銆愮敤鎴锋彁绀鸿瘝銆態rief: ' . ($brief !== '' ? $brief : '-'),
             'Reference image insights (must be honored before theme decisions): ' . $this->buildReferenceImageInsightsPromptText($scope),
             'Visual contract rules (non-negotiable when present): '
                 . \json_encode(
@@ -5641,8 +6390,8 @@ final class AiSiteExecutionBlueprintService
             'Every page_design_plan must cite which visual_contract items it implements.',
             'Every block must map at least one visual_contract item or explicitly state not_applicable.',
             'Do not output visual patterns listed in forbidden_visuals.',
-            '【用户提示词】Instruction: ' . ($instruction !== '' ? $instruction : '-'),
-            '【通用提示词】',
+            'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
+            'General prompt context:',
             'Selected page types: ' . \implode(', ', $pageTypes),
             ...$this->buildStageOneGatePromptLines($pageTypes, $scope, 'theme'),
             'Schema:',
@@ -5728,7 +6477,7 @@ final class AiSiteExecutionBlueprintService
 
         return \implode("\n", [
             ...$this->buildStageOnePromptRolePrelude(),
-            '【系统提示词】',
+            'System prompt:',
             'You are PageBuilder single-stage PAGE planner.',
             'Single-stage page fanout: generate exactly this page type by carrying the confirmed requirement expansion, theme, Header, and Footer. Other page types may be generated in parallel, but the final plan is confirmed once.',
             'Decision order: first page_design_plan, then blocks, then field_plan + execution_script; never draft block copy before page_design_plan is complete.',
@@ -5756,9 +6505,9 @@ final class AiSiteExecutionBlueprintService
                 ? 'Home compact mode: this page has many required blocks, so every block must be terse. Do not include rem/px/CSS value recipes, long typography strings, long background descriptions, or more than two feature_points. Minified JSON is mandatory.'
                 : 'Page compact mode: keep every field short; do not use rem/px/CSS recipes when a short visual token is enough.',
             'Page-type architecture guide: ' . $pageArchitectureGuide,
-            '【用户提示词】Brief: ' . ($brief !== '' ? $brief : '-'),
-            '【用户提示词】Instruction: ' . ($instruction !== '' ? $instruction : '-'),
-            '【通用提示词】',
+            'Brief: ' . ($brief !== '' ? $brief : '-'),
+            'Instruction: ' . ($instruction !== '' ? $instruction : '-'),
+            'General prompt context:',
             'Target scope: ' . ($targetScope !== '' ? $targetScope : '-'),
             'Confirmed requirement expansion (non-negotiable): ' . $requirementExpansion,
             'Archived Stage-1 page contract summary (non-negotiable source of truth generated and stored before page fanout): ' . $archivedStageOneContract,
@@ -5787,7 +6536,7 @@ final class AiSiteExecutionBlueprintService
             '- contact_page usually needs the required block keys contact_methods, support_form_guidance, support_faq, contact_cta; use optional map/service_area details inside those blocks when relevant.',
             '- policy/legal pages usually need summary, key_rules, refund_or_support_steps, help_cta; keep rules concise and avoid full legal prose in Stage-1.',
             '- Policy/legal page body contract: privacy, terms, refund, shipping, and cookie pages must not put conversion CTA copy such as free download, install now, play-game, registration, claim, reward/bonus/coins, or app-download inside page body blocks. Neutral legal applicability wording may mention that the policy applies when visitors download or use the APK/app; neutral data-use or rights wording may mention account benefits only as policy facts, never as an offer. Global header/footer may keep a site CTA when appropriate, but body blocks must stay policy/support/rights focused.',
-            '- Policy/legal block role rule: terms_contact, privacy_contact, cookie_contact, refund_contact, and similar policy-help blocks should normally use page_flow_role=support or details, not cta. Use page_flow_role=cta only when field_plan includes a policy-safe action label such as 查看条款, 了解隐私权利, 查看争议流程, or 提交政策问题.',
+            '- Policy/legal block role rule: terms_contact, privacy_contact, cookie_contact, refund_contact, and similar policy-help blocks should normally use page_flow_role=support or details, not cta. Use page_flow_role=cta only when field_plan includes a policy-safe action label such as 鏌ョ湅鏉℃, 浜嗚В闅愮鏉冨埄, 鏌ョ湅浜夎娴佺▼, or 鎻愪氦鏀跨瓥闂.',
             '- Policy first-block lock: on privacy_policy and terms_of_service, block index 0 content, field_plan samples, and execution_script.core_copy must be policy-summary copy only. They must not inherit site primary_cta or conversion wording such as free download, install now, play, register, claim, reward, bonus, coins, or app-download.',
             '- Policy/legal CTA safety: terms/privacy body CTAs must use policy-safe actions only, such as read terms, view rules, review privacy rights, understand dispute steps, or contact policy help. Never use free download, install now, play, register, claim bonus, reward, coins, or app-download CTA wording inside policy page body blocks. Neutral legal applicability wording may mention download/use of the APK/app.',
             '- Policy/legal help_cta/contact blocks must use policy-safe actions such as privacy rights review, terms summary, data protection help, dispute/support contact, or policy assistance. Do not reuse the site primary_cta even if the overall website goal is app download.',
@@ -5808,7 +6557,7 @@ final class AiSiteExecutionBlueprintService
             '- CTA body/action split: contact_cta/final_cta/download_cta blocks need a supporting_copy/body sentence plus a separate cta_label/action label. The body sentence must be final visitor copy, not a layout note or blueprint explanation.',
             '- CTA field rule: if page_flow_role=cta, row 2 field must be exactly cta_label, action_label, or button_text with a visitor-facing action label. Do not force article/category/contact/support blocks into CTA shape unless their page_flow_role is cta.',
             '- field_plan.field must be a non-empty short snake_case semantic key. Never leave field empty and never invent vague keys such as text, copy, content, details, or item.',
-            '- field_plan.sample and field_plan.implementation_note must not start with validator-rejected prompt words: write, rewrite, describe the/this block, describe the/this field, use this field, do not output, 围绕, 突出, 说明, 完善, 优化. Visitor-facing form hint text such as "Describe your issue..." is allowed only as the final input hint itself; never name the HTML input hint attribute or call it a filler value.',
+            '- field_plan.sample and field_plan.implementation_note must not start with validator-rejected prompt words: write, rewrite, describe the/this block, describe the/this field, use this field, do not output, 鍥寸粫, 绐佸嚭, 璇存槑, 瀹屽杽, 浼樺寲. Visitor-facing form hint text such as "Describe your issue..." is allowed only as the final input hint itself; never name the HTML input hint attribute or call it a filler value.',
             '- design_tags examples: visual=["premium","card shadow","rounded image","large banner"], motion=["5s fade in/out","subtle parallax","hover lift"], interaction=["primary CTA hover","tabs","accordion"], texture=["soft gradient","glass surface","Indian pattern accent"], responsive=["mobile stacked cards","desktop two-column"].',
             '- These design_tags are source-of-truth for virtual-theme build and publish migration; make them specific enough to recreate effects, spacing, shadows, radius, image treatment, and interaction behavior.',
             'Field plan intent rules:',
@@ -5909,7 +6658,7 @@ final class AiSiteExecutionBlueprintService
             'Complete block examples for recovery shape: ' . $this->stageOneBlockReturnExamplesJson(),
             'needs_image recovery rule: image_intent.needs_image must be the JSON boolean true or false only; never return a string, empty value, or explanatory phrase.',
             'visual_signature recovery rule: all five visual_signature fields must be non-empty. For static FAQ, review, support, policy, or text blocks, describe accordion/card/list layout, scan rhythm, CSS-only media strategy, surface treatment, and focus/hover behavior instead of leaving any field blank.',
-            'Field plan recovery rule: every field_plan.sample must be final visitor-facing copy or a concrete asset brief, not an instruction. Do not start samples with write, rewrite, describe the/this block, describe the/this field, use this field, explain, create, show, include, highlight, mention, 围绕, 突出, 说明, 完善, or 优化; visitor-facing form hint text such as "Describe your issue..." is allowed only as the final input hint itself; never name the HTML input hint attribute or call it a filler value.',
+            'Field plan recovery rule: every field_plan.sample must be final visitor-facing copy or a concrete asset brief, not an instruction. Do not start samples with write, rewrite, describe the/this block, describe the/this field, use this field, explain, create, show, include, highlight, mention, 鍥寸粫, 绐佸嚭, 璇存槑, 瀹屽杽, or 浼樺寲; visitor-facing form hint text such as "Describe your issue..." is allowed only as the final input hint itself; never name the HTML input hint attribute or call it a filler value.',
             'Visible body recovery rule: every repaired block must include visitor-facing body copy that BuildPlan can consume. contact_cta/final_cta/download_cta blocks must include supporting_copy/body copy separately from button or action labels.',
             'If the token budget is tight, shorten visitor copy and field samples. Never omit blocks, required block keys, field_plan, or core_copy.',
             'Compact recovery budget: each block.content/core_copy <= 180 chars, each field_plan.sample <= 90 chars, each design_tags array max 2 items, and visual_signature fields <= 90 chars. A complete short page beats a verbose truncated page.',
@@ -5931,6 +6680,8 @@ final class AiSiteExecutionBlueprintService
         $cssOnlyTargets = [];
         $missingIntentTargets = [];
         $iconOnlyImageTargets = [];
+        $localeTargets = [];
+        $placeholderImageTargets = [];
         foreach ($issues as $issue) {
             if (!\is_array($issue)) {
                 continue;
@@ -5962,14 +6713,25 @@ final class AiSiteExecutionBlueprintService
             if ($code === 'icon_only_image_subject' && $targetLabel !== '') {
                 $iconOnlyImageTargets[] = $targetLabel;
             }
+            if ($code === 'visible_copy_locale_mismatch' && $targetLabel !== '') {
+                $localeTargets[] = $targetLabel;
+            }
+            if ($code === 'placeholder_image_planning_forbidden' && $targetLabel !== '') {
+                $placeholderImageTargets[] = $targetLabel;
+            }
         }
 
         $rules = [];
         if ($this->hasAnyStageOneIssueCode($codes, [
+            'invalid_block_count',
+            'target_block_count_mismatch',
             'missing_page_design_plan',
             'malformed_block',
             'missing_block_key',
+            'duplicate_block_key',
+            'generic_block_key',
             'missing_page_flow_role',
+            'missing_required_block_key',
             'missing_design_tag',
             'missing_visual_signature',
             'missing_image_intent',
@@ -5977,7 +6739,7 @@ final class AiSiteExecutionBlueprintService
             'invalid_field_plan_count',
             'malformed_field_plan_row',
         ])) {
-            $rules[] = 'Issue-specific rule for missing/malformed structure: rebuild the complete page object, not only the failed field. Every block must include block_key, page_flow_role, content, complete design_tags, complete visual_signature, complete image_intent, exactly three field_plan rows, and execution_script.core_copy.';
+            $rules[] = 'Issue-specific rule for missing/malformed structure: rebuild the complete page object, not only the failed field. Keep every required block key unchanged and present exactly once, avoid generic/duplicate block keys, and make the block count match the contract. Every block must include block_key, page_flow_role, content, complete design_tags, complete visual_signature, complete image_intent, exactly three field_plan rows, and execution_script.core_copy.';
         }
         if (isset($codes['missing_theme_field'])) {
             $rules[] = 'Issue-specific rule for missing_theme_field: rebuild the complete shared theme artifact with required theme_design fields, color_scheme, typography_spacing_radius, navigation_plan, footer_plan, shared_components, and seo_strategy. Do not return page blocks in a theme repair.';
@@ -6014,6 +6776,12 @@ final class AiSiteExecutionBlueprintService
             $rules[] = 'Issue-specific rule for icon_only_image_subject:' . $targetText
                 . ' replace the generated image subject with a real scene, product interface, editorial environment, or human-in-context visual tied to the block. Do not use an isolated badge, logo, icon, glyph, shield, coin mark, sparkle, arrow, or decorative symbol as the image_subject. For SaaS/product pages, prefer a product interface, support desk, product proof scene, or customer operations moment when it matches the block.';
         }
+        if (isset($codes['placeholder_image_planning_forbidden'])) {
+            $targetText = $placeholderImageTargets !== []
+                ? (' Exact image planning target(s): ' . \implode(', ', \array_values(\array_unique($placeholderImageTargets))) . '.')
+                : '';
+            $rules[] = 'Issue-specific rule for placeholder_image_planning_forbidden:' . $targetText . ' replace placeholder, dummy, temp, gray-box, lorem, stock placeholder, or fake file-name media planning with either a concrete stable generated image subject or a complete CSS-only motif. Never use placeholder names as final image_subject, media_strategy, image_treatment, or css_motif.';
+        }
         if (isset($codes['invalid_image_intent_needs_image'])) {
             $rules[] = 'Issue-specific rule for invalid_image_intent_needs_image: rewrite image_intent.needs_image as the JSON boolean true or false only. Never use "yes", "no", "maybe", "optional", "CSS-only", an empty string, or explanatory text. Put visual planning detail in media_strategy/css_motif/visual_atmosphere/image_treatment and keep the rest of the block creative and page-specific.';
         }
@@ -6034,6 +6802,12 @@ final class AiSiteExecutionBlueprintService
         }
         if (isset($codes['missing_visible_body_copy'])) {
             $rules[] = 'Issue-specific rule for missing_visible_body_copy: rewrite the affected block with a real visitor-facing body sentence in execution_script.core_copy and field_plan row 1 field=supporting_copy. If the block is a CTA, keep the action label in a separate cta_label/action field and do not use the button label as the only body copy.';
+        }
+        if (isset($codes['visible_copy_locale_mismatch'])) {
+            $targetText = $localeTargets !== []
+                ? (' Exact visible-copy target(s): ' . \implode(', ', \array_values(\array_unique($localeTargets))) . '.')
+                : '';
+            $rules[] = 'Issue-specific rule for visible_copy_locale_mismatch:' . $targetText . ' rewrite every visitor-visible value in blocks[].content, field_plan[].sample, execution_script.core_copy, and execution_script.feature_points in the requested Website content locale. Keep brand names and acronyms only; do not leak the brief language, planning language, or mixed-language draft copy into visible copy fields.';
         }
         if (isset($codes['instruction_like_or_empty'])) {
             $rules[] = 'Issue-specific rule for instruction_like_or_empty: replace empty or instruction-like field_plan fields/samples/core_copy with concrete final values. Use row 0 field=headline, row 1 field=supporting_copy, and a purpose-specific row 2 key; every execution_script.core_copy must be one non-empty visitor-facing sentence.';
@@ -6133,7 +6907,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 与方案生成门禁对齐：确认前对 scope 内 plan_json 执行同款 repair，供 BuildPlan v2 与 SourceTruth 校验使用。
+     * 涓庢柟妗堢敓鎴愰棬绂佸榻愶細纭鍓嶅 scope 鍐?plan_json 鎵ц鍚屾 repair锛屼緵 BuildPlan v2 涓?SourceTruth 鏍￠獙浣跨敤銆?
      *
      * @param array<string, mixed> $scope
      * @return array{scope: array<string, mixed>, stage1_validation: array<string, mixed>}
@@ -6141,10 +6915,6 @@ final class AiSiteExecutionBlueprintService
     public function prepareStageOnePlanScopeForConfirmation(array $scope): array
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        if ($planJson === [] && $planStructured !== []) {
-            $planJson = $planStructured;
-        }
         if ($planJson === []) {
             return [
                 'scope' => $scope,
@@ -6184,7 +6954,6 @@ final class AiSiteExecutionBlueprintService
             $repairedPlanJson['stage1_contract']['content_locale'] = $contentLocale;
         }
         $scope['plan_json'] = $repairedPlanJson;
-        $scope['plan_structured'] = $repairedPlanJson;
         $stageOneGenerationAttempts = \is_array($scope['stage1_generation_attempts'] ?? null)
             ? $scope['stage1_generation_attempts']
             : [];
@@ -6196,6 +6965,7 @@ final class AiSiteExecutionBlueprintService
             $scope,
             $stageOneGenerationAttempts
         );
+        $scope['plan_json'] = $repairedPlanJson;
 
         return [
             'scope' => $scope,
@@ -6264,7 +7034,7 @@ final class AiSiteExecutionBlueprintService
             'changes' => [
                 [
                     'target' => $targetScope !== '' ? $targetScope : 'plan',
-                    'reason' => $instruction !== '' ? $instruction : '局部优化当前方案',
+                    'reason' => $instruction !== '' ? $instruction : 'Refine the current plan.',
                 ],
             ],
         ];
@@ -6305,14 +7075,12 @@ final class AiSiteExecutionBlueprintService
             throw new \RuntimeException('Page type is required for stage-1 page refine.');
         }
 
-        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
         $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $existingPlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $structured = $existingPlanJson;
         $pages = \is_array($executionBlueprint['pages'] ?? null)
             ? $executionBlueprint['pages']
-            : (\is_array($structured['pages'] ?? null)
-                ? $structured['pages']
-                : (\is_array($existingPlanJson['pages'] ?? null) ? $existingPlanJson['pages'] : []));
+            : (\is_array($existingPlanJson['pages'] ?? null) ? $existingPlanJson['pages'] : []);
 
         if (!\is_array($pages[$pageType] ?? null)) {
             throw new \RuntimeException('Stage-1 page plan not found for page type: ' . $pageType);
@@ -6333,9 +7101,9 @@ final class AiSiteExecutionBlueprintService
         $candidateArtifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $aiPayload, $onChunk, $onProgress);
         $candidateStructured = \is_array($candidateArtifacts['structured'] ?? null) ? $candidateArtifacts['structured'] : [];
         $candidatePlanJson = \is_array($candidateArtifacts['plan_json'] ?? null) ? $candidateArtifacts['plan_json'] : [];
-        $candidatePages = \is_array($candidateStructured['pages'] ?? null)
-            ? $candidateStructured['pages']
-            : (\is_array($candidatePlanJson['pages'] ?? null) ? $candidatePlanJson['pages'] : []);
+        $candidatePages = \is_array($candidatePlanJson['pages'] ?? null)
+            ? $candidatePlanJson['pages']
+            : (\is_array($candidateStructured['pages'] ?? null) ? $candidateStructured['pages'] : []);
         $refinedPage = \is_array($candidatePages[$pageType] ?? null) ? $candidatePages[$pageType] : [];
         if ($refinedPage === []) {
             throw new \RuntimeException('AI page refine result did not include page type: ' . $pageType);
@@ -6417,7 +7185,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 微调策略：默认累加（保留历史追加区块），仅当用户明确“删除/移除”时执行删除。
+     * 寰皟绛栫暐锛氶粯璁ょ疮鍔狅紙淇濈暀鍘嗗彶杩藉姞鍖哄潡锛夛紝浠呭綋鐢ㄦ埛鏄庣‘鈥滃垹闄?绉婚櫎鈥濇椂鎵ц鍒犻櫎銆?
      *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $artifacts
@@ -6462,78 +7230,6 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $this->refreshStageOnePlanArtifacts($artifacts, $scope);
-    }
-
-    /**
-     * fake_mode 需要让块级微调/新增/删除/重建在前端产生可观察差异。
-     * 否则多次操作会始终落到同一份确定性草稿，E2E 无法判断阶段内编辑是否生效。
-     *
-     * @param array<string, mixed> $artifacts
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $payload
-     * @return array<string, mixed>
-     */
-    private function applyFakeModePreviewMutation(array $artifacts, array $scope, array $payload): array
-    {
-        $planJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
-        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
-        if ($pages === []) {
-            return $artifacts;
-        }
-
-        $instruction = \trim((string)($payload['instruction'] ?? ''));
-        $targetScope = \trim((string)($payload['target_scope'] ?? ''));
-        $promptMode = \strtolower(\trim((string)($payload['prompt_mode'] ?? '')));
-        $round = \max(1, (int)($payload['round'] ?? 1));
-        $pageType = $this->resolveFakeModePlanPageType($pages, $targetScope);
-        $pagePlan = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-        $blocks = \array_values(\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []);
-        $signatureSeed = (string)\json_encode([
-            'page_type' => $pageType,
-            'instruction' => $instruction,
-            'target_scope' => $targetScope,
-            'prompt_mode' => $promptMode,
-            'round' => $round,
-        ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR);
-        $operationId = \substr(\sha1($signatureSeed), 0, 8);
-
-        if ($this->looksLikeAddBlockInstruction($instruction)) {
-            $blocks[] = $this->buildFakeModePlanBlock($pageType, $instruction, $round, $operationId);
-        } elseif ($this->isDeleteInstruction($instruction)) {
-            $blocks = $this->removeFakeModePlanBlock($blocks, $targetScope, $instruction);
-        } else {
-            $blocks = $this->annotateFakeModePlanBlock($blocks, $instruction, $targetScope, $round, $operationId, $promptMode);
-        }
-
-        if ($blocks === []) {
-            $blocks[] = $this->buildFakeModePlanBlock($pageType, 'restore block after delete', $round, $operationId);
-        }
-
-        $pagePlan['blocks'] = \array_values($blocks);
-        $pagePlan['page_goal'] = \trim((string)($pagePlan['page_goal'] ?? ''));
-        if ($promptMode === 'rebuild') {
-            $pagePlan['page_goal'] = \trim($pagePlan['page_goal'] . '（重建轮次 #' . $round . '）');
-        }
-        $pages[$pageType] = $pagePlan;
-        $planJson['pages'] = $pages;
-        $planJson['change_scope_report'] = [
-            'mode' => $promptMode !== '' ? $promptMode : 'refine',
-            'round' => $round,
-            'target_scope' => $targetScope,
-            'instruction' => $instruction,
-            'operation_id' => $operationId,
-        ];
-
-        $artifacts['plan_json'] = $planJson;
-        if (\is_array($artifacts['structured'] ?? null)) {
-            $artifacts['structured']['change_scope_report'] = $planJson['change_scope_report'];
-        }
-        $artifacts = $this->refreshStageOnePlanArtifacts($artifacts, $scope);
-        if (\is_array($artifacts['structured'] ?? null)) {
-            $artifacts['structured']['change_scope_report'] = $planJson['change_scope_report'];
-        }
-
-        return $artifacts;
     }
 
     /**
@@ -6618,16 +7314,16 @@ final class AiSiteExecutionBlueprintService
                 'block_id' => 'plan_header_001',
                 'region' => 'header',
                 'type' => 'title',
-                'title' => $isEn ? 'Site Blueprint Header' : '方案头部',
-                'content' => ($site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点')) . ' - ' . ($summary !== '' ? $summary : ($isEn ? 'Blueprint overview' : '方案概览')),
+                'title' => 'Site Blueprint Header',
+                'content' => ($site !== '' ? $site : 'Untitled site') . ' - ' . ($summary !== '' ? $summary : 'Blueprint overview'),
                 'items' => [],
             ],
             [
                 'block_id' => 'plan_background_001',
                 'region' => 'body',
                 'type' => 'background',
-                'title' => $isEn ? 'Planning Background' : '规划背景',
-                'content' => $summary !== '' ? $summary : ($isEn ? 'Use selected page types and conversion goals as baseline.' : '以当前页面类型与转化目标作为规划基线。'),
+                'title' => 'Planning Background',
+                'content' => $summary !== '' ? $summary : 'Use selected page types and conversion goals as baseline.',
                 'items' => [
                     'header_navigation' => $headerItems,
                     'footer_policies' => $footerPolicies,
@@ -6637,16 +7333,16 @@ final class AiSiteExecutionBlueprintService
                 'block_id' => 'plan_catalog_001',
                 'region' => 'catalog',
                 'type' => 'content_catalog',
-                'title' => $isEn ? 'Page Block Catalog' : '页面区块目录',
-                'content' => $isEn ? 'Implementation-ready block catalog for the virtual-theme build.' : '用于虚拟主题构建的区块目录。',
+                'title' => 'Page Block Catalog',
+                'content' => 'Implementation-ready block catalog for the virtual-theme build.',
                 'items' => $contentItems,
             ],
             [
                 'block_id' => 'plan_footer_001',
                 'region' => 'footer',
                 'type' => 'summary',
-                'title' => $isEn ? 'Blueprint Tail' : '方案尾部',
-                'content' => $isEn ? 'This blueprint is ready for virtual-theme build execution.' : '该方案已可直接进入虚拟主题构建执行。',
+                'title' => 'Blueprint Tail',
+                'content' => 'This blueprint is ready for virtual-theme build execution.',
                 'items' => [],
             ],
         ];
@@ -6659,9 +7355,9 @@ final class AiSiteExecutionBlueprintService
     {
         $isEn = $this->isEnglishLocale($locale);
         $lines = [];
-        $lines[] = $isEn ? '# Site Blueprint' : '# 站点方案蓝图';
+        $lines[] = '# Site Blueprint';
         $lines[] = '';
-        $lines[] = '- ' . ($isEn ? 'Site: ' : '站点：') . ($siteName !== '' ? $siteName : ($isEn ? 'Untitled site' : '未命名站点'));
+        $lines[] = '- Site: ' . ($siteName !== '' ? $siteName : 'Untitled site');
         $lines[] = '';
         foreach ($planBlocks as $block) {
             $title = \trim((string)($block['title'] ?? ''));
@@ -6669,16 +7365,16 @@ final class AiSiteExecutionBlueprintService
             $type = \trim((string)($block['type'] ?? 'section'));
             $region = \trim((string)($block['region'] ?? 'body'));
             $content = \trim((string)($block['content'] ?? ''));
-            $lines[] = '## ' . ($title !== '' ? $title : ($isEn ? 'Block' : '区块'));
-            $lines[] = '- ' . ($isEn ? 'Block ID: ' : '区块 ID：') . ($blockId !== '' ? $blockId : '-');
-            $lines[] = '- ' . ($isEn ? 'Region: ' : '区域：') . ($region !== '' ? $region : 'body');
-            $lines[] = '- ' . ($isEn ? 'Type: ' : '类型：') . ($type !== '' ? $type : 'section');
+            $lines[] = '## ' . ($title !== '' ? $title : 'Block');
+            $lines[] = '- Block ID: ' . ($blockId !== '' ? $blockId : '-');
+            $lines[] = '- Region: ' . ($region !== '' ? $region : 'body');
+            $lines[] = '- Type: ' . ($type !== '' ? $type : 'section');
             if ($content !== '') {
-                $lines[] = '- ' . ($isEn ? 'Content: ' : '内容：') . $content;
+                $lines[] = '- Content: ' . $content;
             }
             $items = \is_array($block['items'] ?? null) ? $block['items'] : [];
             if ($items !== []) {
-                $lines[] = $isEn ? '### Items' : '### 条目';
+                $lines[] = '### Items';
                 foreach ($items as $key => $item) {
                     if (\is_string($key) && $key !== '') {
                         $lines[] = '- ' . $key . ': ' . (\is_scalar($item) ? (string)$item : (\json_encode($item, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: ''));
@@ -6696,145 +7392,26 @@ final class AiSiteExecutionBlueprintService
             $instruction = \trim((string)($changeScopeReport['instruction'] ?? ''));
             $operationId = \trim((string)($changeScopeReport['operation_id'] ?? ''));
             $round = (int)($changeScopeReport['round'] ?? 0);
-            $lines[] = $isEn ? '## Latest Change Summary' : '## 本轮变更摘要';
-            $lines[] = '- ' . ($isEn ? 'Mode: ' : '模式：') . ($mode !== '' ? $mode : 'refine');
-            $lines[] = '- ' . ($isEn ? 'Target Scope: ' : '作用范围：') . ($targetScope !== '' ? $targetScope : 'plan');
+            $lines[] = '## Latest Change Summary';
+            $lines[] = '- Mode: ' . ($mode !== '' ? $mode : 'refine');
+            $lines[] = '- Target Scope: ' . ($targetScope !== '' ? $targetScope : 'plan');
             if ($round > 0) {
-                $lines[] = '- ' . ($isEn ? 'Round: ' : '轮次：') . (string)$round;
+                $lines[] = '- Round: ' . (string)$round;
             }
             if ($operationId !== '') {
-                $lines[] = '- ' . ($isEn ? 'Operation ID: ' : '操作 ID：') . $operationId;
+                $lines[] = '- Operation ID: ' . $operationId;
             }
             if ($instruction !== '') {
-                $lines[] = '- ' . ($isEn ? 'Instruction: ' : '指令：') . $instruction;
+                $lines[] = '- Instruction: ' . $instruction;
             }
             $lines[] = '';
         }
 
         return \str_replace(
-            ['Block Direction (Stage 1 Blueprint)', '区块方向（阶段一蓝图）'],
-            ['Block Content Plan', '区块内容方案'],
+            ['Block Direction (Stage 1 Blueprint)'],
+            ['Block Content Plan'],
             \implode("\n", $lines)
         );
-    }
-
-    /**
-     * @param array<string, mixed> $pages
-     */
-    private function resolveFakeModePlanPageType(array $pages, string $targetScope): string
-    {
-        if (\preg_match('/pages\.([a-z0-9_]+)/i', $targetScope, $matches) === 1 && !empty($pages[$matches[1]])) {
-            return (string)$matches[1];
-        }
-
-        $pageTypes = \array_keys($pages);
-        return (string)($pageTypes[0] ?? 'home_page');
-    }
-
-    private function looksLikeAddBlockInstruction(string $instruction): bool
-    {
-        $text = \mb_strtolower(\trim($instruction));
-        if ($text === '') {
-            return false;
-        }
-
-        return \str_contains($text, 'add block')
-            || \str_contains($text, 'add a')
-            || \str_contains($text, '新增')
-            || \str_contains($text, '补足')
-            || \str_contains($text, '添加');
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $blocks
-     * @return array<int, array<string, mixed>>
-     */
-    private function annotateFakeModePlanBlock(array $blocks, string $instruction, string $targetScope, int $round, string $operationId, string $promptMode): array
-    {
-        if ($blocks === []) {
-            return [
-                $this->buildFakeModePlanBlock('home_page', $instruction, $round, $operationId),
-            ];
-        }
-
-        $targetKey = '';
-        if (\preg_match('/blocks\.([a-z0-9_]+)/i', $targetScope, $matches) === 1) {
-            $targetKey = (string)$matches[1];
-        }
-
-        foreach ($blocks as $idx => $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? ''));
-            if ($targetKey !== '' && $blockKey !== $targetKey) {
-                continue;
-            }
-            $label = $instruction !== '' ? $instruction : ($promptMode === 'rebuild' ? '重建当前方案块' : '微调当前方案块');
-            $content = \trim((string)($block['content'] ?? ''));
-            $goal = \trim((string)($block['goal'] ?? ''));
-            $blocks[$idx]['content'] = $content . ($content !== '' ? "\n" : '') . '[fake-mode:' . $operationId . '] ' . $label;
-            $blocks[$idx]['goal'] = $goal !== '' ? $goal . '（' . $label . '）' : $label;
-            return $blocks;
-        }
-
-        $blocks[0]['content'] = \trim((string)($blocks[0]['content'] ?? '')) . "\n[fake-mode:" . $operationId . '] ' . ($instruction !== '' ? $instruction : '更新当前区块');
-        return $blocks;
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $blocks
-     * @return array<int, array<string, mixed>>
-     */
-    private function removeFakeModePlanBlock(array $blocks, string $targetScope, string $instruction): array
-    {
-        if ($blocks === []) {
-            return [];
-        }
-
-        $targetKey = '';
-        if (\preg_match('/blocks\.([a-z0-9_]+)/i', $targetScope, $matches) === 1) {
-            $targetKey = (string)$matches[1];
-        }
-        if ($targetKey === '' && $instruction !== '') {
-            $targetKey = $this->extractDeleteKeyword($instruction);
-        }
-
-        if ($targetKey !== '') {
-            $filtered = \array_values(\array_filter($blocks, static function (array $block) use ($targetKey): bool {
-                $blockKey = \mb_strtolower(\trim((string)($block['block_key'] ?? $block['section_code'] ?? '')));
-                return $blockKey !== \mb_strtolower($targetKey);
-            }));
-            if ($filtered !== []) {
-                return $filtered;
-            }
-        }
-
-        \array_pop($blocks);
-        return \array_values($blocks);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildFakeModePlanBlock(string $pageType, string $instruction, int $round, string $operationId): array
-    {
-        $blockKey = 'custom_' . \strtolower($operationId);
-        $brief = $instruction !== '' ? $instruction : '补足当前页面的关键信息区块';
-
-        return [
-            'block_key' => $blockKey,
-            'goal' => '补充 ' . $pageType . ' 页面在第 ' . $round . ' 轮操作中的缺失信息。',
-            'keywords' => ['fake-mode', $pageType, $blockKey],
-            'content' => '[fake-mode:' . $operationId . '] ' . $brief,
-            'field_plan' => [
-                [
-                    'field' => 'headline',
-                    'sample' => '新增区块 ' . $round,
-                    'reason' => '保证新增区块在预览和 Markdown 中可被识别。',
-                ],
-            ],
-        ];
     }
 
     /**
@@ -6895,7 +7472,7 @@ final class AiSiteExecutionBlueprintService
         if ($text === '') {
             return false;
         }
-        return $this->containsAny($text, ['删除', '移除', '去掉', '删掉', 'remove', 'delete']);
+        return $this->containsAny($text, ['鍒犻櫎', '绉婚櫎', '鍘绘帀', '鍒犳帀', 'remove', 'delete']);
     }
 
     private function extractDeleteKeyword(string $instruction): string
@@ -6905,7 +7482,7 @@ final class AiSiteExecutionBlueprintService
             return '';
         }
         if (\preg_match(
-            '/(?:删除|移除|去掉|删掉)(?:一段|一块|一节|一条)?\s*([^，。、\s]{1,20})/u',
+            '/(?:鍒犻櫎|绉婚櫎|鍘绘帀|鍒犳帀)(?:涓€娈祙涓€鍧梶涓€鑺倈涓€鏉??\s*([^锛屻€傘€乗s]{1,20})/u',
             $text,
             $matches
         )) {
@@ -6968,222 +7545,6 @@ final class AiSiteExecutionBlueprintService
         $artifacts['rebuild_summary'] = $summary;
 
         return $artifacts;
-    }
-
-    /**
-     * @param list<string> $pageTypes
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $websiteProfile
-     */
-    private function buildAiPlanPrompt(
-        array $scope,
-        array $websiteProfile,
-        array $pageTypes,
-        string $planLocale,
-        string $instruction,
-        string $targetScope,
-        string $siteDisplayName,
-        string $siteSummary
-    ): string {
-        $baseline = $this->buildPlanArtifacts($scope, $websiteProfile, [
-            'instruction' => $instruction,
-            'target_scope' => $targetScope,
-        ]);
-        $baselinePlanJson = \is_array($baseline['plan_json'] ?? null) ? $baseline['plan_json'] : [];
-        $baselineText = $baselinePlanJson === []
-            ? '{}'
-            : (\json_encode($baselinePlanJson, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}');
-        $selectedPageCoverageHints = $this->buildSelectedPageCoverageHints($pageTypes);
-        $promptInputProfile = $this->buildPromptInputProfile($scope, $websiteProfile, $instruction, $targetScope);
-
-        $outputLanguage = $planLocale !== '' ? $planLocale : 'zh_Hans_CN';
-        $pageTypeText = $pageTypes === [] ? '-' : \implode(', ', $pageTypes);
-        $userBrief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? ''));
-        $oneLineRequirement = $userBrief !== '' ? $userBrief : ($instruction !== '' ? $instruction : '-');
-        $cleanPrompt = [
-            // === 角色与意图：放到最前，先“锁定要做什么”，再给 schema ===
-            'You are Structured Web Blueprint Engine for a real website builder.',
-            'PRIMARY GOAL: Take the user one-line website requirement and EXPAND it into a CONCRETE, READY-TO-BUILD plan. This is NOT a writing tutorial; it is the actual blueprint that Stage-2 will execute.',
-            'STAGE ORDER CONTRACT: first decide theme_design (visual concept, palette, typography, spacing/radius, CTA tone, motion/interaction direction), then shared Header/Footer, then page plans and page blocks. Do not design page blocks before the shared theme contract exists.',
-            'PRODUCTION SITE CONTRACT: the result must be suitable for an operating website, not a demo, not a proposal page, and not a page that explains the plan to visitors.',
-            'VISUAL RICHNESS CONTRACT: unless the user explicitly asks for minimalism, choose a rich but coherent visual system with layered backgrounds, varied accent colors, and role-specific compositions (hero stage, proof rail, FAQ rows, form split, CTA band, channel hub, etc.). Do not make every page block the same three-card grid with different copy. Use deliberate typography, surface depth, button hover/focus states, transition timing, and smooth scroll/reveal motion guidance; avoid icon/SVG decoration as the primary visual language.',
-            '中文要求：根据下面的【用户一句话需求】拓写出**真实可落地**的建站方案——给出具体导航、栏目、标题、正文、CTA、字段示例与落地说明，禁止通篇“围绕…/突出…/说明…”这类方向性描述。',
-            '【用户一句话需求】(authoritative, expand from this): ' . $oneLineRequirement,
-            '【站点名】: ' . ($siteDisplayName !== '' ? $siteDisplayName : '-'),
-            '【站点摘要】: ' . ($siteSummary !== '' ? $siteSummary : '-'),
-            '【选定页面类型】: ' . $pageTypeText,
-            '【输出语言】: ' . $outputLanguage,
-            'Reference images for visual style (if any): ' . (($referenceImageJson = \json_encode($this->buildReferenceImagePromptList($scope), \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)) && $referenceImageJson !== '[]' ? $referenceImageJson : '-'),
-            '',
-            'CONCRETENESS CONTRACT (must satisfy ALL):',
-            '1) Every block has REAL on-page strings: nav labels, page titles, headings, subtitles, body sentences, CTA labels, link targets, form fields, trust points.',
-            '2) Replace any sentence that would still be true for an unrelated business with words derived from the user one-line requirement, site name, and instruction.',
-            '3) Use proper nouns / numbers / offers / brand voice; avoid generic "突出价值/说明亮点/完善导航" sentences.',
-            '4) When facts are uncertain, use prefix "[假设]" and STILL output a concrete sample value, not a generic filler value.',
-            '5) navigation_plan.header_items, footer_plan.featured, footer_plan.policies must be non-empty arrays of {label, href} with real labels and exact route-contract paths. If no policy pages are selected, footer_plan.policies must contain trust, safety, support, or compliance links to existing selected pages only; do not invent anchors.',
-            ...$this->getSkillRegistry()->buildPromptGuideLinesForScope('stage1', $scope),
-            ...$this->getDesignDirectionService()->buildStageOnePromptLines($scope),
-            ...$this->buildStageOneGatePromptLines($pageTypes, $scope, 'full'),
-            'STAGE-1 SHARED THEME PLAN CONTRACT (theme_design must satisfy ALL):',
-            '- theme_design is the concrete shared plan for Header/Footer and later page prompts; never output it as abstract direction, brand adjectives, or design-method notes.',
-            '- theme_design.theme_purpose must name the site mission, target visitor, first-screen emotion, and conversion promise derived from the user one-line requirement.',
-            '- theme_design.color_scheme must provide ready-to-apply hex colors for primary/secondary/accent/background/body/button; values must be concrete implementation decisions, not labels like "modern palette".',
-            '- theme_design.typography_spacing_radius must give usable font family, heading/body scale, spacing scale, and radius scale decisions that can be implemented without another interpretation step.',
-            '- theme_design.visual_keywords, tone_of_voice, cta_tone, and forbidden_styles must be specific reusable constraints for page prompts, not vague words like "premium", "clean", or "professional" alone.',
-            '- theme_design.style_signature is required: a brief-derived visual identity that makes this site feel intentionally designed, not a reusable default template.',
-            '- theme_design.art_direction is required: layout_motif, background_system, surface_treatment, visual_detail_rule, and motion_rule must be concrete enough for frontend component generation.',
-            '- Avoid default AI website aesthetics unless explicitly requested: no generic blue SaaS gradient, no purple-on-white default, no plain centered hero plus three cards, no default Inter/Roboto/Arial/system-font look as the main design.',
-            '- Header/Footer planning must reuse this theme_design directly so shared_prompt_context can carry concrete colors, voice, CTA tone, and forbidden styles to every page.',
-            '',
-            'STAGE-1 PAGE THEME ALIGNMENT CONTRACT (pages must satisfy ALL):',
-            '- Every page prompt MUST treat theme_design + shared_prompt_context as non-negotiable constraints, not optional inspiration.',
-            '- Every page object MUST include theme_alignment_summary explaining how that page reuses theme_purpose, color_scheme, typography_spacing_radius, tone_of_voice, cta_tone, and forbidden_styles.',
-            '- theme_alignment_summary must be a concrete page-specific sentence, not a schema phrase. It must name actual theme words/colors/rules from theme_design and the specific page/block rhythm.',
-            '- The literal values "string", "how this page obeys", "string explaining how this page obeys", and "how this page and every block obey theme_design" are invalid output, not examples to copy.',
-            '- Repeat the shared theme decisions inside each page plan: page_goal, blocks, field_plan samples, execution_script, CTA wording, and media assets must visibly obey the same palette, voice, spacing/radius, and forbidden styles.',
-            '- If a page idea conflicts with shared_prompt_context, rewrite the page idea. Never invent a per-page palette, voice, CTA style, or visual direction that diverges from theme_design.',
-            '- Every page object MUST include the canonical page_design_plan keys: page_role, content_narrative, visual_hierarchy, visual_signature_application, composition_motif, color_layering, section_flow, interaction_notes, polish_details, and anti_monotony_rule.',
-            '- Every block object MUST include visual_signature. It must describe the block-specific composition, focal element, image role, CTA role, and how it avoids repeating sibling blocks.',
-            '- Page banners/opening blocks are not a fixed template. They must be composed from page_design_plan.page_role, page_design_plan.composition_motif, and current block visual_signature.',
-            '',
-            'GOOD vs BAD examples (do NOT copy verbatim, learn the structure only):',
-            'BAD field_plan.sample : "Write a title around the main value"',
-            'GOOD field_plan.sample: "Neon tables for focused card-game players"',
-            'BAD blocks[].content   : "Highlight brand value and guide action"',
-            'GOOD blocks[].content  : "Choose a room, review rules, and enter a neon table with support nearby."',
-            'BAD execution_script.core_copy : "Briefly explain product benefits"',
-            'GOOD execution_script.core_copy: "Players can understand room choices, reward cues, fair-play proof, and support before entering a table."',
-            'BAD navigation_plan.header_items : []',
-            'GOOD navigation_plan.header_items: [{"label":"Home","href":"/"},{"label":"About","href":"/about"},{"label":"Blog","href":"/blog"},{"label":"Contact","href":"/contact"}]',
-            '',
-            'Return STRICT JSON only. No markdown fence. No prose outside JSON.',
-            'The first non-whitespace character must be { and the last non-whitespace character must be }.',
-            'Do not echo the schema, prompt rules, GOOD/BAD examples, or writing instructions back into the plan.',
-            'Do not add extra explanatory fields named reason, why, rationale, thinking, analysis, explanation, chain_of_thought, design_reason, or reasoning. Use only the schema keys; selection_reason is allowed only in the three theme objects shown below.',
-            'JSON schema (return this structured plan object directly as the top-level JSON object):',
-            '{',
-            '    "i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},',
-            '    "site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},',
-            '    "theme_style":{"name":"string","visual_tone":"string","font_family":"string","selection_reason":"internal fit summary, not shown as a plan reason"},',
-            '    "palette":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","surface":"#hex","text":"#hex","selection_reason":"internal palette fit summary, not shown as a plan reason"},',
-            '    "theme_design":{"theme_purpose":"string","style_signature":"brief-derived visual identity, not a generic theme name","art_direction":{"layout_motif":"string","background_system":"string","surface_treatment":"string","visual_detail_rule":"string","motion_rule":"string"},"color_scheme":{"name":"string","primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","body":"#hex","button":"#hex"},"typography_spacing_radius":{"font_family":"string","heading_scale":"string","body_scale":"string","spacing_scale":"string","radius_scale":"string"},"visual_keywords":["string"],"tone_of_voice":"string","cta_tone":"string","forbidden_styles":["string"],"selection_reason":"internal brief-alignment summary; must copy at least one exact noun/action phrase from the requirement"},',
-            '    "navigation_plan":{"header_items":[{"label":"string","href":"string"}]},',
-            '    "footer_plan":{"featured":[],"policies":[]},',
-            '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
-            '    "page_types":["home_page"],',
-            '    "pages":{"home_page":{"page_goal":"string","theme_alignment_summary":"string","page_design_plan":{"page_role":"string","content_narrative":"string","visual_hierarchy":"string","visual_signature_application":"string","composition_motif":"string","color_layering":"string","section_flow":["string"],"interaction_notes":["string"],"polish_details":["string"],"anti_monotony_rule":"string"},"primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","page_flow_role":"opening|proof|details|cta|support","goal":"string","keywords":["string"],"content":"string","design_tags":{"visual":["string"],"motion":["string"],"interaction":["string"],"texture":["string"],"responsive":["string"],"color_layering":"string","implementation_note":"string"},"visual_signature":{"composition_pattern":"string","spatial_rhythm":"string","media_strategy":"string","surface_treatment":"string","interaction_pattern":"string"},"image_intent":{"needs_image":true,"image_role":"hero_image|section_image|trust_brand_image|css_motif|none","image_subject":"specific scene/product/editorial subject or none for CSS-only","placement":"background_layer|media_panel|inline_visual|none","visual_atmosphere":"specific mood, environment, lighting, and brand feel","image_treatment":"specific crop, style, framing, overlay, and integration treatment","reuse_policy":"reuse_when_intent_matches|no_generated_image","css_motif":"required concrete CSS motif when needs_image=false, empty string when generated image is needed"},"field_plan":[{"field":"headline","sample":"visitor-facing heading","implementation_note":"where this heading renders"},{"field":"supporting_copy","sample":"visitor-facing support sentence","implementation_note":"where this body copy renders"},{"field":"context_detail","sample":"detail, proof, CTA label, image brief, form label, or policy summary","implementation_note":"where this detail renders"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
-            '    "execution_steps":[{"step":1,"task_key":"string","task_type":"string","status":"pending"}],',
-            '    "build_plan_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
-            '}',
-            'Hard rules:',
-            '- theme_alignment_summary content rule: it must mention actual theme_design color_scheme, tone_of_voice, cta_tone, trust expression, one avoided forbidden style, and Header/Footer handoff in the page locale.',
-            '- seo_strategy is required planning metadata. It MUST include core_intent, 3-6 primary_keywords, keyword_page_map with at least one row for every selected page type, content_strategy, internal_linking, and url_structure. Never omit seo_strategy to save tokens.',
-            '- Output budget is mandatory: home_page MUST contain 5-7 blocks, other pages 3-5 blocks; each block MUST contain exactly 3 field_plan rows; execution_script.feature_points MUST contain at most 3 short items; content/core_copy MUST be concise final copy, not long article text.',
-            '- Prefer dense implementation-ready summaries over exhaustive copy. BuildPlan will expand executable tasks later, so Stage-1 must stay compact enough to return complete valid JSON.',
-            '- All text fields must use locale: ' . $outputLanguage,
-            '- Strict visible-copy field boundary: pages.*.blocks[].content, execution_script.core_copy, and field_plan[].sample become BuildPlan content_manifest seeds. They MUST be final visitor-facing copy in the Website content locale, not UI recipes, not layout instructions, not hover/background/card/grid descriptions, and not explanations of why the block exists.',
-            '- Put layout/effect/media directions only in implementation_note, design_tags, execution_script.typography, execution_script.style_tone, execution_script.background_direction, and execution_script.media_assets. Do not put those directions in content or field_plan.sample.',
-            '- Language consistency gate: except the site title/brand and unavoidable acronyms like APK/APP/SEO, visible-copy seeds must not contain large phrases from another language. Rewrite foreign game/product names into the Website content locale unless the name is the exact brand.',
-            '- Do not return markdown.',
-            '- Do not return a separate markdown field.',
-            '- Output only the structured plan object shown in the schema.',
-            '- The plan must contain final-ready content samples, not writing instructions.',
-            '- theme_design MUST be a concrete shared theme plan. Reject and rewrite it if it reads like directions about what to design instead of decisions to implement.',
-            '- Every pages.*.theme_alignment_summary MUST explicitly name the shared theme purpose, palette/color use, type/spacing/radius rule, tone/CTA rule, and at least one forbidden style that the page avoids.',
-            '- Every page block must be checked against shared_prompt_context before output; any page-specific color, voice, CTA, layout, or media direction that drifts from theme_design must be rewritten.',
-            '- theme_style.selection_reason, palette.selection_reason, and theme_design.selection_reason are internal brief-alignment summaries only; do not present them as user-visible plan reasons.',
-            '- theme_design.selection_reason must explicitly mention the user one-line requirement and copy at least one exact noun/action phrase from it so validation can prove the theme is tied to the brief.',
-            '- selection_reason must connect the color/font/tone choices to the user one-line requirement without generic claims like "modern/professional/simple" as the whole value.',
-            '- theme_design.selection_reason must never be empty. If uncertain, still output one concrete internal fit summary that quotes the requirement phrase and states how palette/font/tone support it.',
-            '- Never write process wording such as "标题围绕核心价值展开", "正文说明主要亮点", "CTA 保持单一动作", or "字体与排版指定".',
-            '- Never write blueprint guidance such as "围绕...说明", "首页先讲清...", "阶段一仅给方向", "List 2-4 points", or "Specify heading font".',
-            '- For each block, content must read like real website copy that can be shown to a client immediately.',
-            '- Example for hero: write concrete title, subtitle, description, CTA label, trust points, and support text. Do not describe what should be written.',
-            '- field_plan.sample must be direct content, for example "欢迎来到示例品牌服务中心" or "立即开始", not "标题围绕核心价值展开".',
-            '- field_plan.implementation_note must be a customer-readable implementation note such as layout handling, editable constraint, delivery requirement, or asset direction; never write abstract design rationale or prompt guidance.',
-            '- For media/image fields, field_plan.sample must be a concrete asset brief the client can review, not a generic instruction like "使用一张主视觉图".',
-            '- Do not output fabricated media URLs such as hero.jpg, about.jpg, example.com, image-filler services, or unverified .jpg/.png/.webp paths. When an image is needed, describe a concrete generated asset brief; the build must use a verified generated/uploaded asset and fail rather than using filler media.',
-            '- execution_script.feature_points must be concrete deliverables for this block, not meta-writing advice.',
-            '- execution_script.core_copy must summarize the actual content message already written for the block.',
-            '- Treat the output as a customer-visible implementation plan: every visible sentence must answer the user brief directly.',
-            '- The hero title/subtitle/description MUST reuse the most concrete nouns from the one-line requirement (market, product type, offer, download/service words) instead of abstract labels like "核心价值" or "下一步动作".',
-            '- If the brief positively mentions app/APK download, booking, consultation, pricing, trial, or signup, at least one CTA label must reflect that exact action directly; excluded terms from the Negative-intent rule must never become CTA labels.',
-            '- page_types can only use selected_page_types.',
-            '- If information is missing, you may make reasonable assumptions, but mark them with the prefix "[假设]".',
-            '- Even in refine/rebuild/translation mode, you must still output the full plan, not fragments.',
-            '- Stage 1 only outputs plan content. Do not include build/executing/log/progress language.',
-            '- Every selected page must be covered and ready for virtual-theme build task execution.',
-            '- Each pages.<page>.theme_alignment_summary is REQUIRED and must explain how that page and its blocks obey theme_design color_scheme, tone_of_voice, cta_tone, trust expression, and Header/Footer handoff.',
-            '- Header and footer must be described as concrete shared-site content and navigation.',
-            '- The structured plan must be readable by product and implementation teams immediately.',
-            '- Minimum concreteness: navigation_plan.header_items MUST be non-empty; each item MUST include concrete label + exact route-contract href tied to selected_page_types; forbid generic filler labels like "Link1" or "Nav item".',
-            '- footer_plan.featured and footer_plan.policies MUST list real link titles and destinations users can click, not phrases like "补充政策链接". If no policy pages are selected, policies MUST become trust/safety/support/compliance links to selected pages only, never anchors.',
-            '- Each non-trivial page block: field_plan MUST have exactly 3 entries; every sample is final copy or starts with "[假设]" and still contains concrete wording.',
-            '- Every field_plan row should pair the final sample with a short implementation_note that explains how the sample lands on the page, not why the AI chose it.',
-            '- blocks[].content MUST be multi-sentence client-ready copy or bullet lines of real sentences; a single meta line such as "突出品牌价值" is invalid.',
-            '- Self-check: if any paragraph stays true for an unrelated business, rewrite it using nouns, offers, and proof points from site_display_name + instruction + prompt_input_profile.',
-            '- When classifying uncertainty, use inline "[已知]"/"[建议]"/"[假设]" sparingly; never leave a section as pure methodology without named UI strings, colors, or labels.',
-            '- Final audit (silently before output): for every block check (a) does it cite at least one concrete noun/number/brand from the user one-line requirement? (b) does field_plan have >=3 entries with real samples? (c) does it avoid verbs like "围绕/突出/说明/突出/完善/优化" used as the only description? If any check fails, REWRITE that block before returning.',
-            'Selected page coverage hints (must all be represented in the final plan):',
-            $selectedPageCoverageHints,
-            'Input context:',
-            'site_display_name: ' . $siteDisplayName,
-            'site_summary: ' . ($siteSummary !== '' ? $siteSummary : '-'),
-            'selected_page_types: ' . $pageTypeText,
-            'target_scope: ' . ($targetScope !== '' ? $targetScope : 'full_plan'),
-            'instruction: ' . ($instruction !== '' ? $instruction : '-'),
-            'prompt_input_profile:',
-            $promptInputProfile,
-            'baseline_plan_json:',
-            $baselineText,
-        ];
-        if (\function_exists('w_log')) {
-            \call_user_func('w_log', 'info', \implode("\n", $cleanPrompt), [], 'buildAiPlanPrompt');
-        }
-
-        return \implode("\n", $cleanPrompt);
-    }
-
-    /**
-     * @param list<string> $pageTypes
-     */
-    private function buildSelectedPageCoverageHints(array $pageTypes): string
-    {
-        $lines = [];
-        foreach ($pageTypes as $pageType) {
-            $pageType = \trim((string)$pageType);
-            if ($pageType === '') {
-                continue;
-            }
-            $lines[] = '- ' . $pageType . ': must include page goal, theme_alignment_summary, conversion rhythm, block implementation detail, field plan, execution script, SEO structure, CTA usage, responsive guidance.';
-        }
-
-        return $lines === [] ? '-' : \implode("\n", $lines);
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $websiteProfile
-     */
-    private function buildPromptInputProfile(
-        array $scope,
-        array $websiteProfile,
-        string $instruction,
-        string $targetScope
-    ): string {
-        $profile = [
-            'site_title' => \trim((string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? '')),
-            'site_tagline' => \trim((string)($scope['site_tagline'] ?? $websiteProfile['site_tagline'] ?? '')),
-            'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? $websiteProfile['brief_description'] ?? '')),
-            'target_domain' => \trim((string)($scope['target_domain'] ?? $websiteProfile['target_domain'] ?? '')),
-            'default_locale' => \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? '')),
-            'plan_locale' => \trim((string)($scope['plan_locale'] ?? '')),
-            'instruction' => $instruction,
-            'target_scope' => $targetScope,
-            'reference_images' => $this->buildReferenceImagePromptList($scope),
-        ];
-
-        return (string)(\json_encode($profile, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}');
     }
 
     /**
@@ -7339,82 +7700,6 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 根据选择的页面类型动态生成 Markdown 模板
-     *
-     * @param list<string> $pageTypes
-     * @return string
-     */
-    private function buildPageMarkdownTemplate(array $pageTypes): string
-    {
-        $lines = [
-            '# Site Blueprint',
-            '## Global',
-            '### Route Structure',
-            '### Header',
-            '### Footer',
-            '### Shared Typography',
-            '### Shared Palette',
-            '### CTA System',
-            '### SEO Rules',
-            '',
-            'Use concrete content under every heading.',
-            'For each block, write the real copy, real CTA, and real trust/support text.',
-            'Do not write guidance such as "围绕核心价值说明" or "标题请突出卖点".',
-        ];
-
-        $pageDefinitions = [
-            Page::TYPE_HOME => ['label' => 'Home', 'blocks' => ['Hero', 'Feature', 'Process', 'CTA']],
-            Page::TYPE_ABOUT => ['label' => 'About', 'blocks' => ['Hero', 'Brand Story', 'Trust', 'CTA']],
-            Page::TYPE_CONTACT => ['label' => 'Contact', 'blocks' => ['Hero', 'Contact Methods', 'FAQ', 'CTA']],
-            'faq_page' => ['label' => 'FAQ', 'blocks' => ['Hero', 'Question List', 'Support CTA']],
-            Page::TYPE_BLOG_LIST => ['label' => 'Blog', 'blocks' => ['Hero', 'Article Grid', 'Content CTA']],
-            'services_page' => ['label' => 'Services', 'blocks' => ['Hero', 'Service List', 'Process', 'FAQ', 'CTA']],
-            'download_page' => ['label' => 'Download', 'blocks' => ['Hero', 'Steps', 'FAQ', 'Support']],
-        ];
-
-        foreach ($pageTypes as $pageType) {
-            $pageType = \trim((string)$pageType);
-            if ($pageType === '') {
-                continue;
-            }
-
-            $definition = $pageDefinitions[$pageType] ?? [
-                'label' => \ucwords(\str_replace('_', ' ', $pageType)),
-                'blocks' => ['Hero', 'Feature', 'CTA'],
-            ];
-
-            $lines[] = '';
-            $lines[] = '## Page: ' . $definition['label'];
-            $lines[] = '### Page Goal';
-            $lines[] = '### Conversion Rhythm';
-
-            foreach ($definition['blocks'] as $blockName) {
-                $lines[] = '### Block: ' . $blockName;
-                $lines[] = '#### Block ID';
-                $lines[] = '#### Function';
-                $lines[] = '#### Content';
-                $lines[] = '#### Content Fields';
-                $lines[] = '#### SEO Keywords';
-                $lines[] = '#### SEO Structure';
-                $lines[] = '#### CTA Usage';
-                $lines[] = '#### Typography';
-                $lines[] = '#### Colors';
-                $lines[] = '#### Background';
-                $lines[] = '#### Layout';
-                $lines[] = '#### Motion';
-                $lines[] = '#### Interaction';
-                $lines[] = '#### Responsive';
-                $lines[] = '#### Assets';
-                $lines[] = '#### Image Rules';
-                $lines[] = '#### Data Points';
-                $lines[] = '#### Reusability';
-            }
-        }
-
-        return \implode("\n", $lines);
-    }
-
-    /**
      * @param list<string> $pageTypes
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
@@ -7475,12 +7760,12 @@ final class AiSiteExecutionBlueprintService
     {
         $normalized = \trim($message);
         if ($normalized === '') {
-            $normalized = '未知错误。';
+            $normalized = 'Unknown error.';
         }
 
-        $normalized = (string)(\preg_replace('/^(?:AI plan generation failed:|第一阶段方案生成失败：)\s*/iu', '', $normalized) ?? $normalized);
+        $normalized = (string)(\preg_replace('/^(?:AI plan generation failed:)\s*/iu', '', $normalized) ?? $normalized);
 
-        return '第一阶段方案生成失败：' . $normalized;
+        return 'AI plan generation failed: ' . $normalized;
     }
 
     private function mapAiPlanToArtifacts(
@@ -7510,7 +7795,7 @@ final class AiSiteExecutionBlueprintService
 
         $this->emitStageOnePipelineProgress(
             $onProgress,
-            '正在整理阶段一原始方案与基线蓝图',
+            'Normalizing stage-one plan input.',
             89,
             'plan_assemble',
             'normalize_input',
@@ -7532,7 +7817,7 @@ final class AiSiteExecutionBlueprintService
         if (!$skipLocalRepair) {
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '正在检查阶段一方案是否需要断点局部修复',
+                'Checking stage-one plan for persisted incomplete page repairs.',
                 89,
                 'plan_assemble',
                 'local_repair_scan',
@@ -7557,7 +7842,7 @@ final class AiSiteExecutionBlueprintService
         }
         $this->emitStageOnePipelineProgress(
             $onProgress,
-            '阶段一页面内容已校验，正在生成共享区块与队列索引',
+            'Stage-one page content validated; building shared block and queue indexes.',
             90,
             'plan_assemble',
             'build_shared_index',
@@ -7579,7 +7864,7 @@ final class AiSiteExecutionBlueprintService
 
         $this->emitStageOnePipelineProgress(
             $onProgress,
-            '正在执行阶段一强契约校验',
+            'Running stage-one contract validation.',
             90,
             'plan_assemble',
             'validate_contract',
@@ -7753,7 +8038,7 @@ final class AiSiteExecutionBlueprintService
         $executionBlueprint['stage1_queue'] = $stageOneQueue;
         $this->emitStageOnePipelineProgress(
             $onProgress,
-            '正在生成页面任务、区块索引与断点队列',
+            '姝ｅ湪鐢熸垚椤甸潰浠诲姟銆佸尯鍧楃储寮曚笌鏂偣闃熷垪',
             91,
             'plan_assemble',
             'build_queue_envelope',
@@ -7813,7 +8098,7 @@ final class AiSiteExecutionBlueprintService
 
         $this->emitStageOnePipelineProgress(
             $onProgress,
-            '正在生成工作台预览数据与方案文档',
+            '姝ｅ湪鐢熸垚宸ヤ綔鍙伴瑙堟暟鎹笌鏂规鏂囨。',
             91,
             'plan_assemble',
             'build_workbench',
@@ -7859,7 +8144,7 @@ final class AiSiteExecutionBlueprintService
      * @param list<string> $pageTypes
      */
     private function buildStageOneValidationReport(
-        array $planJson,
+        array &$planJson,
         array $pageTypes,
         string $briefDescription,
         string $planLocale,
@@ -7874,8 +8159,9 @@ final class AiSiteExecutionBlueprintService
                 $validationTargets[] = $pageType;
             }
         }
-        // Partial assemble passes only pages that cleared fanout; an empty list must not
-        // fall back to every selected page_type or missing_page will block the whole plan.
+        // Keep the full route contract for navigation/footer validation, but pass the
+        // page-validation target list separately so partial retries do not turn
+        // pages waiting for retry into final missing_page failures.
         $contractPageTypes = $validationTargets !== []
             ? $this->resolveStageOneStableContractPageTypes($planJson, $scope, $validationTargets)
             : [];
@@ -7910,6 +8196,7 @@ final class AiSiteExecutionBlueprintService
             'retry_from_previous_failure' => !empty($stageOneGenerationAttempts['retry_from_previous_failure']),
             'source_truth_contract' => \is_array($scope['source_truth_contract'] ?? null) ? $scope['source_truth_contract'] : [],
             'user_requirements' => \is_array($scope['user_requirements'] ?? null) ? $scope['user_requirements'] : [],
+            'validation_page_types' => $validationTargets,
         ];
 
         return $this->getStageOneContractValidator()->validateFullPlan($planJson, $contract, $context);
@@ -7984,7 +8271,7 @@ final class AiSiteExecutionBlueprintService
                 [
                     'validation_summary' => $this->summarizeStageOneValidationReport($pageReport),
                     'validation_issues' => $pageIssues,
-                    'failure_source' => 'gate_checkpoint',
+                    'failure_source' => 'gate_validation',
                 ]
             );
         }
@@ -8080,7 +8367,10 @@ final class AiSiteExecutionBlueprintService
      */
     private function assertAiStageOnePlanJsonIsStrict(array $planJson, array $pageTypes, string $briefDescription, string $planLocale, array $scope = []): void
     {
-        $pageTypes = $this->resolveStageOneStableContractPageTypes($planJson, $scope, $pageTypes);
+        $pageTypes = \array_values(\array_filter(\array_map(
+            static fn($pageType): string => \trim((string)$pageType),
+            $pageTypes
+        ), static fn(string $pageType): bool => $pageType !== ''));
         foreach (['site_strategy', 'theme_style', 'palette', 'theme_design', 'navigation_plan', 'footer_plan', 'seo_strategy', 'pages'] as $sectionKey) {
             if (!\is_array($planJson[$sectionKey] ?? null)) {
                 throw new \RuntimeException('AI stage-1 plan invalid: missing section "' . $sectionKey . '".');
@@ -8242,7 +8532,7 @@ final class AiSiteExecutionBlueprintService
     private function assertAiStageOneThemeDesignColorScheme(array $themeDesign): void
     {
         $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
-        // 历史阶段一产物可能仅输出 body（正文色）或仅输出 text，校验前先互补，避免因字段别名差异误判失败。
+        // 鍘嗗彶闃舵涓€浜х墿鍙兘浠呰緭鍑?body锛堟鏂囪壊锛夋垨浠呰緭鍑?text锛屾牎楠屽墠鍏堜簰琛ワ紝閬垮厤鍥犲瓧娈靛埆鍚嶅樊寮傝鍒ゅけ璐ャ€?
         $textColor = \trim((string)($colorScheme['text'] ?? ''));
         $bodyColor = \trim((string)($colorScheme['body'] ?? ''));
         if ($textColor === '' && $bodyColor !== '') {
@@ -8482,8 +8772,8 @@ final class AiSiteExecutionBlueprintService
 
         $signals = [];
         foreach ([
-            '印度', '棋牌', '下载', 'APK', 'apk', 'teen patti', 'rummy',
-            '预约', '咨询', '批发', '代理', '课程', '下载站',
+            'India', 'game', 'download', 'APK', 'apk', 'teen patti', 'rummy',
+            'booking', 'consulting', 'wholesale', 'agency', 'course', 'download site',
             'download', 'booking', 'consulting', 'pricing', 'trial',
         ] as $candidate) {
             if ($candidate !== '' && $this->containsPositiveIntent($brief, $candidate)) {
@@ -8571,37 +8861,6 @@ final class AiSiteExecutionBlueprintService
         return $withoutGeneric === '' || \mb_strlen($withoutGeneric) < 4;
     }
 
-    /**
-     * @param list<string> $pageTypes
-     * @param array<string, mixed> $planJson
-     * @param array<string, mixed> $fallbackPlanJson
-     * @return array<string, mixed>
-     */
-    private function enforcePlanJsonBaseline(array $planJson, array $fallbackPlanJson, array $pageTypes, bool $isEn): array
-    {
-        $normalized = $planJson;
-        $normalized['page_types'] = $pageTypes;
-        if (!\is_array($normalized['pages'] ?? null)) {
-            $normalized['pages'] = [];
-        }
-        $fallbackPages = \is_array($fallbackPlanJson['pages'] ?? null) ? $fallbackPlanJson['pages'] : [];
-        foreach ($pageTypes as $pageType) {
-            if (!\is_array($normalized['pages'][$pageType] ?? null)) {
-                $normalized['pages'][$pageType] = \is_array($fallbackPages[$pageType] ?? null) ? $fallbackPages[$pageType] : [];
-                continue;
-            }
-            if (!\is_array($fallbackPages[$pageType] ?? null)) {
-                continue;
-            }
-            // 非英文方案下，强制使用本地页面块文案，确保遵守计划语言与结构约束。
-            if (!$isEn) {
-                $normalized['pages'][$pageType] = $fallbackPages[$pageType];
-            }
-        }
-
-        return $normalized;
-    }
-
     private function isPromptLikeStageOneText(
         string $text,
         string $field = '',
@@ -8626,10 +8885,8 @@ final class AiSiteExecutionBlueprintService
         }
 
         foreach ([
-            '围绕', '说明核心价值', '首页先讲清', '阶段一仅给方向', '蓝图方向', '标题围绕', '指定标题字体',
-            '列出 2-4', '字体与排版', '风格语气', '背景方向', '素材建议', 'cta 保持单一动作',
-            '待补充', '待撰写', '详见后文', '完善导航', '优化体验', '补充政策链接', '突出品牌价值',
-            '先用一句话讲清', '再把用户带到', '让访客在第一屏', '承接核心关键词', '不能遮挡标题和主 cta',
+            'placeholder copy', 'direction placeholder', 'needs content', 'needs rewrite',
+            'todo', 'draft later', 'fill policy links', 'improve navigation',
             'block direction', 'section title', 'supporting subtitle text', 'direction only', 'blueprint direction',
             'list 2-4', 'specify heading font', 'describe the overall visual tone', 'use concise readable paragraphs',
             'first-screen promise', 'lead visitors to the next step',
@@ -8670,7 +8927,15 @@ final class AiSiteExecutionBlueprintService
 
     private function isWeakStageOnePageGoal(string $text, string $pageType = ''): bool
     {
-        $normalized = \mb_strtolower(\trim($text, " \t\n\r\0\x0B.,;:!?。，；：！？"));
+        $rawText = \trim($text);
+        if (\in_array($rawText, [
+            '为访客提供清晰且可执行的页面内容',
+            '为访客提供清晰且可执行的页面内容。',
+        ], true)) {
+            return true;
+        }
+
+        $normalized = \mb_strtolower(\trim($text, " \t\n\r\0\x0B.,;:!?銆傦紝锛涳細锛侊紵"));
         if ($normalized === '') {
             return true;
         }
@@ -8688,8 +8953,7 @@ final class AiSiteExecutionBlueprintService
             'present the cookie_policy content clearly',
             'should clearly serve page intent and lead users to next actions',
             '为访客提供清晰且可执行的页面内容',
-            '页面需要围绕页面意图输出清晰信息并承接下一步动作',
-            '页面围绕页面意图输出清晰信息并承接下一步动作',
+            '为访客提供清晰且可执行的页面内容。',
         ] as $marker) {
             if ($normalized === \mb_strtolower($marker)) {
                 return true;
@@ -8708,7 +8972,14 @@ final class AiSiteExecutionBlueprintService
         }
 
         foreach ([$pageGoal, $originalPageGoal] as $candidate) {
-            $normalizedCandidate = \trim($candidate, " \t\n\r\0\x0B.,;:!?。，；：！？");
+            if (
+                $this->isWeakStageOnePageGoal($candidate, $pageType)
+                || $this->isPromptLikeStageOneText($candidate, 'page_goal', '', '', $pageType)
+            ) {
+                return true;
+            }
+
+            $normalizedCandidate = \trim($candidate, " \t\n\r\0\x0B.,;:!?銆傦紝锛涳細锛侊紵");
             if (
                 $this->isWeakStageOnePageGoal($normalizedCandidate, $pageType)
                 || $this->isPromptLikeStageOneText($candidate, 'page_goal', '', '', $pageType)
@@ -9002,6 +9273,10 @@ final class AiSiteExecutionBlueprintService
             $blockKey = \trim((string)($block['block_key'] ?? $block['section_code'] ?? ''));
             $template = \trim((string)($block['component_kind'] ?? $block['template'] ?? ''));
             $sectionName = \trim((string)($block['section_code'] ?? $blockKey));
+            $content = \trim((string)($block['content'] ?? ''));
+            if ($this->stageOneVisibleTextHasLocaleMismatch($content, $planLocale)) {
+                $block['content'] = $this->buildStageOneConcreteBlockContent($blockKey, (string)$pageType, $planLocale);
+            }
             $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
             $fieldPlan = $this->repairStageOneFieldPlanShapeBeforeValidation(
                 $fieldPlan,
@@ -9136,8 +9411,15 @@ final class AiSiteExecutionBlueprintService
         $template = \trim((string)($block['component_kind'] ?? $block['template'] ?? ''));
         $sectionName = \trim((string)($block['section_code'] ?? $blockKey));
         $sample = \trim((string)($row['sample'] ?? ''));
-        if ($sample === '' || $this->isPromptLikeStageOneText($sample, $field, $template, $sectionName, $pageType)) {
+        if (
+            $sample === ''
+            || $this->isPromptLikeStageOneText($sample, $field, $template, $sectionName, $pageType)
+            || $this->stageOneVisibleTextHasLocaleMismatch($sample, $planLocale)
+        ) {
             $sample = $this->buildStageOneFieldPlanSampleFromBlock($field, $block, $blockKey, $pageType, $planLocale);
+            if ($this->stageOneVisibleTextHasLocaleMismatch($sample, $planLocale)) {
+                $sample = $this->buildStageOneConcreteFieldSample($field, $blockKey, $pageType, $planLocale);
+            }
             $row['sample'] = $sample;
         }
 
@@ -9213,13 +9495,17 @@ final class AiSiteExecutionBlueprintService
         $sources = [
             (string)($block['content'] ?? ''),
             (string)($executionScript['core_copy'] ?? ''),
-            \implode(' · ', \array_filter($featureTexts)),
-            \implode(' · ', \array_filter($keywordTexts)),
+            \implode(' 路 ', \array_filter($featureTexts)),
+            \implode(' 路 ', \array_filter($keywordTexts)),
             (string)($block['goal'] ?? ''),
         ];
         foreach ($sources as $source) {
             $source = \trim($source);
-            if ($source === '' || $this->isPromptLikeStageOneText($source, $field, '', $blockKey, $pageType)) {
+            if (
+                $source === ''
+                || $this->isPromptLikeStageOneText($source, $field, '', $blockKey, $pageType)
+                || $this->stageOneVisibleTextHasLocaleMismatch($source, $planLocale)
+            ) {
                 continue;
             }
 
@@ -9251,12 +9537,23 @@ final class AiSiteExecutionBlueprintService
             if ($this->isPromptLikeStageOneText($text, 'feature_points', $template, $sectionName !== '' ? $sectionName : $blockKey, $pageType)) {
                 $text = $this->buildStageOneFeaturePointFromBlockContext($blockKey, $pageType, $index, $planLocale);
             }
+            if ($this->stageOneVisibleTextHasLocaleMismatch($text, $planLocale)) {
+                $text = $this->buildStageOneFeaturePointFromBlockContext($blockKey, $pageType, $index, $planLocale);
+            }
             $repairedFeaturePoints[] = $text;
         }
         if ($featurePoints !== []) {
             $executionScript['feature_points'] = $repairedFeaturePoints !== []
                 ? \array_slice($repairedFeaturePoints, 0, 3)
                 : [$this->buildStageOneFeaturePointFromBlockContext($blockKey, $pageType, 0, $planLocale)];
+        }
+        $coreCopy = \trim((string)($executionScript['core_copy'] ?? ''));
+        if (
+            $coreCopy === ''
+            || $this->isPromptLikeStageOneText($coreCopy, 'core_copy', $template, $sectionName !== '' ? $sectionName : $blockKey, $pageType)
+            || $this->stageOneVisibleTextHasLocaleMismatch($coreCopy, $planLocale)
+        ) {
+            $executionScript['core_copy'] = $this->buildStageOneConcreteCoreCopy($blockKey, $pageType, $planLocale);
         }
 
         return $executionScript;
@@ -9297,7 +9594,7 @@ final class AiSiteExecutionBlueprintService
             if ($issues === []) {
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
-                    '阶段一局部修复检查通过，未发现需重生成的问题块',
+                    'Stage-one local repair check passed; no pages need regeneration.',
                     90,
                     'plan_assemble',
                     'local_repair_done',
@@ -9313,7 +9610,7 @@ final class AiSiteExecutionBlueprintService
 
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '发现阶段一问题块，正在准备断点局部修复（第' . $round . '轮，' . \count($issues) . '项）',
+                'Found stage-one issues; preparing persisted local repair round ' . $round . ' for ' . \count($issues) . ' item(s).',
                 90,
                 'plan_assemble',
                 'local_repair_prepare',
@@ -9350,7 +9647,7 @@ final class AiSiteExecutionBlueprintService
 
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '正在局部重生成异常页面内容（第' . $round . '轮，' . \count($targetPageTypes) . '个页面）',
+                '姝ｅ湪灞€閮ㄩ噸鐢熸垚寮傚父椤甸潰鍐呭锛堢' . $round . '杞紝' . \count($targetPageTypes) . '涓〉闈級',
                 90,
                 'plan_assemble',
                 'local_repair_generate',
@@ -9406,7 +9703,7 @@ final class AiSiteExecutionBlueprintService
                 ];
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
-                    '阶段一局部重生成失败，已记录错误；本次不做本地兜底，等待下次从头重试',
+                    '闃舵涓€灞€閮ㄩ噸鐢熸垚澶辫触锛屽凡璁板綍閿欒锛涙湰娆′笉鍋氭湰鍦板厹搴曪紝绛夊緟涓嬫浠庡ご閲嶈瘯',
                     90,
                     'plan_assemble',
                     'local_repair_error',
@@ -9456,7 +9753,7 @@ final class AiSiteExecutionBlueprintService
 
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '阶段一局部修复第' . $round . '轮已合并，正在继续校验',
+                'Stage-one local repair round ' . $round . ' merged; continuing validation.',
                 90,
                 'plan_assemble',
                 'local_repair_merge',
@@ -9542,120 +9839,6 @@ final class AiSiteExecutionBlueprintService
 
     /**
      * @param list<array<string,mixed>> $issues
-     * @return array<string,mixed>
-     */
-    private function applyStageOneIssueFallbacks(array $planJson, array $issues, string $planLocale, string $contentLocale = ''): array
-    {
-        $copyLocale = $contentLocale !== '' ? $contentLocale : $planLocale;
-        foreach ($issues as $issue) {
-            $pageType = \trim((string)($issue['page_type'] ?? ''));
-            $blockKey = \trim((string)($issue['block_key'] ?? ''));
-            $fieldPath = \trim((string)($issue['field_path'] ?? ''));
-            if ($pageType === '' || !\is_array($planJson['pages'][$pageType] ?? null)) {
-                continue;
-            }
-
-            if ($blockKey === '__page__') {
-                if ($fieldPath === 'page_goal' && \trim((string)($planJson['pages'][$pageType]['page_goal'] ?? '')) === '') {
-                    $planJson['pages'][$pageType]['page_goal'] = $this->buildStageOneConcretePageGoal(
-                        $pageType,
-                        (string)($planJson['pages'][$pageType]['page_label'] ?? $planJson['pages'][$pageType]['page_title'] ?? ''),
-                        $planLocale
-                    );
-                }
-                if ($fieldPath === 'theme_alignment_summary' && \trim((string)($planJson['pages'][$pageType]['theme_alignment_summary'] ?? '')) === '') {
-                    $planJson['pages'][$pageType]['theme_alignment_summary'] = $this->buildStageOneThemeAlignmentSummaryFromPlanJson(
-                        $pageType,
-                        \is_array($planJson['pages'][$pageType] ?? null) ? $planJson['pages'][$pageType] : [],
-                        $planJson,
-                        $planLocale
-                    );
-                }
-                $currentThemeAlignmentSummary = \trim((string)($planJson['pages'][$pageType]['theme_alignment_summary'] ?? ''));
-                if (
-                    $fieldPath === 'theme_alignment_summary'
-                    && $this->isPromptLikeStageOneText($currentThemeAlignmentSummary, 'theme_alignment_summary', '', '', $pageType)
-                ) {
-                    $planJson['pages'][$pageType]['theme_alignment_summary'] = $this->buildStageOneThemeAlignmentSummaryFromPlanJson(
-                        $pageType,
-                        \is_array($planJson['pages'][$pageType] ?? null) ? $planJson['pages'][$pageType] : [],
-                        $planJson,
-                        $planLocale
-                    );
-                }
-                $currentPageGoal = \trim((string)($planJson['pages'][$pageType]['page_goal'] ?? ''));
-                if (
-                    $fieldPath === 'page_goal'
-                    && $this->isWeakStageOnePageGoal($currentPageGoal, $pageType)
-                ) {
-                    $planJson['pages'][$pageType]['page_goal'] = $this->buildStageOneConcretePageGoal(
-                        $pageType,
-                        (string)($planJson['pages'][$pageType]['page_label'] ?? $planJson['pages'][$pageType]['page_title'] ?? ''),
-                        $planLocale
-                    );
-                }
-                continue;
-            }
-
-            $blocks = \is_array($planJson['pages'][$pageType]['blocks'] ?? null) ? $planJson['pages'][$pageType]['blocks'] : [];
-            foreach ($blocks as $index => $block) {
-                if (!\is_array($block) || \trim((string)($block['block_key'] ?? '')) !== $blockKey) {
-                    continue;
-                }
-                if ($fieldPath === 'content') {
-                    $blocks[$index]['content'] = $this->buildStageOneConcreteBlockContent($blockKey, $pageType, $copyLocale);
-                } elseif ($fieldPath === 'execution_script.core_copy') {
-                    $blocks[$index]['execution_script']['core_copy'] = $this->buildStageOneConcreteCoreCopy($blockKey, $pageType, $copyLocale);
-                } elseif ($fieldPath === 'execution_script.feature_points') {
-                    $blocks[$index]['execution_script']['feature_points'] = [
-                        $this->buildStageOneFeaturePointFromBlockContext($blockKey, $pageType, 0, $planLocale),
-                        $this->buildStageOneFeaturePointFromBlockContext($blockKey, $pageType, 1, $planLocale),
-                    ];
-                } elseif (\str_starts_with($fieldPath, 'field_plan.')) {
-                    $fieldPlan = \is_array($blocks[$index]['field_plan'] ?? null) ? $blocks[$index]['field_plan'] : [];
-                    $fieldIndex = (int)($issue['field_index'] ?? -1);
-                    if ($fieldIndex >= 0 && \is_array($fieldPlan[$fieldIndex] ?? null)) {
-                        $field = \trim((string)($fieldPlan[$fieldIndex]['field'] ?? ''));
-                        $sample = \trim((string)($fieldPlan[$fieldIndex]['sample'] ?? ''));
-                        if ($sample === '') {
-                            $sample = $this->buildStageOneConcreteFieldSample($field, $blockKey, $pageType, $copyLocale);
-                            $fieldPlan[$fieldIndex]['sample'] = $sample;
-                        }
-                        $fieldPlan[$fieldIndex] = $this->syncStageOneFieldImplementationNote(
-                            $fieldPlan[$fieldIndex],
-                            $this->buildStageOneFieldImplementationNoteFromSample($field, $sample, $blockKey, $pageType, $planLocale)
-                        );
-                        $blocks[$index]['field_plan'] = $fieldPlan;
-                    }
-                }
-                $content = \trim((string)($blocks[$index]['content'] ?? ''));
-                if ($this->isWeakStageOneBlockContent($content, $blockKey, $pageType)) {
-                    $blocks[$index]['content'] = $this->buildStageOneConcreteBlockContent($blockKey, $pageType, $copyLocale);
-                }
-                $coreCopy = \trim((string)($blocks[$index]['execution_script']['core_copy'] ?? ''));
-                if ($this->isWeakStageOneCoreCopy($coreCopy, $blockKey, $pageType)) {
-                    $blocks[$index]['execution_script']['core_copy'] = $this->buildStageOneConcreteCoreCopy($blockKey, $pageType, $copyLocale);
-                }
-                foreach (\is_array($blocks[$index]['field_plan'] ?? null) ? $blocks[$index]['field_plan'] : [] as $fpIndex => $fieldRow) {
-                    if (!\is_array($fieldRow)) {
-                        continue;
-                    }
-                    $field = \trim((string)($fieldRow['field'] ?? ''));
-                    $sample = \trim((string)($fieldRow['sample'] ?? ''));
-                    if ($this->isWeakStageOneFieldSample($sample, $field, $blockKey, $pageType)) {
-                        $blocks[$index]['field_plan'][$fpIndex]['sample'] = $this->buildStageOneConcreteFieldSample($field, $blockKey, $pageType, $copyLocale);
-                    }
-                }
-                break;
-            }
-            $planJson['pages'][$pageType]['blocks'] = $blocks;
-        }
-
-        return $planJson;
-    }
-
-    /**
-     * @param list<array<string,mixed>> $issues
      */
     private function summarizeStageOneProblemIssues(array $issues): string
     {
@@ -9705,7 +9888,7 @@ final class AiSiteExecutionBlueprintService
                     'reason_code' => 'instruction_like_or_empty',
                     'matched_marker' => '',
                     'snippet' => $this->clipText($pageGoal, 120),
-                    'severity' => 'medium',
+                    'severity' => 'high',
                 ];
             }
             $themeAlignmentSummary = \trim((string)($page['theme_alignment_summary'] ?? ''));
@@ -9993,21 +10176,24 @@ final class AiSiteExecutionBlueprintService
         int $index,
         string $planLocale
     ): string {
-        $isEn = $this->isEnglishLocale($planLocale);
         $blockLabel = $blockKey !== '' ? $blockKey : $pageType;
+        if ($this->isChineseLocale($planLocale)) {
+            $fallbacksZh = [
+                $blockLabel . '区块呈现可直接阅读的页面内容',
+                $blockLabel . '区块沿用统一主题排版和间距',
+                $blockLabel . '区块具备移动端和桌面端响应式布局',
+            ];
+
+            return $fallbacksZh[$index % \count($fallbacksZh)];
+        }
+
         $fallbacksEn = [
             'Visible ' . $blockLabel . ' content rendered on the page',
             'Shared theme typography and spacing applied to ' . $blockLabel,
             'Responsive ' . $blockLabel . ' layout ready for implementation',
         ];
-        $fallbacksZh = [
-            '在页面中渲染 ' . $blockLabel . ' 的可见内容',
-            '为 ' . $blockLabel . ' 应用共享主题字号与间距',
-            '完成 ' . $blockLabel . ' 的响应式布局说明',
-        ];
-        $fallbacks = $isEn ? $fallbacksEn : $fallbacksZh;
 
-        return $fallbacks[$index % \count($fallbacks)];
+        return $fallbacksEn[$index % \count($fallbacksEn)];
     }
 
     private function buildStageOneFieldImplementationNoteFromSample(
@@ -10017,7 +10203,7 @@ final class AiSiteExecutionBlueprintService
         string $pageType,
         string $planLocale
     ): string {
-        $isEn = $this->isEnglishLocale($planLocale) || $this->looksMostlyAscii($sample);
+        $isEn = !$this->isChineseLocale($planLocale) && ($this->isEnglishLocale($planLocale) || $this->looksMostlyAscii($sample));
         $fieldLabel = $field !== '' ? $field : 'content';
         $blockLabel = $blockKey !== '' ? $blockKey : $pageType;
         $sampleSnippet = $this->clipText($sample, 90);
@@ -10041,19 +10227,19 @@ final class AiSiteExecutionBlueprintService
         }
 
         if (\str_contains($normalizedField, 'title') || \str_contains($normalizedField, 'headline')) {
-            return \sprintf('将“%s”渲染为“%s”区块的可见标题，并沿用共享标题字号层级。', $sampleSnippet, $blockLabel);
+            return \sprintf('将“%s”作为“%s”区块的可见标题，并沿用统一标题层级。', $sampleSnippet, $blockLabel);
         }
         if (\str_contains($normalizedField, 'subtitle') || \str_contains($normalizedField, 'summary') || \str_contains($normalizedField, 'description')) {
-            return \sprintf('将“%s”放在“%s”区块标题下方作为辅助文案，保持可读行高。', $sampleSnippet, $blockLabel);
+            return \sprintf('将“%s”放在“%s”区块标题下方，作为清晰易读的辅助文案。', $sampleSnippet, $blockLabel);
         }
         if (\str_contains($normalizedField, 'image') || \str_contains($normalizedField, 'media') || \str_contains($normalizedField, 'asset')) {
-            return \sprintf('Use "%s" as the concrete generated-media brief for the "%s" block; the build must render or generate this asset and fail if no verified media is available.', $sampleSnippet, $blockLabel);
+            return \sprintf('将“%s”作为“%s”区块的具体媒体生成说明，构建阶段必须产出或引用已验证素材。', $sampleSnippet, $blockLabel);
         }
         if (\str_contains($normalizedField, 'cta') || \str_contains($normalizedField, 'button')) {
-            return \sprintf('将“%s”作为“%s”区块的可点击 CTA 内容，并连接到该区块动作目标。', $sampleSnippet, $blockLabel);
+            return \sprintf('将“%s”作为“%s”区块的可点击行动文案，并连接到对应操作目标。', $sampleSnippet, $blockLabel);
         }
 
-        return \sprintf('将“%s”绑定到“%s”区块的可编辑字段“%s”，并作为页面可见内容渲染。', $sampleSnippet, $blockLabel, $fieldLabel);
+        return \sprintf('将“%s”绑定到“%s”区块的可编辑字段“%s”，并渲染为可见页面内容。', $sampleSnippet, $blockLabel, $fieldLabel);
     }
 
     private function looksMostlyAscii(string $text): bool
@@ -10092,26 +10278,26 @@ final class AiSiteExecutionBlueprintService
             $siteTitle = \trim((string)($scope['site_title'] ?? $scope['website_profile']['site_title'] ?? ''));
             $themePurpose = \trim((string)($themeStyle['description'] ?? $themeStyle['theme_purpose'] ?? ''));
             if ($themePurpose === '') {
-                $themePurpose = $isEn
-                    ? ('Build a trustworthy online presence' . ($siteTitle !== '' ? ' for "' . $siteTitle . '"' : '') . '.')
-                    : ('为 "' . ($siteTitle !== '' ? $siteTitle : '该站点') . '" 建立清晰可信的线上品牌形象。');
+                $themePurpose = 'Build a trustworthy online presence'
+                    . ($siteTitle !== '' ? ' for "' . $siteTitle . '"' : '')
+                    . '.';
             }
             $themeDesign['theme_purpose'] = $themePurpose;
         }
         if (\trim((string)($themeDesign['style_signature'] ?? '')) === '') {
             $themeDesign['style_signature'] = \trim((string)($themeStyle['visual_tone'] ?? $themeStyle['name'] ?? ''));
             if ($themeDesign['style_signature'] === '') {
-                $themeDesign['style_signature'] = $isEn ? 'Brief-aligned visual identity' : '紧扣需求的视觉识别';
+                $themeDesign['style_signature'] = $isEn ? 'Brief-aligned visual identity' : '绱ф墸闇€姹傜殑瑙嗚璇嗗埆';
             }
         }
         $artDirectionValue = $themeDesign['art_direction'] ?? '';
         if (!\is_array($artDirectionValue) && \trim((string)$artDirectionValue) === '') {
-            $themeDesign['art_direction'] = $isEn ? 'Calm layout with brand-aligned accent moments.' : '保持克制的布局，并在品牌主色处做强调。';
+            $themeDesign['art_direction'] = 'Calm layout with brand-aligned accent moments.';
         }
 
         $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
         $colorDefaults = [
-            'name' => $isEn ? 'Site palette' : '站点主色',
+            'name' => $isEn ? 'Site palette' : '绔欑偣涓昏壊',
             'primary' => $this->pickString($palette['primary'] ?? null, $themeStyle['primary_color'] ?? null, '#1e293b'),
             'secondary' => $this->pickString($palette['secondary'] ?? null, $themeStyle['secondary_color'] ?? null, '#334155'),
             'accent' => $this->pickString($palette['accent'] ?? null, $themeStyle['accent_color'] ?? null, '#3b82f6'),
@@ -10129,10 +10315,10 @@ final class AiSiteExecutionBlueprintService
         $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
         $typographyDefaults = [
             'font_family' => $this->pickString($themeStyle['font_family'] ?? null, $palette['font_family'] ?? null, 'system-ui, -apple-system, sans-serif'),
-            'heading_scale' => $isEn ? '1.25x modular scale' : '1.25 倍递进字号',
-            'body_scale' => $isEn ? '16px base line-height 1.55' : '正文 16px 行高 1.55',
-            'spacing_scale' => $isEn ? 'comfortable 8px grid' : '宽松 8px 栅格',
-            'radius_scale' => $isEn ? 'soft 8px radius' : '柔和 8px 圆角',
+            'heading_scale' => $isEn ? '1.25x modular scale' : '1.25 鍊嶉€掕繘瀛楀彿',
+            'body_scale' => $isEn ? '16px base line-height 1.55' : '姝ｆ枃 16px 琛岄珮 1.55',
+            'spacing_scale' => $isEn ? 'comfortable 8px grid' : '瀹芥澗 8px 鏍呮牸',
+            'radius_scale' => $isEn ? 'soft 8px radius' : '鏌斿拰 8px 鍦嗚',
         ];
         foreach ($typographyDefaults as $key => $default) {
             if (\trim((string)($typography[$key] ?? '')) === '') {
@@ -10147,24 +10333,20 @@ final class AiSiteExecutionBlueprintService
             $paletteKeywords = $this->normalizeStringList($palette['visual_keywords'] ?? []);
             $visualKeywords = $themeStyleKeywords !== []
                 ? $themeStyleKeywords
-                : ($paletteKeywords !== [] ? $paletteKeywords : ($isEn
-                    ? ['confident typography', 'layered surfaces', 'restrained motion']
-                    : ['有质感的字体', '层次分明的版面', '克制的动效']));
+                : ($paletteKeywords !== [] ? $paletteKeywords : ['confident typography', 'layered surfaces', 'restrained motion']);
         }
         $themeDesign['visual_keywords'] = \array_values(\array_unique($visualKeywords));
 
         if (\trim((string)($themeDesign['tone_of_voice'] ?? '')) === '') {
-            $themeDesign['tone_of_voice'] = $isEn ? 'Clear, helpful, and trustworthy.' : '清晰、可靠、有帮助感。';
+            $themeDesign['tone_of_voice'] = 'Clear, helpful, and trustworthy.';
         }
         if (\trim((string)($themeDesign['cta_tone'] ?? '')) === '') {
-            $themeDesign['cta_tone'] = $isEn ? 'Direct and action-leading.' : '直接、引导下一步行动。';
+            $themeDesign['cta_tone'] = 'Direct and action-leading.';
         }
 
         $forbiddenStyles = $this->normalizeStringList($themeDesign['forbidden_styles'] ?? []);
         if ($forbiddenStyles === []) {
-            $forbiddenStyles = $isEn
-                ? ['flashy gradients without purpose', 'stock-photo collages', 'cluttered hero compositions']
-                : ['毫无意义的炫光渐变', '拼贴风格的素材照片', '塞满元素的首屏组合'];
+            $forbiddenStyles = ['flashy gradients without purpose', 'stock-photo collages', 'cluttered hero compositions'];
         }
         $themeDesign['forbidden_styles'] = \array_values(\array_unique($forbiddenStyles));
 
@@ -10230,10 +10412,10 @@ final class AiSiteExecutionBlueprintService
         $tone = \trim((string)($themeDesign['tone_of_voice'] ?? $themeDesign['cta_tone'] ?? ''));
 
         $requirementReference = $this->clipText($requirementReference, 140);
-        $themePurpose = $themePurpose !== '' ? $this->clipText($themePurpose, 90) : ($isEn ? 'the conversion promise' : '转化承诺');
-        $palette = $palette !== '' ? $palette : ($isEn ? 'the shared color system' : '共享色彩系统');
-        $font = $font !== '' ? $font : ($isEn ? 'the shared typography system' : '共享字体系统');
-        $tone = $tone !== '' ? $tone : ($isEn ? 'the shared voice and CTA tone' : '共享内容语气与 CTA 语气');
+        $themePurpose = $themePurpose !== '' ? $this->clipText($themePurpose, 90) : ($isEn ? 'the conversion promise' : '杞寲鎵胯');
+        $palette = $palette !== '' ? $palette : ($isEn ? 'the shared color system' : '鍏变韩鑹插僵绯荤粺');
+        $font = $font !== '' ? $font : ($isEn ? 'the shared typography system' : '鍏变韩瀛椾綋绯荤粺');
+        $tone = $tone !== '' ? $tone : ($isEn ? 'the shared voice and CTA tone' : '鍏变韩鍐呭璇皵涓?CTA 璇皵');
 
         if ($isEn) {
             return \sprintf(
@@ -10247,7 +10429,7 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \sprintf(
-            '用户一句话需求“%s”需要%s；该主题将它落到%s、%s和%s，确保首屏承诺、信任表达与 CTA 都直接服务这条需求。',
+            'The user one-line requirement "%s" needs %s, so this theme uses %s, %s, and %s to keep the first-screen promise, trust cues, and CTA directly tied to that brief.',
             $requirementReference,
             $themePurpose,
             $palette,
@@ -10290,18 +10472,18 @@ final class AiSiteExecutionBlueprintService
         $forbidden = \trim((string)($forbiddenStyles[0] ?? ''));
 
         $pageLabel = $pageLabel !== '' ? $pageLabel : $pageType;
-        $pageGoal = $pageGoal !== '' ? $pageGoal : ($isEn ? 'the selected page goal' : '当前页面目标');
-        $themePurpose = $themePurpose !== '' ? $themePurpose : ($isEn ? 'the shared conversion promise' : '共享转化目标');
+        $pageGoal = $pageGoal !== '' ? $pageGoal : ($isEn ? 'the selected page goal' : '褰撳墠椤甸潰鐩爣');
+        $themePurpose = $themePurpose !== '' ? $themePurpose : ($isEn ? 'the shared conversion promise' : '鍏变韩杞寲鐩爣');
         $colorUse = $paletteName !== '' ? $paletteName : \trim($primary . ($accent !== '' ? ' / ' . $accent : ''));
-        $colorUse = $colorUse !== '' ? $colorUse : ($isEn ? 'the shared color scheme' : '共享色彩体系');
+        $colorUse = $colorUse !== '' ? $colorUse : ($isEn ? 'the shared color scheme' : '鍏变韩鑹插僵浣撶郴');
         $typeSpacing = \trim($typeRule . ($spacingRule !== '' ? ' / ' . $spacingRule : ''));
-        $typeSpacing = $typeSpacing !== '' ? $typeSpacing : ($isEn ? 'the shared type, spacing, and radius rules' : '共享字体、间距和圆角规则');
-        $tone = $tone !== '' ? $tone : ($isEn ? 'the shared voice' : '共享语气');
-        $ctaTone = $ctaTone !== '' ? $ctaTone : ($isEn ? 'the shared CTA tone' : '共享 CTA 语气');
-        $forbidden = $forbidden !== '' ? $forbidden : ($isEn ? 'off-theme visual styles' : '偏离主题的视觉风格');
+        $typeSpacing = $typeSpacing !== '' ? $typeSpacing : ($isEn ? 'the shared type, spacing, and radius rules' : '鍏变韩瀛椾綋銆侀棿璺濆拰鍦嗚瑙勫垯');
+        $tone = $tone !== '' ? $tone : ($isEn ? 'the shared voice' : '鍏变韩璇皵');
+        $ctaTone = $ctaTone !== '' ? $ctaTone : ($isEn ? 'the shared CTA tone' : '鍏变韩 CTA 璇皵');
+        $forbidden = $forbidden !== '' ? $forbidden : 'off-theme visual styles';
         $blockSummary = $blockKeys !== []
-            ? \implode($isEn ? ', ' : '、', \array_slice($blockKeys, 0, 4))
-            : ($isEn ? 'all page blocks' : '全部页面区块');
+            ? \implode(', ', \array_slice($blockKeys, 0, 4))
+            : 'all page blocks';
 
         if ($isEn) {
             return \sprintf(
@@ -10319,7 +10501,7 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \sprintf(
-            '%s 继承共享主题目标“%s”；%s 服务页面目标“%s”。页面沿用 %s，遵守 %s，保持 %s 与 %s，并避免 %s，同时延续 Header/Footer 的承接关系。',
+            '%s keeps the shared theme purpose "%s" while %s support "%s"; it applies %s, follows %s, keeps the %s voice and %s CTA rhythm, avoids %s, and preserves the Header/Footer handoff.',
             $pageLabel,
             $themePurpose,
             $blockSummary,
@@ -10330,92 +10512,6 @@ final class AiSiteExecutionBlueprintService
             $ctaTone,
             $forbidden
         );
-    }
-
-    /**
-     * @param array<string, mixed> $planJson
-     * @param array<string, mixed> $fallbackPlanJson
-     * @return array<string, mixed>
-     */
-    private function sanitizePromptLikePlanJson(array $planJson, array $fallbackPlanJson): array
-    {
-        $normalized = $planJson;
-        $normalized['site_strategy'] = $this->sanitizeStageOneTextSection(
-            \is_array($normalized['site_strategy'] ?? null) ? $normalized['site_strategy'] : [],
-            \is_array($fallbackPlanJson['site_strategy'] ?? null) ? $fallbackPlanJson['site_strategy'] : [],
-            ['summary', 'core_goal', 'target_users', 'conversion_path']
-        );
-        $normalized['seo_strategy'] = $this->sanitizeStageOneTextSection(
-            \is_array($normalized['seo_strategy'] ?? null) ? $normalized['seo_strategy'] : [],
-            \is_array($fallbackPlanJson['seo_strategy'] ?? null) ? $fallbackPlanJson['seo_strategy'] : [],
-            ['content_strategy', 'internal_linking', 'url_structure']
-        );
-        $normalized['pages'] = $this->sanitizeStageOnePages(
-            \is_array($normalized['pages'] ?? null) ? $normalized['pages'] : [],
-            \is_array($fallbackPlanJson['pages'] ?? null) ? $fallbackPlanJson['pages'] : []
-        );
-
-        return $normalized;
-    }
-
-    /**
-     * @param array<string, mixed> $section
-     * @param array<string, mixed> $fallbackSection
-     * @param list<string> $keys
-     * @return array<string, mixed>
-     */
-    private function sanitizeStageOneTextSection(array $section, array $fallbackSection, array $keys): array
-    {
-        foreach ($keys as $key) {
-            $candidate = \trim((string)($section[$key] ?? ''));
-            if ($candidate === '' || !$this->isPromptLikeStageOneText($candidate)) {
-                continue;
-            }
-            $fallback = \trim((string)($fallbackSection[$key] ?? ''));
-            if ($fallback !== '') {
-                $section[$key] = $fallback;
-            }
-        }
-
-        return $section;
-    }
-
-    /**
-     * @param array<string, mixed> $pages
-     * @param array<string, mixed> $fallbackPages
-     * @return array<string, mixed>
-     */
-    private function sanitizeStageOnePages(array $pages, array $fallbackPages): array
-    {
-        foreach ($pages as $pageType => $page) {
-            if (!\is_array($page)) {
-                continue;
-            }
-            $fallbackPage = \is_array($fallbackPages[$pageType] ?? null) ? $fallbackPages[$pageType] : [];
-            $pageGoal = \trim((string)($page['page_goal'] ?? ''));
-            if ($this->isWeakStageOnePageGoal($pageGoal, (string)$pageType)) {
-                $fallbackGoal = \trim((string)($fallbackPage['page_goal'] ?? ''));
-                $page['page_goal'] = !$this->isWeakStageOnePageGoal($fallbackGoal, (string)$pageType)
-                    ? $fallbackGoal
-                    : $this->buildStageOneConcretePageGoal(
-                        (string)$pageType,
-                        (string)($page['page_label'] ?? $fallbackPage['page_label'] ?? $page['page_title'] ?? $fallbackPage['page_title'] ?? ''),
-                        ''
-                    );
-            }
-            $themeAlignmentSummary = \trim((string)($page['theme_alignment_summary'] ?? ''));
-            if ($themeAlignmentSummary !== '' && $this->isPromptLikeStageOneText($themeAlignmentSummary, 'theme_alignment_summary', '', '', (string)$pageType)) {
-                $page['theme_alignment_summary'] = (string)($fallbackPage['theme_alignment_summary'] ?? $themeAlignmentSummary);
-            }
-            $page['blocks'] = $this->sanitizeStageOneBlocks(
-                \is_array($page['blocks'] ?? null) ? $page['blocks'] : [],
-                \is_array($fallbackPage['blocks'] ?? null) ? $fallbackPage['blocks'] : [],
-                (string)$pageType
-            );
-            $pages[$pageType] = $page;
-        }
-
-        return $pages;
     }
 
     private function buildStageOneConcretePageGoal(string $pageType, string $pageLabel = '', string $locale = ''): string
@@ -10448,66 +10544,30 @@ final class AiSiteExecutionBlueprintService
 
         return match ($pageType) {
             Page::TYPE_REFUND_POLICY => '退款政策清楚呈现适用条件、处理时效和申请路径，帮助客户判断并提交请求。',
-            Page::TYPE_PRIVACY_POLICY => '隐私政策清楚呈现数据收集范围、使用方式和访客可保留的控制权。',
-            Page::TYPE_TERMS_OF_SERVICE => '服务条款清楚呈现使用规则、责任边界和购买或注册前需要确认的事项。',
-            Page::TYPE_SHIPPING_POLICY => '配送政策清楚呈现送达时效、覆盖区域和异常处理方式。',
-            Page::TYPE_COOKIE_POLICY => 'Cookie 政策清楚呈现使用类型、用途和访客管理同意的方式。',
+            Page::TYPE_PRIVACY_POLICY => '隐私政策清楚说明收集哪些数据、如何使用数据以及访客保留哪些控制权。',
+            Page::TYPE_TERMS_OF_SERVICE => '服务条款明确使用规则、双方责任和账号预期，帮助访客在购买或注册前理解约束。',
+            Page::TYPE_SHIPPING_POLICY => '配送政策清楚说明配送时效、覆盖区域和异常处理方式，帮助客户建立交付预期。',
+            Page::TYPE_COOKIE_POLICY => 'Cookie 政策说明使用哪些 Cookie、使用目的以及访客如何管理同意设置。',
             default => '',
         };
     }
 
-    private function isWeakStageOneBlockContent(string $text, string $blockKey = '', string $pageType = ''): bool
-    {
-        $normalized = \mb_strtolower(\trim($text));
-        if ($normalized === '') {
-            return true;
-        }
-
-        return \mb_stripos($normalized, 'content rendered for users') !== false;
-    }
-
-    private function isWeakStageOneCoreCopy(string $text, string $blockKey = '', string $pageType = ''): bool
-    {
-        $normalized = \mb_strtolower(\trim($text));
-        if ($normalized === '') {
-            return true;
-        }
-
-        return \mb_stripos($normalized, 'stays visible and actionable') !== false;
-    }
-
-    private function isWeakStageOneFieldSample(string $text, string $field = '', string $blockKey = '', string $pageType = ''): bool
-    {
-        $normalized = \mb_strtolower(\trim($text));
-        if ($normalized === '') {
-            return true;
-        }
-
-        return \mb_stripos($normalized, 'visible ') !== false && \mb_stripos($normalized, ' content for ') !== false;
-    }
-
     private function buildStageOneConcreteBlockContent(string $blockKey, string $pageType, string $locale): string
     {
-        if ($this->isChineseLocale($locale)) {
-            return $blockKey !== ''
-                ? ($blockKey . ' 区块直接展示客户可读内容、关键信息和下一步动作。')
-                : ($pageType !== '' ? ($pageType . ' 页面区块直接展示客户可读内容、关键信息和下一步动作。') : '该区块直接展示客户可读内容、关键信息和下一步动作。');
-        }
-
         $blockLabel = $blockKey !== '' ? $blockKey : ($pageType !== '' ? $pageType . ' section' : 'section');
+        if ($this->isChineseLocale($locale)) {
+            return $blockLabel . '区块呈现具体的客户可见信息、信任线索和下一步行动。';
+        }
 
         return 'The ' . $blockLabel . ' block shows concrete customer-facing details, trust signals, and the next action on the page.';
     }
 
     private function buildStageOneConcreteCoreCopy(string $blockKey, string $pageType, string $locale): string
     {
-        if ($this->isChineseLocale($locale)) {
-            return $blockKey !== ''
-                ? ($blockKey . ' 区块用清晰文案说明用户会看到什么、为什么可信，以及下一步如何继续。')
-                : ($pageType !== '' ? ($pageType . ' 页面区块用清晰文案说明用户会看到什么、为什么可信，以及下一步如何继续。') : '该区块用清晰文案说明用户会看到什么、为什么可信，以及下一步如何继续。');
-        }
-
         $blockLabel = $blockKey !== '' ? $blockKey : ($pageType !== '' ? $pageType . ' section' : 'section');
+        if ($this->isChineseLocale($locale)) {
+            return $blockLabel . '区块说明客户能获得什么、为什么可信，以及现在可以采取哪一步。';
+        }
 
         return 'The ' . $blockLabel . ' block explains what customers get, why they can trust it, and which next step they can take now.';
     }
@@ -10517,10 +10577,10 @@ final class AiSiteExecutionBlueprintService
         $field = \trim($field);
         if ($this->isChineseLocale($locale)) {
             return match (\mb_strtolower($field)) {
-                'title', 'headline' => '清晰说明本区块的核心信息',
-                'subtitle', 'summary', 'description' => '补充客户需要理解的条件、步骤或结果',
-                'button_text', 'cta', 'cta_text' => '立即查看详情',
-                default => $blockKey !== '' ? ($blockKey . ' 的可编辑客户文案') : '可编辑客户文案',
+                'title', 'headline' => '清楚说明区块承诺的可见标题',
+                'subtitle', 'summary', 'description' => '解释条件、步骤或结果的辅助文案',
+                'button_text', 'cta', 'cta_text' => '查看下一步',
+                default => $blockKey !== '' ? ($blockKey . '客户可见文案') : '可编辑的客户可见文案',
             };
         }
 
@@ -10530,134 +10590,6 @@ final class AiSiteExecutionBlueprintService
             'button_text', 'cta', 'cta_text' => 'Review the next step',
             default => $blockKey !== '' ? ('Editable customer-facing copy for the ' . $blockKey . ' block') : 'Editable customer-facing copy',
         };
-    }
-
-    /**
-     * @param list<array<string, mixed>> $blocks
-     * @param list<array<string, mixed>> $fallbackBlocks
-     * @return list<array<string, mixed>>
-     */
-    private function sanitizeStageOneBlocks(array $blocks, array $fallbackBlocks, string $pageType): array
-    {
-        $fallbackByKey = [];
-        foreach ($fallbackBlocks as $index => $fallbackBlock) {
-            if (!\is_array($fallbackBlock)) {
-                continue;
-            }
-            $fallbackKey = \trim((string)($fallbackBlock['block_key'] ?? ''));
-            if ($fallbackKey !== '') {
-                $fallbackByKey[$fallbackKey] = $fallbackBlock;
-            }
-            $fallbackByKey['#' . $index] ??= $fallbackBlock;
-        }
-
-        foreach ($blocks as $index => $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $blockKey = \trim((string)($block['block_key'] ?? ''));
-            $fallbackBlock = \is_array($fallbackByKey[$blockKey] ?? null)
-                ? $fallbackByKey[$blockKey]
-                : (\is_array($fallbackByKey['#' . $index] ?? null) ? $fallbackByKey['#' . $index] : []);
-            $blocks[$index] = $this->sanitizeStageOneBlock($block, $fallbackBlock, $pageType);
-        }
-
-        return $blocks;
-    }
-
-    /**
-     * @param array<string, mixed> $block
-     * @param array<string, mixed> $fallbackBlock
-     * @return array<string, mixed>
-     */
-    private function sanitizeStageOneBlock(array $block, array $fallbackBlock, string $pageType): array
-    {
-        $template = \trim((string)($block['template'] ?? ''));
-        $sectionName = \trim((string)($block['section_name'] ?? $block['section_code'] ?? $block['label'] ?? $block['block_key'] ?? ''));
-
-        foreach (['goal', 'content', 'why'] as $key) {
-            $candidate = \trim((string)($block[$key] ?? ''));
-            if ($candidate === '' || !$this->isPromptLikeStageOneText($candidate, '', $template, $sectionName, $pageType)) {
-                continue;
-            }
-            $fallback = \trim((string)($fallbackBlock[$key] ?? ''));
-            if ($fallback !== '') {
-                $block[$key] = $fallback;
-            }
-        }
-
-        $block['field_plan'] = $this->sanitizeStageOneFieldPlan(
-            \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
-            \is_array($fallbackBlock['field_plan'] ?? null) ? $fallbackBlock['field_plan'] : [],
-            $template,
-            $sectionName,
-            $pageType
-        );
-        $block['execution_script'] = $this->sanitizeStageOneExecutionScript(
-            \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [],
-            \is_array($fallbackBlock['execution_script'] ?? null) ? $fallbackBlock['execution_script'] : [],
-            $template,
-            $sectionName,
-            $pageType
-        );
-
-        return $block;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $fieldPlan
-     * @param list<array<string, mixed>> $fallbackFieldPlan
-     * @return list<array<string, mixed>>
-     */
-    private function sanitizeStageOneFieldPlan(
-        array $fieldPlan,
-        array $fallbackFieldPlan,
-        string $template,
-        string $sectionName,
-        string $pageType
-    ): array {
-        $fallbackByField = [];
-        foreach ($fallbackFieldPlan as $index => $fallbackRow) {
-            if (!\is_array($fallbackRow)) {
-                continue;
-            }
-            $field = \trim((string)($fallbackRow['field'] ?? ''));
-            if ($field !== '') {
-                $fallbackByField[$field] = $fallbackRow;
-            }
-            $fallbackByField['#' . $index] ??= $fallbackRow;
-        }
-
-        foreach ($fieldPlan as $index => $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $field = \trim((string)($row['field'] ?? ''));
-            $fallbackRow = \is_array($fallbackByField[$field] ?? null)
-                ? $fallbackByField[$field]
-                : (\is_array($fallbackByField['#' . $index] ?? null) ? $fallbackByField['#' . $index] : []);
-
-            $sample = \trim((string)($row['sample'] ?? ''));
-            if ($sample === '' || $this->isPromptLikeStageOneText($sample, $field, $template, $sectionName, $pageType)) {
-                $fallbackSample = \trim((string)($fallbackRow['sample'] ?? ''));
-                if ($fallbackSample !== '') {
-                    $row['sample'] = $fallbackSample;
-                }
-            }
-
-            $implementationNote = $this->resolveStageOneFieldImplementationNote($row);
-            if ($implementationNote === '' || $this->isPromptLikeStageOneText($implementationNote, $field, $template, $sectionName, $pageType)) {
-                $fallbackImplementationNote = $this->resolveStageOneFieldImplementationNote($fallbackRow);
-                if ($fallbackImplementationNote !== '') {
-                    $implementationNote = $fallbackImplementationNote;
-                }
-            }
-            $row = $this->syncStageOneFieldImplementationNote($row, $implementationNote);
-
-            $fieldPlan[$index] = $row;
-        }
-
-        return $fieldPlan;
     }
 
     /**
@@ -10693,56 +10625,6 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * @param array<string, mixed> $executionScript
-     * @param array<string, mixed> $fallbackExecutionScript
-     * @return array<string, mixed>
-     */
-    private function sanitizeStageOneExecutionScript(
-        array $executionScript,
-        array $fallbackExecutionScript,
-        string $template,
-        string $sectionName,
-        string $pageType
-    ): array {
-        $featurePoints = \is_array($executionScript['feature_points'] ?? null) ? $executionScript['feature_points'] : [];
-        $fallbackFeaturePoints = \is_array($fallbackExecutionScript['feature_points'] ?? null) ? $fallbackExecutionScript['feature_points'] : [];
-        $sanitizedFeaturePoints = [];
-        foreach ($featurePoints as $point) {
-            $text = \is_scalar($point) ? \trim((string)$point) : '';
-            if ($text === '' || $this->isPromptLikeStageOneText($text, 'feature_points', $template, $sectionName, $pageType)) {
-                continue;
-            }
-            $sanitizedFeaturePoints[] = $text;
-        }
-        $executionScript['feature_points'] = $sanitizedFeaturePoints !== [] ? $sanitizedFeaturePoints : $fallbackFeaturePoints;
-
-        foreach (['core_copy', 'typography', 'style_tone', 'background_direction'] as $key) {
-            $candidate = \trim((string)($executionScript[$key] ?? ''));
-            if ($candidate === '' || !$this->isPromptLikeStageOneText($candidate, $key, $template, $sectionName, $pageType)) {
-                continue;
-            }
-            $fallback = \trim((string)($fallbackExecutionScript[$key] ?? ''));
-            if ($fallback !== '') {
-                $executionScript[$key] = $fallback;
-            }
-        }
-
-        $mediaAssets = \is_array($executionScript['media_assets'] ?? null) ? $executionScript['media_assets'] : [];
-        $fallbackMediaAssets = \is_array($fallbackExecutionScript['media_assets'] ?? null) ? $fallbackExecutionScript['media_assets'] : [];
-        $sanitizedMediaAssets = [];
-        foreach ($mediaAssets as $asset) {
-            $text = \is_scalar($asset) ? \trim((string)$asset) : '';
-            if ($text === '' || $this->isPromptLikeStageOneText($text, 'media_assets', $template, $sectionName, $pageType)) {
-                continue;
-            }
-            $sanitizedMediaAssets[] = $text;
-        }
-        $executionScript['media_assets'] = $sanitizedMediaAssets !== [] ? $sanitizedMediaAssets : $fallbackMediaAssets;
-
-        return $executionScript;
-    }
-
-    /**
      * @param array<string, mixed> $i18n
      * @return array<string, mixed>
      */
@@ -10751,12 +10633,12 @@ final class AiSiteExecutionBlueprintService
         if (!$isEn) {
             $labels = \is_array($i18n['labels'] ?? null) ? $i18n['labels'] : [];
             $defaultLabels = [
-                'title' => '阶段一执行方案（完整内容版）',
-                'site' => '站点',
-                'summary' => '摘要',
-                'site_structure' => '全站结构',
-                'shared_global_plan' => '全站共享规划',
-                'page_details' => '页面与区块内容细化',
+                'title' => 'Stage-one execution plan',
+                'site' => 'Site',
+                'summary' => 'Summary',
+                'site_structure' => 'Site structure',
+                'shared_global_plan' => 'Shared global plan',
+                'page_details' => 'Page and block details',
             ];
             foreach ($defaultLabels as $key => $value) {
                 $candidate = \trim((string)($labels[$key] ?? ''));
@@ -10771,7 +10653,7 @@ final class AiSiteExecutionBlueprintService
 
         $defaultLabels = $isEn
             ? [
-                'title' => 'Stage 1 Execution Plan (Full Blueprint)',
+                'title' => 'Stage 1 Site Plan (Full Planning)',
                 'site' => 'Site',
                 'summary' => 'Summary',
                 'site_structure' => 'Site Structure',
@@ -10779,12 +10661,12 @@ final class AiSiteExecutionBlueprintService
                 'page_details' => 'Page And Block Execution Details',
             ]
             : [
-                'title' => '阶段一执行蓝图（完整规划）',
-                'site' => '站点',
-                'summary' => '摘要',
-                'site_structure' => '全站结构',
-                'shared_global_plan' => '全站共享规划',
-                'page_details' => '页面与区块执行细化',
+                'title' => 'Stage 1 Site Plan (Full Planning)',
+                'site' => 'Site',
+                'summary' => 'Summary',
+                'site_structure' => 'Site Structure',
+                'shared_global_plan' => 'Shared Global Plan',
+                'page_details' => 'Page And Block Execution Details',
             ];
 
         $labels = \is_array($i18n['labels'] ?? null) ? $i18n['labels'] : [];
@@ -10831,7 +10713,7 @@ final class AiSiteExecutionBlueprintService
         $brief = \mb_strtolower(\trim((string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? '')));
         $instructionLower = \mb_strtolower($instruction);
 
-        if ($this->containsAny($instructionLower, ['midnight ember', '深色', '暗色', '夜间', '高对比'])) {
+        if ($this->containsAny($instructionLower, ['midnight ember', 'dark', 'night', 'high contrast'])) {
             return [
                 'name' => 'Midnight Ember',
                 'primary' => '#111827',
@@ -10839,11 +10721,11 @@ final class AiSiteExecutionBlueprintService
                 'secondary' => '#dc2626',
                 'surface' => '#1f2937',
                 'text' => '#f9fafb',
-                'reason' => '当前指令明确倾向深色高对比方案，便于突出主 CTA、首屏价值和转化入口。',
+                'reason' => 'The current instruction explicitly asks for a dark high-contrast direction that highlights the primary CTA, first-screen value, and conversion entry.',
             ];
         }
 
-        if ($this->containsAnyPositiveIntent($brief, ['棋牌', 'casino', 'rummy', 'ludo', 'poker', 'aviator', 'satta', 'game', 'gaming'])) {
+        if ($this->containsAnyPositiveIntent($brief, ['casino', 'rummy', 'ludo', 'poker', 'aviator', 'satta', 'game', 'gaming'])) {
             return [
                 'name' => 'Midnight Ember',
                 'primary' => '#111827',
@@ -10851,11 +10733,11 @@ final class AiSiteExecutionBlueprintService
                 'secondary' => '#dc2626',
                 'surface' => '#1f2937',
                 'text' => '#f9fafb',
-                'reason' => '棋牌与下载转化场景更适合高对比深色底，便于突出按钮、福利信息和信任提示。',
+                'reason' => 'Gaming and download conversion scenarios benefit from a dark high-contrast base that highlights buttons, benefit messaging, and trust cues.',
             ];
         }
 
-        if ($this->containsAny($brief, ['saas', 'finance', 'fintech', 'payment', 'data', 'dashboard', '软件', '金融', '支付'])) {
+        if ($this->containsAny($brief, ['saas', 'finance', 'fintech', 'payment', 'data', 'dashboard', 'software'])) {
             return [
                 'name' => 'Signal Blue',
                 'primary' => '#0f172a',
@@ -10863,11 +10745,11 @@ final class AiSiteExecutionBlueprintService
                 'secondary' => '#14b8a6',
                 'surface' => '#e0f2fe',
                 'text' => '#0f172a',
-                'reason' => '信息型与专业型网站更适合蓝青配色，便于表达可靠、清晰与数据感。',
+                'reason' => 'Information-heavy and professional sites fit a blue-green palette that communicates reliability, clarity, and data confidence.',
             ];
         }
 
-        if ($this->containsAny($brief, ['fitness', 'health', 'wellness', 'sport', '健身', '健康', '运动'])) {
+        if ($this->containsAny($brief, ['fitness', 'health', 'wellness', 'sport'])) {
             return [
                 'name' => 'Active Green',
                 'primary' => '#052e16',
@@ -10875,11 +10757,11 @@ final class AiSiteExecutionBlueprintService
                 'secondary' => '#84cc16',
                 'surface' => '#f0fdf4',
                 'text' => '#14532d',
-                'reason' => '健康与活力类内容适合绿色体系，便于表达行动感与持续使用。',
+                'reason' => 'Health and activity content fits a green palette that communicates momentum and sustained use.',
             ];
         }
 
-        if ($this->containsAny($brief . ' ' . $instructionLower, ['ai', 'plugin', 'plugins', 'extension', 'download', 'automation', 'developer tool', '插件', '下载', '工具'])) {
+        if ($this->containsAny($brief . ' ' . $instructionLower, ['ai', 'plugin', 'plugins', 'extension', 'download', 'automation', 'developer tool', 'tool'])) {
             return [
                 'name' => 'Electric Circuit',
                 'primary' => '#07111f',
@@ -10891,7 +10773,7 @@ final class AiSiteExecutionBlueprintService
             ];
         }
 
-        if ($this->containsAny($brief . ' ' . $instructionLower, ['ceramic', 'pottery', 'handmade', 'craft', 'aroma', 'candle', 'home fragrance', '陶瓷', '手作', '香薰', '礼物'])) {
+        if ($this->containsAny($brief . ' ' . $instructionLower, ['ceramic', 'pottery', 'handmade', 'craft', 'aroma', 'candle', 'home fragrance', 'gift'])) {
             return [
                 'name' => 'Warm Atelier',
                 'primary' => '#5f2d1f',
@@ -10903,7 +10785,7 @@ final class AiSiteExecutionBlueprintService
             ];
         }
 
-        if ($this->containsAny($brief . ' ' . $instructionLower, ['restaurant', 'coffee', 'bakery', 'food', 'tea', '餐厅', '咖啡', '烘焙', '茶'])) {
+        if ($this->containsAny($brief . ' ' . $instructionLower, ['restaurant', 'coffee', 'bakery', 'food', 'tea'])) {
             return [
                 'name' => 'Culinary Ink',
                 'primary' => '#1f1308',
@@ -10915,7 +10797,7 @@ final class AiSiteExecutionBlueprintService
             ];
         }
 
-        if ($this->containsAny($brief . ' ' . $instructionLower, ['fashion', 'beauty', 'luxury', 'jewelry', 'skincare', '美妆', '服装', '珠宝', '护肤', '奢侈'])) {
+        if ($this->containsAny($brief . ' ' . $instructionLower, ['fashion', 'beauty', 'luxury', 'jewelry', 'skincare'])) {
             return [
                 'name' => 'Editorial Rose',
                 'primary' => '#3b0a2a',
@@ -10934,7 +10816,7 @@ final class AiSiteExecutionBlueprintService
             'secondary' => '#14b8a6',
             'surface' => '#f8fafc',
             'text' => '#0f172a',
-            'reason' => '默认采用稳健的蓝灰体系，兼顾信息结构、内容承载与多行业适配性。',
+            'reason' => 'Default stable blue-gray system balances information structure, content density, and cross-industry adaptability.',
         ];
 
     }
@@ -11083,7 +10965,7 @@ final class AiSiteExecutionBlueprintService
         return [
             'header_items' => $headerItems,
             'all_items' => $allItems,
-            'why' => 'Header 需要在首屏建立路径感，让访客能在首页、品牌说明和咨询入口之间快速切换。',
+            'why' => 'Header navigation should establish first-screen orientation and let visitors move quickly between the home page, brand explanation, blog, and contact entry.',
         ];
 
         $labels = Page::getPageTypes();
@@ -11184,7 +11066,7 @@ final class AiSiteExecutionBlueprintService
             'featured' => $featured !== [] ? $featured : \array_slice($allItems, 0, 4),
             'policies' => $policies,
             'all_items' => $allItems,
-            'why' => 'Footer 负责补齐政策链接、联系入口和二级导航，也承担 SEO 内链承接作用。',
+            'why' => 'Footer navigation completes policy links, contact access, secondary navigation, and SEO internal-link handoff.',
         ];
 
         $labels = Page::getPageTypes();
@@ -11295,36 +11177,7 @@ final class AiSiteExecutionBlueprintService
         return $normalized;
     }
 
-    private function disabledFooterPolicyLinkDefaults(array $pageTypes, string $contentLocale = ''): array
-    {
-        return [];
-
-        $isEnglish = $this->isEnglishLocale($contentLocale);
-        $links = [];
-        if (\in_array(Page::TYPE_CONTACT, $pageTypes, true)) {
-            $links[] = [
-                'type' => 'support',
-                'label' => $isEnglish ? 'Support and Safety' : '客服与安全说明',
-                'href' => '/' . Page::getDefaultHandleForType(Page::TYPE_CONTACT),
-            ];
-        }
-        if (\in_array(Page::TYPE_ABOUT, $pageTypes, true)) {
-            $links[] = [
-                'type' => 'trust',
-                'label' => $isEnglish ? 'Trust and Compliance' : '信任与合规',
-                'href' => '/' . Page::getDefaultHandleForType(Page::TYPE_ABOUT) . '#trust',
-            ];
-        }
-        $links[] = [
-            'type' => 'security',
-            'label' => $isEnglish ? 'Download Safety' : '下载安全说明',
-            'href' => '/',
-        ];
-
-        return \array_slice($links, 0, 3);
-    }
-
-    private function resolveStageOnePageTypeLabel(string $pageType, string $contentLocale = ''): string
+        private function resolveStageOnePageTypeLabel(string $pageType, string $contentLocale = ''): string
     {
         if ($this->isEnglishLocale($contentLocale)) {
             $englishLabels = [
@@ -11351,11 +11204,73 @@ final class AiSiteExecutionBlueprintService
     private function normalizeStageOneVisibleTextLocale(string $value, string $fallback, string $contentLocale = ''): string
     {
         $value = \trim($value);
-        if ($this->isEnglishLocale($contentLocale) && \preg_match('/\p{Han}/u', $value) === 1) {
+        if ($this->stageOneVisibleTextHasLocaleMismatch($value, $contentLocale)) {
             return \trim($fallback);
         }
 
         return $value !== '' ? $value : \trim($fallback);
+    }
+
+    private function stageOneVisibleTextHasLocaleMismatch(string $value, string $contentLocale): bool
+    {
+        $value = \trim($value);
+        $locale = \strtolower(\trim($contentLocale));
+        if ($value === '' || $locale === '') {
+            return false;
+        }
+        if ($this->isStageOneCjkContentLocale($locale)) {
+            return $this->stageOneTextHasDominantLatinCopy($value);
+        }
+
+        return \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $value) === 1;
+    }
+
+    private function isStageOneCjkContentLocale(string $locale): bool
+    {
+        $locale = \strtolower(\trim($locale));
+        return $locale === 'zh'
+            || \str_starts_with($locale, 'zh_')
+            || \str_starts_with($locale, 'zh-')
+            || \str_contains($locale, 'hans')
+            || \str_contains($locale, 'hant')
+            || $locale === 'ja'
+            || \str_starts_with($locale, 'ja_')
+            || \str_starts_with($locale, 'ja-')
+            || $locale === 'ko'
+            || \str_starts_with($locale, 'ko_')
+            || \str_starts_with($locale, 'ko-');
+    }
+
+    private function stageOneTextHasDominantLatinCopy(string $value): bool
+    {
+        $allowed = \array_fill_keys(['apk', 'app', 'seo', 'ios', 'android', 'upi', 'ssl', 'vip', 'faq', 'url', 'www'], true);
+        \preg_match_all('/\b[A-Za-z][A-Za-z0-9\'-]{2,}\b/u', $value, $matches);
+        $words = [];
+        $properNounOnly = true;
+        foreach ($matches[0] ?? [] as $word) {
+            $rawWord = \trim((string)$word, " \t\n\r\0\x0B'\"-");
+            $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
+            if ($normalized === '' || isset($allowed[$normalized])) {
+                continue;
+            }
+            $words[] = $normalized;
+            if (\preg_match('/^[A-Z][A-Za-z0-9\'-]*$/', $rawWord) !== 1) {
+                $properNounOnly = false;
+            }
+        }
+        if ($words === []) {
+            return false;
+        }
+        if ($properNounOnly && \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $value) === 1) {
+            return false;
+        }
+
+        $letterCount = 0;
+        foreach ($words as $word) {
+            $letterCount += \strlen($word);
+        }
+
+        return \count($words) >= 5 && $letterCount >= 28;
     }
 
     /**
@@ -11529,8 +11444,8 @@ final class AiSiteExecutionBlueprintService
             'theme_alignment_summary' => $this->buildPageThemeAlignmentSummary($pageLabel, $pageGoal, $blocks, $palette, $themeStyle, $locale),
             'why' => $this->resolvePageWhy($pageType, $pageLabel, $locale),
             'decision_reason' => $instruction !== ''
-                ? '页面策略按本轮补充说明对齐：' . $this->clipText($instruction, 80)
-                : '页面策略基于已选页面类型与站点目标自动生成。',
+                ? 'Page strategy follows the current supplemental instruction: ' . $this->clipText($instruction, 80)
+                : 'Page strategy is generated from the selected page type and site goals.',
             'slug' => $pageType === Page::TYPE_HOME ? '/' : '/' . Page::getDefaultHandleForType($pageType),
             'nav_label' => $pageLabel,
             'meta_title' => $this->normalizeStageOneVisibleTextLocale((string)($pageBlueprint['meta_title'] ?? $pageTitle), $pageTitle, $locale),
@@ -11563,10 +11478,10 @@ final class AiSiteExecutionBlueprintService
             $blocks
         ), static fn(string $value): bool => $value !== ''));
         $blockSummary = $blockKeys === []
-            ? ($isEn ? 'the page blocks' : '页面区块')
-            : \implode($isEn ? ', ' : '、', \array_slice($blockKeys, 0, 4));
-        $paletteLabel = $paletteName !== '' ? $paletteName : ($isEn ? 'the shared color system' : '共享色系');
-        $toneLabel = $visualTone !== '' ? $visualTone : ($isEn ? 'the shared voice' : '共享语气');
+            ? 'the page blocks'
+            : \implode(', ', \array_slice($blockKeys, 0, 4));
+        $paletteLabel = $paletteName !== '' ? $paletteName : 'the shared color system';
+        $toneLabel = $visualTone !== '' ? $visualTone : 'the shared voice';
 
         if ($isEn) {
             return \sprintf(
@@ -11580,8 +11495,8 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \sprintf(
-            '%s 遵守 shared_prompt_context（%s 与 %s）：%s 服务“%s”这一页面目标，延续共享 CTA 与信任表达，并从 Header 导航自然承接到 Footer 的补充背书。',
-            $pageLabel !== '' ? $pageLabel : '本页面',
+            '%s follows shared_prompt_context (%s and %s): %s support the page goal "%s", reuse the shared CTA/trust rhythm, and hand off cleanly from Header navigation to Footer reassurance.',
+            $pageLabel !== '' ? $pageLabel : 'This page',
             $paletteLabel,
             $toneLabel,
             $blockSummary,
@@ -11640,7 +11555,7 @@ final class AiSiteExecutionBlueprintService
             return [
                 'type' => $appendType,
                 'instruction' => $instruction,
-                'insert_after' => $this->containsAny(\mb_strtolower($instruction), ['hero下面', 'hero 后', 'hero后', 'after hero']) ? 'hero' : '',
+                'insert_after' => $this->containsAny(\mb_strtolower($instruction), ['after hero', 'below hero']) ? 'hero' : '',
             ];
         }
 
@@ -11648,7 +11563,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 由 AI 判定微调指令的真实意图，避免把“新增模块”逻辑硬编码在关键词表里。
+     * 鐢?AI 鍒ゅ畾寰皟鎸囦护鐨勭湡瀹炴剰鍥撅紝閬垮厤鎶娾€滄柊澧炴ā鍧椻€濋€昏緫纭紪鐮佸湪鍏抽敭璇嶈〃閲屻€?
      *
      * @return array<string, mixed>|null
      */
@@ -11795,14 +11710,14 @@ final class AiSiteExecutionBlueprintService
                     'sample' => $this->resolveCustomAppendTitleSample($appendInstruction),
                     'implementation_note' => $this->isEnglishLocale($locale)
                         ? 'Use the title as the visible section label so the client can confirm the appended block purpose immediately.'
-                        : '标题直接作为新增区块的可见识别名，方便客户确认新增内容的用途。',
+                        : 'Use the title as the visible section label so the client can confirm the appended block purpose immediately.',
                 ],
                 [
                     'field' => 'description',
                     'sample' => $instructionText !== '' ? $instructionText : ($this->isEnglishLocale($locale) ? 'Add supporting details for this section.' : '???????????????'),
                     'implementation_note' => $this->isEnglishLocale($locale)
                         ? 'Fill this area with the actual supporting details that will appear in the block, not with writing guidance.'
-                        : '这里直接写会上屏的补充内容，不写写作提示或方向说明。',
+                        : 'Fill this area with the actual supporting details that will appear in the block, not with writing guidance.',
                 ],
             ],
             'result_ref' => [],
@@ -11815,9 +11730,9 @@ final class AiSiteExecutionBlueprintService
         if ($instruction === '') {
             return '';
         }
-        // 从「新增/添加 … 区块|模块|板块|区域」类指令抽取标题样例（正则须完整闭合）。
+        // 浠庛€屾柊澧?娣诲姞 鈥?鍖哄潡|妯″潡|鏉垮潡|鍖哄煙銆嶇被鎸囦护鎶藉彇鏍囬鏍蜂緥锛堟鍒欓』瀹屾暣闂悎锛夈€?
         if (\preg_match(
-            '/(?:新增|添加)(?:一段|一块|一节|一条)?\s*([^，。、\s]{2,20}(?:区块|模块|板块|区域))/u',
+            '/(?:鏂板|娣诲姞)(?:涓€娈祙涓€鍧梶涓€鑺倈涓€鏉??\s*([^锛屻€傘€乗s]{2,20}(?:鍖哄潡|妯″潡|鏉垮潡|鍖哄煙))/u',
             $instruction,
             $matches
         )) {
@@ -11835,9 +11750,9 @@ final class AiSiteExecutionBlueprintService
         if ($titleSample !== '') {
             return $this->isEnglishLocale($locale)
                 ? ('Use "' . $titleSample . '" as section headline.')
-                : ('新增区块标题使用“' . $titleSample . '”。');
+                : ('Use "' . $titleSample . '" as section headline.');
         }
-        return $this->isEnglishLocale($locale) ? 'Add one clear value headline.' : '补充一个明确价值标题。';
+        return 'Add one clear value headline.';
     }
 
     /**
@@ -11849,15 +11764,15 @@ final class AiSiteExecutionBlueprintService
         if ($instruction !== '') {
             return $this->isEnglishLocale($locale)
                 ? ('Follow this refine instruction strictly: ' . $this->clipText($instruction, 100))
-                : ('严格按用户微调说明生成该区块：' . $this->clipText($instruction, 100));
+                : ('Follow this refine instruction strictly: ' . $this->clipText($instruction, 100));
         }
-        return $this->isEnglishLocale($locale) ? 'Explain added value in short paragraph.' : '用短段落解释新增价值。';
+        return 'Explain added value in short paragraph.';
     }
 
     private function shouldAppendPartnerBlock(string $instruction, string $targetScope, string $pageType): bool
     {
         $instructionLower = \mb_strtolower(\trim($instruction));
-        if (!$this->containsAny($instructionLower, ['合作伙伴', '合作品牌', '合作方', 'partner', 'brand logo', 'logo wall'])) {
+        if (!$this->containsAny($instructionLower, ['partner', 'brand logo', 'logo wall'])) {
             return false;
         }
         if ($targetScope === '') {
@@ -11874,10 +11789,10 @@ final class AiSiteExecutionBlueprintService
     private function shouldAppendAboutBlock(string $instruction, string $targetScope, string $pageType): bool
     {
         $instructionLower = \mb_strtolower(\trim($instruction));
-        if (!$this->containsAny($instructionLower, ['关于我们', 'about us', 'about', 'company intro', '品牌介绍'])) {
+        if (!$this->containsAny($instructionLower, ['鍏充簬鎴戜滑', 'about us', 'about', 'company intro', '鍝佺墝浠嬬粛'])) {
             return false;
         }
-        if (!$this->containsAny($instructionLower, ['添加', '新增', '加入', 'append', 'add', 'insert'])) {
+        if (!$this->containsAny($instructionLower, ['娣诲姞', '鏂板', '鍔犲叆', 'append', 'add', 'insert'])) {
             return false;
         }
         if ($targetScope === '') {
@@ -11888,18 +11803,13 @@ final class AiSiteExecutionBlueprintService
             return true;
         }
 
-        return $pageType === Page::TYPE_HOME && (\str_contains($scope, 'home') || \str_contains($scope, '首页') || \str_contains($scope, 'page'));
+        return $pageType === Page::TYPE_HOME && (\str_contains($scope, 'home') || \str_contains($scope, '棣栭〉') || \str_contains($scope, 'page'));
     }
 
     private function shouldAppendWhyChooseUsBlock(string $instruction, string $targetScope, string $pageType): bool
     {
         $instructionLower = \mb_strtolower(\trim($instruction));
         if (!$this->containsAny($instructionLower, [
-            '为什么选择我们',
-            '为什么选我们',
-            '选择我们',
-            '我们的优势',
-            '核心优势',
             'why choose us',
             'why us',
             'our advantages',
@@ -11907,7 +11817,7 @@ final class AiSiteExecutionBlueprintService
         ])) {
             return false;
         }
-        if (!$this->containsAny($instructionLower, ['添加', '新增', '加入', '加一个', 'append', 'add', 'insert'])) {
+        if (!$this->containsAny($instructionLower, ['append', 'add', 'insert'])) {
             return false;
         }
         if ($targetScope === '') {
@@ -11917,272 +11827,12 @@ final class AiSiteExecutionBlueprintService
         if (\str_contains($scope, $pageType)) {
             return true;
         }
-        return $pageType === Page::TYPE_HOME && (\str_contains($scope, 'home') || \str_contains($scope, '首页') || \str_contains($scope, 'page'));
+        return $pageType === Page::TYPE_HOME && (\str_contains($scope, 'home') || \str_contains($scope, '棣栭〉') || \str_contains($scope, 'page'));
     }
 
     /**
      * @return array<string, mixed>
      */
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildPartnerBlockPlan(string $pageType, string $pageLabel, array $palette): array
-    {
-        return [
-            'block_key' => 'partner',
-            'section_code' => 'partner',
-            'region' => 'content',
-            'component_kind' => 'partner',
-            'order' => 990,
-            'goal' => '通过合作品牌或信任标识增强站点可信度。',
-            'why' => $pageLabel . ' 需要补充品牌背书，让用户在继续浏览前先建立基础信任。',
-            'style_brief' => [
-                'visual_tone' => '可信、整洁、偏展示型',
-                'layout_rule' => '桌面端 4-6 列 Logo 墙，移动端 2 列排列。',
-                'responsive_rule' => '移动端保留 Logo 清晰度与留白，不挤压标题说明。',
-            ],
-            'palette_usage' => [
-                'background' => (string)($palette['surface'] ?? '#ffffff'),
-                'accent' => (string)($palette['accent'] ?? '#2563eb'),
-                'text' => (string)($palette['text'] ?? '#0f172a'),
-                'reason' => '合作品牌区块应以浅底承载 Logo，避免干扰主导航与主 CTA。',
-            ],
-            'seo_brief' => [
-                'intent' => '展示合作品牌与信任背书。',
-                'keywords' => ['合作品牌', '品牌背书', '信任标识'],
-                'anchors' => ['#partner'],
-                'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
-            ],
-            'content_brief' => [
-                'goal' => '补充可见的品牌背书内容。',
-                'why' => '让访客快速感知合作可信度。',
-                'headline_direction' => '合作品牌与信任背书',
-                'body_direction' => '展示合作品牌 Logo、合作方向或平台认证，让用户快速建立基本信任。',
-                'cta_direction' => '',
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => '合作品牌与信任背书', 'reason' => '让用户快速知道本区块用途。'],
-                ['field' => 'description', 'sample' => '以下展示的是当前重点合作品牌、合作平台或可信任标识，可作为后续品牌物料的替换位。', 'reason' => '给出客户可直接确认的说明文案。'],
-            ],
-            'result_ref' => [],
-        ];
-
-        return [
-            'block_key' => 'partner',
-            'section_code' => 'partner',
-            'region' => 'content',
-            'component_kind' => 'partner',
-            'order' => 990,
-            'goal' => '?????????????????????????',
-            'why' => $pageLabel . ' ????????????????? Logo ??????',
-            'style_brief' => [
-                'visual_tone' => '??????????????????? CTA?',
-                'layout_rule' => '????? 4-6 ? Logo ????????? 2 ??',
-                'responsive_rule' => '???? Logo ???????????????',
-            ],
-            'palette_usage' => [
-                'background' => (string)($palette['surface'] ?? '#ffffff'),
-                'accent' => (string)($palette['accent'] ?? '#2563eb'),
-                'text' => (string)($palette['text'] ?? '#0f172a'),
-                'reason' => '?????????????? Logo????????',
-            ],
-            'seo_brief' => [
-                'intent' => '??????????????',
-                'keywords' => ['????', '????', '????'],
-                'anchors' => ['#partner'],
-                'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
-            ],
-            'content_brief' => [
-                'goal' => '??????????????????',
-                'why' => '??????????????',
-                'headline_direction' => '?????????',
-                'body_direction' => '?????? Logo????????????????????????????',
-                'cta_direction' => '??????',
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => '?????????', 'reason' => '???????????'],
-                ['field' => 'description', 'sample' => '????????????????????????????', 'reason' => '?????????'],
-            ],
-            'result_ref' => [],
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildAboutIntroBlockPlan(string $pageType, string $pageLabel, array $palette, string $locale = ''): array
-    {
-        return [
-            'block_key' => 'about_intro',
-            'section_code' => 'about_intro',
-            'region' => 'content',
-            'component_kind' => 'content',
-            'order' => 985,
-            'goal' => '补充品牌介绍入口，帮助用户更快理解站点背景。',
-            'why' => $this->isEnglishLocale($locale)
-                ? ('Add an about-intro block to help users understand ' . $pageLabel . ' faster.')
-                : ('为 ' . $pageLabel . ' 补充一段品牌介绍入口，帮助用户更快理解站点背景。'),
-            'style_brief' => [
-                'visual_tone' => '可信、简洁、偏信息型',
-                'layout_rule' => '标题与正文上下布局，桌面端可增加一张辅助图片。',
-                'responsive_rule' => '移动端优先保留标题、正文与主按钮，辅助图像放到文字下方。',
-            ],
-            'palette_usage' => [
-                'background' => (string)($palette['surface'] ?? '#ffffff'),
-                'accent' => (string)($palette['accent'] ?? '#2563eb'),
-                'text' => (string)($palette['text'] ?? '#0f172a'),
-                'reason' => '介绍型内容更适合浅底与清晰文字层级，保证阅读效率。',
-            ],
-            'seo_brief' => [
-                'intent' => '解释品牌背景与价值定位。',
-                'keywords' => ['品牌介绍', '关于我们', '团队背景'],
-                'anchors' => ['#about-intro'],
-                'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
-            ],
-            'content_brief' => [
-                'goal' => '给出品牌介绍的直接文案样例。',
-                'why' => '让访客更快理解品牌与服务边界。',
-                'headline_direction' => '认识我们正在做的事情',
-                'body_direction' => '用一段简洁说明介绍品牌定位、服务对象和希望用户继续了解的理由。',
-                'cta_direction' => '按钮可引导到关于我们或咨询入口。',
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => '认识我们正在做的事情', 'reason' => '明确区块主题。'],
-                ['field' => 'description', 'sample' => '我们希望用更清晰的内容结构、可信的说明方式和明确的下一步动作，帮助用户更快理解品牌并继续深入浏览。', 'reason' => '给出可直接上屏的品牌介绍文案。'],
-            ],
-            'result_ref' => [],
-        ];
-
-        return [
-            'block_key' => 'about_intro',
-            'section_code' => 'about_intro',
-            'region' => 'content',
-            'component_kind' => 'content',
-            'order' => 985,
-            'goal' => '???????????????????',
-            'why' => $this->isEnglishLocale($locale)
-                ? ('Add an about-intro block to help users understand ' . $pageLabel . ' faster.')
-                : ('????????????????? ' . $pageLabel . ' ???????'),
-            'style_brief' => [
-                'visual_tone' => '???????????',
-                'layout_rule' => '??????????????????????',
-                'responsive_rule' => '???????????? CTA ???',
-            ],
-            'palette_usage' => [
-                'background' => (string)($palette['surface'] ?? '#ffffff'),
-                'accent' => (string)($palette['accent'] ?? '#2563eb'),
-                'text' => (string)($palette['text'] ?? '#0f172a'),
-                'reason' => '????????????????????',
-            ],
-            'seo_brief' => [
-                'intent' => '???????????????',
-                'keywords' => ['????', '????', '????'],
-                'anchors' => ['#about-intro'],
-                'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
-            ],
-            'content_brief' => [
-                'goal' => '????????????????????????',
-                'why' => '?????????????????',
-                'headline_direction' => '????????????',
-                'body_direction' => '?????????????????????????????',
-                'cta_direction' => '????',
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => '????????????', 'reason' => '???????????'],
-                ['field' => 'description', 'sample' => '?????????????????????????????????', 'reason' => '??????????????'],
-            ],
-            'result_ref' => [],
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildWhyChooseUsBlockPlan(string $pageType, string $pageLabel, array $palette, string $locale = ''): array
-    {
-        return [
-            'block_key' => 'why_choose_us',
-            'section_code' => 'why_choose_us',
-            'region' => 'content',
-            'component_kind' => 'content',
-            'order' => 987,
-            'goal' => '用具体理由说明为什么用户应继续选择我们。',
-            'why' => $this->isEnglishLocale($locale)
-                ? ('Explain why users should choose ' . $pageLabel . ' over alternatives.')
-                : ('解释为什么用户在比较后仍然应该继续选择 ' . $pageLabel . '。'),
-            'style_brief' => [
-                'visual_tone' => '可信、明确、偏对比型',
-                'layout_rule' => '使用 3-4 个理由卡片或列表并列呈现。',
-                'responsive_rule' => '移动端按单列堆叠，每条理由保留独立标题。',
-            ],
-            'palette_usage' => [
-                'background' => (string)($palette['surface'] ?? '#ffffff'),
-                'accent' => (string)($palette['accent'] ?? '#2563eb'),
-                'text' => (string)($palette['text'] ?? '#0f172a'),
-                'reason' => '对比型区块需要清晰分组和重点强调色，但不能喧宾夺主。',
-            ],
-            'seo_brief' => [
-                'intent' => '解释核心优势与选择理由。',
-                'keywords' => ['为什么选择我们', '核心优势', '服务亮点'],
-                'anchors' => ['#why-choose-us'],
-                'internal_links' => [$pageType === Page::TYPE_HOME ? '/contact' : '/'],
-            ],
-            'content_brief' => [
-                'goal' => '列出 3-4 条可以直接展示的选择理由。',
-                'why' => '帮助用户在关键决策前完成判断。',
-                'headline_direction' => '为什么用户会继续选择我们',
-                'body_direction' => '用可感知的结果、服务体验或支持能力来解释差异点。',
-                'cta_direction' => '结尾可承接咨询或了解更多。',
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => '为什么用户会继续选择我们', 'reason' => '让区块目的明确可见。'],
-                ['field' => 'description', 'sample' => '我们更强调上手清晰、过程透明、支持及时和结果可确认，让用户在浏览时就能理解继续了解的价值。', 'reason' => '给出能直接展示的价值说明。'],
-            ],
-            'result_ref' => [],
-        ];
-
-        return [
-            'block_key' => 'why_choose_us',
-            'section_code' => 'why_choose_us',
-            'region' => 'content',
-            'component_kind' => 'content',
-            'order' => 987,
-            'goal' => '????????????????????',
-            'why' => $this->isEnglishLocale($locale)
-                ? ('Explain why users should choose ' . $pageLabel . ' over alternatives.')
-                : ('??????????????????? ' . $pageLabel . '?'),
-            'style_brief' => [
-                'visual_tone' => '??????????',
-                'layout_rule' => '?? 3-4 ????????????',
-                'responsive_rule' => '??????????????????',
-            ],
-            'palette_usage' => [
-                'background' => (string)($palette['surface'] ?? '#ffffff'),
-                'accent' => (string)($palette['accent'] ?? '#2563eb'),
-                'text' => (string)($palette['text'] ?? '#0f172a'),
-                'reason' => '????????????????????? CTA?',
-            ],
-            'seo_brief' => [
-                'intent' => '???????????????',
-                'keywords' => ['???????', '????', '????'],
-                'anchors' => ['#why-choose-us'],
-                'internal_links' => [$pageType === Page::TYPE_HOME ? '/contact' : '/'],
-            ],
-            'content_brief' => [
-                'goal' => '??????? 3-4 ??????',
-                'why' => '???????????????????????',
-                'headline_direction' => '???????????',
-                'body_direction' => '?????????????????????????????',
-                'cta_direction' => '????',
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => '???????????', 'reason' => '???????????'],
-                ['field' => 'description', 'sample' => '????????????????????????????????????', 'reason' => '????????????'],
-            ],
-            'result_ref' => [],
-        ];
-    }
-
     private function buildBlockPlan(
         string $pageType,
         string $pageLabel,
@@ -12211,7 +11861,7 @@ final class AiSiteExecutionBlueprintService
             'implementation_detail' => $this->resolveLayoutRule($template, $locale),
             'why' => $this->isEnglishLocale($locale)
                 ? ($sectionName . ' breaks the page goal of "' . $pageLabel . '" into actionable, scannable, and linkable content.')
-                : ($sectionName . ' 用来把“' . $pageLabel . '”页面目标拆成可浏览、可转化、可内链的实际内容块。'),
+                : ($sectionName . ' breaks the page goal of "' . $pageLabel . '" into actionable, scannable, and linkable content.'),
             'style_brief' => [
                 'visual_tone' => (string)($themeStyle['visual_tone'] ?? ''),
                 'layout_rule' => $this->resolveLayoutRule($template, $locale),
@@ -12222,8 +11872,8 @@ final class AiSiteExecutionBlueprintService
                 'accent' => (string)($palette['accent'] ?? ''),
                 'text' => $template === 'cta' ? (string)($palette['text'] ?? '#ffffff') : '#0f172a',
                 'reason' => $template === 'hero'
-                    ? '首屏需要更高对比度来承接核心关键词与主 CTA。'
-                    : '内容区块使用更轻的底色，便于承载可读文本与信任信息。',
+                    ? 'Hero blocks need stronger contrast to carry core keywords and the primary CTA.'
+                    : 'Content blocks use a lighter surface so readable text and trust signals remain clear.',
             ],
             'seo_brief' => [
                 'intent' => $pageGoal,
@@ -12234,7 +11884,7 @@ final class AiSiteExecutionBlueprintService
             'keywords' => $this->buildBlockKeywords($siteDisplayName, $pageLabel, $template, $sectionName),
             'content_brief' => [
                 'goal' => $pageGoal,
-                'why' => $sectionName . ' 要同时服务信息理解和下一步动作。',
+                'why' => $sectionName . ' must support both information understanding and the next action.',
                 'headline_direction' => $this->resolveHeadlineDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale),
                 'body_direction' => $this->resolveBodyDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale),
                 'cta_direction' => $this->resolveCtaDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale),
@@ -12247,59 +11897,11 @@ final class AiSiteExecutionBlueprintService
             'responsive_rule' => $this->resolveResponsiveRule($template, $locale),
             'completion_rule' => $this->isEnglishLocale($locale)
                 ? 'Block is complete when content fields, CTA, media slot, and responsive behavior are all defined for implementation.'
-                : '当内容字段、CTA、素材位和响应式行为都明确后，该区块才算完整。',
+                : 'Block is complete when content fields, CTA, media slot, and responsive behavior are all defined for implementation.',
             'execution_script' => $this->buildBlockExecutionScript($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $siteSummary, $locale),
             'result_ref' => [],
         ];
 
-        return [
-            'block_key' => $sectionKey,
-            'section_code' => $sectionCode,
-            'region' => 'content',
-            'component_kind' => $template,
-            'order' => (int)($section['sort_order'] ?? 0),
-            'goal' => $this->resolveBlockGoal($template, $pageGoal, $locale),
-            'implementation_detail' => $this->resolveLayoutRule($template, $locale),
-            'why' => $this->isEnglishLocale($locale)
-                ? ($sectionName . ' breaks the page goal of "' . $pageLabel . '" into actionable, scannable, and linkable content.')
-                : ($sectionName . ' 用来把“' . $pageLabel . '”页面目标拆成可浏览、可转化、可内链的实际内容块。'),
-            'style_brief' => [
-                'visual_tone' => (string)($themeStyle['visual_tone'] ?? ''),
-                'layout_rule' => $this->resolveLayoutRule($template, $locale),
-                'responsive_rule' => $this->resolveResponsiveRule($template, $locale),
-            ],
-            'palette_usage' => [
-                'background' => $template === 'cta' ? (string)($palette['primary'] ?? '') : (string)($palette['surface'] ?? ''),
-                'accent' => (string)($palette['accent'] ?? ''),
-                'text' => $template === 'cta' ? (string)($palette['text'] ?? '#ffffff') : '#0f172a',
-                'reason' => $template === 'hero'
-                    ? '首屏需要更高对比度来承接核心关键词和主 CTA。'
-                    : '内容区块使用更轻的底色，便于承载 SEO 文案和可读信息层级。',
-            ],
-            'seo_brief' => [
-                'intent' => $pageGoal,
-                'keywords' => $this->buildBlockKeywords($siteDisplayName, $pageLabel, $template, $sectionName),
-                'anchors' => ['#' . $this->slugify($sectionKey !== '' ? $sectionKey : $sectionCode)],
-                'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
-            ],
-            'keywords' => $this->buildBlockKeywords($siteDisplayName, $pageLabel, $template, $sectionName),
-            'content_brief' => [
-                'goal' => $pageGoal,
-                'why' => $sectionName . ' 要同时服务信息理解和下一步动作。',
-                'headline_direction' => $this->resolveHeadlineDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale),
-                'body_direction' => $this->resolveBodyDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale),
-                'cta_direction' => $this->resolveCtaDirection($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale),
-            ],
-            'field_plan' => $this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale, $siteDisplayName, $pageLabel),
-            'realtime_content' => $this->buildBlockRealtimeContent($config, $sectionName, $pageGoal, $template, $pageLabel, $siteDisplayName, $locale),
-            'editable_fields' => $this->extractEditableFieldsFromFieldPlan($this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale, $siteDisplayName, $pageLabel)),
-            'content_source' => ['safe_inference', 'editable_field', 'media_manager'],
-            'style_direction' => (string)($themeStyle['visual_tone'] ?? ''),
-            'responsive_rule' => $this->resolveResponsiveRule($template, $locale),
-            'completion_rule' => $this->isEnglishLocale($locale) ? 'Block is complete when content fields, CTA, media slot, and responsive behavior are all defined for implementation.' : '当内容字段、CTA、素材位和响应式行为都明确后，该区块才算完整。',
-            'execution_script' => $this->buildBlockExecutionScript($config, $template, $sectionName, $pageGoal, $pageLabel, $siteDisplayName, $locale),
-            'result_ref' => [],
-        ];
     }
 
     /**
@@ -12321,7 +11923,7 @@ final class AiSiteExecutionBlueprintService
     ): array {
         $isHeader = $component === 'header';
         $isEn = $this->isEnglishLocale($contentLocale);
-        $brandName = $siteDisplayName !== '' ? $siteDisplayName : ($isEn ? 'Brand name' : '品牌名称');
+        $brandName = $siteDisplayName !== '' ? $siteDisplayName : ($isEn ? 'Brand name' : '鍝佺墝鍚嶇О');
         $headerCopy = $isEn
             ? [
                 'goal' => 'Output ready-to-render site header content and carry the primary navigation plus main CTA.',
@@ -12333,13 +11935,13 @@ final class AiSiteExecutionBlueprintService
                 'completion_rule' => 'Header is complete when brand identity, navigation, primary CTA, and mobile behavior are defined.',
             ]
             : [
-                'goal' => '输出可直接上屏的站点头部内容，并承接主导航与主 CTA。',
-                'implementation_detail' => '桌面端使用横向导航与单一主按钮，移动端折叠菜单但保留品牌名和主 CTA。',
-                'supporting_copy' => ['首页', '关于我们', '立即咨询'],
-                'cta_label' => '立即咨询',
-                'media_rule' => '使用可替换的品牌 Logo 位，保持清晰识别度。',
-                'responsive_rule' => '移动端优先保留品牌名与主 CTA，导航折叠为菜单。',
-                'completion_rule' => 'Header 完整条件是品牌识别、导航、主 CTA 与移动端规则都已明确。',
+                'goal' => 'Output ready-to-render site header content and carry the primary navigation plus main CTA.',
+                'implementation_detail' => 'Use horizontal navigation and one primary button on desktop; collapse navigation on mobile while keeping the brand name and primary CTA visible.',
+                'supporting_copy' => ['Home', 'About', 'Download Now'],
+                'cta_label' => 'Download Now',
+                'media_rule' => 'Use a replaceable brand logo slot with clear recognition.',
+                'responsive_rule' => 'On mobile, keep the brand name and primary CTA visible while navigation collapses into a menu.',
+                'completion_rule' => 'Header is complete when brand identity, navigation, primary CTA, and mobile behavior are defined.',
             ];
         $footerCopy = $isEn
             ? [
@@ -12352,13 +11954,13 @@ final class AiSiteExecutionBlueprintService
                 'completion_rule' => 'Footer is complete when information groups, policy links, contact fields, and responsive behavior are defined.',
             ]
             : [
-                'goal' => '输出可直接上屏的页脚内容，补齐联系入口、政策链接与次级导航。',
-                'implementation_detail' => '页脚按信息分组呈现，优先展示联系入口、常用页面和政策链接。',
-                'headline' => '继续了解 ' . $brandName,
-                'supporting_copy' => ['快速入口', '政策说明', '联系渠道', '客服支持'],
-                'media_rule' => '信息分组可搭配轻量图标，但不要压过文字内容。',
-                'responsive_rule' => '移动端按分组单列堆叠，确保政策与联系入口仍然清晰可点。',
-                'completion_rule' => 'Footer 完整条件是信息分组、政策链接、联系字段与响应式规则都已明确。',
+                'goal' => 'Output ready-to-render footer content with contact paths, policy links, and secondary navigation.',
+                'implementation_detail' => 'Group footer information with priority for contact paths, common pages, and policy links.',
+                'headline' => 'Continue with ' . $brandName,
+                'supporting_copy' => ['Quick links', 'Policies', 'Contact', 'Support'],
+                'media_rule' => 'Information groups may use lightweight icons without overpowering text.',
+                'responsive_rule' => 'On mobile, stack footer groups in one column while keeping policy and contact links easy to tap.',
+                'completion_rule' => 'Footer is complete when information groups, policy links, contact fields, and responsive behavior are defined.',
             ];
 
         return [
@@ -12634,15 +12236,15 @@ final class AiSiteExecutionBlueprintService
             'shared_navigation_strategy' => $navigationPlan,
             'shared_footer_strategy' => $footerPlan,
             'shared_cta_strategy' => [
-                'primary_action' => $isContentEnglish ? 'Contact / Start now' : '立即咨询 / 立即开始',
-                'reason' => '共享 CTA 必须在 Header、Footer 与页面核心区块中保持同一转化方向。',
+                'primary_action' => 'Contact / Start now',
+                'reason' => 'The shared CTA must keep one conversion direction across Header, Footer, and core page blocks.',
             ],
             'seo_strategy' => $seoStrategy,
             'page_types' => $pageTypes,
             'anti_hardcode_rules' => [
-                'brand_name' => '品牌名必须来自用户输入、站点标题或冻结方案；不要显示 brand_name/site_title 等字段名。',
-                'contact' => '联系方式文案必须是面向访客的最终表达；禁止显示待补邮箱、断裂邮箱、phone/email/address 字段名或方案说明。',
-                'cases' => '案例、资质、价格和客户名可以按方案语义写成营销文案；禁止展示“真实案例/资质/价格待补充”等蓝图式提示。',
+                'brand_name' => 'Brand names must come from user input, site title, or persisted plan data; never expose field names such as brand_name or site_title.',
+                'contact' => 'Contact copy must be final visitor-facing copy; never expose placeholder emails, split email fragments, field names, or planning notes.',
+                'cases' => 'Cases, credentials, prices, and customer names may be written as marketing copy from plan semantics; never expose blueprint placeholders.',
             ],
             'source_instruction' => $instruction,
         ];
@@ -12672,8 +12274,8 @@ final class AiSiteExecutionBlueprintService
             : ($instruction !== '' ? $instruction : ($siteSummary !== '' ? $siteSummary : $siteDisplayName));
         $themePurpose = $siteSummary !== ''
             ? $siteSummary
-            : ($requirementReference !== '' ? $requirementReference : '建立清晰可信、可转化的站点视觉与内容骨架。');
-        $visualTone = \trim((string)($themeStyle['visual_tone'] ?? '专业、清晰、可转化'));
+            : ($requirementReference !== '' ? $requirementReference : 'Build a clear, trustworthy, and conversion-ready site visual and content system.');
+        $visualTone = \trim((string)($themeStyle['visual_tone'] ?? 'professional, clear, and conversion-ready'));
 
         $themeDesign = [
             'theme_purpose' => $themePurpose,
@@ -12696,28 +12298,28 @@ final class AiSiteExecutionBlueprintService
             ],
             'typography_spacing_radius' => [
                 'font_family' => (string)($themeStyle['font_family'] ?? 'Poppins, Inter, sans-serif'),
-                'heading_scale' => '首屏标题 40-56px，二级标题 28-36px，移动端按 0.78 倍收敛。',
-                'body_scale' => '正文 16-18px，行高 1.6，适合长段客户方案说明。',
-                'spacing_scale' => '以 8px 为基础栅格，区块上下留白 48-96px。',
-                'radius_scale' => '卡片 16-24px，按钮 999px 胶囊或 12px 圆角，保持统一。',
+                'heading_scale' => 'Hero headings 40-56px, section headings 28-36px, mobile scaled to 0.78.',
+                'body_scale' => 'Body text 16-18px with 1.6 line height for long customer-facing explanations.',
+                'spacing_scale' => 'Use an 8px base grid with 48-96px vertical section spacing.',
+                'radius_scale' => 'Cards 16-24px, buttons 999px pill or 12px radius, kept consistent.',
             ],
             'visual_keywords' => \array_values(\array_filter([
                 $visualTone,
                 (string)($themeStyle['name'] ?? ''),
                 (string)($palette['name'] ?? ''),
-                '结构清晰',
-                'CTA 突出',
+                'clear structure',
+                'prominent CTA',
             ], static fn(string $value): bool => \trim($value) !== '')),
-            'tone_of_voice' => $visualTone !== '' ? $visualTone : '可信、清晰、可转化',
-            'cta_tone' => '动作明确、低犹豫成本，优先承接用户需求中的下一步行为。',
+            'tone_of_voice' => $visualTone !== '' ? $visualTone : 'trustworthy, clear, and conversion-ready',
+            'cta_tone' => 'Clear action, low hesitation cost, and direct support for the next step in the user requirement.',
             'forbidden_styles' => [
-                '禁止只写“现代/高级/简洁”等空泛风格标签。',
-                '禁止伪造未提供的品牌事实、资质、客户名、价格或联系方式。',
-                '禁止输出与用户一句话需求无关的通用模板感方案。',
+                'Do not write vague style labels such as modern, premium, or clean without implementation detail.',
+                'Do not invent brand facts, credentials, customer names, prices, or contact details not provided by persisted data.',
+                'Do not output generic template plans unrelated to the user one-line requirement.',
             ],
             'selection_reason' => $requirementReference !== ''
-                ? '围绕用户需求“' . $this->clipText($requirementReference, 120) . '”，选择该主题以优先保证可读信息结构、明确 CTA 和可执行内容落地。'
-                : '选择该主题以优先保证可读信息结构、明确 CTA 和可执行内容落地。',
+                ? 'Selected this theme around the user requirement "' . $this->clipText($requirementReference, 120) . '" to prioritize readable information structure, clear CTA, and executable content.'
+                : 'Selected this theme to prioritize readable information structure, clear CTA, and executable content.',
         ];
 
         return $this->applyReferenceImageInsightsToThemeDesign($themeDesign, $scope);
@@ -12830,7 +12432,7 @@ final class AiSiteExecutionBlueprintService
             'footer_plan' => \is_array($sharedComponents['footer'] ?? null) ? $sharedComponents['footer'] : [],
             'generation_rule' => $this->isEnglishLocale($contentLocale)
                 ? 'Page type plans must carry this shared context and preserve Header, Footer, and theme continuity.'
-                : '页面类型方案必须携带该共享上下文，并保持 Header、Footer 与主题连续性。',
+                : 'Page type plans must carry this shared context and preserve Header, Footer, and theme continuity.',
         ];
         $context['context_hash'] = \sha1((string)\json_encode($context, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
 
@@ -13048,7 +12650,7 @@ final class AiSiteExecutionBlueprintService
                 'result_ref' => [
                     'kind' => 'scope_path',
                     'scope_path' => 'plan_workbench.stage1.page_plans.' . $pageKey,
-                    'structured_path' => 'plan_structured.page_plans.' . $pageKey,
+                    'structured_path' => 'plan_json.page_plans.' . $pageKey,
                     'build_plan_path' => 'build_plan_v2.pages.' . $pageKey,
                     'context_hash' => $pageContextHash,
                 ],
@@ -13126,7 +12728,7 @@ final class AiSiteExecutionBlueprintService
                 ],
                 'output_refs' => [
                     'plan_workbench.stage1.page_plans.' . $pageKey,
-                    'plan_structured.page_plans.' . $pageKey,
+                    'plan_json.page_plans.' . $pageKey,
                 ],
             ];
         }
@@ -13585,16 +13187,6 @@ final class AiSiteExecutionBlueprintService
 
     private function buildStageOneContractBlockHeadline(string $siteDisplayName, string $pageLabel, string $sectionLabel, string $role, string $contentLocale = ''): string
     {
-        if ($this->isChineseLocale($contentLocale)) {
-            return match ($role) {
-                'opening' => $siteDisplayName . '，霓虹牌桌即刻开局',
-                'proof' => '玩家信任与公平体验证明',
-                'cta' => '进入下一场霓虹牌局',
-                'support' => '规则、客服和常见问题',
-                default => '热门玩法与房间亮点',
-            };
-        }
-
         return match ($role) {
             'opening' => $siteDisplayName . ' introduces the main promise for ' . $pageLabel,
             'proof' => 'Proof that ' . $siteDisplayName . ' can support real customer decisions',
@@ -13606,16 +13198,6 @@ final class AiSiteExecutionBlueprintService
 
     private function buildStageOneContractBlockSupportingCopy(string $siteDisplayName, string $pageLabel, string $sectionLabel, string $role, string $pageGoal, string $contentLocale = ''): string
     {
-        if ($this->isChineseLocale($contentLocale)) {
-            return match ($role) {
-                'opening' => '展示房间选择、玩法规则、活动福利和客服支持，让玩家放心入座。',
-                'proof' => '用玩家评价、透明规则和支持入口降低进入牌桌前的不确定。',
-                'cta' => '确认房间、规则和支持入口后，直接进入下一场牌局。',
-                'support' => '用清晰问答说明房间、奖励、账号和客服问题。',
-                default => '用具体场景说明热门房间、玩法亮点和快速上手体验。',
-            };
-        }
-
         $goalTail = $pageGoal !== ''
             ? (' while supporting ' . \rtrim($pageGoal, ". \t\n\r\0\x0B"))
             : (' for the ' . $pageLabel . ' journey');
@@ -13631,14 +13213,6 @@ final class AiSiteExecutionBlueprintService
 
     private function buildStageOneContractBlockDetailCopy(string $siteDisplayName, string $sectionLabel, string $role, string $contentLocale = ''): string
     {
-        if ($this->isChineseLocale($contentLocale)) {
-            return match ($role) {
-                'proof' => '玩家评价、规则透明、客服响应',
-                'support' => '房间问题、奖励说明、账号帮助',
-                default => '牌桌亮点、活动福利、快速上手',
-            };
-        }
-
         return match ($role) {
             'proof' => 'Evidence, reassurance, and brand-safe trust details for ' . $siteDisplayName,
             'support' => 'Short answers, useful resources, and clear next-step guidance',
@@ -13649,13 +13223,6 @@ final class AiSiteExecutionBlueprintService
     private function buildStageOneContractBlockCtaLabel(string $sectionLabel, string $contentLocale = ''): string
     {
         $normalized = \mb_strtolower($sectionLabel);
-        if ($this->isChineseLocale($contentLocale)) {
-            if (\str_contains($normalized, 'contact')) {
-                return '联系客服';
-            }
-
-            return '开始游戏';
-        }
         if (\str_contains($normalized, 'contact')) {
             return 'Contact us';
         }
@@ -13704,7 +13271,11 @@ final class AiSiteExecutionBlueprintService
             }
         }
 
-        return $this->isChineseLocale($contentLocale) ? '该网站' : 'the product';
+        if ($this->isChineseLocale($contentLocale)) {
+            return '当前品牌';
+        }
+
+        return 'the selected brand';
     }
 
     private function isPlaceholderSiteDisplayName(string $name): bool
@@ -13717,8 +13288,6 @@ final class AiSiteExecutionBlueprintService
             'your brand',
             'your site',
             'site name',
-            '品牌名称',
-            '该网站',
         ], true);
     }
 
@@ -13890,12 +13459,12 @@ final class AiSiteExecutionBlueprintService
         ), static fn(string $value): bool => \trim($value) !== ''));
 
         return $this->containsAnyPositiveIntent($text, [
-            '霓虹棋牌',
-            '棋牌游戏',
-            '牌桌',
-            '棋牌',
-            '扑克',
-            '麻将',
+            '闇撹櫣妫嬬墝',
+            '妫嬬墝娓告垙',
+            '鐗屾',
+            '妫嬬墝',
+            '鎵戝厠',
+            '楹诲皢',
             'Teen Patti',
             'Rummy',
             'Poker',
@@ -14804,7 +14373,7 @@ final class AiSiteExecutionBlueprintService
             'result_ref' => [
                 'kind' => 'scope_path',
                 'scope_path' => 'plan_workbench.stage1.theme_context_snapshot',
-                'structured_path' => 'plan_structured.theme_context_snapshot',
+                'structured_path' => 'plan_json.theme_context_snapshot',
                 'build_plan_path' => 'build_plan_v2.design_manifest',
                 'context_hash' => $stableHash,
             ],
@@ -15011,27 +14580,11 @@ final class AiSiteExecutionBlueprintService
                 $rawRequirement !== '' ? ('brief=' . $rawRequirement) : '',
             ])),
             'safe_inferences' => [
-                '根据已选页面类型生成页面结构与内容区块方案。',
-                '先生成共享主题、Header、Footer，再组织每个页面的具体内容块。',
+                'Generate page structure and content-block plans from selected page types.',
+                'Generate shared theme, Header, and Footer first, then organize each page-specific content block.',
             ],
             'pending_variables' => [
-                '如果方案需要后续编辑的联系方式、案例、资质、价格或地址，请写成自然访客文案；不要把字段名、待补充说明或蓝图句子展示出来。',
-            ],
-            'latest_instruction' => $instruction,
-        ];
-
-        return [
-            'raw_requirement' => $rawRequirement,
-            'explicit_facts' => \array_values(\array_filter([
-                \trim((string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? '')) !== '' ? ('site_title=' . (string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? '')) : '',
-                $rawRequirement !== '' ? ('brief=' . $rawRequirement) : '',
-            ])),
-            'safe_inferences' => [
-                '根据已选页面类型生成页面区块方案。',
-                '先生成共享主题、Header、Footer，再并发生成页面类型方案。',
-            ],
-            'pending_variables' => [
-                '如果方案需要后续编辑的联系方式、案例、资质、价格或地址，请写成自然访客文案；不要把字段名、待补充说明或蓝图句子展示出来。',
+                'If contact details, cases, credentials, prices, or addresses need later editing, write natural visitor-facing copy and never expose field names, placeholders, or blueprint notes.',
             ],
             'latest_instruction' => $instruction,
         ];
@@ -15536,9 +15089,6 @@ final class AiSiteExecutionBlueprintService
      */
     private function resolveStageOneExecutionBlueprint(array $scope): array
     {
-        if (\is_array($scope['plan_structured'] ?? null) && $scope['plan_structured'] !== []) {
-            return $scope['plan_structured'];
-        }
         if (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
             return $scope['plan_json'];
         }
@@ -16061,7 +15611,7 @@ final class AiSiteExecutionBlueprintService
             \is_array($block['execution_script']['feature_points'] ?? null) ? $block['execution_script']['feature_points'] : []
         ), static fn(string $value): bool => $value !== ''));
         if ($featurePoints !== []) {
-            return \implode($this->isEnglishLocale($locale) ? '; ' : '；', \array_slice($featurePoints, 0, 3));
+            return \implode('; ', \array_slice($featurePoints, 0, 3));
         }
 
         return \trim((string)($block['implementation_detail'] ?? $block['implementation_note'] ?? $block['goal'] ?? ''));
@@ -16090,43 +15640,43 @@ final class AiSiteExecutionBlueprintService
         $planBlocks = $this->normalizePlanBlocks(\is_array($planJson['plan_blocks'] ?? null) ? $planJson['plan_blocks'] : []);
 
         if ($pages === [] && $planBlocks !== []) {
-            return $this->renderMarkdownFromPlanBlocks($planBlocks, $locale, $site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点'));
+            return $this->renderMarkdownFromPlanBlocks($planBlocks, $locale, $site !== '' ? $site : 'Untitled site');
         }
 
         $lines = [];
-        $lines[] = '# ' . (string)($labels['title'] ?? ($isEn ? 'Stage 1 Content Plan' : '阶段一内容方案'));
+        $lines[] = '# ' . (string)($labels['title'] ?? 'Stage 1 Content Plan');
         $lines[] = '';
-        $lines[] = '- ' . (string)($labels['site'] ?? ($isEn ? 'Site' : '站点')) . ': ' . ($site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点'));
-        $lines[] = '- ' . (string)($labels['summary'] ?? ($isEn ? 'Summary' : '摘要')) . ': ' . ($summary !== '' ? $summary : ($isEn ? 'Pending details' : '待补充站点说明'));
-        $lines[] = '- ' . ($isEn ? 'Theme Style' : '主题风格') . ': ' . ($themeName !== '' ? $themeName : 'Plan-Driven Hybrid');
-        $lines[] = '- ' . ($isEn ? 'Palette' : '色盘') . ': ' . ($paletteName !== '' ? $paletteName : 'Ocean Slate');
-        $lines[] = '- ' . ($isEn ? 'Page Count' : '页面数量') . ': ' . (string)\count($pageTypes);
+        $lines[] = '- ' . (string)($labels['site'] ?? 'Site') . ': ' . ($site !== '' ? $site : 'Untitled site');
+        $lines[] = '- ' . (string)($labels['summary'] ?? 'Summary') . ': ' . ($summary !== '' ? $summary : 'Pending details');
+        $lines[] = '- Theme Style: ' . ($themeName !== '' ? $themeName : 'Plan-Driven Hybrid');
+        $lines[] = '- Palette: ' . ($paletteName !== '' ? $paletteName : 'Ocean Slate');
+        $lines[] = '- Page Count: ' . (string)\count($pageTypes);
         $lines[] = '';
         if ($requirementExpansion !== []) {
             $expandedBrief = \trim((string)($requirementExpansion['expanded_brief'] ?? ''));
             $planningSummary = \trim((string)($requirementExpansion['planning_summary'] ?? ''));
             $siteGoal = \trim((string)($requirementExpansion['site_goal'] ?? ''));
-            $lines[] = '## ' . ($isEn ? 'Expanded Requirement Plan' : '需求拓展规划');
+            $lines[] = '## Expanded Requirement Plan';
             if ($expandedBrief !== '') {
-                $lines[] = '- ' . ($isEn ? 'Expanded Brief' : '拓展说明') . ': ' . $expandedBrief;
+                $lines[] = '- Expanded Brief: ' . $expandedBrief;
             }
             if ($planningSummary !== '') {
-                $lines[] = '- ' . ($isEn ? 'Planning Summary' : '规划说明') . ': ' . $planningSummary;
+                $lines[] = '- Planning Summary: ' . $planningSummary;
             }
             if ($siteGoal !== '') {
-                $lines[] = '- ' . ($isEn ? 'Site Goal' : '站点目标') . ': ' . $siteGoal;
+                $lines[] = '- Site Goal: ' . $siteGoal;
             }
             $lines[] = '';
         }
-        $lines[] = '## ' . (string)($labels['site_structure'] ?? ($isEn ? 'Site Structure' : '全站结构'));
+        $lines[] = '## ' . (string)($labels['site_structure'] ?? 'Site Structure');
         foreach ($pageTypes as $pageType) {
             $lines[] = '- ' . (string)$pageType;
         }
         $lines[] = '';
-        $lines[] = '## ' . (string)($labels['shared_global_plan'] ?? ($isEn ? 'Shared Global Plan' : '全站共享规划'));
-        $lines[] = '- ' . ($isEn ? 'Header Navigation' : 'Header 导航') . ': ' . $this->buildLinkSummary(\is_array($navigationPlan['header_items'] ?? null) ? $navigationPlan['header_items'] : [], $locale);
-        $lines[] = '- ' . ($isEn ? 'Footer Sections' : 'Footer 分组') . ': ' . $this->buildLinkSummary(\is_array($footerPlan['featured'] ?? null) ? $footerPlan['featured'] : [], $locale);
-        $lines[] = '- ' . ($isEn ? 'Footer Policies' : 'Footer 政策') . ': ' . $this->buildLinkSummary(\is_array($footerPlan['policies'] ?? null) ? $footerPlan['policies'] : [], $locale);
+        $lines[] = '## ' . (string)($labels['shared_global_plan'] ?? 'Shared Global Plan');
+        $lines[] = '- Header Navigation: ' . $this->buildLinkSummary(\is_array($navigationPlan['header_items'] ?? null) ? $navigationPlan['header_items'] : [], $locale);
+        $lines[] = '- Footer Sections: ' . $this->buildLinkSummary(\is_array($footerPlan['featured'] ?? null) ? $footerPlan['featured'] : [], $locale);
+        $lines[] = '- Footer Policies: ' . $this->buildLinkSummary(\is_array($footerPlan['policies'] ?? null) ? $footerPlan['policies'] : [], $locale);
         foreach ($sharedBlocks as $sharedBlock) {
             if (!\is_array($sharedBlock)) {
                 continue;
@@ -16134,30 +15684,30 @@ final class AiSiteExecutionBlueprintService
             $sharedLabel = \trim((string)($sharedBlock['label'] ?? $sharedBlock['component'] ?? $sharedBlock['block_key'] ?? ''));
             $sharedGoal = \trim((string)($sharedBlock['goal'] ?? ''));
             $sharedOrder = (int)($sharedBlock['sort_order'] ?? 0);
-            $lines[] = '- ' . ($isEn ? 'Shared Block' : '共享块') . ' #' . (string)$sharedOrder . ': ' . ($sharedLabel !== '' ? $sharedLabel : 'shared') . ($sharedGoal !== '' ? (' - ' . $sharedGoal) : '');
+            $lines[] = '- Shared Block #' . (string)$sharedOrder . ': ' . ($sharedLabel !== '' ? $sharedLabel : 'shared') . ($sharedGoal !== '' ? (' - ' . $sharedGoal) : '');
         }
-        $lines[] = '- ' . ($isEn ? 'SEO Core Strategy' : 'SEO 核心策略') . ': ' . \trim((string)($seoStrategy['core_intent'] ?? ($isEn ? 'not set' : '待补充')));
+        $lines[] = '- SEO Core Strategy: ' . \trim((string)($seoStrategy['core_intent'] ?? 'not set'));
         $lines[] = '';
-        $lines[] = '## ' . (string)($labels['page_details'] ?? ($isEn ? 'Page And Block Content Details' : '页面与区块内容细化'));
+        $lines[] = '## ' . (string)($labels['page_details'] ?? 'Page And Block Content Details');
 
         foreach ($pageTypes as $pageType) {
             $pageType = (string)$pageType;
             $pagePlan = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
             if ($pagePlan === []) {
                 $lines[] = '### ' . $pageType;
-                $lines[] = $isEn ? '- Missing page plan.' : '- 暂无页面方案。';
+                $lines[] = '- Missing page plan.';
                 $lines[] = '';
                 continue;
             }
 
             $lines[] = '### ' . ((string)($pagePlan['page_label'] ?? $pageType));
-            $lines[] = '- ' . ($isEn ? 'Page Goal' : '页面目标') . ': ' . \trim((string)($pagePlan['page_goal'] ?? ''));
+            $lines[] = '- Page Goal: ' . \trim((string)($pagePlan['page_goal'] ?? ''));
             $themeAlignmentSummary = \trim((string)($pagePlan['theme_alignment_summary'] ?? ''));
             if ($themeAlignmentSummary !== '') {
-                $lines[] = '- ' . ($isEn ? 'Theme Alignment' : '主题遵守说明') . ': ' . $themeAlignmentSummary;
+                $lines[] = '- Theme Alignment: ' . $themeAlignmentSummary;
             }
-            $lines[] = '- ' . ($isEn ? 'Primary Keywords' : '主关键词') . ': ' . $this->buildKeywordSummary(\is_array($pagePlan['primary_keywords'] ?? null) ? $pagePlan['primary_keywords'] : [], $locale);
-            $lines[] = '- ' . ($isEn ? 'Secondary Keywords' : '次关键词') . ': ' . $this->buildKeywordSummary(\is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : [], $locale);
+            $lines[] = '- Primary Keywords: ' . $this->buildKeywordSummary(\is_array($pagePlan['primary_keywords'] ?? null) ? $pagePlan['primary_keywords'] : [], $locale);
+            $lines[] = '- Secondary Keywords: ' . $this->buildKeywordSummary(\is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : [], $locale);
             $lines[] = '';
 
             foreach ($this->sortStageOneBlocksForPlanBookMarkdown(\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []) as $block) {
@@ -16166,12 +15716,12 @@ final class AiSiteExecutionBlueprintService
                 }
                 $blockTitle = \trim((string)($block['section_code'] ?? $block['block_key'] ?? 'block'));
                 $lines[] = '#### ' . $blockTitle;
-                $lines[] = '- ' . ($isEn ? 'Goal' : '区块目标') . ': ' . \trim((string)($block['goal'] ?? ''));
+                $lines[] = '- Goal: ' . \trim((string)($block['goal'] ?? ''));
                 $blockImplementationFocus = $this->buildBlockImplementationFocus($block, $locale);
                 if ($blockImplementationFocus !== '') {
-                    $lines[] = '- ' . ($isEn ? 'Implementation Focus' : '落地重点') . ': ' . $blockImplementationFocus;
+                    $lines[] = '- Implementation Focus: ' . $blockImplementationFocus;
                 }
-                $lines[] = '- ' . ($isEn ? 'Content' : '区块内容') . ': ' . $this->buildBlockContentSummary($block);
+                $lines[] = '- Content: ' . $this->buildBlockContentSummary($block);
 
                 $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
                 foreach ($fieldPlan as $field) {
@@ -16341,16 +15891,16 @@ final class AiSiteExecutionBlueprintService
                 'block_id' => 'plan_header_001',
                 'region' => 'header',
                 'type' => 'title',
-                'title' => $isEn ? 'Site Blueprint Header' : '站点方案头部',
-                'content' => ($site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点')) . ' - ' . ($summary !== '' ? $summary : ($isEn ? 'Blueprint overview' : '方案总览')),
+                'title' => 'Site Blueprint Header',
+                'content' => ($site !== '' ? $site : 'Untitled site') . ' - ' . ($summary !== '' ? $summary : 'Blueprint overview'),
                 'items' => [],
             ],
             [
                 'block_id' => 'plan_background_001',
                 'region' => 'body',
                 'type' => 'background',
-                'title' => $isEn ? 'Planning Background' : '方案背景',
-                'content' => $summary !== '' ? $summary : ($isEn ? 'Use selected page types and conversion goals as baseline.' : '以已选页面类型与转化目标作为方案基线。'),
+                'title' => 'Planning Background',
+                'content' => $summary !== '' ? $summary : 'Use selected page types and conversion goals as baseline.',
                 'items' => [
                     'header_navigation' => $headerItems,
                     'footer_policies' => $footerPolicies,
@@ -16360,75 +15910,20 @@ final class AiSiteExecutionBlueprintService
                 'block_id' => 'plan_catalog_001',
                 'region' => 'catalog',
                 'type' => 'content_catalog',
-                'title' => $isEn ? 'Page Block Catalog' : '页面区块目录',
-                'content' => $isEn ? 'Implementation-ready block catalog for the virtual-theme build.' : '供虚拟主题构建使用的页面区块目录。',
+                'title' => 'Page Block Catalog',
+                'content' => 'Implementation-ready block catalog for the virtual-theme build.',
                 'items' => $contentItems,
             ],
             [
                 'block_id' => 'plan_footer_001',
                 'region' => 'footer',
                 'type' => 'summary',
-                'title' => $isEn ? 'Blueprint Tail' : '方案结尾',
-                'content' => $isEn ? 'This blueprint is ready for virtual-theme build execution.' : '当前方案已经可以进入虚拟主题构建执行。',
+                'title' => 'Blueprint Tail',
+                'content' => 'This blueprint is ready for virtual-theme build execution.',
                 'items' => [],
             ],
         ];
 
-        $isEn = $this->isEnglishLocale($locale);
-        $site = \trim((string)($planJson['site_strategy']['site_display_name'] ?? ''));
-        $summary = \trim((string)($planJson['site_strategy']['summary'] ?? ''));
-        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
-        $headerItems = \is_array($planJson['navigation_plan']['header_items'] ?? null) ? $planJson['navigation_plan']['header_items'] : [];
-        $footerPolicies = \is_array($planJson['footer_plan']['policies'] ?? null) ? $planJson['footer_plan']['policies'] : [];
-        $contentItems = [];
-        foreach ($pages as $pageType => $pagePlan) {
-            if (!\is_array($pagePlan)) {
-                continue;
-            }
-            $contentItems[] = [
-                'title' => (string)$pageType,
-                'goal' => (string)($pagePlan['page_goal'] ?? ''),
-                'blocks' => \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [],
-            ];
-        }
-
-        return [
-            [
-                'block_id' => 'plan_header_001',
-                'region' => 'header',
-                'type' => 'title',
-                'title' => $isEn ? 'Site Blueprint Header' : '????',
-                'content' => ($site !== '' ? $site : ($isEn ? 'Untitled site' : '?????')) . ' - ' . ($summary !== '' ? $summary : ($isEn ? 'Blueprint overview' : '????')),
-                'items' => [],
-            ],
-            [
-                'block_id' => 'plan_background_001',
-                'region' => 'body',
-                'type' => 'background',
-                'title' => $isEn ? 'Planning Background' : '????',
-                'content' => $summary !== '' ? $summary : ($isEn ? 'Use selected page types and conversion goals as baseline.' : '???????????????????'),
-                'items' => [
-                    'header_navigation' => $headerItems,
-                    'footer_policies' => $footerPolicies,
-                ],
-            ],
-            [
-                'block_id' => 'plan_catalog_001',
-                'region' => 'catalog',
-                'type' => 'content_catalog',
-                'title' => $isEn ? 'Page Block Catalog' : '??????',
-                'content' => $isEn ? 'Implementation-ready block catalog for the virtual-theme build.' : '用于虚拟主题构建的区块目录。',
-                'items' => $contentItems,
-            ],
-            [
-                'block_id' => 'plan_footer_001',
-                'region' => 'footer',
-                'type' => 'summary',
-                'title' => $isEn ? 'Blueprint Tail' : '????',
-                'content' => $isEn ? 'This blueprint is ready for virtual-theme build execution.' : '该方案已可直接进入虚拟主题构建执行。',
-                'items' => [],
-            ],
-        ];
     }
 
     /**
@@ -16438,9 +15933,9 @@ final class AiSiteExecutionBlueprintService
     {
         $isEn = $this->isEnglishLocale($locale);
         $lines = [];
-        $lines[] = '# ' . ($isEn ? 'Single-Stage Content Plan' : '单阶段内容方案');
+        $lines[] = '# Single-Stage Content Plan';
         $lines[] = '';
-        $lines[] = '- ' . ($isEn ? 'Site' : '站点') . ': ' . ($siteName !== '' ? $siteName : ($isEn ? 'Untitled site' : '未命名站点'));
+        $lines[] = '- Site: ' . ($siteName !== '' ? $siteName : 'Untitled site');
         $lines[] = '';
 
         foreach ($planBlocks as $block) {
@@ -16452,16 +15947,16 @@ final class AiSiteExecutionBlueprintService
             $type = \trim((string)($block['type'] ?? 'section'));
             $region = \trim((string)($block['region'] ?? 'body'));
             $content = \trim((string)($block['content'] ?? ''));
-            $lines[] = '## ' . ($title !== '' ? $title : ($isEn ? 'Block' : '区块'));
-            $lines[] = '- ' . ($isEn ? 'Block ID' : '区块 ID') . ': ' . ($blockId !== '' ? $blockId : '-');
-            $lines[] = '- ' . ($isEn ? 'Region' : '区域') . ': ' . $region;
-            $lines[] = '- ' . ($isEn ? 'Type' : '类型') . ': ' . $type;
+            $lines[] = '## ' . ($title !== '' ? $title : 'Block');
+            $lines[] = '- Block ID: ' . ($blockId !== '' ? $blockId : '-');
+            $lines[] = '- Region: ' . $region;
+            $lines[] = '- Type: ' . $type;
             if ($content !== '') {
-                $lines[] = '- ' . ($isEn ? 'Content' : '内容') . ': ' . $content;
+                $lines[] = '- Content: ' . $content;
             }
             $items = \is_array($block['items'] ?? null) ? $block['items'] : [];
             foreach ($items as $key => $item) {
-                $label = \is_string($key) && $key !== '' ? $key : ($isEn ? 'Item' : '项目');
+                $label = \is_string($key) && $key !== '' ? $key : 'Item';
                 $value = \is_scalar($item) ? (string)$item : ((string)(\json_encode($item, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: ''));
                 $lines[] = '- ' . $label . ': ' . $value;
             }
@@ -16509,7 +16004,7 @@ final class AiSiteExecutionBlueprintService
     {
         $isEn = $this->isEnglishLocale($locale);
         if ($items === []) {
-            return $isEn ? 'none' : '无';
+            return 'none';
         }
         $parts = [];
         foreach ($items as $item) {
@@ -16524,26 +16019,8 @@ final class AiSiteExecutionBlueprintService
             }
         }
 
-        return $parts !== [] ? \implode($isEn ? ', ' : '、', $parts) : ($isEn ? 'none' : '无');
+        return $parts !== [] ? \implode(', ', $parts) : 'none';
 
-        $isEn = $this->isEnglishLocale($locale);
-        if ($items === []) {
-            return $isEn ? 'none' : '无';
-        }
-        $parts = [];
-        foreach ($items as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
-            $label = \trim((string)($item['label'] ?? $item['type'] ?? ''));
-            $href = \trim((string)($item['href'] ?? ''));
-            $parts[] = $href !== '' ? ($label . '(' . $href . ')') : $label;
-            if (\count($parts) >= 8) {
-                break;
-            }
-        }
-
-        return $parts !== [] ? \implode($isEn ? ', ' : '、', $parts) : ($isEn ? 'none' : '无');
     }
 
     /**
@@ -16557,82 +16034,14 @@ final class AiSiteExecutionBlueprintService
             $keywords
         ), static fn(string $value): bool => $value !== ''));
         if ($normalized === []) {
-            return $isEn ? 'none' : '无';
+            return 'none';
         }
 
-        return \implode($isEn ? ', ' : '、', \array_slice($normalized, 0, 8));
-
-        $isEn = $this->isEnglishLocale($locale);
-        $normalized = \array_values(\array_filter(\array_map(
-            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
-            $keywords
-        ), static fn(string $value): bool => $value !== ''));
-        if ($normalized === []) {
-            return $isEn ? 'none' : '无';
-        }
-        return \implode($isEn ? ', ' : '、', \array_slice($normalized, 0, 8));
-    }
-
-    /**
-     * @param list<array<string, mixed>> $fieldPlan
-     */
-    private function buildFieldSampleSummary(array $fieldPlan, string $locale = ''): string
-    {
-        $isEn = $this->isEnglishLocale($locale);
-        $parts = [];
-        foreach ($fieldPlan as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
-            $field = \trim((string)($item['field'] ?? ''));
-            if ($field === '') {
-                continue;
-            }
-            $sample = \trim((string)($item['sample'] ?? ''));
-            if ($sample === '') {
-                continue;
-            }
-            $parts[] = $field . '=>' . $sample;
-            if (\count($parts) >= 5) {
-                break;
-            }
-        }
-
-        return $parts !== [] ? \implode($isEn ? '; ' : '；', $parts) : ($isEn ? 'pending field samples' : '待补充字段示例');
-
-        $isEn = $this->isEnglishLocale($locale);
-        $parts = [];
-        foreach ($fieldPlan as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
-            $field = \trim((string)($item['field'] ?? ''));
-            if ($field === '') {
-                continue;
-            }
-            $sample = \trim((string)($item['sample'] ?? ''));
-            if ($sample === '') {
-                continue;
-            }
-            $parts[] = $field . '=>' . $sample;
-            if (\count($parts) >= 5) {
-                break;
-            }
-        }
-        return $parts !== [] ? \implode($isEn ? '; ' : '；', $parts) : ($isEn ? 'pending field samples' : '待补充字段示例');
+        return \implode(', ', \array_slice($normalized, 0, 8));
     }
 
     private function resolvePageGoal(string $pageType, string $pageLabel, string $locale = ''): string
     {
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($pageType) {
-                Page::TYPE_HOME => '承接主关键词、说明核心价值，并把用户带到下一步动作。',
-                Page::TYPE_ABOUT => '解释品牌背景、能力边界和可信依据，提升继续了解意愿。',
-                Page::TYPE_CONTACT => '降低咨询门槛，快速收集有效线索。',
-                default => $pageLabel . ' 清楚呈现访客最关心的信息、可信依据和继续操作路径。',
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($pageType) {
                 Page::TYPE_HOME => 'Capture core intent, explain value, and surface primary conversion actions.',
@@ -16646,25 +16055,10 @@ final class AiSiteExecutionBlueprintService
                 default => $pageLabel . ' gives visitors specific context, useful proof, and a clear route to continue.',
             };
         }
-        return match ($pageType) {
-            Page::TYPE_HOME => '承接主关键词、首屏价值和关键转化入口。',
-            Page::TYPE_ABOUT => '解释品牌背景与能力边界，建立信任。',
-            Page::TYPE_CONTACT => '降低咨询门槛，收集有效线索。',
-            default => $pageLabel . ' 清楚呈现访客最关心的信息、可信依据和继续操作路径。',
-        };
     }
 
     private function resolvePageWhy(string $pageType, string $pageLabel, string $locale = ''): string
     {
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($pageType) {
-                Page::TYPE_HOME => '首页作为全站主要入口，需要统一价值叙事、导航分发和转化动作。',
-                Page::TYPE_ABOUT => '关于页用来补充品牌说明与信任依据，帮助用户继续判断。',
-                Page::TYPE_CONTACT => '联系页用来承接咨询并缩短转化路径。',
-                default => $pageLabel . ' 用于补足站点结构完整性与长尾关键词覆盖。',
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($pageType) {
                 Page::TYPE_HOME => 'Home is the core traffic entry and must unify value narrative and navigation.',
@@ -16673,12 +16067,6 @@ final class AiSiteExecutionBlueprintService
                 default => $pageLabel . ' completes site structure and supports long-tail search coverage.',
             };
         }
-        return match ($pageType) {
-            Page::TYPE_HOME => '首页作为全站流量主入口，需要统一价值叙事与导航分发。',
-            Page::TYPE_ABOUT => '关于页用于增强可信度并提升转化决策效率。',
-            Page::TYPE_CONTACT => '联系页用于承接咨询和售前沟通，缩短转化路径。',
-            default => $pageLabel . ' 用于补足站点结构完整性与长尾关键词覆盖。',
-        };
     }
 
     /**
@@ -16698,18 +16086,18 @@ final class AiSiteExecutionBlueprintService
      */
     private function buildSecondaryKeywords(string $pageType, string $pageLabel): array
     {
-        $keywords = [$pageLabel . ' 指南', $pageLabel . ' 常见问题'];
+        $keywords = [$pageLabel . ' 鎸囧崡', $pageLabel . ' 甯歌闂'];
         if ($pageType === Page::TYPE_HOME) {
-            $keywords[] = '品牌介绍';
-            $keywords[] = '核心卖点';
+            $keywords[] = '鍝佺墝浠嬬粛';
+            $keywords[] = '鏍稿績鍗栫偣';
         }
 
         return \array_values(\array_unique($keywords));
 
-        $keywords = [$pageLabel . ' 指南', $pageLabel . ' 常见问题'];
+        $keywords = [$pageLabel . ' 鎸囧崡', $pageLabel . ' 甯歌闂'];
         if ($pageType === Page::TYPE_HOME) {
-            $keywords[] = '品牌介绍';
-            $keywords[] = '核心优势';
+            $keywords[] = '鍝佺墝浠嬬粛';
+            $keywords[] = '鏍稿績浼樺娍';
         }
 
         return \array_values(\array_unique($keywords));
@@ -16717,15 +16105,6 @@ final class AiSiteExecutionBlueprintService
 
     private function resolveBlockGoal(string $template, string $pageGoal, string $locale = ''): string
     {
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($template) {
-                'hero' => '在首屏快速解释价值并引导主动作。',
-                'cta' => '聚焦单一动作，降低用户决策成本。',
-                'features' => '把能力亮点拆成可快速浏览的结构化内容。',
-                default => $pageGoal,
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($template) {
                 'hero' => 'Explain value quickly above the fold and drive a primary action.',
@@ -16734,24 +16113,11 @@ final class AiSiteExecutionBlueprintService
                 default => $pageGoal,
             };
         }
-        return match ($template) {
-            'hero' => '在首屏快速解释价值并引导关键动作。',
-            'cta' => '聚焦单一动作，降低用户决策成本。',
-            'features' => '结构化说明能力点，增强对比与理解。',
-            default => $pageGoal,
-        };
+        return $pageGoal;
     }
 
     private function resolveLayoutRule(string $template, string $locale = ''): string
     {
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($template) {
-                'hero' => '首屏优先双栏或居中布局，让标题与主 CTA 同屏出现。',
-                'features' => '采用卡片栅格布局，便于快速扫读。',
-                default => '移动端单列优先，桌面端按内容密度扩展。',
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($template) {
                 'hero' => 'Prefer two-column or centered above-the-fold layout with headline and CTA visible together.',
@@ -16759,32 +16125,18 @@ final class AiSiteExecutionBlueprintService
                 default => 'Mobile-first single column, then expand by content density on desktop.',
             };
         }
-        return match ($template) {
-            'hero' => '首屏优先双栏或居中布局，让标题与 CTA 同屏出现。',
-            'features' => '卡片栅格布局，保证扫读效率。',
-            default => '移动端单列优先，桌面端按内容密度扩展。',
-        };
+        return 'Mobile-first single column, then expand by content density on desktop.';
     }
 
     private function resolveResponsiveRule(string $template, string $locale = ''): string
     {
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($template) {
-                'hero', 'cta' => '移动端优先保留标题与主按钮，次级说明折叠到后续区域。',
-                default => '断点下按单列堆叠，保证阅读顺序与触达效率。',
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($template) {
                 'hero', 'cta' => 'On mobile, keep headline and primary CTA visible first; collapse secondary details.',
                 default => 'Stack to single column on small screens to preserve reading order.',
             };
         }
-        return match ($template) {
-            'hero', 'cta' => '移动端优先保留标题与主按钮，次级说明折叠到后续区域。',
-            default => '断点下按单列堆叠，保证阅读顺序与触达效率。',
-        };
+        return 'Stack to single column on small screens to preserve reading order.';
     }
 
     /**
@@ -16918,17 +16270,7 @@ final class AiSiteExecutionBlueprintService
             };
         }
 
-        return match ($field) {
-            'title' => '作为区块主标题直接上屏，优先让客户一眼看懂这块要传达什么。',
-            'subtitle' => '放在标题下方补充关键信息，建议保持 1 行到 2 行的可读长度。',
-            'description' => '用 1 到 2 句补充场景、收益或信任信息，避免空泛口号。',
-            'button_text' => '按钮文案用动作词开头，并与本区块承接的下一步行为保持一致。',
-            'button_link' => '链接目标与按钮文案一一对应，可直接作为锚点或跳转地址实施。',
-            'image' => $preset === 'hero'
-                ? '主视觉需要描述清楚画面内容，方便设计出图时同时保留标题和主 CTA 的可见区域。'
-                : '这里直接写要呈现的画面内容或替换位要求，方便后续设计与素材执行。',
-            default => $sectionName . ' 需要该字段来承接“' . $pageGoal . '”这个页面目标。',
-        };
+        return $sectionName . ' needs this field to support goal "' . $pageGoal . '".';
     }
 
     /**
@@ -17154,7 +16496,6 @@ final class AiSiteExecutionBlueprintService
         }
 
         foreach ([
-            '围绕', '说明核心价值', '首页先讲清', '阶段一仅给方向', '列出 2-4', '标题围绕', '指定标题字体',
             'block direction', 'section title', 'supporting subtitle text',
             'list 2-4', 'specify heading font', 'describe the overall visual tone', 'use concise readable paragraphs',
             'first-screen promise', 'lead visitors to the next step',
@@ -17172,7 +16513,7 @@ final class AiSiteExecutionBlueprintService
             if ($normalized === $sectionNormalized || $normalized === $pageNormalized) {
                 return true;
             }
-            if (\preg_match('/^(hero|feature|features|process|cta|contact|content|section|block|home|about|contact page|首页|关于我们|联系我们)$/iu', $normalized) === 1) {
+            if (\preg_match('/^(hero|feature|features|process|cta|contact|content|section|block|home|about|contact page|棣栭〉|鍏充簬鎴戜滑|鑱旂郴鎴戜滑)$/iu', $normalized) === 1) {
                 return true;
             }
         }
@@ -17191,20 +16532,6 @@ final class AiSiteExecutionBlueprintService
     ): string
     {
         $summaryCue = $this->buildBriefDrivenSnippet($siteSummary, $siteName, $locale, 18, 42);
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($preset) {
-                'hero' => $summaryCue !== '' ? ($siteName . '：' . $summaryCue) : ('欢迎来到 ' . $siteName),
-                'features' => $summaryCue !== '' ? ('热门内容：' . $summaryCue) : ('为什么用户会继续选择 ' . $siteName),
-                'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载' ? '三步完成下载' : '三步快速开始',
-                'cta' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载' ? '准备开始下载了吗？' : '准备好进入下一步了吗？',
-                'brand' => '认识一下 ' . $siteName,
-                'trust' => '为什么可以放心了解 ' . $siteName,
-                'contact_form' => '告诉我们你的需求',
-                'legal' => $pageLabel !== '' ? $pageLabel : '政策说明',
-                default => $pageLabel !== '' ? ($pageLabel . ' 重点内容') : ($sectionName !== '' ? $sectionName : ($siteName . ' 重点内容')),
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
                 'hero' => $summaryCue !== '' ? ($siteName . ': ' . $summaryCue) : ('Welcome to ' . $siteName),
@@ -17243,17 +16570,6 @@ final class AiSiteExecutionBlueprintService
     ): string
     {
         $summaryLine = $this->buildBriefDrivenSnippet($siteSummary, $siteName, $locale, 42, 96);
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($preset) {
-                'hero' => $summaryLine !== '' ? $summaryLine : ('欢迎来到 ' . $siteName),
-                'features' => $summaryLine !== '' ? ('重点包括：' . $summaryLine) : ('这里整理最值得先看的核心亮点与入口。'),
-                'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载'
-                    ? '选择游戏、查看说明、完成下载，流程一页看清。'
-                    : '浏览重点内容、确认入口、完成下一步动作，流程一页看清。',
-                default => '',
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
                 'hero' => $summaryLine !== '' ? $summaryLine : ('Welcome to ' . $siteName),
@@ -17284,29 +16600,6 @@ final class AiSiteExecutionBlueprintService
     ): string
     {
         $summaryLine = $this->buildBriefDrivenSnippet($siteSummary, $siteName, $locale, 64, 140);
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($preset) {
-                'hero' => $summaryLine !== ''
-                    ? ($siteName . ' 聚焦 ' . $summaryLine . '，让访客一进首页就能看到重点内容与可执行入口。')
-                    : ('欢迎来到 ' . $siteName . '，这里会先展示最值得了解的内容和清晰的下一步入口。'),
-                'features' => $summaryLine !== ''
-                    ? ('围绕 ' . $summaryLine . '，这里会把热门内容、核心亮点和常见关心点整理成易读卡片。')
-                    : '这里会把热门内容、核心亮点和常见关心点整理成易读卡片，方便快速比较。',
-                'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载'
-                    ? '先看推荐内容，再确认版本与说明，最后直接进入下载入口，减少首次操作的犹豫。'
-                    : '先看重点内容，再确认适合自己的入口，最后进入咨询、联系或继续了解的下一步。',
-                'cta' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载'
-                    ? '点击后可直接进入下载入口，同时保留必要说明，方便用户马上开始。'
-                    : '点击后直接进入当前页面最重要的下一步，避免用户在多个入口之间反复选择。',
-                'brand', 'trust' => $summaryLine !== ''
-                    ? ($siteName . ' 围绕 ' . $summaryLine . ' 持续组织内容与服务，让首次访问也能更快建立信任。')
-                    : ('通过品牌背景、支持方式、服务说明和信任细节，帮助访客更安心地继续了解。'),
-                'contact_form' => '只收集必要联系信息与需求说明，让用户可以更快发起沟通。',
-                'legal' => '把关键政策信息拆成可读的小节，方便用户快速找到相关规则。',
-                default => '把页面目标转成访客可以直接看到的实际内容：' . $pageGoal,
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
                 'hero' => $summaryLine !== ''
@@ -17345,14 +16638,6 @@ final class AiSiteExecutionBlueprintService
     private function resolveDefaultButtonText(string $preset, string $pageGoal, string $siteSummary = '', string $locale = ''): string
     {
         $primaryAction = $this->inferPrimaryActionFromSummary($siteSummary, $locale);
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($preset) {
-                'hero' => $primaryAction !== '' ? $primaryAction : '立即开始',
-                'cta', 'contact_form' => $primaryAction !== '' ? $primaryAction : '立即咨询',
-                default => '了解更多',
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
                 'hero' => $primaryAction !== '' ? $primaryAction : 'Start Now',
@@ -17361,24 +16646,12 @@ final class AiSiteExecutionBlueprintService
             };
         }
 
-        return match ($preset) {
-            'hero' => '????',
-            'cta', 'contact_form' => '????',
-            default => '????',
-        };
+        return $primaryAction !== '' ? $primaryAction : 'Learn More';
     }
 
     private function resolveDefaultImageRule(string $preset, string $pageLabel, string $siteName, string $siteSummary = '', string $locale = ''): string
     {
         $summaryCue = $this->buildBriefDrivenSnippet($siteSummary, $siteName, $locale, 28, 72);
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($preset) {
-                'hero' => '首屏主视觉建议：展示“' . ($summaryCue !== '' ? $summaryCue : $siteName) . '”相关场景、界面或核心内容，并确保标题与主 CTA 同屏可见。',
-                'brand', 'trust' => '信任素材建议：展示“' . ($summaryCue !== '' ? $summaryCue : $siteName) . '”相关团队、产品界面、合作标识或服务现场，并预留可替换物料位。',
-                default => '',
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
                 'hero' => 'Hero visual brief: show "' . ($summaryCue !== '' ? $summaryCue : $siteName) . '" through a scene, interface, or offer-focused visual while keeping the headline and primary CTA visible together.',
@@ -17387,11 +16660,7 @@ final class AiSiteExecutionBlueprintService
             };
         }
 
-        return match ($preset) {
-            'hero' => '???????????????????????? CTA?',
-            'brand', 'trust' => '??????????????????????',
-            default => '',
-        };
+        return '';
     }
 
     private function buildBriefDrivenSnippet(string $siteSummary, string $siteName, string $locale = '', int $zhLimit = 24, int $enLimit = 72): string
@@ -17404,14 +16673,14 @@ final class AiSiteExecutionBlueprintService
             return '';
         }
 
-        $summary = \trim($summary, " \t\n\r\0\x0B,.;:!?，。；：！？");
+        $summary = \trim($summary, " \t\n\r\0\x0B,.;:!?");
         if ($summary === '') {
             return '';
         }
 
         if ($siteName !== '' && \mb_stripos($summary, $siteName) !== false) {
             $summary = \trim(\str_replace($siteName, '', $summary));
-            $summary = \trim($summary, " \t\n\r\0\x0B,.;:!?，。；：！？");
+            $summary = \trim($summary, " \t\n\r\0\x0B,.;:!?");
         }
 
         if ($summary === '') {
@@ -17428,14 +16697,14 @@ final class AiSiteExecutionBlueprintService
             return '';
         }
 
-        if ($this->containsAny($summary, ['apk', '下载', 'download', 'install', '安装'])) {
-            return $this->isEnglishLocale($locale) ? 'Download Now' : '立即下载';
+        if ($this->containsAny($summary, ['apk', '涓嬭浇', 'download', 'install', '瀹夎'])) {
+            return $this->isEnglishLocale($locale) ? 'Download Now' : '绔嬪嵆涓嬭浇';
         }
-        if ($this->containsAny($summary, ['预约', '预订', 'booking', 'reserve'])) {
-            return $this->isEnglishLocale($locale) ? 'Book Now' : '立即预约';
+        if ($this->containsAny($summary, ['棰勭害', '棰勮', 'booking', 'reserve'])) {
+            return $this->isEnglishLocale($locale) ? 'Book Now' : '绔嬪嵆棰勭害';
         }
-        if ($this->containsAny($summary, ['咨询', '联系', '合作', '代理', '服务', 'solution', 'service', 'contact'])) {
-            return $this->isEnglishLocale($locale) ? 'Contact Us' : '立即咨询';
+        if ($this->containsAny($summary, ['鍜ㄨ', '鑱旂郴', '鍚堜綔', '浠ｇ悊', '鏈嶅姟', 'solution', 'service', 'contact'])) {
+            return $this->isEnglishLocale($locale) ? 'Contact Us' : '绔嬪嵆鍜ㄨ';
         }
 
         return '';
@@ -17443,16 +16712,6 @@ final class AiSiteExecutionBlueprintService
 
     private function buildExecutionFeaturePoints(string $preset, string $locale = ''): array
     {
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($preset) {
-                'hero' => ['首屏直接说清价值', '保留一个主 CTA', '补充信任或支持提示'],
-                'features' => ['拆出核心亮点', '保持内容可扫读', '支持用户快速比较'],
-                'process' => ['步骤表达清晰', '降低首次使用门槛', '引导继续推进'],
-                'cta' => ['只保留一个主动作', '说明点击后的收益'],
-                default => ['内容清晰可读', '服务页面目标', '让下一步动作可见'],
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
                 'hero' => ['Show core value immediately', 'Expose one primary CTA', 'Add trust or support hints'],
@@ -17481,17 +16740,17 @@ final class AiSiteExecutionBlueprintService
         if ($title !== '') {
             $points[] = $this->isEnglishLocale($locale)
                 ? ('Visible headline: ' . $this->clipText($title, 80))
-                : ('上屏标题：' . $this->clipText($title, 28));
+                : ('Visible headline: ' . $this->clipText($title, 80));
         }
         if ($description !== '') {
             $points[] = $this->isEnglishLocale($locale)
                 ? ('Support copy: ' . $this->clipText($description, 120))
-                : ('补充文案：' . $this->clipText($description, 44));
+                : ('Support copy: ' . $this->clipText($description, 120));
         }
         if ($ctaLabel !== '') {
             $points[] = $this->isEnglishLocale($locale)
                 ? ('Primary CTA label: ' . $ctaLabel)
-                : ('主 CTA 文案：' . $ctaLabel);
+                : ('Primary CTA label: ' . $ctaLabel);
         }
 
         return $points !== [] ? $points : $this->buildExecutionFeaturePoints($preset, $locale);
@@ -17502,7 +16761,7 @@ final class AiSiteExecutionBlueprintService
         $parts = \array_values(\array_filter([$title, $subtitle, $description], static fn(string $value): bool => \trim($value) !== ''));
         $copy = \implode(' ', $parts);
         if ($ctaLabel !== '') {
-            $copy .= ($copy !== '' ? ' ' : '') . ($this->isEnglishLocale($locale) ? ('CTA: ' . $ctaLabel . '.') : ('CTA：' . $ctaLabel . '。'));
+            $copy .= ($copy !== '' ? ' ' : '') . 'CTA: ' . $ctaLabel . '.';
         }
 
         return $copy;
@@ -17512,26 +16771,18 @@ final class AiSiteExecutionBlueprintService
     {
         return $this->isEnglishLocale($locale)
             ? 'Use a bold headline style with clean body text to keep hierarchy clear and conversion-focused.'
-            : '标题使用更强层级，正文保持清晰易读，让用户先看懂再行动。';
+            : 'Use a bold headline style with clean body text to keep hierarchy clear and conversion-focused.';
     }
 
     private function resolveExecutionStyleTone(string $preset, string $locale = ''): string
     {
         return $this->isEnglishLocale($locale)
             ? 'Professional, readable, and conversion-oriented; keep the palette aligned with the site-wide visual direction.'
-            : '整体保持专业、可信、可转化，并与全站视觉方向一致。';
+            : 'Professional, readable, and conversion-oriented; keep the palette aligned with the site-wide visual direction.';
     }
 
     private function resolveExecutionBackgroundDirection(string $preset, string $locale = ''): string
     {
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($preset) {
-                'hero' => '使用更强的背景层次或主视觉来承接首屏价值，但不能压过文字内容。',
-                'cta' => 'CTA 区域可使用强调色或深底形成明显分区。',
-                default => '使用安静背景承托内容，不要和正文争抢注意力。',
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
                 'hero' => 'Use a stronger background or visual layer to frame the first-screen value without overpowering the text.',
@@ -17540,23 +16791,11 @@ final class AiSiteExecutionBlueprintService
             };
         }
 
-        return match ($preset) {
-            'hero' => '???????????????????????????????',
-            'cta' => 'CTA ??????????????????????',
-            default => '?????????????????????',
-        };
+        return 'Use a calm background that supports readability and does not compete with the content.';
     }
 
     private function buildExecutionMediaAssets(string $preset, string $locale = ''): array
     {
-        if (!$this->isEnglishLocale($locale)) {
-            return match ($preset) {
-                'hero' => ['一张能承接首屏承诺的主视觉或产品图'],
-                'brand', 'trust' => ['团队、产品、场景图或信任标识素材'],
-                default => [],
-            };
-        }
-
         if ($this->isEnglishLocale($locale)) {
             return match ($preset) {
                 'hero' => ['Main visual or product shot to support the first-screen promise'],
@@ -17565,11 +16804,7 @@ final class AiSiteExecutionBlueprintService
             };
         }
 
-        return match ($preset) {
-            'hero' => ['?????????????????????'],
-            'brand', 'trust' => ['???????????????'],
-            default => [],
-        };
+        return [];
     }
 
     private function buildBlockContentSummary(array $block): string
@@ -17666,10 +16901,10 @@ final class AiSiteExecutionBlueprintService
     {
         $start = \max(0, $position - 100);
         $prefix = \mb_substr($haystack, $start, $position - $start);
-        $prefix = (string)\preg_replace('/^.*[.;!?。！？\r\n]/u', '', $prefix);
+        $prefix = (string)\preg_replace('/^.*[.;!?銆傦紒锛焅r\n]/u', '', $prefix);
 
         return \preg_match(
-            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|不是|非|勿|请勿)[^.;!?。！？\r\n]{0,100}$/iu',
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|绂佹|閬垮厤|涓嶈|涓嶅緱|鎺掗櫎|涓嶆槸|闈瀨鍕縷璇峰嬁)[^.;!?銆傦紒锛焅r\n]{0,100}$/iu',
             $prefix
         ) === 1;
     }
@@ -17729,7 +16964,7 @@ final class AiSiteExecutionBlueprintService
             return $text;
         }
 
-        return \mb_substr($text, 0, $maxLength) . '…';
+        return \mb_substr($text, 0, $maxLength) . '...';
     }
 
     private function slugify(string $text): string
@@ -17959,7 +17194,7 @@ final class AiSiteExecutionBlueprintService
             return $this->reorderDraftSharedPlanBlocks($scope, $orderedBlockKeys);
         }
 
-        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $structured = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null)
@@ -18084,7 +17319,7 @@ final class AiSiteExecutionBlueprintService
             return $this->mutateDraftSharedPlanBlock($scope, $action, $blockKey, $blockPatch);
         }
 
-        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $structured = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $pagePlans = \is_array($executionBlueprint['page_plans'] ?? null)
             ? $executionBlueprint['page_plans']
@@ -18416,7 +17651,7 @@ final class AiSiteExecutionBlueprintService
         string $blockKey = '',
         array $blockPatch = []
     ): array {
-        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $structured = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
         $mutatedComponent = '';
@@ -18731,7 +17966,7 @@ final class AiSiteExecutionBlueprintService
      */
     private function reorderDraftSharedPlanBlocks(array $scope, array $orderedBlockKeys): array
     {
-        $structured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
+        $structured = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $executionBlueprint = $this->resolveStageOneExecutionBlueprint($scope);
         $sharedComponents = $this->resolveStageOneSharedComponents($structured, $executionBlueprint);
         if (\count($sharedComponents) < 2) {
@@ -19105,11 +18340,11 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * T5: 方案 Markdown 章节完整性校验器
-     * 验证生成的方案 Markdown 是否包含所有必需章节
+     * T5: 鏂规 Markdown 绔犺妭瀹屾暣鎬ф牎楠屽櫒
+     * 楠岃瘉鐢熸垚鐨勬柟妗?Markdown 鏄惁鍖呭惈鎵€鏈夊繀闇€绔犺妭
      *
-     * @param string $markdown 方案 Markdown 文本
-     * @param string $locale 方案语言
+     * @param string $markdown 鏂规 Markdown 鏂囨湰
+     * @param string $locale 鏂规璇█
      * @return array{valid: bool, missing_sections: list<string>, warnings: list<string>}
      */
     public function validateMarkdownSections(string $markdown, string $locale = ''): array
@@ -19119,39 +18354,39 @@ final class AiSiteExecutionBlueprintService
         $missingSections = [];
         $warnings = [];
 
-        // 必须包含的章节（双语对照）。
+        // 蹇呴』鍖呭惈鐨勭珷鑺傦紙鍙岃瀵圭収锛夈€?
         $requiredSections = [
             'style_overview' => [
-                'zh' => ['风格总览', '主题风格', '风格概览'],
+                'zh' => ['Style Overview', 'Theme Style', 'style overview'],
                 'en' => ['Style Overview', 'Theme Style', 'style overview'],
             ],
             'palette' => [
-                'zh' => ['颜色色系', '色系', '调色板', '调色盘', '色彩'],
+                'zh' => ['Color Palette', 'Palette', 'color palette', 'color system'],
                 'en' => ['Color Palette', 'Palette', 'color palette', 'color system'],
             ],
             'header' => [
-                'zh' => ['Header 设计', '头部设计', '页头设计'],
+                'zh' => ['Header Design', 'header design'],
                 'en' => ['Header Design', 'header design'],
             ],
             'footer' => [
-                'zh' => ['Footer 设计', '底部设计', '页脚设计'],
+                'zh' => ['Footer Design', 'footer design'],
                 'en' => ['Footer Design', 'footer design'],
             ],
             'page_types_overview' => [
-                'zh' => ['页面类型设计', '页面设计总览', '全站结构'],
+                'zh' => ['Page Type Design', 'Page Design Overview', 'Site Structure'],
                 'en' => ['Page Type Design', 'Page Design Overview', 'Site Structure'],
             ],
             'page_block_details' => [
-                'zh' => ['页面与区块执行细化', '分页面块级设计', '区块设计'],
+                'zh' => ['Page And Block Execution Details', 'Block Details'],
                 'en' => ['Page And Block Execution Details', 'Block Details'],
             ],
             'execution_order' => [
-                'zh' => ['执行顺序', '任务蓝图摘要', '执行顺序与任务蓝图'],
+                'zh' => ['Execution Order', 'task blueprint'],
                 'en' => ['Execution Order', 'task blueprint'],
             ],
         ];
 
-        // 检查每一个必需章节。
+        // 妫€鏌ユ瘡涓€涓繀闇€绔犺妭銆?
         foreach ($requiredSections as $sectionKey => $sectionLabels) {
             $labels = $isEn ? $sectionLabels['en'] : $sectionLabels['zh'];
             $found = false;
@@ -19166,14 +18401,14 @@ final class AiSiteExecutionBlueprintService
             }
         }
 
-        // 检查是否包含页面覆盖清单。
-        if (\mb_stripos($markdown, '页面覆盖清单') === false
+        // 妫€鏌ユ槸鍚﹀寘鍚〉闈㈣鐩栨竻鍗曘€?
+        if (\mb_stripos($markdown, '椤甸潰瑕嗙洊娓呭崟') === false
             && \mb_stripos($markdown, 'Page Coverage') === false
             && \mb_stripos($markdown, 'Selected Pages') === false
         ) {
             $warnings[] = $isEn
                 ? 'Warning: Page coverage checklist not found.'
-                : '警告：未找到页面覆盖清单。';
+                : 'Warning: Page coverage checklist not found.';
         }
 
         return [
@@ -19184,11 +18419,11 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 检查方案 Markdown 是否包含指定页面类型的规划。
+     * 妫€鏌ユ柟妗?Markdown 鏄惁鍖呭惈鎸囧畾椤甸潰绫诲瀷鐨勮鍒掋€?
      *
-     * @param string $markdown 方案 Markdown
-     * @param list<string> $selectedPageTypes 用户选择的页面类型
-     * @param string $locale 方案语言
+     * @param string $markdown 鏂规 Markdown
+     * @param list<string> $selectedPageTypes 鐢ㄦ埛閫夋嫨鐨勯〉闈㈢被鍨?
+     * @param string $locale 鏂规璇█
      * @return array{valid: bool, missing_pages: list<string>, extra_pages: list<string>}
      */
     public function validatePageCoverage(string $markdown, array $selectedPageTypes, string $locale = ''): array
@@ -19198,19 +18433,19 @@ final class AiSiteExecutionBlueprintService
         $missingPages = [];
         $extraPages = [];
 
-        // 常见页面类型关键词映射。
+        // 甯歌椤甸潰绫诲瀷鍏抽敭璇嶆槧灏勩€?
         $pageTypeKeywords = [
-            'home_page' => ['首页', 'home page', 'homepage'],
-            'about_page' => ['关于页面', 'about', '关于我们'],
-            'contact_page' => ['联系页面', 'contact', '联系我们'],
-            'product_page' => ['产品页面', 'product', '产品列表'],
-            'blog_page' => ['博客页面', 'blog', '博客'],
-            'service_page' => ['服务页面', 'service', '服务'],
-            'privacy_page' => ['隐私政策', 'privacy'],
-            'terms_page' => ['服务条款', 'terms'],
+            'home_page' => ['棣栭〉', 'home page', 'homepage'],
+            'about_page' => ['鍏充簬椤甸潰', 'about', '鍏充簬鎴戜滑'],
+            'contact_page' => ['鑱旂郴椤甸潰', 'contact', '鑱旂郴鎴戜滑'],
+            'product_page' => ['浜у搧椤甸潰', 'product', '浜у搧鍒楄〃'],
+            'blog_page' => ['鍗氬椤甸潰', 'blog', '鍗氬'],
+            'service_page' => ['鏈嶅姟椤甸潰', 'service', '鏈嶅姟'],
+            'privacy_page' => ['闅愮鏀跨瓥', 'privacy'],
+            'terms_page' => ['鏈嶅姟鏉℃', 'terms'],
         ];
 
-        // 检查每一个已选页面是否有规划。
+        // 妫€鏌ユ瘡涓€涓凡閫夐〉闈㈡槸鍚︽湁瑙勫垝銆?
         foreach ($selectedPageTypes as $pageType) {
             $keywords = $pageTypeKeywords[$pageType] ?? [$pageType, \str_replace('_', ' ', $pageType)];
             $found = false;

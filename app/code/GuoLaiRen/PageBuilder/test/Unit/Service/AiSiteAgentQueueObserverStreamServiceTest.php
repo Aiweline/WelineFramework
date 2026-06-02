@@ -6,7 +6,7 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentQueueObserverHelperService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentQueueObserverStreamService;
-use GuoLaiRen\PageBuilder\Service\AiSiteQueueSnapshotService;
+use GuoLaiRen\PageBuilder\Service\AiSiteQueueStateService;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\Sse\SseWriter;
 
@@ -44,7 +44,7 @@ final class AiSiteAgentQueueObserverStreamServiceTest extends TestCase
     private function service(): AiSiteAgentQueueObserverStreamService
     {
         return new AiSiteAgentQueueObserverStreamService(
-            new AiSiteQueueSnapshotService(),
+            new AiSiteQueueStateService(),
             new AiSiteAgentQueueObserverHelperService()
         );
     }
