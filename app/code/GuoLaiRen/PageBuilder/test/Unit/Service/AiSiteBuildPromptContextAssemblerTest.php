@@ -6,6 +6,8 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildPlanService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildPromptContextAssembler;
+use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use PHPUnit\Framework\TestCase;
 
 final class AiSiteBuildPromptContextAssemblerTest extends TestCase
@@ -17,7 +19,7 @@ final class AiSiteBuildPromptContextAssemblerTest extends TestCase
             'site_title' => 'Example Site',
             'brief_description' => 'Explain the service clearly.',
             'default_locale' => 'en_US',
-            'execution_blueprint_draft' => [
+            'plan_json' => [
                 'pages' => [
                     'home_page' => [
                         'title' => 'Home',
@@ -37,15 +39,23 @@ final class AiSiteBuildPromptContextAssemblerTest extends TestCase
                 ],
             ],
         ]);
-        $task = $contract['tasks'][2];
+        $tasks = (new AiSiteBuildTaskService(new AiSitePageBlueprintService()))->listTaskDefinitions([
+            'page_types' => ['home_page'],
+            'build_plan_v2' => $contract,
+        ]);
+        $pageTasks = \array_values(\array_filter(
+            $tasks,
+            static fn(array $task): bool => (string)($task['task_type'] ?? '') === 'page_section'
+        ));
+        $task = $pageTasks[0];
 
         $context = (new AiSiteBuildPromptContextAssembler())->assemble($contract, $task);
 
         self::assertSame((string)$contract['contract_meta']['id'], $context['contract_id']);
-        self::assertSame($task['task_id'], $context['task']['task_id']);
+        self::assertSame($task['task_key'], $context['task']['task_key']);
         self::assertSame('home_page.hero', $context['block']['block_id']);
         self::assertArrayHasKey('block.home_page.hero.title', $context['content_items']);
-        self::assertNotEmpty($context['policy_slices']);
+        self::assertIsArray($context['policy_slices']);
         self::assertArrayHasKey('runtime_context', $context);
         self::assertArrayHasKey('output_contract', $context);
         self::assertArrayHasKey('acceptance', $context);

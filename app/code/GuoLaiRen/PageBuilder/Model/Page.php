@@ -89,7 +89,7 @@ class Page extends Model
     public const schema_fields_RENDER_MODE = 'render_mode';
     #[Col(type: 'text', nullable: true, comment: 'AI 页面区块编辑态 JSON：blocks[] 等')]
     public const schema_fields_AI_LAYOUT = 'ai_layout';
-    #[Col(type: 'text', nullable: true, comment: '最近 N 次发布快照 JSON 数组（消毒后）')]
+    #[Col(type: 'text', nullable: true, comment: '历史发布布局缓存（旧字段，当前发布流程清空）')]
     public const schema_fields_AI_PUBLISH_SNAPSHOTS = 'ai_publish_snapshots';
     #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
     public const schema_fields_CREATE_TIME = 'create_time';
@@ -119,9 +119,6 @@ class Page extends Model
 
     public const RENDER_MODE_THEME = '';
     public const RENDER_MODE_AI_HTML = 'ai_html';
-    /** 发布快照保留份数上限（与计划「最近 N」一致，可调） */
-    public const AI_PUBLISH_SNAPSHOT_MAX = 1;
-    
     /**
      * 获取所有页面类型
      */
@@ -262,61 +259,13 @@ class Page extends Model
     }
 
     /**
-     * @return list<array<string, mixed>>
-     */
-    public function getAiPublishSnapshotsList(): array
-    {
-        $raw = $this->getData(self::schema_fields_AI_PUBLISH_SNAPSHOTS);
-        if ($raw === null || $raw === '') {
-            return [];
-        }
-        $decoded = \is_string($raw) ? \json_decode($raw, true) : null;
-
-        if (!\is_array($decoded)) {
-            return [];
-        }
-
-        return \array_values(\array_slice($decoded, -self::AI_PUBLISH_SNAPSHOT_MAX));
-    }
-
-    /**
-     * @param array<string, mixed> $sanitizedLayout 已消毒的 ai_layout 结构
-     */
-    public function appendAiPublishSnapshot(array $sanitizedLayout): self
-    {
-        $list = $this->getAiPublishSnapshotsList();
-        $list[] = [
-            'published_at' => \date('Y-m-d H:i:s'),
-            'ai_layout' => $sanitizedLayout,
-        ];
-        if (\count($list) > self::AI_PUBLISH_SNAPSHOT_MAX) {
-            $list = \array_slice($list, -self::AI_PUBLISH_SNAPSHOT_MAX);
-        }
-
-        return $this->setData(self::schema_fields_AI_PUBLISH_SNAPSHOTS, \json_encode($list, \JSON_UNESCAPED_UNICODE));
-    }
-
-    /**
-     * 已发布页读最后一次快照；无快照时回退编辑态 ai_layout
-     *
      * @return array<string, mixed>
      */
-    public function resolveAiLayoutForFrontend(bool $useDraftInsteadOfSnapshot = false): array
+    public function resolveAiLayoutForFrontend(bool $useDraftLayout = false): array
     {
-        if ($useDraftInsteadOfSnapshot) {
-            return $this->getAiLayoutArray();
-        }
-        if ((int)$this->getData(self::schema_fields_STATUS) !== self::STATUS_PUBLISHED) {
-            return $this->getAiLayoutArray();
-        }
-        $snapshots = $this->getAiPublishSnapshotsList();
-        if ($snapshots === []) {
-            return $this->getAiLayoutArray();
-        }
-        $last = $snapshots[\array_key_last($snapshots)];
-        $layout = $last['ai_layout'] ?? null;
+        unset($useDraftLayout);
 
-        return \is_array($layout) ? $layout : $this->getAiLayoutArray();
+        return $this->getAiLayoutArray();
     }
     
     /**

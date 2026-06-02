@@ -43,7 +43,7 @@ $startPublishUrl = (string)($this->getData('start_publish_url') ?? '');
 $operationSseUrl = (string)($this->getData('operation_sse_url') ?? '');
 $workspaceStreamSseUrl = (string)($this->getData('workspace_stream_sse_url') ?? '');
 $switchPreviewPageUrl = (string)($this->getData('switch_preview_page_url') ?? '');
-$workspaceSnapshotUrl = (string)($this->getData('workspace_snapshot_url') ?? '');
+$workspaceStateUrl = (string)($this->getData('workspace_state_url') ?? '');
 $publishCheckUrl = (string)($this->getData('publish_check_url') ?? '');
 $backUrl = (string)($this->getData('back_url') ?? $this->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => 'pagebuilder']));
 $stageOptions = $this->getData('stage_options');
@@ -231,13 +231,11 @@ $scopePlanMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
 $statePlanMarkdown = \trim((string)($statePlanBlock['markdown'] ?? ''));
 $scopePlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
 $statePlanJson = \is_array($statePlanBlock['json'] ?? null) ? $statePlanBlock['json'] : [];
-$scopePlanStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
 $pbAiPhaseOnePlanPresent = (int)($state['plan_confirmed'] ?? 0) === 1
     || $scopePlanMarkdown !== ''
     || $statePlanMarkdown !== ''
     || $scopePlanJson !== []
-    || $statePlanJson !== []
-    || $scopePlanStructured !== [];
+    || $statePlanJson !== [];
 
 $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];
@@ -550,7 +548,7 @@ $workspaceTplData = [
     'operationSseUrl' => $operationSseUrl,
     'workspaceStreamSseUrl' => $workspaceStreamSseUrl,
     'switchPreviewPageUrl' => $switchPreviewPageUrl,
-    'workspaceSnapshotUrl' => $workspaceSnapshotUrl,
+    'workspaceStateUrl' => $workspaceStateUrl,
     'publishCheckUrl' => $publishCheckUrl,
     'recommendDomainUrl' => $recommendDomainUrl,
     'checkDomainUrl' => $checkDomainUrl,

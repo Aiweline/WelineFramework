@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Queue;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
-use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
+use GuoLaiRen\PageBuilder\Service\AiSiteQueueLogWriter;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestContext;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\QueueInterface;
 
 class AiSitePublishQueue implements QueueInterface
 {
+    private const QUEUE_RESULT_MAX_BYTES = 4096;
+    private const QUEUE_RESULT_TRUNCATION_MARKER = '[... queue log truncated ...]';
+
     public function name(): string
     {
         return 'PageBuilder AI site publish queue';
@@ -56,10 +58,6 @@ class AiSitePublishQueue implements QueueInterface
         $queueId = (int)$queue->getId();
 
         $sse = null;
-        $previousSseContextExists = false;
-        $previousSseContext = null;
-        $sseContextRegistered = false;
-
         try {
             $this->appendQueueLifecycleLine($queue, 'Starting publish queue. queue_id=' . $queueId . ' public_id=' . $publicId . ' admin_id=' . $adminId);
 
@@ -82,7 +80,7 @@ class AiSitePublishQueue implements QueueInterface
                 $executionToken
             );
 
-            $sse = new QueueDbWriter(
+            $sse = new AiSiteQueueLogWriter(
                 (int)$session->getId(),
                 $adminId,
                 $queueId,
@@ -93,10 +91,6 @@ class AiSitePublishQueue implements QueueInterface
                 \trim((string)($content['job_type'] ?? ''))
             );
 
-            $previousSseContextExists = RequestContext::has(RequestContext::SSE_WRITER_KEY);
-            $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
-            RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
-            $sseContextRegistered = true;
             $this->queueTrace($sse, 'Publish queue claimed the workspace operation.');
 
             /** @var AiSiteAgent $controller */
@@ -123,23 +117,16 @@ class AiSitePublishQueue implements QueueInterface
             return $doneMessage;
         } catch (\Throwable $throwable) {
             $message = \trim($throwable->getMessage()) ?: 'Publish failed.';
-            if ($sse instanceof QueueDbWriter) {
+            if ($sse instanceof AiSiteQueueLogWriter) {
                 $this->queueTrace($sse, 'Publish queue failed: ' . $message);
             } else {
-                $this->appendQueueLifecycleLine($queue, 'Publish queue failed before SSE initialization: ' . $message);
+                $this->appendQueueLifecycleLine($queue, 'Publish queue failed before queue log initialization: ' . $message);
             }
             $this->updateSessionError($publicId, $adminId, $executionToken, $message);
 
             throw new \RuntimeException('Publish failed: ' . $message, 0, $throwable);
         } finally {
-            if ($sseContextRegistered) {
-                if ($previousSseContextExists) {
-                    RequestContext::set(RequestContext::SSE_WRITER_KEY, $previousSseContext);
-                } else {
-                    RequestContext::remove(RequestContext::SSE_WRITER_KEY);
-                }
-            }
-            if ($sse instanceof QueueDbWriter) {
+            if ($sse instanceof AiSiteQueueLogWriter) {
                 $sse->complete();
             }
         }
@@ -267,7 +254,7 @@ class AiSitePublishQueue implements QueueInterface
             'queue_id' => $qid,
             'patch' => [
                 'process' => $message,
-                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+                'result' => $this->appendQueueResultLine($existing, $line),
             ],
         ]);
         $this->mirrorToCli($line);
@@ -294,13 +281,35 @@ class AiSitePublishQueue implements QueueInterface
                 'pid' => 0,
                 'finished' => 1,
                 'process' => $message,
-                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+                'result' => $this->appendQueueResultLine($existing, $line),
             ],
         ]);
         $this->mirrorToCli($line);
     }
 
-    private function queueTrace(QueueDbWriter $sse, string $message): void
+    private function appendQueueResultLine(string $existing, string $line): string
+    {
+        $result = \trim($existing) === '' ? $line : $existing . PHP_EOL . $line;
+        if (\strlen($result) <= self::QUEUE_RESULT_MAX_BYTES) {
+            return $result;
+        }
+
+        $marker = self::QUEUE_RESULT_TRUNCATION_MARKER;
+        $tailBudget = self::QUEUE_RESULT_MAX_BYTES - \strlen($marker) - \strlen(\PHP_EOL);
+        if ($tailBudget <= 0) {
+            return \substr($result, -self::QUEUE_RESULT_MAX_BYTES);
+        }
+
+        $tail = \substr($result, -$tailBudget);
+        $newlinePos = \strpos($tail, \PHP_EOL);
+        if ($newlinePos !== false && ($newlinePos + \strlen(\PHP_EOL)) < \strlen($tail)) {
+            $tail = (string)\substr($tail, $newlinePos + \strlen(\PHP_EOL));
+        }
+
+        return $marker . PHP_EOL . $tail;
+    }
+
+    private function queueTrace(AiSiteQueueLogWriter $sse, string $message): void
     {
         if ($message === '') {
             return;

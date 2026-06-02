@@ -16,6 +16,7 @@ final class AiSiteQualityGateService
         'build_plan_blocks_done' => ['label' => 'BuildPlan blocks completed'],
         'required_pages_render' => ['label' => 'Required pages render'],
         'shared_blocks_ready' => ['label' => 'Shared header/footer ready', 'page_report_field' => 'shared_blocks'],
+        'responsive_support' => ['label' => 'Responsive CSS support', 'page_report_field' => 'responsive_support'],
         'render_data_quality' => ['label' => 'Render data structure valid'],
     ];
 
@@ -61,6 +62,7 @@ final class AiSiteQualityGateService
         $allBlocksDone = !empty($completionGate['passed']);
         $requiredPagesReady = $pageTypes !== [];
         $sharedBlocksReady = true;
+        $responsiveSupportReady = true;
 
         foreach ($pageTypes as $pageType) {
             $pageId = (int)($pagesByType[$pageType]['page_id'] ?? 0);
@@ -125,6 +127,7 @@ final class AiSiteQualityGateService
                 && $renderError === ''
                 && ($pageId > 0 || $hasRenderableVirtualDraft || \array_key_exists($pageType, $renderedHtmlByPageType));
             $sharedBlocksReady = $sharedBlocksReady && (bool)($report['shared_blocks_ready'] ?? false);
+            $responsiveSupportReady = $responsiveSupportReady && (bool)($report['responsive_support_ready'] ?? false);
             unset($html, $layout, $report);
         }
 
@@ -147,6 +150,7 @@ final class AiSiteQualityGateService
             $this->buildItem('build_plan_blocks_done', $allBlocksDone, $summary),
             $this->buildItem('required_pages_render', $requiredPagesReady, \array_keys($pageReports)),
             $this->buildItem('shared_blocks_ready', $sharedBlocksReady, $this->extractPageValues($pageReports, 'shared_blocks')),
+            $this->buildItem('responsive_support', $responsiveSupportReady, $this->extractPageValues($pageReports, 'responsive_support')),
             $this->buildItem('render_data_quality', $renderData['ok'], $renderData),
         ], $pageReports);
 
@@ -284,6 +288,7 @@ final class AiSiteQualityGateService
     ): array {
         $sharedBlocks = $this->detectSharedBlocks($layout, $html);
         $structureIssues = $this->matchMalformedGeneratedHtml($html);
+        $responsiveSupport = $this->matchResponsiveSignals($html, $layout);
 
         return [
             'page_type' => $pageType,
@@ -294,6 +299,8 @@ final class AiSiteQualityGateService
             'structure_issues' => $structureIssues,
             'shared_blocks_ready' => !empty($sharedBlocks['header']) && !empty($sharedBlocks['footer']),
             'shared_blocks' => $sharedBlocks,
+            'responsive_support_ready' => !empty($responsiveSupport['media_768']) && !empty($responsiveSupport['media_420']),
+            'responsive_support' => $responsiveSupport,
         ];
     }
 
@@ -486,6 +493,22 @@ final class AiSiteQualityGateService
     }
 
     /**
+     * @param array<string, mixed> $layout
+     * @return array{media_768:bool,media_420:bool,fluid_width:bool}
+     */
+    private function matchResponsiveSignals(string $html, array $layout): array
+    {
+        $layoutText = (string)\json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR);
+        $source = $html . "\n" . $layoutText;
+
+        return [
+            'media_768' => \preg_match('/@media\s*\(\s*max-width\s*:\s*768px\s*\)/i', $source) === 1,
+            'media_420' => \preg_match('/@media\s*\(\s*max-width\s*:\s*420px\s*\)/i', $source) === 1,
+            'fluid_width' => \preg_match('/(?:width|max-width)\s*:\s*(?:100%|min\(|clamp\()/i', $source) === 1,
+        ];
+    }
+
+    /**
      * @param array<string,array<string,mixed>> $pageReports
      * @return array<string,mixed>
      */
@@ -553,6 +576,7 @@ final class AiSiteQualityGateService
                 'build_plan_blocks_done' => 'All BuildPlan blocks are complete.',
                 'required_pages_render' => 'All required pages rendered.',
                 'shared_blocks_ready' => 'Shared header and footer are present.',
+                'responsive_support' => 'Required responsive CSS breakpoints are present.',
                 'render_data_quality' => 'Render data passed structure checks.',
                 default => '',
             };
@@ -562,6 +586,7 @@ final class AiSiteQualityGateService
             'build_plan_blocks_done' => $this->formatBuildPlanBlocksFailureDetail(\is_array($value) ? $value : []),
             'required_pages_render' => 'At least one required page is missing or failed to render.',
             'shared_blocks_ready' => 'Generated pages must include shared header and footer blocks.',
+            'responsive_support' => 'Generated pages must include responsive @media rules for 768px and 420px.',
             'render_data_quality' => $this->formatStructuralFindingsFailureDetail(\is_array($value) ? $value : []),
             default => '',
         };

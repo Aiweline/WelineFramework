@@ -53,10 +53,9 @@ final class AiSiteBuildPlanService
         $policy = $this->policyRegistry()->get();
         $policyRef = $this->policyRegistry()->policyRef();
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
         $existing = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
 
-        $sourcePlan = $this->selectStageOneSourcePlan($planJson, $planStructured);
+        $sourcePlan = $this->selectStageOneSourcePlan($planJson);
         if ($sourcePlan === []) {
             throw new \RuntimeException('BuildPlan contract failed: stage-one plan JSON is missing. Regenerate the plan instead of using legacy execution blueprint fallback.');
         }
@@ -242,18 +241,11 @@ final class AiSiteBuildPlanService
 
     /**
      * @param array<string, mixed> $planJson
-     * @param array<string, mixed> $planStructured
      * @return array<string, mixed>
      */
-    private function selectStageOneSourcePlan(array $planJson, array $planStructured): array
+    private function selectStageOneSourcePlan(array $planJson): array
     {
-        foreach ([$planJson, $planStructured] as $candidate) {
-            if ($this->stageOneSourcePlanHasPages($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return $planJson !== [] ? $planJson : $planStructured;
+        return $planJson;
     }
 
     /**
@@ -280,8 +272,7 @@ final class AiSiteBuildPlanService
     {
         $policy = $this->policyRegistry()->get();
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
-        $sourcePlan = $this->selectStageOneSourcePlan($planJson, $planStructured);
+        $sourcePlan = $this->selectStageOneSourcePlan($planJson);
         if ($sourcePlan === []) {
             throw new \RuntimeException('BuildPlan contract failed: stage-one plan JSON is missing. Regenerate the plan instead of using legacy execution blueprint fallback.');
         }

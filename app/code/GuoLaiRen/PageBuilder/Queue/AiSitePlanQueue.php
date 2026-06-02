@@ -5,24 +5,28 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Queue;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
-use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonStateService;
+use GuoLaiRen\PageBuilder\Service\AiSiteQueueLogWriter;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteWorkflowTrace;
 use Weline\Ai\Service\AiRuntimeContext;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Runtime\RequestContext;
+use Weline\Queue\DeadWorkerRecoverableQueueInterface;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\QueueInterface;
 
-class AiSitePlanQueue implements QueueInterface
+class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInterface
 {
     private const MAX_PLAN_QUEUE_ATTEMPTS = 3;
+    private const QUEUE_RESULT_MAX_BYTES = 4096;
+    private const QUEUE_RESULT_TRUNCATION_MARKER = '[... queue log truncated ...]';
     private const PLAN_COMPLETION_GATE_ARTIFACT_KEYS = [
         'plan_json',
         'plan_markdown',
+        'plan_workbench',
     ];
 
     public function name(): string
@@ -32,7 +36,7 @@ class AiSitePlanQueue implements QueueInterface
 
     public function tip(): string
     {
-        return '异步执行 PageBuilder 第一阶段方案 AI 生成任务，并通过 SSE 同步阶段进度。';
+        return '异步执行 PageBuilder 第一阶段方案 AI 生成任务，并写入 plan_json 状态与队列日志。';
     }
 
     public function attributes(): array
@@ -61,6 +65,34 @@ class AiSitePlanQueue implements QueueInterface
         return $session instanceof AiSiteAgentSession;
     }
 
+    public function shouldRecoverDeadWorker(Queue $queue, int $deadPid, string $workerOutput): bool
+    {
+        unset($deadPid, $workerOutput);
+        $content = \json_decode((string)$queue->getContent(), true);
+        if (!\is_array($content)) {
+            return false;
+        }
+
+        $executionToken = \trim((string)($content['execution_token'] ?? $content['token'] ?? ''));
+        $publicId = \trim((string)($content['public_id'] ?? ''));
+        $adminId = (int)($content['admin_id'] ?? 0);
+        if ($publicId === '' || $adminId <= 0 || $executionToken === '') {
+            return false;
+        }
+
+        $operation = \trim((string)($content['operation'] ?? 'plan'));
+        $stage = \trim((string)($content['stage'] ?? 'plan'));
+
+        return ($operation === '' || $operation === 'plan') && ($stage === '' || $stage === 'plan');
+    }
+
+    public function deadWorkerRecoveryMessage(Queue $queue, int $deadPid, string $workerOutput): string
+    {
+        unset($queue, $deadPid, $workerOutput);
+
+        return 'PageBuilder plan worker exited before terminal state; queue reset to pending for scheduler resume.';
+    }
+
     public function execute(Queue &$queue): string
     {
         $content = \json_decode((string)$queue->getContent(), true);
@@ -79,9 +111,6 @@ class AiSitePlanQueue implements QueueInterface
         $queueId = (int)$queue->getId();
 
         $sse = null;
-        $previousSseContextExists = false;
-        $previousSseContext = null;
-        $sseContextRegistered = false;
         $previousAiRuntimeParamsExists = false;
         $previousAiRuntimeParams = [];
         $aiRuntimeParamsRegistered = false;
@@ -149,7 +178,7 @@ class AiSitePlanQueue implements QueueInterface
                 '已同步 active_operation=queued operation=plan execution_token=' . \substr($effectiveExecutionToken, 0, 12)
             );
 
-            $sse = new QueueDbWriter(
+            $sse = new AiSiteQueueLogWriter(
                 (int)$session->getId(),
                 $adminId,
                 $queueId,
@@ -159,16 +188,12 @@ class AiSitePlanQueue implements QueueInterface
                 \trim((string)($content['job_key'] ?? '')),
                 \trim((string)($content['job_type'] ?? ''))
             );
-            $previousSseContextExists = RequestContext::has(RequestContext::SSE_WRITER_KEY);
-            $previousSseContext = RequestContext::get(RequestContext::SSE_WRITER_KEY);
-            RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
-            $sseContextRegistered = true;
             $previousAiRuntimeParamsExists = AiRuntimeContext::hasDefaultParams();
             $previousAiRuntimeParams = AiRuntimeContext::getDefaultParams();
             AiRuntimeContext::setDefaultParams(AiRuntimeContext::thinkingModeParams());
             $aiRuntimeParamsRegistered = true;
             $this->queueTrace($sse, 'AI thinking mode enabled for queue execution; reasoning_content is kept separate from output content.');
-            $this->queueTrace($sse, 'QueueDbWriter 已创建，阶段一进度将写入队列 result 与会话事件。');
+            $this->queueTrace($sse, 'Queue log writer 已创建，阶段一状态写入 plan_json，队列仅记录 result 与会话事件。');
 
             /** @var AiSiteAgent $controller */
             $controller = AiSiteAgentForQueue::create();
@@ -207,16 +232,25 @@ class AiSitePlanQueue implements QueueInterface
             $this->queueTrace($sse, '第一阶段完成门禁已通过。');
             $queueDoneMessage = '第一阶段方案生成完成。';
             $this->queueTrace($sse, '队列执行完成：' . $queueDoneMessage);
+            $this->persistPlanQueueCompletionScope(
+                $sessionService,
+                $scopeService,
+                $controller,
+                $publicId,
+                $adminId,
+                $effectiveExecutionToken,
+                $queueId
+            );
             $this->markQueueDone($queue, $queueDoneMessage);
             $sse->complete();
 
             return $queueDoneMessage;
         } catch (\Throwable $throwable) {
             $message = $this->normalizeQueueFailureMessage($throwable->getMessage());
-            if ($sse instanceof QueueDbWriter) {
+            if ($sse instanceof AiSiteQueueLogWriter) {
                 $this->queueTrace($sse, '异常：' . $message);
             } else {
-                $this->appendQueueLifecycleLine($queue, '异常（SSE 未初始化）：' . $message);
+                $this->appendQueueLifecycleLine($queue, '异常（队列日志未初始化）：' . $message);
             }
             $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $message, $queueId);
             if ($this->isTransientAiProviderFailure($message) && $this->canScheduleTransientPlanRetry($content)) {
@@ -232,7 +266,7 @@ class AiSitePlanQueue implements QueueInterface
                     $retryMessage
                 );
                 $this->markQueueRetryScheduled($queue, $retryQueueId, $content, $retryMessage);
-                if ($sse instanceof QueueDbWriter) {
+                if ($sse instanceof AiSiteQueueLogWriter) {
                     $this->queueTrace($sse, $retryMessage);
                 }
 
@@ -251,7 +285,7 @@ class AiSitePlanQueue implements QueueInterface
                     $retryMessage
                 );
                 $this->markQueueRetryScheduled($queue, $retryQueueId, $content, $retryMessage);
-                if ($sse instanceof QueueDbWriter) {
+                if ($sse instanceof AiSiteQueueLogWriter) {
                     $this->queueTrace($sse, $retryMessage);
                 }
 
@@ -266,14 +300,7 @@ class AiSitePlanQueue implements QueueInterface
                     AiRuntimeContext::removeDefaultParams();
                 }
             }
-            if ($sseContextRegistered) {
-                if ($previousSseContextExists) {
-                    RequestContext::set(RequestContext::SSE_WRITER_KEY, $previousSseContext);
-                } else {
-                    RequestContext::remove(RequestContext::SSE_WRITER_KEY);
-                }
-            }
-            if ($sse instanceof QueueDbWriter) {
+            if ($sse instanceof AiSiteQueueLogWriter) {
                 $sse->complete();
             }
         }
@@ -321,7 +348,6 @@ class AiSitePlanQueue implements QueueInterface
             'plan_confirmed' => 0,
             'plan_generation_last_error' => [],
             'plan_generation_progress' => [],
-            '_unset_scope_keys' => ['_plan_generation_checkpoint'],
         ]);
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
@@ -404,7 +430,6 @@ class AiSitePlanQueue implements QueueInterface
         }
         if ((string)($request['prompt_mode'] ?? '') === 'rebuild') {
             $patch['plan_generation_progress'] = [];
-            $patch['_unset_scope_keys'] = ['_plan_generation_checkpoint'];
         }
 
         $sessionService->mergeScope((int)$fresh->getId(), $adminId, $patch);
@@ -779,6 +804,156 @@ class AiSitePlanQueue implements QueueInterface
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
     }
 
+    private function persistPlanQueueCompletionScope(
+        AiSiteAgentSessionService $sessionService,
+        AiSiteScopeCompatibilityService $scopeService,
+        AiSiteAgent $controller,
+        string $publicId,
+        int $adminId,
+        string $executionToken,
+        int $queueId
+    ): void {
+        $session = $sessionService->loadByPublicId($publicId, $adminId);
+        if (!$session instanceof AiSiteAgentSession) {
+            throw new \RuntimeException('Stage-one plan completion finalization failed: session reload failed.');
+        }
+
+        $scope = $scopeService->normalizeScope(
+            $sessionService->loadScopeForStage(
+                $session,
+                AiSiteAgentSession::STAGE_PLAN,
+                self::PLAN_COMPLETION_GATE_ARTIFACT_KEYS
+            )
+        );
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pageTypes = $this->resolveCompletedPlanPageTypes($scopeService, $scope, $planJson);
+        $planLocale = $this->resolveCompletedPlanLocale($scope, $planJson);
+        $sourceSignature = \trim((string)($scope['plan_generated_source_signature'] ?? ''));
+        if ($sourceSignature === '') {
+            try {
+                $sourceSignature = (string)$this->invokePrivate(
+                    $controller,
+                    'buildPlanSourceSignature',
+                    [\array_replace($scope, ['page_types' => $pageTypes])]
+                );
+            } catch (\Throwable) {
+                $sourceSignature = '';
+            }
+        }
+
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $existingPlanOperation = \is_array($activeOperations['plan'] ?? null) ? $activeOperations['plan'] : [];
+        $basePlanOperation = $existingPlanOperation !== [] ? $existingPlanOperation : $activeOperation;
+        $planOperation = \array_replace($basePlanOperation, [
+            'operation' => 'plan',
+            'execution_token' => $executionToken !== '' ? $executionToken : (string)($basePlanOperation['execution_token'] ?? ''),
+            'status' => 'done',
+            'queue_id' => $queueId,
+            'message' => 'Stage-one plan generation completed.',
+            'progress_percent' => 100,
+            'queue_waiting_for_scheduler' => false,
+            'can_close_stream' => true,
+            'continue_other_operations' => true,
+            'retry_allowed' => 0,
+            'failure_mode' => '',
+            'updated_at' => \date('Y-m-d H:i:s'),
+        ]);
+        $activeOperations['plan'] = $planOperation;
+
+        $patch = [
+            'plan_generated_page_types' => $pageTypes,
+            'plan_generated_locale' => $planLocale,
+            'plan_generated_source_signature' => $sourceSignature,
+            'plan_ai_generated' => (int)($scope['fake_mode'] ?? 0) === 1
+                ? (int)($scope['plan_ai_generated'] ?? 0)
+                : 1,
+            'plan_missing_page_types' => [],
+            'plan_generation_progress' => [],
+            'active_operations' => $activeOperations,
+            'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH,
+        ];
+
+        $currentActiveOperationName = \trim((string)($activeOperation['operation'] ?? ''));
+        $currentActiveExecutionToken = \trim((string)($activeOperation['execution_token'] ?? ''));
+        if (
+            $currentActiveOperationName === ''
+            || $currentActiveOperationName === 'plan'
+            || ($executionToken !== '' && $currentActiveExecutionToken === $executionToken)
+        ) {
+            $patch['active_operation'] = $planOperation;
+        }
+
+        $sessionService->mergeScope((int)$session->getId(), $adminId, $patch);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $planJson
+     * @return list<string>
+     */
+    private function resolveCompletedPlanPageTypes(
+        AiSiteScopeCompatibilityService $scopeService,
+        array $scope,
+        array $planJson
+    ): array {
+        try {
+            $pageTypes = $scopeService->resolveScopedPageTypes($scope);
+        } catch (\Throwable) {
+            $pageTypes = [];
+        }
+
+        foreach ([
+            $pageTypes,
+            $scope['page_types'] ?? null,
+            $planJson['page_types'] ?? null,
+            $planJson['stage1_contract']['page_types'] ?? null,
+        ] as $candidate) {
+            $normalized = $this->normalizeStringList($candidate);
+            if ($normalized !== []) {
+                return $normalized;
+            }
+        }
+
+        $fromPages = [];
+        foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($key) ? $key : '')));
+            if ($pageType !== '' && !\in_array($pageType, $fromPages, true)) {
+                $fromPages[] = $pageType;
+            }
+        }
+
+        return $fromPages;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $planJson
+     */
+    private function resolveCompletedPlanLocale(array $scope, array $planJson): string
+    {
+        foreach ([
+            $scope['plan_locale'] ?? null,
+            $planJson['i18n']['plan_locale'] ?? null,
+            $planJson['stage1_contract']['plan_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate) && !(\is_object($candidate) && \method_exists($candidate, '__toString'))) {
+                continue;
+            }
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
     private function markPlanRetryScheduledInScope(
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,
@@ -874,6 +1049,7 @@ class AiSitePlanQueue implements QueueInterface
     private function hasPlanCompletionValidationReport(array $scope): bool
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planJson = ObjectManager::getInstance(AiSitePlanJsonStateService::class)->normalizePlanJson($planJson);
         $validationReport = \is_array($scope['stage1_validation_report'] ?? null)
             ? $scope['stage1_validation_report']
             : (\is_array($planJson['stage1_validation_report'] ?? null) ? $planJson['stage1_validation_report'] : []);
@@ -963,7 +1139,11 @@ class AiSitePlanQueue implements QueueInterface
         if ($validationReport === []) {
             throw new \RuntimeException('Stage-one plan completion gate failed: stage1_validation_report is missing.');
         }
+        $retryablePlanMessages = $this->extractPlanRetryableFailureMessages($scope);
         if (empty($validationReport['passed'])) {
+            if ($retryablePlanMessages !== []) {
+                return $retryablePlanMessages;
+            }
             throw new \RuntimeException('Stage-one plan completion gate failed: validation_report failed: ' . $this->summarizeStageOneValidationReport($validationReport));
         }
         $stageOneContract = \is_array($scope['stage1_contract'] ?? null)
@@ -976,8 +1156,11 @@ class AiSitePlanQueue implements QueueInterface
         }
         $missingPageTypes = $this->collectMissingSelectedPageTypes($scopeService, $scope, $planJson);
         if ($missingPageTypes !== []) {
+            if ($retryablePlanMessages !== []) {
+                return $retryablePlanMessages;
+            }
             throw new \RuntimeException(
-                'Stage-one plan completion gate failed: plan_json.pages missing selected page_types: ' . \implode(', ', $missingPageTypes)
+                'Stage-one plan completion gate failed: persistent stage-one page plans missing selected page_types: ' . \implode(', ', $missingPageTypes)
             );
         }
         $hasAiGeneratedEvidence = (int)($scope['plan_ai_generated'] ?? 0) === 1
@@ -990,7 +1173,6 @@ class AiSitePlanQueue implements QueueInterface
             throw new \RuntimeException('Stage-one plan completion gate failed: plan was not AI generated.');
         }
 
-        $retryablePlanMessages = $this->extractPlanRetryableFailureMessages($scope);
         if ((int)($scope['partial_retry_required'] ?? 0) === 1 && $retryablePlanMessages === []) {
             throw new \RuntimeException('Stage-one plan completion gate failed: partial_retry_required=1 without retryable failure details');
         }
@@ -1022,13 +1204,23 @@ class AiSitePlanQueue implements QueueInterface
         }
 
         $actual = [];
-        foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $key => $page) {
-            if (!\is_array($page)) {
-                continue;
-            }
-            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($key) ? $key : '')));
-            if ($pageType !== '') {
-                $actual[$pageType] = true;
+        foreach ([
+            $planJson['pages'] ?? null,
+            $planJson['page_plans'] ?? null,
+            $scope['plan_workbench']['stage1']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['structured_plan']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['structured_plan']['page_plans'] ?? null,
+        ] as $pageSource) {
+            foreach (\is_array($pageSource) ? $pageSource : [] as $key => $page) {
+                if (!\is_array($page)) {
+                    continue;
+                }
+                $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($key) ? $key : '')));
+                if ($pageType !== '') {
+                    $actual[$pageType] = true;
+                }
             }
         }
 
@@ -1192,6 +1384,32 @@ class AiSitePlanQueue implements QueueInterface
         return false;
     }
 
+    private function isPermanentAiProviderFailure(string $message): bool
+    {
+        $normalized = \mb_strtolower($message);
+        foreach ([
+            'http 400',
+            'http 401',
+            'http 402',
+            'http 403',
+            'invalid api key',
+            'api key is invalid',
+            'authentication',
+            'unauthorized',
+            'permission denied',
+            'insufficient balance',
+            'billing',
+            'quota exceeded',
+            'account balance',
+        ] as $needle) {
+            if (\str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * @param array<string, mixed> $content
      */
@@ -1206,6 +1424,9 @@ class AiSitePlanQueue implements QueueInterface
     private function canScheduleGeneralPlanRetry(array $content, string $message): bool
     {
         if ($this->isPlatformPlanQueueFailure($message)) {
+            return false;
+        }
+        if ($this->isPermanentAiProviderFailure($message)) {
             return false;
         }
 
@@ -1298,7 +1519,7 @@ class AiSitePlanQueue implements QueueInterface
             'queue_id' => $queueId,
             'patch' => [
                 'process' => $message,
-                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+                'result' => $this->appendQueueResultLine($existing, $line),
             ],
         ]);
         $this->mirrorToCli($line);
@@ -1318,6 +1539,22 @@ class AiSitePlanQueue implements QueueInterface
         $line = '[' . \date('H:i:s') . '] QUEUE_RETRY same_queue=' . $retryQueueId . ' ' . $message;
         $row = w_query('queue', 'get', ['queue_id' => $queueId]);
         $existing = \is_array($row) ? (string)($row['result'] ?? '') : '';
+        $storedContent = [];
+        if (\is_array($row)) {
+            $decodedContent = \json_decode((string)($row['content'] ?? ''), true);
+            if (\is_array($decodedContent)) {
+                $storedContent = $decodedContent;
+            }
+        }
+        if ($storedContent !== []) {
+            $storedStageOneProgress = \is_array($storedContent['stage1_page_progress'] ?? null)
+                ? $storedContent['stage1_page_progress']
+                : [];
+            $content = \array_replace($storedContent, $content);
+            if ($storedStageOneProgress !== []) {
+                $content['stage1_page_progress'] = $storedStageOneProgress;
+            }
+        }
         w_query('queue', 'update', [
             'queue_id' => $queueId,
             'patch' => [
@@ -1328,7 +1565,7 @@ class AiSitePlanQueue implements QueueInterface
                 'start_at' => null,
                 'end_at' => null,
                 'process' => $message,
-                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+                'result' => $this->appendQueueResultLine($existing, $line),
             ],
         ]);
         $this->mirrorToCli($line);
@@ -1355,7 +1592,7 @@ class AiSitePlanQueue implements QueueInterface
                 'pid' => 0,
                 'finished' => 1,
                 'process' => $message,
-                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+                'result' => $this->appendQueueResultLine($existing, $line),
             ],
         ]);
         $this->mirrorToCli($line);
@@ -1382,13 +1619,35 @@ class AiSitePlanQueue implements QueueInterface
                 'pid' => 0,
                 'finished' => 1,
                 'process' => $message,
-                'result' => $existing === '' ? $line : $existing . PHP_EOL . $line,
+                'result' => $this->appendQueueResultLine($existing, $line),
             ],
         ]);
         $this->mirrorToCli($line);
     }
 
-    private function queueTrace(QueueDbWriter $sse, string $message): void
+    private function appendQueueResultLine(string $existing, string $line): string
+    {
+        $result = \trim($existing) === '' ? $line : $existing . PHP_EOL . $line;
+        if (\strlen($result) <= self::QUEUE_RESULT_MAX_BYTES) {
+            return $result;
+        }
+
+        $marker = self::QUEUE_RESULT_TRUNCATION_MARKER;
+        $tailBudget = self::QUEUE_RESULT_MAX_BYTES - \strlen($marker) - \strlen(\PHP_EOL);
+        if ($tailBudget <= 0) {
+            return \substr($result, -self::QUEUE_RESULT_MAX_BYTES);
+        }
+
+        $tail = \substr($result, -$tailBudget);
+        $newlinePos = \strpos($tail, \PHP_EOL);
+        if ($newlinePos !== false && ($newlinePos + \strlen(\PHP_EOL)) < \strlen($tail)) {
+            $tail = (string)\substr($tail, $newlinePos + \strlen(\PHP_EOL));
+        }
+
+        return $marker . PHP_EOL . $tail;
+    }
+
+    private function queueTrace(AiSiteQueueLogWriter $sse, string $message): void
     {
         if ($message === '') {
             return;

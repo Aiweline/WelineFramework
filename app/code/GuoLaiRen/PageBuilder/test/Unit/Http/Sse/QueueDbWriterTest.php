@@ -182,7 +182,7 @@ final class QueueDbWriterTest extends TestCase
         self::assertGreaterThan(0, (int)($result['suppressed_content_bytes'] ?? 0));
     }
 
-    public function testSanitizePayloadForQueueEventPrunesHeavyCheckpointState(): void
+    public function testSanitizePayloadForQueueEventPrunesHeavyState(): void
     {
         $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build');
         $method = new ReflectionMethod(QueueDbWriter::class, 'sanitizePayloadForQueueEvent');
@@ -228,6 +228,138 @@ final class QueueDbWriterTest extends TestCase
             $maxBytes,
             \strlen(\json_encode($result, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES))
         );
+    }
+
+    public function testStageOnePageProgressIsPersistedAsBoundedQueueContent(): void
+    {
+        $this->expectOutputRegex('/PROGRESS Stage 1 page fanout/');
+        QueueDbWriterWQuerySpy::reset([
+            7 => [
+                'queue_id' => 7,
+                'content' => \json_encode(['public_id' => 'pid-7', 'existing' => 'keep'], \JSON_UNESCAPED_UNICODE),
+            ],
+        ]);
+        $writer = new QueueDbWriter(1, 1, 7, AiSiteAgentSession::STAGE_PLAN, 'plan');
+
+        $writer->sendEvent('progress', [
+            'message' => 'Stage 1 page fanout',
+            'operation' => 'plan',
+            'stage1_page_progress' => [
+                'total' => 2,
+                'concurrency' => 5,
+                'running' => ['home_page'],
+                'done' => ['about_page'],
+                'details' => [
+                    [
+                        'page_type' => 'home_page',
+                        'status' => 'running',
+                        'message' => 'Generating blocks',
+                        'blocks' => [
+                            [
+                                'block_key' => 'hero',
+                                'status' => 'running',
+                                'message' => \str_repeat('x', 300),
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $row = QueueDbWriterWQuerySpy::$rows[7] ?? [];
+        self::assertIsArray($row);
+        $content = \json_decode((string)($row['content'] ?? ''), true);
+        self::assertIsArray($content);
+        self::assertSame('keep', (string)($content['existing'] ?? ''));
+        self::assertIsArray($content['stage1_page_progress'] ?? null);
+        $progress = $content['stage1_page_progress'];
+        self::assertSame(2, (int)($progress['total'] ?? 0));
+        self::assertSame(5, (int)($progress['concurrency'] ?? 0));
+        self::assertSame(['home_page'], $progress['running'] ?? []);
+        self::assertSame(['about_page'], $progress['done'] ?? []);
+        self::assertIsArray($progress['details'] ?? null);
+        self::assertSame('home_page', (string)($progress['details'][0]['page_type'] ?? ''));
+        self::assertSame('hero', (string)($progress['details'][0]['blocks'][0]['block_key'] ?? ''));
+        self::assertLessThanOrEqual(160, \strlen((string)($progress['details'][0]['blocks'][0]['message'] ?? '')));
+    }
+
+    public function testBuildProgressIsPersistedAsBoundedQueueContent(): void
+    {
+        QueueDbWriterWQuerySpy::reset([
+            8 => [
+                'queue_id' => 8,
+                'content' => \json_encode(['public_id' => 'pid-8', 'existing' => 'keep'], \JSON_UNESCAPED_UNICODE),
+            ],
+        ]);
+        $writer = new QueueDbWriter(1, 1, 8, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build');
+
+        $this->discardCliMirrorOutput(static function () use ($writer): void {
+            $writer->sendEvent('progress', [
+                'message' => 'Build progress',
+                'operation' => 'build',
+                'progress_percent' => 42,
+                'active_concurrency' => 5,
+                'build_task_summary' => [
+                    'total' => 3,
+                    'done' => 1,
+                    'running' => 2,
+                    'pending' => 0,
+                    'failed' => 0,
+                    'groups' => [
+                        'home_page' => [
+                            'page_type' => 'home_page',
+                            'total' => 2,
+                            'done' => 1,
+                            'running' => 1,
+                            'tasks' => [
+                                [
+                                    'task_key' => 'home_page:hero',
+                                    'label' => 'Hero',
+                                    'section_code' => 'hero',
+                                    'page_type' => 'home_page',
+                                    'status' => 'done',
+                                    'message' => \str_repeat('x', 260),
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'page_block_progress' => [
+                    ['page_type' => 'home_page', 'done' => 1, 'total' => 2, 'running' => 1],
+                ],
+                'build_plan_block_progress' => [
+                    [
+                        'page_type' => 'home_page',
+                        'block_id' => 'home_page:hero',
+                        'section_key' => 'hero',
+                        'label' => 'Hero',
+                        'status' => 'completed',
+                        'message' => \str_repeat('y', 260),
+                        'html' => \str_repeat('<div>heavy</div>', 100),
+                    ],
+                ],
+            ]);
+        });
+
+        $row = QueueDbWriterWQuerySpy::$rows[8] ?? [];
+        self::assertIsArray($row);
+        $content = \json_decode((string)($row['content'] ?? ''), true);
+        self::assertIsArray($content);
+        self::assertSame('keep', (string)($content['existing'] ?? ''));
+        self::assertSame(42, (int)($content['progress_percent'] ?? 0));
+        self::assertSame(5, (int)($content['active_concurrency'] ?? 0));
+        self::assertSame(3, (int)($content['build_task_summary']['total'] ?? 0));
+        self::assertSame(2, (int)($content['build_task_summary']['running'] ?? 0));
+        self::assertLessThanOrEqual(180, \strlen((string)($content['build_task_summary']['groups']['home_page']['tasks'][0]['message'] ?? '')));
+        self::assertSame('home_page', (string)($content['page_block_progress'][0]['page_type'] ?? ''));
+        self::assertSame(1, (int)($content['page_block_progress'][0]['running'] ?? 0));
+        self::assertSame('done', (string)($content['build_plan_block_progress'][0]['status'] ?? ''));
+        self::assertArrayNotHasKey('html', $content['build_plan_block_progress'][0]);
+        self::assertLessThanOrEqual(160, \strlen((string)($content['build_plan_block_progress'][0]['message'] ?? '')));
+
+        $patch = QueueDbWriterWQuerySpy::$updates[0]['patch'] ?? [];
+        self::assertIsArray($patch);
+        self::assertArrayNotHasKey('result', $patch);
     }
 
     public function testIsContentBearingStreamPayloadTreatsThinkingAsSuppressedStream(): void
@@ -329,7 +461,7 @@ final class QueueDbWriterTest extends TestCase
         self::assertArrayNotHasKey('content', $aiProgressPatch);
     }
 
-    public function testTerminalErrorAndCheckpointCanPersistQueueResultAndSessionEvent(): void
+    public function testTerminalErrorAndTerminalSummaryCanPersistQueueResultAndSessionEvent(): void
     {
         $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_PLAN, 'plan');
         $shouldPersistQueue = new ReflectionMethod(QueueDbWriter::class, 'shouldPersistQueueResultLine');
@@ -341,7 +473,6 @@ final class QueueDbWriterTest extends TestCase
 
         foreach ([
             ['error', ['message' => 'terminal failure']],
-            ['progress', ['message' => 'checkpoint saved', 'checkpoint' => ['step' => 'theme']]],
             ['progress', ['message' => 'terminal summary', 'terminal_summary' => true]],
             ['progress', ['message' => 'queue done', 'status' => 'done']],
         ] as [$event, $payload]) {
@@ -349,10 +480,268 @@ final class QueueDbWriterTest extends TestCase
             self::assertTrue((bool)$shouldPersistSession->invoke($writer, $event, $payload), $event);
         }
 
+        $staleTransientPayload = ['message' => 'old transient payload', 'checkpoint' => ['step' => 'theme']];
+        self::assertFalse((bool)$shouldPersistQueue->invoke($writer, 'progress', $staleTransientPayload));
+        self::assertFalse((bool)$shouldPersistSession->invoke($writer, 'progress', $staleTransientPayload));
+
         $patch = $buildPatch->invoke($writer, '[12:00:00] ERROR terminal failure', 'terminal failure');
         self::assertIsArray($patch);
         self::assertSame('terminal failure', $patch['process'] ?? null);
         self::assertStringContainsString('ERROR terminal failure', (string)($patch['result'] ?? ''));
+    }
+
+    public function testLegacyTransientPayloadsAreDiscardedBeforePersistence(): void
+    {
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_PLAN, 'plan');
+        $sanitize = new ReflectionMethod(QueueDbWriter::class, 'sanitizePayloadForQueueEvent');
+        $sanitize->setAccessible(true);
+
+        $payload = $sanitize->invoke($writer, 'progress', [
+            'message' => 'status update',
+            'snapshot' => ['large' => true],
+            'queue_snapshot' => ['large' => true],
+            'checkpoint' => ['step' => 'theme'],
+            'payload' => [
+                'snapshot' => ['large' => true],
+                'queue_snapshot' => ['large' => true],
+                'checkpoint' => ['step' => 'nested'],
+            ],
+        ]);
+
+        self::assertIsArray($payload);
+        self::assertArrayNotHasKey('snapshot', $payload);
+        self::assertArrayNotHasKey('queue_snapshot', $payload);
+        self::assertArrayNotHasKey('checkpoint', $payload);
+        self::assertIsArray($payload['payload'] ?? null);
+        self::assertArrayNotHasKey('snapshot', $payload['payload']);
+        self::assertArrayNotHasKey('queue_snapshot', $payload['payload']);
+        self::assertArrayNotHasKey('checkpoint', $payload['payload']);
+    }
+
+    public function testBuildPlanBlockProgressIsCompactedBeforeQueuePersistence(): void
+    {
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build');
+        $sanitize = new ReflectionMethod(QueueDbWriter::class, 'sanitizePayloadForQueueEvent');
+        $sanitize->setAccessible(true);
+
+        $payload = $sanitize->invoke($writer, 'progress', [
+            'message' => 'block progress',
+            'state' => [
+                'build_plan_block_progress' => [
+                    [
+                        'page_type' => 'home_page',
+                        'block_id' => 'home:hero',
+                        'section_key' => 'hero',
+                        'label' => 'Hero',
+                        'status' => 'completed',
+                        'message' => \str_repeat('x', 300),
+                        'updated_at' => '2026-06-02 10:00:00',
+                        'html' => \str_repeat('<div>heavy</div>', 100),
+                    ],
+                ],
+                'build_plan_v2' => ['heavy' => \str_repeat('y', 4096)],
+            ],
+        ]);
+
+        self::assertIsArray($payload);
+        self::assertArrayNotHasKey('state', $payload);
+        self::assertSame(false, $payload['state_loaded'] ?? null);
+        self::assertIsArray($payload['build_plan_block_progress'] ?? null);
+        self::assertCount(1, $payload['build_plan_block_progress']);
+        self::assertSame('home_page', $payload['build_plan_block_progress'][0]['page_type'] ?? null);
+        self::assertSame('done', $payload['build_plan_block_progress'][0]['status'] ?? null);
+        self::assertArrayNotHasKey('html', $payload['build_plan_block_progress'][0]);
+        self::assertLessThanOrEqual(160, \strlen((string)($payload['build_plan_block_progress'][0]['message'] ?? '')));
+    }
+
+    public function testStageOneProgressUpdatesBypassDuplicateSummarySuppression(): void
+    {
+        QueueDbWriterWQuerySpy::reset([
+            1 => [
+                'queue_id' => 1,
+                'content' => \json_encode(['public_id' => 'pid-1'], \JSON_UNESCAPED_UNICODE),
+            ],
+        ]);
+
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_PLAN, 'plan');
+        \ob_start();
+        try {
+            $writer->sendEvent('progress', [
+                'message' => 'Stage 1 page fanout',
+                'operation' => 'plan',
+                'stage1_page_progress' => [
+                    'total' => 2,
+                    'running' => ['home_page'],
+                    'done' => [],
+                    'pending' => ['about_page'],
+                    'done_count' => 0,
+                    'running_count' => 1,
+                    'pending_count' => 1,
+                    'remaining_count' => 2,
+                ],
+            ]);
+            $writer->sendEvent('progress', [
+                'message' => 'Stage 1 page fanout',
+                'operation' => 'plan',
+                'stage1_page_progress' => [
+                    'total' => 2,
+                    'running' => ['about_page'],
+                    'done' => ['home_page'],
+                    'pending' => [],
+                    'done_count' => 1,
+                    'running_count' => 1,
+                    'pending_count' => 0,
+                    'remaining_count' => 1,
+                ],
+            ]);
+        } finally {
+            \ob_end_clean();
+        }
+
+        self::assertCount(2, QueueDbWriterWQuerySpy::$updates);
+        $lastPatch = QueueDbWriterWQuerySpy::$updates[1]['patch'] ?? [];
+        self::assertIsArray($lastPatch);
+        $content = \json_decode((string)($lastPatch['content'] ?? ''), true);
+        self::assertIsArray($content);
+        self::assertSame(['home_page'], $content['stage1_page_progress']['done'] ?? null);
+        self::assertSame(['about_page'], $content['stage1_page_progress']['running'] ?? null);
+    }
+
+    public function testBuildProgressUpdatesBypassDuplicateSummarySuppression(): void
+    {
+        QueueDbWriterWQuerySpy::reset([
+            1 => [
+                'queue_id' => 1,
+                'content' => \json_encode(['public_id' => 'pid-1'], \JSON_UNESCAPED_UNICODE),
+            ],
+        ]);
+
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build');
+        \ob_start();
+        try {
+            $writer->sendEvent('progress', [
+                'message' => 'Build progress',
+                'operation' => 'build',
+                'build_task_summary' => [
+                    'total' => 2,
+                    'done' => 0,
+                    'running' => 1,
+                    'pending' => 1,
+                    'groups' => [
+                        'home_page' => ['page_type' => 'home_page', 'total' => 1, 'running' => 1],
+                    ],
+                ],
+                'page_block_progress' => [
+                    ['page_type' => 'home_page', 'done' => 0, 'total' => 1, 'running' => 1],
+                ],
+            ]);
+            $writer->sendEvent('progress', [
+                'message' => 'Build progress',
+                'operation' => 'build',
+                'build_task_summary' => [
+                    'total' => 2,
+                    'done' => 1,
+                    'running' => 1,
+                    'pending' => 0,
+                    'groups' => [
+                        'home_page' => ['page_type' => 'home_page', 'total' => 1, 'done' => 1],
+                        'about_page' => ['page_type' => 'about_page', 'total' => 1, 'running' => 1],
+                    ],
+                ],
+                'page_block_progress' => [
+                    ['page_type' => 'home_page', 'done' => 1, 'total' => 1],
+                    ['page_type' => 'about_page', 'done' => 0, 'total' => 1, 'running' => 1],
+                ],
+            ]);
+        } finally {
+            \ob_end_clean();
+        }
+
+        self::assertCount(2, QueueDbWriterWQuerySpy::$updates);
+        $lastPatch = QueueDbWriterWQuerySpy::$updates[1]['patch'] ?? [];
+        self::assertIsArray($lastPatch);
+        $content = \json_decode((string)($lastPatch['content'] ?? ''), true);
+        self::assertIsArray($content);
+        self::assertSame(1, (int)($content['build_task_summary']['done'] ?? 0));
+        self::assertSame('about_page', (string)($content['page_block_progress'][1]['page_type'] ?? ''));
+    }
+
+    public function testLargeQueueContentProgressMergeDoesNotDecodeWholePayload(): void
+    {
+        $largeContent = '{"public_id":"pid-1","blob":"' . \str_repeat('x', 270000) . '"}';
+        QueueDbWriterWQuerySpy::reset([
+            1 => [
+                'queue_id' => 1,
+                'content' => $largeContent,
+            ],
+        ]);
+
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_PLAN, 'plan');
+        \ob_start();
+        try {
+            $writer->sendEvent('progress', [
+                'message' => 'Stage 1 page fanout',
+                'operation' => 'plan',
+                'stage1_page_progress' => [
+                    'total' => 1,
+                    'done' => ['home_page'],
+                    'done_count' => 1,
+                    'remaining_count' => 0,
+                ],
+            ]);
+        } finally {
+            \ob_end_clean();
+        }
+
+        self::assertCount(1, QueueDbWriterWQuerySpy::$updates);
+        $content = (string)(QueueDbWriterWQuerySpy::$updates[0]['patch']['content'] ?? '');
+        self::assertStringContainsString('"blob":"', $content);
+        self::assertStringContainsString('"stage1_page_progress"', $content);
+        self::assertStringContainsString('"done":["home_page"]', $content);
+        self::assertGreaterThan(\strlen($largeContent), \strlen($content));
+    }
+
+    public function testLargeQueueContentProgressMergeOnlyTouchesTopLevelProgress(): void
+    {
+        $largeContent = \json_encode([
+            'public_id' => 'pid-1',
+            'nested' => [
+                'stage1_page_progress' => [
+                    'done' => ['nested_should_remain'],
+                ],
+            ],
+            'blob' => \str_repeat('x', 270000),
+        ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        self::assertIsString($largeContent);
+        QueueDbWriterWQuerySpy::reset([
+            1 => [
+                'queue_id' => 1,
+                'content' => $largeContent,
+            ],
+        ]);
+
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_PLAN, 'plan');
+        \ob_start();
+        try {
+            $writer->sendEvent('progress', [
+                'message' => 'Stage 1 page fanout',
+                'operation' => 'plan',
+                'stage1_page_progress' => [
+                    'total' => 1,
+                    'done' => ['home_page'],
+                    'done_count' => 1,
+                    'remaining_count' => 0,
+                ],
+            ]);
+        } finally {
+            \ob_end_clean();
+        }
+
+        self::assertCount(1, QueueDbWriterWQuerySpy::$updates);
+        $content = \json_decode((string)(QueueDbWriterWQuerySpy::$updates[0]['patch']['content'] ?? ''), true);
+        self::assertIsArray($content);
+        self::assertSame(['nested_should_remain'], $content['nested']['stage1_page_progress']['done'] ?? null);
+        self::assertSame(['home_page'], $content['stage1_page_progress']['done'] ?? null);
     }
 
     public function testTransientTelemetryDoesNotPersistSessionEventHistory(): void

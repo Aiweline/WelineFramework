@@ -44,11 +44,6 @@ class AiSiteAgentSessionArtifactService
             'path' => ['plan_json'],
             'empty' => [],
         ],
-        'plan_structured' => [
-            'stage' => AiSiteAgentSession::STAGE_PLAN,
-            'path' => ['plan_structured'],
-            'empty' => [],
-        ],
         'plan_markdown' => [
             'stage' => AiSiteAgentSession::STAGE_PLAN,
             'path' => ['plan_markdown'],
@@ -117,7 +112,6 @@ class AiSiteAgentSessionArtifactService
     private const ARTIFACT_KEYS_BY_STAGE = [
         AiSiteAgentSession::STAGE_PLAN => [
             'plan_json',
-            'plan_structured',
             'plan_markdown',
             'build_plan_v2',
             'plan_projection',
@@ -126,7 +120,6 @@ class AiSiteAgentSessionArtifactService
         ],
         AiSiteAgentSession::STAGE_VISUAL_EDIT => [
             'plan_json',
-            'plan_structured',
             'plan_markdown',
             'build_plan_v2',
             'plan_projection',
@@ -142,7 +135,6 @@ class AiSiteAgentSessionArtifactService
         ],
         AiSiteAgentSession::STAGE_PUBLISH => [
             'plan_json',
-            'plan_structured',
             'plan_markdown',
             'build_plan_v2',
             'plan_projection',
@@ -173,7 +165,7 @@ class AiSiteAgentSessionArtifactService
             return ['scope' => $scope, 'artifacts' => []];
         }
 
-        $scope = $this->removeSnapshotBackupsFromScope($scope);
+        $scope = $this->removeDuplicatedStageOneFieldsFromScope($scope);
         $explicitArtifactRefReset = \array_key_exists(self::REF_KEY, $scope)
             && \is_array($scope[self::REF_KEY])
             && $scope[self::REF_KEY] === [];
@@ -195,9 +187,8 @@ class AiSiteAgentSessionArtifactService
 
             if ($hasValue) {
                 if (
-                    \in_array($artifactKey, ['plan_json', 'plan_structured'], true)
+                    $artifactKey === 'plan_json'
                     && \is_array($value)
-                    && !isset($touchedMap[$artifactKey])
                     && !$this->hasCompleteStageOnePlanPayload($value)
                     && $existingRef !== []
                 ) {
@@ -222,7 +213,12 @@ class AiSiteAgentSessionArtifactService
                 $storage = $bytes > self::EXTERNAL_PAYLOAD_THRESHOLD_BYTES ? self::STORAGE_EXTERNAL_FILE : self::STORAGE_INLINE;
                 $previousHash = \trim((string)($existingRef['hash'] ?? ''));
                 $previousStorage = \trim((string)($existingRef['storage'] ?? ''));
-                if ($previousHash !== '' && \hash_equals($previousHash, $hash) && $previousStorage === $storage) {
+                if (
+                    $storage !== self::STORAGE_EXTERNAL_FILE
+                    && $previousHash !== ''
+                    && \hash_equals($previousHash, $hash)
+                    && $previousStorage === $storage
+                ) {
                     $refs[$stageCode][$artifactKey] = \array_replace($existingRef, [
                         'storage' => $storage,
                         'stage_code' => $stageCode,
@@ -290,15 +286,9 @@ class AiSiteAgentSessionArtifactService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function removeSnapshotBackupsFromScope(array $scope): array
+    private function removeDuplicatedStageOneFieldsFromScope(array $scope): array
     {
-        unset(
-            $scope['confirmed_stage1_plan_book'],
-            $scope['theme_context_snapshot'],
-            $scope['shared_prompt_context']
-        );
-
-        return $scope;
+        return AiSiteScopeCompatibilityService::stripDuplicatedStageOneStorageFields($scope);
     }
 
     private function compactArtifactPayloadForStorage(string $artifactKey, mixed $value): mixed
@@ -422,38 +412,20 @@ class AiSiteAgentSessionArtifactService
 
         $explicitKeys = $artifactKeys !== [];
         $keys = $explicitKeys ? $artifactKeys : $this->resolveReferencedArtifactKeys($scope);
-        \file_put_contents(
-            BP . 'var/log/emergency_fallback.log',
-            \date('Y-m-d H:i:s') . " [hydrateScope] sessionId={$sessionId} explicitKeys=" . ($explicitKeys ? 'true' : 'false') . ' keys=' . \implode(',', $keys) . "\n",
-            \FILE_APPEND
-        );
         foreach (\array_values(\array_unique($keys)) as $artifactKey) {
             $definition = self::ARTIFACT_DEFINITIONS[$artifactKey] ?? null;
             if (!\is_array($definition)) {
-                \error_log("[hydrateScope] skip {$artifactKey}: no definition");
                 continue;
             }
 
             $stageCode = (string)$definition['stage'];
             $inlineValue = $this->getPathValue($scope, $definition['path'], $definition['empty']);
             if (!$this->shouldHydrateArtifactFromStorage($artifactKey, $inlineValue)) {
-                \error_log("[hydrateScope] skip {$artifactKey}: shouldHydrate=false (inlineValue type=" . \gettype($inlineValue) . ')');
                 continue;
             }
 
             $artifact = $this->loadArtifactModel($sessionId, $stageCode, $artifactKey);
-            \error_log("[hydrateScope] {$artifactKey}: artifactId=" . $artifact->getId());
             if ($artifact->getId() <= 0) {
-                if (!$explicitKeys) {
-                    continue;
-                }
-                // Fallback: load latest artifact from filesystem when DB metadata is missing.
-                $payload = $this->loadLatestArtifactFromFilesystem($sessionId, $stageCode, $artifactKey);
-                \error_log("[hydrateScope] {$artifactKey}: filesystem fallback payload=" . (\is_array($payload) ? 'array(' . \count($payload) . ')' : \gettype($payload)));
-                if (!$this->hasArtifactPayload($payload)) {
-                    continue;
-                }
-                $scope = $this->setPathValue($scope, $definition['path'], $payload);
                 continue;
             }
 
@@ -462,18 +434,15 @@ class AiSiteAgentSessionArtifactService
                 $refHash = \trim((string)($ref['hash'] ?? ''));
                 $payloadHash = \trim((string)$artifact->getPayloadHash());
                 if ($refHash !== '' && $payloadHash !== '' && !\hash_equals($refHash, $payloadHash)) {
-                    \error_log("[hydrateScope] skip {$artifactKey}: hash mismatch ref={$refHash} payload={$payloadHash}");
                     continue;
                 }
             }
 
             $payload = $this->loadCachedOrFreshPayloadValue($artifact);
             if (!$this->hasArtifactPayload($payload)) {
-                \error_log("[hydrateScope] skip {$artifactKey}: no payload");
                 continue;
             }
 
-            \error_log("[hydrateScope] {$artifactKey}: loaded OK, type=" . \gettype($payload));
             $scope = $this->setPathValue($scope, $definition['path'], $payload);
         }
 
@@ -576,7 +545,6 @@ class AiSiteAgentSessionArtifactService
         $keys = [];
         foreach ([
             'plan_json',
-            'plan_structured',
             'plan_markdown',
             'build_plan_v2',
             'plan_projection',
@@ -626,16 +594,15 @@ class AiSiteAgentSessionArtifactService
         }
         $this->ensureArtifactTableExists();
         $pdo = $this->getPgsqlPdo();
-        if ($pdo === null) {
-            return;
+        if ($pdo !== null) {
+            $table = $this->artifactModel->getTable();
+            $sessionIdField = AiSiteAgentSessionArtifact::schema_fields_AGENT_SESSION_ID;
+            $stmt = $pdo->prepare("DELETE FROM {$table} WHERE \"{$sessionIdField}\" = :session_id");
+            if ($stmt) {
+                $stmt->execute(['session_id' => $sessionId]);
+            }
         }
-
-        $table = $this->artifactModel->getTable();
-        $sessionIdField = AiSiteAgentSessionArtifact::schema_fields_AGENT_SESSION_ID;
-        $stmt = $pdo->prepare("DELETE FROM {$table} WHERE \"{$sessionIdField}\" = :session_id");
-        if ($stmt) {
-            $stmt->execute(['session_id' => $sessionId]);
-        }
+        $this->deleteSessionExternalPayloadDirectory($sessionId);
     }
 
     private function writeExternalPayloadDocument(
@@ -645,7 +612,6 @@ class AiSiteAgentSessionArtifactService
         string $payloadHash,
         string $payloadJson
     ): string {
-        $hash = \preg_match('/^[a-f0-9]{40}$/i', $payloadHash) === 1 ? \strtolower($payloadHash) : \sha1($payloadJson);
         $stageCode = $this->sanitizeStorageSegment($stageCode);
         $artifactKey = $this->sanitizeStorageSegment($artifactKey);
         $directory = BP . self::ARTIFACT_FILE_BASE_DIR . \DIRECTORY_SEPARATOR . $sessionId . \DIRECTORY_SEPARATOR . $stageCode;
@@ -653,15 +619,86 @@ class AiSiteAgentSessionArtifactService
             \mkdir($directory, 0775, true);
         }
 
-        $filename = $artifactKey . '-' . $hash . '.json';
+        $filename = $artifactKey . '.json';
         $path = $directory . \DIRECTORY_SEPARATOR . $filename;
-        if (!\is_file($path)) {
-            $temporaryPath = $path . '.tmp.' . \getmypid() . '.' . \bin2hex(\random_bytes(4));
-            \file_put_contents($temporaryPath, $payloadJson, \LOCK_EX);
-            \rename($temporaryPath, $path);
-        }
+        $temporaryPath = $path . '.tmp.' . \getmypid() . '.' . \bin2hex(\random_bytes(4));
+        \file_put_contents($temporaryPath, $payloadJson, \LOCK_EX);
+        \rename($temporaryPath, $path);
+        $this->deleteLegacyExternalPayloadDocuments($directory, $artifactKey, $filename);
 
         return self::ARTIFACT_FILE_BASE_DIR . '/' . $sessionId . '/' . $stageCode . '/' . $filename;
+    }
+
+    private function deleteLegacyExternalPayloadDocuments(string $directory, string $artifactKey, string $currentFilename): void
+    {
+        if (!\is_dir($directory)) {
+            return;
+        }
+
+        $prefix = $artifactKey . '-';
+        $handle = @\opendir($directory);
+        if ($handle === false) {
+            return;
+        }
+        while (($entry = \readdir($handle)) !== false) {
+            if (
+                $entry === '.'
+                || $entry === '..'
+                || $entry === $currentFilename
+                || !\str_starts_with($entry, $prefix)
+                || !\str_ends_with($entry, '.json')
+            ) {
+                continue;
+            }
+            $path = $directory . \DIRECTORY_SEPARATOR . $entry;
+            if (\is_file($path)) {
+                @\unlink($path);
+            }
+        }
+        \closedir($handle);
+    }
+
+    private function deleteSessionExternalPayloadDirectory(int $sessionId): void
+    {
+        if ($sessionId <= 0 || !\defined('BP')) {
+            return;
+        }
+
+        $baseDirectory = BP . self::ARTIFACT_FILE_BASE_DIR;
+        $baseReal = \realpath($baseDirectory);
+        if (!\is_string($baseReal)) {
+            return;
+        }
+
+        $directory = $baseDirectory . \DIRECTORY_SEPARATOR . $sessionId;
+        $directoryReal = \realpath($directory);
+        if (!\is_string($directoryReal) || !\is_dir($directoryReal)) {
+            return;
+        }
+
+        $basePrefix = \rtrim($baseReal, \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR;
+        if (!\str_starts_with($directoryReal, $basePrefix)) {
+            return;
+        }
+
+        $this->deleteDirectoryTree($directoryReal);
+    }
+
+    private function deleteDirectoryTree(string $directory): void
+    {
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            $path = $item->getPathname();
+            if ($item->isDir() && !$item->isLink()) {
+                @\rmdir($path);
+                continue;
+            }
+            @\unlink($path);
+        }
+        @\rmdir($directory);
     }
 
     private function sanitizeStorageSegment(string $value): string
@@ -683,57 +720,6 @@ class AiSiteAgentSessionArtifactService
             ->fetch();
 
         return $artifact;
-    }
-
-    /**
-     * Load the latest artifact payload directly from filesystem when DB metadata is missing.
-     *
-     * @return array<string, mixed>|string|null
-     */
-    private function loadLatestArtifactFromFilesystem(int $sessionId, string $stageCode, string $artifactKey): mixed
-    {
-        $directory = BP . self::ARTIFACT_FILE_BASE_DIR . \DIRECTORY_SEPARATOR . $sessionId . \DIRECTORY_SEPARATOR . $stageCode;
-        if (!\is_dir($directory)) {
-            return null;
-        }
-
-        $prefix = $artifactKey . '-';
-        $latestFile = null;
-        $latestMtime = 0;
-
-        $handle = \opendir($directory);
-        if ($handle === false) {
-            return null;
-        }
-        while (($entry = \readdir($handle)) !== false) {
-            if ($entry === '.' || $entry === '..' || !\str_starts_with($entry, $prefix) || !\str_ends_with($entry, '.json')) {
-                continue;
-            }
-            $filePath = $directory . \DIRECTORY_SEPARATOR . $entry;
-            $mtime = \filemtime($filePath);
-            if ($mtime > $latestMtime) {
-                $latestMtime = $mtime;
-                $latestFile = $filePath;
-            }
-        }
-        \closedir($handle);
-
-        if ($latestFile === null) {
-            return null;
-        }
-
-        $json = \file_get_contents($latestFile);
-        if ($json === false || \trim($json) === '') {
-            return null;
-        }
-
-        try {
-            $decoded = \json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return null;
-        }
-
-        return \is_array($decoded) ? $decoded : null;
     }
 
     private function ensureArtifactTableExists(): void
@@ -871,6 +857,9 @@ SQL);
     {
         if (!$this->hasArtifactPayload($inlineValue)) {
             return true;
+        }
+        if ($artifactKey === 'plan_json' && \is_array($inlineValue)) {
+            return !$this->hasCompleteStageOnePlanPayload($inlineValue);
         }
         if ($artifactKey === 'build_plan_v2' && \is_array($inlineValue)) {
             return !$this->hasCompleteBuildPlanArtifactPayload($inlineValue);

@@ -17,7 +17,7 @@ final class AiSiteBuildPlanProjectionServiceTest extends TestCase
             'site_title' => 'Example Site',
             'brief_description' => 'Explain the service clearly.',
             'default_locale' => 'en_US',
-            'execution_blueprint_draft' => [
+            'plan_json' => [
                 'pages' => [
                     'home_page' => [
                         'title' => 'Home',
@@ -46,7 +46,7 @@ final class AiSiteBuildPlanProjectionServiceTest extends TestCase
         self::assertSame('Example Site', $projection['site_name']);
         self::assertSame(1, $projection['page_count']);
         self::assertSame(1, $projection['block_count']);
-        self::assertSame(3, $projection['task_count']);
+        self::assertSame(0, $projection['task_count']);
         self::assertSame('premium_web_v1', $projection['design']['policy_id']);
         $titleKey = (string)$contract['pages'][0]['title_key'];
         $expectedTitle = $contract['content_manifest']['items'][$titleKey];

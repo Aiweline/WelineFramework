@@ -73,7 +73,19 @@ class AiSiteAgentWorkspaceEntryNoticeService
     private function normalizeOperation(string $operation): string
     {
         $operation = \trim($operation);
-        return \in_array($operation, ['plan', 'build'], true) ? $operation : '';
+        if ($operation === 'block_refine') {
+            $operation = 'block_regenerate';
+        }
+
+        return \in_array($operation, [
+            'plan',
+            'build',
+            'publish',
+            'regenerate_page',
+            'block_regenerate',
+            'block_partial_patch',
+            'image_asset',
+        ], true) ? $operation : '';
     }
 
     /**
@@ -96,7 +108,7 @@ class AiSiteAgentWorkspaceEntryNoticeService
      */
     private function selectFallbackOperation(array $queueInfoByOperation): string
     {
-        foreach (['build', 'plan'] as $operation) {
+        foreach (['publish', 'image_asset', 'block_partial_patch', 'block_regenerate', 'regenerate_page', 'build', 'plan'] as $operation) {
             $queueInfo = \is_array($queueInfoByOperation[$operation] ?? null) ? $queueInfoByOperation[$operation] : null;
             $queueState = $this->resolveQueueCurrentState($queueInfo);
             $status = \trim((string)($queueState['status'] ?? $queueState['queue_status'] ?? $queueState['job_status'] ?? ''));
@@ -111,8 +123,13 @@ class AiSiteAgentWorkspaceEntryNoticeService
     private function operationLabel(string $operation): string
     {
         return match ($operation) {
+            'regenerate_page' => (string)__('页面重新生成'),
+            'block_regenerate' => (string)__('区块重新生成'),
+            'block_partial_patch' => (string)__('区块局部修改'),
+            'image_asset' => (string)__('图片资源生成'),
             'plan' => (string)__('方案生成'),
             'build' => (string)__('生成主题'),
+            'publish' => (string)__('发布站点'),
             default => (string)__('后台任务'),
         };
     }

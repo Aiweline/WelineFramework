@@ -5,14 +5,32 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Controller;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
-use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue;
-use GuoLaiRen\PageBuilder\Service\AiSiteQueueSnapshotService;
+use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSiteQueueLogWriter;
+use GuoLaiRen\PageBuilder\Service\AiSiteQueueStateService;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
 final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
 {
+    public function testStageOneEmptyAiStreamFailureMatchesCurrentProviderMessage(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $method = new \ReflectionMethod($service, 'isEmptyAiStreamCompletionFailure');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke(
+            $service,
+            new \RuntimeException('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确')
+        ));
+        self::assertTrue($method->invoke(
+            $service,
+            new \RuntimeException('AI流式生成失败: AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确')
+        ));
+    }
+
     public function testIncompleteStageOnePlanReturnsToQueueCompletionGateForRetry(): void
     {
         $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
@@ -49,9 +67,24 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString('$pollIntervalMs = self::OBSERVER_QUEUE_PROGRESS_POLL_INTERVAL_MS;', $observeDuplicateStream);
         self::assertStringContainsString('$queueProgressChanged = $queueProgressBefore !== [', $observeDuplicateStream);
         self::assertStringContainsString('$idleLoops = 0;', $observeDuplicateStream);
+        self::assertStringContainsString('buildWorkspaceState($fresh, $adminId, 80, false)', $observeDuplicateStream);
+        self::assertStringNotContainsString('replaceScope($fresh->getId(), $adminId, $scope)', $observeDuplicateStream);
         $deferredQueueObserver = $this->extractMethodSource($controllerSource, 'streamDeferredQueueProgressUntilTerminal');
         self::assertStringContainsString('$pollIntervalMs = self::OBSERVER_QUEUE_PROGRESS_POLL_INTERVAL_MS;', $deferredQueueObserver);
         self::assertStringContainsString('OBSERVER_QUEUE_PROGRESS_MAX_OBSERVE_MS', $deferredQueueObserver);
+        self::assertStringContainsString('$lastStageOnePageProgressSignature = \'\';', $deferredQueueObserver);
+        self::assertStringContainsString('emitObservedPlanStageOnePageProgressState(', $deferredQueueObserver);
+        self::assertStringContainsString('buildWorkspaceState($fresh, $adminId, 80, false)', $deferredQueueObserver);
+        $planProgressObserver = $this->extractMethodSource($controllerSource, 'emitObservedPlanStageOnePageProgressState');
+        self::assertStringNotContainsString('decodeAiSiteQueueRowContent($queueRow)', $planProgressObserver);
+        self::assertStringContainsString('stage1_page_progress', $planProgressObserver);
+        self::assertStringContainsString('$queueState = $this->buildQueueObserverPublicState($queueRow);', $planProgressObserver);
+        self::assertStringContainsString('$queueInfo = $this->queueObserverHelperService()->buildPanelPayload($queueRow, $queueState);', $planProgressObserver);
+        self::assertStringContainsString('$signature === $lastSignature', $planProgressObserver);
+        self::assertStringContainsString('$remaining = \array_key_exists(\'remaining_count\', $progress)', $planProgressObserver);
+        self::assertStringContainsString('$running + $pending', $planProgressObserver);
+        self::assertStringContainsString("\\str_starts_with(\$message, 'Stage 1 page fanout:')", $planProgressObserver);
+        self::assertStringContainsString("\$sse->sendEvent('progress'", $planProgressObserver);
 
         $operationSse = $this->extractMethodSource($controllerSource, 'handleOperationSse');
         $queueObserverPos = \strpos($operationSse, 'if ($this->isAiSiteQueueBackedOperation($operation))');
@@ -87,11 +120,14 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
     {
         $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
         $runPlanOperation = $this->extractMethodSource($controllerSource, 'runQueuedPlanOperationFromWorkspaceStream');
-        self::assertStringContainsString("'stage1_page_progress'", $runPlanOperation);
+        self::assertStringContainsString('stage1_page_progress', $runPlanOperation);
         self::assertStringContainsString("'queue_process'", $runPlanOperation);
         self::assertStringContainsString('mergeStageOnePersistedPlanJson(', $runPlanOperation);
-        self::assertStringContainsString("'plan_json' => \\is_array(\$scope['plan_json'] ?? null) ? \$scope['plan_json'] : []", $runPlanOperation);
-        self::assertStringContainsString("'plan_structured' => \\is_array(\$scope['plan_structured'] ?? null) ? \$scope['plan_structured'] : []", $runPlanOperation);
+        self::assertStringContainsString("\$sse->sendEvent('progress', \$payload);", $runPlanOperation);
+        self::assertStringContainsString("'plan_generation_progress' => \$planGenerationProgress", $runPlanOperation);
+        self::assertStringContainsString("sendEvent('plan_state'", $controllerSource);
+        self::assertStringContainsString('pollWorkspaceStreamPlanState(', $controllerSource);
+        self::assertStringNotContainsString('$structured !== [] ? $structured : $planJson', $controllerSource);
 
         $moduleDir = \dirname((new ReflectionClass(AiSiteAgent::class))->getFileName(), 3);
         $serviceSource = (string)\file_get_contents(
@@ -99,33 +135,126 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         );
         self::assertStringContainsString('emitStageOnePageFanoutProgress(', $serviceSource);
         self::assertStringContainsString('Stage 1 page fanout: total ', $serviceSource);
+        self::assertStringContainsString("'concurrency' => \\max(0, (int)(\$fanoutProgress['concurrency'] ?? 0))", $serviceSource);
+        self::assertStringContainsString("Env::get('pagebuilder.ai_site.max_http_concurrency', 5)", $serviceSource);
+        self::assertStringContainsString('resolveStageOnePageFanoutConcurrency(\\count($pageTypes))', $serviceSource);
+        self::assertStringContainsString('runCooperativeSessionTasksSettled($tasks', $serviceSource);
+        self::assertStringContainsString("'concurrency' => \$concurrency", $serviceSource);
+        self::assertStringContainsString('resolveStageOneBlockSegmentConcurrency(', $serviceSource);
+        self::assertStringContainsString('supportsCooperativeConcurrency($segmentConcurrency)', $serviceSource);
+        self::assertStringContainsString('FiberTaskRunner::currentPump() === null', $serviceSource);
+        self::assertStringContainsString('runCooperativeSessionTasksSettled($segmentTasks', $serviceSource);
+        self::assertStringContainsString('generateStageOneBlockSegmentByAi(', $serviceSource);
         $summaryMethod = $this->extractMethodSource($serviceSource, 'summarizeStageOnePageFanoutProgress');
         self::assertStringNotContainsString("'page_statuses' =>", $summaryMethod);
+        self::assertStringContainsString("'concurrency' =>", $summaryMethod);
         self::assertStringContainsString("'remaining_count' =>", $summaryMethod);
+        self::assertStringContainsString("'remaining_count' => \\count(\$groups['running']) + \\count(\$groups['pending'])", $summaryMethod);
         self::assertStringContainsString("'details' =>", $summaryMethod);
 
         $workspaceScript = (string)\file_get_contents(
             $moduleDir . '/view/templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml'
         );
-        self::assertStringContainsString('publishPlanQueueLatestPageProgress', $workspaceScript);
-        self::assertStringContainsString('normalizePlanQueuePageProgress', $workspaceScript);
-        self::assertStringContainsString('renderPlanQueueTaskDetails', $workspaceScript);
-        self::assertStringContainsString('latestEl.innerHTML =', $workspaceScript);
-        self::assertStringNotContainsString('latestEl.innerHTML +=', $workspaceScript);
-        self::assertStringContainsString(': null', $workspaceScript);
+        self::assertStringContainsString('stage1_page_progress', $workspaceScript);
+        self::assertStringContainsString('normalized.concurrency', $workspaceScript);
+        self::assertStringContainsString("concurrency ' + concurrency", $workspaceScript);
+        self::assertStringContainsString('function hasNonEmptyStageOneProgress(progress)', $workspaceScript);
+        self::assertStringContainsString('function resolvePlanQueueLatestPageProgress(info)', $workspaceScript);
+        self::assertStringContainsString('function mergeIncomingPlanQueueInfoWithRememberedProgress(info)', $workspaceScript);
+        self::assertStringContainsString("['pending', 'queued', 'running', 'processing'].indexOf(status) >= 0", $workspaceScript);
+        self::assertStringContainsString('publishPlanQueueLatestPageProgress(resolvePlanQueueLatestPageProgress(queueInfo), latestMessage)', $workspaceScript);
+        self::assertStringContainsString('syncStageOnePlanPreviewFromWorkspaceState', $workspaceScript);
 
         $mainScript = (string)\file_get_contents(
             $moduleDir . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
         );
+        self::assertStringContainsString('function resolvePlanPageStatus(page)', $mainScript);
+        self::assertStringContainsString('data-plan-node-status', $mainScript);
+        self::assertStringNotContainsString('renderStageOnePageProgressPlaceholder', $mainScript);
         self::assertStringContainsString('阶段一失败项，请重新重试', $mainScript);
         self::assertStringNotContainsString('阶段一失败项，确认方案已暂停', $mainScript);
 
-        $queueWriterSource = (string)\file_get_contents((new ReflectionClass(QueueDbWriter::class))->getFileName());
-        self::assertStringContainsString('mergeStageOnePageProgressIntoQueueContentPatch', $queueWriterSource);
-        self::assertStringContainsString("'stage1_page_progress'", $queueWriterSource);
+        $queueWriterSource = (string)\file_get_contents((new ReflectionClass(AiSiteQueueLogWriter::class))->getFileName());
+        self::assertStringContainsString('class AiSiteQueueLogWriter', $queueWriterSource);
+        $queueDbWriterSource = (string)\file_get_contents($moduleDir . '/Http/Sse/QueueDbWriter.php');
+        self::assertStringContainsString('stage1_page_progress', $queueDbWriterSource);
+        self::assertStringContainsString('mergeStageOnePageProgressIntoQueueContentPatch', $queueDbWriterSource);
 
-        $queueStateSource = (string)\file_get_contents((new ReflectionClass(AiSiteQueueSnapshotService::class))->getFileName());
-        self::assertStringContainsString("'stage1_page_progress' => \$stageOnePageProgress", $queueStateSource);
+        $queueStateSource = (string)\file_get_contents((new ReflectionClass(AiSiteQueueStateService::class))->getFileName());
+        self::assertStringContainsString('stage1_page_progress', $queueStateSource);
+    }
+
+    public function testPlanWorkspaceDoesNotRecoverFromDetachedArtifactFiles(): void
+    {
+        $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
+
+        self::assertStringNotContainsString('emergencyLoadPlanArtifactsFromFilesystem', $controllerSource);
+        self::assertStringNotContainsString("session-artifacts/' . \$sessionId . '/plan", $controllerSource);
+        self::assertStringNotContainsString("artifactKey . '-'", $controllerSource);
+        self::assertStringNotContainsString('latestFile', $controllerSource);
+        self::assertStringContainsString('loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, $planArtifactKeys)', $controllerSource);
+        self::assertStringNotContainsString('hydrateStageOnePlanPayloadFromExecutionBlueprint', $controllerSource);
+        self::assertStringNotContainsString("'execution_blueprint' => \\is_array(\$plan['execution_blueprint']", $controllerSource);
+    }
+
+    public function testPageBuilderWorkspaceOwnsDomainWorkbenchRoutes(): void
+    {
+        $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
+        self::assertStringContainsString("getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-recommend-domain')", $controllerSource);
+        self::assertStringContainsString("getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-check-domain')", $controllerSource);
+        self::assertStringContainsString("getBackendUrlPath('pagebuilder/backend/ai-site-agent/domain-purchase-sse')", $controllerSource);
+        self::assertStringNotContainsString("getBackendUrlPath('websites/backend/site-builder-agent/recommend-domain')", $controllerSource);
+        self::assertStringNotContainsString("getBackendUrlPath('websites/backend/site-builder-agent/check-domain')", $controllerSource);
+        self::assertStringNotContainsString("getBackendUrlPath('websites/backend/site-builder-agent/domain-purchase-sse')", $controllerSource);
+
+        $recommendDomain = $this->extractMethodSource($controllerSource, 'postRecommendDomain');
+        self::assertStringContainsString('recommendAvailableDomain(', $recommendDomain);
+        self::assertStringContainsString('$deferAvailability', $recommendDomain);
+        self::assertStringContainsString('buildDomainChoiceEnvironment()', $recommendDomain);
+        self::assertStringContainsString("'local_registrar_account_id'", $recommendDomain);
+        self::assertStringContainsString('LocalDomainPolicy::isManagedLocalDomain($requestHost)', $recommendDomain);
+        self::assertStringContainsString('$this->isTruthyRequestFlag(\'fake_mode\')', $recommendDomain);
+
+        $checkDomain = $this->extractMethodSource($controllerSource, 'postCheckDomain');
+        self::assertStringContainsString('checkCandidateAvailability(', $checkDomain);
+        self::assertStringContainsString("'available' => \$available", $checkDomain);
+
+        $domainPurchaseSse = $this->extractMethodSource($controllerSource, 'getDomainPurchaseSse');
+        self::assertStringContainsString('ensureLinkedWebsitesMirrorSession(', $domainPurchaseSse);
+        self::assertStringContainsString('executeQueuedPurchase(', $domainPurchaseSse);
+        self::assertStringContainsString('syncPageBuilderScopeFromLinkedWebsitesSession(', $domainPurchaseSse);
+
+        $moduleDir = \dirname((new ReflectionClass(AiSiteAgent::class))->getFileName(), 3);
+        $mainScript = (string)\file_get_contents(
+            $moduleDir . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
+        );
+        self::assertStringContainsString("var streamPublicId = String(data.public_id || publicId || linkedWorkbenchPublicId || '').trim();", $mainScript);
+        self::assertStringContainsString('startDomainPurchaseStream(streamPublicId, executionToken);', $mainScript);
+    }
+
+    public function testProfileManualFlagsAreExplicitAndNotInferredFromFilledPatchValues(): void
+    {
+        $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
+
+        $dropEmptyProfilePatch = $this->extractMethodSource($controllerSource, 'dropEmptyProfileIdentityPatchValues');
+        self::assertStringContainsString("!\\is_array(\$payload['site_profile_manual'])", $dropEmptyProfilePatch);
+
+        $startBuild = $this->extractMethodSource($controllerSource, 'handleStartBuild');
+        self::assertStringContainsString('$scopePatch = $this->dropEmptyProfileIdentityPatchValues($scopePatch);', $startBuild);
+        self::assertStringNotContainsString('$siteProfileManual = \\is_array($scopePatch', $startBuild);
+        self::assertStringNotContainsString('$siteProfileManual[$manualField] = true;', $startBuild);
+
+        $mutateScope = $this->extractMethodSource($controllerSource, 'mutateScope');
+        self::assertStringContainsString('$payload = $this->dropEmptyProfileIdentityPatchValues($payload);', $mutateScope);
+        self::assertStringNotContainsString('$siteProfileManual = \\is_array($payload', $mutateScope);
+        self::assertStringNotContainsString('$siteProfileManual[$manualField] = true;', $mutateScope);
+
+        $moduleDir = \dirname((new ReflectionClass(AiSiteAgent::class))->getFileName(), 3);
+        $mainScript = (string)\file_get_contents(
+            $moduleDir . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
+        );
+        self::assertStringContainsString('state.site_profile_manual = Object.assign({}, siteProfileManual);', $mainScript);
+        self::assertStringContainsString('siteProfileManual[mapped] = true;', $mainScript);
     }
 
     private function extractMethodSource(string $source, string $method): string

@@ -175,6 +175,142 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringNotContainsString('syncTaskPlanSseRunningFromWorkspaceState', $source);
     }
 
+    public function testPlanQueueProgressKeepsStructuredCountsWhenListsAreCompacted(): void
+    {
+        $source = \file_get_contents(
+            \dirname(__DIR__, 3) . '/view/templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml'
+        );
+
+        self::assertIsString($source);
+        $methodOffset = \strpos($source, 'function normalizePlanQueuePageProgress');
+        self::assertNotFalse($methodOffset);
+        $methodSource = \substr($source, $methodOffset, 2400);
+
+        foreach ([
+            'var doneCount = parsePlanQueueNonNegativeCount(source.done_count, done.length);',
+            'var runningCount = parsePlanQueueNonNegativeCount(source.running_count, running.length);',
+            'var failedCount = parsePlanQueueNonNegativeCount(source.failed_count, failed.length);',
+            'var pendingCount = parsePlanQueueNonNegativeCount(source.pending_count, pending.length);',
+            'remaining_count: resolvePlanQueueRemainingCount(source, total, doneCount, runningCount, failedCount, pendingCount)',
+        ] as $needle) {
+            self::assertStringContainsString($needle, $methodSource);
+        }
+        self::assertStringContainsString(
+            'var pendingCount = parseInt(String(normalized.pending_count != null ? normalized.pending_count : pending.length), 10) || 0;',
+            $source
+        );
+        self::assertStringContainsString(
+            "renderPlanQueueProgressBar('Pending', pendingCount, total, 'secondary', pending)",
+            $source
+        );
+        self::assertStringContainsString(
+            'function resolvePlanQueueRemainingCount(source, total, doneCount, runningCount, failedCount, pendingCount)',
+            $source
+        );
+        self::assertStringNotContainsString(
+            "renderPlanQueueProgressBar('Pending', pending.length, total, 'secondary', pending)",
+            $source
+        );
+        self::assertStringContainsString(
+            'var blockTotal = Math.max(blocks.length, parseInt(String(row.block_total || 0), 10) || 0);',
+            $source
+        );
+        self::assertStringContainsString(
+            'row.block_done_count != null ? row.block_done_count : counts.done',
+            $source
+        );
+        self::assertStringContainsString(
+            'var hiddenBlockCount = Math.max(0, blockTotal - Math.min(blocks.length, 24));',
+            $source
+        );
+        self::assertStringContainsString(
+            "var active = ['pending', 'queued', 'running', 'processing', 'retrying'].indexOf(status) >= 0;",
+            $source
+        );
+        self::assertStringContainsString(
+            'var candidates = active',
+            $source
+        );
+        self::assertMatchesRegularExpression(
+            '/queueInfo\\.process,\\s+queueInfo\\.message,\\s+queueInfo\\.latest_message/s',
+            $source
+        );
+    }
+
+    public function testStageOnePlanJsonMergeKeepsNumericPageFanoutByPageType(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'mergeStageOnePersistedPlanJson');
+        $method->setAccessible(true);
+
+        $merged = $method->invoke(
+            $controller,
+            [
+                'pages' => [
+                    [
+                        'page_type' => 'home_page',
+                        'blocks' => [
+                            ['block_key' => 'hero', 'content' => 'Home hero'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'pages' => [
+                    [
+                        'page_type' => 'about_page',
+                        'blocks' => [
+                            ['block_key' => 'intro', 'content' => 'About intro'],
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        self::assertArrayHasKey('home_page', $merged['pages']);
+        self::assertArrayHasKey('about_page', $merged['pages']);
+        self::assertArrayNotHasKey(0, $merged['pages']);
+        self::assertSame('Home hero', $merged['pages']['home_page']['blocks'][0]['content']);
+        self::assertSame('About intro', $merged['pages']['about_page']['blocks'][0]['content']);
+    }
+
+    public function testStageOnePlanJsonMergeKeepsIncrementalPagePlansByPageType(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'mergeStageOnePersistedPlanJson');
+        $method->setAccessible(true);
+
+        $merged = $method->invoke(
+            $controller,
+            [
+                'page_plans' => [
+                    [
+                        'page_type' => 'home_page',
+                        'blocks' => [
+                            ['block_key' => 'hero', 'summary' => 'Home hero'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'page_plans' => [
+                    [
+                        'type' => 'blog_list',
+                        'blocks' => [
+                            ['block_key' => 'post_grid', 'summary' => 'Blog grid'],
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        self::assertArrayHasKey('home_page', $merged['page_plans']);
+        self::assertArrayHasKey('blog_list', $merged['page_plans']);
+        self::assertArrayNotHasKey(0, $merged['page_plans']);
+        self::assertSame('Home hero', $merged['page_plans']['home_page']['blocks'][0]['summary']);
+        self::assertSame('Blog grid', $merged['page_plans']['blog_list']['blocks'][0]['summary']);
+    }
+
     public function testBlockConfigReplacementOnlyTouchesSelectedPageBlock(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
@@ -245,13 +381,13 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'module' => 'GuoLaiRen_PageBuilder',
             'biz_key' => 'glr_aisite:session:987:queue_slot:planning',
             'status' => 'running',
-            'pid' => 48104,
+            'pid' => \getmypid(),
             'type_id' => 6,
             'finished' => 0,
             'start_at' => '2026-04-21 02:15:53',
             'end_at' => '2026-04-21 02:16:04',
             'process' => 'AI 流式生成中... (+33 B)',
-            'result' => "[02:16:04] INFO checkpoint saved\n",
+            'result' => "[02:16:04] INFO state saved\n",
             'content' => \json_encode([
                 'job_key' => 'glr_aisite:session:987:job:stage1.requirement_expand',
                 'job_type' => 'stage1.requirement_expand',
@@ -276,7 +412,33 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(340, $payload['token_usage']['output_tokens']);
         self::assertSame(1540, $payload['token_usage']['total_tokens']);
         self::assertSame('AI 流式生成中... (+33 B)', $payload['process']);
-        self::assertSame("[02:16:04] INFO checkpoint saved", $payload['result_log']);
+        self::assertSame("[02:16:04] INFO state saved", $payload['result_log']);
+    }
+
+    public function testQueueObserverPanelPayloadPreservesRunningQueueForSchedulerRecovery(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'buildQueueObserverPanelPayload');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke($controller, [
+            'queue_id' => 144,
+            'name' => 'PageBuilder plan',
+            'module' => 'GuoLaiRen_PageBuilder',
+            'biz_key' => 'glr_aisite:session:987:queue_slot:plan',
+            'status' => 'running',
+            'pid' => 999999,
+            'type_id' => 6,
+            'finished' => 0,
+            'process' => 'old running message',
+        ]);
+
+        self::assertSame('running', $payload['status']);
+        self::assertSame('running', $payload['queue_status']);
+        self::assertSame('running', $payload['job_status']);
+        self::assertArrayNotHasKey('retry_allowed', $payload);
+        self::assertArrayNotHasKey('queue_terminal_recovered', $payload);
+        self::assertSame('old running message', $payload['process']);
     }
 
     public function testStageOneRequirementExpandQueueEnvelopeUsesJobFields(): void
@@ -316,7 +478,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'type_id' => 6,
                 'finished' => 0,
                 'process' => 'AI stream running... (+33 B)',
-                'result' => "[02:16:04] INFO checkpoint saved\n",
+                'result' => "[02:16:04] INFO state saved\n",
                 'content' => \json_encode([
                     'operation' => 'plan',
                     'token_usage' => [
@@ -365,7 +527,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         self::assertSame([], $chunkEvents, 'queue.result should not replay as chunk SSE');
         self::assertArrayNotHasKey('queue_result_delta', $processEvents[0]['data']);
-        self::assertSame("[02:16:04] INFO checkpoint saved", (string)$processEvents[0]['data']['queue_info']['result_log']);
+        self::assertSame("[02:16:04] INFO state saved", (string)$processEvents[0]['data']['queue_info']['result_log']);
         self::assertSame(780, $processEvents[0]['data']['token_usage']['total_tokens']);
         self::assertSame(780, $processEvents[0]['data']['queue_info']['token_usage']['total_tokens']);
     }
@@ -414,9 +576,11 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         $moduleRoot = \dirname(__DIR__, 3);
         $phaseScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml');
         $runtimeScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        $controllerSource = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
 
         self::assertIsString($phaseScript);
         self::assertIsString($runtimeScript);
+        self::assertIsString($controllerSource);
         self::assertStringContainsString('syncFromSsePayload', $phaseScript);
         self::assertStringContainsString('mergePlanQueueInfoFromSsePayload', $phaseScript);
         self::assertStringContainsString('renderQueueInfoSummary', $phaseScript);
@@ -434,7 +598,17 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('function appendLiveQueueLog(delta)', $phaseScript);
         self::assertStringContainsString('resEl.appendChild(node)', $phaseScript);
         self::assertStringContainsString('while (resEl.childNodes.length > LIVE_LOG_MAX_LINES)', $phaseScript);
-        self::assertStringContainsString('state.plan_queue_info = sanitizeQueueInfoForMemory(info);', $phaseScript);
+        self::assertStringContainsString('state.plan_queue_info = mergeIncomingPlanQueueInfoWithRememberedProgress(info);', $phaseScript);
+        self::assertStringContainsString('function hasNonEmptyStageOneProgress(progress)', $phaseScript);
+        self::assertStringContainsString('stage1_page_progress', $phaseScript);
+        self::assertStringContainsString('function resolvePlanQueueLatestPageProgress(info)', $phaseScript);
+        self::assertStringContainsString('function mergeIncomingPlanQueueInfoWithRememberedProgress(info)', $phaseScript);
+        self::assertStringContainsString('$includeQueuePayload = $operation === \'plan\';', $controllerSource);
+        self::assertStringContainsString('findAiSiteOperationQueueRow($fresh, $operation, $queueId, $includeQueuePayload)', $controllerSource);
+        self::assertStringContainsString('findAiSiteOperationQueueRow($fresh, $operation, $effectiveQueueId, $operation === \'plan\')', $controllerSource);
+        self::assertStringContainsString('window.__pbWorkspaceApi.updateStageStatusSummary(state)', $phaseScript);
+        self::assertStringContainsString('window.__pbWorkspaceApi.updateStageStatusSummary(safeState)', $phaseScript);
+        self::assertStringContainsString("activeOp === 'plan' && isStageQueueInProgress(readStageQueueStatus(resolveRuntimeQueueInfoFromState(state, 'plan')))", $runtimeScript);
         self::assertStringContainsString("'result_log', 'queue_result_delta', 'chunk', 'content', 'events', 'top_logs'", $phaseScript);
         self::assertStringContainsString("'events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'", $phaseScript);
         self::assertStringNotContainsString('state.queue_result_delta =', $phaseScript);
@@ -473,8 +647,6 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('function abortBlockEditorAiStream()', $mainScript);
         self::assertStringContainsString('abortCurrentStream();', $mainScript);
         self::assertStringContainsString('clearStreamRefs();', $mainScript);
-        self::assertStringContainsString("delete safe.snapshot;", $mainScript);
-        self::assertStringContainsString("delete safe.scope.snapshot;", $mainScript);
         self::assertStringContainsString("safe.scope[key] = sanitizeQueueInfoForMemory(safe.scope[key]);", $mainScript);
         self::assertStringContainsString("['page_type_layouts', 'pagebuilder_pages_by_type', 'virtual_pages_by_type']", $mainScript);
         self::assertStringContainsString('function sanitizeWorkspaceStateCollectionForMemory(collection)', $mainScript);
@@ -507,8 +679,6 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'details close should clear the bounded live log DOM'
             );
             self::assertStringContainsString('if (panelEl && !panelEl.open)', $script);
-            self::assertStringContainsString('delete state.snapshot;', $script);
-            self::assertStringContainsString('delete state.scope.snapshot;', $script);
             self::assertStringContainsString('state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);', $script);
             self::assertStringContainsString('state.plan_queue_info = sanitizeQueueInfoForMemory(state.plan_queue_info);', $script);
             self::assertStringContainsString('state.build_queue_info = sanitizeQueueInfoForMemory(state.build_queue_info);', $script);
@@ -599,7 +769,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         self::assertIsString($controllerSource);
         self::assertIsString($planQueueSource);
-        self::assertStringContainsString("string \$claimSource = 'operation_sse'", $controllerSource);
+        self::assertStringContainsString("string \$claimSource = 'direct_operation'", $controllerSource);
+        self::assertStringContainsString("'reason' => 'queue_observer_only'", $controllerSource);
         self::assertStringContainsString("&& \$claimSource === 'queue'", $controllerSource);
         self::assertStringContainsString('&& !$this->scopeHasPersistedStageOnePlan($scope)', $controllerSource);
         self::assertStringContainsString("'claimed_by' => \$claimSource", $controllerSource);
@@ -679,7 +850,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertFalse($reflection->hasMethod('scopeHasPersistedStageTwoTaskPlan'));
         self::assertFalse($reflection->hasMethod('autoRerunTaskPlanQueueWhenQueueDoneButDraftMissing'));
     }
-    public function testWorkspacePollingPayloadUsesSameStatusEnvelopeAsSseSnapshot(): void
+    public function testWorkspacePollingPayloadUsesSameStatusEnvelopeAsSseState(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
         $pollingMethod = new ReflectionMethod(AiSiteAgent::class, 'decorateWorkspaceStateWithPollingPayload');

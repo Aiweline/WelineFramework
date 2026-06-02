@@ -18,19 +18,19 @@ class AiSiteAgentWorkspaceStateHelperService
     private const VIEW_LONG_TEXT_BYTES = 12000;
     private const VIEW_MESSAGE_BYTES = 800;
 
-    private ?AiSiteQueueSnapshotService $queueSnapshotService;
+    private ?AiSiteQueueStateService $queueStateService;
 
-    public function __construct(?AiSiteQueueSnapshotService $queueSnapshotService = null)
+    public function __construct(?AiSiteQueueStateService $queueStateService = null)
     {
-        $this->queueSnapshotService = $queueSnapshotService;
+        $this->queueStateService = $queueStateService;
     }
 
-    private function queueSnapshotService(): AiSiteQueueSnapshotService
+    private function queueStateService(): AiSiteQueueStateService
     {
-        if ($this->queueSnapshotService === null) {
-            $this->queueSnapshotService = ObjectManager::getInstance(AiSiteQueueSnapshotService::class);
+        if ($this->queueStateService === null) {
+            $this->queueStateService = ObjectManager::getInstance(AiSiteQueueStateService::class);
         }
-        return $this->queueSnapshotService;
+        return $this->queueStateService;
     }
 
     /**
@@ -136,23 +136,23 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
-     * @param array<string, mixed> $snapshot
+     * @param array<string, mixed> $state
      * @return array<string, mixed>
      */
-    public function filterSnapshotByStage(array $snapshot, string $streamStage): array
+    public function filterStateByStage(array $state, string $streamStage): array
     {
         if ($streamStage === '') {
-            return $snapshot;
+            return $state;
         }
-        $snapshot['events'] = $this->filterEventsByStage(
-            \is_array($snapshot['events'] ?? null) ? $snapshot['events'] : [],
+        $state['events'] = $this->filterEventsByStage(
+            \is_array($state['events'] ?? null) ? $state['events'] : [],
             $streamStage
         );
-        $snapshot['top_logs'] = $this->filterEventsByStage(
-            \is_array($snapshot['top_logs'] ?? null) ? $snapshot['top_logs'] : [],
+        $state['top_logs'] = $this->filterEventsByStage(
+            \is_array($state['top_logs'] ?? null) ? $state['top_logs'] : [],
             $streamStage
         );
-        return $snapshot;
+        return $state;
     }
 
     /**
@@ -281,7 +281,6 @@ class AiSiteAgentWorkspaceStateHelperService
         foreach ([
             'markdown' => 'plan_markdown',
             'json' => 'plan_json',
-            'structured' => 'plan_structured',
             'build_plan_v2' => 'build_plan_v2',
             'projection' => 'plan_projection',
         ] as $planKey => $stateKey) {
@@ -327,15 +326,12 @@ class AiSiteAgentWorkspaceStateHelperService
 
         unset(
             $state['events'],
-            $state['confirmed_stage1_plan_book'],
             $state['plan_markdown'],
             $state['plan_json'],
-            $state['plan_structured'],
             $state['plan_workbench'],
             $state['virtual_theme_plan'],
             $state['task_plan'],
             $state['task_plan_markdown'],
-            $state['task_plan_structured'],
             $state['task_plan_confirmed'],
             $state['task_plan_confirmed_at'],
             $state['build_blueprint'],
@@ -348,8 +344,9 @@ class AiSiteAgentWorkspaceStateHelperService
             $state['raw'],
             $state['raw_response']
         );
-
-        return $this->stripInlineImagePayloads($state);
+        return $this->stripInlineImagePayloads(
+            AiSiteScopeCompatibilityService::stripDuplicatedStageOneStorageFields($state)
+        );
     }
 
     /**
@@ -397,16 +394,13 @@ class AiSiteAgentWorkspaceStateHelperService
             $scope['build_summary'],
             $scope['active_operation'],
             $scope['pre_publish_visual_urls'],
-            $scope['confirmed_stage1_plan_book'],
             $scope['plan_markdown'],
             $scope['plan_json'],
-            $scope['plan_structured'],
             $scope['plan_workbench'],
             $scope['build_plan_v2'],
             $scope['plan_projection'],
             $scope['task_plan'],
             $scope['task_plan_markdown'],
-            $scope['task_plan_structured'],
             $scope['task_plan_confirmed'],
             $scope['task_plan_confirmed_at'],
             $scope['build_blueprint'],
@@ -415,8 +409,6 @@ class AiSiteAgentWorkspaceStateHelperService
             $scope['build_css'],
             $scope['build_js'],
             $scope['execution_blueprint'],
-            $scope['_plan_generation_checkpoint'],
-            $scope['_task_plan_generation_checkpoint'],
             $scope['content_manifest'],
             $scope['virtual_theme_plan'],
             $scope['virtual_theme_build_tree'],
@@ -424,8 +416,7 @@ class AiSiteAgentWorkspaceStateHelperService
             $scope['shared_components'],
             $scope['_ai_generated_shared_components']
         );
-
-        return $scope;
+        return AiSiteScopeCompatibilityService::stripDuplicatedStageOneStorageFields($scope);
     }
 
     /**
@@ -702,14 +693,12 @@ class AiSiteAgentWorkspaceStateHelperService
     {
         $json = \is_array($plan['json'] ?? null) ? $plan['json'] : [];
         $structured = \is_array($plan['structured'] ?? null) ? $plan['structured'] : [];
-        \error_log("[prunePlanForView] json=" . (\is_array($json) ? 'array(' . \count($json) . ')' : \gettype($json)) . " structured=" . (\is_array($structured) ? 'array(' . \count($structured) . ')' : \gettype($structured)) . " structured_keys=" . (\is_array($structured) ? \implode(',', \array_keys($structured)) : 'N/A'));
         if ($structured === [] && $json !== []) {
             $structured = $json;
         }
         $buildPlan = \is_array($plan['build_plan_v2'] ?? null) ? $plan['build_plan_v2'] : [];
 
         $prunedStructured = $this->pruneStageOneStructuredPlanForView($structured);
-        \error_log("[prunePlanForView] result json_available=" . ($json !== [] ? 'true' : 'false') . " structured_available=" . ($structured !== [] ? 'true' : 'false') . " prunedStructured_keys=" . (\is_array($prunedStructured) ? \implode(',', \array_keys($prunedStructured)) : 'N/A'));
 
         return [
             'markdown' => $this->limitViewText((string)($plan['markdown'] ?? ''), 80000),
@@ -1111,13 +1100,19 @@ class AiSiteAgentWorkspaceStateHelperService
      */
     public function selectStatusQueueInfo(array $state, string $operation): array
     {
-        $key = match (\trim($operation)) {
+        $operation = $this->normalizeQueueOperation($operation);
+        $key = match ($operation) {
             'plan' => 'plan_queue_info',
-            'build', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'publish' => 'build_queue_info',
+            'build', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'image_asset', 'publish' => 'build_queue_info',
             default => '',
         };
         if ($key !== '' && \is_array($state[$key] ?? null)) {
-            return $state[$key];
+            $queueInfo = $state[$key];
+            return $this->queueInfoBelongsToOperation($queueInfo, $operation) ? $queueInfo : [];
+        }
+
+        if ($key !== '') {
+            return [];
         }
 
         foreach (['plan_queue_info', 'build_queue_info'] as $fallbackKey) {
@@ -1127,6 +1122,93 @@ class AiSiteAgentWorkspaceStateHelperService
         }
 
         return [];
+    }
+
+    /**
+     * @param array<string, mixed> $queueInfo
+     */
+    public function resolveStatusQueueInfoOperation(array $queueInfo): string
+    {
+        $operation = $this->normalizeQueueOperation((string)($queueInfo['operation'] ?? ''));
+        if ($operation !== '') {
+            return $operation;
+        }
+
+        $jobType = \trim((string)($queueInfo['job_type'] ?? ''));
+        if ($jobType === '') {
+            $jobKey = \trim((string)($queueInfo['job_key'] ?? ''));
+            foreach ($this->queueOperationJobTypes() as $candidateOperation => $candidateJobType) {
+                if ($candidateJobType !== '' && \str_contains($jobKey, ':job:' . $candidateJobType)) {
+                    return $candidateOperation;
+                }
+            }
+        } else {
+            foreach ($this->queueOperationJobTypes() as $candidateOperation => $candidateJobType) {
+                if ($jobType === $candidateJobType) {
+                    return $candidateOperation;
+                }
+            }
+        }
+
+        $bizKey = \trim((string)($queueInfo['biz_key'] ?? ''));
+        if ($bizKey !== '') {
+            if (\preg_match('/(?:^|:)asset:/', $bizKey) === 1) {
+                return 'image_asset';
+            }
+            if (\preg_match('/(?:^|:)queue_slot:([^:]+)/', $bizKey, $slotMatch) === 1) {
+                return match (\trim((string)($slotMatch[1] ?? ''))) {
+                    'planning', 'plan' => 'plan',
+                    'build' => 'build',
+                    'regenerate_page' => 'regenerate_page',
+                    'block_regenerate' => 'block_regenerate',
+                    'block_partial_patch' => 'block_partial_patch',
+                    'image_asset' => 'image_asset',
+                    'publish' => 'publish',
+                    default => '',
+                };
+            }
+            if (\preg_match('/(?:^|:)operation:([^:]+)/', $bizKey, $operationMatch) === 1) {
+                return $this->normalizeQueueOperation((string)($operationMatch[1] ?? ''));
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $queueInfo
+     */
+    private function queueInfoBelongsToOperation(array $queueInfo, string $operation): bool
+    {
+        $operation = $this->normalizeQueueOperation($operation);
+        if ($operation === '') {
+            return true;
+        }
+
+        $resolvedOperation = $this->resolveStatusQueueInfoOperation($queueInfo);
+        return $resolvedOperation === '' || $resolvedOperation === $operation;
+    }
+
+    private function normalizeQueueOperation(string $operation): string
+    {
+        $operation = \trim($operation);
+        return \array_key_exists($operation, $this->queueOperationJobTypes()) ? $operation : '';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function queueOperationJobTypes(): array
+    {
+        return [
+            'plan' => 'stage1.requirement_expand',
+            'build' => 'virtual_theme.tree.build',
+            'block_regenerate' => 'virtual_theme.block.regenerate',
+            'block_partial_patch' => 'virtual_theme.block.partial_patch',
+            'regenerate_page' => 'virtual_theme.page.regenerate',
+            'image_asset' => 'image.asset.generate',
+            'publish' => 'virtual_theme.publish',
+        ];
     }
 
     public function normalizeEnvelopeStatus(string $status): string
@@ -1221,14 +1303,14 @@ class AiSiteAgentWorkspaceStateHelperService
     /**
      * @param array<string, mixed> $state
      * @param array<string, mixed> $activeOperation
-     * @param array<string, mixed> $queueSnapshot
+     * @param array<string, mixed> $queueState
      */
-    public function resolveEnvelopeUpdatedAt(array $state, array $activeOperation, array $queueSnapshot): string
+    public function resolveEnvelopeUpdatedAt(array $state, array $activeOperation, array $queueState): string
     {
         foreach ([
             $activeOperation['updated_at'] ?? null,
-            $queueSnapshot['end_at'] ?? null,
-            $queueSnapshot['start_at'] ?? null,
+            $queueState['end_at'] ?? null,
+            $queueState['start_at'] ?? null,
             $state['updated_at'] ?? null,
         ] as $value) {
             $updatedAt = \trim((string)$value);
@@ -1255,17 +1337,17 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
-     * @param array<string, mixed> $queueSnapshot
+     * @param array<string, mixed> $queueState
      * @param array<string, mixed> $queueInfo
      * @param array<string, mixed> $activeOperation
      * @return array{input_tokens:int|null,output_tokens:int|null,total_tokens:int|null,token_cost_meta:array<string,mixed>|null}
      */
-    public function resolveEnvelopeTokenUsage(array $queueSnapshot, array $queueInfo, array $activeOperation): array
+    public function resolveEnvelopeTokenUsage(array $queueState, array $queueInfo, array $activeOperation): array
     {
-        $snapshotService = $this->queueSnapshotService();
-        $tokenUsage = $snapshotService->normalizeTokenUsage($queueSnapshot);
+        $queueStateService = $this->queueStateService();
+        $tokenUsage = $queueStateService->normalizeTokenUsage($queueState);
         foreach ([$queueInfo, $activeOperation] as $source) {
-            $candidate = $snapshotService->normalizeTokenUsage(\is_array($source) ? $source : []);
+            $candidate = $queueStateService->normalizeTokenUsage(\is_array($source) ? $source : []);
             foreach (['input_tokens', 'output_tokens', 'total_tokens'] as $tokenKey) {
                 if ($tokenUsage[$tokenKey] === null && $candidate[$tokenKey] !== null) {
                     $tokenUsage[$tokenKey] = $candidate[$tokenKey];

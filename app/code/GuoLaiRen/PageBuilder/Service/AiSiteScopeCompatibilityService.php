@@ -19,6 +19,35 @@ class AiSiteScopeCompatibilityService
     public const WORKSPACE_STATUS_PUBLISHING = 'publishing';
     public const WORKSPACE_STATUS_PUBLISHED = 'published';
     public const WORKSPACE_STATUS_FAILED = 'failed';
+    public const DUPLICATED_STAGE_ONE_STORAGE_KEYS = [
+        'confirmed_stage1_plan_book',
+        'theme_context_snapshot',
+        'shared_prompt_context',
+    ];
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    public static function stripDuplicatedStageOneStorageFields(array $scope): array
+    {
+        foreach (self::DUPLICATED_STAGE_ONE_STORAGE_KEYS as $key) {
+            unset($scope[$key]);
+        }
+        foreach (\array_keys($scope) as $key) {
+            if (\is_string($key) && self::isInternalPlanGenerationTransientKey($key)) {
+                unset($scope[$key]);
+            }
+        }
+
+        return $scope;
+    }
+
+    private static function isInternalPlanGenerationTransientKey(string $key): bool
+    {
+        return \str_starts_with($key, '_') && \str_contains($key, 'plan_generation_');
+    }
+
     public function __construct(
         private readonly LayoutConfigNormalizer $layoutConfigNormalizer,
         private readonly ?AiSiteHtmlBlocksBuildService $aiSiteHtmlBlocksBuildService = null,
@@ -269,10 +298,8 @@ class AiSiteScopeCompatibilityService
     public function hasPersistedStageOnePlan(array $scope): bool
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planStructured = \is_array($scope['plan_structured'] ?? null) ? $scope['plan_structured'] : [];
 
-        return $this->isUsableStageOnePlanJson($planJson)
-            || $this->isUsableStageOnePlanJson($planStructured);
+        return $this->isUsableStageOnePlanJson($planJson);
     }
 
     /**
@@ -1781,7 +1808,6 @@ class AiSiteScopeCompatibilityService
         foreach ([
             $scope['plan_generated_locale'] ?? null,
             $scope['plan_workbench']['confirmed']['plan_generated_locale'] ?? null,
-            $scope['plan_structured']['plan_generated_locale'] ?? null,
             $scope['plan_json']['plan_generated_locale'] ?? null,
         ] as $candidate) {
             if (!\is_scalar($candidate)) {
@@ -1832,11 +1858,13 @@ class AiSiteScopeCompatibilityService
 
         foreach ([
             $scope['ai_content_locale'] ?? null,
+            $scope['selected_content_locale'] ?? null,
+            $scope['selected_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
             $scope['content_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
             $scope['plan_locale'] ?? null,
-            $scope['default_locale'] ?? null,
-            $websiteProfile['default_locale'] ?? null,
             $scope['default_language'] ?? null,
             $websiteProfile['default_language'] ?? null,
         ] as $candidate) {

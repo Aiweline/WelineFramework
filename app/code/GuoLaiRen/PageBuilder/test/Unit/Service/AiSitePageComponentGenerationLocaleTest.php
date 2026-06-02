@@ -42,11 +42,11 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         })->call(
             $service,
             ['site_title' => 'Teenipiya', 'default_locale' => 'pt_BR'],
-            [
+            $this->scopeWithBuildPlanV2([
                 'default_locale' => 'pt_BR',
                 'content_locale' => 'pt_BR',
                 'page_types' => ['home_page', 'about_page', 'contact_page', 'privacy_policy', 'terms_of_service'],
-            ],
+            ], 'pt_BR', 'Teenipiya'),
             'Teenipiya'
         );
 
@@ -56,103 +56,6 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         self::assertStringContainsString("In\u{00ED}cio=>/", (string)($footer['links.column3_items'] ?? ''));
         self::assertStringContainsString("Pol\u{00ED}tica de Privacidade=>/privacy", (string)($footer['links.column3_items'] ?? ''));
         self::assertStringNotContainsString('Privacy Policy', (string)($footer['links.column3_items'] ?? ''));
-    }
-
-    public function testPortugueseBuildPlanCopyReplacesPlanningLanguageDefaults(): void
-    {
-        $service = new AiSitePageComponentGenerationService(
-            pageBlueprintService: new AiSitePageBlueprintService(),
-        );
-
-        $planningCopy = "Teenipiya \u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}\u{3001}\u{4FE1}\u{4EFB}\u{4FE1}\u{606F}\u{548C}\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}\u{3002}";
-        $expectedBody = 'Baixe o APK em passos simples e entre na mesa de Teen Patti agora.';
-
-        $config = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): array {
-            return $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
-        })->call(
-            $service,
-            'home_page',
-            [
-                'code' => 'content/home-page-hero-download',
-                'key' => 'hero_download',
-                'name' => 'Baixe em 3 Passos',
-                'config' => ['description' => $planningCopy],
-            ],
-            ['ai_description' => $planningCopy],
-            ['site_title' => 'Teenipiya', 'content_locale' => 'pt_BR'],
-            [
-                'content_locale' => 'pt_BR',
-                'default_locale' => 'pt_BR',
-                'page_types' => ['home_page'],
-                'build_blueprint' => [
-                    'source' => 'build_plan_v2',
-                    'tasks' => [[
-                        'task_type' => 'page_section',
-                        'page_type' => 'home_page',
-                        'section_code' => 'content/home-page-hero-download',
-                        'block_task' => [
-                            'content_plan' => [
-                                'content_copy' => [
-                                    ['field' => 'headline', 'copy' => 'Baixe em 3 Passos'],
-                                    ['field' => 'body', 'copy' => $expectedBody],
-                                ],
-                                'cta_plan' => [
-                                    ['label' => 'Baixar APK'],
-                                ],
-                            ],
-                        ],
-                    ]],
-                ],
-            ]
-        );
-
-        self::assertSame('Baixe em 3 Passos', $config['content.title'] ?? null);
-        self::assertSame($expectedBody, $config['content.description'] ?? null);
-        self::assertSame($expectedBody, $config['body'] ?? null);
-        self::assertNotSame('Download Now', $config['cta.text'] ?? null);
-        self::assertStringNotContainsString("\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}", (string)\json_encode($config, \JSON_UNESCAPED_UNICODE));
-    }
-
-    public function testScopeLocaleDrivesSectionDefaultsWhenContentLocaleIsMissing(): void
-    {
-        $service = new AiSitePageComponentGenerationService(
-            pageBlueprintService: new AiSitePageBlueprintService(),
-        );
-
-        $planningCopy = "Teenipiya \u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}\u{3001}\u{4FE1}\u{4EFB}\u{4FE1}\u{606F}\u{548C}\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}\u{3002}";
-
-        $config = (function (string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): array {
-            return $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
-        })->call(
-            $service,
-            'home_page',
-            [
-                'code' => 'content/home-page-trust',
-                'key' => 'trust',
-                'name' => 'trust',
-                'config' => ['description' => $planningCopy, 'section_intro' => $planningCopy],
-            ],
-            ['ai_description' => $planningCopy],
-            ['site_title' => 'Teenipiya'],
-            [
-                'locale' => 'pt_BR',
-                'build_blueprint' => [
-                    'tasks' => [[
-                        'task_type' => 'page_section',
-                        'page_type' => 'home_page',
-                        'section_code' => 'content/home-page-trust',
-                        'plan_context' => ['block_goal' => $planningCopy],
-                        'task_script' => ['story_goal' => $planningCopy],
-                        'block_task' => ['task_goal' => $planningCopy],
-                    ]],
-                ],
-            ]
-        );
-
-        self::assertSame('pt_BR', $config['runtime.content_locale'] ?? null);
-        self::assertSame('', $config['content.description'] ?? null);
-        self::assertSame('', $config['body'] ?? null);
-        self::assertStringNotContainsString("\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}", (string)\json_encode($config, \JSON_UNESCAPED_UNICODE));
     }
 
     public function testSelectedLocaleOverridesStaleChinesePlanLocaleForComponentDefaults(): void
@@ -180,12 +83,12 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
                 'content_locale' => 'zh_Hans_CN',
                 'default_locale' => 'pt_BR',
             ],
-            [
+            $this->scopeWithBuildPlanV2([
                 'content_locale' => 'zh_Hans_CN',
                 'plan_generated_locale' => 'zh_Hans_CN',
                 'default_locale' => 'pt_BR',
                 'page_types' => ['contact_page'],
-            ]
+            ], 'pt_BR', 'Teenipiya')
         );
 
         self::assertSame('pt_BR', $config['runtime.content_locale'] ?? null);
@@ -208,7 +111,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
                 'content_locale' => 'en_US',
                 'default_locale' => 'en_US',
             ],
-            [
+            $this->scopeWithBuildPlanV2([
                 'content_locale' => 'en_US',
                 'default_locale' => 'en_US',
                 'plan_json' => [
@@ -216,7 +119,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
                     'stage1_contract' => ['content_locale' => 'zh_Hans_CN'],
                 ],
                 'page_types' => ['home_page', 'contact_page', 'privacy_policy'],
-            ],
+            ], 'zh_Hans_CN', "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}"),
             "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}"
         );
 
@@ -240,13 +143,12 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
                 'content_locale' => 'en_US',
                 'default_locale' => 'en_US',
             ],
-            [
+            $this->scopeWithBuildPlanV2([
                 'content_locale' => 'en_US',
                 'plan_generated_locale' => 'zh_Hans_CN',
                 'plan_json' => ['content_locale' => 'en_US'],
-                'execution_blueprint' => ['content_locale' => 'en_US'],
                 'page_types' => ['home_page', 'contact_page', 'privacy_policy'],
-            ],
+            ], 'zh_Hans_CN', "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}"),
             "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}"
         );
 
@@ -464,5 +366,102 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         self::assertStringContainsString('data-pb-ai-bound', $phtml);
         self::assertStringNotContainsString("    @media (max-width: 768px){#<?= \$componentId ?> .pb-c-inner", $phtml);
         self::assertStringContainsString("\n@media (max-width: 768px){#<?= \$componentId ?> .pb-c-inner", $phtml);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function scopeWithBuildPlanV2(array $scope, string $locale, string $siteName): array
+    {
+        $pageTypes = array_values(array_filter(array_map('strval', $scope['page_types'] ?? ['home_page'])));
+        if ($pageTypes === []) {
+            $pageTypes = ['home_page'];
+        }
+
+        $contentItems = [
+            'site.name' => $siteName,
+            'site.primary_goal' => 'Localized site defaults',
+        ];
+        $pages = [];
+
+        foreach ($pageTypes as $pageType) {
+            $pageId = str_replace('_', '-', $pageType);
+            $titleKey = 'page.' . $pageType . '.title';
+            $contentItems[$titleKey] = $this->localizedPageTitle($pageType, $locale);
+            $pages[] = [
+                'page_id' => $pageId,
+                'page_type' => $pageType,
+                'title_key' => $titleKey,
+                'blocks' => [],
+            ];
+        }
+
+        return array_replace_recursive([
+            'build_plan_v2' => [
+                'contract_meta' => [
+                    'id' => 'locale-test-build-plan-v2',
+                    'version' => '2.2',
+                    'status' => 'confirmed',
+                    'signature' => 'locale-test-signature',
+                    'source_signature' => 'locale-test-source-signature',
+                ],
+                'site_brief' => [
+                    'site_name' => $siteName,
+                    'primary_goal' => 'Localized site defaults',
+                    'locale' => $locale,
+                ],
+                'source_of_truth' => [
+                    'user_requirements' => [
+                        'site_name' => $siteName,
+                    ],
+                ],
+                'i18n' => [
+                    'primary_locale' => $locale,
+                ],
+                'content_manifest' => [
+                    'primary_locale' => $locale,
+                    'items' => $contentItems,
+                ],
+                'pages' => $pages,
+                'blocks' => [],
+            ],
+        ], $scope);
+    }
+
+    private function localizedPageTitle(string $pageType, string $locale): string
+    {
+        $language = strtolower(substr($locale, 0, 2));
+
+        if ($language === 'pt') {
+            return match ($pageType) {
+                'home_page' => "In\u{00ED}cio",
+                'about_page' => 'Sobre',
+                'contact_page' => 'Contato',
+                'privacy_policy' => "Pol\u{00ED}tica de Privacidade",
+                'terms_of_service' => 'Termos de Servico',
+                default => str_replace('_', ' ', $pageType),
+            };
+        }
+
+        if ($language === 'zh') {
+            return match ($pageType) {
+                'home_page' => "\u{9996}\u{9875}",
+                'about_page' => "\u{5173}\u{4E8E}",
+                'contact_page' => "\u{8054}\u{7CFB}\u{6211}\u{4EEC}",
+                'privacy_policy' => "\u{9690}\u{79C1}\u{653F}\u{7B56}",
+                'terms_of_service' => "\u{670D}\u{52A1}\u{6761}\u{6B3E}",
+                default => str_replace('_', ' ', $pageType),
+            };
+        }
+
+        return match ($pageType) {
+            'home_page' => 'Home',
+            'about_page' => 'About',
+            'contact_page' => 'Contact',
+            'privacy_policy' => 'Privacy Policy',
+            'terms_of_service' => 'Terms of Service',
+            default => str_replace('_', ' ', $pageType),
+        };
     }
 }

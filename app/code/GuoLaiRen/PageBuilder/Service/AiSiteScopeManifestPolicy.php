@@ -16,7 +16,6 @@ final class AiSiteScopeManifestPolicy
     /** @var list<string> */
     public const INLINE_ARTIFACT_KEYS = [
         'plan_json',
-        'plan_structured',
         'plan_markdown',
         'plan_projection',
         'content_manifest',

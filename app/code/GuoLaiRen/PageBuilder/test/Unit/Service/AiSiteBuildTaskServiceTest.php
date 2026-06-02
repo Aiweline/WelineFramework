@@ -330,9 +330,6 @@ JSON;
 
         $this->assertFalse($service->hasConfirmedBuildPlanForBuild([
             'task_plan_confirmed' => 1,
-            'task_plan_structured' => [
-                'shared_tasks' => [['task_key' => 'shared:header']],
-            ],
             'virtual_theme_plan' => [
                 'confirmed' => [
                     'signature' => 'legacy-confirmed-signature',
@@ -624,16 +621,41 @@ JSON;
                 'about_page' => ['blocks' => [['block_key' => 'intro']]],
             ],
             'build_plan_confirmed' => 1,
-            'build_tasks' => [
-                'home_page:hero' => [
-                    'status' => 'done',
-                    'attempt_no' => 1,
-                    'message' => '',
+            'build_plan_v2' => [
+                'contract_meta' => [
+                    'status' => 'confirmed',
+                    'signature' => 'completion-gate-fails',
                 ],
-                'about_page:intro' => [
-                    'status' => 'done',
-                    'attempt_no' => 1,
-                    'message' => '',
+                'pages' => [
+                    [
+                        'page_id' => 'home_page',
+                        'page_type' => 'home_page',
+                    ],
+                ],
+                'blocks' => [
+                    [
+                        'block_id' => 'home_page.hero',
+                        'page_id' => 'home_page',
+                        'page_type' => 'home_page',
+                        'section_key' => 'hero',
+                        'execution' => [
+                            'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+                            'updated_at' => '2026-05-11 00:00:00',
+                            'finished_at' => '2026-05-11 00:00:00',
+                        ],
+                    ],
+                ],
+                'shared_execution' => [
+                    'header' => [
+                        'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+                        'updated_at' => '2026-05-11 00:00:00',
+                        'finished_at' => '2026-05-11 00:00:00',
+                    ],
+                    'footer' => [
+                        'status' => AiSiteBuildTaskService::TASK_STATUS_DONE,
+                        'updated_at' => '2026-05-11 00:00:00',
+                        'finished_at' => '2026-05-11 00:00:00',
+                    ],
                 ],
             ],
             'latest_build_failed' => 1,

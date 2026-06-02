@@ -5,7 +5,7 @@ $startPublishUrl = (string)($startPublishUrl ?? '');
 $publishCheckUrl = (string)($publishCheckUrl ?? '');
 $operationSseUrl = (string)($operationSseUrl ?? '');
 $workspaceStreamSseUrl = (string)($workspaceStreamSseUrl ?? '');
-$workspaceSnapshotUrl = (string)($workspaceSnapshotUrl ?? '');
+$workspaceStateUrl = (string)($workspaceStateUrl ?? '');
 $activeOperation = \is_array($activeOperation ?? null) ? $activeOperation : [];
 $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 ?>
@@ -148,7 +148,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
     function resolveRuntimeQueueInfoKey(operation) {
         var op = String(operation || '').trim().toLowerCase();
-        if (isRuntimePublishBlockingAiOperation(op) || op === 'publish') {
+        if (isRuntimePublishBlockingAiOperation(op) || op === 'image_asset' || op === 'publish') {
             return 'build_queue_info';
         }
         return 'plan_queue_info';
@@ -175,7 +175,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var operationSseBaseUrl = <?= \json_encode($operationSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceStreamSseBaseUrl = <?= \json_encode((string)($workspaceStreamSseUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var workspaceSnapshotUrl = <?= \json_encode((string)($workspaceSnapshotUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var workspaceStateUrl = <?= \json_encode((string)($workspaceStateUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var workspaceStatePollUrl = workspaceStateUrl;
     var operationSseDeferredHandoffKeys = Object.create(null);
     var activeOperation = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var initialWorkspaceState = window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
@@ -196,8 +197,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     var deferredQueueStatePollInFlight = false;
     var deferredQueueStatePollDeadline = 0;
     var deferredQueueStatePollOperation = '';
-    var DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 5000;
-    // 0 means no wall-clock cutoff: once SSE hands off to snapshot polling,
+    var deferredQueueStatePollSignature = '';
+    var DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 1000;
+    // 0 means no wall-clock cutoff: once SSE hands off to state polling,
     // the poller stops only when the real queue state becomes terminal.
     var DEFERRED_QUEUE_STATE_POLL_TTL_MS = 0;
 
@@ -243,6 +245,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         deferredQueueStatePollInFlight = false;
         deferredQueueStatePollDeadline = 0;
         deferredQueueStatePollOperation = '';
+        deferredQueueStatePollSignature = '';
     }
 
     /**
@@ -384,7 +387,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var normalizedOperation = String(operation || '').trim().toLowerCase();
         var state = payload && payload.state && typeof payload.state === 'object'
             ? payload.state
-            : (readCachedWorkspaceSnapshotState() || initialWorkspaceState || {});
+            : (readCachedWorkspaceState() || initialWorkspaceState || {});
         var active = resolveNestedOperationPayload(state, normalizedOperation)
             || resolveNestedOperationPayload(payload, normalizedOperation);
         if ((!active || !resolveActiveExecutionToken(active)) && activeOperation && typeof activeOperation === 'object') {
@@ -395,19 +398,14 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return true;
         }
         var queueStatus = readQueueStatusForDeferredState(state, normalizedOperation);
-        if (!isQueueStatusInProgressForWatch(queueStatus)) {
+        var queueWaitingForScheduler = runtimeTruthyFlag(active && active.queue_waiting_for_scheduler)
+            || runtimeTruthyFlag(payload && payload.queue_waiting_for_scheduler)
+            || runtimeTruthyFlag(state && state.queue_waiting_for_scheduler);
+        if (!isQueueStatusInProgressForWatch(queueStatus) && !queueWaitingForScheduler) {
             return false;
         }
-        var key = resolveRuntimeQueueInfoKey(normalizedOperation);
-        var queueInfo = normalizeRuntimeQueueState(state[key] && typeof state[key] === 'object' ? state[key] : null);
-        var pid = parseInt(String(
-            queueInfo.pid
-            || queueInfo.worker_pid
-            || (active && active.pid)
-            || 0
-        ), 10) || 0;
-        // queue_waiting_for_scheduler / can_close_stream 表示 operation-sse 可结束，不代表刷新后应跳过认领流。
-        return queueStatus === 'running' || queueStatus === 'processing' || pid > 0;
+        // Queue-backed progress resumes through workspace stream and read-only polling.
+        return true;
     }
 
     function resumeOperationStreamForQueueWatch(operation, payload, sourceTag) {
@@ -434,16 +432,140 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return startOperationStream(streamUrl, normalizedOperation, executionToken, sourceTag || 'queue-watch');
     }
 
-    function readQueueStatusForDeferredState(workspaceState, operation) {
-        if (!workspaceState || typeof workspaceState !== 'object') {
+    function queueInfoBelongsToRuntimeOperation(queueInfo, operation) {
+        if (!queueInfo || typeof queueInfo !== 'object') {
+            return false;
+        }
+        var op = normalizeRuntimeQueueOperation(operation);
+        if (!op) {
+            return true;
+        }
+        var resolvedOperation = resolveRuntimeQueueInfoOperation(queueInfo);
+        if (!resolvedOperation) {
+            return true;
+        }
+        return resolvedOperation === op;
+    }
+
+    function normalizeRuntimeQueueOperation(operation) {
+        var op = String(operation || '').trim().toLowerCase();
+        if (op === 'block_refine') {
+            return 'block_regenerate';
+        }
+        return ['plan', 'build', 'publish', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'image_asset'].indexOf(op) !== -1
+            ? op
+            : '';
+    }
+
+    function resolveRuntimeQueueInfoOperation(queueInfo) {
+        if (!queueInfo || typeof queueInfo !== 'object') {
             return '';
         }
+        var candidates = [
+            queueInfo.operation,
+            queueInfo.job_type,
+            queueInfo.job_key,
+            queueInfo.biz_key,
+            queueInfo.name
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var resolved = resolveRuntimeQueueOperationMarker(candidates[i]);
+            if (resolved) {
+                return resolved;
+            }
+        }
+        return '';
+    }
+
+    function resolveRuntimeQueueOperationMarker(marker) {
+        var text = String(marker || '').trim().toLowerCase();
+        if (!text) {
+            return '';
+        }
+        var operationMatch = text.match(/(?:^|:)operation:([^:]+)/);
+        if (operationMatch && operationMatch[1]) {
+            var operation = normalizeRuntimeQueueOperation(operationMatch[1]);
+            if (operation) {
+                return operation;
+            }
+        }
+        var queueSlotMatch = text.match(/(?:^|:)queue_slot:([^:]+)/);
+        if (queueSlotMatch && queueSlotMatch[1]) {
+            var queueSlot = normalizeRuntimeQueueOperation(queueSlotMatch[1]);
+            if (queueSlot) {
+                return queueSlot;
+            }
+        }
+        var direct = normalizeRuntimeQueueOperation(text);
+        if (direct) {
+            return direct;
+        }
+        if (text.indexOf('stage1') !== -1 || text.indexOf('stage_one') !== -1 || text.indexOf('requirement_expand') !== -1 || text.indexOf('plan') !== -1) {
+            return 'plan';
+        }
+        if (text.indexOf('virtual_theme.publish') !== -1 || text.indexOf('publish') !== -1) {
+            return 'publish';
+        }
+        if (text.indexOf('image.asset.generate') !== -1 || text.indexOf('image_asset') !== -1) {
+            return 'image_asset';
+        }
+        if (text.indexOf('virtual_theme.block.partial_patch') !== -1 || text.indexOf('block_partial_patch') !== -1) {
+            return 'block_partial_patch';
+        }
+        if (text.indexOf('virtual_theme.block.regenerate') !== -1 || text.indexOf('block_regenerate') !== -1 || text.indexOf('block_refine') !== -1) {
+            return 'block_regenerate';
+        }
+        if (text.indexOf('virtual_theme.page.regenerate') !== -1 || text.indexOf('regenerate_page') !== -1) {
+            return 'regenerate_page';
+        }
+        if (text.indexOf('virtual_theme.tree.build') !== -1 || text.indexOf('build') !== -1) {
+            return 'build';
+        }
+        return '';
+    }
+
+    function resolveRuntimeQueueInfoFromState(workspaceState, operation) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return {};
+        }
+        var op = String(operation || '').trim().toLowerCase();
         var key = resolveRuntimeQueueInfoKey(operation);
-        var queueInfo = normalizeRuntimeQueueState(
-            workspaceState[key] && typeof workspaceState[key] === 'object'
-                ? workspaceState[key]
-                : null
-        );
+        var scope = workspaceState.scope && typeof workspaceState.scope === 'object' ? workspaceState.scope : {};
+        var nestedState = workspaceState.state && typeof workspaceState.state === 'object' && workspaceState.state !== workspaceState
+            ? workspaceState.state
+            : {};
+        var active = workspaceState.active_operation && typeof workspaceState.active_operation === 'object'
+            ? workspaceState.active_operation
+            : {};
+        var activeOperations = workspaceState.active_operations && typeof workspaceState.active_operations === 'object'
+            ? workspaceState.active_operations
+            : {};
+        var scopedActive = op && activeOperations[op] && typeof activeOperations[op] === 'object'
+            ? activeOperations[op]
+            : {};
+        var candidates = [
+            workspaceState[key],
+            scope[key],
+            nestedState[key],
+            scopedActive.queue_info,
+            scopedActive.queue_state,
+            active.queue_info,
+            active.queue_state,
+            workspaceState.queue_info,
+            scope.queue_info,
+            nestedState.queue_info
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var queueInfo = normalizeRuntimeQueueState(candidates[i]);
+            if (Object.keys(queueInfo).length > 0 && queueInfoBelongsToRuntimeOperation(queueInfo, op)) {
+                return queueInfo;
+            }
+        }
+        return {};
+    }
+
+    function readQueueStatusForDeferredState(workspaceState, operation) {
+        var queueInfo = resolveRuntimeQueueInfoFromState(workspaceState, operation);
         return String(
             queueInfo.status
             || queueInfo.queue_status
@@ -454,13 +576,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
 
     function readQueueMessageForDeferredState(workspaceState, operation) {
-        if (!workspaceState || typeof workspaceState !== 'object') {
-            return '';
-        }
-        var key = resolveRuntimeQueueInfoKey(operation);
-        var queueInfo = workspaceState[key] && typeof workspaceState[key] === 'object'
-            ? workspaceState[key]
-            : null;
+        var queueInfo = resolveRuntimeQueueInfoFromState(workspaceState, operation);
         return readQueueResultTail(queueInfo) || String(
             (queueInfo && (queueInfo.message || queueInfo.process))
             || ''
@@ -751,9 +867,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!isRuntimePlainObject(queueInfo)) {
             return {};
         }
-        var currentState = Object.assign({}, queueInfo);
-        delete currentState.snapshot;
-        return currentState;
+        return Object.assign({}, queueInfo);
     }
 
     function copyRuntimeSummaryFields(source, fields, textLimit) {
@@ -859,15 +973,14 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     function resolveQueueInfoForOperation(payload, operation) {
         var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : {};
         var op = String((operation || (payload && payload.operation) || '')).trim().toLowerCase();
-        var queueInfo = null;
-        var stateQueueInfoKey = resolveRuntimeQueueInfoKey(op);
-        if (stateQueueInfoKey && state[stateQueueInfoKey] && typeof state[stateQueueInfoKey] === 'object') {
-            queueInfo = state[stateQueueInfoKey];
+        var queueInfo = resolveRuntimeQueueInfoFromState(state, op);
+        if (Object.keys(queueInfo).length > 0) {
+            return queueInfo;
         }
-        if (!queueInfo && payload && payload.queue_info && typeof payload.queue_info === 'object') {
-            queueInfo = payload.queue_info;
+        if (payload && payload.queue_info && typeof payload.queue_info === 'object') {
+            return payload.queue_info;
         }
-        return queueInfo;
+        return {};
     }
 
     function readQueueResultTail(queueInfo) {
@@ -1000,7 +1113,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (op === 'plan' || op === 'build') {
             modalOptions.extraMessage = (typeof messages === 'object' && messages.retryableAiFailuresPending)
                 ? String(messages.retryableAiFailuresPending || '')
-                : '失败项已加入错误列表；系统不会自动重试，请调整底座提示词后重新生成。';
+                : '失败项已记录；如果队列仍在运行或等待调度，系统会继续按队列状态重试。队列终止后请点击重新重试或重新生成。';
         }
         return showOperationFailureDetailModal(op, payload, modalOptions);
     }
@@ -1053,17 +1166,17 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         };
     window.__pbAiWorkspacePostForm = postForm;
 
-    function submitWorkspaceForm(url, fields) {
+    function submitWorkspaceForm(url, fields, options) {
         var poster = typeof postForm === 'function'
             ? postForm
             : (typeof window.__pbAiWorkspacePostForm === 'function' ? window.__pbAiWorkspacePostForm : null);
         if (typeof poster !== 'function') {
             return Promise.reject(new Error('postForm unavailable'));
         }
-        return poster(url, fields);
+        return poster(url, fields, options || {});
     }
 
-    function extractWorkspaceSnapshotState(data) {
+    function extractWorkspaceState(data) {
         if (!data || typeof data !== 'object') {
             return null;
         }
@@ -1076,7 +1189,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return data;
     }
 
-    function readCachedWorkspaceSnapshotState() {
+    function readCachedWorkspaceState() {
         if (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object') {
             return window.__pbWorkspaceState;
         }
@@ -1089,13 +1202,153 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return null;
     }
 
-    function fetchWorkspaceSnapshotState() {
-        // 状态以 SSE（工作区终端 + operation-sse）为准，不再 POST post-workspace-snapshot。
-        var cached = readCachedWorkspaceSnapshotState();
-        if (!cached) {
-            return Promise.reject(new Error('workspace snapshot cache unavailable'));
+    function fetchWorkspaceStateForRuntime(operation) {
+        var cached = readCachedWorkspaceState();
+        if (!workspaceStatePollUrl) {
+            if (!cached) {
+                return Promise.reject(new Error('workspace state cache unavailable'));
+            }
+            return Promise.resolve(cached);
         }
-        return Promise.resolve(cached);
+        return submitWorkspaceForm(workspaceStatePollUrl, {
+            public_id: publicId,
+            operation: String(operation || deferredQueueStatePollOperation || ''),
+            state_mode: 'queue_poll'
+        }, { timeoutMs: 30000 }).then(function (data) {
+            if (!data || data.success === false) {
+                throw new Error((data && (data.message || data.error)) ? String(data.message || data.error) : 'workspace state refresh failed');
+            }
+            var state = extractWorkspaceState(data);
+            if (!state || typeof state !== 'object') {
+                throw new Error('workspace state response unavailable');
+            }
+            return state;
+        });
+    }
+
+    function fetchWorkspaceState() {
+        // 状态轮询只读取持久化队列/会话数据，不能启动或认领队列。
+        return fetchWorkspaceStateForRuntime(deferredQueueStatePollOperation);
+    }
+
+    function buildDeferredQueueStatePollSignature(operation, workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return '';
+        }
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        var key = resolveRuntimeQueueInfoKey(normalizedOperation);
+        var queueInfo = normalizeRuntimeQueueState(
+            workspaceState[key] && typeof workspaceState[key] === 'object'
+                ? workspaceState[key]
+                : null
+        );
+        return [
+            normalizedOperation,
+            String(queueInfo.status || queueInfo.queue_status || queueInfo.state || queueInfo.job_status || ''),
+            String(queueInfo.process || queueInfo.message || workspaceState.queue_process || ''),
+            buildDeferredQueueProgressSignature(queueInfo),
+            String(queueInfo.updated_at || workspaceState.updated_at || '')
+        ].join('|');
+    }
+
+    function buildDeferredQueueProgressSignature(queueInfo) {
+        if (!queueInfo || typeof queueInfo !== 'object') {
+            return '';
+        }
+        var progress = queueInfo.stage1_page_progress && typeof queueInfo.stage1_page_progress === 'object'
+            ? queueInfo.stage1_page_progress
+            : (
+                queueInfo.queue_state
+                && typeof queueInfo.queue_state === 'object'
+                && queueInfo.queue_state.stage1_page_progress
+                && typeof queueInfo.queue_state.stage1_page_progress === 'object'
+                    ? queueInfo.queue_state.stage1_page_progress
+                    : null
+            );
+        if (!progress) {
+            return [
+                String(queueInfo.progress_percent || ''),
+                String(queueInfo.page_total || ''),
+                String(queueInfo.page_done || ''),
+                String(queueInfo.page_failed || ''),
+                String(queueInfo.block_total || ''),
+                String(queueInfo.block_done_count || ''),
+                String(queueInfo.block_running_count || ''),
+                String(queueInfo.block_failed_count || ''),
+                String(queueInfo.block_pending_count || '')
+            ].join(',');
+        }
+        var summary = [
+            String(progress.total || 0),
+            String(progress.concurrency || 0),
+            String(progress.done_count || 0),
+            String(progress.running_count || 0),
+            String(progress.failed_count || 0),
+            String(progress.pending_count || 0),
+            String(progress.remaining_count || 0),
+            String(progress.updated_at || ''),
+            normalizeDeferredQueueProgressList(progress.running).join(','),
+            normalizeDeferredQueueProgressList(progress.done).join(','),
+            normalizeDeferredQueueProgressList(progress.failed).join(','),
+            normalizeDeferredQueueProgressList(progress.pending).join(',')
+        ];
+        var details = progress.details && typeof progress.details === 'object' ? progress.details : {};
+        Object.keys(details).sort().slice(0, 64).forEach(function (key) {
+            var detail = details[key] && typeof details[key] === 'object' ? details[key] : {};
+            summary.push([
+                String(key),
+                String(detail.page_type || ''),
+                String(detail.status || ''),
+                String(detail.message || detail.error_message || ''),
+                String(detail.updated_at || ''),
+                String(detail.block_total || 0),
+                String(detail.block_done_count || 0),
+                String(detail.block_running_count || 0),
+                String(detail.block_failed_count || 0),
+                String(detail.block_pending_count || 0),
+                buildDeferredQueueBlockProgressSignature(detail.blocks)
+            ].join(':'));
+        });
+        return summary.join('|');
+    }
+
+    function normalizeDeferredQueueProgressList(value) {
+        if (!Array.isArray(value)) {
+            return [];
+        }
+        return value.map(function (item) {
+            return String(item || '').trim();
+        }).filter(function (item) {
+            return item !== '';
+        }).sort();
+    }
+
+    function buildDeferredQueueBlockProgressSignature(blocks) {
+        if (!blocks || typeof blocks !== 'object') {
+            return '';
+        }
+        var entries = Array.isArray(blocks)
+            ? blocks.map(function (block, index) {
+                var item = block && typeof block === 'object' ? block : {};
+                return [
+                    String(index),
+                    String(item.key || item.block_key || item.id || ''),
+                    String(item.status || ''),
+                    String(item.message || item.error_message || ''),
+                    String(item.updated_at || '')
+                ].join('/');
+            })
+            : Object.keys(blocks).sort().slice(0, 64).map(function (key) {
+                var item = blocks[key] && typeof blocks[key] === 'object' ? blocks[key] : {};
+                return [
+                    String(key),
+                    String(item.key || item.block_key || item.id || ''),
+                    String(item.status || ''),
+                    String(item.message || item.error_message || ''),
+                    String(item.updated_at || '')
+                ].join('/');
+            });
+        return entries.join(',');
     }
 
     function syncDeferredQueueWorkspaceState(operation, workspaceState) {
@@ -1123,6 +1376,13 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         updateTaskSummaryFromState(workspaceState);
         updateStageStatusSummary(workspaceState);
 
+        if (isQueueStatusInProgressForWatch(queueStatus)) {
+            var progressPayload = buildDeferredQueueProgressPayload(normalizedOperation, workspaceState, queueStatus);
+            syncQueuedStageUi(normalizedOperation, 'progress', progressPayload, { level: 'progress' });
+            logOperationToWorkspaceTerminal('deferred_queue_progress', progressPayload, 'progress', progressPayload.message);
+            return false;
+        }
+
         if (normalizedOperation === 'plan' && workspaceStateHasBlockingPlanFailures(workspaceState)) {
             stopDeferredQueueStatePoll();
             var planFailureItems = collectRetryableFailureItemsFromPayload('plan', { state: workspaceState });
@@ -1145,13 +1405,6 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return true;
         }
 
-        if (isQueueStatusInProgressForWatch(queueStatus)) {
-            var progressPayload = buildDeferredQueueProgressPayload(normalizedOperation, workspaceState, queueStatus);
-            syncQueuedStageUi(normalizedOperation, 'progress', progressPayload, { level: 'progress' });
-            logOperationToWorkspaceTerminal('deferred_queue_progress', progressPayload, 'progress', progressPayload.message);
-            return false;
-        }
-
         var terminalActive = resolveDeferredQueueTerminalOperation(workspaceState, operation);
         if (!terminalActive) {
             return false;
@@ -1164,11 +1417,41 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     function startDeferredQueueStatePoll(operation) {
         var normalizedOperation = String(operation || '').trim().toLowerCase() || 'build';
         stopDeferredQueueStatePoll();
-        return resumeOperationStreamForQueueWatch(
-            normalizedOperation,
-            readCachedWorkspaceSnapshotState() || {},
-            'deferred-poll-disabled'
-        );
+        deferredQueueStatePollOperation = normalizedOperation;
+        deferredQueueStatePollDeadline = DEFERRED_QUEUE_STATE_POLL_TTL_MS > 0
+            ? (Date.now() + DEFERRED_QUEUE_STATE_POLL_TTL_MS)
+            : 0;
+        deferredQueueStatePollSignature = '';
+
+        function tickDeferredQueueStatePoll() {
+            if (!deferredQueueStatePollOperation || deferredQueueStatePollInFlight) {
+                return;
+            }
+            if (deferredQueueStatePollDeadline > 0 && Date.now() > deferredQueueStatePollDeadline) {
+                stopDeferredQueueStatePoll();
+                return;
+            }
+            deferredQueueStatePollInFlight = true;
+            fetchWorkspaceStateForRuntime(normalizedOperation).then(function (workspaceState) {
+                if (!deferredQueueStatePollOperation || !workspaceState || typeof workspaceState !== 'object') {
+                    return;
+                }
+                var signature = buildDeferredQueueStatePollSignature(normalizedOperation, workspaceState);
+                if (signature && signature === deferredQueueStatePollSignature) {
+                    return;
+                }
+                deferredQueueStatePollSignature = signature;
+                syncDeferredQueueWorkspaceState(normalizedOperation, workspaceState);
+            }).catch(function () {
+                // The next tick retries; stale responses are never buffered.
+            }).then(function () {
+                deferredQueueStatePollInFlight = false;
+            });
+        }
+
+        tickDeferredQueueStatePoll();
+        deferredQueueStatePollTimer = window.setInterval(tickDeferredQueueStatePoll, DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS);
+        return true;
     }
 
     function shouldObserveActiveQueueOperationOnLoad(active) {
@@ -1187,7 +1470,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
 
     function resolveWorkspaceLoadResumeContext() {
-        var state = readCachedWorkspaceSnapshotState() || initialWorkspaceState || {};
+        var state = readCachedWorkspaceState() || initialWorkspaceState || {};
         var active = activeOperation && typeof activeOperation === 'object' ? activeOperation : {};
         if (state.active_operation && typeof state.active_operation === 'object') {
             var stateActive = state.active_operation;
@@ -1200,6 +1483,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!operation && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'plan'))) {
             operation = 'plan';
             active = Object.assign({ operation: 'plan', status: readQueueStatusForDeferredState(state, 'plan') || 'queued' }, active);
+        }
+        if (!operation && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'publish'))) {
+            operation = 'publish';
+            active = Object.assign({ operation: 'publish', status: readQueueStatusForDeferredState(state, 'publish') || 'queued' }, active);
         }
         if (!operation && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'build'))) {
             operation = 'build';
@@ -1237,6 +1524,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }), status), { level: 'progress' });
         }
         var operationResumed = resumeOperationStreamForQueueWatch(operation, Object.assign({ state: state }, state), sourceTag || 'load-bootstrap');
+        if (shouldSyncUi) {
+            startDeferredQueueStatePoll(operation);
+        }
         if (shouldPreferWorkspaceStreamForQueueWatch(operation, state)) {
             ensureWorkspaceStreamRunning('load-bootstrap-workspace');
         }
@@ -1325,7 +1615,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     // 已禁用页面加载阶段的自动续跑/自动接管提示逻辑，仅允许用户显式触发。
 
     if (workspaceTerminal && typeof workspaceTerminal.on === 'function') {
-        workspaceTerminal.on('snapshot', function (event) {
+        workspaceTerminal.on('state', function (event) {
             var data = parsePayload(event);
             if (!data || typeof data !== 'object') {
                 return;
@@ -1340,6 +1630,27 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 syncTerminalActiveOperationForRuntimeUi(data.active_operation);
             }
         });
+        workspaceTerminal.on('plan_state', function (event) {
+            var data = parsePayload(event);
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+            var planJson = data.plan_json && typeof data.plan_json === 'object' ? data.plan_json : {};
+            var statePatch = {
+                plan_json: planJson,
+                plan: {json: planJson},
+                plan_status_summary: data.plan_status_summary && typeof data.plan_status_summary === 'object' ? data.plan_status_summary : {},
+                plan_state_changed_paths: Array.isArray(data.changed_paths) ? data.changed_paths : [],
+                updated_at: String(data.updated_at || '')
+            };
+            if (typeof hydrateWorkspaceFromState === 'function') {
+                hydrateWorkspaceFromState(statePatch);
+            }
+            if (typeof syncStageOnePlanPreviewFromWorkspaceState === 'function') {
+                syncStageOnePlanPreviewFromWorkspaceState(statePatch);
+            }
+            updateStageStatusSummary(statePatch);
+        });
         workspaceTerminal.on('log', function (event) {
             var data = parsePayload(event);
             if (!data || typeof data !== 'object') {
@@ -1348,6 +1659,14 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             if (data.active_operation && typeof data.active_operation === 'object') {
                 activeOperation = data.active_operation;
                 syncTerminalActiveOperationForRuntimeUi(data.active_operation);
+            }
+            if (
+                typeof hydrateWorkspaceFromState === 'function'
+                && data.plan_json
+            ) {
+                hydrateWorkspaceFromState(data.state && typeof data.state === 'object' ? data.state : data);
+                updateTaskSummaryFromState(data.state && typeof data.state === 'object' ? data.state : data);
+                updateStageStatusSummary(data.state && typeof data.state === 'object' ? data.state : data);
             }
             mirrorWorkspaceLogToQueuedStageUi(data);
         });
@@ -1427,6 +1746,12 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (normalized.payload && normalized.payload.state && typeof normalized.payload.state === 'object') {
             hydrateWorkspaceFromState(normalized.payload.state);
             updateTaskSummaryFromState(normalized.payload.state);
+        } else if (
+                normalized.payload
+            && normalized.payload.plan_json
+        ) {
+            hydrateWorkspaceFromState(normalized.payload);
+            updateTaskSummaryFromState(normalized.payload);
         }
         updateTaskSummaryFromState(normalized.payload);
         if (normalized.kind === 'done') {
@@ -1629,7 +1954,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
      * 从 SSE/queue payload 中读取队列权威状态。
      *
      * 主字段：payload.queue_status（由 AiSiteSsePayloadNormalizer 写入并强制小写）。
-     * 过渡 fallback（normalizer 镜像）：payload.status / queue_info.status / snapshot.job_status 等。
+     * 过渡 fallback（normalizer 镜像）：payload.status / queue_info.status / queue_state.job_status 等。
      * 契约稳定后可在 1-2 个 release 内仅保留 queue_status 主字段。
      */
     function readQueueStatusFromPayload(operation, payload) {
@@ -3019,15 +3344,16 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }
 
         if (kind === 'plan') {
-            var planQueueStatus = readStageQueueStatus(state.plan_queue_info);
+            var planQueueInfo = resolveRuntimeQueueInfoFromState(state, 'plan');
+            var planQueueStatus = readStageQueueStatus(planQueueInfo);
             if (isStageQueueFailed(planQueueStatus)) {
-                return make('Failed', 'text-bg-danger', readStageQueueFailureMessage(state.plan_queue_info) || activeMessage || 'Plan generation failed.');
+                return make('Failed', 'text-bg-danger', readStageQueueFailureMessage(planQueueInfo) || activeMessage || 'Plan generation failed.');
             }
             if (isStageQueueInProgress(planQueueStatus)) {
                 return make(
                     planQueueStatus === 'running' ? 'Running' : 'Queued',
                     planQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
-                    readStageQueueMessage(state.plan_queue_info) || activeMessage || 'Plan generation is running in the background queue.'
+                    readStageQueueMessage(planQueueInfo) || activeMessage || 'Plan generation is running in the background queue.'
                 );
             }
             if (isStageQueueDone(planQueueStatus) && activeOp === 'plan') {
@@ -3054,15 +3380,16 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!buildReadyForBuild) {
             return make('Locked', 'text-bg-secondary', 'Confirm the plan before build.');
         }
-        var buildQueueStatus = readStageQueueStatus(state.build_queue_info);
+        var buildQueueInfo = resolveRuntimeQueueInfoFromState(state, 'build');
+        var buildQueueStatus = readStageQueueStatus(buildQueueInfo);
         if (isStageQueueFailed(buildQueueStatus)) {
-            return make('Failed', 'text-bg-danger', readStageQueueFailureMessage(state.build_queue_info) || activeMessage || 'Site build failed.');
+            return make('Failed', 'text-bg-danger', readStageQueueFailureMessage(buildQueueInfo) || activeMessage || 'Site build failed.');
         }
         if (isStageQueueInProgress(buildQueueStatus)) {
             return make(
                 buildQueueStatus === 'running' ? 'Building' : 'Queued',
                 buildQueueStatus === 'running' ? 'text-bg-primary' : 'text-bg-warning',
-                readStageQueueMessage(state.build_queue_info) || activeMessage || 'Virtual theme build is running in the background queue.'
+                readStageQueueMessage(buildQueueInfo) || activeMessage || 'Virtual theme build is running in the background queue.'
             );
         }
         if (isStageQueueDone(buildQueueStatus)) {
@@ -3081,6 +3408,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }
         if (activeOp === 'build' && activeStatus === 'error') {
             return make('Failed', 'text-bg-danger', activeMessage || 'Site build failed.');
+        }
+        if (activeOp === 'plan' && isStageQueueInProgress(readStageQueueStatus(resolveRuntimeQueueInfoFromState(state, 'plan')))) {
+            return make('Ready', 'text-bg-secondary', 'Waiting for confirmed plan build.');
         }
         if (workspaceStatus === 'published') {
             return make('Published', 'text-bg-success', 'The site has been published.');
@@ -3174,9 +3504,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
     var workspaceApiRef = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
     workspaceApiRef.clearBlockStreamingState = clearBlockStreamingState;
-    workspaceApiRef.fetchWorkspaceSnapshotState = fetchWorkspaceSnapshotState;
+    workspaceApiRef.fetchWorkspaceState = fetchWorkspaceStateForRuntime;
     workspaceApiRef.refreshWorkspaceStateFromCache = function () {
-        return fetchWorkspaceSnapshotState().then(function (state) {
+        return fetchWorkspaceState().then(function (state) {
             return { success: true, data: state };
         });
     };
@@ -3201,7 +3531,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     if (window.__pbTaskSummary && window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary === 'function') {
         window.PbAiWorkspacePreview.syncPreviewTabGenerationFromTaskSummary(
             window.__pbTaskSummary,
-            readCachedWorkspaceSnapshotState() || window.__pbInitialWorkspaceState || window.__pbWorkspaceState || null
+            readCachedWorkspaceState() || window.__pbInitialWorkspaceState || window.__pbWorkspaceState || null
         );
     }
     if (typeof window.applyTaskSummarySelectionFilter === 'function') {
@@ -3218,7 +3548,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (runningSource && runningOperationKey === operationKey) {
             return true;
         }
-        // 同一个 operation_key 在短时间内可能会被多路触发（snapshot 自动恢复、state 拉取、手工启动返回）
+        // 同一个 operation_key 在短时间内可能会被多路触发（state 自动恢复、state 拉取、手工启动返回）
         // 这里增加冷却窗口，避免出现“同一条 SSE 被接管多次”的重复连接。
         if (runningOperationKey === operationKey) {
             var lastStartedAt = parseInt(runningStartAtByOperationKey[operationKey] || 0, 10) || 0;
@@ -3268,13 +3598,13 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
         var settled = false;
         var lastServerError = '';
-        var transportErrorSnapshotProbeStarted = false;
+        var transportErrorStateProbeStarted = false;
         var source = null;
-        function handleTransportErrorSnapshotFallback() {
-            if (settled || transportErrorSnapshotProbeStarted) {
+        function handleTransportErrorStateFallback() {
+            if (settled || transportErrorStateProbeStarted) {
                 return true;
             }
-            transportErrorSnapshotProbeStarted = true;
+            transportErrorStateProbeStarted = true;
             settled = true;
             closeOperationSource(source);
             var fallbackMessage = <?= \json_encode((string)__('操作事件流断开，正在恢复工作区 SSE 同步。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
@@ -3283,7 +3613,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 message: fallbackMessage
             }, 'warning', fallbackMessage);
             ensureWorkspaceStreamRunning('transport-error');
-            resumeOperationStreamForQueueWatch(operation, readCachedWorkspaceSnapshotState() || {}, 'transport-error');
+            resumeOperationStreamForQueueWatch(operation, readCachedWorkspaceState() || {}, 'transport-error');
+            startDeferredQueueStatePoll(operation);
             if (typeof enableNavigationAfterOperation === 'function') {
                 enableNavigationAfterOperation();
             }
@@ -3347,7 +3678,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                     parsedMessage = String(event.data).trim();
                 }
                 if (!hasServerErrorData && !parsedMessage) {
-                    handleTransportErrorSnapshotFallback();
+                    handleTransportErrorStateFallback();
                     return;
                 }
                 lastServerError = normalizeToastMessage(parsedMessage || <?= \json_encode((string)__('操作执行失败（服务端返回错误事件）'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
@@ -3515,16 +3846,47 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 if (!payload || typeof payload !== 'object') {
                     return;
                 }
-                // 方案块进度改由 build_plan_progress 专门事件处理，避免双事件重复渲染。
+                // build_plan_progress is carried as progress_kind on the normal progress event.
                 if (String(payload.progress_kind || '') === 'build_plan_progress') {
-                    return;
+                    handleOperationProgressPayload(payload, 'build_plan_progress');
+                } else {
+                    handleOperationProgressPayload(payload, 'progress');
                 }
-                handleOperationProgressPayload(payload, 'progress');
             });
 
-            source.addEventListener('build_plan_progress', function (event) {
+            source.addEventListener('task_progress', function (event) {
                 var payload = parsePayload(event);
-                handleOperationProgressPayload(payload, 'build_plan_progress');
+                handleOperationProgressPayload(payload, 'task_progress');
+            });
+
+            source.addEventListener('task_completed', function (event) {
+                stopObserverSyncTerminalPulse();
+                var payload = parsePayload(event);
+                if (!payload || typeof payload !== 'object') {
+                    return;
+                }
+                if (payload.state && typeof payload.state === 'object') {
+                    hydrateWorkspaceFromState(payload.state);
+                    updateTaskSummaryFromState(payload.state);
+                }
+                updateTaskSummaryFromState(payload);
+                syncPreviewTabsFromTaskProgressPayload(payload, payload.state && typeof payload.state === 'object' ? payload.state : null);
+                logOperationToWorkspaceTerminal('task_completed', payload, 'done', String(payload.message || 'Task completed.'));
+            });
+
+            source.addEventListener('task_failed', function (event) {
+                stopObserverSyncTerminalPulse();
+                var payload = parsePayload(event);
+                if (!payload || typeof payload !== 'object') {
+                    return;
+                }
+                if (payload.state && typeof payload.state === 'object') {
+                    hydrateWorkspaceFromState(payload.state);
+                    updateTaskSummaryFromState(payload.state);
+                }
+                updateTaskSummaryFromState(payload);
+                syncPreviewTabsFromTaskProgressPayload(payload, payload.state && typeof payload.state === 'object' ? payload.state : null);
+                logOperationToWorkspaceTerminal('task_failed', payload, 'error', String(payload.error_message || payload.message || 'Task failed.'));
             });
 
         source.addEventListener('chunk', function (event) {
@@ -4100,7 +4462,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 }
                 return;
             }
-            handleTransportErrorSnapshotFallback();
+            handleTransportErrorStateFallback();
         };
         }, operationSseConnectDelayMs);
         return true;
@@ -4165,6 +4527,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 queue_waiting_for_scheduler: true
             }), { level: 'info' });
             resumeOperationStreamForQueueWatch(operation || fallbackOperation || 'build', payload || {}, 'start-deferred');
+            startDeferredQueueStatePoll(operation || fallbackOperation || 'build');
             return true;
         }
         if (!executionToken || !streamUrl) {
@@ -4217,7 +4580,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             if (!data || !data.success) {
                 var errorCode = String((data && (data.code || (data.data && data.data.code))) || '').toUpperCase();
                 if (errorCode === 'WORKSPACE_NOT_READY' && retryAttempt < 3) {
-                    fetchWorkspaceSnapshotState().then(function (workspaceState) {
+                    fetchWorkspaceState().then(function (workspaceState) {
                         syncDeferredQueueWorkspaceState('publish', workspaceState);
                         window.setTimeout(function () {
                             startPublishFlow(triggerButton, {

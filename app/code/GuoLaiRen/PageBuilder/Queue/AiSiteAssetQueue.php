@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Queue;
 
-use GuoLaiRen\PageBuilder\Http\Sse\QueueDbWriter;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\PageLayout;
@@ -13,6 +12,7 @@ use GuoLaiRen\PageBuilder\Model\VirtualThemeComponentVersion;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeLayout;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAssetManifestService;
+use GuoLaiRen\PageBuilder\Service\AiSiteQueueLogWriter;
 use GuoLaiRen\PageBuilder\Service\AiSiteIdentityAssetTransparencyValidator;
 use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
@@ -81,7 +81,7 @@ class AiSiteAssetQueue implements QueueInterface
             throw new \RuntimeException('AI site session not found for asset generation.');
         }
 
-        $sse = new QueueDbWriter(
+        $sse = new AiSiteQueueLogWriter(
             (int)$session->getId(),
             $adminId,
             $queueId,

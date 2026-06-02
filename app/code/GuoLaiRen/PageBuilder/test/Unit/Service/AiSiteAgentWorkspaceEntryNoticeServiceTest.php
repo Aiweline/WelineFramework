@@ -69,6 +69,47 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
         self::assertSame(3, $result['queue_id']);
     }
 
+    public function testScopedBuildBucketOperationsRenderNotice(): void
+    {
+        $imageAsset = $this->service()->buildWorkspaceEntryQueueNotice(
+            ['operation' => 'image_asset'],
+            ['image_asset' => ['queue_id' => 4, 'status' => 'running']]
+        );
+
+        self::assertTrue($imageAsset['show']);
+        self::assertSame('image_asset', $imageAsset['operation']);
+        self::assertSame(4, $imageAsset['queue_id']);
+
+        $fallback = $this->service()->buildWorkspaceEntryQueueNotice(
+            [],
+            [
+                'plan' => ['queue_id' => 1, 'status' => 'running'],
+                'block_partial_patch' => ['queue_id' => 5, 'status' => 'queued'],
+            ]
+        );
+
+        self::assertTrue($fallback['show']);
+        self::assertSame('block_partial_patch', $fallback['operation']);
+        self::assertSame(5, $fallback['queue_id']);
+    }
+
+    public function testFallbackPrefersPublishWhenPublishQueueIsRunning(): void
+    {
+        $result = $this->service()->buildWorkspaceEntryQueueNotice(
+            [],
+            [
+                'plan' => ['queue_id' => 1, 'status' => 'running'],
+                'build' => ['queue_id' => 2, 'status' => 'running'],
+                'publish' => ['queue_id' => 3, 'status' => 'running'],
+            ]
+        );
+
+        self::assertTrue($result['show']);
+        self::assertSame('publish', $result['operation']);
+        self::assertSame('发布站点', $result['operation_label']);
+        self::assertSame(3, $result['queue_id']);
+    }
+
     public function testFallbackSkipsTerminalBuildAndIgnoresLegacyTaskPlan(): void
     {
         $result = $this->service()->buildWorkspaceEntryQueueNotice(
@@ -133,6 +174,14 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
             ['build' => ['queue_id' => 20, 'status' => 'done']]
         );
         self::assertSame('success', $done['level']);
+
+        $publish = $this->service()->buildWorkspaceEntryQueueNotice(
+            ['operation' => 'publish'],
+            ['publish' => ['queue_id' => 30, 'status' => 'running']]
+        );
+        self::assertSame('warning', $publish['level']);
+        self::assertSame('发布站点', $publish['operation_label']);
+        self::assertStringContainsString('发布站点', $publish['message']);
     }
 
     public function testUnknownStatusUsesInfoAndOriginalLabel(): void

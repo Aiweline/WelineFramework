@@ -143,6 +143,7 @@ When both a user-explicit correction and a wrong-first-then-fixed handling path 
    - decide whether the lesson is promotable,
    - serialize it as a rule, skill step, SOP, checklist, preference, or anti-pattern.
 15. Before finishing, update automation memory with what was learned, what file changed, and whether the run only reconfirmed existing rules or introduced a new wording requirement.
+16. When updating Markdown memory through PowerShell, avoid expandable here-strings for content that contains backticks or escape-sensitive text; use literal here-strings/placeholders, then re-read the written section before final delivery.
 
 # Delivery Report Contract
 
@@ -163,6 +164,8 @@ For simple answers with no durable work, a compact response is acceptable. For a
 # Correction Promotion Rules
 
 Promote a corrected lesson into durable knowledge only when there is evidence: explicit user approval, passing tests or builds, successful verification, a clearly identified framework-level defect, or a direct user request to avoid recurrence or extract a rule.
+
+A clearly applied repair that stops the same correction from recurring, or output that directly resolves the originally corrected issue, can support promotion. Do not treat user silence alone as proof; if the corrected behavior is not concrete, keep the lesson as `Candidate`.
 
 Convert root causes by category:
 

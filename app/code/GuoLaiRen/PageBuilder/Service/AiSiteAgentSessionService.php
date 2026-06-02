@@ -124,7 +124,6 @@ class AiSiteAgentSessionService
         'plan_generated_source_signature',
         'plan_json',
         'plan_markdown',
-        'plan_structured',
         'plan_workbench',
         'page_route_contract',
         'stage1_contract',
@@ -562,7 +561,7 @@ class AiSiteAgentSessionService
     }
 
     /**
-     * Lightweight preview-switch snapshot for large scope_json rows.
+     * Lightweight preview-switch state for large scope_json rows.
      *
      * @return array{
      *   scope_json_bytes:int,
@@ -574,16 +573,16 @@ class AiSiteAgentSessionService
      *   workspace_track:string
      * }|null
      */
-    public function loadPreviewSwitchScopeSnapshot(int $sessionId, int $forAdminUserId): ?array
+    public function loadPreviewSwitchScopeState(int $sessionId, int $forAdminUserId): ?array
     {
         $session = $this->loadById($sessionId, $forAdminUserId);
         if ($session === null) {
             return null;
         }
 
-        $pgsqlSnapshot = $this->loadPreviewSwitchScopeSnapshotFromPgsql($sessionId, $forAdminUserId);
-        if ($pgsqlSnapshot !== null) {
-            return $pgsqlSnapshot;
+        $pgsqlState = $this->loadPreviewSwitchScopeStateFromPgsql($sessionId, $forAdminUserId);
+        if ($pgsqlState !== null) {
+            return $pgsqlState;
         }
 
         $raw = (string)($session->getData(AiSiteAgentSession::schema_fields_SCOPE_JSON) ?? '');
@@ -1314,7 +1313,7 @@ SQL;
      *   workspace_track:string
      * }|null
      */
-    private function loadPreviewSwitchScopeSnapshotFromPgsql(int $sessionId, int $forAdminUserId): ?array
+    private function loadPreviewSwitchScopeStateFromPgsql(int $sessionId, int $forAdminUserId): ?array
     {
         $pdo = $this->getPgsqlPdo();
         if ($pdo === null) {

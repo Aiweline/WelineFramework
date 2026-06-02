@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "734b44a6120f10b5adedd1661bbb2708",
+    "content-hash": "93b61421e175de24b80b4479986a6c78",
     "packages": [
         {
             "name": "ardagnsrn/ollama-php",
@@ -67,16 +67,16 @@
         },
         {
             "name": "bacon/bacon-qr-code",
-            "version": "v3.0.3",
+            "version": "v3.1.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/Bacon/BaconQrCode.git",
-                "reference": "36a1cb2b81493fa5b82e50bf8068bf84d1542563"
+                "reference": "4da2233e72eeecd9be3b62e0dc2cc9ed8e2e31c2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Bacon/BaconQrCode/zipball/36a1cb2b81493fa5b82e50bf8068bf84d1542563",
-                "reference": "36a1cb2b81493fa5b82e50bf8068bf84d1542563",
+                "url": "https://api.github.com/repos/Bacon/BaconQrCode/zipball/4da2233e72eeecd9be3b62e0dc2cc9ed8e2e31c2",
+                "reference": "4da2233e72eeecd9be3b62e0dc2cc9ed8e2e31c2",
                 "shasum": ""
             },
             "require": {
@@ -116,9 +116,9 @@
             "homepage": "https://github.com/Bacon/BaconQrCode",
             "support": {
                 "issues": "https://github.com/Bacon/BaconQrCode/issues",
-                "source": "https://github.com/Bacon/BaconQrCode/tree/v3.0.3"
+                "source": "https://github.com/Bacon/BaconQrCode/tree/v3.1.1"
             },
-            "time": "2025-11-19T17:15:36+00:00"
+            "time": "2026-04-05T21:06:35+00:00"
         },
         {
             "name": "brick/math",
@@ -723,26 +723,26 @@
         },
         {
             "name": "endroid/qr-code",
-            "version": "5.1.0",
+            "version": "6.1.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/endroid/qr-code.git",
-                "reference": "393fec6c4cbdc1bd65570ac9d245704428010122"
+                "reference": "5fa534856ed95649d67c0eab0cabc03ab1d8e0e2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/endroid/qr-code/zipball/393fec6c4cbdc1bd65570ac9d245704428010122",
-                "reference": "393fec6c4cbdc1bd65570ac9d245704428010122",
+                "url": "https://api.github.com/repos/endroid/qr-code/zipball/5fa534856ed95649d67c0eab0cabc03ab1d8e0e2",
+                "reference": "5fa534856ed95649d67c0eab0cabc03ab1d8e0e2",
                 "shasum": ""
             },
             "require": {
                 "bacon/bacon-qr-code": "^3.0",
-                "php": "^8.1"
+                "php": "^8.4"
             },
             "require-dev": {
                 "endroid/quality": "dev-main",
                 "ext-gd": "*",
-                "khanamiryan/qrcode-detector-decoder": "^2.0.2",
+                "khanamiryan/qrcode-detector-decoder": "^2.0.3",
                 "setasign/fpdf": "^1.8.2"
             },
             "suggest": {
@@ -754,7 +754,7 @@
             "type": "library",
             "extra": {
                 "branch-alias": {
-                    "dev-main": "5.x-dev"
+                    "dev-main": "6.x-dev"
                 }
             },
             "autoload": {
@@ -783,7 +783,7 @@
             ],
             "support": {
                 "issues": "https://github.com/endroid/qr-code/issues",
-                "source": "https://github.com/endroid/qr-code/tree/5.1.0"
+                "source": "https://github.com/endroid/qr-code/tree/6.1.3"
             },
             "funding": [
                 {
@@ -791,7 +791,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2024-09-08T08:52:55+00:00"
+            "time": "2026-02-05T07:01:58+00:00"
         },
         {
             "name": "evenement/evenement",
@@ -6902,7 +6902,7 @@
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/Base",
-                "reference": "fb4bf1671eb277090482f5d2d20ee5ebe1ff5495"
+                "reference": "c389f5e5facf4b068c8ca4fe9ff25f8dddc75810"
             },
             "require": {
                 "php": "^8.1",
@@ -6911,10 +6911,8 @@
                 "weline/module-acl": "@dev",
                 "weline/module-admin": "@dev",
                 "weline/module-ai": "@dev",
-                "weline/module-ali-ddns-server": "@dev",
                 "weline/module-backend": "@dev",
                 "weline/module-backend-activity": "@dev",
-                "weline/module-backend-theme-upzet": "@dev",
                 "weline/module-cache-manager": "@dev",
                 "weline/module-ck-editor-editor-manager": "@dev",
                 "weline/module-component": "@dev",
@@ -7198,42 +7196,6 @@
             }
         },
         {
-            "name": "weline/module-ali-ddns-server",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/AliDdnsServer",
-                "reference": "f6615c8e4bff97471a8938ff0746e3558198f804"
-            },
-            "require": {
-                "php": "^8.1",
-                "weline/framework": "@dev"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\AliDdnsServer\\": ""
-                },
-                "psr-0": {
-                    "Weline\\AliDdnsServer\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "Weline提供的基于WelineFramework框架的阿里云Ddns解析服务，支持ipv4和ipv6，支持多域名批量解析。",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
             "name": "weline/module-backend",
             "version": "dev-main",
             "dist": {
@@ -7298,39 +7260,6 @@
                 }
             ],
             "description": "后端日志记录组件。（Backend activity log module）。可以记录后端用户操作记录。",
-            "transport-options": {
-                "symlink": false,
-                "relative": true
-            }
-        },
-        {
-            "name": "weline/module-backend-theme-upzet",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "app/code/Weline/BackendThemeUpzet",
-                "reference": "4eadced080f45c4595610e8e0dccf481b311ed3f"
-            },
-            "require": {
-                "php": "^8.0",
-                "weline/framework": "@dev"
-            },
-            "type": "weline-module",
-            "autoload": {
-                "psr-4": {
-                    "Weline\\BackendThemeUpzet\\": ""
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Weline",
-                    "email": "aiweline@qq.com"
-                }
-            ],
-            "description": "WelineFramework admin theme module",
             "transport-options": {
                 "symlink": false,
                 "relative": true
@@ -7919,7 +7848,7 @@
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/MediaManager",
-                "reference": "4773053c1c0214d24788cee0e51549066e883816"
+                "reference": "0d969fedd713191f6633af1fac92849f09b0c14b"
             },
             "require": {
                 "php": "^8.1"
@@ -7942,7 +7871,7 @@
                     "email": "aiweline@qq.com"
                 }
             ],
-            "description": "WelineFramework 媒体管理器",
+            "description": "WelineFramework 媒体管理器：图片链接裁剪、缓存及 WLS 兼容的文件浏览/上传/下载",
             "transport-options": {
                 "symlink": false,
                 "relative": true
@@ -8460,11 +8389,11 @@
             "dist": {
                 "type": "path",
                 "url": "app/code/Weline/TwoFactorAuth",
-                "reference": "2a0dfc3b7d6fb1a0768cfd55fa4a711ad3cef358"
+                "reference": "276d80db742f521aa86995d95f3d7a0e818a96b6"
             },
             "require": {
-                "endroid/qr-code": "^5.0",
-                "php": ">=8.0",
+                "endroid/qr-code": "^6.0",
+                "php": "^8.4",
                 "weline/framework": "@dev"
             },
             "require-dev": {
@@ -9728,7 +9657,7 @@
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "php": "^8.1",
+        "php": "^8.4",
         "ext-iconv": "*",
         "ext-json": "*",
         "ext-pdo": "*",

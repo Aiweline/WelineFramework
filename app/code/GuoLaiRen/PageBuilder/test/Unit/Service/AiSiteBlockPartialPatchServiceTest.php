@@ -88,6 +88,68 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertSame([], $result['details']['available_block_ids']);
     }
 
+    public function testApplyReplacementUpdatesLayoutContentSource(): void
+    {
+        $service = new AiSiteBlockPartialPatchService();
+        $scope = [
+            'page_types' => ['home_page'],
+            'page_type_layouts' => [
+                'home_page' => [
+                    'content' => [
+                        [
+                            'block_id' => 'hero',
+                            'code' => 'content/hero',
+                            'component_code' => 'content/hero',
+                            'type' => 'hero',
+                            'config' => ['headline' => 'Original headline'],
+                            'html' => '<section><h1>Original headline</h1></section>',
+                            'field_schema' => [
+                                'content' => [
+                                    'fields' => [
+                                        ['key' => 'headline', 'type' => 'text'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'virtual_pages_by_type' => [
+                'home_page' => [
+                    'blocks' => [],
+                ],
+            ],
+        ];
+        $replacement = [
+            'block_id' => 'hero',
+            'type' => 'hero',
+            'component_code' => 'content/hero',
+            'config' => ['headline' => 'New headline'],
+            'html' => '<section><h1>New headline</h1></section>',
+            'field_schema' => [
+                'content' => [
+                    'fields' => [
+                        ['key' => 'headline', 'type' => 'text'],
+                    ],
+                ],
+            ],
+        ];
+
+        $result = $service->applyReplacementBlockToScope($scope, 'home_page', 'hero', $replacement);
+
+        self::assertTrue($result['success'], \json_encode($result, \JSON_UNESCAPED_UNICODE));
+        self::assertSame('page_type_layouts.content', $result['source']);
+        self::assertSame(
+            'New headline',
+            $result['scope']['page_type_layouts']['home_page']['content'][0]['config']['headline'] ?? null
+        );
+        self::assertSame(
+            '<section><h1>New headline</h1></section>',
+            $result['scope']['page_type_layouts']['home_page']['content'][0]['html'] ?? null
+        );
+        self::assertSame([], $result['scope']['virtual_pages_by_type']['home_page']['blocks'] ?? null);
+    }
+
     public function testReadCurrentSharedHeaderComponentFromScope(): void
     {
         $service = new AiSiteBlockPartialPatchService();
@@ -316,6 +378,32 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertStringContainsString('Do not include reason, why, or decision_reason fields', $captured['prompt']);
         self::assertStringNotContainsString('keys: block, change_summary, changed_fields, reason', $captured['prompt']);
         self::assertSame('Conversion headline', $result['block']['config']['headline'] ?? null);
+    }
+
+    public function testGenerateReplacementUsesDeterministicFakeModeWithoutAiCall(): void
+    {
+        $scope = $this->scope();
+        $scope['fake_mode'] = '1';
+        $read = (new AiSiteBlockPartialPatchService())->readCurrentBlockFromScope($scope, 'home', 'hero');
+
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::never())->method('generateStream');
+
+        $events = [];
+        $service = new AiSiteBlockPartialPatchService(aiService: $aiService);
+        $result = $service->generateReplacementBlock(
+            $read,
+            $scope,
+            'Make the headline stronger.',
+            static function (string $event, array $payload) use (&$events): void {
+                $events[] = [$event, $payload];
+            }
+        );
+
+        self::assertSame('Headline - refined', $result['block']['config']['headline'] ?? null);
+        self::assertStringContainsString('Headline - refined', (string)($result['block']['html'] ?? ''));
+        self::assertSame(['config.headline', 'html'], $result['changed_fields']);
+        self::assertSame('fake_patch', $events[0][0] ?? null);
     }
 
     public function testPatchPromptOmitsServerTemplateBodySoAiDoesNotRewritePhtml(): void
@@ -561,9 +649,17 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
     {
         $service = new AiSiteBlockPartialPatchService();
         $replacement = $this->block('hero', 'New Headline', '<section>New Headline</section>');
-        $replacement['_pb_server_template_phtml'] = '<?php if (';
+        $replacement['_pb_server_template_phtml'] = '<?php throw new \RuntimeException("render failed"); ?>';
 
-        $result = $service->applyReplacementBlockToScope($this->scope(), 'home', 'hero', $replacement);
+        $bufferLevel = \ob_get_level();
+        \ob_start();
+        try {
+            $result = $service->applyReplacementBlockToScope($this->scope(), 'home', 'hero', $replacement);
+        } finally {
+            while (\ob_get_level() > $bufferLevel) {
+                \ob_end_clean();
+            }
+        }
 
         self::assertFalse($result['success']);
         self::assertSame('BLOCK_RENDER_FAILED', $result['code']);
@@ -641,60 +737,83 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
             'default_locale' => 'de_DE',
             'content_locale' => 'de_DE',
         ];
-        $scope['build_blueprint'] = [
-            'source' => 'build_plan_v2',
-            'tasks' => [
-                [
-                    'task_key' => 'page:home:content/hero',
-                    'task_type' => 'page_section',
-                    'page_type' => 'home',
-                    'section_code' => 'content/hero',
-                    'section_key' => 'hero',
-                    'block_key' => 'hero',
-                    'runtime_context' => [
-                        'content_locale' => 'de_DE',
-                        'language_contract' => [
-                            'source_of_truth_locale' => 'de_DE',
-                            'visible_copy_rule' => 'German visible copy only.',
-                        ],
-                    ],
-                    'plan_context' => [
-                        'block' => [
-                            'block_id' => 'block.home.hero',
-                            'block_contract' => [
-                                'morphology_id' => 'editorial_split_media',
-                                'block_goal' => 'Convert visitors to restaurant reservations.',
-                                'media_strategy' => [
-                                    'needs_real_image' => true,
-                                    'asset_slot_id' => 'page:home:hero',
-                                ],
-                                'diversity_constraints' => [
-                                    'must_differ_from_previous_block' => ['morphology_id', 'media_placement'],
-                                ],
-                            ],
+        $blockContract = [
+            'morphology_id' => 'editorial_split_media',
+            'block_goal' => 'Convert visitors to restaurant reservations.',
+            'media_strategy' => [
+                'needs_real_image' => true,
+                'asset_slot_id' => 'page:home:hero',
+            ],
+            'diversity_constraints' => [
+                'must_differ_from_previous_block' => ['morphology_id', 'media_placement'],
+            ],
+        ];
+        $scope['plan_json'] = [
+            'pages' => [
+                'home' => [
+                    'blocks' => [
+                        [
+                            'block_key' => 'hero',
+                            'component_code' => 'content/hero',
+                            'block_contract' => $blockContract,
                             'image_intent' => [
                                 'needs_image' => true,
                                 'asset_slot_id' => 'page:home:hero',
                             ],
                         ],
                     ],
-                    'block_task' => [
-                        'content_plan' => [
-                            'headline' => 'Plan intent only; rewrite into German before output.',
-                        ],
-                        'image_intent' => [
-                            'needs_image' => true,
-                            'asset_slot_id' => 'page:home:hero',
-                        ],
+                ],
+            ],
+        ];
+        $scope['build_plan_v2'] = [
+            'contract_meta' => [
+                'id' => 'test-build-plan-v2',
+                'version' => '2.2',
+                'status' => 'confirmed',
+                'source_signature' => 'test-build-plan-signature',
+            ],
+            'site_brief' => [
+                'site_name' => 'Restaurant Test',
+                'primary_goal' => 'Convert visitors to restaurant reservations.',
+                'locale' => 'de_DE',
+            ],
+            'i18n' => [
+                'primary_locale' => 'de_DE',
+            ],
+            'content_manifest' => [
+                'primary_locale' => 'de_DE',
+                'items' => [
+                    'page.home.title' => 'Home',
+                    'block.home.hero.title' => 'Reservierung starten',
+                    'block.home.hero.goal' => 'Plan intent only; rewrite into German before output.',
+                ],
+            ],
+            'pages' => [
+                [
+                    'page_id' => 'home',
+                    'page_type' => 'home',
+                    'title_key' => 'page.home.title',
+                    'blocks' => ['block.home.hero'],
+                ],
+            ],
+            'blocks' => [
+                [
+                    'block_id' => 'block.home.hero',
+                    'page_id' => 'home',
+                    'page_type' => 'home',
+                    'section_key' => 'hero',
+                    'block_type' => 'hero',
+                    'page_flow_role' => 'opening_conversion',
+                    'content_keys' => [
+                        'block.home.hero.title',
+                        'block.home.hero.goal',
                     ],
-                    'task_script' => [
-                        'output_contract' => [
-                            'html' => 'Localized section HTML matching the confirmed block contract.',
-                        ],
-                        'acceptance' => [
-                            'must_follow_current_block_contract' => true,
-                        ],
+                    'block_contract' => $blockContract,
+                    'image_intent' => [
+                        'needs_image' => true,
+                        'asset_slot_id' => 'page:home:hero',
                     ],
+                    'sort_order' => 100,
                 ],
             ],
         ];

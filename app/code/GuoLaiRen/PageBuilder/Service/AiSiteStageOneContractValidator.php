@@ -34,7 +34,8 @@ final class AiSiteStageOneContractValidator
         $this->validateLinkRequirements($planJson, $contract, $issues);
 
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
-        foreach (\is_array($contract['page_types'] ?? null) ? $contract['page_types'] : [] as $pageType) {
+        $pageValidationTargets = $this->resolvePageValidationTargets($contract, $context);
+        foreach ($pageValidationTargets as $pageType) {
             $pageType = \trim((string)$pageType);
             if ($pageType === '') {
                 continue;
@@ -49,6 +50,27 @@ final class AiSiteStageOneContractValidator
         }
 
         return $this->report($planJson, $contract, $issues, $context);
+    }
+
+    /**
+     * @param array<string, mixed> $contract
+     * @param array<string, mixed> $context
+     * @return list<string>
+     */
+    private function resolvePageValidationTargets(array $contract, array $context): array
+    {
+        $source = \is_array($context['validation_page_types'] ?? null)
+            ? $context['validation_page_types']
+            : (\is_array($contract['page_types'] ?? null) ? $contract['page_types'] : []);
+        $targets = [];
+        foreach ($source as $pageType) {
+            $pageType = \trim((string)$pageType);
+            if ($pageType !== '' && !\in_array($pageType, $targets, true)) {
+                $targets[] = $pageType;
+            }
+        }
+
+        return $targets;
     }
 
     /**

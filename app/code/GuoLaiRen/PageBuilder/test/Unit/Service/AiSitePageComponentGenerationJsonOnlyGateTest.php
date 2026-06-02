@@ -122,6 +122,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
                 ],
                 [
+                    AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                     'content_locale' => 'zh_Hans_CN',
                     '_content_locale' => 'zh_Hans_CN',
                     '_scope' => [
@@ -178,6 +179,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     'runtime.build_plan_task_json' => (string)\json_encode($buildPlanTask, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
                 ],
                 [
+                    AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
                     'content_locale' => 'zh_Hans_CN',
                     '_content_locale' => 'zh_Hans_CN',
                     '_scope' => [
@@ -329,7 +331,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
 
         self::assertStringNotContainsString($genericPlanCopy, $extraFields);
         self::assertStringContainsString(
-            'content.description => Description:textarea:Show the trust signals visitors need before they take action.',
+            'content.description => Description:textarea:Show the trust signals players need before they take action.',
             $extraFields
         );
         self::assertStringContainsString(
@@ -341,7 +343,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
             $extraFields
         );
         self::assertStringContainsString(
-            'card.item_3_text => Card 3 text:textarea:Show where visitors can get help when they need more context.',
+            'card.item_3_text => Card 3 text:textarea:Show where players can get help when they need more context.',
             $extraFields
         );
     }
@@ -404,7 +406,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
             $heroFields
         );
         self::assertStringContainsString(
-            'content.description => Description:textarea:Guide visitors toward the next step with clear context, proof, and support.',
+            'content.description => Description:textarea:Guide players toward the next step with clear context, proof, and support.',
             $ctaFields
         );
         self::assertStringContainsString('.pb-c-inner{display:block;width:100%;', $heroCss);

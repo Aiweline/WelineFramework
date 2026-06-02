@@ -8,7 +8,7 @@
 
 `POST /pagebuilder/backend/ai-site-agent/post-start-patch-block`
 
-该入口不会直接同步返回微调后的 block，而是创建 `block_partial_patch` 队列任务，并返回 `execution_token`、`queue_id`、`stream_url`。调用方应通过 SSE 或 `post-workspace-snapshot` 读取任务状态与最新工作区结果。
+该入口不会直接同步返回微调后的 block，而是创建 `block_partial_patch` 队列任务，并返回 `execution_token`、`queue_id`、`stream_url`。调用方应通过 SSE 或 `post-workspace-state` 读取任务状态与最新工作区结果。
 
 ## 调用前提
 
@@ -20,11 +20,11 @@
 
 ## 典型流程
 
-1. 调用 `post-workspace-snapshot` 获取当前工作区页面、区块、`active_operation` 和可用 `page_type`。
-2. 从快照或预览 DOM 中确定目标 `page_type`、`block_id`，必要时传入 `component_code` 作为兜底。
+1. 调用 `post-workspace-state` 获取当前工作区页面、区块、`active_operation` 和可用 `page_type`。
+2. 从工作区状态或预览 DOM 中确定目标 `page_type`、`block_id`，必要时传入 `component_code` 作为兜底。
 3. 调用 `post-start-patch-block` 启动块微调任务。
-4. 使用返回的 `stream_url` 建立 SSE 连接，或定期调用 `post-workspace-snapshot` 轮询状态。
-5. 当任务状态为 `done`，从快照的 `virtual_pages_by_type`、`page_type_layouts`、`block_patch_history` 或预览页面读取更新后的 block。
+4. 使用返回的 `stream_url` 建立 SSE 连接，或定期调用 `post-workspace-state` 轮询状态。
+5. 当任务状态为 `done`，从工作区状态的 `virtual_pages_by_type`、`page_type_layouts`、`block_patch_history` 或预览页面读取更新后的 block。
 6. 当任务状态为 `error/failed/fail`，展示 `message`，并可调用 `post-retry-ai-operation` 重试同一失败操作。
 
 ## 启动块微调
@@ -131,11 +131,11 @@ curl -X POST "https://example.com/backend/pagebuilder/backend/ai-site-agent/post
 }
 ```
 
-## 读取工作区快照
+## 读取工作区状态
 
 ### 请求
 
-`POST /pagebuilder/backend/ai-site-agent/post-workspace-snapshot`
+`POST /pagebuilder/backend/ai-site-agent/post-workspace-state`
 
 ```json
 {
@@ -218,7 +218,7 @@ curl -X POST "https://example.com/backend/pagebuilder/backend/ai-site-agent/post
 
 - 把 `public_id` 作为第三方任务和 PageBuilder 工作区的主关联键。
 - 启动任务后保存 `queue_id`、`execution_token`、`stream_url`，便于断线恢复和客服排查。
-- 前端系统优先使用 SSE；服务端系统可使用 `post-workspace-snapshot` 做低频轮询。
+- 前端系统优先使用 SSE；服务端系统可使用 `post-workspace-state` 做低频轮询。
 - 轮询间隔建议 3 至 5 秒，队列等待阶段可放宽到 10 秒。
 - 展示结果时以快照中的最新 scope 为准，不要只依赖启动接口返回的 `data`。
 - 任务失败后先展示 `message` 和 `queue_id`，再决定调用重试接口或重新启动微调。
@@ -231,6 +231,5 @@ curl -X POST "https://example.com/backend/pagebuilder/backend/ai-site-agent/post
 | `post-start-refine-component` | `block_regenerate` | 根据指令重生成某个组件或 section，变更范围更大。 |
 | `post-start-regenerate-page` | `regenerate_page` | 重生成整个页面。 |
 | `post-update-block-config` | config update | 直接保存人工配置，不调用智能体。 |
-| `post-workspace-snapshot` | snapshot | 读取工作区状态，不触发 AI。 |
+| `post-workspace-state` | state | 读取工作区状态，不触发 AI。 |
 | `post-retry-ai-operation` | retry | 重试最近失败的 AI 操作。 |
-
