@@ -148,7 +148,13 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
         // 多源候选拼装契约：预览只消费 json / structured / build_plan_v2，不再读取原始 markdown；
         // 缺页检测只读取当前 plan_json/page_plans 与 plan_workbench 来源，与后端完成门禁保持一致。
-        self::assertStringContainsString('json: pickFirstNonEmptyPlanObject(plan.json, state.plan_json, scope.plan_json)', $script);
+        self::assertStringContainsString('function collectStageOnePlanWorkbenchPreviewCandidates(workbench)', $script);
+        self::assertStringContainsString('var stateWorkbenchCandidates = collectStageOnePlanWorkbenchPreviewCandidates(state.plan_workbench);', $script);
+        self::assertStringContainsString('var scopeWorkbenchCandidates = collectStageOnePlanWorkbenchPreviewCandidates(scope.plan_workbench);', $script);
+        self::assertStringContainsString('json: pickFirstNonEmptyPlanObject.apply(null, [', $script);
+        self::assertStringContainsString('structured: pickFirstNonEmptyPlanObject.apply(null, [', $script);
+        self::assertStringContainsString('plan.structured,', $script);
+        self::assertStringContainsString('confirmed.structured_plan', $script);
         self::assertStringNotContainsString('state.plan_structured', $script);
         self::assertStringNotContainsString('scope.plan_structured', $script);
         self::assertStringContainsString('build_plan_v2: pickFirstNonEmptyPlanObject(plan.build_plan_v2, state.build_plan_v2, scope.build_plan_v2)', $script);
@@ -1022,7 +1028,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('isWorkspaceSseResumeBlockedByTerminal', $bootstrapBody);
         self::assertStringContainsString('resumeOperationStreamForQueueWatch', $bootstrapBody);
         self::assertStringContainsString('queueWaitingForScheduler', $preferBody);
-        self::assertStringContainsString('Queue-backed progress resumes through workspace stream and read-only polling.', $preferBody);
+        self::assertStringContainsString('Queue-backed progress prefers workspace SSE; read-only polling is only a fallback.', $preferBody);
         self::assertStringNotContainsString("queueStatus === 'running' || queueStatus === 'processing'", $preferBody);
         self::assertStringNotContainsString('pid > 0', $preferBody);
     }
@@ -1160,6 +1166,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('function resolveRuntimeQueueInfoKey(operation)', $runtime);
         self::assertStringContainsString('function startDeferredQueueStatePoll(operation)', $runtime);
         self::assertStringContainsString('return submitWorkspaceForm(workspaceStatePollUrl', $runtime);
+        self::assertStringContainsString('shouldSyncUi && !operationResumed', $runtime);
         self::assertStringContainsString('startDeferredQueueStatePoll(operation);', $runtime);
         self::assertStringContainsString('stopDeferredQueueStatePoll();', $runtime);
         self::assertStringContainsString('offerRetryForFailedOperation(op, failurePayload);', $runtime);
@@ -1225,7 +1232,12 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $fetchBody = $this->extractFunctionBody($runtime, 'fetchWorkspaceStateForRuntime');
         self::assertStringContainsString('return submitWorkspaceForm(workspaceStatePollUrl', $fetchBody);
         self::assertStringNotContainsString('}).catch(function (error)', $fetchBody);
-        self::assertStringContainsString('DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 1000', $runtime);
+        self::assertStringContainsString('DEFERRED_QUEUE_STATE_POLL_INITIAL_DELAY_MS = 1200', $runtime);
+        self::assertStringContainsString('DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 5000', $runtime);
+        self::assertStringContainsString('DEFERRED_QUEUE_STATE_POLL_JITTER_MS = 1500', $runtime);
+        self::assertStringContainsString('deferredQueueStatePollOperation === normalizedOperation', $runtime);
+        self::assertStringContainsString('window.setTimeout(tickDeferredQueueStatePoll, baseDelay + jitter)', $runtime);
+        self::assertStringNotContainsString('window.setInterval(tickDeferredQueueStatePoll', $runtime);
 
         $signatureBody = $this->extractFunctionBody($runtime, 'buildDeferredQueueStatePollSignature');
         $progressBody = $this->extractFunctionBody($runtime, 'buildDeferredQueueProgressSignature');
@@ -1252,6 +1264,27 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $latestProgressBody = $this->extractFunctionBody($taskProgress, 'publishPlanQueueLatestPageProgress');
         self::assertStringContainsString('var remainingCount = parsePlanQueueNonNegativeCount(normalized.remaining_count, null);', $latestProgressBody);
         self::assertStringContainsString('remainingCount = resolvePlanQueueRemainingCount(normalized, total, doneCount, runningCount, failedCount, pendingCount);', $latestProgressBody);
+    }
+
+    public function testWorkspaceToastUsesShortStructuralMessagesForOperationSuccess(): void
+    {
+        $script = $this->workspaceScript();
+        $toastBody = $this->extractFunctionBody($script, 'toast');
+        self::assertStringContainsString('function normalizeToastType(type)', $script);
+        self::assertStringContainsString('function getToastFallbackMessage(type)', $script);
+        self::assertStringContainsString('function isToastMessageStructurallyUnsafe(text)', $script);
+        self::assertStringContainsString('value.length > 80', $script);
+        self::assertStringContainsString('getToastFallbackMessage(normalizedType)', $script);
+        self::assertStringContainsString('var normalizedType = normalizeToastType(type);', $toastBody);
+        self::assertStringContainsString('message = normalizeToastMessage(message, normalizedType);', $toastBody);
+        self::assertStringContainsString('window.BackendToast[normalizedType](message);', $toastBody);
+
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+        self::assertStringContainsString('function resolveOperationDoneToastMessage(doneOperation, payload)', $runtime);
+        self::assertStringContainsString("toast('success', messages.buildReady || messages.operationDone || 'Editing workspace is ready.');", $runtime);
+        self::assertStringContainsString("toast('success', resolveOperationDoneToastMessage(normalizedDoneOperation, payload));", $runtime);
+        self::assertStringNotContainsString("toast('success', (payload && payload.message) ? String(payload.message)", $runtime);
     }
 
     public function testRuntimeQueueProgressReadsPersistentQueueStateFromAllPayloadShapes(): void

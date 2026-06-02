@@ -2036,6 +2036,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         blockSseApplied: <?= \json_encode((string)__('当前区块已自动刷新。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         buildPreparing: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         buildReady: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        operationDone: <?= \json_encode((string)__('操作执行完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         operationDuplicateStream: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         leaveDuringBuild: <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         domainNeedBrief: <?= \json_encode((string)__('请先填写站点名称和需求描述。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -3107,8 +3108,51 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     };
 
     var lastToastByKey = {};
-    function normalizeToastMessage(message) {
-        var text = String(message || '');
+    function normalizeToastType(type) {
+        var normalizedType = String(type || '').trim().toLowerCase();
+        return ['success', 'info', 'warning', 'error'].indexOf(normalizedType) >= 0 ? normalizedType : 'info';
+    }
+
+    function getToastFallbackMessage(type) {
+        var normalizedType = normalizeToastType(type);
+        if (normalizedType === 'success') {
+            return messages.operationDone || messages.blockOpSuccess || 'Operation completed.';
+        }
+        if (normalizedType === 'error') {
+            return messages.networkError || 'Operation failed.';
+        }
+        if (normalizedType === 'warning') {
+            return messages.operationDuplicateStream || messages.networkError || 'Please check the workspace status.';
+        }
+        return messages.resumeDeferred || messages.operationDone || 'Operation updated.';
+    }
+
+    function isToastMessageStructurallyUnsafe(text) {
+        var value = String(text || '').trim();
+        if (!value) {
+            return false;
+        }
+        if (value.length > 80) {
+            return true;
+        }
+        if (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) {
+            return true;
+        }
+        if (/^\s*[\[{]/.test(value)) {
+            return true;
+        }
+        if (/<[a-z][\s\S]*>/i.test(value)) {
+            return true;
+        }
+        if (/```|<!doctype|<html|function\s*\(|class\s*=|data-[a-z0-9_-]+=/i.test(value)) {
+            return true;
+        }
+        return false;
+    }
+
+    function normalizeToastMessage(message, type) {
+        var normalizedType = normalizeToastType(type);
+        var text = String(message || '').replace(/\s+/g, ' ').trim();
         var lower = text.toLowerCase();
         if (lower.indexOf('insufficient balance') >= 0 || lower.indexOf('http 402') >= 0) {
             return <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -3116,12 +3160,15 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (lower.indexOf('ai component generation failed') >= 0) {
             return <?= \json_encode((string)__(''), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
         }
+        if (isToastMessageStructurallyUnsafe(text)) {
+            return getToastFallbackMessage(normalizedType);
+        }
         return text;
     }
 
     // 兼容旧函数名 normalizetoastMessage（历史拼写），避免外部脚本调用时报 ReferenceError。
-    function normalizetoastMessage(message) {
-        return normalizeToastMessage(message);
+    function normalizetoastMessage(message, type) {
+        return normalizeToastMessage(message, type);
     }
     window.normalizeToastMessage = normalizeToastMessage;
     window.normalizetoastMessage = normalizetoastMessage;
@@ -3130,18 +3177,22 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (!message) {
             return;
         }
-        message = normalizeToastMessage(message);
-        var key = String(type || '') + ':' + String(message || '');
+        var normalizedType = normalizeToastType(type);
+        message = normalizeToastMessage(message, normalizedType);
+        if (!message) {
+            return;
+        }
+        var key = normalizedType + ':' + String(message || '');
         var now = Date.now();
         if (lastToastByKey[key] && (now - lastToastByKey[key]) < 5000) {
             return;
         }
         lastToastByKey[key] = now;
-        if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
-            window.BackendToast[type](message);
+        if (window.BackendToast && typeof window.BackendToast[normalizedType] === 'function') {
+            window.BackendToast[normalizedType](message);
             return;
         }
-        console[type === 'error' ? 'error' : 'log'](message);
+        console[normalizedType === 'error' ? 'error' : 'log'](message);
     }
 
     function postForm(url, fields, options) {
