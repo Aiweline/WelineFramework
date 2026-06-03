@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
+use GuoLaiRen\PageBuilder\Controller\Frontend\Page as FrontendPageController;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use Weline\Framework\Http\Url;
@@ -97,6 +98,7 @@ class AiSitePublishService
             $workspaceTrack,
             $websiteProfile
         );
+        FrontendPageController::clearProcessCaches(true);
 
         $previewPageId = (int)($materialized['preview_page_id'] ?? 0);
         $visualUrls = $this->visualUrlService->normalizeUrlsToLocalBase(
