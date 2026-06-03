@@ -53,7 +53,7 @@ final class AiSiteSessionRuntimeTest extends TestCase
             'theme_css' => '.pb-c-section{}',
         ];
         $dehydrated = $policy->dehydrateScopePaths($manifest);
-        self::assertSame([], $dehydrated['build_plan_v2']);
+        self::assertSame(['blocks' => [['block_id' => 'hero']]], $dehydrated['build_plan_v2']);
         self::assertArrayNotHasKey('css', $dehydrated['theme_css_ref']);
         self::assertArrayNotHasKey('theme_css', $dehydrated);
     }
