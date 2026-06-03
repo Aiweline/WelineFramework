@@ -360,8 +360,14 @@ class AiSiteBuildTaskService
             $scope['plan_workbench']['stage1']['page_plans'] ?? null,
             $scope['plan_workbench']['confirmed']['pages'] ?? null,
             $scope['plan_workbench']['confirmed']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_json']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_json']['page_plans'] ?? null,
             $scope['plan_workbench']['confirmed']['structured_plan']['pages'] ?? null,
             $scope['plan_workbench']['confirmed']['structured_plan']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['structured']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['structured']['page_plans'] ?? null,
         ] as $pageSource) {
             foreach (\is_array($pageSource) ? $pageSource : [] as $key => $page) {
                 if (!\is_array($page)) {

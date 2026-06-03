@@ -15,8 +15,10 @@ final class AiSiteAgentBlockSseRouteContractTest extends TestCase
         $controllerSource = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
         self::assertIsString($controllerSource);
 
-        self::assertStringContainsString("pagebuilder/backend/ai-site-agent/block-refine-sse", $controllerSource);
-        self::assertStringContainsString("pagebuilder/backend/ai-site-agent/block-regenerate-sse", $controllerSource);
+        self::assertStringContainsString('public function getBlockRefineSse()', $controllerSource);
+        self::assertStringContainsString('public function getBlockRegenerateSse()', $controllerSource);
+        self::assertStringContainsString('public function getPostBlockRefineSse()', $controllerSource);
+        self::assertStringContainsString('public function getPostBlockRegenerateSse()', $controllerSource);
         self::assertStringNotContainsString("start_block_refine_sse_url', \$this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-block-refine-sse')", $controllerSource);
         self::assertStringNotContainsString("start_block_regenerate_sse_url', \$this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-block-regenerate-sse')", $controllerSource);
 
@@ -40,9 +42,9 @@ final class AiSiteAgentBlockSseRouteContractTest extends TestCase
         self::assertIsString($scriptSource);
 
         self::assertStringContainsString('function blockMatchesComponentCode(pageType, block, componentCode)', $scriptSource);
-        self::assertStringContainsString('findVirtualBlockInList(targetPageType, pageState.blocks, targetBlockId)', $scriptSource);
-        self::assertStringContainsString("resolveSharedComponentRegionFromCode(pageType, candidates[i].getAttribute('data-component') || '')", $scriptSource);
-        self::assertStringContainsString('updateVirtualBlockState(targetPageType, nextBlock)', $scriptSource);
+        self::assertStringContainsString('findVirtualBlockInList(pageType, pageState.blocks, blockId)', $scriptSource);
+        self::assertStringContainsString("resolveSharedComponentRegionFromCode(pageType, String(candidate || ''))", $scriptSource);
+        self::assertStringContainsString('updateVirtualBlockState(context.page_type, refreshedBlock)', $scriptSource);
     }
 
     public function testPreviewStageToolbarKeepsStageLevelActionsWired(): void
