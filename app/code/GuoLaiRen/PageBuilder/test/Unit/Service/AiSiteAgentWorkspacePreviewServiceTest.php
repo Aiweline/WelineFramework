@@ -114,6 +114,14 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
             ->with($scope)
             ->willReturn($scope);
         $scopeCompatibility->expects(self::once())
+            ->method('normalizePreviewContentLocale')
+            ->with($scope, '')
+            ->willReturn($scope);
+        $scopeCompatibility->expects(self::once())
+            ->method('resolvePreviewContentLocale')
+            ->with($scope, '')
+            ->willReturn('en_US');
+        $scopeCompatibility->expects(self::once())
             ->method('resolveScopedPageTypes')
             ->with($scope)
             ->willReturn([Page::TYPE_HOME]);
@@ -134,6 +142,10 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
             ->method('resolvePreviewPageType')
             ->with($this->isType('array'), Page::TYPE_HOME)
             ->willReturn(Page::TYPE_HOME);
+        $scopeCompatibility->expects(self::once())
+            ->method('localizeSharedLayoutConfigForScope')
+            ->with([], $scope, Page::TYPE_HOME)
+            ->willReturn([]);
 
         $service = new AiSiteAgentWorkspacePreviewService(
             $this->createStub(AiSiteAgentSessionService::class),

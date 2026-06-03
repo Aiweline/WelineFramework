@@ -323,14 +323,14 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
             $this->assign('title', __('PageBuilder AI site workspace'));
-            $this->assign('error_message', __('鏈櫥褰曟垨浼氳瘽浠ょ墝鏃犳晥'));
+            $this->assign('error_message', __('未登录或会话令牌无效'));
             return $this->fetch('workspace-error');
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
             $this->assign('title', __('PageBuilder AI site workspace'));
-            $this->assign('error_message', __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'));
+            $this->assign('error_message', __('会话不存在或无权访问'));
             return $this->fetch('workspace-error');
         }
 
@@ -485,7 +485,7 @@ class AiSiteAgent extends BaseController
     {
         $adminId = (int)$this->getLoginUserId();
         $items = $adminId > 0 ? \array_values($this->designDirectionService()->listDirections($adminId, true)) : [];
-        $this->assign('title', __('AI 璁捐鏂瑰悜妯℃澘'));
+            $this->assign('title', __('AI 设计方向模板'));
         $this->assign('design_direction_items', $items);
         $this->assign('design_direction_list_url', $this->url->getBackendUrlPath('ai/backend/style/post-catalog'));
         $this->assign('design_direction_save_url', $this->url->getBackendUrlPath('ai/backend/style/post-save'));
@@ -849,31 +849,31 @@ class AiSiteAgent extends BaseController
         }
         if (\preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', $locale) === 1) {
             return match ($key) {
-                'home' => '啶灌啶',
-                'about' => '啶灌ぎ啶距ぐ啷?啶ぞ啶班 啶啶',
-                'contact' => '啶膏啶ぐ啷嵿 啶曕ぐ啷囙',
-                'privacy_policy' => '啶椸啶え啷€啶い啶?啶ㄠ啶むた',
-                'terms_of_service' => '啶膏啶掂ぞ 啶曕 啶多ぐ啷嵿い啷囙',
+                'home' => 'होम',
+                'about' => 'हमारे बारे में',
+                'contact' => 'संपर्क करें',
+                'privacy_policy' => 'गोपनीयता नीति',
+                'terms_of_service' => 'सेवा की शर्तें',
                 default => '',
             };
         }
         if (\preg_match('/^pt(?:[_-]|$)/i', $locale) === 1) {
             return match ($key) {
-                'home' => 'In铆cio',
+                'home' => 'Início',
                 'about' => 'Sobre',
                 'contact' => 'Contato',
-                'privacy_policy' => 'Pol铆tica de Privacidade',
-                'terms_of_service' => 'Termos de Servi莽o',
+                'privacy_policy' => 'Política de Privacidade',
+                'terms_of_service' => 'Termos de Serviço',
                 default => '',
             };
         }
         if (\preg_match('/^(zh|zh[_-]hans|zh[_-]cn|zh[_-]sg)/i', $locale) === 1) {
             return match ($key) {
-                'home' => '棣栭〉',
-                'about' => '鍏充簬鎴戜滑',
-                'contact' => '鑱旂郴鎴戜滑',
-                'privacy_policy' => '闅愮鏀跨瓥',
-                'terms_of_service' => '鏈嶅姟鏉℃',
+                'home' => '首页',
+                'about' => '关于我们',
+                'contact' => '联系我们',
+                'privacy_policy' => '隐私政策',
+                'terms_of_service' => '服务条款',
                 default => '',
             };
         }
@@ -955,17 +955,17 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $stage = $this->scopeCompatibilityService->normalizeStage((string)$this->getRequestBodyValue('stage', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('鍙傛暟鏃犳晥')]);
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶')]);
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
         }
 
         $allowed = \array_column($this->getStageOptions(), 'value');
         if (!\in_array($stage, $allowed, true)) {
-            return $this->fetchJson(['success' => false, 'message' => __('鏃犳晥鐨勯樁娈')]);
+            return $this->fetchJson(['success' => false, 'message' => __('无效的阶段')]);
         }
 
         if ($stage === AiSiteAgentSession::STAGE_PUBLISH) {
@@ -1014,7 +1014,7 @@ class AiSiteAgent extends BaseController
         }
 
         $this->sessionService->setStage($session->getId(), $adminId, $stage);
-        $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'stage_changed', (string)__('宸ヤ綔鍖洪樁娈靛凡鍒囨崲'));
+        $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'stage_changed', (string)__('工作区阶段已切换'));
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $viewState = $this->buildWorkspaceFastViewState($fresh, $adminId);
 
@@ -1136,19 +1136,19 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('鍙傛暟鏃犳晥')]);
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶')]);
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
         }
 
         if (!$this->sessionService->deleteSession($session->getId(), $adminId)) {
-            return $this->fetchJson(['success' => false, 'message' => __('鍒犻櫎宸ヤ綔鍖哄け璐ワ紝璇风◢鍚庨噸璇')]);
+            return $this->fetchJson(['success' => false, 'message' => __('删除工作区失败，请稍后重试')]);
         }
 
-        return $this->fetchJson(['success' => true, 'message' => __('宸ヤ綔鍖哄凡鍒犻櫎')]);
+        return $this->fetchJson(['success' => true, 'message' => __('工作区已删除')]);
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'Ai Site Agent Workspace', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_workspace', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -1163,7 +1163,7 @@ class AiSiteAgent extends BaseController
     {
         return $this->fetchJson([
             'success' => true,
-            'message' => __('鍘熺敓 SSE 妯″紡鏃犻渶棰濆缁害'),
+            'message' => __('原生 SSE 模式无需额外续约'),
             'native_sse' => true,
         ]);
     }
@@ -1200,7 +1200,7 @@ class AiSiteAgent extends BaseController
     {
         $adminId = (int)$this->getLoginUserId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('鏈櫥褰')]);
+            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
         }
 
         $fakeMode = $this->getRequestBodyValue('fake_mode', '0');
@@ -1417,17 +1417,17 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('鍙傛暟鏃犳晥')]);
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶')]);
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
         }
 
         $linkedWebsitesSession = $this->ensureLinkedWebsitesMirrorSession($session, $adminId);
         if (!$linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession) {
-            return $this->fetchJson(['success' => false, 'message' => __('鏆傛椂鏃犳硶鍒涘缓鍩熷悕璐拱宸ヤ綔鍖')]);
+            return $this->fetchJson(['success' => false, 'message' => __('暂时无法创建域名购买工作区')]);
         }
 
         $scopeError = '';
@@ -1446,7 +1446,7 @@ class AiSiteAgent extends BaseController
         if (empty($result['success'])) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => (string)($result['message'] ?? __('鍔犲叆鍩熷悕璐拱闃熷垪澶辫触')),
+                'message' => (string)($result['message'] ?? __('加入域名购买队列失败')),
             ]);
         }
 
@@ -1457,7 +1457,7 @@ class AiSiteAgent extends BaseController
 
         return $this->fetchJson([
             'success' => true,
-            'message' => (string)($result['message'] ?? __('宸插姞鍏ュ煙鍚嶈喘涔伴槦鍒')),
+                'message' => (string)($result['message'] ?? __('已加入域名购买队列')),
             'state' => $state,
             'pagebuilder_state' => $this->buildWorkspaceState($freshPageBuilderSession, $adminId, 80, true),
             'public_id' => $freshPageBuilderSession->getPublicId(),
@@ -1863,7 +1863,7 @@ class AiSiteAgent extends BaseController
     {
         $adminId = (int)$this->getLoginUserId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('鏈櫥褰')]);
+            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
         }
 
         try {
@@ -1889,7 +1889,7 @@ class AiSiteAgent extends BaseController
     {
         $adminId = (int)$this->getLoginUserId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('鏈櫥褰')]);
+            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
         }
 
         $error = '';
@@ -1996,7 +1996,7 @@ class AiSiteAgent extends BaseController
     {
         $adminId = (int)$this->getLoginUserId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('鏈櫥褰')]);
+            return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
         }
 
         $title = \trim((string)$this->getRequestBodyValue('site_title', $this->getRequestBodyValue('title', '')));
@@ -2020,11 +2020,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         $error = '';
@@ -2055,7 +2055,7 @@ class AiSiteAgent extends BaseController
         if ($targetDomain === '') {
             return $this->jsonError(
                 'TARGET_DOMAIN_REQUIRED',
-                (string)__('璇峰厛濉啓瑕佺粦瀹氱殑鐩爣鍩熷悕'),
+                (string)__('请先填写要绑定的目标域名'),
                 ['target_domain']
             );
         }
@@ -2107,11 +2107,11 @@ class AiSiteAgent extends BaseController
             && !$confirmRegenerate
         ) {
             $confirmMessage = (string)($planStartDecision['action'] ?? '') === 'translate'
-                ? (string)__('鏂规璇█宸插彉鏇淬€傛槸鍚︽寜鏂拌瑷€閲嶆柊鐢熸垚锛堢炕璇戯級寤虹珯鏂规锛')
-                : (string)__('妫€娴嬪埌寤虹珯闇€姹傚凡鍙樻洿銆傛槸鍚︾珛鍗抽噸寤哄缓绔欐柟妗堬紵');
+                ? (string)__('方案语言已变更。是否按新语言重新生成（翻译）建站方案？')
+                : (string)__('检测到建站需求已变更。是否立即重建建站方案？');
             return $this->fetchJson([
                 'success' => true,
-                'message' => (string)__('妫€娴嬪埌鏂规閰嶇疆鍙樻洿锛屽綋鍓嶅厛淇濈暀鏃ф柟妗堬紝绛夊緟浣犵‘璁ゅ悗鍐嶉噸鏂扮敓鎴愩€'),
+                'message' => (string)__('检测到方案配置变更，当前先保留旧方案，等待你确认后再重新生成。'),
                 'operation' => 'plan',
                 'start_sse' => false,
                 'requires_confirmation' => true,
@@ -2168,7 +2168,7 @@ class AiSiteAgent extends BaseController
         if ((string)($planStartDecision['action'] ?? '') === 'reuse' && $hasPlanDraft && !$hasRetryablePlanFailures && !\in_array($requestedPromptMode, ['refine', 'rebuild', 'resume_plan'], true)) {
             return $this->fetchJson([
                 'success' => true,
-                'message' => (string)__('褰撳墠鏂规鏃犻渶閲嶅缓锛屽凡淇濈暀骞跺洖鏄惧凡鏈夋柟妗堝唴瀹广€'),
+                'message' => (string)__('当前方案无需重建，已保留并回显已有方案内容。'),
                 'operation' => 'plan',
                 'start_sse' => false,
                 'requires_confirmation' => false,
@@ -2236,7 +2236,7 @@ class AiSiteAgent extends BaseController
                 if ($resumeExecutionToken !== '' && $resumeStreamUrl !== '') {
                     return $this->fetchJson([
                         'success' => true,
-                        'message' => (string)__('妫€娴嬪埌寤虹珯鏂规浠诲姟宸插湪鎵ц涓紝宸茬户缁鐢ㄥ綋鍓嶄换鍔¤繘搴︺€'),
+                        'message' => (string)__('检测到建站方案任务已在执行中，已继续复用当前任务进度。'),
                         'operation' => 'plan',
                         'execution_token' => $resumeExecutionToken,
                         'stream_url' => $resumeStreamUrl,
@@ -2279,7 +2279,7 @@ class AiSiteAgent extends BaseController
                 if (empty($result['success'])) {
                     return $this->fetchJson([
                         'success' => false,
-                        'message' => (string)($result['message'] ?? __('寤虹珯鏂规鍚姩澶辫触锛氭娴嬪埌鏃犳晥鐨勫巻鍙蹭换鍔¤褰曪紝宸茶嚜鍔ㄦ竻鐞嗭紝璇风◢鍚庨噸璇')),
+                        'message' => (string)($result['message'] ?? __('建站方案启动失败：检测到无效的历史任务记录，已自动清理，请稍后重试')),
                         'operation' => (string)($result['operation'] ?? 'plan'),
                     ]);
                 }
@@ -2287,7 +2287,7 @@ class AiSiteAgent extends BaseController
             } else {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => (string)($result['message'] ?? __('褰撳墠鏃犳硶鍚姩寤虹珯鏂规鐢熸垚')),
+                    'message' => (string)($result['message'] ?? __('当前无法启动建站方案生成')),
                     'operation' => (string)($result['operation'] ?? ''),
                 ]);
             }
@@ -2296,7 +2296,7 @@ class AiSiteAgent extends BaseController
         $responseState = \is_array($result['data'] ?? null) ? $result['data'] : [];
         return $this->fetchJson([
             'success' => true,
-            'message' => (string)__('寤虹珯鏂规鐢熸垚浠诲姟宸插垱寤猴紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涢€氬父绾?1 鍒嗛挓鍐呭紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆'),
+            'message' => (string)__('建站方案生成任务已创建，正在等待系统定时任务调度；通常约 1 分钟内开始执行。当前进度窗口可以关闭，可以继续操作其他内容。'),
             'operation' => (string)($result['operation'] ?? 'plan'),
             'execution_token' => (string)($result['execution_token'] ?? ''),
             'stream_url' => (string)($result['stream_url'] ?? ''),
@@ -2321,11 +2321,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         $requestedStage = $this->scopeCompatibilityService->normalizeStage(
@@ -2383,14 +2383,14 @@ class AiSiteAgent extends BaseController
             }
         }
         if (!$hasStageOnePayload && $existingBuildPlanV2 === []) {
-            return $this->jsonError('PLAN_NOT_READY', (string)__('灏氭湭鐢熸垚鏂规锛岃鍏堝畬鎴愭柟妗堢敓鎴'), ['public_id']);
+            return $this->jsonError('PLAN_NOT_READY', (string)__('尚未生成方案，请先完成方案生成'), ['public_id']);
         }
 
         if ($this->buildTaskService->hasRetryableAiFailures($scope, 'plan')) {
             $summary = $this->buildTaskService->summarizeRetryableAiFailures($scope, 'plan');
             return $this->jsonError(
                 'RETRYABLE_AI_FAILURES_PENDING',
-                (string)__('闃舵涓€浠嶆湁 AI 鐢熸垚澶辫触椤癸紱褰撳墠闃舵闃熷垪浼氱户缁ˉ榻愮己澶遍〉闈紝璇风瓑寰呴槦鍒楃画璺戝畬鎴愬悗鍐嶇‘璁ゃ€'),
+                (string)__('第一阶段仍有 AI 生成失败项；当前阶段队列会继续补齐缺失页面，请等待队列续跑完成后再确认。'),
                 ['public_id'],
                 ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
             );
@@ -2410,7 +2410,7 @@ class AiSiteAgent extends BaseController
         if (!empty($planStartDecision['rebuild_required']) || !empty($planStartDecision['source_signature_changed'])) {
             return $this->jsonError(
                 'PLAN_INPUT_STALE',
-                (string)__('寤虹珯璧勬枡宸插彉鏇达紝涓庡綋鍓嶆柟妗堜笉涓€鑷淬€傝鍏堢偣鍑汇€岄噸鏂扮敓鎴愭柟妗堛€嶅悗鍐嶇‘璁ゃ€'),
+                (string)__('建站资料已变更，与当前方案不一致。请先点击“重新生成方案”后再确认。'),
                 ['public_id'],
                 ['plan_start_decision' => $planStartDecision]
             );
@@ -2451,8 +2451,8 @@ class AiSiteAgent extends BaseController
                 ? \implode('; ', \array_slice($buildPlanErrors, 0, 6))
                 : '';
             $message = $detail !== ''
-                ? (string)__('鏂规鍚堝悓鏍￠獙澶辫触锛?{detail}', ['detail' => $detail])
-                : (string)__('鏂规鍚堝悓鏍￠獙澶辫触锛岃閲嶆柊鐢熸垚寤虹珯鏂规銆');
+                ? (string)__('方案合同校验失败：{detail}', ['detail' => $detail])
+                : (string)__('方案合同校验失败，请重新生成建站方案。');
 
             return $this->jsonError(
                 'BUILD_PLAN_V2_INVALID',
@@ -2494,7 +2494,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
             'plan_confirmed',
-            (string)__('寤虹珯鏂规宸茬‘璁わ紝宸插垱寤烘瀯寤轰换鍔¤鍒掞紝鍙洿鎺ヨ繘鍏ュ悗鍙版瀯寤恒€'),
+            (string)__('建站方案已确认，已创建构建任务计划，可直接进入后台构建。'),
             [
                 'operation' => 'plan_confirm',
                 'details' => [
@@ -2528,7 +2528,7 @@ class AiSiteAgent extends BaseController
         );
         if (!empty($buildStartResult['success'])) {
             $buildStartResult['start_sse'] = true;
-            $buildStartResult['message'] = (string)__('寤虹珯鏂规宸茬‘璁わ紝鍚庡彴鏋勫缓闃熷垪宸插垱寤恒€');
+            $buildStartResult['message'] = (string)__('建站方案已确认，后台构建队列已创建。');
         }
 
         return $this->fetchJson($buildStartResult);
@@ -2545,14 +2545,14 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $promptMode = \trim((string)$this->getRequestBodyValue('prompt_mode', ''));
         if ($adminId <= 0 || $publicId === '' || !\in_array($promptMode, ['refine', 'rebuild', 'resume_plan'], true)) {
-            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('寤虹珯鏂规娴佸弬鏁版棤鏁'), ['public_id', 'prompt_mode']);
+            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('建站方案流参数无效'), ['public_id', 'prompt_mode']);
             $sse->complete(['success' => false]);
             return;
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), ['public_id'], 404);
+            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), ['public_id'], 404);
             $sse->complete(['success' => false]);
             return;
         }
@@ -2599,17 +2599,17 @@ class AiSiteAgent extends BaseController
         if ($planLocaleChanged && !$pageTypesChanged) {
             $targetScope = $targetScope !== '' ? $targetScope : 'locale_translation';
             $instruction = $instruction !== ''
-                ? ((string)__('璇锋寜鐩爣 plan_locale 缈昏瘧褰撳墠鏂规锛屽苟淇濈暀鍘熸湁缁撴瀯涓庨〉闈㈢被鍨嬨€') . ' ' . $instruction)
-                : (string)__('璇锋寜鐩爣 plan_locale 缈昏瘧褰撳墠鏂规锛屽苟淇濈暀鍘熸湁缁撴瀯涓庨〉闈㈢被鍨嬨€');
+                ? ((string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。') . ' ' . $instruction)
+                : (string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。');
         }
         if ($effectivePromptMode === 'rebuild') {
             $instruction = $instruction !== ''
-                ? ((string)__('鏈疆灞炰簬閲嶅缓锛氳鍩轰簬鐢ㄦ埛鏈€鏂拌姹傦紝瀹屾暣閲嶆柊鐢熸垚寤虹珯鏂规銆傛寜鍏ㄦ柊鏂规杈撳嚭锛屼笉娌跨敤鏃ф柟妗堢粨鏋勶紝涓嶈緭鍑哄眬閮ㄧ墖娈碉紝蹇呴』瑕嗙洊 markdown 鍏ㄦ枃涓庡畬鏁?plan_json銆') . ' ' . $instruction)
-                : (string)__('鏈疆灞炰簬閲嶅缓锛氳鍩轰簬鐢ㄦ埛鏈€鏂拌姹傦紝瀹屾暣閲嶆柊鐢熸垚寤虹珯鏂规銆傛寜鍏ㄦ柊鏂规杈撳嚭锛屼笉娌跨敤鏃ф柟妗堢粨鏋勶紝涓嶈緭鍑哄眬閮ㄧ墖娈碉紝蹇呴』瑕嗙洊 markdown 鍏ㄦ枃涓庡畬鏁?plan_json銆');
+                ? ((string)__('本轮属于重建：请基于用户最新要求，完整重新生成建站方案。按全新方案输出，不沿用旧方案结构，不输出局部片段，必须覆盖 markdown 全文与完整 plan_json。') . ' ' . $instruction)
+                : (string)__('本轮属于重建：请基于用户最新要求，完整重新生成建站方案。按全新方案输出，不沿用旧方案结构，不输出局部片段，必须覆盖 markdown 全文与完整 plan_json。');
         } else {
             $instruction = $instruction !== ''
-                ? ((string)__('鏈疆灞炰簬瀵硅瘽寮忓井璋冿細璇锋妸鐢ㄦ埛鏈€鏂版寚浠ゅ綋浣滄柊鐨勫璇濅笂涓嬫枃锛岄噸鏂扮敓鎴愬畬鏁村缓绔欐柟妗堛€傚厑璁镐繚鐣欐湁鏁堝巻鍙插唴瀹癸紝浣嗗繀椤讳弗鏍艰惤瀹炴湰杞柊澧?鍒犻櫎/鏀瑰啓瑕佹眰銆傝緭鍑哄繀椤绘槸瀹屾暣鏂规锛堥潪灞€閮ㄧ墖娈碉級锛岃鐩?markdown 鍏ㄦ枃涓庡畬鏁?plan_json銆') . ' ' . $instruction)
-                : (string)__('鏈疆灞炰簬瀵硅瘽寮忓井璋冿細璇锋妸鐢ㄦ埛鏈€鏂版寚浠ゅ綋浣滄柊鐨勫璇濅笂涓嬫枃锛岄噸鏂扮敓鎴愬畬鏁村缓绔欐柟妗堛€傚厑璁镐繚鐣欐湁鏁堝巻鍙插唴瀹癸紝浣嗗繀椤讳弗鏍艰惤瀹炴湰杞柊澧?鍒犻櫎/鏀瑰啓瑕佹眰銆傝緭鍑哄繀椤绘槸瀹屾暣鏂规锛堥潪灞€閮ㄧ墖娈碉級锛岃鐩?markdown 鍏ㄦ枃涓庡畬鏁?plan_json銆');
+                ? ((string)__('本轮属于对话式微调：请把用户最新指令当作新的对话上下文，重新生成完整建站方案。允许保留有效历史内容，但必须严格落实本轮新增、删除或改写要求。输出必须是完整方案（非局部片段），覆盖 markdown 全文与完整 plan_json。') . ' ' . $instruction)
+                : (string)__('本轮属于对话式微调：请把用户最新指令当作新的对话上下文，重新生成完整建站方案。允许保留有效历史内容，但必须严格落实本轮新增、删除或改写要求。输出必须是完整方案（非局部片段），覆盖 markdown 全文与完整 plan_json。');
         }
 
         if ($effectivePromptMode === 'rebuild') {
@@ -2623,8 +2623,8 @@ class AiSiteAgent extends BaseController
 
         $sse->sendEvent('start', [
             'message' => $effectivePromptMode === 'rebuild'
-                ? (string)__('姝ｅ湪閲嶅缓寤虹珯鏂规')
-                : (string)__('姝ｅ湪寰皟寤虹珯鏂规'),
+                ? (string)__('正在重建建站方案')
+                : (string)__('正在微调建站方案'),
             'prompt_mode' => $effectivePromptMode,
             'round' => $round,
             'target_scope' => $targetScope,
@@ -2632,7 +2632,7 @@ class AiSiteAgent extends BaseController
             'locale_changed_force_rebuild' => ($effectivePromptMode !== $promptMode) ? 1 : 0,
         ]);
         $sse->sendEvent('progress', [
-            'message' => (string)__('姝ｅ湪鏁寸悊褰撳墠绔欑偣鏂规涓婁笅鏂'),
+            'message' => (string)__('正在整理当前站点方案上下文'),
             'prompt_mode' => $effectivePromptMode,
             'progress_percent' => 20,
         ]);
@@ -2684,7 +2684,7 @@ class AiSiteAgent extends BaseController
                 ], $emitAiChunkProgress, $emitPlanPipelineProgress);
             $this->flushPlanSseRawChunkBuffer($sse, $effectivePromptMode, $rawChunkInfoBuffer);
             if ((int)($scope['fake_mode'] ?? 0) !== 1 && (int)($artifacts['ai_generated'] ?? 0) !== 1) {
-                throw new \RuntimeException((string)__('寤虹珯鏂规蹇呴』鐢?AI 鐢熸垚锛屾湰娆℃湭鎴愬姛璋冪敤 AI锛岃妫€鏌ユā鍨嬮厤缃悗閲嶈瘯銆'));
+                throw new \RuntimeException((string)__('建站方案必须由 AI 生成，本次未成功调用 AI，请检查模型配置后重试。'));
             }
 
             $derivedPatch = \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [];
@@ -2728,7 +2728,7 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
                 'plan_saved',
-                (string)__('寤虹珯鏂规宸蹭繚瀛'),
+                (string)__('建站方案已保存'),
                 [
                     'operation' => 'plan',
                     'details' => [
@@ -2746,8 +2746,8 @@ class AiSiteAgent extends BaseController
                 $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
                 $effectivePromptMode === 'rebuild' ? 'plan_rebuilt' : 'plan_refined',
                 $effectivePromptMode === 'rebuild'
-                    ? (string)__('寤虹珯鏂规宸查噸寤猴紝璇风‘璁ゅ悗杩涘叆鏋勫缓娴佺▼')
-                    : (string)__('寤虹珯鏂规宸插井璋冿紝璇风‘璁ゅ悗杩涘叆鏋勫缓娴佺▼'),
+                    ? (string)__('建站方案已重建，请确认后进入构建流程')
+                    : (string)__('建站方案已微调，请确认后进入构建流程'),
                 [
                     'operation' => $effectivePromptMode === 'rebuild' ? 'rebuild_plan' : 'refine_plan',
                     'details' => [
@@ -2759,7 +2759,7 @@ class AiSiteAgent extends BaseController
                 ]
             );
             $sse->sendEvent('progress', [
-                'message' => (string)__('姝ｅ湪杈撳嚭鏇存柊鍚庣殑寤虹珯鏂规'),
+                'message' => (string)__('正在输出更新后的建站方案'),
                 'prompt_mode' => $effectivePromptMode,
                 'progress_percent' => 80,
             ]);
@@ -2779,8 +2779,8 @@ class AiSiteAgent extends BaseController
             $sse->complete([
                 'success' => true,
                 'message' => $effectivePromptMode === 'rebuild'
-                    ? (string)__('寤虹珯鏂规閲嶅缓瀹屾垚')
-                    : (string)__('寤虹珯鏂规寰皟瀹屾垚'),
+                    ? (string)__('建站方案重建完成')
+                    : (string)__('建站方案微调完成'),
                 'prompt_mode' => $effectivePromptMode,
                 'requested_prompt_mode' => $promptMode,
                 'plan_locale' => $requestedPlanLocale,
@@ -2829,7 +2829,7 @@ class AiSiteAgent extends BaseController
             $aiChunkCount++;
             if ($aiChunkCount === 1 || $aiChunkCount % 12 === 0) {
                 $sse->sendEvent('progress', [
-                    'message' => (string)__('AI 姝ｅ湪鐢熸垚寤虹珯鏂规鍐呭鈥'),
+                    'message' => (string)__('AI 正在生成建站方案内容...'),
                     'prompt_mode' => $effectivePromptMode,
                     'progress_percent' => 55,
                     'ai_chunk_count' => $aiChunkCount,
@@ -2996,7 +2996,7 @@ class AiSiteAgent extends BaseController
             \error_log('[AiSiteStartBuild] failed: ' . $throwable->getMessage() . ' in ' . $throwable->getFile() . ':' . $throwable->getLine());
             return $this->jsonError(
                 'START_BUILD_FAILED',
-                (string)__('鍚姩鏋勫缓澶辫触锛岃鍒锋柊椤甸潰鍚庨噸璇曘€'),
+                (string)__('启动构建失败，请刷新页面后重试。'),
                 self::PARAMS_PUBLIC_ID
             );
         }
@@ -3007,11 +3007,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         $error = '';
@@ -3055,7 +3055,7 @@ class AiSiteAgent extends BaseController
             $summary = $this->buildTaskService->summarizeRetryableAiFailures($mergedScope, 'plan');
             return $this->jsonError(
                 'RETRYABLE_AI_FAILURES_PENDING',
-                (string)__('浠嶆湁 AI 鐢熸垚澶辫触椤癸紱褰撳墠闃熷垪浼氱户缁ˉ榻愮己澶变换鍔★紝璇风瓑寰呯画璺戝畬鎴愬悗鍐嶆瀯寤恒€'),
+                (string)__('仍有 AI 生成失败项；当前队列会继续补齐缺失任务，请等待续跑完成后再构建。'),
                 ['public_id'],
                 ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
             );
@@ -3063,7 +3063,7 @@ class AiSiteAgent extends BaseController
         if (!$this->isBuildPlanReadyForBuild($mergedScope)) {
             return $this->jsonError(
                 'BUILD_PLAN_REQUIRED_BEFORE_BUILD',
-                (string)__('璇峰厛纭寤虹珯鏂规鐢熸垚鐨勬瀯寤轰换鍔¤鍒掞紝鍐嶅紑濮嬫墽琛屾瀯寤'),
+                (string)__('请先确认建站方案生成的构建任务计划，再开始执行构建'),
                 ['public_id', 'build_plan_confirmed']
             );
         }
@@ -3077,7 +3077,7 @@ class AiSiteAgent extends BaseController
             if ($resumeTaskCount <= 0 && $retryableFailureCount <= 0) {
                 return $this->fetchJson([
                     'success' => true,
-                    'message' => (string)__('褰撳墠娌℃湁寰呯户缁殑鏋勫缓浠诲姟'),
+                    'message' => (string)__('当前没有待继续的构建任务'),
                     'data' => $this->buildWorkspaceOperationPayload(
                         $this->buildWorkspaceState($session, $adminId, 24, true),
                         'build'
@@ -3175,12 +3175,12 @@ class AiSiteAgent extends BaseController
             $slotType = 'section_image';
         }
         if ($adminId <= 0 || $publicId === '' || $slotId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), ['public_id', 'slot_id']);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), ['public_id', 'slot_id']);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -3749,11 +3749,11 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
         if ($adminId <= 0 || $publicId === '' || $pageType === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_REGENERATE);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_REGENERATE);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
         return $this->fetchJson($this->startOperation(
             $session,
@@ -3776,12 +3776,12 @@ class AiSiteAgent extends BaseController
         $componentLabel = \trim((string)$this->getRequestBodyValue('component_label', ''));
 
         if ($adminId <= 0 || $publicId === '' || $pageType === '' || $componentCode === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_REFINE_COMPONENT);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_REFINE_COMPONENT);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -3789,7 +3789,7 @@ class AiSiteAgent extends BaseController
         );
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鎵€閫夐〉闈㈢被鍨嬩笉鍦ㄥ綋鍓嶅伐浣滃尯涓'), self::PARAMS_REGENERATE);
+            return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_REGENERATE);
         }
 
         $componentCodes = $this->resolveRequestedBlockComponentCodes($componentCode);
@@ -3853,7 +3853,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'component_refine_requested',
-            (string)__('宸茶褰曞尯鍧楀井璋冿細%{component}', ['component' => $label]),
+            (string)__('已记录区块微调：%{component}', ['component' => $label]),
             [
                 'operation' => 'block_regenerate',
                 'page_type' => $pageType,
@@ -4013,7 +4013,7 @@ class AiSiteAgent extends BaseController
             if (!$this->buildTaskService->hasConfirmedBuildPlanForBuild($buildScope)) {
                 return $this->jsonError(
                     'BUILD_PLAN_REQUIRED_BEFORE_BUILD',
-                    (string)__('鏋勫缓缂哄皯宸茬‘璁ょ殑鏋勫缓浠诲姟璁″垝锛岃鍏堥噸鏂扮敓鎴愬苟纭寤虹珯鏂规銆'),
+                    (string)__('构建缺少已确认的构建任务计划，请先重新生成并确认建站方案。'),
                     ['public_id', 'build_plan_confirmed']
                 );
             }
@@ -4436,13 +4436,13 @@ class AiSiteAgent extends BaseController
             $this->sendSseContractError(
                 $sse,
                 'INVALID_PARAMS',
-                (string)__('鍙傛暟鏃犳晥'),
+                (string)__('参数无效'),
                 $refine ? self::PARAMS_REFINE_COMPONENT : self::PARAMS_REGENERATE
             );
             $sse->sendEvent('done', [
                 'success' => false,
                 'operation' => $operationLabel,
-                'message' => __('鍙傛暟鏃犳晥'),
+                'message' => __('参数无效'),
                 'page_type' => $pageType,
                 'component_code' => $componentCode,
                 'realtime' => true,
@@ -4504,7 +4504,7 @@ class AiSiteAgent extends BaseController
                     $sse->sendEvent('info', [
                         'operation' => $operationLabel,
                         'component_code' => $candidateCode,
-                        'message' => (string)__('缁х画澶勭悊涓嬩竴涓尯鍧楋細%{1}', [$candidateCode]),
+                        'message' => (string)__('继续处理下一个区块：%{1}', [$candidateCode]),
                     ]);
                 }
                 $lastResult = $this->runRegenerateBlockOperation(
@@ -4532,7 +4532,7 @@ class AiSiteAgent extends BaseController
             $sse->sendEvent('done', [
                 'success' => true,
                 'operation' => $operationLabel,
-                'message' => (string)($lastResult['message'] ?? ($refine ? __('鍖哄潡寰皟瀹屾垚') : __('鍖哄潡閲嶅缓瀹屾垚'))),
+                'message' => (string)($lastResult['message'] ?? ($refine ? __('区块微调完成') : __('区块重建完成'))),
                 'page_type' => (string)($lastResult['page_type'] ?? $pageType),
                 'component_code' => $componentCode,
                 'section_code' => (string)($lastResult['section_code'] ?? ''),
@@ -4603,7 +4603,7 @@ class AiSiteAgent extends BaseController
             }
         }
 
-        throw new \RuntimeException((string)__('鏈壘鍒扮粍浠跺搴旂殑鏋勫缓浠诲姟锛?{1}', [$componentCode]));
+            throw new \RuntimeException((string)__('未找到组件对应的构建任务：%{1}', [$componentCode]));
     }
 
     /**
@@ -4898,7 +4898,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'block_regenerate',
-            __('姝ｅ湪閲嶅缓鍖哄潡锛?{page}', ['page' => $pageLabel]),
+                __('正在重建区块：{page}', ['page' => $pageLabel]),
             35,
             $pageType
         );
@@ -4922,7 +4922,7 @@ class AiSiteAgent extends BaseController
             $this->emitBlockPreviewReadyEvent(
                 $sse,
                 $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                (string)__('鍖哄潡宸茬敓鎴愶紙DEMO锛夛紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
+                (string)__('区块已生成（DEMO），正在刷新当前预览'),
                 $pageType,
                 $componentCode,
                 $sectionCode,
@@ -4935,7 +4935,7 @@ class AiSiteAgent extends BaseController
             if (\is_array($scope['build_summary'] ?? null)) {
                 unset($scope['build_summary']['task_summary']);
             }
-            $doneMessage = $instruction !== '' ? (string)__('鍖哄潡寰皟瀹屾垚锛圖EMO锛') : (string)__('鍖哄潡閲嶅缓瀹屾垚锛圖EMO锛');
+            $doneMessage = $instruction !== '' ? (string)__('区块微调完成（DEMO）') : (string)__('区块重建完成（DEMO）');
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
             if (\in_array($activeOperationName, ['block_refine', 'block_regenerate'], true)) {
@@ -4962,7 +4962,7 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
                 'task_completed',
-                (string)__('鍖哄潡浠诲姟宸插畬鎴愶紙DEMO锛夛細%{page}', ['page' => $pageLabel]),
+                (string)__('区块任务已完成（DEMO）：%{page}', ['page' => $pageLabel]),
                 [
                     'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
                     'page_type' => $pageType,
@@ -5057,7 +5057,7 @@ class AiSiteAgent extends BaseController
                 $this->emitBlockPreviewReadyEvent(
                     $sse,
                     $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                    (string)__('鍖哄潡宸茬敓鎴愶紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
+                    (string)__('区块已生成，正在刷新当前预览'),
                     $pageType,
                     $componentCode,
                     $sectionCode,
@@ -5126,7 +5126,7 @@ class AiSiteAgent extends BaseController
                 $this->emitBlockPreviewReadyEvent(
                     $sse,
                     $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                    (string)__('鍖哄潡宸茬敓鎴愶紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
+                    (string)__('区块已生成，正在刷新当前预览'),
                     $pageType,
                     $componentCode,
                     $sectionCode,
@@ -5192,7 +5192,7 @@ class AiSiteAgent extends BaseController
                 $this->emitBlockPreviewReadyEvent(
                     $sse,
                     $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                    (string)__('鍖哄潡宸茬敓鎴愶紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
+                    (string)__('区块已生成，正在刷新当前预览'),
                     $pageType,
                     $componentCode,
                     $sectionCode,
@@ -5253,7 +5253,7 @@ class AiSiteAgent extends BaseController
                 $this->emitBlockPreviewReadyEvent(
                     $sse,
                     $instruction !== '' ? 'block_refine' : 'block_regenerate',
-                    (string)__('鍖哄潡宸茬敓鎴愶紝姝ｅ湪鍒锋柊褰撳墠棰勮'),
+                    (string)__('区块已生成，正在刷新当前预览'),
                     $pageType,
                     $componentCode,
                     $sectionCode,
@@ -5273,7 +5273,7 @@ class AiSiteAgent extends BaseController
         if (\is_array($scope['build_summary'] ?? null)) {
             unset($scope['build_summary']['task_summary']);
         }
-        $doneMessage = $instruction !== '' ? (string)__('鍖哄潡寰皟瀹屾垚') : (string)__('鍖哄潡閲嶅缓瀹屾垚');
+        $doneMessage = $instruction !== '' ? (string)__('区块微调完成') : (string)__('区块重建完成');
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
         if (\in_array($activeOperationName, ['block_refine', 'block_regenerate'], true)) {
@@ -5307,7 +5307,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'task_completed',
-            (string)__('鍖哄潡浠诲姟宸插畬鎴愶細%{page}', ['page' => $pageLabel]),
+            (string)__('区块任务已完成：%{page}', ['page' => $pageLabel]),
             [
                 'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
                 'page_type' => $pageType,
@@ -5380,7 +5380,7 @@ class AiSiteAgent extends BaseController
         ]);
         $sse->sendEvent('progress', [
             'operation' => $operation,
-            'message' => (string)__('鍖哄潡宸茬敓鎴愶紝褰撳墠棰勮宸插埛鏂'),
+            'message' => (string)__('区块已生成，当前预览已刷新'),
             'page_type' => $pageType,
             'component_code' => $componentCode,
             'section_code' => $sectionCode,
@@ -5396,11 +5396,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
         $state = $this->buildWorkspaceFastViewState($session, $adminId);
         $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -5461,12 +5461,12 @@ class AiSiteAgent extends BaseController
                 ]);
             }
             if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
-                return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('璇峰厛纭寤虹珯鏂规锛屽啀杩涘叆鍙戝竷娴佺▼銆')]);
+            return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案，再进入发布流程。')]);
             }
             if (!$this->isBuildPlanReadyForBuild($scope) && !$buildAlreadyComplete) {
-                return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('璇峰厛纭寤虹珯鏂规鐢熸垚鐨勬瀯寤轰换鍔¤鍒掞紝鍐嶈繘鍏ュ彂甯冩祦绋嬨€')]);
+            return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案生成的构建任务计划，再进入发布流程。')]);
             }
-            return $this->fetchJson(['success' => false, 'code' => 'WORKSPACE_NOT_READY', 'message' => __('褰撳墠宸ヤ綔鍖哄皻鏈噯澶囧ソ鍙戝竷锛岃鍏堝畬鎴愰〉闈㈢敓鎴愪笌缂栬緫銆')]);
+            return $this->fetchJson(['success' => false, 'code' => 'WORKSPACE_NOT_READY', 'message' => __('当前工作区尚未准备好发布，请先完成页面生成与编辑。')]);
         }
         if ($buildAlreadyComplete && empty($state['can_publish'])) {
             $state['can_publish'] = true;
@@ -5476,7 +5476,7 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson([
                 'success' => false,
                 'code' => 'PUBLISH_STAGE2_TASK_BLOCK_MISMATCH',
-                'message' => __('闃舵浜屾瀯寤轰换鍔′笌鐪熷疄鐢熸垚鍖哄潡涓嶄竴鑷达紝璇峰厛閲嶈瘯澶辫触浠诲姟鎴栭噸寤虹浜岄樁娈点€'),
+                'message' => __('阶段二构建任务与真实生成区块不一致，请先重试失败任务或重建第二阶段。'),
                 'data' => \array_replace(['code' => 'PUBLISH_STAGE2_TASK_BLOCK_MISMATCH'], $stageTwoReadiness),
             ]);
         }
@@ -5495,7 +5495,7 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson([
                 'success' => false,
                 'code' => 'PUBLISH_QUALITY_GATE_FAILED',
-                'message' => __('鍙戝竷闂ㄧ鏈€氳繃锛岃鍏堜慨澶嶉〉闈㈠唴瀹硅川閲忋€佺牬鍥炬垨浠诲姟鐘舵€侀棶棰樸€'),
+                'message' => __('发布门禁未通过，请先修复页面内容质量、破图或任务状态问题。'),
                 'data' => \array_replace(['code' => 'PUBLISH_QUALITY_GATE_FAILED'], $qualityReport),
             ]);
         }
@@ -5508,7 +5508,7 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson([
                 'success' => false,
                 'code' => 'VISUAL_THEME_CONFIRM_REQUIRED',
-                'message' => __('璇峰厛纭铏氭嫙涓婚棰勮鏁堟灉鏃犻棶棰橈紝鍐嶅彂甯冩寮忕珯鐐广€'),
+                'message' => __('请先确认虚拟主题预览效果无问题，再发布正式站点。'),
                 'data' => [
                     'code' => 'VISUAL_THEME_CONFIRM_REQUIRED',
                     'required_param' => 'confirm_visual_theme',
@@ -5537,12 +5537,12 @@ class AiSiteAgent extends BaseController
         $region = \trim((string)$this->getRequestBodyValue('region', ''));
         $componentIndex = (int)$this->getRequestBodyValue('index', 0);
         if ($adminId <= 0 || $publicId === '' || $pageType === '' || $blockId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_UPDATE_BLOCK);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_UPDATE_BLOCK);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         $error = '';
@@ -5556,7 +5556,7 @@ class AiSiteAgent extends BaseController
         );
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鎵€閫夐〉闈㈢被鍨嬩笉鍦ㄥ綋鍓嶅伐浣滃尯涓'), self::PARAMS_UPDATE_BLOCK);
+            return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_UPDATE_BLOCK);
         }
 
         $blockConfig = $this->syncVirtualThemeEditableConfigAliases(
@@ -5592,7 +5592,7 @@ class AiSiteAgent extends BaseController
         if ($updatedBlock === null) {
             $virtualThemeId = \max((int)($scope['virtual_theme_id'] ?? 0), (int)$session->getVirtualThemeId());
             if ($virtualThemeId <= 0) {
-                return $this->fetchJson(['success' => false, 'message' => __('鏈壘鍒拌鏇存柊鐨勫尯鍧')]);
+            return $this->fetchJson(['success' => false, 'message' => __('未找到要更新的区块')]);
             }
             $scope['virtual_theme_id'] = $virtualThemeId;
             $resolvedComponentCode = $componentCode !== '' ? $componentCode : $blockId;
@@ -5630,7 +5630,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'block_config_updated',
-            (string)__('鍖哄潡閰嶇疆宸叉洿鏂帮細%{block}', ['block' => $blockId]),
+            (string)__('区块配置已更新：%{block}', ['block' => $blockId]),
             [
                 'page_type' => $pageType,
                 'details' => [
@@ -5650,7 +5650,7 @@ class AiSiteAgent extends BaseController
 
         $response = [
             'success' => true,
-            'message' => __('鍖哄潡宸叉洿鏂'),
+                'message' => __('区块已更新'),
             'data' => [
                 'public_id' => $session->getPublicId(),
                 'stage' => $this->scopeCompatibilityService->normalizeStage($session->getStage()),
@@ -6269,11 +6269,11 @@ class AiSiteAgent extends BaseController
             $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
             $stateMode = \strtolower(\trim((string)$this->getRequestBodyValue('state_mode', '')));
             if ($adminId <= 0 || $publicId === '') {
-                return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+                return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
             }
             $session = $this->sessionService->loadByPublicId($publicId, $adminId);
             if ($session === null) {
-                return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+                return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
             }
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
             if ($stateMode === '') {
@@ -6304,7 +6304,7 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson([
                 'success' => false,
                 'code' => 'STATE_FAILED',
-                'message' => (string)__('宸ヤ綔鍖虹姸鎬佸埛鏂板け璐ワ紝璇风◢鍚庨噸璇'),
+                'message' => (string)__('工作区状态刷新失败，请稍后重试'),
                 'data' => [
                     'public_id' => $publicId,
                     'response_mode' => $stateMode === '' ? 'queue_poll' : $stateMode,
@@ -6817,11 +6817,11 @@ class AiSiteAgent extends BaseController
         $requestedPageId = (int)$this->getRequestBodyValue('preview_page_id', 0);
         $requestedPageType = \trim((string)$this->getRequestBodyValue('preview_page_type', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         // 鍓嶇 Tab 鍙兘瀵瑰簲宸插嬀閫変絾灏氭湭瀹屾垚 mergeScope锛堥槻鎶栵級鐨勯〉闈㈢被鍨嬶紱鑻ヤ笉鍐欏叆 scope锛宺esolvePreviewPageType 浼氬洖閫€鍒伴椤碉紝棰勮鐪嬩技銆屽垏涓嶈繃鍘汇€嶃€?
@@ -6854,7 +6854,7 @@ class AiSiteAgent extends BaseController
         );
         $previewPageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
         if ($previewPageType === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('褰撳墠杩樻病鏈夊彲鍒囨崲鐨勯瑙堥〉')]);
+            return $this->fetchJson(['success' => false, 'message' => __('当前还没有可切换的预览页')]);
         }
 
         $this->sessionService->mergeScope($session->getId(), $adminId, [
@@ -6866,7 +6866,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             $state['stage'],
             'preview_page_switched',
-            (string)__('棰勮椤甸潰宸插垏鎹'),
+            (string)__('预览页面已切换'),
             ['page_type' => $previewPageType]
         );
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
@@ -6881,7 +6881,7 @@ class AiSiteAgent extends BaseController
         $requestedPageId = (int)$this->getRequestBodyValue('preview_page_id', 0);
         $requestedPageType = \trim((string)$this->getRequestBodyValue('preview_page_type', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
@@ -7154,7 +7154,7 @@ class AiSiteAgent extends BaseController
         } catch (\Throwable $throwable) {
             $scope['quality_gate_preflight_error'] = \trim($throwable->getMessage()) !== ''
                 ? $throwable->getMessage()
-                : (string)__('娓叉煋鏁版嵁濂戠害棰勬澶辫触锛岃鍏堜慨澶嶆瀯寤轰骇鐗╁悗鍐嶅彂甯冦€');
+            : (string)__('渲染数据契约预检失败，请先修复构建产物后再发布。');
 
             return $scope;
         }
@@ -7165,11 +7165,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         $state = $this->buildWorkspaceFastViewState($session, $adminId);
@@ -7213,7 +7213,7 @@ class AiSiteAgent extends BaseController
             ];
         }
         if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
-            return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('璇峰厛纭寤虹珯鏂规锛屽啀妫€鏌ュ彂甯冩潯浠躲€')]);
+            return $this->fetchJson(['success' => false, 'code' => 'PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案，再检查发布条件。')]);
         }
         if (!$completionGatePassed) {
             $scope['can_publish'] = 0;
@@ -7221,30 +7221,30 @@ class AiSiteAgent extends BaseController
         }
         $buildAlreadyComplete = $completionGatePassed;
         if (!$this->isBuildPlanReadyForBuild($buildPlanScope) && !$buildAlreadyComplete) {
-            return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('璇峰厛纭寤虹珯鏂规鐢熸垚鐨勬瀯寤轰换鍔¤鍒掞紝鍐嶆鏌ュ彂甯冩潯浠躲€')]);
+            return $this->fetchJson(['success' => false, 'code' => 'BUILD_PLAN_NOT_CONFIRMED', 'message' => __('请先确认建站方案生成的构建任务计划，再检查发布条件。')]);
         }
         $virtualPages = \is_array($state['virtual_pages_by_type']) ? $state['virtual_pages_by_type'] : [];
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $checkItems = [
-            ['key' => 'draft_website', 'code' => 'DRAFT_WEBSITE_READY', 'label' => __('鑽夌绔欑偣宸插垱寤'), 'ok' => (int)$state['draft_website_id'] > 0, 'value' => (int)$state['draft_website_id']],
+            ['key' => 'draft_website', 'code' => 'DRAFT_WEBSITE_READY', 'label' => __('草稿站点已创建'), 'ok' => (int)$state['draft_website_id'] > 0, 'value' => (int)$state['draft_website_id']],
             [
                 'key' => 'virtual_theme',
                 'code' => 'VIRTUAL_THEME_READY',
-                'label' => __('铏氭嫙涓婚宸茬敓鎴'),
+                'label' => __('虚拟主题已生成'),
                 'ok' => (int)$state['virtual_theme_id'] > 0,
                 'value' => (int)$state['virtual_theme_id'],
             ],
-            ['key' => 'website_profile', 'code' => 'WEBSITE_PROFILE_READY', 'label' => __('缃戠珯绾ц祫鏂欏凡榻愬'), 'ok' => \trim((string)($state['website_profile']['site_title'] ?? '')) !== '', 'value' => [
+            ['key' => 'website_profile', 'code' => 'WEBSITE_PROFILE_READY', 'label' => __('网站级资料已齐备'), 'ok' => \trim((string)($state['website_profile']['site_title'] ?? '')) !== '', 'value' => [
                 'site_title' => (string)($state['website_profile']['site_title'] ?? ''),
                 'site_tagline' => (string)($state['website_profile']['site_tagline'] ?? ''),
                 'brief_description' => (string)($state['website_profile']['brief_description'] ?? ''),
                 'default_locale' => (string)($state['website_profile']['default_locale'] ?? ''),
             ]],
-            ['key' => 'virtual_pages', 'code' => 'VIRTUAL_PAGES_READY', 'label' => __('铏氭嫙椤甸潰宸茬敓鎴'), 'ok' => \count($virtualPages) >= \count($pageTypes), 'value' => \array_keys($virtualPages)],
+            ['key' => 'virtual_pages', 'code' => 'VIRTUAL_PAGES_READY', 'label' => __('虚拟页面已生成'), 'ok' => \count($virtualPages) >= \count($pageTypes), 'value' => \array_keys($virtualPages)],
             [
                 'key' => 'visual_editor',
                 'code' => 'VISUAL_EDITOR_READY',
-                'label' => __('鍙鍖栭瑙?缂栬緫鍦板潃宸插氨缁'),
+                'label' => __('可视化预览/编辑地址已就绪'),
                 'ok' => \trim((string)$state['visual_edit_url']) !== '' && \trim((string)$state['visual_preview_url']) !== '',
                 'value' => ['visual_preview_url' => $state['visual_preview_url'], 'visual_edit_url' => $state['visual_edit_url']],
             ],
@@ -7252,7 +7252,7 @@ class AiSiteAgent extends BaseController
         $checkItems[] = [
             'key' => 'build_completion_gate',
             'code' => 'BUILD_COMPLETION_GATE',
-            'label' => __('瀵よ櫣鐝弬瑙勵攳妞ょ敻娼版稉搴″隘閸ф鍑￠崗銊╁劥閻㈢喐鍨'),
+                'label' => __('建站方案页面与区块已全部生成'),
             'ok' => $completionGatePassed,
             'value' => [
                 'passed' => $completionGatePassed,
@@ -7272,7 +7272,7 @@ class AiSiteAgent extends BaseController
         $checkItems[] = [
             'key' => 'stage2_task_block_integrity',
             'code' => 'STAGE2_TASK_BLOCK_INTEGRITY',
-            'label' => __('闃舵浜屼换鍔′笌鐢熸垚鍖哄潡鏁伴噺涓€鑷'),
+                'label' => __('阶段二任务与生成区块数量一致'),
             'ok' => !empty($stageTwoReadiness['passed']),
             'value' => [
                 'passed' => !empty($stageTwoReadiness['passed']),
@@ -7317,7 +7317,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             (string)$state['stage'],
             'publish_check',
-            $passed ? (string)__('鍙戝竷妫€鏌ュ凡閫氳繃') : (string)__('鍙戝竷妫€鏌ュ皻鏈€氳繃'),
+            $passed ? (string)__('发布检查已通过') : (string)__('发布检查尚未通过'),
             [
                 'details' => [
                     'passed' => $passed,
@@ -7367,7 +7367,7 @@ class AiSiteAgent extends BaseController
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(\json_encode([
                 'error' => 'UNAUTHORIZED',
-                'message' => (string)__('鏈櫥褰曟垨鐧诲綍宸茶繃鏈'),
+            'message' => (string)__('未登录或登录已过期'),
             ], JSON_UNESCAPED_UNICODE));
             return;
         }
@@ -7382,7 +7382,7 @@ class AiSiteAgent extends BaseController
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(\json_encode([
                 'error' => 'INVALID_PARAMS',
-                'message' => (string)__('鍙傛暟鏃犳晥'),
+                'message' => (string)__('参数无效'),
                 'param' => self::PARAMS_PUBLIC_ID,
             ], JSON_UNESCAPED_UNICODE));
             return;
@@ -7396,7 +7396,7 @@ class AiSiteAgent extends BaseController
             \header('X-AiSite-Sse-Debug-Stage: sse-started');
         }
         $sse->sendEvent('start', [
-            'message' => __('姝ｅ湪寤虹珛 PageBuilder 宸ヤ綔鍖轰簨浠舵祦...'),
+            'message' => __('正在建立 PageBuilder 工作区事件流...'),
         ]);
 
         // 浼氳瘽涓嶅瓨鍦細閫氳繃 SSE 杩斿洖閿欒骞跺畬鎴?
@@ -7409,7 +7409,7 @@ class AiSiteAgent extends BaseController
             ], 'warning');
             $sse->sendEvent('error', [
                 'error' => 'SESSION_NOT_FOUND',
-                'message' => (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'),
+                'message' => (string)__('会话不存在或无权访问'),
                 'param' => self::PARAMS_PUBLIC_ID,
             ]);
             $sse->complete(['success' => false]);
@@ -7423,7 +7423,7 @@ class AiSiteAgent extends BaseController
         @\set_time_limit(0);
         @\ignore_user_abort(true);
         $sse->sendEvent('start', [
-            'message' => __('宸茶繛鎺?PageBuilder 宸ヤ綔鍖轰簨浠舵祦'),
+            'message' => __('已连接 PageBuilder 工作区事件流'),
         ]);
         $this->logStreamSse('stream_started', [
             'session_id' => $session->getId(),
@@ -7444,7 +7444,7 @@ class AiSiteAgent extends BaseController
             $lastEventId = $stateLastEventId;
             $statePayload['event_replay_skipped'] = true;
             $statePayload['event_replay_skipped_until'] = $lastEventId;
-            $statePayload['event_replay_message'] = (string)__('鍘嗗彶杩涘害鏃ュ織杈冨锛屽凡璺宠繃鏃ф棩蹇楋紝浠呭睍绀烘渶鏂扮姸鎬併€');
+        $statePayload['event_replay_message'] = (string)__('历史进度日志较多，已跳过旧日志，仅展示最新状态。');
         }
         $streamObservedActiveOperation = $this->isWorkspaceStreamOperationActive($stateSource);
         $this->logStreamSse('state_built', [
@@ -7750,7 +7750,7 @@ class AiSiteAgent extends BaseController
                 $this->syncPlanActiveOperationFromQueueRow($fresh, $adminId, $activeOperation, $queueRow);
                 return;
             }
-            $schedulerWaitMessage = '绛夊緟绯荤粺璋冨害锛岄€氬父绾?1 鍒嗛挓锛屽彲鍏抽棴缁х画鎿嶄綔';
+        $schedulerWaitMessage = '等待系统调度，通常约 1 分钟，可关闭继续操作';
             if ($activeStatus !== 'queued' || \trim((string)($activeOperation['message'] ?? '')) !== $schedulerWaitMessage) {
                 $this->updateActiveOperation(
                     $fresh,
@@ -7786,7 +7786,7 @@ class AiSiteAgent extends BaseController
         $this->updateActiveOperation(
             $fresh,
             $adminId,
-            ['status' => 'running', 'message' => (string)__('姝ｅ湪鐢熸垚寤虹珯鏂规')],
+            ['status' => 'running', 'message' => (string)__('正在生成建站方案')],
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
         );
         $this->appendWorkspaceEvent(
@@ -7794,20 +7794,20 @@ class AiSiteAgent extends BaseController
             $adminId,
             'plan',
             'operation_started',
-            (string)__('宸插紑濮嬫墽琛屽缓绔欐柟妗堢敓鎴'),
+            (string)__('已开始执行建站方案生成'),
             ['operation' => 'plan']
         );
         $sse->sendEvent('log', [
             'event_type' => 'operation_started',
             'stage_code' => 'plan',
-            'message' => (string)__('宸插紑濮嬫墽琛屽缓绔欐柟妗堢敓鎴'),
+            'message' => (string)__('已开始执行建站方案生成'),
             'payload' => ['operation' => 'plan'],
             'level' => 'info',
             'event_id' => 0,
             'created_at' => \date('Y-m-d H:i:s'),
         ]);
         $sse->sendEvent('start', [
-            'message' => (string)__('宸插紑濮嬫墽琛屽缓绔欐柟妗堢敓鎴'),
+            'message' => (string)__('已开始执行建站方案生成'),
             'operation' => 'plan',
         ]);
 
@@ -7911,7 +7911,7 @@ class AiSiteAgent extends BaseController
                 $attempt++;
                 try {
                     if ($attempt > 1) {
-                        $retryMessage = (string)__('AI 杈撳嚭鏍煎紡寮傚父锛屾鍦ㄨ嚜鍔ㄩ噸璇曪紙%{1}/%{2}锛夆€', [$attempt, $maxAttempts]);
+                    $retryMessage = (string)__('AI 输出格式异常，正在自动重试（%{1}/%{2}）', [$attempt, $maxAttempts]);
                         $this->appendWorkspaceEvent(
                             $fresh->getId(),
                             $adminId,
@@ -7948,7 +7948,7 @@ class AiSiteAgent extends BaseController
                         if ($mutationPageType === '' || !\in_array($mutationAction, ['create', 'delete', 'refine', 'rebuild'], true)) {
                             throw new \RuntimeException('Invalid stage-1 block mutation request.');
                         }
-                        $mutationMessage = (string)__('姝ｅ湪鍚庡彴鏇存柊闃舵涓€椤甸潰鍧');
+            $mutationMessage = (string)__('正在后台更新阶段一页面块');
                         $sse->sendEvent('progress', [
                             'message' => $mutationMessage,
                             'operation' => 'plan',
@@ -8011,15 +8011,15 @@ class AiSiteAgent extends BaseController
                         $artifacts['ai_generated'] = 1;
                     } elseif ($requestedPromptMode === 'refine' && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
                         $resumeInstruction = $requestedPromptMode === 'resume_plan'
-                            ? (string)__('璇峰熀浜庡綋鍓嶆柟妗堣崏绋夸笌宸插畬鎴愮粨鏋勭户缁ˉ榻愪腑鏂唴瀹癸紝淇濈暀宸插畬鎴愰儴鍒嗭紝鍙慨澶嶇己澶便€佹湭瀹屾垚鎴栧紓甯镐腑鏂殑鍐呭锛屽苟杈撳嚭瀹屾暣 markdown 涓庡畬鏁?plan_json銆')
+                    ? (string)__('请基于当前方案草稿与已完成结构继续补齐中断内容，保留已完成部分，只修复缺失、未完成或异常中断的内容，并输出完整 markdown 与完整 plan_json。')
                             : '';
                         $refineInstruction = $requestedInstruction;
                         $refineTargetScope = $requestedTargetScope;
                         if ($planLocaleChanged && !$pageTypesChanged) {
                             $refineTargetScope = $refineTargetScope !== '' ? $refineTargetScope : 'locale_translation';
                             $refineInstruction = $refineInstruction !== ''
-                                ? ((string)__('璇锋寜鐩爣 plan_locale 缈昏瘧褰撳墠鏂规锛屽苟淇濈暀鍘熸湁缁撴瀯涓庨〉闈㈢被鍨嬨€') . ' ' . $refineInstruction)
-                                : (string)__('璇锋寜鐩爣 plan_locale 缈昏瘧褰撳墠鏂规锛屽苟淇濈暀鍘熸湁缁撴瀯涓庨〉闈㈢被鍨嬨€');
+                    ? ((string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。') . ' ' . $refineInstruction)
+                    : (string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。');
                         }
                         $artifacts = $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                             'instruction' => $refineInstruction,
@@ -8028,7 +8028,7 @@ class AiSiteAgent extends BaseController
                             'prompt_mode' => $requestedPromptMode,
                         ], $onChunk, $onProgress);
                     } elseif ($planLocaleChanged && !$pageTypesChanged && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
-                        $translateInstruction = (string)__('璇蜂繚鐣欏綋鍓嶆柟妗堢粨鏋勪笌椤甸潰绫诲瀷锛屼粎灏嗘柟妗堝唴瀹瑰畬鏁寸炕璇戜负鐩爣 plan_locale锛屼笉鏂板鎴栧垹闄ら〉闈€');
+                $translateInstruction = (string)__('请保留当前方案结构与页面类型，仅将方案内容完整翻译为目标 plan_locale，不新增或删除页面。');
                         $artifacts = $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                             'instruction' => $translateInstruction,
                             'target_scope' => 'locale_translation',
@@ -8040,7 +8040,7 @@ class AiSiteAgent extends BaseController
                         } else {
                             $buildPayload = [];
                             if ($requestedPromptMode === 'resume_plan') {
-                                $buildPayload['instruction'] = (string)__('璇峰熀浜庡綋鍓嶉樁娈典竴涓婁笅鏂囦笌宸蹭繚瀛樼殑宸ヤ綔鍙颁俊鎭户缁ˉ榻愪腑鏂唴瀹癸紝浼樺厛澶嶇敤宸插畬鎴愰儴鍒嗭紝涓嶈浠庨浂鎶涘純宸叉湁杩涘害銆');
+                $buildPayload['instruction'] = (string)__('请基于当前阶段一上下文与已保存的工作台信息继续补齐中断内容，优先复用已完成部分，不要从零抛弃已有进度。');
                                 $buildPayload['target_scope'] = 'resume_generation';
                                 $buildPayload['prompt_mode'] = 'resume_plan';
                                 $buildPayload['resume_failed_tasks'] = 1;
@@ -8134,7 +8134,7 @@ class AiSiteAgent extends BaseController
                 throw $lastAttemptThrowable;
             }
             if ((int)($scope['fake_mode'] ?? 0) !== 1 && (int)($artifacts['ai_generated'] ?? 0) !== 1) {
-                throw new \RuntimeException((string)__('寤虹珯鏂规蹇呴』鐢?AI 鐢熸垚锛屾湰娆℃湭鎴愬姛璋冪敤 AI锛岃妫€鏌ユā鍨嬮厤缃悗閲嶈瘯銆'));
+            throw new \RuntimeException((string)__('建站方案必须由 AI 生成，本次未成功调用 AI，请检查模型配置后重试。'));
             }
 
             if (!($planMarkdownStreamState['markdown_string_closed'] ?? false)) {
@@ -8213,7 +8213,7 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 $this->scopeCompatibilityService->normalizeStage($freshSaved->getStage()),
                 'plan_saved',
-                (string)__('寤虹珯鏂规宸蹭繚瀛'),
+                (string)__('建站方案已保存'),
                 [
                     'operation' => 'plan',
                     'details' => [
@@ -8226,14 +8226,14 @@ class AiSiteAgent extends BaseController
             $sse->sendEvent('log', [
                 'event_type' => 'plan_saved',
                 'stage_code' => 'plan',
-                'message' => (string)__('寤虹珯鏂规宸蹭繚瀛'),
+                'message' => (string)__('建站方案已保存'),
                 'payload' => ['operation' => 'plan'],
                 'level' => 'info',
                 'event_id' => 0,
                 'created_at' => \date('Y-m-d H:i:s'),
             ]);
             $sse->sendEvent('progress', [
-                'message' => (string)__('寤虹珯鏂规宸蹭繚瀛'),
+                'message' => (string)__('建站方案已保存'),
                 'operation' => 'plan',
                 'progress_percent' => 95,
             ]);
@@ -8243,7 +8243,7 @@ class AiSiteAgent extends BaseController
                     $adminId,
                     [
                         'status' => 'error',
-                        'message' => (string)__('閮ㄥ垎椤甸潰鏂规鐢熸垚澶辫触锛涘綋鍓嶉樁娈甸槦鍒椾細缁х画琛ラ綈缂哄け椤甸潰銆'),
+                        'message' => (string)__('部分页面方案生成失败；当前阶段队列会继续补齐缺失页面。'),
                         'retry_allowed' => 1,
                         'failure_mode' => 'plan_failed',
                         'retryable_ai_failure_count' => \count($retryablePlanFailures),
@@ -8255,7 +8255,7 @@ class AiSiteAgent extends BaseController
             $this->updateActiveOperation(
                 $fresh,
                 $adminId,
-                ['status' => 'done', 'message' => (string)__('寤虹珯鏂规鐢熸垚瀹屾垚')],
+                    ['status' => 'done', 'message' => (string)__('建站方案生成完成')],
                 AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
             );
             $this->appendWorkspaceEvent(
@@ -8263,7 +8263,7 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 'plan',
                 'plan_generated',
-                (string)__('宸茬敓鎴愬缓绔欐柟妗堬紝璇风‘璁ゅ悗缁х画鎵ц鏋勫缓'),
+                (string)__('已生成建站方案，请确认后继续执行构建'),
                 [
                     'operation' => 'plan',
                     'details' => [
@@ -8298,14 +8298,14 @@ class AiSiteAgent extends BaseController
             $sse->sendEvent('log', [
                 'event_type' => 'plan_generated',
                 'stage_code' => 'plan',
-                'message' => (string)__('寤虹珯鏂规鐢熸垚瀹屾垚'),
+                'message' => (string)__('建站方案生成完成'),
                 'payload' => ['operation' => 'plan'],
                 'level' => 'done',
                 'event_id' => 0,
                 'created_at' => \date('Y-m-d H:i:s'),
             ]);
             $sse->sendEvent('progress', [
-                'message' => (string)__('寤虹珯鏂规鐢熸垚瀹屾垚'),
+                'message' => (string)__('建站方案生成完成'),
                 'operation' => 'plan',
                 'progress_percent' => 99,
             ]);
@@ -8321,14 +8321,14 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 'plan',
                 'operation_failed',
-                (string)__('寤虹珯鏂规鐢熸垚澶辫触锛?{message}', ['message' => $throwable->getMessage()]),
+                (string)__('建站方案生成失败：{message}', ['message' => $throwable->getMessage()]),
                 ['operation' => 'plan', 'details' => ['exception' => $throwable->getMessage()]],
                 AiSiteAgentSessionEvent::LEVEL_ERROR
             );
             $sse->sendEvent('log', [
                 'event_type' => 'operation_failed',
                 'stage_code' => 'plan',
-                'message' => (string)__('寤虹珯鏂规鐢熸垚澶辫触锛?{message}', ['message' => $throwable->getMessage()]),
+                'message' => (string)__('建站方案生成失败：{message}', ['message' => $throwable->getMessage()]),
                 'payload' => ['operation' => 'plan'],
                 'level' => 'error',
                 'event_id' => 0,
@@ -8359,7 +8359,7 @@ class AiSiteAgent extends BaseController
         }
 
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
-        $schedulerWaitMessage = '鎿嶄綔宸茶繘鍏ョ郴缁熼槦鍒楋紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涘ぇ閮ㄥ垎鎯呭喌绾?1 鍒嗛挓鍚庡紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆';
+        $schedulerWaitMessage = '操作已进入系统队列，正在等待系统定时任务调度；大部分情况下约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。';
         if ($activeStatus !== 'queued' || \trim((string)($activeOperation['message'] ?? '')) !== $schedulerWaitMessage) {
             $this->updateActiveOperation(
                 $fresh,
@@ -8414,7 +8414,7 @@ class AiSiteAgent extends BaseController
                 ? $queueProcess
                 : ($queueStatus === 'running'
                     ? ''
-                    : (string)__('寤虹珯鏂规闃熷垪姝ｅ湪绛夊緟 worker 鎵ц銆'));
+            : (string)__('建站方案队列正在等待 worker 执行。'));
             $nextOperation['updated_at'] = \date('Y-m-d H:i:s');
         } elseif (\in_array($queueStatus, ['done', 'error', 'stop', 'cancelled'], true)) {
             $nextOperation = $this->reconcileActiveOperationWithQueueInfo(
@@ -8625,11 +8625,11 @@ class AiSiteAgent extends BaseController
                 if ($operation !== 'plan') {
                     return ['ok' => true, 'reason' => 'parallel_non_plan'];
                 }
-                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('鏈壘鍒板緟鎵ц鐨勫伐浣滃尯鎿嶄綔')];
+                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('未找到待执行的工作区操作')];
             }
 
             if (\in_array($status, ['done', 'error', 'cancelled'], true)) {
-                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('璇ユ搷浣滃凡缁撴潫锛岃閲嶆柊鍙戣捣')];
+                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('该操作已结束，请重新发起')];
             }
 
             $allowUnclaimedPlanQueueRun = false;
@@ -8656,14 +8656,14 @@ class AiSiteAgent extends BaseController
             }
 
             if ($status !== 'queued' && !$allowUnclaimedPlanQueueRun) {
-                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('鎿嶄綔鐘舵€佸紓甯革紝璇峰埛鏂板悗閲嶈瘯')];
+                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('操作状态异常，请刷新后重试')];
             }
 
             $scope = $this->writeActiveOperationStateToScope($scope, \array_replace($active, [
                 'status' => 'running',
                 'claimed_by' => $claimSource,
                 'claimed_at' => \date('Y-m-d H:i:s'),
-                'message' => (string)__('鎿嶄綔寮€濮嬫墽琛'),
+                'message' => (string)__('操作开始执行'),
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]));
             $this->sessionService->replaceScope($fresh->getId(), $adminId, $scope);
@@ -8896,13 +8896,13 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $executionToken = \trim((string)$this->request->getGet('execution_token', ''));
         if ($adminId <= 0 || $publicId === '' || $executionToken === '') {
-            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_OPERATION_SSE);
+            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_OPERATION_SSE);
             $sse->complete(['success' => false]);
             return;
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_OPERATION_SSE, 404);
+            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_OPERATION_SSE, 404);
             $sse->complete(['success' => false]);
             return;
         }
@@ -8915,7 +8915,7 @@ class AiSiteAgent extends BaseController
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
         $status = \trim((string)($activeOperation['status'] ?? ''));
         if ($operation === '') {
-            $this->sendSseContractError($sse, 'OPERATION_NOT_FOUND', (string)__('鏈壘鍒板緟鎵ц鐨勫伐浣滃尯鎿嶄綔'), self::PARAMS_OPERATION_SSE, 404);
+            $this->sendSseContractError($sse, 'OPERATION_NOT_FOUND', (string)__('未找到待执行的工作区操作'), self::PARAMS_OPERATION_SSE, 404);
             $sse->complete(['success' => false]);
             return;
         }
@@ -8990,7 +8990,7 @@ class AiSiteAgent extends BaseController
                     'public_id' => $session->getPublicId(),
                     'operation' => $operation,
                 ]);
-                $missingQueueMessage = (string)__('鏈壘鍒板綋鍓嶉樁娈靛搴旂殑闃熷垪璁板綍锛岃鍒锋柊鍚庨噸璇曘€');
+                $missingQueueMessage = (string)__('未找到当前阶段对应的队列记录，请刷新后重试。');
                 $this->sendSseContractError(
                     $sse,
                     'OPERATION_QUEUE_NOT_FOUND',
@@ -9014,7 +9014,7 @@ class AiSiteAgent extends BaseController
             $queueStatusForObserver = \trim((string)($queueRow['status'] ?? ''));
             $queueWaitingForScheduler = \in_array($queueStatusForObserver, ['pending', 'queued'], true);
             if ($queueWaitingForScheduler) {
-                $schedulerHintMessage = (string)__('鎿嶄綔宸茶繘鍏ョ郴缁熼槦鍒楋紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涘ぇ閮ㄥ垎鎯呭喌绾?1 鍒嗛挓鍚庡紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆');
+                $schedulerHintMessage = (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况下约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。');
                 $sse->sendEvent('info', [
                     'message' => $schedulerHintMessage,
                     'operation' => $operation,
@@ -9140,7 +9140,7 @@ class AiSiteAgent extends BaseController
                     return;
                 }
                 $sse->sendEvent('info', [
-                    'message' => (string)__('妫€娴嬪埌宸插瓨鍦ㄩ槦鍒楄褰曪紝宸插垏鎹负瑙傚療妯″紡骞剁户缁悓姝ラ槦鍒楃姸鎬併€'),
+                    'message' => (string)__('检测到已存在队列记录，已切换为观察模式并继续同步队列状态。'),
                     'operation' => $operation,
                     'observer_mode' => true,
                     'queue_id' => (int)($queueRow['queue_id'] ?? 0),
@@ -9149,13 +9149,13 @@ class AiSiteAgent extends BaseController
                 $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
                 if (!(bool)($observed['success'] ?? true)) {
                     $sse->sendError(
-                        (string)($observed['message'] ?? __('鎿嶄綔鎵ц澶辫触')),
+                        (string)($observed['message'] ?? __('操作执行失败')),
                         (int)($observed['http_code'] ?? 500)
                     );
                 }
                 $sse->complete([
                     'success' => (bool)($observed['success'] ?? true),
-                    'message' => (string)($observed['message'] ?? __('鎿嶄綔鎵ц瀹屾垚')),
+                    'message' => (string)($observed['message'] ?? __('操作执行完成')),
                     'operation' => $operation,
                     'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
                     'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
@@ -9191,27 +9191,27 @@ class AiSiteAgent extends BaseController
                     'operation' => $operation,
                 ]);
                 $sse->sendEvent('warning', [
-                    'message' => (string)__('妫€娴嬪埌閲嶅鐨勬搷浣滀簨浠舵祦杩炴帴锛屽綋鍓嶅凡鍒囨崲涓鸿瀵熸ā寮忥紝灏嗙户缁悓姝ュ墿浣欒繘搴︺€'),
+                'message' => (string)__('检测到重复的操作事件流连接，当前已切换为观察模式，将继续同步剩余进度。'),
                     'operation' => $operation,
                     'observer_mode' => true,
                 ]);
                 $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
                 if (!(bool)($observed['success'] ?? true)) {
                     $sse->sendError(
-                        (string)($observed['message'] ?? __('鎿嶄綔鎵ц澶辫触')),
+                        (string)($observed['message'] ?? __('操作执行失败')),
                         (int)($observed['http_code'] ?? 500)
                     );
                 }
                 $sse->complete([
                     'success' => (bool)($observed['success'] ?? true),
-                    'message' => (string)($observed['message'] ?? __('鎿嶄綔鎵ц瀹屾垚')),
+                    'message' => (string)($observed['message'] ?? __('操作执行完成')),
                     'operation' => $operation,
                     'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
                     'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
                 ]);
                 return;
             }
-            $terminalMessage = (string)($claim['message'] ?? (string)__('璇ユ搷浣滃凡缁撴潫鎴栦笉鍙敤'));
+            $terminalMessage = (string)($claim['message'] ?? (string)__('该操作已结束或不可用'));
             $this->sendSseContractError($sse, 'OPERATION_NOT_ACTIVE', $terminalMessage, self::PARAMS_OPERATION_SSE, 409);
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
             $sse->complete([
@@ -9231,8 +9231,8 @@ class AiSiteAgent extends BaseController
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
 
         $stageCode = $this->scopeCompatibilityService->normalizeStage($session->getStage());
-        $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_started', (string)__('宸插紑濮嬫墽琛屾搷浣'), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? '')]);
-        $sse->sendEvent('start', ['message' => __('宸插紑濮嬫墽琛岋細%{operation}', ['operation' => $operation]), 'operation' => $operation]);
+            $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_started', (string)__('已开始执行操作'), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? '')]);
+        $sse->sendEvent('start', ['message' => __('已开始执行：%{operation}', ['operation' => $operation]), 'operation' => $operation]);
         RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
         RequestContext::set(self::REQUEST_CTX_AI_CHUNK_FORWARDER, function (array $payload) use ($sse, $session, $adminId, $stageCode, $operation): void {
             $chunk = (string)($payload['chunk'] ?? '');
@@ -9241,8 +9241,8 @@ class AiSiteAgent extends BaseController
             }
             $region = \trim((string)($payload['region'] ?? ''));
             $message = $region !== ''
-                ? (string)__('AI 鐗囨锛?{region}锛夛細%{chunk}', ['region' => $region, 'chunk' => $chunk])
-                : (string)__('AI 鐗囨锛?{chunk}', ['chunk' => $chunk]);
+                            ? (string)__('AI 片段（{region}）：%{chunk}', ['region' => $region, 'chunk' => $chunk])
+                            : (string)__('AI 片段：%{chunk}', ['chunk' => $chunk]);
             $this->appendWorkspaceEvent(
                 $session->getId(),
                 $adminId,
@@ -9277,7 +9277,7 @@ class AiSiteAgent extends BaseController
                 );
             $sse->complete([
                 'success' => true,
-                'message' => (string)($result['message'] ?? __('鎿嶄綔鎵ц瀹屾垚')),
+                'message' => (string)($result['message'] ?? __('操作执行完成')),
                 'operation' => $operation,
                 'data' => $result,
                 'state' => $statePayload,
@@ -9285,7 +9285,7 @@ class AiSiteAgent extends BaseController
         } catch (\Throwable $throwable) {
             $failedStatus = $operation === 'publish' ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
             $this->updateActiveOperation($session, $adminId, ['status' => 'error', 'message' => $throwable->getMessage()], $failedStatus, $operation === 'publish' ? AiSiteAgentSession::PUBLISH_STATUS_FAILED : null);
-            $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_failed', (string)__('鎿嶄綔鎵ц澶辫触锛?{message}', ['message' => $throwable->getMessage()]), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? ''), 'details' => ['exception' => $throwable->getMessage()]], AiSiteAgentSessionEvent::LEVEL_ERROR);
+            $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_failed', (string)__('操作执行失败：{message}', ['message' => $throwable->getMessage()]), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? ''), 'details' => ['exception' => $throwable->getMessage()]], AiSiteAgentSessionEvent::LEVEL_ERROR);
             $httpCode = $this->inferThrowableHttpCode($throwable);
             $sse->sendError($throwable->getMessage(), $httpCode);
             if ($httpCode === 402) {
@@ -9316,7 +9316,7 @@ class AiSiteAgent extends BaseController
         }
 
         return match ($operation) {
-            default => throw new \RuntimeException((string)__('鏈煡鎿嶄綔锛?{operation}锛堝厑璁革細%{allowed}锛', [
+            default => throw new \RuntimeException((string)__('未知操作：%{operation}（允许：%{allowed}）', [
                 'operation' => $operation !== '' ? $operation : '(empty)',
                 'allowed' => 'system-scheduler queue operations only',
             ])),
@@ -9358,11 +9358,11 @@ class AiSiteAgent extends BaseController
         $message = \trim((string)($activeOperation['message'] ?? ''));
 
         if ($status === 'error') {
-            throw new \RuntimeException($message !== '' ? $message : (string)__('寤虹珯鏂规鐢熸垚澶辫触'));
+            throw new \RuntimeException($message !== '' ? $message : (string)__('建站方案生成失败'));
         }
 
         return [
-            'message' => $message !== '' ? $message : (string)__('寤虹珯鏂规鐢熸垚瀹屾垚'),
+            'message' => $message !== '' ? $message : (string)__('建站方案生成完成'),
             'state' => $state,
             'active_operation' => $activeOperation,
             'plan_json' => \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
@@ -9460,7 +9460,7 @@ class AiSiteAgent extends BaseController
 
             return [
                 'success' => true,
-                'message' => (string)__('闃熷垪浠诲姟宸叉彁浜わ紝杩涘害灏嗘寔缁悓姝ュ埌宸ヤ綔鍖恒€'),
+                'message' => (string)__('队列任务已提交，进度将持续同步到工作区。'),
                 'data' => $this->buildObservedOperationResultData($operation, $queuedState),
                 'state' => $queuedState,
                 'http_code' => 200,
@@ -9636,7 +9636,7 @@ class AiSiteAgent extends BaseController
         $message = \trim((string)($activeOperation['message'] ?? ''));
         if ($timedOut) {
             // 鎻愪緵鏇磋缁嗙殑瓒呮椂淇℃伅鍜屾搷浣滃缓璁?
-            $message = (string)__('鎿嶄綔浠嶅湪鎵ц涓紝浣嗚繘搴﹁瀵熷凡瓒呮椂锛?0鍒嗛挓鏃犲搷搴旓級銆傝繖鍙兘鍙戠敓鍦ㄥぇ鍨嬮〉闈㈢敓鎴愭垨澶嶆潅浠诲姟涓€傚缓璁細1锛夊埛鏂伴〉闈㈡煡鐪嬫渶鏂扮姸鎬侊紱2锛夊鏋滄搷浣滄湭瀹屾垚锛屽彲閲嶆柊瑙﹀彂锛?锛夋鏌ョ郴缁熸棩蹇椾簡瑙ｈ缁嗕俊鎭');
+                $message = (string)__('操作仍在执行中，但进度观察已超时（10 分钟无响应）。这可能发生在大型页面生成或复杂任务中。建议：1）刷新页面查看最新状态；2）如果操作未完成，可重新触发；3）检查系统日志了解详细信息');
         } elseif ($message === '') {
             $message = $this->resolveObservedQueueMessage($queueRow, $success);
         }
@@ -9661,7 +9661,7 @@ class AiSiteAgent extends BaseController
         if (!$timedOut && !$success && ($activeInProgress || $queueInProgress)) {
             return [
                 'success' => true,
-                'message' => $message !== '' ? $message : (string)__('鎿嶄綔浠嶅湪鎵ц涓紝宸ヤ綔鍖哄皢缁х画鍚屾鍚庡彴闃熷垪杩涘害銆'),
+                    'message' => $message !== '' ? $message : (string)__('操作仍在执行中，工作区将继续同步后台队列进度。'),
                 'data' => $this->buildObservedOperationResultData($operation, $state),
                 'state' => $state,
                 'http_code' => 200,
@@ -9750,7 +9750,7 @@ class AiSiteAgent extends BaseController
         $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId, $operation === 'plan');
         if ($this->isObservedQueueInProgress($queueRow)) {
             $sse->sendEvent('info', [
-                'message' => (string)__('闃熷垪浠嶅湪鎵ц锛岃瀵熻繛鎺ュ凡杈惧埌鏈鏈€闀夸繚鎸佹椂闂达紱宸ヤ綔鍖轰細缁х画閫氳繃闃熷垪鐘舵€佸悓姝ユ渶鏂拌繘搴︺€'),
+            'message' => (string)__('队列仍在执行，观察连接已达到本次最长保持时间；工作区会继续通过队列状态同步最新进度。'),
                 'operation' => $operation,
                 'queue_id' => $queueId,
                 'queue_status' => (string)($queueRow['status'] ?? 'running'),
@@ -10027,26 +10027,17 @@ class AiSiteAgent extends BaseController
         if (\is_array($scope['build_summary'] ?? null)) {
             unset($scope['build_summary']['task_summary']);
         }
-        $scope['auto_generate_identity_assets_first'] = 1;
+        if (!\array_key_exists('auto_generate_identity_assets_first', $scope)) {
+            $scope['auto_generate_identity_assets_first'] = 0;
+        }
         unset($scope['auto_asset_prebuild_identity_only']);
 
         /** @var AiSiteAutoAssetGenerationService $assetGenerationService */
         $assetGenerationService = ObjectManager::getInstance(AiSiteAutoAssetGenerationService::class);
-        $manifest = $this->assetManifestService()->syncFromBuildPlan($scope);
-        $pendingSlotCount = 0;
-        foreach (\is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [] as $slot) {
-            if (!\is_array($slot)) {
-                continue;
-            }
-            $status = \strtolower(\trim((string)($slot['status'] ?? 'pending')));
-            $finalUrl = \trim((string)($slot['final_url'] ?? ''));
-            if ($finalUrl === '' && \in_array($status, ['', 'pending', 'failed', 'generating', 'queued'], true)) {
-                $pendingSlotCount++;
-            }
-        }
-        // Image generation is a design preference, not a build gate. Keep the
-        // manifest/slot metadata available, but do not block page-block builds
-        // on an upfront image batch.
+        // Image generation is a design preference, not a build gate. Prepare the
+        // manifest and prompts here, but leave actual image rendering to the
+        // component/asset pipeline so the main build queue is not blocked by a
+        // provider timeout.
         $assetGenerationLimit = 0;
         $result = $assetGenerationService->prepareBuildAssets($session, $adminId, $scope, $assetGenerationLimit);
         $resultScope = \is_array($result['scope'] ?? null) ? $result['scope'] : $scope;
@@ -10677,8 +10668,8 @@ class AiSiteAgent extends BaseController
         $lastSignature = $signature;
 
         $message = $queueStatus === 'running'
-            ? (string)__('AI 姝ｅ湪鐢熸垚椤甸潰浠诲姟')
-            : (string)__('AI 鏋勫缓浠诲姟鍚屾涓');
+            ? (string)__('AI 正在生成页面任务')
+            : (string)__('AI 构建任务同步中');
         $progressPercent = isset($activeOperation['progress_percent']) ? (int)$activeOperation['progress_percent'] : $this->resolveTaskSummaryProgressPercent($summary);
 
         $payload = $this->buildTaskProgressStatePayload(
@@ -11116,7 +11107,7 @@ class AiSiteAgent extends BaseController
 
         return match ($eventType) {
             'start' => [
-                'message' => (string)($payload['message'] ?? __('宸插紑濮嬫墽琛屾搷浣')),
+                'message' => (string)($payload['message'] ?? __('已开始执行操作')),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'page_type' => (string)($payload['page_type'] ?? ''),
             ],
@@ -11130,39 +11121,39 @@ class AiSiteAgent extends BaseController
             ],
             'progress' => $this->buildObservedProgressPayload($payload),
             'ai_raw_chunk' => [
-                'message' => (string)__('AI 姝ｅ湪鐢熸垚鍐呭锛屾鏂囨祦宸蹭粠闃熷垪 SSE 涓渷鐣ャ€'),
+            'message' => (string)__('AI 正在生成内容，正文流已从队列 SSE 中省略。'),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
                 'suppressed_content' => true,
             ],
             'plan_chunk' => [
-                'message' => (string)__('闃舵鏂规鍐呭宸茬敓鎴愬苟鍐欏叆鑽夋锛屾鏂囨祦宸蹭粠闃熷垪 SSE 涓渷鐣ャ€'),
+            'message' => (string)__('第一阶段方案内容已生成并写入草稿，正文流已从队列 SSE 中省略。'),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
                 'suppressed_content' => true,
             ],
             'chunk' => [
-                'message' => (string)__('闃舵鍐呭宸叉洿鏂帮紝姝ｆ枃娴佸凡浠庨槦鍒?SSE 涓渷鐣ャ€'),
+            'message' => (string)__('阶段内容已更新，正文流已从队列 SSE 中省略。'),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'region' => (string)($details['region'] ?? $payload['region'] ?? ''),
                 'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
                 'suppressed_content' => true,
             ],
             'error' => [
-                'message' => (string)($payload['message'] ?? __('鎿嶄綔鎵ц澶辫触')),
+                'message' => (string)($payload['message'] ?? __('操作执行失败')),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'page_type' => (string)($payload['page_type'] ?? ''),
                 'details' => $details,
                 'http_code' => isset($payload['code']) ? (int)$payload['code'] : 500,
             ],
             'operation_started' => [
-                'message' => (string)($payload['message'] ?? __('宸插紑濮嬫墽琛屾搷浣')),
+                'message' => (string)($payload['message'] ?? __('已开始执行操作')),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'page_type' => (string)($payload['page_type'] ?? ''),
             ],
             'operation_progress' => $this->buildObservedProgressPayload($payload),
             'ai_chunk' => [
-                'message' => (string)__('AI 姝ｅ湪鐢熸垚鍐呭锛屾鏂囨祦宸蹭粠闃熷垪 SSE 涓渷鐣ャ€'),
+            'message' => (string)__('AI 正在生成内容，正文流已从队列 SSE 中省略。'),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'region' => (string)($details['region'] ?? $payload['region'] ?? ''),
                 'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
@@ -11172,7 +11163,7 @@ class AiSiteAgent extends BaseController
             'page_generated' => $this->buildObservedPageGeneratedPayload($session, $adminId, $payload, $details),
             'task_completed' => $this->buildObservedTaskCompletedPayload($session, $adminId, $payload, $details),
             'operation_failed' => [
-                'message' => (string)($payload['message'] ?? __('鎿嶄綔鎵ц澶辫触')),
+                'message' => (string)($payload['message'] ?? __('操作执行失败')),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'page_type' => (string)($payload['page_type'] ?? ''),
                 'details' => $details,
@@ -11378,8 +11369,8 @@ class AiSiteAgent extends BaseController
             }
             if (\str_contains($message, 'http 402')
                 || \str_contains($message, 'insufficient balance')
-                || \str_contains($message, '浣欓涓嶈冻')
-                || \str_contains($message, '棰濆害涓嶈冻')
+                || \str_contains($message, '余额不足')
+                || \str_contains($message, '额度不足')
             ) {
                 return 402;
             }
@@ -11744,7 +11735,7 @@ class AiSiteAgent extends BaseController
             $taskSummary = \is_array($completionGateForWorkspace['summary'] ?? null)
                 ? $completionGateForWorkspace['summary']
                 : $taskSummary;
-            $doneMessage = (string)__('鏋勫缓瀹屾垚銆');
+        $doneMessage = (string)__('构建完成。');
             $buildDoneState = [
                 'operation' => 'build',
                 'status' => 'done',
@@ -11812,7 +11803,7 @@ class AiSiteAgent extends BaseController
         ) {
             $activeOperation = \array_replace($activeOperation, [
                 'status' => 'cancelled',
-                'message' => (string)__('妫€娴嬪埌鍘嗗彶鏋勫缓娴佸凡涓柇锛屼笅涓€娆＄户缁敓鎴愬皢鎸変换鍔″崟浣嶉噸鏂板紑濮'),
+                    'message' => (string)__('检测到历史构建流已中断，下一次继续生成将按任务单位重新开始'),
                 'updated_at' => \date('Y-m-d H:i:s'),
                 'details' => \array_replace(
                     \is_array($activeOperation['details'] ?? null) ? $activeOperation['details'] : [],
@@ -13307,7 +13298,7 @@ class AiSiteAgent extends BaseController
                 $item['ok'] = true;
                 $item['blocking'] = true;
                 $item['level'] = 'pass';
-                $item['detail'] = (string)__('闃舵浜屼换鍔″凡鍏ㄩ儴瀹屾垚锛孊uildPlan 鍖哄潡璇佹嵁宸插榻愩€');
+                $item['detail'] = (string)__('阶段二任务已全部完成，BuildPlan 区块证据已对齐。');
                 $taskSummary = \is_array($stageTwoReadiness['task_summary'] ?? null) ? $stageTwoReadiness['task_summary'] : [];
                 $item['value'] = [
                     'total' => (int)($taskSummary['total'] ?? 0),
@@ -13321,7 +13312,7 @@ class AiSiteAgent extends BaseController
                 $item['ok'] = true;
                 $item['blocking'] = false;
                 $item['level'] = 'warning';
-                $item['detail'] = (string)__('鍥剧墖妲戒綅缂哄け浼氫繚鐣欏湪璧勪骇闈㈡澘渚涢噸璇曪紝浣嗗彧瑕侀〉闈㈡病鏈夌牬鍥撅紝涓嶉樆鏂彂甯冦€');
+                $item['detail'] = (string)__('图片槽位缺失会保留在资产面板供重试，但只要页面没有破图，不阻断发布。');
             }
             $items[] = $item;
         }
@@ -13402,7 +13393,7 @@ class AiSiteAgent extends BaseController
     {
         $failures = \array_values(\array_filter(\array_map('strval', \is_array($report['failures'] ?? null) ? $report['failures'] : [])));
         if ($failures === []) {
-            return (string)__('闃舵浜屼换鍔℃爲銆佺敓鎴愬尯鍧楀拰鍏变韩缁勪欢鏁伴噺涓€鑷淬€');
+        return (string)__('阶段二任务树、生成区块和共享组件数量一致。');
         }
 
         return \implode('; ', \array_slice($failures, 0, 6));
@@ -13669,7 +13660,7 @@ class AiSiteAgent extends BaseController
             [$pageType]
         );
         $sse->sendEvent('environment_ready', [
-            'message' => (string)__('缂栬緫鐜宸插噯澶囧ソ锛屽彲鍏堣皟鏁村凡鐢熸垚椤甸潰'),
+            'message' => (string)__('编辑环境已准备好，可先调整已生成页面'),
             'page_type' => $pageType,
             'page_label' => $pageLabel,
             'page_id' => $pageId,
@@ -13709,7 +13700,7 @@ class AiSiteAgent extends BaseController
         ) {
             $scope['active_operation'] = \array_replace($activeOperation, [
                 'status' => 'cancelled',
-                'message' => (string)__('妫€娴嬪埌鍘嗗彶鎿嶄綔闀挎椂闂存棤杩涘睍锛屽凡鑷姩鍥炴敹骞跺厑璁搁噸鏂板紑濮'),
+                    'message' => (string)__('检测到历史操作长时间无进展，已自动回收并允许重新开始'),
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]);
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
@@ -13719,7 +13710,7 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 $this->scopeCompatibilityService->normalizeStage($session->getStage()),
                 'operation_cancelled',
-                (string)__('鍘嗗彶鎿嶄綔宸茶秴鏃跺洖鏀讹紝鍙噸鏂板彂璧锋瀯寤'),
+                (string)__('历史操作已超时回收，可重新发起构建'),
                 ['details' => ['reason' => 'stale_active_operation']]
             );
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
@@ -13757,7 +13748,7 @@ class AiSiteAgent extends BaseController
         ) {
             $scope['active_operation'] = \array_replace($activeOperation, [
                 'status' => 'cancelled',
-                'message' => (string)__('妫€娴嬪埌鏃犳晥鐨勫巻鍙叉搷浣滆褰曪紙缂哄皯鎵ц浠ょ墝锛夛紝宸茶嚜鍔ㄥ洖鏀跺苟鍏佽閲嶆柊寮€濮'),
+                    'message' => (string)__('检测到无效的历史操作记录（缺少执行令牌），已自动回收并允许重新开始'),
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]);
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
@@ -13837,7 +13828,7 @@ class AiSiteAgent extends BaseController
                     'success' => false,
                     'http_status' => 409,
                     'status_code' => 409,
-                    'message' => __('褰撳墠宸叉湁姝ｅ湪鎵ц鐨勫缓绔欐柟妗堢敓鎴愶紝璇峰厛绛夊緟瀹屾垚'),
+                    'message' => __('当前已有正在执行的建站方案生成，请先等待完成'),
                     'operation' => $runningOperationForState,
                     'execution_token' => $runningExecutionToken,
                     'stream_url' => ($runningOperationForState !== '' && $runningExecutionToken !== '')
@@ -13951,7 +13942,7 @@ class AiSiteAgent extends BaseController
             unset($scope['latest_build_failure'], $scope['publish_blocked_reason']);
         }
         if ($pageType !== '' && !\in_array($pageType, $scope['page_types'], true)) {
-            return ['success' => false, 'message' => __('鎵€閫夐〉闈㈢被鍨嬩笉鍦ㄥ綋鍓嶅伐浣滃尯涓')];
+            return ['success' => false, 'message' => __('所选页面类型不在当前工作区中')];
         }
 
         $executionToken = \bin2hex(\random_bytes(16));
@@ -13977,7 +13968,7 @@ class AiSiteAgent extends BaseController
             'retry_allowed' => 0,
             'queue_terminal_recovered' => 0,
             'progress_percent' => 0,
-            'message' => (string)__('绛夊緟寮€濮'),
+            'message' => (string)__('等待开始'),
         ], $operationEnvelope);
         if ($operationDetails !== []) {
             $scope['active_operation'] = $this->applyOperationDetailsToPayload($scope['active_operation'], $operationDetails);
@@ -14038,7 +14029,7 @@ class AiSiteAgent extends BaseController
         if ($queueId > 0) {
             $queueWait = $this->buildAiSiteQueueSchedulerWaitPayload($operation, $queueId);
         }
-        $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'operation_queued', (string)__('宸插姞鍏ユ搷浣滈槦鍒'), ['operation' => $operation, 'page_type' => $pageType]);
+        $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'operation_queued', (string)__('已加入操作队列'), ['operation' => $operation, 'page_type' => $pageType]);
 
         // 鎶婂垰鍏ラ槦鐨勭湡瀹?queue row 鍠傜粰 operation state锛屽墠绔娆℃嬁鍒板搷搴斿氨鑳芥纭樉绀?queued/running锛?
         // 涓嶅啀渚濊禆 SSE 绗竴甯э紱鍚屾椂閬垮厤 PID/杩涚▼鎺㈡椿璺緞銆?
@@ -14063,7 +14054,7 @@ class AiSiteAgent extends BaseController
         );
         return [
             'success' => true,
-            'message' => __('鎿嶄綔宸插惎鍔'),
+            'message' => __('操作已启动'),
             'execution_token' => $executionToken,
             'queue_id' => $queueId,
             'operation' => $operation,
@@ -14288,22 +14279,22 @@ class AiSiteAgent extends BaseController
         $requestedOperation = \trim($requestedOperation);
         $runningOperation = \trim($runningOperation);
         if ($runningOperation === 'build' && \in_array($requestedOperation, ['block_regenerate', 'block_partial_patch'], true)) {
-            return (string)__('褰撳墠绔欑偣鏋勫缓浠嶅湪杩愯锛屾殏涓嶈兘鍙戣捣鍖哄潡寰皟鎴栭噸寤猴紱璇风瓑寰呮瀯寤哄畬鎴愬悗鍐嶈瘯銆');
+            return (string)__('当前站点构建仍在运行，暂不能发起区块微调或重建；请等待构建完成后再试。');
         }
         if ($runningOperation === 'build' && $requestedOperation === 'regenerate_page') {
-            return (string)__('褰撳墠绔欑偣鏋勫缓浠嶅湪杩愯锛屾殏涓嶈兘閲嶆柊鐢熸垚椤甸潰锛涜绛夊緟鏋勫缓瀹屾垚鍚庡啀璇曘€');
+            return (string)__('当前站点构建仍在运行，暂不能重新生成页面；请等待构建完成后再试。');
         }
         if ($requestedOperation === 'build' && \in_array($runningOperation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
-            return (string)__('褰撳墠椤甸潰鎴栧尯鍧?AI 鎿嶄綔浠嶅湪杩愯锛屾殏涓嶈兘鍚姩鏁寸珯鏋勫缓锛涜绛夊緟瀹屾垚鍚庡啀璇曘€');
+            return (string)__('当前页面或区块 AI 操作仍在运行，暂不能启动整站构建；请等待完成后再试。');
         }
         if ($runningOperation === 'build') {
-            return (string)__('褰撳墠绔欑偣鏋勫缓浠嶅湪杩愯锛屾殏涓嶈兘鍙戣捣鏂扮殑 AI 闃熷垪鎿嶄綔锛涜绛夊緟瀹屾垚鍚庡啀璇曘€');
+            return (string)__('当前站点构建仍在运行，暂不能发起新的 AI 队列操作；请等待完成后再试。');
         }
         if (\in_array($runningOperation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
-            return (string)__('褰撳墠椤甸潰鎴栧尯鍧?AI 鎿嶄綔浠嶅湪杩愯锛岃绛夊緟瀹屾垚鍚庡啀璇曘€');
+            return (string)__('当前页面或区块 AI 操作仍在运行，请等待完成后再试。');
         }
 
-        return (string)__('褰撳墠宸叉湁 AI 闃熷垪鎿嶄綔杩愯涓紝璇风瓑寰呭畬鎴愬悗鍐嶈瘯銆');
+        return (string)__('当前已有 AI 队列操作运行中，请等待完成后再试。');
     }
 
     /**
@@ -14760,8 +14751,8 @@ class AiSiteAgent extends BaseController
             $detail = $createFailureMessage !== '' ? $createFailureMessage : $reuseFailureMessage;
             throw new \RuntimeException(
                 $detail !== ''
-                    ? (string)__('鍒涘缓闃熷垪浠诲姟澶辫触锛?{1}', [$detail])
-                    : (string)__('鍒涘缓闃熷垪浠诲姟澶辫触銆')
+                ? (string)__('创建队列任务失败：%{1}', [$detail])
+                : (string)__('创建队列任务失败。')
             );
         }
         $this->stopSupersededPendingAiSiteQueueRows($bizKey, $queueId, $operation);
@@ -15017,7 +15008,7 @@ class AiSiteAgent extends BaseController
     {
         $typeId = (int)w_query('queue', 'getTypeIdByClass', ['class' => $queueClass]);
         if ($typeId <= 0) {
-            throw new \RuntimeException((string)__('瑙ｆ瀽闃熷垪绫诲瀷澶辫触銆'));
+            throw new \RuntimeException((string)__('解析队列类型失败。'));
         }
 
         return $typeId;
@@ -15104,7 +15095,7 @@ class AiSiteAgent extends BaseController
                 : \in_array($queueStatus, ['pending', 'queued'], true)
         );
         $queuedMessage = $waitingForScheduler
-            ? (string)__('鎿嶄綔宸茶繘鍏ョ郴缁熼槦鍒楋紝姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛涘ぇ閮ㄥ垎鎯呭喌绾?1 鍒嗛挓鍚庡紑濮嬫墽琛屻€傚綋鍓嶈繘搴︾獥鍙ｅ彲浠ュ叧闂紝鍙互缁х画鎿嶄綔鍏朵粬鍐呭銆')
+                ? (string)__('操作已进入系统队列，正在等待系统定时任务调度；大部分情况下约 1 分钟后开始执行。当前进度窗口可以关闭，可以继续操作其他内容。')
             : ($queueStatus === 'running'
                 ? $queueProcessLine
                 : (string)($activeOperation['message'] ?? ''));
@@ -15152,7 +15143,7 @@ class AiSiteAgent extends BaseController
 
     private function buildAiSiteQueueSchedulerWaitMessage(string $operation, int $queueId): string
     {
-        return (string)__('闃熷垪 #%{queue_id} 姝ｅ湪绛夊緟绯荤粺瀹氭椂浠诲姟璋冨害锛岄€氬父绾?1 鍒嗛挓鍐呭紑濮嬫墽琛岋紱浣犲彲浠ュ叧闂綋鍓嶈繘搴︾獥鍙ｏ紝缁х画鎿嶄綔鍏朵粬鍐呭銆', [
+        return (string)__('队列 #%{queue_id} 正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。', [
             'queue_id' => (string)$queueId,
             'operation' => $operation,
         ]);
@@ -15530,7 +15521,7 @@ class AiSiteAgent extends BaseController
                 if ($this->buildTaskService->hasUnfinishedBlueprintTasks($scope)) {
                     $resetScope = $this->buildTaskService->resetRunningTasksForInterruptedBuild(
                         $scope,
-                        (string)__('鏋勫缓璋冨害锛氭棤鍙淳鍙戜换鍔★紝宸查噸缃粸鐣欑殑鎵ц涓换鍔′互渚挎柇鐐圭画鐢熸垚銆')
+                    (string)__('构建调度：无可派发任务，已重置滞留的执行中任务以便断点续生成。')
                     );
                     if ($resetScope !== $scope && $buildLoopStallPasses < 32) {
                         $buildLoopStallPasses++;
@@ -15540,7 +15531,7 @@ class AiSiteAgent extends BaseController
                             $sse,
                             $scope,
                             'build',
-                            (string)__('鏂偣缁敓鎴愶細姝ｅ湪鎭㈠婊炵暀浠诲姟'),
+                            (string)__('断点续生成：正在恢复滞留任务'),
                             $this->resolveTaskSummaryProgressPercent($this->buildTaskService->summarize($scope))
                         );
                         continue;
@@ -15693,7 +15684,7 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 'build',
-                (string)__('AI 姝ｅ湪鐢熸垚椤甸潰浠诲姟'),
+                (string)__('AI 正在生成页面任务'),
                 $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
             );
 
@@ -15892,7 +15883,7 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 'build',
-                (string)__('椤甸潰鍖哄潡鎵规瀹屾垚锛?{done}/%{total}', [
+                (string)__('页面区块批次完成：%{done}/%{total}', [
                     'done' => (string)(int)($this->buildTaskService->summarize($scope)['done'] ?? 0),
                     'total' => (string)(int)($this->buildTaskService->summarize($scope)['total'] ?? 0),
                 ]),
@@ -15931,7 +15922,7 @@ class AiSiteAgent extends BaseController
         $hasBuildFailures = (int)($taskSummary['failed'] ?? 0) > 0 || $this->buildTaskService->hasRetryableAiFailures($scope, 'build');
         $hasOutstandingTasks = empty($completionGate['passed']);
         if (!$htmlTrackReady && !$hasBuildFailures) {
-            throw new \RuntimeException((string)__('HTML 鍖哄潡鏋勫缓鏈畬鏁翠骇鍑猴紝璇烽噸鏂拌皟搴︽瀯寤洪槦鍒'));
+            throw new \RuntimeException((string)__('HTML 区块构建未完整产出，请重新调度构建队列'));
         }
         $canPublishBuild = !$hasOutstandingTasks && $htmlTrackReady && !$hasBuildFailures;
         $scope['build_summary'] = [
@@ -15952,7 +15943,7 @@ class AiSiteAgent extends BaseController
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
                     ? (string)__('HTML block build failed; unfinished AI items will retry on the same queue.')
-                    : (string)__('浠嶅瓨鍦ㄦ湭褰掓。鐨勬瀯寤轰换鍔★紱璇峰湪宸ヤ綔鍖哄埛鏂板悗閲嶈瘯鏈畬鎴愪换鍔″啀缁х画銆'),
+                    : (string)__('仍存在未归档的构建任务；请在工作区刷新后重试未完成任务再继续。'),
                 'retry_allowed' => 0,
                 'failure_mode' => 'build_failed',
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
@@ -15978,7 +15969,7 @@ class AiSiteAgent extends BaseController
             ($hasBuildFailures || $hasOutstandingTasks)
                 ? ($hasBuildFailures
                     ? __('HTML block build failed; unfinished AI items will retry on the same queue.')
-                    : __('浠嶅瓨鍦ㄦ湭褰掓。鐨?HTML 鍖哄潡浠诲姟锛涜鍒锋柊鍚庡畬鎴愬墿浣欎换鍔″悗鍐嶈瘯銆'))
+                    : __('仍存在未归档的 HTML 区块任务；请刷新后完成剩余任务后再试。'))
                 : __('HTML blocks ready for preview or publish'),
             100,
             '',
@@ -15990,7 +15981,7 @@ class AiSiteAgent extends BaseController
             'message' => $hasBuildFailures
                 ? (string)__('HTML block build failed; unfinished AI items will retry on the same queue.')
                 : ($hasOutstandingTasks
-                    ? (string)__('HTML 鍖哄潡鏋勫缓鏈畬鍏ㄥ綊妗ｏ紱璇峰埛鏂板苟瀹屾垚鍓╀綑浠诲姟銆')
+                ? (string)__('HTML 区块构建未完全归档；请刷新并完成剩余任务。')
                     : (string)__('HTML block build complete')),
             'draft_website_id' => (int)$draftWebsite['website_id'],
             'virtual_theme_id' => 0,
@@ -17095,7 +17086,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'build',
-            (string)__('姝ｅ湪鎵ц锛岃绋嶅€?..'),
+                    (string)__('正在执行，请稍候...'),
             1
         );
         $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -17347,7 +17338,7 @@ class AiSiteAgent extends BaseController
                 if ($this->buildTaskService->hasUnfinishedBlueprintTasks($scope)) {
                     $resetScope = $this->buildTaskService->resetRunningTasksForInterruptedBuild(
                         $scope,
-                        (string)__('鏋勫缓璋冨害锛氭棤鍙淳鍙戜换鍔★紝宸查噸缃粸鐣欑殑鎵ц涓换鍔′互渚挎柇鐐圭画鐢熸垚銆')
+                    (string)__('构建调度：无可派发任务，已重置滞留的执行中任务以便断点续生成。')
                     );
                     if ($resetScope !== $scope && $buildLoopStallPasses < 32) {
                         $buildLoopStallPasses++;
@@ -17357,7 +17348,7 @@ class AiSiteAgent extends BaseController
                             $sse,
                             $scope,
                             'build',
-                            (string)__('鏂偣缁敓鎴愶細姝ｅ湪鎭㈠婊炵暀浠诲姟'),
+                            (string)__('断点续生成：正在恢复滞留任务'),
                             $this->resolveTaskSummaryProgressPercent($this->buildTaskService->summarize($scope))
                         );
                         continue;
@@ -17515,7 +17506,7 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 'build',
-                (string)__('AI 姝ｅ湪鐢熸垚椤甸潰浠诲姟'),
+                (string)__('AI 正在生成页面任务'),
                 $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
             );
 
@@ -17800,7 +17791,7 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 'build',
-                (string)__('椤甸潰鍖哄潡鎵规瀹屾垚锛?{done}/%{total}', [
+                (string)__('页面区块批次完成：%{done}/%{total}', [
                     'done' => (string)(int)($this->buildTaskService->summarize($scope)['done'] ?? 0),
                     'total' => (string)(int)($this->buildTaskService->summarize($scope)['total'] ?? 0),
                 ]),
@@ -17850,7 +17841,7 @@ class AiSiteAgent extends BaseController
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
                     ? (string)__('Virtual theme build failed; unfinished AI items will retry on the same queue.')
-                    : (string)__('浠嶅瓨鍦ㄦ湭褰掓。鐨勮櫄鎷熶富棰樻瀯寤轰换鍔★紱璇峰埛鏂板悗閲嶈瘯鏈畬鎴愪换鍔″啀缁х画銆'),
+                    : (string)__('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'),
                 'retry_allowed' => 0,
                 'failure_mode' => 'build_failed',
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
@@ -17908,7 +17899,7 @@ class AiSiteAgent extends BaseController
             ($hasBuildFailures || $hasOutstandingTasks)
                 ? ($hasBuildFailures
                     ? __('Virtual theme build failed; unfinished AI items will retry on the same queue.')
-                    : __('浠嶅瓨鍦ㄦ湭褰掓。鐨勮櫄鎷熶富棰樻瀯寤轰换鍔★紱璇峰埛鏂板悗閲嶈瘯鏈畬鎴愪换鍔″啀缁х画銆'))
+                    : __('仍存在未归档的虚拟主题构建任务；请刷新后重试未完成任务再继续。'))
                 : __('Virtual theme ready for editing'),
             100,
             '',
@@ -17919,7 +17910,7 @@ class AiSiteAgent extends BaseController
             'message' => $hasBuildFailures
                 ? (string)__('Virtual theme build failed; unfinished AI items will retry on the same queue.')
                 : ($hasOutstandingTasks
-                    ? (string)__('铏氭嫙涓婚鏋勫缓鏈畬鍏ㄥ綊妗ｏ紱璇峰埛鏂板苟瀹屾垚鍓╀綑浠诲姟銆')
+                ? (string)__('虚拟主题构建未完全归档；请刷新并完成剩余任务。')
                     : (string)__('Virtual theme build complete')),
             'draft_website_id' => (int)$draftWebsite['website_id'],
             'virtual_theme_id' => (int)($scope['virtual_theme_id'] ?? 0),
@@ -17992,13 +17983,13 @@ class AiSiteAgent extends BaseController
         $virtualThemeId = \max((int)($scope['virtual_theme_id'] ?? 0), (int)$session->getVirtualThemeId());
         $workspaceTrack = AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
         if ($websiteId <= 0 || $virtualThemeId <= 0) {
-            throw new \RuntimeException((string)__('鍙戝竷鍓嶈鍏堝畬鎴愪富棰樻瀯寤'));
+            throw new \RuntimeException((string)__('发布前请先完成主题构建'));
         }
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('姝ｅ湪鏍￠獙闃舵浜屼换鍔′笌鍖哄潡鏁伴噺'), 10);
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('正在校验阶段二任务与区块数量'), 10);
         $stageTwoReadiness = $this->buildStageTwoPublishReadinessReport($scope);
         $scope['stage2_publish_readiness'] = $stageTwoReadiness;
         if (empty($stageTwoReadiness['passed'])) {
-            throw new \RuntimeException((string)__('闃舵浜屾瀯寤轰换鍔′笌鐪熷疄鐢熸垚鍖哄潡涓嶄竴鑷达紝璇峰厛閲嶈瘯澶辫触浠诲姟鎴栭噸寤虹浜岄樁娈点€') . ' ' . $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness));
+            throw new \RuntimeException((string)__('阶段二构建任务与真实生成区块不一致，请先重试失败任务或重建第二阶段。') . ' ' . $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness));
         }
         $scope = $this->refreshScopeQualityContractsForPublishGate($scope);
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
@@ -18007,10 +17998,10 @@ class AiSiteAgent extends BaseController
             $stageTwoReadiness
         );
         if (empty($qualityReport['passed'])) {
-            throw new \RuntimeException((string)__('鍙戝竷闂ㄧ鏈€氳繃锛岃鍏堜慨澶嶉〉闈㈠唴瀹硅川閲忋€佺牬鍥炬垨浠诲姟鐘舵€侀棶棰樸€'));
+            throw new \RuntimeException((string)__('发布门禁未通过，请先修复页面内容质量、破图或任务状态问题。'));
         }
 
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('姝ｅ湪鍒涘缓姝ｅ紡椤甸潰骞跺彂甯冧笂绾'), 25);
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('正在创建正式页面并发布上线'), 25);
         $published = $this->publishService->publish(
             $websiteId,
             $virtualThemeId,
@@ -18040,7 +18031,7 @@ class AiSiteAgent extends BaseController
                 'operation' => 'publish',
                 'status' => 'done',
                 'updated_at' => \date('Y-m-d H:i:s'),
-                'message' => (string)__('鍙戝竷瀹屾垚'),
+                'message' => (string)__('发布完成'),
             ]
         ));
 
@@ -18048,8 +18039,8 @@ class AiSiteAgent extends BaseController
         $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED);
         $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_PUBLISH);
 
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('姝ｅ紡椤甸潰宸插垱寤哄苟涓婄嚎'), 100);
-        return ['message' => (string)__('鍙戝竷瀹屾垚'), 'published' => $published];
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', __('正式页面已创建并上线'), 100);
+        return ['message' => (string)__('发布完成'), 'published' => $published];
     }
 
     private function sendOperationProgress(
@@ -18390,11 +18381,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_PUBLIC_ID);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
         $jsonKey = $merge ? 'scope_patch' : 'scope';
         $isAutosave = \in_array(\strtolower(\trim((string)$this->getRequestBodyValue('autosave', '0'))), ['1', 'true', 'yes', 'on'], true);
@@ -18415,13 +18406,13 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 $this->scopeCompatibilityService->normalizeStage($session->getStage()),
                 'plan_draft_saved',
-                (string)__('寤虹珯鏂规鑽夌宸蹭繚瀛'),
+            (string)__('建站方案草稿已保存'),
                 ['details' => ['autosave' => 1, 'source' => 'save_button']]
             );
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => (string)__('寤虹珯鏂规鑽夌宸蹭繚瀛'),
+                'message' => (string)__('建站方案草稿已保存'),
                 'autosave' => true,
             ]);
         }
@@ -18453,14 +18444,14 @@ class AiSiteAgent extends BaseController
             $this->scopeCompatibilityService->normalizeStage($session->getStage()),
             $isAutosave ? 'autosave_saved' : ($merge ? 'scope_merged' : 'scope_replaced'),
             $isAutosave
-                ? (string)__('宸ヤ綔鍖哄凡鑷姩淇濆瓨')
-                : ($merge ? (string)__('宸ヤ綔鍖轰俊鎭凡鍚堝苟淇濆瓨') : (string)__('宸ヤ綔鍖轰俊鎭凡鏁翠綋鏇挎崲')),
+                ? (string)__('工作区已自动保存')
+                : ($merge ? (string)__('工作区信息已合并保存') : (string)__('工作区信息已整体替换')),
             ['details' => ['keys' => \array_values(\array_map('strval', \array_keys($payload))), 'autosave' => $isAutosave ? 1 : 0]]
         );
         if ($isAutosave) {
             return $this->fetchJson([
                 'success' => true,
-                'message' => (string)__('宸ヤ綔鍖哄凡鑷姩淇濆瓨'),
+                'message' => (string)__('工作区已自动保存'),
                 'autosave' => true,
             ]);
         }
@@ -18737,10 +18728,10 @@ class AiSiteAgent extends BaseController
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
 
         $doneMessage = match ($action) {
-            'create' => (string)__('寤虹珯鏂规鍧楀凡鏂板銆'),
-            'delete' => (string)__('寤虹珯鏂规鍧楀凡鍒犻櫎銆'),
-            'rebuild' => (string)__('寤虹珯鏂规鍧楀凡閲嶅缓銆'),
-            default => (string)__('寤虹珯鏂规鍧楀凡寰皟銆'),
+            'create' => (string)__('建站方案块已新增。'),
+            'delete' => (string)__('建站方案块已删除。'),
+            'rebuild' => (string)__('建站方案块已重建。'),
+            default => (string)__('建站方案块已微调。'),
         };
         $this->appendWorkspaceEvent(
             $session->getId(),
@@ -18892,11 +18883,11 @@ class AiSiteAgent extends BaseController
         try {
             $decoded = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
         } catch (\JsonException $jsonException) {
-            $error = (string)__('JSON 鏃犳晥锛?{1}', [$jsonException->getMessage()]);
+            $error = (string)__('JSON 无效：%{1}', [$jsonException->getMessage()]);
             return [];
         }
         if (!\is_array($decoded)) {
-            $error = (string)__('璇锋眰浣撳繀椤绘槸 JSON 瀵硅薄');
+            $error = (string)__('请求体必须是 JSON 对象');
             return [];
         }
         return $decoded;
@@ -18973,7 +18964,7 @@ class AiSiteAgent extends BaseController
             $accountName = \trim((string)($row['account_name'] ?? ''));
             $label = $registrarName !== ''
                 ? $registrarName . ($accountName !== '' ? (' - ' . $accountName) : '')
-                : ($accountName !== '' ? $accountName : (string)__('鏈嶅姟鍟'));
+                : ($accountName !== '' ? $accountName : (string)__('服务商'));
             $options[] = [
                 'account_id' => $accountId,
                 'label' => $label,
@@ -18986,10 +18977,10 @@ class AiSiteAgent extends BaseController
         if (\defined('DEV') && DEV) {
             $localDemo = [
                 'account_id' => 900001,
-                'label' => (string)__('鏈湴渚涘簲鍟?- 鏈湴榛樿璐﹀彿'),
-                'registrar_name' => (string)__('鏈湴渚涘簲鍟'),
+            'label' => (string)__('本地供应商 - 本地默认账号'),
+            'registrar_name' => (string)__('本地供应商'),
                 'registrar_code' => 'local_demo',
-                'account_name' => (string)__('鏈湴榛樿璐﹀彿'),
+                'account_name' => (string)__('本地默认账号'),
             ];
             $hasLocalDemo = false;
             foreach ($options as $option) {
@@ -19286,7 +19277,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             [
                 'status' => 'cancelled',
-                'message' => (string)__('妫€娴嬪埌闃舵涓€杈撳叆宸插彉鏇达紝宸插彇娑堟棫浠诲姟骞跺噯澶囬噸鏂扮敓鎴'),
+                'message' => (string)__('检测到阶段一输入已变更，已取消旧任务并准备重新生成'),
             ],
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
         );
@@ -19295,7 +19286,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             'plan',
             'operation_cancelled',
-            (string)__('妫€娴嬪埌闃舵涓€杈撳叆鍙樻洿锛屽凡鍙栨秷鏃т换鍔″苟閲嶆柊鎺掗槦鐢熸垚'),
+            (string)__('检测到阶段一输入变更，已取消旧任务并重新排队生成'),
             ['operation' => 'plan', 'details' => ['reason' => 'plan_scope_changed']]
         );
     }
@@ -19306,9 +19297,9 @@ class AiSiteAgent extends BaseController
     private function getStageOptions(): array
     {
         return [
-            ['value' => AiSiteAgentSession::STAGE_PLAN, 'label' => (string)__('璁″垝闃舵')],
-            ['value' => AiSiteAgentSession::STAGE_VISUAL_EDIT, 'label' => (string)__('铏氭嫙缂栬緫')],
-            ['value' => AiSiteAgentSession::STAGE_PUBLISH, 'label' => (string)__('纭鍙戝竷')],
+            ['value' => AiSiteAgentSession::STAGE_PLAN, 'label' => (string)__('计划阶段')],
+            ['value' => AiSiteAgentSession::STAGE_VISUAL_EDIT, 'label' => (string)__('虚拟编辑')],
+            ['value' => AiSiteAgentSession::STAGE_PUBLISH, 'label' => (string)__('确认发布')],
         ];
     }
 

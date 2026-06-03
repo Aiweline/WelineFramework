@@ -9,32 +9,18 @@ use PHPUnit\Framework\TestCase;
 
 final class RenderDataQualityLinterTest extends TestCase
 {
-    public function testLintReturnsStructuredDesignCopyAndSeoFindings(): void
+    public function testLintReturnsStructuredStructureFindings(): void
     {
         $findings = (new RenderDataQualityLinter())->lint([
             'payload' => [
-                'page_type_layouts' => [
-                    'home_page' => [
-                        'content' => [
-                            [
-                                'code' => 'hero',
-                                'title' => 'Welcome to our website',
-                            ],
-                        ],
-                    ],
-                ],
-                'materialized_pages_by_type' => [
-                    'home_page' => [
-                        'seo_title' => 'Home',
-                    ],
-                ],
+                'page_type_layouts' => [],
             ],
         ]);
 
         $categories = \array_values(\array_unique(\array_map(static fn(array $finding): string => (string)$finding['category'], $findings)));
-        self::assertContains('design', $categories);
-        self::assertContains('copy', $categories);
-        self::assertContains('seo', $categories);
+        $rules = \array_map(static fn(array $finding): string => (string)$finding['rule'], $findings);
+        self::assertSame(['structure'], $categories);
+        self::assertContains('structure.missing_page_layouts', $rules);
         self::assertContains('target_path', \array_keys($findings[0]));
         self::assertContains('rule', \array_keys($findings[0]));
     }
@@ -105,10 +91,10 @@ final class RenderDataQualityLinterTest extends TestCase
         ]);
 
         $rules = \array_map(static fn(array $finding): string => (string)$finding['rule'], $findings);
-        self::assertContains('design.malformed_html_structure', $rules);
+        self::assertContains('structure.malformed_html', $rules);
     }
 
-    public function testLintFlagsNonTargetLanguageCopyInsideBlockConfig(): void
+    public function testLintDoesNotGateNonTargetLanguageCopyInsideBlockConfig(): void
     {
         $findings = (new RenderDataQualityLinter())->lint([
             'payload' => [
@@ -143,11 +129,10 @@ final class RenderDataQualityLinterTest extends TestCase
             ],
         ]);
 
-        $rules = \array_map(static fn(array $finding): string => (string)$finding['rule'], $findings);
-        self::assertContains('copy.locale_mismatch', $rules);
+        self::assertSame([], $findings);
     }
 
-    public function testLintFlagsShortNonTargetLanguageCtaCopyInsideBlockConfig(): void
+    public function testLintDoesNotGateShortNonTargetLanguageCtaCopyInsideBlockConfig(): void
     {
         $findings = (new RenderDataQualityLinter())->lint([
             'payload' => [
@@ -167,7 +152,6 @@ final class RenderDataQualityLinterTest extends TestCase
             ],
         ]);
 
-        $rules = \array_map(static fn(array $finding): string => (string)$finding['rule'], $findings);
-        self::assertContains('copy.locale_mismatch', $rules);
+        self::assertSame([], $findings);
     }
 }

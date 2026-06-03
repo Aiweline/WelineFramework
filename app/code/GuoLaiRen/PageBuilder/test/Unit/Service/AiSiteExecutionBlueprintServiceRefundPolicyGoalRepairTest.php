@@ -11,6 +11,30 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteExecutionBlueprintServiceRefundPolicyGoalRepairTest extends TestCase
 {
+    public function testChinesePageGoalHelpersAlwaysReturnStrings(): void
+    {
+        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $goalMethod = new \ReflectionMethod($service, 'resolvePageGoal');
+        $goalMethod->setAccessible(true);
+        $whyMethod = new \ReflectionMethod($service, 'resolvePageWhy');
+        $whyMethod->setAccessible(true);
+        $keywordsMethod = new \ReflectionMethod($service, 'buildSecondaryKeywords');
+        $keywordsMethod->setAccessible(true);
+
+        self::assertSame(
+            '承接核心意图，说明价值，并露出主要转化动作。',
+            $goalMethod->invoke($service, Page::TYPE_HOME, '首页', 'zh_Hans_CN')
+        );
+        self::assertSame(
+            '首页是核心流量入口，需要统一价值叙事与导航。',
+            $whyMethod->invoke($service, Page::TYPE_HOME, '首页', 'zh_Hans_CN')
+        );
+        self::assertSame(
+            ['首页 指南', '首页 常见问题', '品牌介绍', '核心卖点'],
+            $keywordsMethod->invoke($service, Page::TYPE_HOME, '首页')
+        );
+    }
+
     public function testRepairAiStageOnePlanJsonBeforeValidationReplacesPromptLikeRefundPolicyGoal(): void
     {
         $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());

@@ -82,4 +82,29 @@ final class AiSiteBuildPlanTaskSchedulerTest extends TestCase
 
         self::assertSame([], $missing);
     }
+
+    public function testCollectMissingSelectedPlanPageTypesUsesConfirmedPlanBookStructuredSources(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $missing = $service->collectMissingSelectedPlanPageTypes([
+            'page_types' => ['home_page', 'about_page', 'contact_page'],
+            'plan_workbench' => [
+                'confirmed' => [
+                    'plan_book' => [
+                        'structured' => [
+                            'pages' => [
+                                'home_page' => ['page_type' => 'home_page'],
+                                'about_page' => ['page_type' => 'about_page'],
+                            ],
+                            'page_plans' => [
+                                'contact_page' => ['blocks' => [['block_key' => 'form']]],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertSame([], $missing);
+    }
 }

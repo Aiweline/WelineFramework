@@ -543,7 +543,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 鐪熷疄 AI 娴佸紡鐢熸垚闃舵涓€鏂规锛涘け璐ユ椂鍥為€€鍒版湰鍦拌鍒掑櫒銆?
+     * 真实 AI 流式生成阶段一方案；失败时不走本地兜底。
      *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
@@ -567,7 +567,7 @@ final class AiSiteExecutionBlueprintService
     ): array
     {
         if ((int)($scope['fake_mode'] ?? 0) === 1) {
-            throw new \RuntimeException((string)__('AI 寤虹珯闃舵涓€涓嶅厑璁镐娇鐢?deterministic/fake 鍥為€€鏂规'));
+            throw new \RuntimeException((string)__('AI 建站第一阶段不允许使用 deterministic/fake 回退方案'));
         }
 
         return $this->buildPlanArtifactsByStagedAiStream($scope, $websiteProfile, $payload, $onChunk, $onProgress);
@@ -615,7 +615,7 @@ final class AiSiteExecutionBlueprintService
         ) {
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '妫€娴嬪埌鍙傝€冨浘鐗囷紝姝ｅ湪鍏堟墽琛屽浘鐗囩悊瑙ｅ苟鎻愬彇椋庢牸娲炲療',
+                '检测到参考图片，正在先执行图片理解并提取风格洞察',
                 8,
                 'reference_image_understanding',
                 'start',
@@ -640,7 +640,7 @@ final class AiSiteExecutionBlueprintService
             }
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '鍙傝€冨浘鐗囩悊瑙ｅ畬鎴愶紝缁х画鐢熸垚闃舵涓€鏂规',
+                '参考图片理解完成，继续生成阶段一方案',
                 10,
                 'reference_image_understanding',
                 'done',
@@ -702,7 +702,7 @@ final class AiSiteExecutionBlueprintService
             if ($this->hasPersistedStageOneRequirementExpansion($planJson)) {
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
-                    '宸插鐢ㄥ凡淇濆瓨鐨勯渶姹傛墿鍐欑粨鏋滐紝缁х画鐢熸垚闃舵涓€鏂规',
+                    '已复用已保存的需求扩写结果，继续生成阶段一方案',
                     24,
                     'requirement_expand',
                     'persisted',
@@ -962,7 +962,7 @@ final class AiSiteExecutionBlueprintService
             $this->emitStageOnePlanProgressState($onProgressState, $progressSignature, $planJson, 'plan_assemble', $pageTypes, $combinedRetryableFailures);
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '闃舵涓€鎬昏璁¤閰嶅畬鎴愶紝姝ｅ湪鍐欏叆鏂规鑽夋',
+                '阶段一总设计装配完成，正在写入方案草稿',
                 92,
                 'plan_assemble',
                 'done',
@@ -2879,7 +2879,7 @@ final class AiSiteExecutionBlueprintService
      */
     private function sanitizeStageOneJsonRequestParams(array $params): array
     {
-        // 闃舵涓€缁撴瀯鍖?JSON 浠诲姟锛氬己鍒剁鐢?thinking锛岄伩鍏嶅彧杩斿洖 reasoning_content銆?
+        // 阶段一结构化 JSON 任务：强制禁用 thinking，避免只返回 reasoning_content。
         $params['thinking'] = ['type' => 'disabled'];
         $params['thinking_mode'] = 'disabled';
         $params['enable_thinking'] = false;
@@ -6281,7 +6281,7 @@ final class AiSiteExecutionBlueprintService
         ];
         $lines[] = 'BuildPlan no-reason field rule: do not add extra explanatory keys named reason, why, rationale, thinking, analysis, explanation, chain_of_thought, design_reason, or reasoning anywhere unless the active schema explicitly lists that exact key. Theme selection_reason is allowed only in theme_style, palette, and theme_design when the schema lists it; do not invent selection_reason on pages, blocks, image_intent, visual_signature, field_plan, or execution_script.';
         $lines[] = 'Template scaffold translation rule: style templates, default configs, layout JSON, and examples are structural references only. Treat #download, #contact, #faq, href="#", fake URLs, fake media names, old brands, old CTA targets, and sample social/support links as stale scaffold values. Do not copy them into Stage-1 output; use exact route-contract paths when provided, otherwise omit the link or describe a button/event action.';
-        $lines[] = 'Negative-intent rule: words after avoid, do not, no, without, exclude, forbid, 绂佹, 閬垮厤, 涓嶈, 涓嶅緱, 鎺掗櫎, or 璇峰嬁 are hard exclusions, not requirements. If the brief says to avoid gaming, casino, APK, reward, card, neon, gambling, or similar terms, never use those excluded words as the site category, CTA, visual style, image subject, or copy direction.';
+        $lines[] = 'Negative-intent rule: words after avoid, do not, no, without, exclude, forbid, 禁止, 避免, 不要, 不得, 排除, or 请勿 are hard exclusions, not requirements. If the brief says to avoid gaming, casino, APK, reward, card, neon, gambling, or similar terms, never use those excluded words as the site category, CTA, visual style, image subject, or copy direction.';
         $lines[] = 'Output vocabulary gate: do not write internal filler tokens, HTML input hint attribute names, or localized filler-media words in any returned JSON value. For form inputs, return the final hint text itself, such as "Describe your issue in one sentence"; never describe the field as an input-hint attribute or filler value.';
         return $lines;
     }
@@ -6532,7 +6532,7 @@ final class AiSiteExecutionBlueprintService
             '- contact_page usually needs the required block keys contact_methods, support_form_guidance, support_faq, contact_cta; use optional map/service_area details inside those blocks when relevant.',
             '- policy/legal pages usually need summary, key_rules, refund_or_support_steps, help_cta; keep rules concise and avoid full legal prose in Stage-1.',
             '- Policy/legal page body contract: privacy, terms, refund, shipping, and cookie pages must not put conversion CTA copy such as free download, install now, play-game, registration, claim, reward/bonus/coins, or app-download inside page body blocks. Neutral legal applicability wording may mention that the policy applies when visitors download or use the APK/app; neutral data-use or rights wording may mention account benefits only as policy facts, never as an offer. Global header/footer may keep a site CTA when appropriate, but body blocks must stay policy/support/rights focused.',
-            '- Policy/legal block role rule: terms_contact, privacy_contact, cookie_contact, refund_contact, and similar policy-help blocks should normally use page_flow_role=support or details, not cta. Use page_flow_role=cta only when field_plan includes a policy-safe action label such as 鏌ョ湅鏉℃, 浜嗚В闅愮鏉冨埄, 鏌ョ湅浜夎娴佺▼, or 鎻愪氦鏀跨瓥闂.',
+            '- Policy/legal block role rule: terms_contact, privacy_contact, cookie_contact, refund_contact, and similar policy-help blocks should normally use page_flow_role=support or details, not cta. Use page_flow_role=cta only when field_plan includes a policy-safe action label such as 查看条款, 了解隐私权利, 查看争议流程, or 提交政策问题.',
             '- Policy first-block lock: on privacy_policy and terms_of_service, block index 0 content, field_plan samples, and execution_script.core_copy must be policy-summary copy only. They must not inherit site primary_cta or conversion wording such as free download, install now, play, register, claim, reward, bonus, coins, or app-download.',
             '- Policy/legal CTA safety: terms/privacy body CTAs must use policy-safe actions only, such as read terms, view rules, review privacy rights, understand dispute steps, or contact policy help. Never use free download, install now, play, register, claim bonus, reward, coins, or app-download CTA wording inside policy page body blocks. Neutral legal applicability wording may mention download/use of the APK/app.',
             '- Policy/legal help_cta/contact blocks must use policy-safe actions such as privacy rights review, terms summary, data protection help, dispute/support contact, or policy assistance. Do not reuse the site primary_cta even if the overall website goal is app download.',
@@ -6904,7 +6904,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 涓庢柟妗堢敓鎴愰棬绂佸榻愶細纭鍓嶅 scope 鍐?plan_json 鎵ц鍚屾 repair锛屼緵 BuildPlan v2 涓?SourceTruth 鏍￠獙浣跨敤銆?
+     * 与方案生成门禁对齐：确认前对 scope 内 plan_json 执行同步 repair，供 BuildPlan v2 与 SourceTruth 校验使用。
      *
      * @param array<string, mixed> $scope
      * @return array{scope: array<string, mixed>, stage1_validation: array<string, mixed>}
@@ -7469,7 +7469,7 @@ final class AiSiteExecutionBlueprintService
         if ($text === '') {
             return false;
         }
-        return $this->containsAny($text, ['鍒犻櫎', '绉婚櫎', '鍘绘帀', '鍒犳帀', 'remove', 'delete']);
+        return $this->containsAny($text, ['删除', '移除', '去掉', '删掉', 'remove', 'delete']);
     }
 
     private function extractDeleteKeyword(string $instruction): string
@@ -7479,7 +7479,7 @@ final class AiSiteExecutionBlueprintService
             return '';
         }
         if (\preg_match(
-            '/(?:鍒犻櫎|绉婚櫎|鍘绘帀|鍒犳帀)(?:涓€娈祙涓€鍧梶涓€鑺倈涓€鏉??\s*([^锛屻€傘€乗s]{1,20})/u',
+            '/(?:删除|移除|去掉|删掉)(?:一段|一块|一节|一条)?\s*([^，。、\s]{1,20})/u',
             $text,
             $matches
         )) {
@@ -8529,7 +8529,7 @@ final class AiSiteExecutionBlueprintService
     private function assertAiStageOneThemeDesignColorScheme(array $themeDesign): void
     {
         $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
-        // 鍘嗗彶闃舵涓€浜х墿鍙兘浠呰緭鍑?body锛堟鏂囪壊锛夋垨浠呰緭鍑?text锛屾牎楠屽墠鍏堜簰琛ワ紝閬垮厤鍥犲瓧娈靛埆鍚嶅樊寮傝鍒ゅけ璐ャ€?
+        // 历史阶段一产物可能只输出 body（正文侧）或只输出 text，校验前先互补，避免因字段别名差异误判失败。
         $textColor = \trim((string)($colorScheme['text'] ?? ''));
         $bodyColor = \trim((string)($colorScheme['body'] ?? ''));
         if ($textColor === '' && $bodyColor !== '') {
@@ -9644,7 +9644,7 @@ final class AiSiteExecutionBlueprintService
 
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '姝ｅ湪灞€閮ㄩ噸鐢熸垚寮傚父椤甸潰鍐呭锛堢' . $round . '杞紝' . \count($targetPageTypes) . '涓〉闈級',
+                '正在局部重新生成异常页面内容（第' . $round . '轮，' . \count($targetPageTypes) . '个页面）',
                 90,
                 'plan_assemble',
                 'local_repair_generate',
@@ -9700,7 +9700,7 @@ final class AiSiteExecutionBlueprintService
                 ];
                 $this->emitStageOnePipelineProgress(
                     $onProgress,
-                    '闃舵涓€灞€閮ㄩ噸鐢熸垚澶辫触锛屽凡璁板綍閿欒锛涙湰娆′笉鍋氭湰鍦板厹搴曪紝绛夊緟涓嬫浠庡ご閲嶈瘯',
+                    '阶段一局部重新生成失败，已记录错误；本次不做本地兜底，等待下次从头重试',
                     90,
                     'plan_assemble',
                     'local_repair_error',
@@ -10284,7 +10284,7 @@ final class AiSiteExecutionBlueprintService
         if (\trim((string)($themeDesign['style_signature'] ?? '')) === '') {
             $themeDesign['style_signature'] = \trim((string)($themeStyle['visual_tone'] ?? $themeStyle['name'] ?? ''));
             if ($themeDesign['style_signature'] === '') {
-                $themeDesign['style_signature'] = $isEn ? 'Brief-aligned visual identity' : '绱ф墸闇€姹傜殑瑙嗚璇嗗埆';
+                $themeDesign['style_signature'] = $isEn ? 'Brief-aligned visual identity' : '紧扣需求的视觉识别';
             }
         }
         $artDirectionValue = $themeDesign['art_direction'] ?? '';
@@ -10294,7 +10294,7 @@ final class AiSiteExecutionBlueprintService
 
         $colorScheme = \is_array($themeDesign['color_scheme'] ?? null) ? $themeDesign['color_scheme'] : [];
         $colorDefaults = [
-            'name' => $isEn ? 'Site palette' : '绔欑偣涓昏壊',
+            'name' => $isEn ? 'Site palette' : '站点主色',
             'primary' => $this->pickString($palette['primary'] ?? null, $themeStyle['primary_color'] ?? null, '#1e293b'),
             'secondary' => $this->pickString($palette['secondary'] ?? null, $themeStyle['secondary_color'] ?? null, '#334155'),
             'accent' => $this->pickString($palette['accent'] ?? null, $themeStyle['accent_color'] ?? null, '#3b82f6'),
@@ -10312,10 +10312,10 @@ final class AiSiteExecutionBlueprintService
         $typography = \is_array($themeDesign['typography_spacing_radius'] ?? null) ? $themeDesign['typography_spacing_radius'] : [];
         $typographyDefaults = [
             'font_family' => $this->pickString($themeStyle['font_family'] ?? null, $palette['font_family'] ?? null, 'system-ui, -apple-system, sans-serif'),
-            'heading_scale' => $isEn ? '1.25x modular scale' : '1.25 鍊嶉€掕繘瀛楀彿',
-            'body_scale' => $isEn ? '16px base line-height 1.55' : '姝ｆ枃 16px 琛岄珮 1.55',
-            'spacing_scale' => $isEn ? 'comfortable 8px grid' : '瀹芥澗 8px 鏍呮牸',
-            'radius_scale' => $isEn ? 'soft 8px radius' : '鏌斿拰 8px 鍦嗚',
+            'heading_scale' => $isEn ? '1.25x modular scale' : '1.25 倍递进字号',
+            'body_scale' => $isEn ? '16px base line-height 1.55' : '正文 16px 行高 1.55',
+            'spacing_scale' => $isEn ? 'comfortable 8px grid' : '宽松 8px 栅格',
+            'radius_scale' => $isEn ? 'soft 8px radius' : '柔和 8px 圆角',
         ];
         foreach ($typographyDefaults as $key => $default) {
             if (\trim((string)($typography[$key] ?? '')) === '') {
@@ -10409,10 +10409,10 @@ final class AiSiteExecutionBlueprintService
         $tone = \trim((string)($themeDesign['tone_of_voice'] ?? $themeDesign['cta_tone'] ?? ''));
 
         $requirementReference = $this->clipText($requirementReference, 140);
-        $themePurpose = $themePurpose !== '' ? $this->clipText($themePurpose, 90) : ($isEn ? 'the conversion promise' : '杞寲鎵胯');
-        $palette = $palette !== '' ? $palette : ($isEn ? 'the shared color system' : '鍏变韩鑹插僵绯荤粺');
-        $font = $font !== '' ? $font : ($isEn ? 'the shared typography system' : '鍏变韩瀛椾綋绯荤粺');
-        $tone = $tone !== '' ? $tone : ($isEn ? 'the shared voice and CTA tone' : '鍏变韩鍐呭璇皵涓?CTA 璇皵');
+        $themePurpose = $themePurpose !== '' ? $this->clipText($themePurpose, 90) : ($isEn ? 'the conversion promise' : '转化承诺');
+        $palette = $palette !== '' ? $palette : ($isEn ? 'the shared color system' : '共享色彩系统');
+        $font = $font !== '' ? $font : ($isEn ? 'the shared typography system' : '共享字体系统');
+        $tone = $tone !== '' ? $tone : ($isEn ? 'the shared voice and CTA tone' : '共享内容语气与 CTA 语气');
 
         if ($isEn) {
             return \sprintf(
@@ -10469,14 +10469,14 @@ final class AiSiteExecutionBlueprintService
         $forbidden = \trim((string)($forbiddenStyles[0] ?? ''));
 
         $pageLabel = $pageLabel !== '' ? $pageLabel : $pageType;
-        $pageGoal = $pageGoal !== '' ? $pageGoal : ($isEn ? 'the selected page goal' : '褰撳墠椤甸潰鐩爣');
-        $themePurpose = $themePurpose !== '' ? $themePurpose : ($isEn ? 'the shared conversion promise' : '鍏变韩杞寲鐩爣');
+        $pageGoal = $pageGoal !== '' ? $pageGoal : ($isEn ? 'the selected page goal' : '当前页面目标');
+        $themePurpose = $themePurpose !== '' ? $themePurpose : ($isEn ? 'the shared conversion promise' : '共享转化目标');
         $colorUse = $paletteName !== '' ? $paletteName : \trim($primary . ($accent !== '' ? ' / ' . $accent : ''));
-        $colorUse = $colorUse !== '' ? $colorUse : ($isEn ? 'the shared color scheme' : '鍏变韩鑹插僵浣撶郴');
+        $colorUse = $colorUse !== '' ? $colorUse : ($isEn ? 'the shared color scheme' : '共享色彩体系');
         $typeSpacing = \trim($typeRule . ($spacingRule !== '' ? ' / ' . $spacingRule : ''));
-        $typeSpacing = $typeSpacing !== '' ? $typeSpacing : ($isEn ? 'the shared type, spacing, and radius rules' : '鍏变韩瀛椾綋銆侀棿璺濆拰鍦嗚瑙勫垯');
-        $tone = $tone !== '' ? $tone : ($isEn ? 'the shared voice' : '鍏变韩璇皵');
-        $ctaTone = $ctaTone !== '' ? $ctaTone : ($isEn ? 'the shared CTA tone' : '鍏变韩 CTA 璇皵');
+        $typeSpacing = $typeSpacing !== '' ? $typeSpacing : ($isEn ? 'the shared type, spacing, and radius rules' : '共享字体、间距和圆角规则');
+        $tone = $tone !== '' ? $tone : ($isEn ? 'the shared voice' : '共享语气');
+        $ctaTone = $ctaTone !== '' ? $ctaTone : ($isEn ? 'the shared CTA tone' : '共享 CTA 语气');
         $forbidden = $forbidden !== '' ? $forbidden : 'off-theme visual styles';
         $blockSummary = $blockKeys !== []
             ? \implode(', ', \array_slice($blockKeys, 0, 4))
@@ -11003,7 +11003,7 @@ final class AiSiteExecutionBlueprintService
         return [
             'header_items' => $headerItems,
             'all_items' => $allItems,
-            'why' => 'Header ?????????????????????????????',
+            'why' => 'Header 导航用于建立首屏方向感，并让访客快速进入首页、品牌说明、博客和联系入口。',
         ];
     }
 
@@ -11089,7 +11089,7 @@ final class AiSiteExecutionBlueprintService
             'featured' => $featured !== [] ? $featured : \array_slice($allItems, 0, 4),
             'policies' => $policies,
             'all_items' => $allItems,
-            'why' => 'Footer ???????????????????????? SEO ??????',
+            'why' => 'Footer 导航补全政策链接、联系入口、次级导航和 SEO 内链承接。',
         ];
     }
 
@@ -11560,7 +11560,7 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 鐢?AI 鍒ゅ畾寰皟鎸囦护鐨勭湡瀹炴剰鍥撅紝閬垮厤鎶娾€滄柊澧炴ā鍧椻€濋€昏緫纭紪鐮佸湪鍏抽敭璇嶈〃閲屻€?
+     * 用 AI 判断微调指令的真实意图，避免把“新增模块”逻辑硬编码在关键词表里。
      *
      * @return array<string, mixed>|null
      */
@@ -11672,7 +11672,7 @@ final class AiSiteExecutionBlueprintService
             'goal' => $pageGoal,
             'planning_note' => $this->isEnglishLocale($locale)
                 ? ('Append a focused content block for ' . $pageLabel . ' based on the latest instruction.')
-                : ('????????? ' . $pageLabel . ' ???????????????'),
+                : ('根据最新指令，为 ' . $pageLabel . ' 追加一个聚焦内容区块。'),
             'style_brief' => [
                 'visual_tone' => (string)($themeStyle['visual_tone'] ?? ''),
                 'layout_rule' => $this->resolveLayoutRule('content', $locale),
@@ -11684,7 +11684,7 @@ final class AiSiteExecutionBlueprintService
                 'text' => (string)($palette['text'] ?? '#0f172a'),
                 'implementation_note' => $this->isEnglishLocale($locale)
                     ? 'Use the current palette to keep the appended block visually consistent.'
-                    : '???????????????????????',
+                    : '使用当前配色，让追加区块保持视觉一致。',
             ],
             'seo_brief' => [
                 'intent' => $pageGoal,
@@ -11696,7 +11696,7 @@ final class AiSiteExecutionBlueprintService
                 'goal' => $pageGoal,
                 'implementation_note' => $this->isEnglishLocale($locale)
                     ? 'Keep the appended block concise, useful, and conversion-oriented.'
-                    : '????????????????????????',
+                    : '保持追加区块简洁、有用，并围绕转化目标。',
                 'headline_direction' => $this->resolveCustomAppendHeadlineDirection($appendInstruction, $locale),
                 'body_direction' => $this->resolveCustomAppendBodyDirection($appendInstruction, $locale),
                 'cta_direction' => $this->resolveCtaDirection([], 'content', 'custom', $pageGoal, $pageLabel, '', '', $locale),
@@ -11707,14 +11707,14 @@ final class AiSiteExecutionBlueprintService
                     'sample' => $this->resolveCustomAppendTitleSample($appendInstruction),
                     'implementation_note' => $this->isEnglishLocale($locale)
                         ? 'Use the title as the visible section label so the client can confirm the appended block purpose immediately.'
-                        : 'Use the title as the visible section label so the client can confirm the appended block purpose immediately.',
+                        : '将标题作为可见区块标签，方便客户立即确认追加区块的目的。',
                 ],
                 [
                     'field' => 'description',
-                    'sample' => $instructionText !== '' ? $instructionText : ($this->isEnglishLocale($locale) ? 'Add supporting details for this section.' : '???????????????'),
+                    'sample' => $instructionText !== '' ? $instructionText : ($this->isEnglishLocale($locale) ? 'Add supporting details for this section.' : '补充这一段的支持信息。'),
                     'implementation_note' => $this->isEnglishLocale($locale)
                         ? 'Fill this area with the actual supporting details that will appear in the block, not with writing guidance.'
-                        : 'Fill this area with the actual supporting details that will appear in the block, not with writing guidance.',
+                        : '填入实际会显示在区块里的支持内容，不要写成写作指导。',
                 ],
             ],
             'result_ref' => [],
@@ -11727,9 +11727,9 @@ final class AiSiteExecutionBlueprintService
         if ($instruction === '') {
             return '';
         }
-        // 浠庛€屾柊澧?娣诲姞 鈥?鍖哄潡|妯″潡|鏉垮潡|鍖哄煙銆嶇被鎸囦护鎶藉彇鏍囬鏍蜂緥锛堟鍒欓』瀹屾暣闂悎锛夈€?
+        // 从“新增 / 添加 一段区块”类指令中提取标题样例，正则需保持完整闭合。
         if (\preg_match(
-            '/(?:鏂板|娣诲姞)(?:涓€娈祙涓€鍧梶涓€鑺倈涓€鏉??\s*([^锛屻€傘€乗s]{2,20}(?:鍖哄潡|妯″潡|鏉垮潡|鍖哄煙))/u',
+            '/(?:新增|添加)(?:一段|一块|一节|一条)?\s*([^，。、\s]{2,20}(?:区块|模块|板块|区域))/u',
             $instruction,
             $matches
         )) {
@@ -11747,9 +11747,9 @@ final class AiSiteExecutionBlueprintService
         if ($titleSample !== '') {
             return $this->isEnglishLocale($locale)
                 ? ('Use "' . $titleSample . '" as section headline.')
-                : ('Use "' . $titleSample . '" as section headline.');
+                : ('使用 "' . $titleSample . '" 作为区块标题。');
         }
-        return 'Add one clear value headline.';
+        return $this->isEnglishLocale($locale) ? 'Add one clear value headline.' : '添加一个清晰的价值标题。';
     }
 
     /**
@@ -11761,9 +11761,9 @@ final class AiSiteExecutionBlueprintService
         if ($instruction !== '') {
             return $this->isEnglishLocale($locale)
                 ? ('Follow this refine instruction strictly: ' . $this->clipText($instruction, 100))
-                : ('Follow this refine instruction strictly: ' . $this->clipText($instruction, 100));
+                : ('严格遵循这条微调指令：' . $this->clipText($instruction, 100));
         }
-        return 'Explain added value in short paragraph.';
+        return $this->isEnglishLocale($locale) ? 'Explain added value in short paragraph.' : '用短段落说明新增价值。';
     }
 
     private function shouldAppendPartnerBlock(string $instruction, string $targetScope, string $pageType): bool
@@ -11786,7 +11786,7 @@ final class AiSiteExecutionBlueprintService
     private function shouldAppendAboutBlock(string $instruction, string $targetScope, string $pageType): bool
     {
         $instructionLower = \mb_strtolower(\trim($instruction));
-        if (!$this->containsAny($instructionLower, ['鍏充簬鎴戜滑', 'about us', 'about', 'company intro', '鍝佺墝浠嬬粛'])) {
+        if (!$this->containsAny($instructionLower, ['关于我们', 'about us', 'about', 'company intro', '品牌介绍'])) {
             return false;
         }
         if (!$this->containsAny($instructionLower, ['娣诲姞', '鏂板', '鍔犲叆', 'append', 'add', 'insert'])) {
@@ -11920,7 +11920,7 @@ final class AiSiteExecutionBlueprintService
     ): array {
         $isHeader = $component === 'header';
         $isEn = $this->isEnglishLocale($contentLocale);
-        $brandName = $siteDisplayName !== '' ? $siteDisplayName : ($isEn ? 'Brand name' : '鍝佺墝鍚嶇О');
+        $brandName = $siteDisplayName !== '' ? $siteDisplayName : ($isEn ? 'Brand name' : '品牌名称');
         $headerCopy = $isEn
             ? [
                 'goal' => 'Output ready-to-render site header content and carry the primary navigation plus main CTA.',
@@ -12012,24 +12012,24 @@ final class AiSiteExecutionBlueprintService
             'task_key' => 'shared:' . $component,
             'task_type' => 'shared_component',
             'component' => $component,
-            'goal' => $isHeader ? '??????????????? CTA?' : '???????????????????',
+            'goal' => $isHeader ? '建立全局导航和主要 CTA。' : '承接站点链接、政策入口和联系信息。',
             'implementation_detail' => $isHeader
-                ? '????????????? CTA?????????????????'
-                : '?????????????????????????????????',
+                ? '保持品牌、导航和 CTA 在所有页面一致。'
+                : '整理精选链接、政策链接、联系入口和社交信息。',
             'realtime_content' => $isHeader
                 ? [
-                    'headline' => '??? / Logo / ????',
-                    'supporting_copy' => ['???', '? CTA', '???????'],
-                    'cta' => [['label' => '????', 'target' => '']],
-                    'media' => [['kind' => 'logo', 'rule' => '?????? logo ????']],
+                    'headline' => '品牌 / Logo / 导航',
+                    'supporting_copy' => ['品牌名', '主 CTA', '导航项目'],
+                    'cta' => [['label' => '开始', 'target' => '']],
+                    'media' => [['kind' => 'logo', 'rule' => '使用可替换的 logo 资源']],
                     'data_slots' => ['brand_name', 'navigation_items', 'primary_cta'],
                     'editable_slots' => ['brand_name', 'logo', 'navigation_items', 'primary_cta'],
                 ]
                 : [
-                    'headline' => '?????',
-                    'supporting_copy' => ['????', '????', '????', '????'],
+                    'headline' => '页脚导航',
+                    'supporting_copy' => ['精选链接', '政策链接', '联系信息', '社交入口'],
                     'cta' => [],
-                    'media' => [['kind' => 'icon', 'rule' => '????? icon ??']],
+                    'media' => [['kind' => 'icon', 'rule' => '使用轻量 icon 点缀']],
                     'data_slots' => ['footer_links', 'policy_links', 'contact_fields'],
                     'editable_slots' => ['footer_links', 'policy_links', 'contact_fields'],
                 ],
@@ -12039,11 +12039,11 @@ final class AiSiteExecutionBlueprintService
             'content_source' => ['theme_context_snapshot', 'shared_prompt_context', 'editable_field'],
             'style_direction' => (string)($themeStyle['visual_tone'] ?? ''),
             'responsive_rule' => $isHeader
-                ? '?????????????????? CTA?'
-                : '???????????????????????????',
+                ? '移动端折叠为菜单，并保留主要 CTA。'
+                : '移动端按分组堆叠，保持链接可读。',
             'completion_rule' => $isHeader
-                ? 'Header ?????????????????CTA???????????'
-                : 'Footer ?????????????????????????????',
+                ? 'Header 必须包含品牌、导航和 CTA 的可编辑字段。'
+                : 'Footer 必须包含精选链接、政策链接和联系信息。',
             'site_display_name' => $siteDisplayName,
             'style_brief' => [
                 'palette' => $palette,
@@ -15754,45 +15754,45 @@ final class AiSiteExecutionBlueprintService
         $planBlocks = $this->normalizePlanBlocks(\is_array($planJson['plan_blocks'] ?? null) ? $planJson['plan_blocks'] : []);
 
         if ($pages === [] && $planBlocks !== []) {
-            return $this->renderMarkdownFromPlanBlocks($planBlocks, $locale, $site !== '' ? $site : ($isEn ? 'Untitled site' : '?????'));
+            return $this->renderMarkdownFromPlanBlocks($planBlocks, $locale, $site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点'));
         }
 
         $lines = [];
-        $lines[] = '# ' . (string)($labels['title'] ?? ($isEn ? 'Stage 1 Content Plan' : '???????'));
+        $lines[] = '# ' . (string)($labels['title'] ?? ($isEn ? 'Stage 1 Content Plan' : '阶段一内容方案'));
         $lines[] = '';
-        $lines[] = '- ' . (string)($labels['site'] ?? ($isEn ? 'Site' : '??')) . ': ' . ($site !== '' ? $site : ($isEn ? 'Untitled site' : '?????'));
-        $lines[] = '- ' . (string)($labels['summary'] ?? ($isEn ? 'Summary' : '??')) . ': ' . ($summary !== '' ? $summary : ($isEn ? 'Pending details' : '???'));
-        $lines[] = '- ' . ($isEn ? 'Theme Style' : '????') . ': ' . ($themeName !== '' ? $themeName : 'Plan-Driven Hybrid');
-        $lines[] = '- ' . ($isEn ? 'Palette' : '??') . ': ' . ($paletteName !== '' ? $paletteName : 'Ocean Slate');
-        $lines[] = '- ' . ($isEn ? 'Page Count' : '????') . ': ' . (string)\count($pageTypes);
+        $lines[] = '- ' . (string)($labels['site'] ?? ($isEn ? 'Site' : '站点')) . ': ' . ($site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点'));
+        $lines[] = '- ' . (string)($labels['summary'] ?? ($isEn ? 'Summary' : '摘要')) . ': ' . ($summary !== '' ? $summary : ($isEn ? 'Pending details' : '待补充'));
+        $lines[] = '- ' . ($isEn ? 'Theme Style' : '主题风格') . ': ' . ($themeName !== '' ? $themeName : 'Plan-Driven Hybrid');
+        $lines[] = '- ' . ($isEn ? 'Palette' : '配色') . ': ' . ($paletteName !== '' ? $paletteName : 'Ocean Slate');
+        $lines[] = '- ' . ($isEn ? 'Page Count' : '页面数量') . ': ' . (string)\count($pageTypes);
         $lines[] = '';
-        $lines[] = '## ' . (string)($labels['site_structure'] ?? ($isEn ? 'Site Structure' : '????'));
+        $lines[] = '## ' . (string)($labels['site_structure'] ?? ($isEn ? 'Site Structure' : '站点结构'));
         foreach ($pageTypes as $pageType) {
             $lines[] = '- ' . (string)$pageType;
         }
         $lines[] = '';
-        $lines[] = '## ' . (string)($labels['shared_global_plan'] ?? ($isEn ? 'Shared Global Plan' : '??????'));
-        $lines[] = '- ' . ($isEn ? 'Header Navigation' : 'Header ??') . ': ' . $this->buildLinkSummary(\is_array($navigationPlan['header_items'] ?? null) ? $navigationPlan['header_items'] : [], $locale);
-        $lines[] = '- ' . ($isEn ? 'Footer Sections' : 'Footer ??') . ': ' . $this->buildLinkSummary(\is_array($footerPlan['featured'] ?? null) ? $footerPlan['featured'] : [], $locale);
-        $lines[] = '- ' . ($isEn ? 'Footer Policies' : 'Footer ??') . ': ' . $this->buildLinkSummary(\is_array($footerPlan['policies'] ?? null) ? $footerPlan['policies'] : [], $locale);
-        $lines[] = '- ' . ($isEn ? 'SEO Core Strategy' : 'SEO ????') . ': ' . \trim((string)($seoStrategy['core_intent'] ?? ($isEn ? 'not set' : '???')));
+        $lines[] = '## ' . (string)($labels['shared_global_plan'] ?? ($isEn ? 'Shared Global Plan' : '全局共享方案'));
+        $lines[] = '- ' . ($isEn ? 'Header Navigation' : '头部导航') . ': ' . $this->buildLinkSummary(\is_array($navigationPlan['header_items'] ?? null) ? $navigationPlan['header_items'] : [], $locale);
+        $lines[] = '- ' . ($isEn ? 'Footer Sections' : '底部分组') . ': ' . $this->buildLinkSummary(\is_array($footerPlan['featured'] ?? null) ? $footerPlan['featured'] : [], $locale);
+        $lines[] = '- ' . ($isEn ? 'Footer Policies' : '底部政策链接') . ': ' . $this->buildLinkSummary(\is_array($footerPlan['policies'] ?? null) ? $footerPlan['policies'] : [], $locale);
+        $lines[] = '- ' . ($isEn ? 'SEO Core Strategy' : 'SEO 核心策略') . ': ' . \trim((string)($seoStrategy['core_intent'] ?? ($isEn ? 'not set' : '未设置')));
         $lines[] = '';
-        $lines[] = '## ' . (string)($labels['page_details'] ?? ($isEn ? 'Page And Block Content Details' : '?????????'));
+        $lines[] = '## ' . (string)($labels['page_details'] ?? ($isEn ? 'Page And Block Content Details' : '页面与区块内容详情'));
 
         foreach ($pageTypes as $pageType) {
             $pageType = (string)$pageType;
             $pagePlan = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
             if ($pagePlan === []) {
                 $lines[] = '### ' . $pageType;
-                $lines[] = $isEn ? '- Missing page plan.' : '- ???????';
+                $lines[] = $isEn ? '- Missing page plan.' : '- 缺少页面方案。';
                 $lines[] = '';
                 continue;
             }
 
             $lines[] = '### ' . ((string)($pagePlan['page_label'] ?? $pageType));
-            $lines[] = '- ' . ($isEn ? 'Page Goal' : '????') . ': ' . \trim((string)($pagePlan['page_goal'] ?? ''));
-            $lines[] = '- ' . ($isEn ? 'Primary Keywords' : '????') . ': ' . $this->buildKeywordSummary(\is_array($pagePlan['primary_keywords'] ?? null) ? $pagePlan['primary_keywords'] : [], $locale);
-            $lines[] = '- ' . ($isEn ? 'Secondary Keywords' : '?????') . ': ' . $this->buildKeywordSummary(\is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : [], $locale);
+            $lines[] = '- ' . ($isEn ? 'Page Goal' : '页面目标') . ': ' . \trim((string)($pagePlan['page_goal'] ?? ''));
+            $lines[] = '- ' . ($isEn ? 'Primary Keywords' : '主关键词') . ': ' . $this->buildKeywordSummary(\is_array($pagePlan['primary_keywords'] ?? null) ? $pagePlan['primary_keywords'] : [], $locale);
+            $lines[] = '- ' . ($isEn ? 'Secondary Keywords' : '次关键词') . ': ' . $this->buildKeywordSummary(\is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : [], $locale);
             $lines[] = '';
 
             foreach (\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [] as $block) {
@@ -15801,12 +15801,12 @@ final class AiSiteExecutionBlueprintService
                 }
                 $blockTitle = \trim((string)($block['section_code'] ?? $block['block_key'] ?? 'block'));
                 $lines[] = '#### ' . $blockTitle;
-                $lines[] = '- ' . ($isEn ? 'Goal' : '??') . ': ' . \trim((string)($block['goal'] ?? ''));
+                $lines[] = '- ' . ($isEn ? 'Goal' : '目标') . ': ' . \trim((string)($block['goal'] ?? ''));
                 $blockImplementationFocus = $this->buildBlockImplementationFocus($block, $locale);
                 if ($blockImplementationFocus !== '') {
-                    $lines[] = '- ' . ($isEn ? 'Implementation Focus' : '??') . ': ' . $blockImplementationFocus;
+                    $lines[] = '- ' . ($isEn ? 'Implementation Focus' : '实现重点') . ': ' . $blockImplementationFocus;
                 }
-                $lines[] = '- ' . ($isEn ? 'Content' : '??') . ': ' . $this->buildBlockContentSummary($block);
+                $lines[] = '- ' . ($isEn ? 'Content' : '内容') . ': ' . $this->buildBlockContentSummary($block);
 
                 $fieldPlan = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
                 foreach ($fieldPlan as $field) {
@@ -15824,7 +15824,7 @@ final class AiSiteExecutionBlueprintService
             }
         }
 
-        return \str_replace(['Block Direction (Stage 1 Blueprint)', '???????????'], ['Block Content Plan', '??????'], \implode("\n", $lines));
+        return \str_replace(['Block Direction (Stage 1 Blueprint)', '阶段一区块方向'], ['Block Content Plan', '区块内容方案'], \implode("\n", $lines));
     }
 
     private function normalizePlanBlocks(array $rawBlocks): array
@@ -15964,9 +15964,9 @@ final class AiSiteExecutionBlueprintService
 
         $isEn = $this->isEnglishLocale($locale);
         $lines = [];
-        $lines[] = '# ' . ($isEn ? 'Stage 1 Content Plan' : '???????');
+        $lines[] = '# ' . ($isEn ? 'Stage 1 Content Plan' : '阶段一内容方案');
         $lines[] = '';
-        $lines[] = '- ' . ($isEn ? 'Site' : '??') . ': ' . ($siteName !== '' ? $siteName : ($isEn ? 'Untitled site' : '?????'));
+        $lines[] = '- ' . ($isEn ? 'Site' : '站点') . ': ' . ($siteName !== '' ? $siteName : ($isEn ? 'Untitled site' : '未命名站点'));
         $lines[] = '';
 
         foreach ($planBlocks as $block) {
@@ -15978,16 +15978,16 @@ final class AiSiteExecutionBlueprintService
             $type = \trim((string)($block['type'] ?? 'section'));
             $region = \trim((string)($block['region'] ?? 'body'));
             $content = \trim((string)($block['content'] ?? ''));
-            $lines[] = '## ' . ($title !== '' ? $title : ($isEn ? 'Block' : '??'));
-            $lines[] = '- ' . ($isEn ? 'Block ID' : '?? ID') . ': ' . ($blockId !== '' ? $blockId : '-');
-            $lines[] = '- ' . ($isEn ? 'Region' : '??') . ': ' . $region;
-            $lines[] = '- ' . ($isEn ? 'Type' : '??') . ': ' . $type;
+            $lines[] = '## ' . ($title !== '' ? $title : ($isEn ? 'Block' : '区块'));
+            $lines[] = '- ' . ($isEn ? 'Block ID' : '区块 ID') . ': ' . ($blockId !== '' ? $blockId : '-');
+            $lines[] = '- ' . ($isEn ? 'Region' : '区域') . ': ' . $region;
+            $lines[] = '- ' . ($isEn ? 'Type' : '类型') . ': ' . $type;
             if ($content !== '') {
-                $lines[] = '- ' . ($isEn ? 'Content' : '??') . ': ' . $content;
+                $lines[] = '- ' . ($isEn ? 'Content' : '内容') . ': ' . $content;
             }
             $items = \is_array($block['items'] ?? null) ? $block['items'] : [];
             foreach ($items as $key => $item) {
-                $label = \is_string($key) && $key !== '' ? $key : ($isEn ? 'Item' : '??');
+                $label = \is_string($key) && $key !== '' ? $key : ($isEn ? 'Item' : '项目');
                 $value = \is_scalar($item) ? (string)$item : ((string)(\json_encode($item, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: ''));
                 $lines[] = '- ' . $label . ': ' . $value;
             }
@@ -16052,6 +16052,18 @@ final class AiSiteExecutionBlueprintService
                 default => $pageLabel . ' gives visitors specific context, useful proof, and a clear route to continue.',
             };
         }
+
+        return match ($pageType) {
+            Page::TYPE_HOME => '承接核心意图，说明价值，并露出主要转化动作。',
+            Page::TYPE_ABOUT => '通过品牌背景与交付能力建立信任。',
+            Page::TYPE_CONTACT => '降低沟通门槛，快速收集有效咨询。',
+            Page::TYPE_REFUND_POLICY => '说明退款资格、时间节点和申请步骤，让用户能放心操作。',
+            Page::TYPE_PRIVACY_POLICY => '说明收集哪些数据、如何使用，以及访客保留哪些控制权。',
+            Page::TYPE_TERMS_OF_SERVICE => '在购买或注册前讲清使用规则、责任边界和账户预期。',
+            Page::TYPE_SHIPPING_POLICY => '清晰设置配送时效、服务区域与异常处理预期。',
+            Page::TYPE_COOKIE_POLICY => '说明使用哪些 Cookie、使用原因以及访客如何管理同意。',
+            default => $pageLabel . ' 为访客提供具体上下文、可信证明和继续浏览路径。',
+        };
     }
 
     private function resolvePageWhy(string $pageType, string $pageLabel, string $locale = ''): string
@@ -16064,6 +16076,13 @@ final class AiSiteExecutionBlueprintService
                 default => $pageLabel . ' completes site structure and supports long-tail search coverage.',
             };
         }
+
+        return match ($pageType) {
+            Page::TYPE_HOME => '首页是核心流量入口，需要统一价值叙事与导航。',
+            Page::TYPE_ABOUT => '关于页面建立信任，帮助访客做出转化决策。',
+            Page::TYPE_CONTACT => '联系页面承接咨询，缩短转化路径。',
+            default => $pageLabel . ' 补全站点结构，并支持长尾搜索覆盖。',
+        };
     }
 
     /**
@@ -16083,18 +16102,10 @@ final class AiSiteExecutionBlueprintService
      */
     private function buildSecondaryKeywords(string $pageType, string $pageLabel): array
     {
-        $keywords = [$pageLabel . ' 鎸囧崡', $pageLabel . ' 甯歌闂'];
+        $keywords = [$pageLabel . ' 指南', $pageLabel . ' 常见问题'];
         if ($pageType === Page::TYPE_HOME) {
-            $keywords[] = '鍝佺墝浠嬬粛';
-            $keywords[] = '鏍稿績鍗栫偣';
-        }
-
-        return \array_values(\array_unique($keywords));
-
-        $keywords = [$pageLabel . ' 鎸囧崡', $pageLabel . ' 甯歌闂'];
-        if ($pageType === Page::TYPE_HOME) {
-            $keywords[] = '鍝佺墝浠嬬粛';
-            $keywords[] = '鏍稿績浼樺娍';
+            $keywords[] = '品牌介绍';
+            $keywords[] = '核心卖点';
         }
 
         return \array_values(\array_unique($keywords));
@@ -16544,15 +16555,15 @@ final class AiSiteExecutionBlueprintService
         }
 
         return match ($preset) {
-            'hero' => '????' . $siteName,
-            'features' => '?????' . $siteName,
-            'process' => '??????',
-            'cta' => '???????????',
-            'brand' => '??' . $siteName,
-            'trust' => $siteName . ' ???????',
-            'contact_form' => '????????',
-            'legal' => $pageLabel !== '' ? $pageLabel : '????',
-            default => $pageLabel !== '' ? ($pageLabel . '????') : ($sectionName !== '' ? $sectionName : ($siteName . ' ????')),
+            'hero' => $summaryCue !== '' ? ($siteName . '：' . $summaryCue) : ('欢迎来到' . $siteName),
+            'features' => $summaryCue !== '' ? ('亮点：' . $summaryCue) : ('为什么选择' . $siteName),
+            'process' => '三步开始',
+            'cta' => '准备开始下一步？',
+            'brand' => '了解' . $siteName,
+            'trust' => $siteName . ' 值得信赖的理由',
+            'contact_form' => '告诉我们你的需求',
+            'legal' => $pageLabel !== '' ? $pageLabel : '政策详情',
+            default => $pageLabel !== '' ? ($pageLabel . '亮点') : ($sectionName !== '' ? $sectionName : ($siteName . '亮点')),
         };
     }
 
@@ -16579,9 +16590,11 @@ final class AiSiteExecutionBlueprintService
         }
 
         return match ($preset) {
-            'hero' => '????????????????????',
-            'features' => '????????????????????',
-            'process' => '???????????????????????',
+            'hero' => $summaryLine !== '' ? $summaryLine : ('欢迎来到' . $siteName),
+            'features' => $summaryLine !== '' ? ('重点：' . $summaryLine) : '先查看主要亮点和入口。',
+            'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载'
+                ? '选择内容，查看提示，并按清晰流程完成下载。'
+                : '查看亮点，选择合适入口，并按清晰流程继续。',
             default => '',
         };
     }
@@ -16621,14 +16634,24 @@ final class AiSiteExecutionBlueprintService
         }
 
         return match ($preset) {
-            'hero' => '???????????????????????????????????????',
-            'features' => '??????????????????????????????????',
-            'process' => '????????????????????????????????',
-            'cta' => '????????????????????????????',
-            'brand', 'trust' => '??????????????????????????????????',
-            'contact_form' => '????????????????????????????',
-            'legal' => '????????????????????????????',
-            default => '???????????????????????????????????' . $pageGoal,
+            'hero' => $summaryLine !== ''
+                ? ($siteName . ' 聚焦 ' . $summaryLine . '，让访客一打开页面就能看到主要价值和下一步动作。')
+                : ('欢迎来到' . $siteName . '，访客可以立即看到主要价值和下一步动作。'),
+            'features' => $summaryLine !== ''
+                ? ('将 ' . $summaryLine . ' 拆成易扫读的亮点、核心入口和利益卡片。')
+                : '把主要价值拆成易扫读的亮点、核心入口和利益卡片。',
+            'process' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载'
+                ? '查看推荐内容、确认提示信息，并更顺畅地进入下载流程。'
+                : '查看亮点、选择合适入口，并更顺畅地进入下一步。',
+            'cta' => $this->inferPrimaryActionFromSummary($siteSummary, $locale) === '立即下载'
+                ? '点击后，访客可直接进入下载入口，同时保留关键支持说明。'
+                : '点击后，访客能直接进入最重要的下一步，不需要猜测该做什么。',
+            'brand', 'trust' => $summaryLine !== ''
+                ? ($siteName . ' 围绕 ' . $summaryLine . ' 展开，让首次访问者更快建立信任。')
+                : '用品牌背景、支持方式和安心细节建立信任，让访客愿意继续浏览。',
+            'contact_form' => '只收集关键联系方式和需求说明，让访客能快速开启沟通。',
+            'legal' => '用可读的分区呈现关键政策信息，让访客不用猜也能找到需要的规则。',
+            default => '把页面目标转成访客可以立即阅读并采取行动的清晰内容：' . $pageGoal,
         };
     }
 
@@ -16694,14 +16717,14 @@ final class AiSiteExecutionBlueprintService
             return '';
         }
 
-        if ($this->containsAny($summary, ['apk', '涓嬭浇', 'download', 'install', '瀹夎'])) {
-            return $this->isEnglishLocale($locale) ? 'Download Now' : '绔嬪嵆涓嬭浇';
+        if ($this->containsAny($summary, ['apk', '下载', 'download', 'install', '安装'])) {
+            return $this->isEnglishLocale($locale) ? 'Download Now' : '立即下载';
         }
-        if ($this->containsAny($summary, ['棰勭害', '棰勮', 'booking', 'reserve'])) {
-            return $this->isEnglishLocale($locale) ? 'Book Now' : '绔嬪嵆棰勭害';
+        if ($this->containsAny($summary, ['预约', '预订', 'booking', 'reserve'])) {
+            return $this->isEnglishLocale($locale) ? 'Book Now' : '立即预约';
         }
-        if ($this->containsAny($summary, ['鍜ㄨ', '鑱旂郴', '鍚堜綔', '浠ｇ悊', '鏈嶅姟', 'solution', 'service', 'contact'])) {
-            return $this->isEnglishLocale($locale) ? 'Contact Us' : '绔嬪嵆鍜ㄨ';
+        if ($this->containsAny($summary, ['咨询', '联系', '合作', '代理', '服务', 'solution', 'service', 'contact'])) {
+            return $this->isEnglishLocale($locale) ? 'Contact Us' : '立即咨询';
         }
 
         return '';
@@ -16720,11 +16743,11 @@ final class AiSiteExecutionBlueprintService
         }
 
         return match ($preset) {
-            'hero' => ['?????????', '?????? CTA', '?????????'],
-            'features' => ['??????', '???????', '????????'],
-            'process' => ['??????', '????????', '??????'],
-            'cta' => ['???????', '????????'],
-            default => ['??????', '??????', '????????'],
+            'hero' => ['立即展示核心价值', '露出一个主 CTA', '补充信任或支持提示'],
+            'features' => ['总结关键优势', '保持卡片易扫读', '支持对比阅读'],
+            'process' => ['清晰说明步骤', '降低首次使用阻力', '引导进度'],
+            'cta' => ['只保留一个动作', '说明下一步收益'],
+            default => ['保证区块可读', '支撑页面目标', '保持下一步动作可见'],
         };
     }
 
@@ -16901,7 +16924,7 @@ final class AiSiteExecutionBlueprintService
         $prefix = (string)\preg_replace('/^.*[.;!?銆傦紒锛焅r\n]/u', '', $prefix);
 
         return \preg_match(
-            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|绂佹|閬垮厤|涓嶈|涓嶅緱|鎺掗櫎|涓嶆槸|闈瀨鍕縷璇峰嬁)[^.;!?銆傦紒锛焅r\n]{0,100}$/iu',
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|不是|非|请勿)[^.;!?。！？\r\n]{0,100}$/iu',
             $prefix
         ) === 1;
     }
@@ -18383,7 +18406,7 @@ final class AiSiteExecutionBlueprintService
             ],
         ];
 
-        // 妫€鏌ユ瘡涓€涓繀闇€绔犺妭銆?
+        // 检查每一个必需章节。
         foreach ($requiredSections as $sectionKey => $sectionLabels) {
             $labels = $isEn ? $sectionLabels['en'] : $sectionLabels['zh'];
             $found = false;
@@ -18398,8 +18421,8 @@ final class AiSiteExecutionBlueprintService
             }
         }
 
-        // 妫€鏌ユ槸鍚﹀寘鍚〉闈㈣鐩栨竻鍗曘€?
-        if (\mb_stripos($markdown, '椤甸潰瑕嗙洊娓呭崟') === false
+        // 检查是否包含页面覆盖清单。
+        if (\mb_stripos($markdown, '页面覆盖清单') === false
             && \mb_stripos($markdown, 'Page Coverage') === false
             && \mb_stripos($markdown, 'Selected Pages') === false
         ) {
@@ -18416,11 +18439,11 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
-     * 妫€鏌ユ柟妗?Markdown 鏄惁鍖呭惈鎸囧畾椤甸潰绫诲瀷鐨勮鍒掋€?
+     * 检查方案 Markdown 是否包含指定页面类型的规划。
      *
-     * @param string $markdown 鏂规 Markdown
-     * @param list<string> $selectedPageTypes 鐢ㄦ埛閫夋嫨鐨勯〉闈㈢被鍨?
-     * @param string $locale 鏂规璇█
+     * @param string $markdown 方案 Markdown
+     * @param list<string> $selectedPageTypes 用户选择的页面类型
+     * @param string $locale 方案语言
      * @return array{valid: bool, missing_pages: list<string>, extra_pages: list<string>}
      */
     public function validatePageCoverage(string $markdown, array $selectedPageTypes, string $locale = ''): array
@@ -18430,19 +18453,19 @@ final class AiSiteExecutionBlueprintService
         $missingPages = [];
         $extraPages = [];
 
-        // 甯歌椤甸潰绫诲瀷鍏抽敭璇嶆槧灏勩€?
+        // 常见页面类型关键词映射。
         $pageTypeKeywords = [
-            'home_page' => ['棣栭〉', 'home page', 'homepage'],
-            'about_page' => ['鍏充簬椤甸潰', 'about', '鍏充簬鎴戜滑'],
-            'contact_page' => ['鑱旂郴椤甸潰', 'contact', '鑱旂郴鎴戜滑'],
-            'product_page' => ['浜у搧椤甸潰', 'product', '浜у搧鍒楄〃'],
-            'blog_page' => ['鍗氬椤甸潰', 'blog', '鍗氬'],
-            'service_page' => ['鏈嶅姟椤甸潰', 'service', '鏈嶅姟'],
-            'privacy_page' => ['闅愮鏀跨瓥', 'privacy'],
-            'terms_page' => ['鏈嶅姟鏉℃', 'terms'],
+            'home_page' => ['首页', 'home page', 'homepage'],
+            'about_page' => ['关于页面', 'about', '关于我们'],
+            'contact_page' => ['联系页面', 'contact', '联系我们'],
+            'product_page' => ['产品页面', 'product', '产品列表'],
+            'blog_page' => ['博客页面', 'blog', '博客'],
+            'service_page' => ['服务页面', 'service', '服务'],
+            'privacy_page' => ['隐私政策', 'privacy'],
+            'terms_page' => ['服务条款', 'terms'],
         ];
 
-        // 妫€鏌ユ瘡涓€涓凡閫夐〉闈㈡槸鍚︽湁瑙勫垝銆?
+        // 检查每一个已选页面是否有规划。
         foreach ($selectedPageTypes as $pageType) {
             $keywords = $pageTypeKeywords[$pageType] ?? [$pageType, \str_replace('_', ' ', $pageType)];
             $found = false;

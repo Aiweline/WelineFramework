@@ -17,13 +17,12 @@ final class BuildPlanContractSchemaTest extends TestCase
         self::assertContains('policy_ref', $schema->requiredTopLevelFields());
         self::assertContains('policy_projection', $schema->requiredTopLevelFields());
         self::assertContains('content_manifest', $schema->requiredTopLevelFields());
-        self::assertContains('tasks', $schema->requiredTopLevelFields());
+        self::assertNotContains('tasks', $schema->requiredTopLevelFields());
         self::assertContains('source_contracts', $schema->requiredTopLevelFields());
-        self::assertContains('block_build', $schema->allowedTaskKinds());
-        self::assertContains('AiSiteBuildQueue', $schema->allowedExecutors());
+        self::assertContains('tasks', $schema->forbiddenTopLevelFields());
         self::assertContains('reason', $schema->forbiddenFieldNames());
         self::assertContains('typography', $schema->requiredDesignTokenGroups());
         self::assertContains('policy_hash', $schema->requiredPolicyFields());
-        self::assertContains('policy_slices', $schema->requiredTaskFields());
+        self::assertContains('content_keys', $schema->requiredBlockFields());
     }
 }

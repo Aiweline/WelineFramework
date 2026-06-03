@@ -138,7 +138,7 @@ final class AiSiteDesignDirectorServiceTest extends TestCase
             ]
         );
 
-        self::assertSame('#070A18', $system['tokens']['color_roles']['background'] ?? null);
+        self::assertSame('#0F0F23', $system['tokens']['color_roles']['background'] ?? null);
         self::assertSame('#00F5FF', $system['tokens']['color_roles']['accent'] ?? null);
         self::assertSame('high', $system['media_strategy']['page_asset_density'] ?? null);
         self::assertSame('immersive', $system['style_axis']['density'] ?? null);

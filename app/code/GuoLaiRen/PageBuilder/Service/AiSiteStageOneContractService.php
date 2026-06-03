@@ -533,9 +533,9 @@ final class AiSiteStageOneContractService
             'APK',
             'download',
             'app',
-            '瀹夎',
-            '涓嬭浇',
-            '鎺ㄥ箍',
+            '安装',
+            '下载',
+            '推广',
         ]);
     }
 

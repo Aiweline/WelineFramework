@@ -459,6 +459,19 @@ class Page extends FrontendController
     public static function clearProcessCaches(bool $aggressive = false): void
     {
         self::$viewHtmlCache = [];
+        if (!$aggressive) {
+            return;
+        }
+
+        try {
+            $cache = self::runtimeCache();
+            if ($cache !== null) {
+                $cache->clearNamespace(self::RUNTIME_CACHE_NAMESPACE);
+            }
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
     }
 
     /**
@@ -615,12 +628,13 @@ class Page extends FrontendController
         $host = $this->normalizeHostCandidate($host);
 
         return \sha1((string)\json_encode([
-            'v' => 1,
+            'v' => 2,
             'page_id' => (int)$page->getId(),
             'website_id' => $websiteId,
             'style' => $styleCode,
             'locale' => $locale,
-            'updated_at' => (string)($page->getData('updated_at') ?? ''),
+            'update_time' => (string)($page->getData(PageModel::schema_fields_UPDATE_TIME) ?? ''),
+            'layout_config_hash' => \sha1((string)($page->getData(PageModel::schema_fields_LAYOUT_CONFIG) ?? '')),
             'render_mode' => (string)($page->getData(PageModel::schema_fields_RENDER_MODE) ?? ''),
             'host' => $host,
             'uri' => $uri,
