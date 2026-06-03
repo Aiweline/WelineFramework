@@ -138,6 +138,65 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertTrue($method->invoke($controller, ['plan_json' => $this->buildContractPassedStageOnePlanJson()]));
     }
 
+    public function testStageOnePlanPayloadHydrateCopiesPlanWorkbenchFromPlanStageArtifacts(): void
+    {
+        $session = new AiSiteAgentSession();
+        $planScope = [
+            'plan_json' => $this->buildContractPassedStageOnePlanJson(),
+            'plan_markdown' => '# Stage one plan',
+            'plan_workbench' => [
+                'stage1' => [
+                    'page_plans' => [
+                        'home_page' => [
+                            'blocks' => [['block_key' => 'hero']],
+                        ],
+                    ],
+                ],
+            ],
+            'plan_generated_at' => '2026-06-03 09:00:00',
+            'plan_confirmed' => 1,
+            'plan_confirmed_at' => '2026-06-03 09:10:00',
+        ];
+
+        $sessionService = $this->getMockBuilder(AiSiteAgentSessionService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['loadScopeForStage'])
+            ->getMock();
+        $sessionService->expects(self::once())
+            ->method('loadScopeForStage')
+            ->with(
+                $session,
+                AiSiteAgentSession::STAGE_PLAN,
+                ['plan_json', 'plan_markdown', 'plan_workbench']
+            )
+            ->willReturn($planScope);
+
+        $scopeService = $this->getMockBuilder(AiSiteScopeCompatibilityService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['normalizeScope'])
+            ->getMock();
+        $scopeService->method('normalizeScope')->willReturnArgument(0);
+
+        $reflection = new ReflectionClass(AiSiteAgent::class);
+        $controller = $reflection->newInstanceWithoutConstructor();
+        $sessionServiceProperty = $reflection->getProperty('sessionService');
+        $sessionServiceProperty->setAccessible(true);
+        $sessionServiceProperty->setValue($controller, $sessionService);
+        $scopeServiceProperty = $reflection->getProperty('scopeCompatibilityService');
+        $scopeServiceProperty->setAccessible(true);
+        $scopeServiceProperty->setValue($controller, $scopeService);
+
+        $method = new ReflectionMethod(AiSiteAgent::class, 'hydrateStageOnePlanPayloadFromPlanStageScope');
+        $method->setAccessible(true);
+
+        $hydrated = $method->invoke($controller, $session, 7, ['workspace_status' => 'planning']);
+
+        self::assertSame($planScope['plan_json'], $hydrated['plan_json'] ?? null);
+        self::assertSame($planScope['plan_markdown'], $hydrated['plan_markdown'] ?? null);
+        self::assertSame($planScope['plan_workbench'], $hydrated['plan_workbench'] ?? null);
+        self::assertSame(1, $hydrated['plan_confirmed'] ?? null);
+    }
+
     public function testQueuedOperationStartOnlyReusesSameNonPlanQueueOperation(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
@@ -354,6 +413,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'done']));
         self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'error']));
         self::assertTrue($method->invoke($controller, ['queue_id' => 9, 'status' => 'stop']));
+        self::assertTrue($method->invoke($controller, ['id' => 9, 'status' => 'error']));
         self::assertFalse($method->invoke($controller, ['queue_id' => 0, 'status' => 'done']));
     }
 
@@ -560,6 +620,7 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertStringContainsString("!\\in_array(\$operation, ['plan', 'build'], true) && \$pageType === ''", $handleRetry);
         self::assertStringContainsString("unset(\$details['fresh_repair_failed_tasks']);", $handleRetry);
         self::assertStringContainsString("\$details['resume_failed_tasks'] = 1;", $handleRetry);
+        self::assertStringContainsString("\$details['retry_of_queue_id'] = (int)(\$retry['queue_id'] ?? \$queueId);", $handleRetry);
         self::assertStringContainsString('$scopePatch = [];', $handleRetry);
     }
 
@@ -930,6 +991,79 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         self::assertSame([], $method->invoke($queue, $sessionService, $scopeService, 'public-plan-id', 7));
     }
 
+    public function testPlanQueueCompletionGateUsesNestedStageOnePageSources(): void
+    {
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_ID, 123);
+        $contractHash = 'stage-one-contract-hash';
+        $scope = [
+            'fake_mode' => 1,
+            'page_types' => ['home_page', 'about_page', 'contact_page', 'privacy_policy'],
+            'plan_markdown' => '# Stage one plan',
+            'plan_json' => [
+                'stage1_contract' => ['contract_hash' => $contractHash],
+                'stage1_validation_report' => ['passed' => true, 'contract_hash' => $contractHash],
+                'stage1' => [
+                    'page_plans' => [
+                        [
+                            'page' => [
+                                'page_type' => 'home_page',
+                                'blocks' => [['block_key' => 'hero']],
+                            ],
+                        ],
+                        [
+                            'page_plan' => [
+                                'type' => 'about_page',
+                                'blocks' => [['block_key' => 'story']],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'plan_workbench' => [
+                'stage1' => [
+                    'pages' => [
+                        [
+                            'page' => [
+                                'type' => 'contact_page',
+                                'blocks' => [['block_key' => 'form']],
+                            ],
+                        ],
+                    ],
+                ],
+                'confirmed' => [
+                    'structured_plan' => [
+                        'page_plans' => [
+                            'privacy_policy' => [
+                                'blocks' => [['block_key' => 'legal']],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $sessionService = $this->getMockBuilder(AiSiteAgentSessionService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['loadByPublicId', 'loadScopeForStage'])
+            ->getMock();
+        $sessionService->method('loadByPublicId')->willReturn($session);
+        $sessionService->method('loadScopeForStage')->willReturn($scope);
+
+        $scopeService = $this->getMockBuilder(AiSiteScopeCompatibilityService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['normalizeScope', 'resolveScopedPageTypes'])
+            ->getMock();
+        $scopeService->method('normalizeScope')->willReturnArgument(0);
+        $scopeService->method('resolveScopedPageTypes')->willReturn(['home_page', 'about_page', 'contact_page', 'privacy_policy']);
+
+        $queue = new AiSitePlanQueue();
+        $method = new ReflectionMethod(AiSitePlanQueue::class, 'assertPlanQueueCompletionGate');
+        $method->setAccessible(true);
+
+        self::assertSame([], $method->invoke($queue, $sessionService, $scopeService, 'public-plan-id', 7));
+    }
+
     public function testPlanQueueCompletionGateUsesConfirmedPlanBookStructuredSources(): void
     {
         $session = new AiSiteAgentSession();
@@ -1193,15 +1327,28 @@ final class AiSiteAgentQueueReuseTest extends TestCase
         );
     }
 
-    public function testNewBuildQueueStopsOlderPendingDuplicateRowsBeforeSchedulerCanRunThem(): void
+    public function testActiveBuildQueueStopsOtherPendingDuplicateRowsBeforeSchedulerCanRunThem(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
         $methodSource = $this->extractControllerMethodSource($source, 'stopSupersededPendingAiSiteQueueRows');
 
         self::assertStringContainsString("['pending', 'queued']", $methodSource);
         self::assertStringContainsString("'status' => 'stop'", $methodSource);
-        self::assertStringContainsString('Superseded by newer PageBuilder queue #', $methodSource);
+        self::assertStringContainsString('$queueId === $activeQueueId', $methodSource);
+        self::assertStringContainsString('Superseded by PageBuilder queue #', $methodSource);
         self::assertStringContainsString('stopSupersededPendingAiSiteQueueRows($bizKey, $queueId, $operation)', $source);
+    }
+
+    public function testRetryQueueIdIsHardReuseTargetForQueueEnqueue(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $methodSource = $this->extractControllerMethodSource($source, 'enqueueOperationQueueTask');
+
+        self::assertStringContainsString("\$retryOfQueueId = (int)(\$operationDetails['retry_of_queue_id'] ?? 0);", $methodSource);
+        self::assertStringContainsString('$retryQueueRow = $this->findAiSiteQueueRowById($retryOfQueueId);', $methodSource);
+        self::assertStringContainsString('$queueId = $reusableQueueId;', $methodSource);
+        self::assertStringContainsString('Original PageBuilder queue #', $methodSource);
+        self::assertStringContainsString('$this->findAiSiteOperationQueueRow($session, $operation)', $methodSource);
     }
 
     public function testNewFrontendBuildResetsFailedAndInterruptedTasksForFreshRepair(): void
