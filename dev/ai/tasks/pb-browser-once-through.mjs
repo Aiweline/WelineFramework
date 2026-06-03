@@ -94,9 +94,13 @@ function isTransientApiPostError(error) {
 
 async function apiPost(api, url, options, label, attempts = 3) {
   let lastError;
+  const requestOptions = {
+    ...(options || {}),
+    timeout: Number(options?.timeout || process.env.WELINE_API_POST_TIMEOUT_MS || 60000),
+  };
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await api.post(url, options);
+      return await api.post(url, requestOptions);
     } catch (error) {
       lastError = error;
       if (attempt >= attempts || !isTransientApiPostError(error)) {
@@ -204,6 +208,17 @@ function buildAlreadyStarted(state) {
     || ['done', 'complete', 'completed', 'success'].includes(queueStatus(state, 'build'));
 }
 
+function hasPlanPayload(state) {
+  const candidates = [
+    state?.plan_json,
+    state?.plan?.json,
+    state?.plan?.plan_json,
+    state?.scope?.plan_json,
+    state?.data?.plan_json,
+  ];
+  return candidates.some((candidate) => candidate && typeof candidate === 'object' && Object.keys(candidate).length > 0);
+}
+
 async function workspaceState(api, publicId) {
   const data = await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-workspace-state', {
     data: { public_id: publicId, state_mode: 'queue_poll' },
@@ -215,6 +230,27 @@ async function waitForPlanReady(api, publicId) {
   const deadline = Date.now() + planDeadlineMs;
   let last = '';
   while (Date.now() <= deadline) {
+    let state = await workspaceState(api, publicId).catch(() => ({}));
+    const planActive = activeStatus(state, 'plan');
+    const planQueue = queueStatus(state, 'plan');
+    const progress = state.plan_queue_info?.stage1_page_progress || {};
+    const stateConfirmed = Number(state.plan_confirmed ?? state.build_plan_confirmed ?? state.scope?.plan_confirmed ?? 0) === 1;
+    const lineBeforeConfirm = `plan confirmed=${stateConfirmed ? 1 : 0} queue=${planQueue} active=${planActive} pages=${progress.done_count || 0}/${progress.total || 0} running=${progress.running_count || 0} failed=${progress.failed_count || 0} msg=${stateMessage(state, 'plan').slice(0, 180)}`;
+    if (lineBeforeConfirm !== last) {
+      log(lineBeforeConfirm);
+      last = lineBeforeConfirm;
+    }
+    if (stateConfirmed || buildAlreadyStarted(state)) {
+      return state;
+    }
+    if (isFailureStatus(planActive) || isFailureStatus(planQueue)) {
+      throw new Error(`plan failed: ${stateMessage(state, 'plan') || jsonSummary(state.plan_queue_info || state, 1000)}`);
+    }
+    if (isRunningStatus(planActive) || isRunningStatus(planQueue) || !hasPlanPayload(state)) {
+      await sleep(pollMs);
+      continue;
+    }
+
     const confirm = await apiPost(api, route('/pagebuilder/backend/ai-site-agent/post-confirm-plan'), {
       data: { public_id: publicId },
     }, 'confirm plan');
@@ -226,8 +262,8 @@ async function waitForPlanReady(api, publicId) {
     } catch {
       data = { success: false, message: text.slice(0, 300) };
     }
-    let state = await workspaceState(api, publicId).catch(() => ({}));
     if (planRequiresStaleConfirmation(data)) {
+      state = await workspaceState(api, publicId).catch(() => state);
       if (isRunningStatus(activeStatus(state, 'plan')) || isRunningStatus(queueStatus(state, 'plan'))) {
         data = {
           ...data,
@@ -249,18 +285,13 @@ async function waitForPlanReady(api, publicId) {
     }
     const confirmed = planConfirmedFromPayload(data);
     const msg = String(data.message || data?.data?.message || '').trim();
-    const progress = state.plan_queue_info?.stage1_page_progress || {};
     const line = `plan confirmed=${confirmed ? 1 : 0} status=${status} queue=${queueStatus(state, 'plan')} active=${activeStatus(state, 'plan')} pages=${progress.done_count || 0}/${progress.total || 0} running=${progress.running_count || 0} failed=${progress.failed_count || 0} msg=${(msg || stateMessage(state, 'plan')).slice(0, 180)}`;
     if (line !== last) {
       log(line);
       last = line;
     }
-    const stateConfirmed = Number(state.plan_confirmed ?? state.build_plan_confirmed ?? state.scope?.plan_confirmed ?? 0) === 1;
     if (confirmed || stateConfirmed || buildAlreadyStarted(state)) {
       return state;
-    }
-    if (isFailureStatus(activeStatus(state, 'plan')) || isFailureStatus(queueStatus(state, 'plan'))) {
-      throw new Error(`plan failed: ${stateMessage(state, 'plan') || jsonSummary(state.plan_queue_info || state, 1000)}`);
     }
     await sleep(pollMs);
   }
