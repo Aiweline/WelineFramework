@@ -22,7 +22,6 @@ $buildTaskSummary = \is_array($buildTaskSummary ?? null) ? $buildTaskSummary : [
 $initialVirtualPagesByTypeState = \is_array($initialVirtualPagesByTypeState ?? null) ? $initialVirtualPagesByTypeState : [];
 $pbAiPhaseOnePlanPresent = (bool)($pbAiPhaseOnePlanPresent ?? false);
 $mergeScopeUrl = (string)($mergeScopeUrl ?? '');
-$replaceScopeUrl = (string)($replaceScopeUrl ?? '');
 $setStageUrl = (string)($setStageUrl ?? '');
 $startPlanUrl = (string)($startPlanUrl ?? '');
 $confirmPlanUrl = (string)($confirmPlanUrl ?? '');
@@ -90,7 +89,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     var pageTypesUserCustomized = <?= \json_encode($pageTypesUserCustomized, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var pageTypesSelectionLocallyCustomized = !!pageTypesUserCustomized;
     var mergeScopeUrl = <?= \json_encode($mergeScopeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
-    var replaceScopeUrl = <?= \json_encode($replaceScopeUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var setStageUrl = <?= \json_encode($setStageUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var startPlanUrl = <?= \json_encode($startPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var confirmPlanUrl = <?= \json_encode($confirmPlanUrl, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
@@ -129,7 +127,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     var currentPreviewPageId = <?= \json_encode($previewPageId, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>;
     var currentPreviewDevice = 'desktop';
     mergeScopeUrl = normalizeLocalPreviewUrlForCurrentHost(mergeScopeUrl);
-    replaceScopeUrl = normalizeLocalPreviewUrlForCurrentHost(replaceScopeUrl);
     setStageUrl = normalizeLocalPreviewUrlForCurrentHost(setStageUrl);
     startPlanUrl = normalizeLocalPreviewUrlForCurrentHost(startPlanUrl);
     confirmPlanUrl = normalizeLocalPreviewUrlForCurrentHost(confirmPlanUrl);
@@ -349,7 +346,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
     }
 
     /**
-     * 根据工作区状态判断是否已有可用的建站方案（已确认、Markdown、JSON/结构化草稿等）。
+     * 根据后端持久化状态判断是否已有可用的建站方案。
      */
     function phaseOnePlanPresentFromWorkspaceState(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
@@ -1063,7 +1060,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         isOperationRunning = false;
         setPlanGenerationActionLock(false);
         setPlanModeStatus(message);
-        setPlanModalProgress(message, 100, (hasCurrentPhaseOnePlanDraft() || lastPhaseOnePlanPresent), 'done');
+        setPlanModalProgress(message, 100, (hasCurrentPhaseOnePlan() || lastPhaseOnePlanPresent), 'done');
         renderQueueUiState('plan', { state: 'completed', message: message, percent: 100 }, { updateStatus: false });
         setPlanRetryButtonVisible(false);
         syncConfirmPlanButtonEnabled();
@@ -1209,33 +1206,14 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return bindPlanSseTerminalHandlers();
     };
 
-    function hasCurrentPhaseOnePlanDraft() {
-        var payload = currentPlanPayload && typeof currentPlanPayload === 'object' ? currentPlanPayload : {};
-        if (String(payload.markdown || '').trim() !== '') {
-            return true;
-        }
-        if (isNonEmptyObject(payload.json)) {
-            return true;
-        }
-        if (isNonEmptyObject(payload.structured)) {
-            return true;
-        }
-        var scopePlan = (window.__pbWorkspaceConfirmedPlan && typeof window.__pbWorkspaceConfirmedPlan === 'object')
-            ? window.__pbWorkspaceConfirmedPlan
-            : {};
-        if (String(scopePlan.markdown || '').trim() !== '') {
-            return true;
-        }
-        if (isNonEmptyObject(scopePlan.plan_json) || isNonEmptyObject(scopePlan.structured)) {
-            return true;
-        }
-        if (lastPhaseOnePlanPresent || hasBuildPlanV2FlowEvidence()) {
-            return true;
-        }
+    function hasCurrentPhaseOnePlan() {
         var workspaceState = (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object')
             ? window.__pbWorkspaceState
             : (latestWorkspaceState && typeof latestWorkspaceState === 'object' ? latestWorkspaceState : initialWorkspaceState);
         if (phaseOnePlanPresentFromWorkspaceState(workspaceState)) {
+            return true;
+        }
+        if (lastPhaseOnePlanPresent || hasBuildPlanV2FlowEvidence(workspaceState)) {
             return true;
         }
         return false;
@@ -1339,7 +1317,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return String(currentStageCode || currentWorkspaceStage || state.stage || '').trim().toLowerCase();
     }
 
-    function buildPlanAutoRetryFingerprint(workspaceState) {
+    function buildPlanRetryableFailureFingerprint(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var items = collectRetryableAiFailureItems(state, 'plan').map(function (item) {
             return [
@@ -1360,7 +1338,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 'error=' + String(planError.message || planError.error_message || planError.error || '')
             ].join('|');
         }
-        return shortHashText(String(publicId || '') + '|plan_retry|' + items);
+        return shortHashText(String(publicId || '') + '|plan_retry_prompt|' + items);
     }
 
     function reservePlanReloadAction(action, fingerprint) {
@@ -1383,9 +1361,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return true;
     }
 
-    function shouldAutoRetryPlanAfterReload(workspaceState) {
+    function shouldSurfaceRetryablePlanFailureAfterReload(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        if (!startPlanUrl || !publicId || planStartRequestPending || planSseRunning) {
+        if (!publicId || planStartRequestPending || planSseRunning) {
             return false;
         }
         if (getPlanReloadReconcileStage(state) !== 'plan') {
@@ -1415,26 +1393,25 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (hasPhaseOnePlanBlockingErrors(state) || hasRetryableAiFailures(state, 'plan')) {
             return false;
         }
-        if (!phaseOnePlanPresentFromWorkspaceState(state) && !hasCurrentPhaseOnePlanDraft()) {
+        if (!phaseOnePlanPresentFromWorkspaceState(state) && !hasCurrentPhaseOnePlan()) {
             return false;
         }
         return !!findPlanSuccessOperationFromWorkspaceState(state) || isWorkspacePlanQueueTerminal(state);
     }
 
-    function autoRetryPlanAfterReload(workspaceState) {
+    function surfaceRetryablePlanFailureAfterReload(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        var fingerprint = buildPlanAutoRetryFingerprint(state);
-        if (!reservePlanReloadAction('retry', fingerprint)) {
+        var fingerprint = buildPlanRetryableFailureFingerprint(state);
+        if (!reservePlanReloadAction('retry_prompt', fingerprint)) {
             return false;
         }
-        var selectedTypes = Array.isArray(currentPlanSelection) && currentPlanSelection.length > 0
-            ? currentPlanSelection.slice()
-            : selectedPageTypes();
-        selectedTypes = ensureRequiredPageTypeSelected(selectedTypes);
-        toast('info', <?= \json_encode((string)__('检测到阶段一有可重试失败项，刷新后正在自动重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>);
-        startPlanGenerationForSelection(currentPlanTriggerButton || null, selectedTypes, {
-            promptMode: PLAN_PROMPT_MODE_RESUME
-        });
+        var message = getRetryableAiFailureMessage(state, 'plan');
+        setPlanModeStatus(message);
+        setPlanModalProgress(message, 100, false, 'error');
+        setPlanRetryButtonVisible(true);
+        syncPlanFailureListFromWorkspaceState(state);
+        syncRetryableAiFailureActionGuards(state);
+        toast('warning', message);
         return true;
     }
 
@@ -1485,9 +1462,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (!state || typeof state !== 'object') {
             return;
         }
-        if (shouldAutoRetryPlanAfterReload(state)) {
+        if (shouldSurfaceRetryablePlanFailureAfterReload(state)) {
             consumePlanReloadReason();
-            autoRetryPlanAfterReload(state);
+            surfaceRetryablePlanFailureAfterReload(state);
             return;
         }
         if (shouldPromptManualPlanReviewAfterReload(state, reloadReason)) {
@@ -1627,7 +1604,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             : getLatestWorkspaceStateForQueuePrompt();
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         var actual = resolveGeneratedPlanPageTypesFromState(state);
-        if (actual.length === 0 && !phaseOnePlanPresentFromWorkspaceState(state) && !hasCurrentPhaseOnePlanDraft()) {
+        if (actual.length === 0 && !phaseOnePlanPresentFromWorkspaceState(state) && !hasCurrentPhaseOnePlan()) {
             return [];
         }
         var expected = resolveSelectedPlanPageTypesFromState(state);
@@ -1669,10 +1646,25 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
-        if (phaseOnePlanPresentFromWorkspaceState(state) || hasCurrentPhaseOnePlanDraft()) {
+        if (phaseOnePlanPresentFromWorkspaceState(state) || hasCurrentPhaseOnePlan()) {
             return true;
         }
         return resolveGeneratedPlanPageTypesFromState(state).length > 0;
+    }
+
+    function hasConfirmedStalePlanOverride(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var override = parseInt(String(state.plan_confirmed_stale_input || scope.plan_confirmed_stale_input || 0), 10) === 1;
+        var confirmed = !!state.plan_confirmed
+            || !!scope.plan_confirmed
+            || !!state.build_plan_confirmed
+            || !!scope.build_plan_confirmed
+            || !!planConfirmedState
+            || !!buildPlanConfirmedState;
+        return override && confirmed;
     }
 
     function isPlanInputStaleForConfirmation(workspaceState) {
@@ -1680,6 +1672,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        if (hasConfirmedStalePlanOverride(state)) {
+            return false;
+        }
         return !!state.plan_input_stale
             || !!state.plan_rebuild_required
             || !!state.plan_source_changed
@@ -1731,9 +1726,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (parseInt(String(state.partial_retry_required || scope.partial_retry_required || 0), 10) === 1) {
             return getRetryableAiFailureMessage(state, 'plan');
         }
-        if (isPlanInputStaleForConfirmation(state)) {
-            return String(messages.planInputStaleRegenerateRequired || messages.planSchemeRebuildConfirmMessage || '');
-        }
         if (hasStageOnePlanEvidenceForBlockingCheck(state)) {
             var missingPlanPages = resolveMissingSelectedPlanPageTypes(state);
             if (missingPlanPages.length > 0) {
@@ -1760,11 +1752,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }
         var state = getLatestWorkspaceStateForQueuePrompt();
         var c1 = planGenerationActionLockActive;
-        var c2 = !(hasCurrentPhaseOnePlanDraft() || lastPhaseOnePlanPresent);
+        var c2 = !(hasCurrentPhaseOnePlan() || lastPhaseOnePlanPresent);
         var c3 = isPhaseOneQueueUnfinished();
         var c4 = hasPhaseOnePlanBlockingErrors(state);
         var c5 = planSseRunning || hasBuildOperationRunningForUi(state);
-        console.log('[syncConfirmPlanButtonEnabled]', JSON.stringify({lockActive: c1, noPlan: c2, queueUnfinished: c3, blockingErrors: c4, buildRunning: c5, lastPhaseOnePlanPresent: lastPhaseOnePlanPresent, hasDraft: hasCurrentPhaseOnePlanDraft()}));
+        console.log('[syncConfirmPlanButtonEnabled]', JSON.stringify({lockActive: c1, noPlan: c2, queueUnfinished: c3, blockingErrors: c4, buildRunning: c5, lastPhaseOnePlanPresent: lastPhaseOnePlanPresent, hasPlan: hasCurrentPhaseOnePlan()}));
         if (c4) {
             console.log('[blockingError]', getPhaseOnePlanBlockingErrorMessage(state));
         }
@@ -1777,7 +1769,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             return;
         }
         var state = getLatestWorkspaceStateForQueuePrompt();
-        var visible = (hasCurrentPhaseOnePlanDraft() || lastPhaseOnePlanPresent)
+        var visible = (hasCurrentPhaseOnePlan() || lastPhaseOnePlanPresent)
             || isPlanInputStaleForConfirmation(state)
             || (hasStageOnePlanEvidenceForBlockingCheck(state) && resolveMissingSelectedPlanPageTypes(state).length > 0);
         var queueBusy = planStartRequestPending || planSseRunning || planGenerationActionLockActive
@@ -1849,7 +1841,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                     payload: currentPlanPayload || {}
                 });
             }
-            var confirmEnabled = hasCurrentPhaseOnePlanDraft();
+            var confirmEnabled = hasCurrentPhaseOnePlan();
             if (typeof setPlanModalProgress === 'function') {
                 setPlanModalProgress(messages.planModeDone, 100, confirmEnabled);
             }
@@ -1909,6 +1901,10 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         planSchemeRebuildConfirmMessage: <?= \json_encode((string)__('方案重建会舍弃当前方案以及待构建任务，并重新生成完整方案。是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSchemeRebuilding: <?= \json_encode((string)__('正在重建整个方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planInputStaleRegenerateRequired: <?= \json_encode((string)__('建站资料已变更，与当前方案不一致。请先点击「重新生成方案」。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleConfirmTitle: <?= \json_encode((string)__('确认继续当前方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleConfirmMessage: <?= \json_encode((string)__('建站资料已变更，与当前方案不一致。是否仍按当前方案确认并进入第二阶段？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleConfirmText: <?= \json_encode((string)__('确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleCancelText: <?= \json_encode((string)__('取消'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planMissingSelectedPages: <?= \json_encode((string)__('建站方案尚未覆盖全部选中页面（缺少：%{pages}），请重试失败项或重新生成方案后再确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStageOneValidationFailed: <?= \json_encode((string)__('建站方案尚未通过完整校验，请等待全部选中页面生成完成后再确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planResumeFailedTasks: <?= \json_encode((string)__('正在续跑失败项，已完成的阶段一内容将保留'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1923,7 +1919,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         domainRequiredForPlanAction: <?= \json_encode((string)__('请先填写目标域名，再生成或更新建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         domainRequiredForBuild: <?= \json_encode((string)__('请先填写目标域名，再执行发布或域名相关操作。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planStartUnavailable: <?= \json_encode((string)__('建站方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planSaving: <?= \json_encode((string)__('正在保存方案草稿...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planUpdating: <?= \json_encode((string)__('正在更新当前方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planGenerating: <?= \json_encode((string)__('正在生成建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planRegeneratingByPageTypes: <?= \json_encode((string)__('正在根据当前页面类型重新生成建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planRegeneratingByLocale: <?= \json_encode((string)__('正在根据当前方案语言重新生成建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -1933,10 +1929,9 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         buildPlanV2ConfirmRequired: <?= \json_encode((string)__('请先确认建站方案，系统会直接基于已确认方案进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planConfirmSaved: <?= \json_encode((string)__('建站方案已确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planConfirmStartBuildQuestion: <?= \json_encode((string)__('建站方案已确认，是否立即进入后台构建？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planDeferred: <?= \json_encode((string)__('已保留当前方案草稿，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planDraftSaved: <?= \json_encode((string)__('方案草稿已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        planDraftSaveFailed: <?= \json_encode((string)__('方案草稿保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        stageOneFieldEditPending: <?= \json_encode((string)__('已修改方案综述/主题信息，系统会自动保存草稿。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPersisted: <?= \json_encode((string)__('方案已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPersistFailed: <?= \json_encode((string)__('方案保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageOneFieldEditPending: <?= \json_encode((string)__('已修改方案综述/主题信息，系统会直接写入当前方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         stageOneFieldAutosaved: <?= \json_encode((string)__('方案综述/主题微调已自动保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSortSaved: <?= \json_encode((string)__('方案块顺序已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planSortSaveFailed: <?= \json_encode((string)__('方案块顺序保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -2076,6 +2071,118 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         planPreviewFullscreenTitle: <?= \json_encode((string)__('建站方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         planPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
     };
+    Object.assign(messages, {
+        networkError: <?= \json_encode((string)__('网络错误，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planErrorNoDetail: <?= \json_encode((string)__('建站方案生成失败，但后端未返回具体错误详情。请查看队列日志，或刷新工作区后重试失败项。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStreamStartFailed: <?= \json_encode((string)__('建站方案进度流创建失败，请检查当前登录状态、路由和本地服务状态。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        saveFailed: <?= \json_encode((string)__('自动保存失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        switched: <?= \json_encode((string)__('预览页面已切换'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        targetDomainRequiredLabel: <?= \json_encode((string)__('目标域名（必填）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        targetDomainRequiredPlaceholder: <?= \json_encode((string)__('请先填写要绑定的目标域名'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        schemeRebuildButton: <?= \json_encode((string)__('重新生成方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSchemeRebuildConfirmTitle: <?= \json_encode((string)__('重建整个方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSchemeRebuildConfirmMessage: <?= \json_encode((string)__('方案重建会放弃当前方案以及待构建任务，并重新生成完整方案。是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSchemeRebuilding: <?= \json_encode((string)__('正在重建整个方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleRegenerateRequired: <?= \json_encode((string)__('建站资料已变更，与当前方案不一致。请先点击“重新生成方案”。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleConfirmTitle: <?= \json_encode((string)__('确认继续当前方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleConfirmMessage: <?= \json_encode((string)__('建站资料已变更，与当前方案不一致。是否仍按当前方案确认并进入第二阶段？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleConfirmText: <?= \json_encode((string)__('确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planInputStaleCancelText: <?= \json_encode((string)__('取消'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planMissingSelectedPages: <?= \json_encode((string)__('建站方案尚未覆盖全部选中页面（缺少：%{pages}），请重试失败项或重新生成方案后再确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStageOneValidationFailed: <?= \json_encode((string)__('建站方案尚未通过完整结构校验，请等待全部选中页面生成完成后再确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planResumeFailedTasks: <?= \json_encode((string)__('正在续跑失败项，已完成的阶段一内容将保留。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryFailedItemsLabel: <?= \json_encode((string)__('重试失败项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildResumeFailedTasks: <?= \json_encode((string)__('正在重试失败的构建任务，已成功的页面将保留。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildFullRebuildConfirmTitle: <?= \json_encode((string)__('重新生成当前构建阶段'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildFullRebuildConfirmMessage: <?= \json_encode((string)__('当前阶段完全重新生成会清空当前虚拟主题与已生成页面，并重新执行构建阶段任务。是否继续？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRequiredForPlanAction: <?= \json_encode((string)__('请先填写目标域名，再生成或更新建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainRequiredForBuild: <?= \json_encode((string)__('请先填写目标域名，再执行发布或域名相关操作。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStartUnavailable: <?= \json_encode((string)__('建站方案入口暂不可用，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planUpdating: <?= \json_encode((string)__('正在更新当前方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planGenerating: <?= \json_encode((string)__('正在生成建站方案...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planGenerated: <?= \json_encode((string)__('建站方案已生成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planConfirmRequired: <?= \json_encode((string)__('请先确认建站方案，再进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildPlanV2ConfirmRequired: <?= \json_encode((string)__('请先确认建站方案，系统会直接基于已确认方案进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planConfirmSaved: <?= \json_encode((string)__('建站方案已确认。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planConfirmStartBuildQuestion: <?= \json_encode((string)__('建站方案已确认，是否立即进入后台构建？'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPersisted: <?= \json_encode((string)__('方案已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPersistFailed: <?= \json_encode((string)__('方案保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageOneFieldEditPending: <?= \json_encode((string)__('已修改方案综述/主题信息，系统会直接写入当前方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageOneFieldAutosaved: <?= \json_encode((string)__('方案综述/主题微调已自动保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSortSaved: <?= \json_encode((string)__('方案块顺序已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSortSaveFailed: <?= \json_encode((string)__('方案块顺序保存失败。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planSortUnavailable: <?= \json_encode((string)__('方案排序接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeRefine: <?= \json_encode((string)__('微调方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeRebuild: <?= \json_encode((string)__('重建方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeReady: <?= \json_encode((string)__('可以继续微调或重建建站方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeUnavailable: <?= \json_encode((string)__('方案模式当前不可用，请检查生成流配置。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeRunning: <?= \json_encode((string)__('正在执行方案局部调整...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeDone: <?= \json_encode((string)__('方案局部调整已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planModeInstructionHint: <?= \json_encode((string)__('未选择局部操作时，这里可选填整体调整说明。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planActionPromptRequired: <?= \json_encode((string)__('请先输入本次方案局部调整要求，再执行当前模式。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPageRefineRunning: <?= \json_encode((string)__('正在微调当前页面块树...'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPageRefineDone: <?= \json_encode((string)__('当前页面块树微调已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPageRefineUnavailable: <?= \json_encode((string)__('微调当前页面接口暂不可用。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        stageOneBadge: <?= \json_encode((string)__('建站方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpCreate: <?= \json_encode((string)__('新增块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpRefine: <?= \json_encode((string)__('微调块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpRebuild: <?= \json_encode((string)__('局部重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpDelete: <?= \json_encode((string)__('删除块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpTargetPage: <?= \json_encode((string)__('页面'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpTargetBlock: <?= \json_encode((string)__('块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpIntentPrompt: <?= \json_encode((string)__('告诉 AI 你希望这个块怎么改'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpCreatePrompt: <?= \json_encode((string)__('告诉 AI 新增什么内容、放在哪里'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpDeleteReason: <?= \json_encode((string)__('可选：说明删除原因（留空表示直接删除）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpCommonHelp: <?= \json_encode((string)__('提交后会实时执行，并立即刷新预览与方案数据。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpQueued: <?= \json_encode((string)__('块级操作已入队，进度会同步到队列信息区。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpSuccess: <?= \json_encode((string)__('块级操作已完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockOpFailed: <?= \json_encode((string)__('块级操作未能完成，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStructuredPreviewEmpty: <?= \json_encode((string)__('方案等待确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planStructuredPreviewEmptyRunning: <?= \json_encode((string)__('方案正在生成中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        continueGenerateNow: <?= \json_encode((string)__('继续生成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        continueGenerateLater: <?= \json_encode((string)__('稍后继续'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        continueObserveNow: <?= \json_encode((string)__('继续观察'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        continueObserveLater: <?= \json_encode((string)__('关闭继续操作'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        resumeRunningPrompt: <?= \json_encode((string)__('检测到有正在执行的工作区队列，可继续观察执行流；队列由系统调度执行，也可以关闭窗口继续操作其他内容。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        resumeDeferred: <?= \json_encode((string)__('已保留当前任务，稍后可以继续。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        operationStreamMissing: <?= \json_encode((string)__('后台已接受任务，但未返回可观察的进度流。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineInstructionRequired: <?= \json_encode((string)__('请先输入区块微调要求'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineUnavailable: <?= \json_encode((string)__('当前区块暂时无法发起 AI 微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineQueued: <?= \json_encode((string)__('已提交区块局部修改，等待系统稍后调度处理'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        refineStreaming: <?= \json_encode((string)__('已开始区块微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        regenerateStreaming: <?= \json_encode((string)__('已开始区块重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        regenerateQueued: <?= \json_encode((string)__('已确认区块重建，正在重新生成当前页面'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseConfirmRefine: <?= \json_encode((string)__('确认微调'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseConfirmRebuild: <?= \json_encode((string)__('确认重建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseConfirmDefault: <?= \json_encode((string)__('确认执行'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        buildQueueBusyActionBlocked: <?= \json_encode((string)__('构建队列正在执行，请等待完成或失败后再操作。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiQueueRunning: <?= \json_encode((string)__('当前队列仍在运行，等待完成后查看失败结果。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiFailuresPending: <?= \json_encode((string)__('当前仍有 AI 生成失败项，请点击重新重试或重新生成方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiFailuresPendingWithCount: <?= \json_encode((string)__('当前仍有 %{count} 个 AI 生成失败项，请点击重新重试或重新生成方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumeOperationPlan: <?= \json_encode((string)__('建站方案'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiResumeOperationBuild: <?= \json_encode((string)__('构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishFailureListTitle: <?= \json_encode((string)__('失败项明细'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        retryableAiFailureItemPrefix: <?= \json_encode((string)__('失败项'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planFailureListTitle: <?= \json_encode((string)__('阶段一失败项，请重新重试'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planFailureListHint: <?= \json_encode((string)__('请重新重试或重新生成方案；失败详情如下。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editUnavailable: <?= \json_encode((string)__('当前区块暂时无法打开字段编辑弹窗。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        operationDone: <?= \json_encode((string)__('操作执行完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainNeedBrief: <?= \json_encode((string)__('请先填写站点名称和需求描述。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        domainNeedRegistrar: <?= \json_encode((string)__('请先选择域名供应商。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryPendingBadge: <?= \json_encode((string)__('等待构建完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryBuildingBadge: <?= \json_encode((string)__('正在构建'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryFailedBadge: <?= \json_encode((string)__('最新 AI 生成失败'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishBlockedLatestBuildFailure: <?= \json_encode((string)__('最新 AI 生成失败或仍在运行，禁止发布旧站点；请先重新生成并等待成功完成。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryReadyBadge: <?= \json_encode((string)__('可发布确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryReadyTitle: <?= \json_encode((string)__('虚拟主题已就绪，下一步进入确认发布'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        publishStageEntryButton: <?= \json_encode((string)__('发布确认'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualPreviewFullscreenTitle: <?= \json_encode((string)__('主题预览放大查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualPreviewFullscreenOpen: <?= \json_encode((string)__('放大预览'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        visualPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPreviewFullscreenTitle: <?= \json_encode((string)__('建站方案全屏查看'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        planPreviewFullscreenClose: <?= \json_encode((string)__('关闭'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+    });
     function getLatestWorkspaceStateForQueuePrompt() {
         if (latestWorkspaceState && typeof latestWorkspaceState === 'object') {
             return normalizeWorkspaceStateShape(latestWorkspaceState);
@@ -3040,7 +3147,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         overviewBusinessGoals: <?= \json_encode((string)__('业务目标（每行一项）'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         overviewContentFocus: <?= \json_encode((string)__('内容重点'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         overviewDomainStrategy: <?= \json_encode((string)__('转化策略与主 CTA'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
-        overviewEditHint: <?= \json_encode((string)__('可直接修改，修改后自动写入方案草稿。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
+        overviewEditHint: <?= \json_encode((string)__('可直接修改，修改后自动写入当前方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeTab: <?= \json_encode((string)__('主题'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themeTabEmpty: <?= \json_encode((string)__('当前方案暂未写入主题级全局信息，请先生成或微调方案。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
         themePurpose: <?= \json_encode((string)__('主题宗旨'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>,
@@ -7236,7 +7343,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return true;
     }
 
-    /** 根据当前前端状态判断是否已有建站方案（草稿或已确认）。 */
+    /** 根据当前前端状态判断是否已有持久化建站方案。 */
     function hasPhaseOnePlanPresent() {
         var md = String((currentPlanPayload && currentPlanPayload.markdown) || '').trim();
         if (md !== '') {
@@ -13797,11 +13904,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
 
     function markStageOneInlineEditDirty() {
         stageOneInlineEditDirty = true;
-        var savePlanBtn = document.getElementById('pb-ai-save-plan-draft');
-        if (savePlanBtn) {
-            savePlanBtn.classList.remove('d-none');
-        }
-        setPlanModeStatus(messages.stageOneFieldEditPending || messages.planDraftSaved);
+        setPlanModeStatus(messages.stageOneFieldEditPending || messages.planPersisted);
     }
 
     function persistStageOneInlineEdits(forcePersist) {
@@ -13845,7 +13948,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 hydrateWorkspaceFromState(data.data);
             }
             if (!force) {
-                setPlanModeStatus(messages.stageOneFieldAutosaved || messages.planDraftSaved);
+                setPlanModeStatus(messages.stageOneFieldAutosaved || messages.planPersisted);
             }
             return true;
         }).catch(function () {
@@ -14634,7 +14737,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }
         return persistStageOneInlineEdits(true).then(function (patched) {
             if (!patched) {
-                toast('warning', messages.planDraftSaveFailed);
+                toast('warning', messages.planPersistFailed);
                 return false;
             }
             return postForm(confirmPlanUrl, {
@@ -16376,7 +16479,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             var payload = parsePlanTerminalPayload(event);
             if (payload && payload.message) {
                 var progressMsg = String(payload.message);
-                var isAiHintOnly = /AI\s*(提示|建议|草稿|思路)/.test(progressMsg);
+                var isAiHintOnly = /AI\s*(提示|建议|思路)/.test(progressMsg);
                 setPlanModeStatus(progressMsg);
                 setPlanModalProgress(progressMsg, resolveQueuedStagePayloadProgressPercent(payload, 35), false);
                 if (!isAiHintOnly && typeof terminal.log === 'function') {
@@ -16474,7 +16577,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             }
             setPlanGenerationActionLock(false);
             setPlanModeStatus(messages.planModeDone);
-            setPlanModalProgress(messages.planModeDone, 100, hasCurrentPhaseOnePlanDraft());
+            setPlanModalProgress(messages.planModeDone, 100, hasCurrentPhaseOnePlan());
             // setPlanModalProgress 会把队列 UI 标为 completed；在它之后才符合 isPlanGenerationRunningNow 的兜底判定，需再渲染一次预览避免空态文案卡住。
             if (typeof rerenderCurrentPlanPreview === 'function') {
                 rerenderCurrentPlanPreview();
@@ -16598,7 +16701,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             if (data && data.success && data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
                 setPlanModeStatus((data && data.message) ? String(data.message) : (messages.planPageRefineDone || messages.planModeDone));
-                setPlanModalProgress(messages.planPageRefineDone || messages.planModeDone, 100, hasCurrentPhaseOnePlanDraft());
+                setPlanModalProgress(messages.planPageRefineDone || messages.planModeDone, 100, hasCurrentPhaseOnePlan());
                 if (typeof rerenderCurrentPlanPreview === 'function') {
                     rerenderCurrentPlanPreview();
                 }
@@ -17071,54 +17174,11 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         return Promise.resolve(window.confirm(confirmMessage));
     }
 
-    function savePhaseOnePlanDraftThen(callback) {
-        var cb = typeof callback === 'function' ? callback : function () {};
-        if (!mergeScopeUrl || !String(publicId || '').trim()) {
-            cb(false);
-            return;
-        }
-        if (!hasCurrentPhaseOnePlanDraft()) {
-            toast('warning', messages.planStartUnavailable);
-            cb(false);
-            return;
-        }
-        persistStageOneInlineEdits(true).then(function (patched) {
-            if (!patched) {
-                toast('warning', messages.planDraftSaveFailed);
-                cb(false);
-                return;
-            }
-            postJson(mergeScopeUrl, {
-                public_id: publicId,
-                autosave: '1',
-                save_target: 'plan',
-                save_plan_draft: '1'
-            }).then(function (data) {
-                if (data && data.success) {
-                    if (data.data && typeof data.data === 'object') {
-                        hydrateWorkspaceFromState(data.data);
-                    }
-                    toast('success', messages.planDraftSaved);
-                    cb(true);
-                    return;
-                }
-                toast('warning', (data && data.message) ? String(data.message) : messages.planDraftSaveFailed);
-                cb(false);
-            }).catch(function () {
-                toast('error', messages.planDraftSaveFailed);
-                cb(false);
-            });
-        }).catch(function () {
-            toast('error', messages.planDraftSaveFailed);
-            cb(false);
-        });
-    }
-
     /**
      * 拼接任务方案 SSE 的 GET URL：附加 public_id、prompt_mode，以及可选的 instruction、target_scope。
      */
     /**
-     * 启动任务方案的 detect_bootstrap SSE：在本地无草稿时向后端拉取初始任务计划骨架，再衔接后续模式。
+     * 启动任务方案的 detect_bootstrap SSE：在本地无方案时向后端拉取初始任务计划骨架，再衔接后续模式。
      */
     function syncBuildPlanStartButtonState(workspaceState) {
         var buildBtn = document.getElementById('pb-ai-start-build-site');
@@ -17176,7 +17236,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         if (planStartRequestPending) {
             return Promise.resolve(false);
         }
-        if (!hasCurrentPhaseOnePlanDraft() && !isPlanInputStaleForConfirmation()) {
+        if (!hasCurrentPhaseOnePlan() && !isPlanInputStaleForConfirmation()) {
             toast('warning', messages.planStartUnavailable);
             return Promise.resolve(false);
         }
@@ -17235,8 +17295,8 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             if (forceRebuild) {
                 return 'rebuild';
             }
-            var hasDraft = hasCurrentPhaseOnePlanDraft();
-            if (!hasDraft) {
+            var hasPlan = hasCurrentPhaseOnePlan();
+            if (!hasPlan) {
                 return 'rebuild';
             }
             return '';
@@ -17244,7 +17304,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         var isResumeRepair = resolveInitialPlanPromptMode() === PLAN_PROMPT_MODE_RESUME;
         var planProgressMessage = forceRebuild
             ? messages.planSchemeRebuilding
-            : (isResumeRepair ? messages.planResumeFailedTasks : messages.planSaving);
+            : (isResumeRepair ? messages.planResumeFailedTasks : messages.planUpdating);
         bindPlanModalViewSwitchers();
         bindPlanModeSwitchers();
         clearPlanPreviewActionContext({ preserveValue: false, restoreStatus: false });
@@ -17399,7 +17459,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
             }
             if (data.start_sse === false && !reuseRunningPlan) {
                 var keepMessage = (data && data.message) ? String(data.message) : messages.planGenerated;
-                setPlanModalProgress(keepMessage, 100, hasCurrentPhaseOnePlanDraft());
+                setPlanModalProgress(keepMessage, 100, hasCurrentPhaseOnePlan());
                 setPlanRetryButtonVisible(false);
                 toast('success', keepMessage);
                 planStartRequestPending = false;
@@ -17593,7 +17653,38 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         ensureBuildPlanConfirmedBeforeBuild(null, types, {});
     }
 
-    function confirmCurrentPlanAndMaybeBuild() {
+    function isPlanInputStaleConfirmationResponse(data) {
+        if (!data || typeof data !== 'object') {
+            return false;
+        }
+        return String(data.code || '') === 'PLAN_INPUT_STALE'
+            && (!!data.requires_confirmation || String(data.confirmation_code || '') === 'PLAN_INPUT_STALE_CONFIRM');
+    }
+
+    function promptPlanInputStaleConfirmation(data) {
+        var confirmMessage = String(
+            (data && (data.confirm_message || data.message))
+            || messages.planInputStaleConfirmMessage
+            || messages.planInputStaleRegenerateRequired
+            || ''
+        );
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(confirmMessage, {
+                title: String(messages.planInputStaleConfirmTitle || ''),
+                confirmText: String(messages.planInputStaleConfirmText || ''),
+                cancelText: String(messages.planInputStaleCancelText || '')
+            }).then(function (confirmed) {
+                return !!confirmed;
+            }).catch(function () {
+                return false;
+            });
+        }
+        toast('warning', confirmMessage);
+        return Promise.resolve(false);
+    }
+
+    function confirmCurrentPlanAndMaybeBuild(options) {
+        var opts = options && typeof options === 'object' ? options : {};
         if (!confirmPlanUrl) {
             toast('error', messages.planStartUnavailable);
             return;
@@ -17603,15 +17694,33 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         }
         persistStageOneInlineEdits(true).then(function (patched) {
             if (!patched) {
-                toast('warning', messages.planDraftSaveFailed);
+                toast('warning', messages.planPersistFailed);
                 syncConfirmPlanButtonEnabled();
                 return;
             }
-            postForm(confirmPlanUrl, {
+            var fields = {
                 public_id: publicId,
                 stage: 'plan'
+            };
+            if (opts.forceConfirmStalePlan === true) {
+                fields.force_confirm_stale_plan = '1';
+            }
+            postForm(confirmPlanUrl, {
+                public_id: fields.public_id,
+                stage: fields.stage,
+                force_confirm_stale_plan: fields.force_confirm_stale_plan || '0'
             }).then(function (data) {
                 if (!data || !data.success) {
+                    if (opts.forceConfirmStalePlan !== true && isPlanInputStaleConfirmationResponse(data)) {
+                        promptPlanInputStaleConfirmation(data).then(function (confirmed) {
+                            if (confirmed) {
+                                confirmCurrentPlanAndMaybeBuild({ forceConfirmStalePlan: true });
+                                return;
+                            }
+                            syncConfirmPlanButtonEnabled();
+                        });
+                        return;
+                    }
                     toast('error', (data && data.message) ? String(data.message) : messages.networkError);
                     syncConfirmPlanButtonEnabled();
                     return;
@@ -17629,7 +17738,7 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 syncPlanRebuildButtonVisibility();
             });
         }).catch(function () {
-            toast('warning', messages.planDraftSaveFailed);
+            toast('warning', messages.planPersistFailed);
             syncConfirmPlanButtonEnabled();
         });
     }
@@ -17808,14 +17917,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
                 });
             });
         }
-        var savePlanBtn = document.getElementById('pb-ai-save-plan-draft');
-        if (savePlanBtn && savePlanBtn.dataset.pbBound !== '1') {
-            savePlanBtn.dataset.pbBound = '1';
-            savePlanBtn.addEventListener('click', function () {
-                savePhaseOnePlanDraftThen(function () {});
-            });
-        }
-
         var startBuildSiteBtn = document.getElementById('pb-ai-start-build-site');
         if (startBuildSiteBtn) {
             startBuildSiteBtn.dataset.pbBound = '1';
@@ -18642,27 +18743,6 @@ $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchase
         bindVisualEditStageLogic: bindVisualEditStageLogic,
         bindPublishStageLogic: bindPublishStageLogic
     };
-
-    var mergeBtn = document.getElementById('pb-ai-merge-scope');
-    var replaceBtn = document.getElementById('pb-ai-replace-scope');
-    var patchTA = document.getElementById('pb-ai-scope-patch');
-    var fullTA = document.getElementById('pb-ai-scope-full');
-    if (mergeBtn && patchTA) {
-        mergeBtn.addEventListener('click', function () {
-            postForm(mergeScopeUrl, { public_id: publicId, scope_patch: patchTA.value }).then(function (data) {
-                if (data && data.success) { toast('success', messages.saveSuccess); window.location.reload(); return; }
-                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
-            }).catch(function () { toast('error', messages.networkError); });
-        });
-    }
-    if (replaceBtn && fullTA) {
-        replaceBtn.addEventListener('click', function () {
-            postForm(replaceScopeUrl, { public_id: publicId, scope: fullTA.value }).then(function (data) {
-                if (data && data.success) { toast('success', messages.saveSuccess); window.location.reload(); return; }
-                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
-            }).catch(function () { toast('error', messages.networkError); });
-        });
-    }
 
     function showWorkspaceEntryQueueNotice(workspaceState) {
         var notice = workspaceState && typeof workspaceState === 'object' && workspaceState.workspace_entry_notice

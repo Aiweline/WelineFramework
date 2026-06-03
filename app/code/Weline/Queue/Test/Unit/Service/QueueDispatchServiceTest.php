@@ -129,6 +129,39 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString('return true;', $wakeGateSource);
     }
 
+    public function testQueueQueryProviderWakesSchedulerWhenUpdateResetsAutoPendingQueue(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/QueueQueryProvider.php');
+        $updateMethodSource = $this->extractPrivateMethodSource($source, 'updateQueue');
+        $dispatchableSource = $this->extractPrivateMethodSource($source, 'isQueueDispatchableForScheduler');
+
+        self::assertStringContainsString('if ($this->shouldWakeScheduler($params) && $this->isQueueDispatchableForScheduler($queue))', $updateMethodSource);
+        self::assertStringContainsString('$this->wakeSystemScheduler($queue);', $updateMethodSource);
+        self::assertStringContainsString('!$queue->isFinished()', $dispatchableSource);
+        self::assertStringContainsString('$queue->getAuto()', $dispatchableSource);
+        self::assertStringContainsString('$queue->getStatus() === Queue::status_pending', $dispatchableSource);
+    }
+
+    public function testQueueQueryProviderUpdateKeepsQueueIdBeforeReloadingFreshRow(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/QueueQueryProvider.php');
+        $updateMethodSource = $this->extractPrivateMethodSource($source, 'updateQueue');
+
+        $saveOffset = \strpos($updateMethodSource, '$queue->save();');
+        $idOffset = \strpos($updateMethodSource, '$queueId = (int)$queue->getId();');
+        $loadOffset = \strpos($updateMethodSource, '$queue->clearData()->load($queueId);');
+        $returnOffset = \strpos($updateMethodSource, "'queue_id' => \$queueId");
+
+        self::assertNotFalse($saveOffset);
+        self::assertNotFalse($idOffset);
+        self::assertNotFalse($loadOffset);
+        self::assertNotFalse($returnOffset);
+        self::assertLessThan($idOffset, $saveOffset);
+        self::assertLessThan($loadOffset, $idOffset);
+        self::assertLessThan($returnOffset, $loadOffset);
+        self::assertStringNotContainsString('clearData()->load((int)$queue->getId())', $updateMethodSource);
+    }
+
     public function testReconcileChecksPidLivenessAndWritesOperatorMessage(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');

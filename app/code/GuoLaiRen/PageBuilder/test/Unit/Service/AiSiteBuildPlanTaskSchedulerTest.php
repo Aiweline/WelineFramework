@@ -83,6 +83,55 @@ final class AiSiteBuildPlanTaskSchedulerTest extends TestCase
         self::assertSame([], $missing);
     }
 
+    public function testCollectMissingSelectedPlanPageTypesUsesNestedStageOnePageSources(): void
+    {
+        $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
+        $missing = $service->collectMissingSelectedPlanPageTypes([
+            'page_types' => ['home_page', 'about_page', 'contact_page', 'privacy_policy'],
+            'plan_json' => [
+                'stage1' => [
+                    'page_plans' => [
+                        [
+                            'page' => [
+                                'page_type' => 'home_page',
+                                'blocks' => [['block_key' => 'hero']],
+                            ],
+                        ],
+                        [
+                            'page_plan' => [
+                                'type' => 'about_page',
+                                'blocks' => [['block_key' => 'story']],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'plan_workbench' => [
+                'stage1' => [
+                    'pages' => [
+                        [
+                            'page' => [
+                                'type' => 'contact_page',
+                                'blocks' => [['block_key' => 'form']],
+                            ],
+                        ],
+                    ],
+                ],
+                'confirmed' => [
+                    'structured_plan' => [
+                        'page_plans' => [
+                            'privacy_policy' => [
+                                'blocks' => [['block_key' => 'legal']],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertSame([], $missing);
+    }
+
     public function testCollectMissingSelectedPlanPageTypesUsesConfirmedPlanBookStructuredSources(): void
     {
         $service = new AiSiteBuildTaskService(new AiSitePageBlueprintService());
