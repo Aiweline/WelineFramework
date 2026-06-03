@@ -11273,7 +11273,7 @@ PROMPT;
                 'AI component contains invalid image resource: '
                 . \implode(', ', \array_slice($broken, 0, 5))
             );
-            throw new \RuntimeException((string)__('AI 缁勪欢鍖呭惈鏃犳晥鍥剧墖璧勬簮锛?{1}', [\implode(', ', \array_slice($broken, 0, 5))]));
+            throw new \RuntimeException((string)__('AI 组件包含无效图片资源：%{1}', [\implode(', ', \array_slice($broken, 0, 5))]));
         }
     }
     private function extractHtmlAttribute(string $tag, string $attribute): string
@@ -11353,7 +11353,7 @@ PROMPT;
 
         $result = $renderer->render($phtml);
         if (!($result['success'] ?? false)) {
-            throw new \RuntimeException((string)__('AI 缁勪欢棰勮娓叉煋澶辫触锛?{message}', [
+            throw new \RuntimeException((string)__('AI 组件预览渲染失败：{message}', [
                 'message' => (string)($result['error'] ?? 'unknown'),
             ]));
         }
@@ -15017,15 +15017,26 @@ JSON;
      */
     private function resolveThemeContract(array $scope): array
     {
-        foreach ([
-            $this->resolveBuildPlanTaskRoot($scope),
-            [
-                'theme_design' => \is_array($scope['theme_design'] ?? null) ? $scope['theme_design'] : [],
-                'theme_style' => \is_array($scope['theme_style'] ?? null) ? $scope['theme_style'] : [],
-                'palette' => \is_array($scope['palette'] ?? null) ? $scope['palette'] : [],
-            ],
-            \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
-        ] as $candidate) {
+        $candidates = [];
+        try {
+            $buildPlanTaskRoot = $this->resolveBuildPlanTaskRoot($scope);
+            if ($buildPlanTaskRoot !== []) {
+                $candidates[] = $buildPlanTaskRoot;
+            }
+        } catch (\RuntimeException $exception) {
+            if (!\str_contains($exception->getMessage(), 'confirmed build_plan_v2 has no executable blocks')) {
+                throw $exception;
+            }
+        }
+
+        $candidates[] = [
+            'theme_design' => \is_array($scope['theme_design'] ?? null) ? $scope['theme_design'] : [],
+            'theme_style' => \is_array($scope['theme_style'] ?? null) ? $scope['theme_style'] : [],
+            'palette' => \is_array($scope['palette'] ?? null) ? $scope['palette'] : [],
+        ];
+        $candidates[] = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+
+        foreach ($candidates as $candidate) {
             if (!\is_array($candidate) || $candidate === []) {
                 continue;
             }
@@ -17013,7 +17024,7 @@ JSON;
         ) {
             return '';
         }
-        if (\in_array($normalized, ['棣栭〉', '涓婚〉', '鍏充簬鎴戜滑', '鍏充簬', 'home', 'home page', 'about', 'about page', 'about us'], true)) {
+        if (\in_array($normalized, ['首页', '主页', '关于我们', '关于', 'home', 'home page', 'about', 'about page', 'about us'], true)) {
             return '';
         }
         foreach (['core selling points', 'feature characteristics', 'page type', 'content block', 'planning', 'blueprint'] as $marker) {

@@ -318,6 +318,89 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
+    public function testPrepareBuildAssetsPrioritizesPageImagesBeforeIdentityByDefault(): void
+    {
+        $publicId = 'asset-page-images-first-' . \bin2hex(\random_bytes(4));
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
+
+        $scope = [
+            'site_title' => 'Royal Indian Games',
+            'website_profile' => [
+                'site_title' => 'Royal Indian Games',
+                'brief_description' => 'A premium card game website.',
+            ],
+            'asset_manifest' => [
+                'slots' => [
+                    'identity:website-logo' => [
+                        'slot_id' => 'identity:website-logo',
+                        'slot_type' => 'logo_icon',
+                        'required' => 1,
+                        'label' => 'Website logo',
+                        'brief' => 'A transparent website logo.',
+                    ],
+                    'identity:site-title-icon' => [
+                        'slot_id' => 'identity:site-title-icon',
+                        'slot_type' => 'logo_icon',
+                        'required' => 1,
+                        'label' => 'Site title icon',
+                        'brief' => 'A transparent title icon.',
+                    ],
+                    'home:hero' => [
+                        'slot_id' => 'home:hero',
+                        'slot_type' => 'hero_image',
+                        'page_type' => 'home_page',
+                        'required' => 1,
+                        'label' => 'Hero visual',
+                        'brief' => 'A premium homepage hero image.',
+                    ],
+                    'about:story' => [
+                        'slot_id' => 'about:story',
+                        'slot_type' => 'section_image',
+                        'page_type' => 'about_page',
+                        'required' => 1,
+                        'label' => 'Origin story visual',
+                        'brief' => 'A card-room origin story image.',
+                    ],
+                ],
+            ],
+        ];
+
+        $service = new AiSiteAutoAssetGenerationService(
+            new AiSiteAssetManifestService(),
+            null,
+            static fn(string $prompt, int $adminId, string $slotId): array => [
+                'images' => [[
+                    'b64_json' => \base64_encode('page-image-' . $slotId),
+                    'mime_type' => 'image/png',
+                ]],
+                'model' => 'fake-image-model',
+            ]
+        );
+        $result = $service->prepareBuildAssets($session, 2, $scope, 2);
+        $generatedSlots = $result['generated_slots'];
+        $slots = $result['scope']['asset_manifest']['slots'] ?? [];
+
+        try {
+            self::assertSame(['home:hero', 'about:story'], $generatedSlots);
+            self::assertSame('pending', (string)($slots['identity:website-logo']['status'] ?? 'pending'));
+            self::assertSame('pending', (string)($slots['identity:site-title-icon']['status'] ?? 'pending'));
+            foreach ($generatedSlots as $slotId) {
+                self::assertSame('done', (string)($slots[$slotId]['status'] ?? ''));
+            }
+        } finally {
+            foreach ($generatedSlots as $slotId) {
+                $slot = \is_array($slots[$slotId] ?? null) ? $slots[$slotId] : [];
+                $variant = \is_array($slot['variants'][0] ?? null) ? $slot['variants'][0] : [];
+                $relativePath = (string)($variant['path'] ?? '');
+                $absolutePath = $relativePath !== '' ? BP . \str_replace('/', \DIRECTORY_SEPARATOR, $relativePath) : '';
+                if ($absolutePath !== '' && \is_file($absolutePath)) {
+                    \unlink($absolutePath);
+                }
+            }
+        }
+    }
+
     public function testPrepareBuildAssetsStoresGeneratedFilesUnderDomainHandle(): void
     {
         $session = new AiSiteAgentSession();

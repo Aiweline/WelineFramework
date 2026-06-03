@@ -300,6 +300,22 @@ final class AiSiteAgentQueueReuseTest extends TestCase
             ['_plan_queue_retry_count' => 0],
             'Stage-one plan invalid JSON; retry same queue data'
         ));
+        self::assertFalse($method->invoke(
+            $queue,
+            ['_plan_queue_retry_count' => 3],
+            'Stage-one plan invalid JSON; retry same queue data'
+        ));
+    }
+
+    public function testPlanQueueDoesNotAutoRetryCompletionGateAfterMaximumAttempts(): void
+    {
+        $queue = new AiSitePlanQueue();
+        $method = new ReflectionMethod(AiSitePlanQueue::class, 'canSchedulePlanCompletionGateRetry');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke($queue, []));
+        self::assertTrue($method->invoke($queue, ['_plan_completion_gate_retry_count' => 2]));
+        self::assertFalse($method->invoke($queue, ['_plan_completion_gate_retry_count' => 3]));
     }
 
     public function testLegacyTaskPlanQueueOperationIsNotSupported(): void
@@ -887,6 +903,63 @@ final class AiSiteAgentQueueReuseTest extends TestCase
                     'page_plans' => [
                         'about_page' => [
                             'blocks' => [['block_key' => 'story']],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $sessionService = $this->getMockBuilder(AiSiteAgentSessionService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['loadByPublicId', 'loadScopeForStage'])
+            ->getMock();
+        $sessionService->method('loadByPublicId')->willReturn($session);
+        $sessionService->method('loadScopeForStage')->willReturn($scope);
+
+        $scopeService = $this->getMockBuilder(AiSiteScopeCompatibilityService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['normalizeScope', 'resolveScopedPageTypes'])
+            ->getMock();
+        $scopeService->method('normalizeScope')->willReturnArgument(0);
+        $scopeService->method('resolveScopedPageTypes')->willReturn(['home_page', 'about_page', 'contact_page']);
+
+        $queue = new AiSitePlanQueue();
+        $method = new ReflectionMethod(AiSitePlanQueue::class, 'assertPlanQueueCompletionGate');
+        $method->setAccessible(true);
+
+        self::assertSame([], $method->invoke($queue, $sessionService, $scopeService, 'public-plan-id', 7));
+    }
+
+    public function testPlanQueueCompletionGateUsesConfirmedPlanBookStructuredSources(): void
+    {
+        $session = new AiSiteAgentSession();
+        $session->setData(AiSiteAgentSession::schema_fields_ID, 123);
+        $contractHash = 'stage-one-contract-hash';
+        $scope = [
+            'fake_mode' => 1,
+            'page_types' => ['home_page', 'about_page', 'contact_page'],
+            'plan_markdown' => '# Stage one plan',
+            'plan_json' => [
+                'stage1_contract' => ['contract_hash' => $contractHash],
+                'stage1_validation_report' => ['passed' => true, 'contract_hash' => $contractHash],
+            ],
+            'plan_workbench' => [
+                'confirmed' => [
+                    'plan_book' => [
+                        'structured' => [
+                            'pages' => [
+                                'home_page' => [
+                                    'blocks' => [['block_key' => 'hero']],
+                                ],
+                            ],
+                            'page_plans' => [
+                                'about_page' => [
+                                    'blocks' => [['block_key' => 'story']],
+                                ],
+                                'contact_page' => [
+                                    'blocks' => [['block_key' => 'form']],
+                                ],
+                            ],
                         ],
                     ],
                 ],

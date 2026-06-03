@@ -27,7 +27,8 @@ final class AiSitePlanPreviewContractTest extends TestCase
         self::assertStringContainsString('previewLabels.implementationNote', $this->extractFunctionBody($script, 'renderPlanPagePreviewCard'));
 
         self::assertStringContainsString('function normalizeStageOneStructuredRootForPreview', $script);
-        self::assertStringContainsString('conf.plan_book.structured', $script);
+        self::assertStringContainsString('payload.plan_book.structured', $script);
+        self::assertStringContainsString('collectStageOnePlanWorkbenchPreviewCandidates({ confirmed: payload.confirmed })', $script);
         self::assertStringContainsString('pages: pagePlans', $script);
     }
 
