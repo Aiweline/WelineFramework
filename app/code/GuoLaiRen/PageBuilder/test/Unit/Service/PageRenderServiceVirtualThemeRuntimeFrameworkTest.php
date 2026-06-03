@@ -78,9 +78,57 @@ HTML;
         self::assertStringContainsString('data-pb-ai-header-mobile-compact="1"', $result);
         self::assertStringContainsString('bottom: auto !important;', $result);
         self::assertStringContainsString('max-height: min(70vh, 360px) !important;', $result);
+        self::assertStringContainsString('overflow-wrap: anywhere !important;', $result);
+        self::assertStringContainsString('white-space: normal !important;', $result);
+        self::assertStringContainsString('max-width: 100vw !important;', $result);
 
         $contentResult = (string)$apply->invoke($service, $html, 'content/hero');
         self::assertStringNotContainsString('data-pb-ai-header-mobile-compact="1"', $contentResult);
+    }
+
+    public function testStaticConfigOverridesDoNotReplaceBrandFromNavigationLabels(): void
+    {
+        $service = new PageRenderService(
+            $this->createStub(LayoutAssembler::class),
+            $this->createStub(LayoutOwnerResolver::class),
+            $this->createStub(Page::class),
+            $this->createStub(Style::class),
+            $this->createStub(LocalDescription::class),
+        );
+
+        $apply = new \ReflectionMethod($service, 'applyVirtualThemeConfigOverridesToStaticHtml');
+        $apply->setAccessible(true);
+
+        $html = '<header><a class="logo"><span>Card Room Download Hub</span></a><nav>'
+            . '<a>Card Room Download Hub</a><a>Card Room Download Hub</a><a>Card Room Download Hub</a>'
+            . '</nav></header><main><h1>Old hero headline</h1></main>';
+        $referenceConfig = [
+            'logo.text' => 'Card Room Download Hub',
+            'navigation.items' => "Card Room Download Hub=>/\nCard Room Download Hub=>/about\nCard Room Download Hub=>/contact",
+            'nav_items' => [
+                ['text' => 'Card Room Download Hub', 'href' => '/'],
+                ['text' => 'Card Room Download Hub', 'href' => '/about'],
+                ['text' => 'Card Room Download Hub', 'href' => '/contact'],
+            ],
+            'content.title' => 'Old hero headline',
+        ];
+        $currentConfig = [
+            'logo.text' => 'Card Room Download Hub',
+            'navigation.items' => "Home=>/\nAbout=>/about\nContact=>/contact",
+            'nav_items' => [
+                ['text' => 'Home', 'href' => '/'],
+                ['text' => 'About', 'href' => '/about'],
+                ['text' => 'Contact', 'href' => '/contact'],
+            ],
+            'content.title' => 'New hero headline',
+        ];
+
+        $result = (string)$apply->invoke($service, $html, $referenceConfig, $currentConfig);
+
+        self::assertStringContainsString('<span>Card Room Download Hub</span>', $result);
+        self::assertStringNotContainsString('<span>Contact</span>', $result);
+        self::assertSame(4, \substr_count($result, 'Card Room Download Hub'));
+        self::assertStringContainsString('<h1>New hero headline</h1>', $result);
     }
 
     public function testVisualModeDocumentLanguageUsesRenderLocale(): void

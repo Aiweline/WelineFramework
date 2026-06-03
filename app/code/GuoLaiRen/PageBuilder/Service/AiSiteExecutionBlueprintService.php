@@ -28,7 +28,7 @@ final class AiSiteExecutionBlueprintService
     private const STAGE_ONE_SEGMENTED_PAGE_TARGET_THRESHOLD = 7;
     private const STAGE_ONE_PAGE_SKELETON_MAX_TOKENS = 2600;
     private const STAGE_ONE_PAGE_BLOCK_SEGMENT_MAX_TOKENS = 5200;
-    private const STAGE_ONE_PAGE_BLOCK_SEGMENT_SIZE = 1;
+    private const STAGE_ONE_PAGE_BLOCK_SEGMENT_SIZE = 2;
     private const TEMPLATE_SCAFFOLD_BRAND_TERMS = [
         'LudoEmpire',
         'PokerArena',
@@ -962,7 +962,7 @@ final class AiSiteExecutionBlueprintService
             $this->emitStageOnePlanProgressState($onProgressState, $progressSignature, $planJson, 'plan_assemble', $pageTypes, $combinedRetryableFailures);
             $this->emitStageOnePipelineProgress(
                 $onProgress,
-                '阶段一总设计装配完成，正在写入方案草稿',
+                '阶段一总设计装配完成，正在写入当前方案',
                 92,
                 'plan_assemble',
                 'done',
@@ -3057,7 +3057,7 @@ final class AiSiteExecutionBlueprintService
                 ? 'Summarize the APK download promise, game categories, safety proof, install path, and final download CTA.'
                 : 'Introduce the offer, proof, benefits, workflow, and primary CTA.',
             'about_page' => 'Explain credibility, mission, selection standards, and why visitors should trust the site.',
-            'contact_page' => 'Make support paths, response expectations, and common questions easy to scan.',
+            'contact_page' => 'Make support paths, response expectations, common questions, and a concrete support/help-desk visual opportunity easy to scan.',
             'privacy_policy' => 'Explain data collection, cookies, user rights, and privacy contact points in plain language.',
             'terms_of_service' => 'Clarify usage rules, visitor responsibilities, limitations, and support escalation.',
             'refund_policy' => $isDownloadSite
@@ -4966,10 +4966,10 @@ final class AiSiteExecutionBlueprintService
     {
         $examples = [
             'home_page' => 'hero plus major body sections such as game_showcase, comparison, proof, support, and final_cta when the page is visually rich',
-            'about_page' => 'origin_story plus proof/team/process sections when the page is visually rich',
-            'contact_page' => 'contact_methods plus support/help desk sections when the page is visually rich',
-            'blog_post' => 'article_hero plus one contextual editorial image section',
-            'blog_category' => 'category_hero plus featured article media',
+            'about_page' => 'origin_story plus at least one proof/team/process media section when the page is visually rich',
+            'contact_page' => 'contact_methods plus support/help desk media sections when the page is visually rich',
+            'blog_post' => 'article_hero plus contextual editorial images for article body sections',
+            'blog_category' => 'category_hero plus featured article media and category rail imagery',
         ];
 
         return \json_encode($examples, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '{}';
@@ -4990,11 +4990,11 @@ final class AiSiteExecutionBlueprintService
             }
             if ($generatedImageTargetKey !== '' && $segmentKey === $generatedImageTargetKey) {
                 $examples[$segmentKey] = [
-                    'needs_image' => 'prefer true when the generated image strengthens this block, otherwise false',
+                    'needs_image' => 'prefer true when the generated image strengthens this block or prevents a large body section from becoming text-only, otherwise false',
                     'image_role' => 'hero_image or section_image when needs_image=true; css_motif when false',
                     'image_subject' => 'concrete generated scene/product/interface subject when true; none when false',
                     'placement' => 'media_panel or inline_visual when true; background_layer/none when false',
-                    'media_strategy' => 'Prefer a generated image integrated with this block, but CSS-only/no generated image is allowed when the page still works visually.',
+                    'media_strategy' => 'Prefer a generated image integrated with this block, but CSS-only/no generated image is allowed when the page still has a substantial visual media surface.',
                 ];
                 continue;
             }
@@ -5018,7 +5018,7 @@ final class AiSiteExecutionBlueprintService
                     'image_role' => 'section_image when true; css_motif when the block is compact or text-only',
                     'image_subject' => 'concrete block-level scene, product/interface mockup, room/table visual, support moment, or editorial product image when true; none when false',
                     'placement' => 'media_panel, inline_visual, side_poster, phone_mockup, or background_layer when true; inline_visual/background_layer when false',
-                    'media_strategy' => 'Give large empty card areas a real image plan or a concrete CSS companion. This is generation guidance only, not a validation gate.',
+                    'media_strategy' => 'Give large empty card areas a real image plan or a concrete CSS media companion. This is generation guidance only, not a validation gate.',
                 ];
                 continue;
             }
@@ -5404,7 +5404,7 @@ final class AiSiteExecutionBlueprintService
         $orderedKeyExample = $this->orderStageOneBlockKeysForPrompt($requiredBlockKeys, $optionalBlockKeys, $targetBlockCount);
         $isPolicyPage = \in_array($pageType, ['privacy_policy', 'terms_of_service', 'refund_policy', 'shipping_policy', 'cookie_policy'], true);
         $generatedImageTargetRule = !$isPolicyPage
-            ? 'Generated-image target preference: choose one ordered_block_keys value as generated_image_target_block_key when a stable real scene, product interface, phone mockup, support desk, or editorial visual would improve the page. This is a richness preference, not a completion gate; the target block may still use complete CSS-only visual planning when generated media is unstable.'
+            ? 'Generated-image target preference: choose one primary ordered_block_keys value as generated_image_target_block_key when a stable real scene, product interface, phone mockup, support desk, or editorial visual would improve the page. This is a richness preference, not a completion gate; block_blueprints should still identify additional body/support/proof/article blocks that need a real generated image or a substantial CSS media surface when the brief asks for rich imagery.'
             : 'Policy media rule: generated_image_target_block_key must be an empty string for dense policy/legal pages unless the page contract explicitly says otherwise.';
 
         return \implode("\n", \array_values(\array_filter([
@@ -5527,8 +5527,10 @@ final class AiSiteExecutionBlueprintService
             'Visible-copy rule: content, field_plan.sample, and execution_script.core_copy are visitor-facing copy seeds. Do not put layout recipes, hover notes, CSS values, or why-this-block explanations in those fields.',
             'Output budget: each block.content/core_copy <= 110 chars; feature_points max 2 and <= 12 chars; field_plan.sample <= 56 chars; implementation_note <= 32 chars; visual_signature values <= 56 chars; design_tags arrays max 2 items.',
             'Creativity rule: obey the block schema but invent the block-specific composition, motion, surface, and visitor message from the page goal. Do not copy examples verbatim or make every block a generic card grid.',
-            'Image richness guidance: non-policy marketing pages that ask for rich imagery should plan a strong opening image plus several block-level section images for large body panels such as game cards, comparison rows, proof/review rails, support scenes, and download CTAs. This is prompt guidance only: image count, image subject, and generated copy are not validation gates.',
-            'Large-card media guidance: if a block would otherwise render as a wide empty card grid with only small dots/icons/badges, prefer image_intent.needs_image=true and describe a concrete scene/product/interface/editorial subject sized for that block. Use CSS-only only for compact FAQ/legal/text rows or when a generated image is unstable.',
+            'Image richness guidance: non-policy marketing pages that ask for rich imagery should plan a strong opening image plus media-bearing body sections for large panels such as game cards, comparison rows, proof/review rails, support scenes, editorial article panels, and download CTAs. This is prompt guidance only: image count, image subject, and generated copy are not validation gates.',
+            'Contact/support media guidance: for contact_page segments, prefer one support scene, app-support console, help-desk workstation, phone support mockup, or safe-download assistance visual in contact_methods, support_form_guidance, support_faq, or contact_cta when the block is not compact FAQ/legal text.',
+            'About/contact/blog media rhythm rule: about origin/proof/process blocks, contact support/help-desk blocks, and blog/category editorial blocks should not all become text-only cards. At least one meaningful non-opening block should carry either image_intent.needs_image=true with a concrete subject or a substantial CSS media surface such as a phone mockup, support console, article poster, card-table frame, or review rail.',
+            'Large-card media guidance: if a block would otherwise render as a wide empty card grid with only small dots/icons/badges, prefer image_intent.needs_image=true and describe a concrete scene/product/interface/editorial subject sized for that block. Use CSS-only for compact FAQ/legal/text rows or when a generated image is unstable, but CSS-only body blocks still need a real visual surface rather than empty padding.',
             'Image intent structural rule: every image_intent must include all required keys. If needs_image=false, fill css_motif/visual_atmosphere/image_treatment as a visual companion so build has structure to consume; the exact wording and image choice are creative output, not a hard gate.',
             $generatedImageSegmentRule,
             'Media decision examples for this exact segment: ' . $segmentMediaDecisionExamplesJson . '. Use this to choose generated-image vs CSS-only path before writing the block JSON; rewrite the wording for the current brand and block.',
@@ -6529,7 +6531,7 @@ final class AiSiteExecutionBlueprintService
             '- home_page must follow the page contract from Block budget: include every required block key exactly once, then use recommended_optional from Block budget until the target block count is reached. Do not replace required page-contract keys with generic brand_promise/content/details blocks.',
             '- Card-game APK style home_page information architecture: when required keys include player_reviews or faq_or_rules, keep them as independent blocks. Do not merge reviews, FAQ, game showcase, or install/download guidance into brand_promise or final_cta.',
             '- about_page usually needs story/mission/team/values/trust narrative blocks, not another homepage conversion sequence.',
-            '- contact_page usually needs the required block keys contact_methods, support_form_guidance, support_faq, contact_cta; use optional map/service_area details inside those blocks when relevant.',
+            '- contact_page usually needs the required block keys contact_methods, support_form_guidance, support_faq, contact_cta; use optional map/service_area details inside those blocks when relevant, and give one non-FAQ support/contact block a clear support/help-desk media opportunity when the site asks for rich imagery.',
             '- policy/legal pages usually need summary, key_rules, refund_or_support_steps, help_cta; keep rules concise and avoid full legal prose in Stage-1.',
             '- Policy/legal page body contract: privacy, terms, refund, shipping, and cookie pages must not put conversion CTA copy such as free download, install now, play-game, registration, claim, reward/bonus/coins, or app-download inside page body blocks. Neutral legal applicability wording may mention that the policy applies when visitors download or use the APK/app; neutral data-use or rights wording may mention account benefits only as policy facts, never as an offer. Global header/footer may keep a site CTA when appropriate, but body blocks must stay policy/support/rights focused.',
             '- Policy/legal block role rule: terms_contact, privacy_contact, cookie_contact, refund_contact, and similar policy-help blocks should normally use page_flow_role=support or details, not cta. Use page_flow_role=cta only when field_plan includes a policy-safe action label such as 查看条款, 了解隐私权利, 查看争议流程, or 提交政策问题.',
@@ -6569,7 +6571,9 @@ final class AiSiteExecutionBlueprintService
             '- Complete block examples (copy the shape, not the exact content; rewrite for this page/locale/block): ' . $blockReturnExamplesJson,
             '- When image_intent.needs_image=true, image_subject must be a concrete block-level generated visual: a scene, product/editorial photograph, interface/product mockup, environment, people moment, or premium illustration tied to the block goal. When needs_image=false, image_subject must be "none" and css_motif carries the visual plan.',
             '- Non-policy page visual asset preference: marketing pages that ask for rich imagery should usually plan a strong opening image plus several block-level section images for large body panels such as game cards, comparison rows, proof/review rails, support scenes, and download CTAs. This is guidance for richer design, not a completion gate; complete CSS-only visual planning is acceptable when generated-image planning is unstable.',
-            '- Large-card media guidance: if a block would otherwise render as a wide empty card grid with only small dots/icons/badges, prefer image_intent.needs_image=true and describe a concrete scene/product/interface/editorial subject sized for that block. Use CSS-only only for compact FAQ/legal/text rows or when a generated image is unstable.',
+            '- Contact/support visual preference: contact_page should usually nominate one concrete support visual such as a help-desk console, app support screen, phone assistance mockup, or safe-download support scene in contact_methods, support_form_guidance, support_faq, or contact_cta. Compact FAQ/legal rows may stay CSS-only, but a full contact page should not read as only text boxes.',
+            '- Large-card media guidance: if a block would otherwise render as a wide empty card grid with only small dots/icons/badges, prefer image_intent.needs_image=true and describe a concrete scene/product/interface/editorial subject sized for that block. Use CSS-only for compact FAQ/legal/text rows or when a generated image is unstable, but CSS-only body blocks still need a real visual surface rather than empty padding.',
+            '- About/contact/blog media rhythm rule: non-policy origin/proof/process/support/help-desk/article/category blocks should not all become text-only cards. Give at least one meaningful non-opening block a generated-image subject or a substantial CSS media surface.',
             '- Preferred generated-image target examples by page type: ' . $this->stageOneGeneratedImageTargetExamplesJson() . '. Prefer these required/opening/support/article blocks when present, but keep narrative fit, allow CSS-only alternatives, and still return all required blocks.',
             '- Non-policy opening image direction: for home_page, about_page, contact_page, and custom marketing pages, prefer a concrete generated scene/product/interface subject early in the page when it supports the narrative, but do not force block index 0 to be the generated-image block.',
             '- Do not use icon-only image subjects for page blocks. Invalid page-block subjects include app icon, shield badge, logo mark, sparkle glyph, line icon, avatar badge, chevron, symbol, SVG icon, download arrow, coin mark, or any subject that is only a decorative mark.',

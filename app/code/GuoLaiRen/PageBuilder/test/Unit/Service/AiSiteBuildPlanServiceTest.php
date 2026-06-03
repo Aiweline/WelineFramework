@@ -72,6 +72,26 @@ final class AiSiteBuildPlanServiceTest extends TestCase
         self::assertSame(['home_page.hero'], $contract['pages'][0]['blocks'] ?? null);
         self::assertSame('home_page.hero', $contract['blocks'][0]['block_id'] ?? null);
         self::assertSame('hero', $contract['blocks'][0]['section_key'] ?? null);
+        $responsiveContract = \is_array($contract['blocks'][0]['visual']['responsive_layout_contract'] ?? null)
+            ? $contract['blocks'][0]['visual']['responsive_layout_contract']
+            : [];
+        self::assertStringContainsString('brand/logo text', (string)($responsiveContract['breakpoints']['mobile'] ?? ''));
+        self::assertStringContainsString(
+            'overflow-wrap:anywhere',
+            \implode("\n", \is_array($responsiveContract['overflow_guards'] ?? null) ? $responsiveContract['overflow_guards'] : [])
+        );
+        self::assertStringContainsString(
+            'white-space:nowrap',
+            \implode("\n", \is_array($responsiveContract['overflow_guards'] ?? null) ? $responsiveContract['overflow_guards'] : [])
+        );
+        self::assertStringContainsString(
+            'substantial CSS media surface',
+            (string)($contract['blocks'][0]['visual']['image_integration'] ?? '')
+        );
+        self::assertStringContainsString(
+            'policy/legal blocks may remain text-dense',
+            (string)($contract['blocks'][0]['visual']['image_integration'] ?? '')
+        );
         self::assertSame('en_US', $contract['i18n']['primary_locale'] ?? null);
         self::assertSame('en_US', $contract['content_manifest']['primary_locale'] ?? null);
         self::assertSame('Launch reliable AI workflows', $contract['content_manifest']['items']['block.home_page.hero.title'] ?? null);
@@ -135,6 +155,53 @@ final class AiSiteBuildPlanServiceTest extends TestCase
         self::assertTrue($result['valid'], \implode("\n", $result['errors']));
         self::assertSame('home_page', $contract['pages'][0]['page_type'] ?? null);
         self::assertSame('Guests see signature dishes, trust', $contract['content_manifest']['items']['block.home_page.hero.title'] ?? null);
+    }
+
+    public function testBuildPlanTreatsMissingVisibleBlockCopyAsDiagnosticOnly(): void
+    {
+        $service = new AiSiteBuildPlanService();
+
+        $contract = $service->buildFromScope([
+            'page_types' => ['privacy_policy'],
+            'site_title' => 'Example Site',
+            'brief_description' => 'Explain privacy rules in a clear website structure.',
+            'default_locale' => 'en_US',
+            'plan_json' => [
+                'signature' => 'stage1-signature-privacy',
+                'pages' => [
+                    'privacy_policy' => [
+                        'title' => 'Privacy Policy',
+                        'page_goal' => 'Present the privacy policy sections.',
+                        'blocks' => [
+                            [
+                                'block_key' => 'privacy_overview',
+                                'page_flow_role' => 'opening',
+                                'visual_signature' => [
+                                    'composition_pattern' => 'policy intro',
+                                    'spatial_rhythm' => 'single column legal overview',
+                                    'media_strategy' => 'CSS-only divider motif',
+                                    'surface_treatment' => 'quiet readable surface',
+                                    'interaction_pattern' => 'anchor navigation',
+                                ],
+                                'image_intent' => [
+                                    'needs_image' => false,
+                                    'css_motif' => 'thin policy divider',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = $service->validate($contract);
+
+        self::assertTrue($result['valid'], \implode("\n", $result['errors']));
+        self::assertSame('Privacy Overview', $contract['content_manifest']['items']['block.privacy_policy.privacy_overview.title'] ?? null);
+        self::assertSame(
+            'Present the core message clearly and guide visitors to the next action.',
+            $contract['content_manifest']['items']['block.privacy_policy.privacy_overview.copy'] ?? null
+        );
     }
 
     public function testBuildPlanRejectsStageOnePagesMissingSelectedPageTypes(): void

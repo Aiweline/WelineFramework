@@ -1221,6 +1221,24 @@ class PageRenderService
 @media (max-width: 992px) {
     header[id^="header-"] {
         position: relative;
+        max-width: 100vw !important;
+        box-sizing: border-box !important;
+    }
+
+    header[id^="header-"],
+    header[id^="header-"] * {
+        box-sizing: border-box !important;
+    }
+
+    header[id^="header-"] :is(a, button, span, p, strong, small, div) {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        overflow-wrap: anywhere !important;
+        word-break: normal !important;
+    }
+
+    header[id^="header-"] :is([class*="-logo"], [class*="-brand"], [class*="-title"], [class*="-nav"], [class*="-link"], [class*="-cta"]) {
+        white-space: normal !important;
     }
 
     header[id^="header-"] :is(nav, div)[class*="-nav"] {
@@ -1632,9 +1650,15 @@ HTML;
         if ($key === ''
             || \str_starts_with($key, 'style.')
             || \str_starts_with($key, 'layout.')
+            || \str_starts_with($key, 'navigation.')
+            || \str_starts_with($key, 'nav_items.')
+            || \str_starts_with($key, 'menu.')
+            || \str_starts_with($key, 'links.')
             || \str_contains($key, 'color')
             || \str_contains($key, 'image')
             || \str_contains($key, 'icon')
+            || \str_contains($key, '.items.')
+            || \str_contains($key, '_items.')
         ) {
             return false;
         }
@@ -2049,9 +2073,15 @@ HTML;
 
         return '<style>
 :root{--pb-ai-site-canvas-width:1200px;--pb-ai-site-canvas-padding:24px;}
+html,body{max-width:100%;overflow-x:hidden;}
+body{box-sizing:border-box;}
+body > *{max-width:100%;box-sizing:border-box;}
 [class^="header-"][class*="-container"],[class*=" header-"][class*="-container"],
 [class^="footer-"][class*="-container"],[class*=" footer-"][class*="-container"],
 .pb-c-inner{max-width:var(--pb-ai-site-canvas-width) !important;width:min(100% - calc(var(--pb-ai-site-canvas-padding) * 2), var(--pb-ai-site-canvas-width)) !important;margin-left:auto !important;margin-right:auto !important;box-sizing:border-box;}
+.pb-c-root,.pb-c-root *{box-sizing:border-box;}
+.pb-c-root{max-width:100%;overflow-x:clip;}
+.pb-c-root :is([class*="rail"],[class*="carousel"],[class*="slider"],[class*="cards"],[class*="grid"],[class*="list"]){max-width:100%;min-width:0;}
 [class^="header-"][class*="-container"],[class*=" header-"][class*="-container"],
 [class^="footer-"][class*="-container"],[class*=" footer-"][class*="-container"]{padding-left:0 !important;padding-right:0 !important;}
 @media (max-width:768px){:root{--pb-ai-site-canvas-padding:18px;}}
