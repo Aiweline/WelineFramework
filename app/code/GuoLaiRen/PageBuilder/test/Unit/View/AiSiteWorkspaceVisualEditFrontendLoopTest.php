@@ -488,7 +488,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('scope.plan_workbench && scope.plan_workbench.stage1 && scope.plan_workbench.stage1.page_plans', $generatedTypesBody);
         self::assertStringContainsString('scope.plan_workbench && scope.plan_workbench.confirmed && scope.plan_workbench.confirmed.structured_plan && scope.plan_workbench.confirmed.structured_plan.page_plans', $generatedTypesBody);
         self::assertStringContainsString('var actual = resolveGeneratedPlanPageTypesFromState(state);', $missingPagesBody);
-        self::assertStringContainsString('actual.length === 0 && !phaseOnePlanPresentFromWorkspaceState(state) && !hasCurrentPhaseOnePlanDraft()', $missingPagesBody);
+        self::assertStringContainsString('actual.length === 0 && !phaseOnePlanPresentFromWorkspaceState(state) && !hasCurrentPhaseOnePlan()', $missingPagesBody);
         self::assertStringContainsString('var missingFromActual = expected.length > 0 ? expected.filter(function (pageType)', $missingPagesBody);
         self::assertStringContainsString('var normalizePersistedMissing = function (values)', $missingPagesBody);
         self::assertStringContainsString('if (actual.indexOf(pageType) !== -1)', $missingPagesBody);
@@ -551,6 +551,51 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
 
         self::assertFileDoesNotExist($templateRoot . '/workspace/stages/sections/task-plan-accordion-panel.phtml');
         self::assertFileDoesNotExist($templateRoot . '/workspace/script-phase2-queue-progress.phtml');
+    }
+
+    public function testWorkspaceDoesNotExposeLegacyScopeDraftOrReplaceEntrypoints(): void
+    {
+        $templateRoot = BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent';
+        $sources = [
+            'workspace.phtml' => \file_get_contents($templateRoot . '/workspace.phtml'),
+            'workspace/layout.phtml' => \file_get_contents($templateRoot . '/workspace/layout.phtml'),
+            'workspace/modals.phtml' => \file_get_contents($templateRoot . '/workspace/modals.phtml'),
+            'workspace/script-main.phtml' => $this->workspaceScript(),
+            'workspace/stages/sections/plan-inline-panel-body.phtml' => \file_get_contents($templateRoot . '/workspace/stages/sections/plan-inline-panel-body.phtml'),
+        ];
+        $legacyTokens = [
+            'replaceScopeUrl',
+            'replace_scope_url',
+            'post-replace-scope',
+            'pb-ai-replace-scope',
+            'pb-ai-merge-scope',
+            'pb-ai-scope-full',
+            'pb-ai-scope-patch',
+            'save_plan_draft',
+            'pb-ai-save-plan-draft',
+            'planDraft',
+        ];
+
+        foreach ($sources as $label => $source) {
+            self::assertIsString($source, $label . ' must be readable.');
+            foreach ($legacyTokens as $token) {
+                self::assertStringNotContainsString($token, $source, $label . ' must not expose legacy scope/draft token ' . $token . '.');
+            }
+        }
+    }
+
+    public function testPlanPresenceCheckUsesPersistedWorkspaceStateInsteadOfFrontendPreviewCache(): void
+    {
+        $script = $this->workspaceScript();
+        $body = $this->extractFunctionBody($script, 'hasCurrentPhaseOnePlan');
+
+        self::assertStringContainsString('phaseOnePlanPresentFromWorkspaceState(workspaceState)', $body);
+        self::assertStringContainsString('hasBuildPlanV2FlowEvidence(workspaceState)', $body);
+        self::assertStringNotContainsString('currentPlanPayload', $body);
+        self::assertStringNotContainsString('__pbWorkspaceConfirmedPlan', $body);
+        self::assertStringNotContainsString('payload.markdown', $body);
+        self::assertStringNotContainsString('payload.json', $body);
+        self::assertStringNotContainsString('payload.structured', $body);
     }
 
     public function testBuildQueueDetailsDoNotRemainAutoExpandedAfterTerminalStatus(): void

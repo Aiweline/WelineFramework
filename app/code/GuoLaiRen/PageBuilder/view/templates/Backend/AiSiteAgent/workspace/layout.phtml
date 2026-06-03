@@ -1575,24 +1575,6 @@ $pbAiStageGuide = match ((string)$currentStage) {
         <?php else: ?>
             <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/publish-card.phtml', $workspaceSectionData) ?>
         <?php endif; ?>
-
-        <details class="card border-0 shadow-sm mt-3">
-            <summary class="card-body fw-semibold" style="cursor:pointer;list-style:none;"><?= htmlspecialchars((string)__('开发调试：直接编辑 Scope JSON'), ENT_QUOTES, 'UTF-8') ?></summary>
-            <div class="card-body pt-0">
-                <div class="mb-3">
-                    <label class="form-label" for="pb-ai-scope-full"><?= htmlspecialchars((string)__('Current Scope'), ENT_QUOTES, 'UTF-8') ?></label>
-                    <textarea class="form-control font-monospace" id="pb-ai-scope-full" rows="10"><?= htmlspecialchars($scopePreview, ENT_QUOTES, 'UTF-8') ?></textarea>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label" for="pb-ai-scope-patch"><?= htmlspecialchars((string)__('Patch JSON'), ENT_QUOTES, 'UTF-8') ?></label>
-                    <textarea class="form-control font-monospace" id="pb-ai-scope-patch" rows="6">{}</textarea>
-                </div>
-                <div class="d-flex flex-wrap gap-2">
-                    <button type="button" class="btn btn-outline-primary" id="pb-ai-merge-scope"><?= htmlspecialchars((string)__('合并 Patch'), ENT_QUOTES, 'UTF-8') ?></button>
-                    <button type="button" class="btn btn-outline-danger" id="pb-ai-replace-scope"><?= htmlspecialchars((string)__('Replace Scope'), ENT_QUOTES, 'UTF-8') ?></button>
-                </div>
-            </div>
-        </details>
     </div>
 
     <div class="col-12 col-xxl-8 col-xl-7 pb-ai-expert-preview-col">

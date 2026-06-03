@@ -58,7 +58,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame(0, (int)$method->invoke($controller));
     }
 
-    public function testEnqueueOperationQueueTaskCreatesFreshRowWhenLatestCanonicalRowErrored(): void
+    public function testEnqueueOperationQueueTaskReusesOriginalErroredQueueAndStopsDuplicateRows(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -83,21 +83,23 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
 
         $first = w_query('queue', 'create', [
             'class' => \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class,
-            'name' => 'First canonical queue',
+            'name' => 'Original errored canonical queue',
             'module' => 'GuoLaiRen_PageBuilder',
             'content' => \array_replace($baseContent, ['execution_token' => 'first-canonical-token']),
-            'status' => 'done',
-            'auto' => true,
-            'biz_key' => $bizKey,
-        ]);
-        $second = w_query('queue', 'create', [
-            'class' => \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class,
-            'name' => 'Second duplicate queue',
-            'module' => 'GuoLaiRen_PageBuilder',
-            'content' => \array_replace($baseContent, ['execution_token' => 'second-duplicate-token']),
             'status' => 'error',
             'auto' => true,
             'biz_key' => $bizKey,
+            'wake_scheduler' => false,
+        ]);
+        $second = w_query('queue', 'create', [
+            'class' => \GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue::class,
+            'name' => 'Second duplicate pending queue',
+            'module' => 'GuoLaiRen_PageBuilder',
+            'content' => \array_replace($baseContent, ['execution_token' => 'second-duplicate-token']),
+            'status' => 'pending',
+            'auto' => true,
+            'biz_key' => $bizKey,
+            'wake_scheduler' => false,
         ]);
         self::assertIsArray($first);
         self::assertIsArray($second);
@@ -117,10 +119,11 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             1,
             'plan',
             'canonical-reuse-token',
-            []
+            [],
+            ['retry_of_queue_id' => $firstQueueId]
         );
 
-        self::assertGreaterThan($secondQueueId, $queueId);
+        self::assertSame($firstQueueId, $queueId);
 
         $canonical = w_query('queue', 'get', ['queue_id' => $queueId]);
         self::assertIsArray($canonical);
@@ -128,13 +131,26 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertSame('PageBuilder plan #canonical-re', (string)($canonical['name'] ?? ''));
         self::assertSame($bizKey, (string)($canonical['biz_key'] ?? ''));
 
+        $content = \is_array($canonical['content'] ?? null)
+            ? $canonical['content']
+            : \json_decode((string)($canonical['content'] ?? ''), true);
+        self::assertIsArray($content);
+        self::assertSame('canonical-reuse-token', (string)($content['execution_token'] ?? ''));
+        self::assertSame($firstQueueId, (int)($content['retry_of_queue_id'] ?? 0));
+        self::assertSame($firstQueueId, (int)($content['details']['retry_of_queue_id'] ?? 0));
+
+        $duplicate = w_query('queue', 'get', ['queue_id' => $secondQueueId]);
+        self::assertIsArray($duplicate);
+        self::assertSame('stop', (string)($duplicate['status'] ?? ''));
+        self::assertStringContainsString('Superseded by PageBuilder queue #' . $firstQueueId, (string)($duplicate['process'] ?? ''));
+
         $rows = w_query('queue', 'list', [
             'module' => 'GuoLaiRen_PageBuilder',
             'biz_key' => $bizKey,
             'page_size' => 10,
         ]);
         self::assertIsArray($rows);
-        self::assertCount(3, \is_array($rows['items'] ?? null) ? $rows['items'] : []);
+        self::assertCount(2, \is_array($rows['items'] ?? null) ? $rows['items'] : []);
     }
 
     public function testPostStartPatchBlockCreatesPendingQueueWithScopedPayload(): void

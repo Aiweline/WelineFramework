@@ -1231,30 +1231,8 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         }
 
         $actual = [];
-        foreach ([
-            $planJson['pages'] ?? null,
-            $planJson['page_plans'] ?? null,
-            $scope['plan_workbench']['stage1']['page_plans'] ?? null,
-            $scope['plan_workbench']['confirmed']['pages'] ?? null,
-            $scope['plan_workbench']['confirmed']['page_plans'] ?? null,
-            $scope['plan_workbench']['confirmed']['plan_json']['pages'] ?? null,
-            $scope['plan_workbench']['confirmed']['plan_json']['page_plans'] ?? null,
-            $scope['plan_workbench']['confirmed']['structured_plan']['pages'] ?? null,
-            $scope['plan_workbench']['confirmed']['structured_plan']['page_plans'] ?? null,
-            $scope['plan_workbench']['confirmed']['plan_book']['pages'] ?? null,
-            $scope['plan_workbench']['confirmed']['plan_book']['page_plans'] ?? null,
-            $scope['plan_workbench']['confirmed']['plan_book']['structured']['pages'] ?? null,
-            $scope['plan_workbench']['confirmed']['plan_book']['structured']['page_plans'] ?? null,
-        ] as $pageSource) {
-            foreach (\is_array($pageSource) ? $pageSource : [] as $key => $page) {
-                if (!\is_array($page)) {
-                    continue;
-                }
-                $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($key) ? $key : '')));
-                if ($pageType !== '') {
-                    $actual[$pageType] = true;
-                }
-            }
+        foreach ($this->stageOnePageTypeSourceCandidates($scope, $planJson) as $pageSource) {
+            $this->collectStageOnePageTypesFromSource($pageSource, $actual);
         }
 
         $missing = [];
@@ -1265,6 +1243,90 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         }
 
         return \array_values(\array_unique($missing));
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $planJson
+     * @return list<mixed>
+     */
+    private function stageOnePageTypeSourceCandidates(array $scope, array $planJson): array
+    {
+        return [
+            $planJson['pages'] ?? null,
+            $planJson['page_plans'] ?? null,
+            $planJson['stage1']['pages'] ?? null,
+            $planJson['stage1']['page_plans'] ?? null,
+            $planJson['structured']['pages'] ?? null,
+            $planJson['structured']['page_plans'] ?? null,
+            $planJson['structured_plan']['pages'] ?? null,
+            $planJson['structured_plan']['page_plans'] ?? null,
+            $planJson['plan_book']['structured']['pages'] ?? null,
+            $planJson['plan_book']['structured']['page_plans'] ?? null,
+            $scope['plan_workbench']['stage1']['pages'] ?? null,
+            $scope['plan_workbench']['stage1']['page_plans'] ?? null,
+            $scope['plan_workbench']['stage1']['structured']['pages'] ?? null,
+            $scope['plan_workbench']['stage1']['structured']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_json']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_json']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['structured_plan']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['structured_plan']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['structured']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['structured']['page_plans'] ?? null,
+        ];
+    }
+
+    /**
+     * @param array<string, true> $actual
+     */
+    private function collectStageOnePageTypesFromSource(mixed $pageSource, array &$actual, int $depth = 0): void
+    {
+        if (!\is_array($pageSource) || $depth > 4) {
+            return;
+        }
+
+        $directPageType = \trim((string)($pageSource['page_type'] ?? $pageSource['type'] ?? ''));
+        if ($directPageType !== '') {
+            $actual[$directPageType] = true;
+            $this->collectNestedStageOnePageTypeBuckets($pageSource, $actual, $depth);
+            return;
+        }
+
+        foreach ($pageSource as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? ''));
+            if ($pageType === '' && \is_string($key) && !\ctype_digit($key)) {
+                $pageType = \trim($key);
+            }
+            if ($pageType !== '') {
+                $actual[$pageType] = true;
+            }
+            $this->collectNestedStageOnePageTypeBuckets($page, $actual, $depth);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @param array<string, true> $actual
+     */
+    private function collectNestedStageOnePageTypeBuckets(array $page, array &$actual, int $depth): void
+    {
+        foreach (['page', 'page_plan'] as $wrapperKey) {
+            if (\is_array($page[$wrapperKey] ?? null)) {
+                $this->collectStageOnePageTypesFromSource($page[$wrapperKey], $actual, $depth + 1);
+            }
+        }
+        foreach (['pages', 'page_plans'] as $bucketKey) {
+            if (\is_array($page[$bucketKey] ?? null)) {
+                $this->collectStageOnePageTypesFromSource($page[$bucketKey], $actual, $depth + 1);
+            }
+        }
     }
 
     /**

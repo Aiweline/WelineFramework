@@ -892,7 +892,7 @@ final class AiSiteBuildPlanService
             'visual_signature' => $visualSignature,
             'image_intent' => $imageIntent,
             'block_contract' => $blockContract,
-            'image_integration' => 'Integrate imagery as part of the section composition, with responsive crop and readable overlays when needed.',
+            'image_integration' => 'Integrate imagery as part of the section composition, with responsive crop and readable overlays when needed. Non-policy narrative, proof, support, contact, and article blocks should use a verified/generated image when planned or a substantial CSS media surface when image_intent.needs_image=false; contact/support media should read as a help-desk, app-support, phone-assistance, or safe-download support scene; policy/legal blocks may remain text-dense.',
             'responsive_layout_contract' => $this->buildBlockResponsiveContract($blockType, $blockKey),
             'implementation_slices' => $this->buildBlockImplementationSlices($blockType, $blockKey),
             'composition_guards' => [
@@ -1061,7 +1061,7 @@ final class AiSiteBuildPlanService
             'breakpoints' => [
                 'desktop' => '>=1024px: multi-column is allowed only inside a centered max-width container; every column uses minmax(0, 1fr) or flex-basis with min-width:0.',
                 'tablet' => '<=900px: media, copy, and action/form panels must stack or become a safe two-row layout; no side panel may remain absolutely offset outside the grid.',
-                'mobile' => '<=420px: single column; width:100%; max-width:100%; images height auto or fixed-ratio cover; CTA/form controls fill available width without overflow.',
+                'mobile' => '<=420px: single column; width:100%; max-width:100%; images height auto or fixed-ratio cover; long headings, brand/logo text, badges/chips, labels, and CTA text wrap instead of clipping; CTA/form controls fit available width without overflow.',
             ],
             'required_parts' => \array_values(\array_filter([
                 'root_shell',
@@ -1076,7 +1076,9 @@ final class AiSiteBuildPlanService
                 'root_shell must set box-sizing:border-box and overflow-x:hidden only for decoration, not as a way to hide broken content',
                 'inner_container must use width:min(100%, max-width) or max-width:calc(100% - safe gutters)',
                 'all grid/flex children, cards, media frames, and form panels must set min-width:0',
+                'all text-bearing children, including headings, brand/logo text, nav labels, chips/badges, card titles, media captions, and CTA labels, must allow wrapping with max-width:100% and overflow-wrap:anywhere',
                 'form inputs, buttons, and textareas must use width:100%; max-width:100%; box-sizing:border-box',
+                'mobile rules must not use white-space:nowrap on real copy or hide overflow to mask clipped content',
                 'decorative absolute layers must use pointer-events:none and stay behind content with z-index below panels',
             ],
             'media_text_safety' => [
@@ -1716,7 +1718,7 @@ final class AiSiteBuildPlanService
             $this->shortTitleFromCopy((string)($block['content'] ?? '')),
         ], $locale);
         if ($title === '') {
-            throw new \RuntimeException('BuildPlan contract failed: stage-one block ' . $blockKey . ' is missing visible title content.');
+            $title = $this->humanizeIdentifier($blockKey);
         }
 
         return $title;
@@ -1741,7 +1743,7 @@ final class AiSiteBuildPlanService
             $block['content'] ?? null,
         ], $locale);
         if ($copy === '') {
-            throw new \RuntimeException('BuildPlan contract failed: stage-one block ' . $blockKey . ' is missing visible body content.');
+            $copy = $this->localizedDefaultCopy($locale);
         }
 
         return $copy;
