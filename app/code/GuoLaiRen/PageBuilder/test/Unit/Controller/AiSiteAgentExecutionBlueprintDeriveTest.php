@@ -32,7 +32,7 @@ final class AiSiteAgentExecutionBlueprintDeriveTest extends TestCase
         $methodSource = $this->extractControllerMethodSource($controllerSource, 'handleConfirmPlan');
 
         self::assertStringContainsString('$existingBuildPlanV2 = \is_array($scope[\'build_plan_v2\'] ?? null) ? $scope[\'build_plan_v2\'] : [];', $methodSource);
-        self::assertStringContainsString('if ($executionBlueprintDraft === [] && $existingBuildPlanV2 === [])', $methodSource);
+        self::assertStringContainsString('if (!$hasStageOnePayload && $existingBuildPlanV2 === [])', $methodSource);
         self::assertStringNotContainsString("if (\$executionBlueprintDraft === []) {\n            return \$this->jsonError('PLAN_NOT_READY'", $methodSource);
     }
 

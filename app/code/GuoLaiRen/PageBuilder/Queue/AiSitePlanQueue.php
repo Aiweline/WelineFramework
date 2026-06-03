@@ -215,6 +215,27 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
                 $retryMessage = 'Stage-one plan has retryable page failures; the same queue will resume missing pages: '
                     . \implode('; ', \array_slice($retryablePlanMessages, 0, 5));
                 $this->queueTrace($sse, $retryMessage);
+                if (!$this->canSchedulePlanCompletionGateRetry($content)) {
+                    $stopMessage = 'Stage-one plan completion gate still found retryable page failures after '
+                        . self::MAX_PLAN_QUEUE_ATTEMPTS
+                        . ' automatic attempts; automatic retry has stopped. Please retry manually after adjusting or regenerating the plan: '
+                        . \implode('; ', \array_slice($retryablePlanMessages, 0, 5));
+                    $this->queueTrace($sse, $stopMessage);
+                    $freshSession = $sessionService->loadByPublicId($publicId, $adminId) ?? $session;
+                    $freshScope = $scopeService->normalizeScope(
+                        $sessionService->loadScopeForStage($freshSession, AiSiteAgentSession::STAGE_PLAN)
+                    );
+                    $this->persistPlanQueueStopState(
+                        $sessionService,
+                        (int)$freshSession->getId(),
+                        $adminId,
+                        $freshScope,
+                        $stopMessage
+                    );
+                    $this->markQueueStopped($queue, $stopMessage);
+
+                    return $stopMessage;
+                }
                 $retryQueueId = $this->createPlanCompletionGateRetryQueue($queue, $content, $retryMessage);
                 $this->markPlanRetryScheduledInScope(
                     $sessionService,
@@ -1082,6 +1103,11 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         if ($active !== []) {
             $active['status'] = $skipAsDone ? 'done' : 'stop';
             $active['message'] = $message;
+            $active['retry_allowed'] = $skipAsDone ? 0 : 1;
+            $active['failure_mode'] = $skipAsDone ? '' : 'plan_retry_exhausted';
+            $active['queue_waiting_for_scheduler'] = false;
+            $active['can_close_stream'] = true;
+            $active['continue_other_operations'] = true;
             $active['updated_at'] = \date('Y-m-d H:i:s');
             $scope['active_operation'] = $active;
             $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
@@ -1096,6 +1122,7 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
                 'message' => $message,
                 'attempt_no' => \max(0, (int)($active['attempt_no'] ?? 0)),
                 'max_attempts' => self::MAX_PLAN_QUEUE_ATTEMPTS,
+                'retry_allowed' => 1,
                 'updated_at' => \date('Y-m-d H:i:s'),
             ];
             $scope = $this->markPlanGenerationFailureRetryable(
@@ -1210,8 +1237,14 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
             $scope['plan_workbench']['stage1']['page_plans'] ?? null,
             $scope['plan_workbench']['confirmed']['pages'] ?? null,
             $scope['plan_workbench']['confirmed']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_json']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_json']['page_plans'] ?? null,
             $scope['plan_workbench']['confirmed']['structured_plan']['pages'] ?? null,
             $scope['plan_workbench']['confirmed']['structured_plan']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['page_plans'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['structured']['pages'] ?? null,
+            $scope['plan_workbench']['confirmed']['plan_book']['structured']['page_plans'] ?? null,
         ] as $pageSource) {
             foreach (\is_array($pageSource) ? $pageSource : [] as $key => $page) {
                 if (!\is_array($page)) {
@@ -1431,6 +1464,14 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         }
 
         return \max(0, (int)($content['_plan_queue_retry_count'] ?? 0)) < self::MAX_PLAN_QUEUE_ATTEMPTS;
+    }
+
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function canSchedulePlanCompletionGateRetry(array $content): bool
+    {
+        return \max(0, (int)($content['_plan_completion_gate_retry_count'] ?? 0)) < self::MAX_PLAN_QUEUE_ATTEMPTS;
     }
 
     /**
