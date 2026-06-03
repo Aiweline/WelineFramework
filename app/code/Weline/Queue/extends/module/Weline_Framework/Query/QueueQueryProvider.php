@@ -306,14 +306,20 @@ class QueueQueryProvider implements QueryProviderInterface
         }
 
         $queue->save();
-        $queue->clearData()->load((int)$queue->getId());
+        $queueId = (int)$queue->getId();
+        if ($queueId > 0) {
+            $queue->clearData()->load($queueId);
+        }
 
         $eventData = ['queue' => $queue];
         $this->eventsManager->dispatch('Weline_Queue::edit', $eventData);
+        if ($this->shouldWakeScheduler($params) && $this->isQueueDispatchableForScheduler($queue)) {
+            $this->wakeSystemScheduler($queue);
+        }
 
         return [
             'success' => true,
-            'queue_id' => (int)$queue->getId(),
+            'queue_id' => $queueId,
             'data' => $queue->getData(),
         ];
     }
@@ -459,6 +465,13 @@ class QueueQueryProvider implements QueryProviderInterface
         }
 
         return true;
+    }
+
+    private function isQueueDispatchableForScheduler(Queue $queue): bool
+    {
+        return !$queue->isFinished()
+            && $queue->getAuto()
+            && $queue->getStatus() === Queue::status_pending;
     }
 
     private function deleteQueue(array $params): array

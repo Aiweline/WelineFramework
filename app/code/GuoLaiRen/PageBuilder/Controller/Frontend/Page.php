@@ -628,7 +628,7 @@ class Page extends FrontendController
         $host = $this->normalizeHostCandidate($host);
 
         return \sha1((string)\json_encode([
-            'v' => 2,
+            'v' => 3,
             'page_id' => (int)$page->getId(),
             'website_id' => $websiteId,
             'style' => $styleCode,

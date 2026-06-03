@@ -36,7 +36,6 @@ final class AiSiteWorkbenchWorkspaceUrlPathIntegrationTest extends AbstractAiSit
 
         foreach ([
             'mergeScopeUrl',
-            'replaceScopeUrl',
             'setStageUrl',
             'runVirtualThemeUrl',
             'startRegeneratePageUrl',

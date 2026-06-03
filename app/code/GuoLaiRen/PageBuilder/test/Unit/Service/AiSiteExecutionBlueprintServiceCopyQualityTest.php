@@ -44,6 +44,17 @@ final class AiSiteExecutionBlueprintServiceCopyQualityTest extends TestCase
         self::assertStringNotContainsString('????????', $seoStrategy);
     }
 
+    public function testStageOneMediaRichnessPromptsRemainGuidanceOnly(): void
+    {
+        $source = (string)\file_get_contents((new ReflectionClass(AiSiteExecutionBlueprintService::class))->getFileName());
+
+        self::assertStringContainsString('About/contact/blog media rhythm rule', $source);
+        self::assertStringContainsString('not validation gates', $source);
+        self::assertStringContainsString('substantial CSS media surface', $source);
+        self::assertStringContainsString('Policy media rule', $source);
+        self::assertStringContainsString('image count, image subject, and generated copy are not validation gates', $source);
+    }
+
     private function extractMethodSource(string $source, string $methodName): string
     {
         $offset = \strpos($source, 'private function ' . $methodName);

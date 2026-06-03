@@ -22,6 +22,28 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
         self::assertStringNotContainsString('autoResumeActiveOperation', $script);
     }
 
+    public function testStalePlanConfirmationPromptsAndUsesExplicitOverride(): void
+    {
+        $script = (string)\file_get_contents(
+            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
+        );
+        $controller = (string)\file_get_contents(
+            BP . 'app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php'
+        );
+
+        self::assertStringContainsString('function promptPlanInputStaleConfirmation(data)', $script);
+        self::assertStringContainsString("String(data.code || '') === 'PLAN_INPUT_STALE'", $script);
+        self::assertStringContainsString('window.BackendConfirm.show(confirmMessage, {', $script);
+        self::assertStringContainsString("fields.force_confirm_stale_plan = '1';", $script);
+        self::assertStringContainsString('confirmCurrentPlanAndMaybeBuild({ forceConfirmStalePlan: true });', $script);
+        self::assertStringNotContainsString("return String(messages.planInputStaleRegenerateRequired || messages.planSchemeRebuildConfirmMessage || '');", $script);
+
+        self::assertStringContainsString("getRequestBodyValue('force_confirm_stale_plan', 0)", $controller);
+        self::assertStringContainsString("'requires_confirmation' => true", $controller);
+        self::assertStringContainsString("'confirmation_code' => 'PLAN_INPUT_STALE_CONFIRM'", $controller);
+        self::assertStringContainsString("'plan_confirmed_stale_input' =>", $controller);
+    }
+
     public function testResumePromptSuppressesTerminalOrCompleteGeneratedWorkspace(): void
     {
         $script = (string)\file_get_contents(

@@ -79,6 +79,41 @@ async function okJson(response, label) {
   return data;
 }
 
+function isTransientApiPostError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return [
+    'socket hang up',
+    'econnreset',
+    'econnrefused',
+    'etimedout',
+    'timeout',
+    'net::err_connection_reset',
+    'net::err_connection_closed',
+  ].some((needle) => message.includes(needle));
+}
+
+async function apiPost(api, url, options, label, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await api.post(url, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts || !isTransientApiPostError(error)) {
+        throw error;
+      }
+      const delayMs = 800 * attempt;
+      log(`api_post_retry label=${label} attempt=${attempt + 1}/${attempts} delay_ms=${delayMs} error=${String(error.message || error).slice(0, 180)}`);
+      await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
+async function postOkJson(api, relativePath, options, label, attempts = 3) {
+  return okJson(await apiPost(api, route(relativePath), options, label, attempts), label);
+}
+
 function pickState(payload) {
   if (payload && typeof payload === 'object') {
     if (payload.data && typeof payload.data === 'object') {
@@ -148,6 +183,18 @@ function planConfirmedFromPayload(payload) {
   ) === 1;
 }
 
+function planRequiresStaleConfirmation(payload) {
+  return Boolean(
+    payload?.requires_confirmation
+    || payload?.data?.requires_confirmation
+    || payload?.state?.requires_confirmation
+    || payload?.confirmation_code === 'PLAN_INPUT_STALE_CONFIRM'
+    || payload?.data?.confirmation_code === 'PLAN_INPUT_STALE_CONFIRM'
+    || payload?.code === 'PLAN_INPUT_STALE'
+    || payload?.error_code === 'PLAN_INPUT_STALE'
+  );
+}
+
 function buildAlreadyStarted(state) {
   const workspaceStatus = String(state.workspace_status || state.stage || '').toLowerCase();
   return ['can_publish', 'published', 'publishing'].includes(workspaceStatus)
@@ -158,9 +205,9 @@ function buildAlreadyStarted(state) {
 }
 
 async function workspaceState(api, publicId) {
-  const data = await okJson(await api.post(route('/pagebuilder/backend/ai-site-agent/post-workspace-state'), {
+  const data = await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-workspace-state', {
     data: { public_id: publicId, state_mode: 'queue_poll' },
-  }), 'workspace state');
+  }, 'workspace state');
   return pickState(data);
 }
 
@@ -168,9 +215,9 @@ async function waitForPlanReady(api, publicId) {
   const deadline = Date.now() + planDeadlineMs;
   let last = '';
   while (Date.now() <= deadline) {
-    const confirm = await api.post(route('/pagebuilder/backend/ai-site-agent/post-confirm-plan'), {
+    const confirm = await apiPost(api, route('/pagebuilder/backend/ai-site-agent/post-confirm-plan'), {
       data: { public_id: publicId },
-    });
+    }, 'confirm plan');
     const status = confirm.status();
     const text = await confirm.text();
     let data = {};
@@ -179,9 +226,29 @@ async function waitForPlanReady(api, publicId) {
     } catch {
       data = { success: false, message: text.slice(0, 300) };
     }
+    let state = await workspaceState(api, publicId).catch(() => ({}));
+    if (planRequiresStaleConfirmation(data)) {
+      if (isRunningStatus(activeStatus(state, 'plan')) || isRunningStatus(queueStatus(state, 'plan'))) {
+        data = {
+          ...data,
+          message: data.message || data?.data?.message || 'stale confirmation waiting for plan queue to finish',
+        };
+      } else {
+        log('plan stale confirmation requested after plan queue finished; sending force_confirm_stale_plan=1');
+        const forced = await apiPost(api, route('/pagebuilder/backend/ai-site-agent/post-confirm-plan'), {
+          data: { public_id: publicId, force_confirm_stale_plan: '1' },
+        }, 'confirm stale plan');
+        const forcedText = await forced.text();
+        try {
+          data = forcedText ? JSON.parse(forcedText) : {};
+        } catch {
+          data = { success: false, message: forcedText.slice(0, 300) };
+        }
+        state = await workspaceState(api, publicId).catch(() => state);
+      }
+    }
     const confirmed = planConfirmedFromPayload(data);
     const msg = String(data.message || data?.data?.message || '').trim();
-    const state = await workspaceState(api, publicId).catch(() => ({}));
     const progress = state.plan_queue_info?.stage1_page_progress || {};
     const line = `plan confirmed=${confirmed ? 1 : 0} status=${status} queue=${queueStatus(state, 'plan')} active=${activeStatus(state, 'plan')} pages=${progress.done_count || 0}/${progress.total || 0} running=${progress.running_count || 0} failed=${progress.failed_count || 0} msg=${(msg || stateMessage(state, 'plan')).slice(0, 180)}`;
     if (line !== last) {
@@ -280,10 +347,10 @@ async function main() {
   const loginHtml = await loginPage.text();
   const formKey = /name="form_key"\s+value="([^"]+)"/.exec(loginHtml)?.[1] || '';
   log(`form_key=${formKey ? 'yes' : 'no'}`);
-  const loginPost = await api.post(route('/USD/en_US/admin/login/post'), {
+  const loginPost = await apiPost(api, route('/USD/en_US/admin/login/post'), {
     form: { form_key: formKey, username: adminUser, password: adminPassword, remember: 'on' },
     maxRedirects: 0,
-  });
+  }, 'login post');
   if (![200, 302, 303].includes(loginPost.status())) {
     throw new Error(`login failed HTTP ${loginPost.status()}: ${(await loginPost.text()).slice(0, 500)}`);
   }
@@ -314,14 +381,14 @@ async function main() {
     );
 
     log('create session');
-    const create = await okJson(await api.post(route('/pagebuilder/backend/ai-site-agent/post-create-session'), {
+    const create = await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-create-session', {
       data: {
         site_title: siteTitle,
         brief_description: brief,
         default_locale: 'en_US',
         design_direction_mode: 'auto',
       },
-    }), 'create session');
+    }, 'create session');
     const publicId = String(create.public_id || create.data?.public_id || '').trim();
     if (!publicId) {
       throw new Error(`missing public_id: ${jsonSummary(create)}`);
@@ -329,12 +396,12 @@ async function main() {
     log(`public_id=${publicId}`);
 
     log('recommend domain');
-    const recommend = await okJson(await api.post(route('/pagebuilder/backend/ai-site-agent/post-recommend-domain'), {
+    const recommend = await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-recommend-domain', {
       data: {
         description: brief,
         defer_availability_check: true,
       },
-    }), 'recommend domain');
+    }, 'recommend domain');
     const rawCandidates = recommend.candidate_domains || recommend.data?.candidate_domains || recommend.recommended_domain_list || [];
     const recommendedDomain = normalizeDomain(rawCandidates[0] || recommend.domain || recommend.data?.domain || fallbackDomain);
     const candidates = [recommendedDomain, ...rawCandidates.map((domain) => normalizeDomain(domain))]
@@ -344,7 +411,7 @@ async function main() {
     log(`workspace_domain=${workspaceDomain}`);
 
     log('merge scope');
-    await okJson(await api.post(route('/pagebuilder/backend/ai-site-agent/post-merge-scope'), {
+    await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-merge-scope', {
       data: {
         public_id: publicId,
         scope_patch: {
@@ -361,7 +428,7 @@ async function main() {
           selected_skill_codes: ['claude-design'],
         },
       },
-    }), 'merge scope');
+    }, 'merge scope');
 
     browser = await chromium.launch({
       headless: process.env.WELINE_HEADED === '0',
@@ -379,7 +446,7 @@ async function main() {
     await page.screenshot({ path: path.join(outDir, 'workspace-initial.png'), fullPage: false });
 
     log('start plan');
-    await okJson(await api.post(route('/pagebuilder/backend/ai-site-agent/post-start-plan'), {
+    await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-start-plan', {
       data: {
         public_id: publicId,
         selected_skill_codes: ['claude-design'],
@@ -391,7 +458,7 @@ async function main() {
           plan_locale: 'en_US',
         },
       },
-    }), 'start plan');
+    }, 'start plan');
     const planState = await waitForPlanReady(api, publicId);
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.screenshot({ path: path.join(outDir, 'plan-confirmed.png'), fullPage: true });
@@ -400,9 +467,9 @@ async function main() {
     if (buildAlreadyStarted(planState)) {
       log('build already queued by plan confirmation');
     } else {
-      await okJson(await api.post(route('/pagebuilder/backend/ai-site-agent/post-start-build'), {
+      await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-start-build', {
         data: { public_id: publicId },
-      }), 'start build');
+      }, 'start build');
     }
     const buildState = await waitForBuildReady(api, publicId);
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -438,15 +505,15 @@ async function main() {
     fs.writeFileSync(path.join(outDir, 'preview-audit.json'), JSON.stringify(previewAudit, null, 2));
 
     log('publish checklist');
-    const checklist = await okJson(await api.post(route('/pagebuilder/backend/ai-site-agent/post-publish-checklist'), {
+    const checklist = await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-publish-checklist', {
       data: { public_id: publicId },
-    }), 'publish checklist');
+    }, 'publish checklist');
     log(`publish_checklist=${jsonSummary(checklist, 1000)}`);
 
     log('start publish');
-    const publishStart = await okJson(await api.post(route('/pagebuilder/backend/ai-site-agent/post-start-publish'), {
+    const publishStart = await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-start-publish', {
       data: { public_id: publicId, confirm_visual_theme: 1 },
-    }), 'start publish');
+    }, 'start publish');
     log(`publish_start=${jsonSummary(publishStart, 1000)}`);
     const publishState = await waitForPublishDone(api, publicId);
 

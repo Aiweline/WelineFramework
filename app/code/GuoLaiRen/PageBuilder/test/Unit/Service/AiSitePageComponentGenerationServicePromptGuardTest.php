@@ -47,6 +47,31 @@ final class AiSitePageComponentGenerationServicePromptGuardTest extends TestCase
         self::assertStringNotContainsString('emitComponentRetryNotice', $source);
     }
 
+    public function testResponsivePromptGuardsLongMobileTextInsteadOfClippingIt(): void
+    {
+        $source = (string)\file_get_contents(
+            __DIR__ . '/../../../Service/AiSitePageComponentGenerationService.php'
+        );
+
+        self::assertStringContainsString('brand/logo text, headings, paragraphs, labels, nav items, badges/chips', $source);
+        self::assertStringContainsString('overflow-wrap:anywhere', $source);
+        self::assertStringContainsString('Do not use white-space:nowrap on brand/nav/badges/buttons/headings at <=420px', $source);
+        self::assertStringContainsString('never to hide clipped copy or controls', $source);
+    }
+
+    public function testMediaRhythmPromptGuidesImagesWithoutContentGate(): void
+    {
+        $source = (string)\file_get_contents(
+            __DIR__ . '/../../../Service/AiSitePageComponentGenerationService.php'
+        );
+
+        self::assertStringContainsString('Page media rhythm rule', $source);
+        self::assertStringContainsString('all text/stat/card-only sections', $source);
+        self::assertStringContainsString('substantial CSS media/supporting visual surface', $source);
+        self::assertStringContainsString('Policy pages may remain dense legal text', $source);
+        self::assertStringContainsString('This is design guidance only, not a validation gate', $source);
+    }
+
     public function testStructuralGateAllowsVisibleCopySpacingIssues(): void
     {
         $service = new AiSitePageComponentGenerationService(

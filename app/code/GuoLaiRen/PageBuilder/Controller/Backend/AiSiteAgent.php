@@ -322,12 +322,18 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
+        }
+        if ($adminId <= 0 || $publicId === '') {
             $this->assign('title', __('PageBuilder AI site workspace'));
             $this->assign('error_message', __('未登录或会话令牌无效'));
             return $this->fetch('workspace-error');
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+        }
         if ($session === null) {
             $this->assign('title', __('PageBuilder AI site workspace'));
             $this->assign('error_message', __('会话不存在或无权访问'));
@@ -390,9 +396,7 @@ class AiSiteAgent extends BaseController
         $this->assign('session', $session);
         $this->assign('workspace_state', $viewState);
         $this->assign('scope', $viewState['scope']);
-        $this->assign('scope_preview', '{}');
         $this->assign('merge_scope_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-merge-scope'));
-        $this->assign('replace_scope_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-replace-scope'));
         $this->assign('set_stage_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-set-stage'));
         $this->assign('start_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-start-plan'));
         $this->assign('skill_list_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-skill-list'));
@@ -921,13 +925,7 @@ class AiSiteAgent extends BaseController
 
     public function postMergeScope(): string
     {
-        return $this->mutateScope(true);
-    }
-
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postReplaceScope(): string
-    {
-        return $this->mutateScope(false);
+        return $this->mutateScope();
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -2365,23 +2363,6 @@ class AiSiteAgent extends BaseController
         $hasStageOnePayload = (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
             || \trim((string)($scope['plan_markdown'] ?? '')) !== '';
         $existingBuildPlanV2 = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        if ($hasStageOnePayload && $existingBuildPlanV2 === []) {
-            try {
-                $fresh = $this->persistExistingPlanDraftOrThrow($session, $adminId, 'plan_confirm');
-                $scope = $this->scopeCompatibilityService->normalizeScope(
-                    $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN, $planArtifactKeys)
-                );
-                $planConfirmationPrepared = $this->executionBlueprintService->prepareStageOnePlanScopeForConfirmation($scope);
-                $scope = \is_array($planConfirmationPrepared['scope'] ?? null) ? $planConfirmationPrepared['scope'] : $scope;
-                $planConfirmationStage1Validation = \is_array($planConfirmationPrepared['stage1_validation'] ?? null)
-                    ? $planConfirmationPrepared['stage1_validation']
-                    : [];
-                $hasStageOnePayload = (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
-                    || \trim((string)($scope['plan_markdown'] ?? '')) !== '';
-                $existingBuildPlanV2 = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-            } catch (\Throwable) {
-            }
-        }
         if (!$hasStageOnePayload && $existingBuildPlanV2 === []) {
             return $this->jsonError('PLAN_NOT_READY', (string)__('尚未生成方案，请先完成方案生成'), ['public_id']);
         }
@@ -2407,12 +2388,21 @@ class AiSiteAgent extends BaseController
             );
         }
         $planStartDecision = $this->resolvePlanStartDecision($scope);
-        if (!empty($planStartDecision['rebuild_required']) || !empty($planStartDecision['source_signature_changed'])) {
+        $planInputStaleForConfirmation = !empty($planStartDecision['rebuild_required'])
+            || !empty($planStartDecision['source_signature_changed']);
+        $forceConfirmStalePlan = (int)$this->getRequestBodyValue('force_confirm_stale_plan', 0) === 1;
+        if ($planInputStaleForConfirmation && !$forceConfirmStalePlan) {
+            $stalePlanConfirmMessage = (string)__('建站资料已变更，与当前方案不一致。是否仍按当前方案确认并进入第二阶段？');
             return $this->jsonError(
                 'PLAN_INPUT_STALE',
-                (string)__('建站资料已变更，与当前方案不一致。请先点击“重新生成方案”后再确认。'),
-                ['public_id'],
-                ['plan_start_decision' => $planStartDecision]
+                $stalePlanConfirmMessage,
+                ['public_id', 'force_confirm_stale_plan'],
+                [
+                    'requires_confirmation' => true,
+                    'confirmation_code' => 'PLAN_INPUT_STALE_CONFIRM',
+                    'confirm_message' => $stalePlanConfirmMessage,
+                    'plan_start_decision' => $planStartDecision,
+                ]
             );
         }
 
@@ -2428,6 +2418,8 @@ class AiSiteAgent extends BaseController
 
         $scopePatch = \array_replace($directionLockPatch, [
             'plan_confirmed' => 1,
+            'plan_confirmed_stale_input' => $forceConfirmStalePlan && $planInputStaleForConfirmation ? 1 : 0,
+            'plan_confirmed_stale_input_at' => $forceConfirmStalePlan && $planInputStaleForConfirmation ? \date('Y-m-d H:i:s') : '',
         ]);
         $buildPlanSourceScope = \array_replace($scope, $scopePatch);
         foreach ([
@@ -2936,49 +2928,6 @@ class AiSiteAgent extends BaseController
         }
 
         return '';
-    }
-
-    private function persistExistingPlanDraftOrThrow(
-        AiSiteAgentSession $session,
-        int $adminId,
-        string $source
-    ): AiSiteAgentSession {
-        $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
-        );
-        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planMarkdown = \trim((string)($scope['plan_markdown'] ?? ''));
-
-        if ($planMarkdown === '' && $planJson === []) {
-            throw new \RuntimeException('Stage-one plan draft is not ready to save source=' . $source);
-        }
-
-        $patch = [
-            'plan_json' => $planJson,
-            'plan_markdown' => $planMarkdown,
-            'plan_generated_at' => (string)($scope['plan_generated_at'] ?? \date('Y-m-d H:i:s')),
-        ];
-
-        $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $patch);
-        if (!$saved) {
-            throw new \RuntimeException('Stage-one plan draft persist failed: mergeScope returned false.');
-        }
-
-        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        $freshScope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage(
-                $fresh,
-                AiSiteAgentSession::STAGE_PLAN,
-                ['plan_json', 'plan_markdown']
-            )
-        );
-        $freshPlanJson = \is_array($freshScope['plan_json'] ?? null) ? $freshScope['plan_json'] : [];
-        $freshPlanMarkdown = \trim((string)($freshScope['plan_markdown'] ?? ''));
-        if ($freshPlanMarkdown !== '' || $freshPlanJson !== []) {
-            return $fresh;
-        }
-
-        throw new \RuntimeException('Stage-one plan draft persist verification failed source=' . $source);
     }
 
     private function handleResumeBuild(): string
@@ -3510,6 +3459,9 @@ class AiSiteAgent extends BaseController
         $saved = $this->sessionService->mergeScope((int)$session->getId(), $adminId, [
             'reference_images' => $referenceImages,
         ]);
+        if (!$saved) {
+            return $this->fetchJson(['success' => false, 'message' => __('保存失败')]);
+        }
         if (!$saved) {
             return $this->jsonError('REFERENCE_IMAGE_SCOPE_SAVE_FAILED', 'Failed to save reference image into workspace.', ['reference_image']);
         }
@@ -8011,7 +7963,7 @@ class AiSiteAgent extends BaseController
                         $artifacts['ai_generated'] = 1;
                     } elseif ($requestedPromptMode === 'refine' && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
                         $resumeInstruction = $requestedPromptMode === 'resume_plan'
-                    ? (string)__('请基于当前方案草稿与已完成结构继续补齐中断内容，保留已完成部分，只修复缺失、未完成或异常中断的内容，并输出完整 markdown 与完整 plan_json。')
+                    ? (string)__('请基于当前方案与已完成结构继续补齐中断内容，保留已完成部分，只修复缺失、未完成或异常中断的内容，并输出完整 markdown 与完整 plan_json。')
                             : '';
                         $refineInstruction = $requestedInstruction;
                         $refineTargetScope = $requestedTargetScope;
@@ -11127,7 +11079,7 @@ class AiSiteAgent extends BaseController
                 'suppressed_content' => true,
             ],
             'plan_chunk' => [
-            'message' => (string)__('第一阶段方案内容已生成并写入草稿，正文流已从队列 SSE 中省略。'),
+            'message' => (string)__('第一阶段方案内容已生成并写入当前方案，正文流已从队列 SSE 中省略。'),
                 'operation' => (string)($payload['operation'] ?? ''),
                 'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
                 'suppressed_content' => true,
@@ -12008,7 +11960,11 @@ class AiSiteAgent extends BaseController
         }
 
         $planStageScope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, ['plan_json', 'plan_markdown'])
+            $this->sessionService->loadScopeForStage(
+                $session,
+                AiSiteAgentSession::STAGE_PLAN,
+                ['plan_json', 'plan_markdown', 'plan_workbench']
+            )
         );
         if ($planStageScope === [] || $planStageScope === $scope) {
             return $scope;
@@ -14715,16 +14671,32 @@ class AiSiteAgent extends BaseController
 
         $queueName = $this->buildAiSiteQueueName($operation, $executionToken);
         $bizKey = $this->buildAiSiteQueueBizKey((int)$session->getId(), $operation);
-        $reusableQueueRow = $this->findAiSiteOperationQueueRow($session, $operation);
+        $retryOfQueueId = (int)($operationDetails['retry_of_queue_id'] ?? 0);
+        $reusableQueueRow = null;
+        if ($retryOfQueueId > 0) {
+            $retryQueueRow = $this->findAiSiteQueueRowById($retryOfQueueId);
+            if (\is_array($retryQueueRow) && $retryQueueRow !== [] && $this->isAiSiteQueueRowForOperation($retryQueueRow, $operation)) {
+                $reusableQueueRow = $retryQueueRow;
+            } else {
+                throw new \RuntimeException(
+                    'Original PageBuilder queue #' . $retryOfQueueId . ' is not available for retry.'
+                );
+            }
+        } else {
+            $reusableQueueRow = $this->findAiSiteOperationQueueRow($session, $operation);
+        }
         $reuseFailureMessage = '';
         if (\is_array($reusableQueueRow) && $reusableQueueRow !== [] && $this->shouldReuseAiSiteQueueRow($reusableQueueRow, $preserveRunningQueueRow, $operation, $scopePatch, $operationDetails)) {
-            $reusableQueueId = (int)($reusableQueueRow['queue_id'] ?? $reusableQueueRow['id'] ?? 0);
+            $reusableQueueId = $this->resolveAiSiteQueueRowId($reusableQueueRow);
             $updated = w_query('queue', 'update', [
                 'queue_id' => $reusableQueueId,
                 'patch' => $this->buildAiSiteQueueReusePatch($queueName, $content, $bizKey, $typeId),
             ]);
             if (\is_array($updated) && ($updated['success'] ?? false)) {
                 $queueId = (int)($updated['queue_id'] ?? 0);
+                if ($queueId <= 0) {
+                    $queueId = $reusableQueueId;
+                }
                 if ($queueId > 0) {
                     $this->stopSupersededPendingAiSiteQueueRows($bizKey, $queueId, $operation);
                     return $queueId;
@@ -14733,6 +14705,12 @@ class AiSiteAgent extends BaseController
             $reuseFailureMessage = \is_array($updated)
                 ? \trim((string)($updated['message'] ?? ''))
                 : 'invalid queue update response';
+        }
+        if ($retryOfQueueId > 0 && \is_array($reusableQueueRow) && $reusableQueueRow !== []) {
+            $detail = $reuseFailureMessage !== '' ? ': ' . $reuseFailureMessage : '.';
+            throw new \RuntimeException(
+                'Original PageBuilder queue #' . $retryOfQueueId . ' could not be reset for retry' . $detail
+            );
         }
         $created = w_query('queue', 'create', [
             'class' => $queueClass,
@@ -14905,7 +14883,7 @@ class AiSiteAgent extends BaseController
         array $operationDetails = []
     ): bool
     {
-        if ((int)($queueRow['queue_id'] ?? 0) <= 0) {
+        if ($this->resolveAiSiteQueueRowId($queueRow) <= 0) {
             return false;
         }
 
@@ -14915,6 +14893,19 @@ class AiSiteAgent extends BaseController
         }
 
         return true;
+    }
+
+    /**
+     * @param array<string, mixed> $queueRow
+     */
+    private function resolveAiSiteQueueRowId(array $queueRow): int
+    {
+        $queueId = (int)($queueRow['queue_id'] ?? 0);
+        if ($queueId > 0) {
+            return $queueId;
+        }
+
+        return (int)($queueRow['id'] ?? 0);
     }
 
     /**
@@ -14959,8 +14950,8 @@ class AiSiteAgent extends BaseController
             if (!\is_array($row)) {
                 continue;
             }
-            $queueId = (int)($row['queue_id'] ?? 0);
-            if ($queueId <= 0 || $queueId >= $activeQueueId) {
+            $queueId = $this->resolveAiSiteQueueRowId($row);
+            if ($queueId <= 0 || $queueId === $activeQueueId) {
                 continue;
             }
             $status = \strtolower(\trim((string)($row['status'] ?? '')));
@@ -14976,7 +14967,7 @@ class AiSiteAgent extends BaseController
                     'patch' => [
                         'status' => 'stop',
                         'pid' => 0,
-                        'process' => 'Superseded by newer PageBuilder queue #' . $activeQueueId . '.',
+                        'process' => 'Superseded by PageBuilder queue #' . $activeQueueId . '.',
                     ],
                 ]);
             } catch (\Throwable) {
@@ -18376,7 +18367,7 @@ class AiSiteAgent extends BaseController
         return $payload;
     }
 
-    private function mutateScope(bool $merge): string
+    private function mutateScope(): string
     {
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
@@ -18387,34 +18378,12 @@ class AiSiteAgent extends BaseController
         if ($session === null) {
             return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
-        $jsonKey = $merge ? 'scope_patch' : 'scope';
+        $jsonKey = 'scope_patch';
         $isAutosave = \in_array(\strtolower(\trim((string)$this->getRequestBodyValue('autosave', '0'))), ['1', 'true', 'yes', 'on'], true);
         $error = '';
         $payload = $this->getRequestJsonObject($jsonKey, $error);
         if ($error !== '') {
             return $this->fetchJson(['success' => false, 'message' => $error]);
-        }
-        $saveTarget = \strtolower(\trim((string)$this->getRequestBodyValue('save_target', '')));
-        if ($merge && $isAutosave && $payload === [] && ($saveTarget === 'plan' || ($saveTarget === '' && $this->isTruthyRequestFlag('save_plan_draft')))) {
-            try {
-                $this->persistExistingPlanDraftOrThrow($session, $adminId, 'save_button');
-            } catch (\Throwable $throwable) {
-                return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
-            }
-            $this->appendWorkspaceEvent(
-                $session->getId(),
-                $adminId,
-                $this->scopeCompatibilityService->normalizeStage($session->getStage()),
-                'plan_draft_saved',
-            (string)__('建站方案草稿已保存'),
-                ['details' => ['autosave' => 1, 'source' => 'save_button']]
-            );
-
-            return $this->fetchJson([
-                'success' => true,
-                'message' => (string)__('建站方案草稿已保存'),
-                'autosave' => true,
-            ]);
         }
         if (isset($payload['page_types']) && !\array_key_exists(AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY, $payload)) {
             $payload[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
@@ -18434,7 +18403,7 @@ class AiSiteAgent extends BaseController
                 ['design_direction_code']
             );
         }
-        $saved = $merge ? $this->sessionService->mergeScope($session->getId(), $adminId, $payload) : $this->sessionService->replaceScope($session->getId(), $adminId, $payload);
+        $saved = $this->sessionService->mergeScope($session->getId(), $adminId, $payload);
         if (!$saved) {
             return $this->fetchJson(['success' => false, 'message' => __('淇濆瓨澶辫触')]);
         }
@@ -18442,12 +18411,19 @@ class AiSiteAgent extends BaseController
             $session->getId(),
             $adminId,
             $this->scopeCompatibilityService->normalizeStage($session->getStage()),
-            $isAutosave ? 'autosave_saved' : ($merge ? 'scope_merged' : 'scope_replaced'),
+            $isAutosave ? 'autosave_saved' : 'scope_updated',
             $isAutosave
                 ? (string)__('工作区已自动保存')
-                : ($merge ? (string)__('工作区信息已合并保存') : (string)__('工作区信息已整体替换')),
+                : (string)__('工作区信息已更新'),
             ['details' => ['keys' => \array_values(\array_map('strval', \array_keys($payload))), 'autosave' => $isAutosave ? 1 : 0]]
         );
+        if ($isAutosave) {
+            return $this->fetchJson([
+                'success' => true,
+                'message' => (string)__('工作区已自动保存'),
+                'autosave' => true,
+            ]);
+        }
         if ($isAutosave) {
             return $this->fetchJson([
                 'success' => true,
