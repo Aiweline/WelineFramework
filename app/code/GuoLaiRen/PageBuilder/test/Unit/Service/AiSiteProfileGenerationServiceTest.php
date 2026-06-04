@@ -64,6 +64,36 @@ class AiSiteProfileGenerationServiceTest extends TestCase
         self::assertSame(['zh_Hans_CN', 'en_US'], $profile['locales']);
     }
 
+    public function testGeneratePrefersCanonicalPlanJsonIdentityOverBriefSentence(): void
+    {
+        $service = new AiSiteProfileGenerationService();
+
+        $profile = $service->generate([
+            'brief_description' => 'Create a polished English official recommendation website for India card-game APK downloads.',
+            'plan_json' => [
+                'site_brief' => [
+                    'site_title' => 'India Card Game APK Guide',
+                    'site_tagline' => 'Trusted APK comparisons for Indian card players',
+                ],
+            ],
+        ], false);
+
+        self::assertSame('India Card Game APK Guide', $profile['site_title']);
+        self::assertSame('Trusted APK comparisons for Indian card players', $profile['site_tagline']);
+    }
+
+    public function testGenerateDerivesConciseTitleFromWebsiteForBrief(): void
+    {
+        $service = new AiSiteProfileGenerationService();
+
+        $profile = $service->generate([
+            'brief_description' => 'Create a polished English official recommendation website for India card-game APK downloads. The site helps Indian mobile players compare trusted Teen Patti and Rummy APKs.',
+        ], false);
+
+        self::assertSame('India card-game APK', $profile['site_title']);
+        self::assertStringNotContainsString('The site', $profile['site_title']);
+    }
+
     public function testGeneratePrefersExplicitTargetDomainOverPreviewHost(): void
     {
         $service = new AiSiteProfileGenerationService();

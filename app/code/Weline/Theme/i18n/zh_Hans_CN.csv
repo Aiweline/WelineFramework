@@ -1390,6 +1390,74 @@ Next,Next
 姓名,姓名
 消息内容,消息内容
 提交请求,提交请求
+"Weline default page","Weline default page"
+"This default Theme page is ready for module hooks, visual slots, and direct controller content.","This default Theme page is ready for module hooks, visual slots, and direct controller content."
+"Go home","Go home"
+Contact,Contact
+"Weline Default Theme","Weline Default Theme"
+"Build a clean storefront","Build a clean storefront"
+"A ready homepage with graceful defaults, module hooks, and visual slots for real content.","A ready homepage with graceful defaults, module hooks, and visual slots for real content."
+"Browse products","Browse products"
+"Talk to us","Talk to us"
+"Ready layout regions","Ready layout regions"
+"Footer extension slots","Footer extension slots"
+"Required commerce modules","Required commerce modules"
+"Featured picks","Featured picks"
+"Use product, banner, or content widgets here when real data is available.","Use product, banner, or content widgets here when real data is available."
+"View all","View all"
+"Starter Kit","Starter Kit"
+"Modern Pack","Modern Pack"
+"Growth Bundle","Growth Bundle"
+"Studio Set","Studio Set"
+"Default product placeholder. Replace with module data or widgets.","Default product placeholder. Replace with module data or widgets."
+"Explore sections","Explore sections"
+"Default cards keep the page useful before a category module is installed.","Default cards keep the page useful before a category module is installed."
+Collections,Collections
+"Curated groups for product or content modules.","Curated groups for product or content modules."
+Promotions,Promotions
+"Seasonal banners, offers, or announcement widgets.","Seasonal banners, offers, or announcement widgets."
+Services,Services
+"Support blocks, guides, and contact entry points.","Support blocks, guides, and contact entry points."
+"Launch-ready by default","Launch-ready by default"
+"Publish a clean page first, then let modules replace each region with live data.","Publish a clean page first, then let modules replace each region with live data."
+"Get started","Get started"
+"Latest updates","Latest updates"
+"Use this slot for new products, posts, releases, or campaigns.","Use this slot for new products, posts, releases, or campaigns."
+"New content","New content"
+"Fresh module output can replace this fallback.","Fresh module output can replace this fallback."
+"Featured story","Featured story"
+"Ideal for CMS, blog, or landing content.","Ideal for CMS, blog, or landing content."
+"Active campaign","Active campaign"
+"Drop in a banner or promotion widget.","Drop in a banner or promotion widget."
+"Popular now","Popular now"
+"A neutral region for ranked items, recommended content, or highlights.","A neutral region for ranked items, recommended content, or highlights."
+"Top item","Top item"
+"Ready for ranking widgets.","Ready for ranking widgets."
+"Customer choice","Customer choice"
+"Ready for review or recommendation modules.","Ready for review or recommendation modules."
+"Editor pick","Editor pick"
+"Ready for curated content.","Ready for curated content."
+"Trusted ecosystem","Trusted ecosystem"
+"Brand, partner, certification, or channel widgets can live here.","Brand, partner, certification, or channel widgets can live here."
+Reliable,Reliable
+"Defaults render without optional commerce dependencies.","Defaults render without optional commerce dependencies."
+Composable,Composable
+"Each important region has a named slot and hook.","Each important region has a named slot and hook."
+Replaceable,Replaceable
+"Real module output can replace fallback content cleanly.","Real module output can replace fallback content cleanly."
+"Default Theme","Default Theme"
+"A clean Weline homepage","A clean Weline homepage"
+"Use slots for visual composition, hooks for real module data, and this fallback for a complete default page.","Use slots for visual composition, hooks for real module data, and this fallback for a complete default page."
+Explore,Explore
+"Logo, navigation, search, account, and cart slots.","Logo, navigation, search, account, and cart slots."
+"Hero, products, categories, banners, and module content.","Hero, products, categories, banners, and module content."
+"Links, social, newsletter, payment, and copyright slots.","Links, social, newsletter, payment, and copyright slots."
+"Real data first","Real data first"
+"Modules can replace this card through hooks without changing Theme code.","Modules can replace this card through hooks without changing Theme code."
+"Visual slots","Visual slots"
+"The editor can place widgets into clearly named homepage regions.","The editor can place widgets into clearly named homepage regions."
+"Safe defaults","Safe defaults"
+"The page remains readable when optional modules are not installed.","The page remains readable when optional modules are not installed."
 "本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。","本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。"
 "一、什么是 Cookie？","一、什么是 Cookie？"
 "Cookie 是当您访问网站时，由网站服务器存储在您设备上的小型文本文件。Cookie 有助于网站识别您的设备，记住您的偏好设置，并改进服务体验。","Cookie 是当您访问网站时，由网站服务器存储在您设备上的小型文本文件。Cookie 有助于网站识别您的设备，记住您的偏好设置，并改进服务体验。"
@@ -1646,37 +1714,29 @@ Next,Next
 "推荐产品区域 - 拖拽推荐部件到此处","推荐产品区域 - 拖拽推荐部件到此处"
 示例分类,示例分类
 当前页面,当前页面
-了解我们,了解我们
-职业机会,职业机会
-新闻中心,新闻中心
-投资者关系,投资者关系
-设备与服务,设备与服务
-赚钱,赚钱
-在网站上销售,在网站上销售
-销售您的应用,销售您的应用
-成为合作伙伴,成为合作伙伴
-广告,广告
-自助出版,自助出版
-付款产品,付款产品
-商店卡,商店卡
-购物积分,购物积分
-货币转换器,货币转换器
-礼品卡,礼品卡
-需要帮助？,需要帮助？
-COVID-19和网站,COVID-19和网站
-您的账户,您的账户
-配送率和政策,配送率和政策
-退货和换货,退货和换货
-管理您的内容和设备,管理您的内容和设备
-帮助,帮助
-法律与政策,法律与政策
-微信公众号,微信公众号
-微博,微博
-抖音,抖音
-B站,B站
-小红书,小红书
-关注我们,关注我们
-返回顶部,返回顶部
+Theme,Theme
+Home,Home
+Products,Products
+Solutions,Solutions
+Support,Support
+"Help Center","Help Center"
+Orders,Orders
+Returns,Returns
+FAQ,FAQ
+Policies,Policies
+Privacy,Privacy
+Terms,Terms
+Cookie,Cookie
+Disclaimer,Disclaimer
+WeChat,WeChat
+Douyin,Douyin
+YouTube,YouTube
+Instagram,Instagram
+"A clean default theme surface for modules, real data hooks, and visual composition.","A clean default theme surface for modules, real data hooks, and visual composition."
+"Get updates","Get updates"
+"Email address","Email address"
+Subscribe,Subscribe
+"Back to top","Back to top"
 "Weline Framework","Weline Framework"
 Weline,Weline
 网站Logo,网站Logo
@@ -1684,158 +1744,13 @@ Weline,Weline
 切换语言,切换语言
 语言,语言
 切换货币,切换货币
-跳转到主要内容,跳转到主要内容
-选择配送地址,选择配送地址
-配送至,配送至
-中国大陆,中国大陆
-搜索建议,搜索建议
-我的,我的
-我的菜单,我的菜单
-账户及心愿单,账户及心愿单
-我的订单,我的订单
-账户设置,账户设置
-简体中文,简体中文
-繁體中文,繁體中文
-货币,货币
-ZH,ZH
-语言选项,语言选项
-English,English
-CNY,CNY
-货币选项,货币选项
-账户菜单,账户菜单
-"您好, 登录","您好, 登录"
-退货,退货
-与我的订单,与我的订单
-打开购物车,打开购物车
-关闭购物车,关闭购物车
-总计,总计
-查看购物车,查看购物车
-去结算,去结算
-打开所有类别菜单,打开所有类别菜单
-关闭菜单,关闭菜单
-电子产品,电子产品
-手机通讯,手机通讯
-智能手机,智能手机
-功能手机,功能手机
-5G手机,5G手机
-折叠手机,折叠手机
-手机壳,手机壳
-屏幕保护膜,屏幕保护膜
-充电器,充电器
-数据线,数据线
-移动电源,移动电源
-手机耳机,手机耳机
-电脑办公,电脑办公
-笔记本,笔记本
-游戏本,游戏本
-超极本,超极本
-台式机,台式机
-一体机,一体机
-平板电脑,平板电脑
-显示器,显示器
-键盘,键盘
-鼠标,鼠标
-摄像头,摄像头
-存储设备,存储设备
-智能设备,智能设备
-智能手表,智能手表
-运动手环,运动手环
-智能音箱,智能音箱
-智能照明,智能照明
-智能门锁,智能门锁
-智能摄像头,智能摄像头
-智能家居套装,智能家居套装
-可穿戴设备,可穿戴设备
-影音娱乐,影音娱乐
-无线耳机,无线耳机
-有线耳机,有线耳机
-入耳式耳机,入耳式耳机
-蓝牙音响,蓝牙音响
-Soundbar,Soundbar
-单反相机,单反相机
-微单相机,微单相机
-运动相机,运动相机
-游戏主机,游戏主机
-游戏配件,游戏配件
-服装服饰,服装服饰
-男装,男装
-衬衫,衬衫
-T恤,T恤
-Polo衫,Polo衫
-长裤,长裤
-短裤,短裤
-外套,外套
-毛衣,毛衣
-皮鞋,皮鞋
-运动鞋,运动鞋
-皮带,皮带
-手表,手表
-包袋,包袋
-女装,女装
-连衣裙,连衣裙
-上装,上装
-下装,下装
-半身裙,半身裙
-大衣,大衣
-高跟鞋,高跟鞋
-平底鞋,平底鞋
-靴子,靴子
-手提包,手提包
-斜挎包,斜挎包
-首饰,首饰
-童装,童装
-男童装,男童装
-女童装,女童装
-婴儿装,婴儿装
-童鞋,童鞋
-童装配饰,童装配饰
-校服,校服
-泳装,泳装
-运动服饰,运动服饰
-运动装,运动装
-跑步装备,跑步装备
-健身服,健身服
-跑鞋,跑鞋
-篮球鞋,篮球鞋
-户外装备,户外装备
-露营装备,露营装备
-家居用品,家居用品
-家具,家具
-沙发,沙发
-沙发床,沙发床
-餐桌,餐桌
-茶几,茶几
-椅子,椅子
-办公椅,办公椅
-床具,床具
-衣柜,衣柜
-书柜,书柜
-家纺,家纺
-床上用品,床上用品
-床单被套,床单被套
-枕头,枕头
-被子,被子
-窗帘,窗帘
-毛巾,毛巾
-地毯,地毯
-靠垫,靠垫
-厨房用品,厨房用品
-锅具,锅具
-刀具,刀具
-餐具,餐具
-杯具,杯具
-收纳,收纳
-厨房工具,厨房工具
-小家电,小家电
-装饰用品,装饰用品
-墙饰,墙饰
-花瓶,花瓶
-灯具,灯具
-镜子,镜子
-绿植,绿植
-运动户外,运动户外
-图书音像,图书音像
-食品饮料,食品饮料
+Docs,Docs
+"Free theme-ready header. Replace this area from any module hook or slot.","Free theme-ready header. Replace this area from any module hook or slot."
+Search...,Search...
+Search,Search
+Account,Account
+Cart,Cart
+"Toggle navigation","Toggle navigation"
 分页导航,分页导航
 NEW,NEW
 SALE,SALE
@@ -1844,6 +1759,7 @@ SALE,SALE
 加入购物车,加入购物车
 暂时缺货,暂时缺货
 已添加,已添加
+广告,广告
 2026春季新品上市,2026春季新品上市
 探索最新时尚潮流,探索最新时尚潮流
 立即选购,立即选购
@@ -1862,6 +1778,7 @@ SALE,SALE
 时,时
 分,分
 秒,秒
+电子产品,电子产品
 面包屑导航,面包屑导航
 "轮播产品 %d","轮播产品 %d"
 热门分类,热门分类
@@ -1871,9 +1788,16 @@ SALE,SALE
 美妆个护,美妆个护
 食品生鲜,食品生鲜
 母婴用品,母婴用品
+运动户外,运动户外
 图书文具,图书文具
 件商品,件商品
 商品分类,商品分类
+男装,男装
+女装,女装
+童装,童装
+家具,家具
+家纺,家纺
+收纳,收纳
 清除全部,清除全部
 "100 - 299 元","100 - 299 元"
 价格区间,价格区间
@@ -1919,6 +1843,7 @@ SSL安全,SSL安全
 搜索问题...,搜索问题...
 公司简介,公司简介
 加入我们,加入我们
+新闻中心,新闻中心
 客户服务,客户服务
 帮助中心,帮助中心
 配送说明,配送说明
@@ -1930,6 +1855,7 @@ SSL安全,SSL安全
 法律条款,法律条款
 使用条款,使用条款
 Cookie政策,Cookie政策
+我的订单,我的订单
 我的收藏,我的收藏
 地址管理,地址管理
 欢迎回来,欢迎回来
@@ -1948,6 +1874,8 @@ Cookie政策,Cookie政策
 促销活动,促销活动
 示例商品名称,示例商品名称
 小计,小计
+查看购物车,查看购物车
+去结算,去结算
 全部分类,全部分类
 配件,配件
 商品,商品
@@ -2005,14 +1933,21 @@ Cookie政策,Cookie政策
 订阅获取最新优惠信息,订阅获取最新优惠信息
 请输入邮箱地址,请输入邮箱地址
 我们不会分享您的邮箱地址,我们不会分享您的邮箱地址
+关注我们,关注我们
 微信扫码关注,微信扫码关注
 微信二维码,微信二维码
 热门标签,热门标签
 耳机,耳机
 相机,相机
+智能手表,智能手表
+充电器,充电器
+数据线,数据线
 保护壳,保护壳
 蓝牙,蓝牙
 音箱,音箱
+键盘,键盘
+鼠标,鼠标
+显示器,显示器
 路由器,路由器
 分享到,分享到
 邮件,邮件

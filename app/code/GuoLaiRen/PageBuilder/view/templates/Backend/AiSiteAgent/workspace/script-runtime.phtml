@@ -33,18 +33,13 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
     function resolveRuntimePlanJson(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
-        var planBlock = state.plan && typeof state.plan === 'object' ? state.plan : {};
-        var candidates = [state.plan_json, scope.plan_json, planBlock.json, planBlock.structured];
-        for (var i = 0; i < candidates.length; i += 1) {
-            if (candidates[i] && typeof candidates[i] === 'object' && candidates[i].pages && typeof candidates[i].pages === 'object') {
-                return candidates[i];
-            }
+        if (state.plan_json && typeof state.plan_json === 'object' && state.plan_json.pages && typeof state.plan_json.pages === 'object') {
+            return state.plan_json;
         }
         return {};
     }
     function runtimePlanJsonConfirmed(workspaceState) {
-        return runtimeTruthyFlag(resolveRuntimePlanJson(workspaceState).confirmed);
+        return parseInt(String(resolveRuntimePlanJson(workspaceState).confirmed || 0), 10) === 1;
     }
     function runtimePlanJsonPagesHaveBlocks(planJson) {
         var pages = planJson && typeof planJson === 'object' && planJson.pages && typeof planJson.pages === 'object'
@@ -54,7 +49,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             page_key: true, page_type: true, type: true, status: true, message: true, error: true, error_message: true,
             updated_at: true, started_at: true, finished_at: true, attempt_no: true, result_ref: true,
             title: true, label: true, page_label: true, page_title: true, page_goal: true, page_status: true,
-            content_locale: true, block_nodes: true, ordered_block_keys: true,
+            content_locale: true, ordered_block_keys: true,
             seo: true, route: true, slug: true, path: true, layout: true, sections: true, content: true,
             description: true, summary: true, html: true, html_content: true, fields: true
         };
@@ -72,16 +67,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
     function hasRuntimePlanJsonBuildEvidence(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
-        var planBlock = state.plan && typeof state.plan === 'object' ? state.plan : {};
         var api = resolveWorkspaceApi();
         if (typeof api.hasPlanJsonFlowEvidence === 'function' && api.hasPlanJsonFlowEvidence()) {
             return true;
         }
-        return runtimePlanJsonPagesHaveBlocks(state.plan_json)
-            || runtimePlanJsonPagesHaveBlocks(scope.plan_json)
-            || runtimePlanJsonPagesHaveBlocks(planBlock.json)
-            || runtimePlanJsonPagesHaveBlocks(planBlock.structured);
+        return runtimePlanJsonPagesHaveBlocks(state.plan_json);
     }
     function getRuntimeWorkspaceStateForPublishGate() {
         if (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object') {
@@ -137,7 +127,6 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     function hasPublishBlockingAiFailureStateForRuntime(source) {
         var bridge = resolveLivePreviewBridge();
         var state = source && typeof source === 'object' ? source : getRuntimeWorkspaceStateForPublishGate();
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         if (typeof bridge.hasPublishBlockingLatestBuildFailure === 'function'
             && bridge.hasPublishBlockingLatestBuildFailure(state)
         ) {
@@ -145,20 +134,14 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }
         if (runtimeTruthyFlag(state.latest_build_failed)
             || runtimeTruthyFlag(state.publish_blocked_by_latest_ai_failure)
-            || runtimeTruthyFlag(scope.latest_build_failed)
-            || runtimeTruthyFlag(scope.publish_blocked_by_latest_ai_failure)
         ) {
             return true;
         }
-        if ((parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0) > 0
-            || (parseInt(String(scope.retryable_ai_failure_count || 0), 10) || 0) > 0
-        ) {
+        if ((parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0) > 0) {
             return true;
         }
         if (countRuntimeRetryableAiFailureBucket(state.retryable_ai_failure_summary) > 0
-            || countRuntimeRetryableAiFailureBucket(scope.retryable_ai_failure_summary) > 0
             || countRuntimeRetryableAiFailureBucket(state.retryable_ai_failures) > 0
-            || countRuntimeRetryableAiFailureBucket(scope.retryable_ai_failures) > 0
             || collectRetryableFailureItemsFromPayload('', state).length > 0
         ) {
             return true;
@@ -180,13 +163,6 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     function isRuntimeVisualRefreshOperation(operation) {
         var op = String(operation || '').trim().toLowerCase();
         return isRuntimePublishBlockingAiOperation(op) || op === 'image_asset';
-    }
-    function resolveRuntimeQueueInfoKey(operation) {
-        var op = String(operation || '').trim().toLowerCase();
-        if (isRuntimePublishBlockingAiOperation(op) || op === 'image_asset' || op === 'publish') {
-            return 'build_queue_info';
-        }
-        return 'plan_queue_info';
     }
     var compactPageDisplayLabel = typeof previewBridge.compactPageDisplayLabel === 'function'
         ? previewBridge.compactPageDisplayLabel
@@ -286,7 +262,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
 
     /**
-     * 观察/队列同步阶段：终端状态行显示累计点号 + 刷新本地时间，便于用户感知仍在运行。
+     * 瑙傚療/闃熷垪鍚屾闃舵锛氱粓绔姸鎬佽鏄剧ず绱鐐瑰彿 + 鍒锋柊鏈湴鏃堕棿锛屼究浜庣敤鎴锋劅鐭ヤ粛鍦ㄨ繍琛屻€?
      */
     function startObserverSyncTerminalPulse(terminal) {
         stopObserverSyncTerminalPulse();
@@ -294,7 +270,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return;
         }
         observerSyncDotPhase = -1;
-        var baseLabel = <?= \json_encode((string)__('观察同步中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        var baseLabel = <?= \json_encode((string)__('同步中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
         function tick() {
             observerSyncDotPhase = (observerSyncDotPhase + 1) % 6;
             var n = observerSyncDotPhase + 1;
@@ -351,7 +327,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
     function isWorkspaceSseResumeBlockedByTerminal(active, workspaceState, operation) {
         var normalizedOperation = String(operation || '').trim().toLowerCase();
-        var activeStatus = String((active && (active.status || active.queue_status)) || '').trim().toLowerCase();
+        var activeStatus = String((active && active.queue_status) || '').trim().toLowerCase();
         if (activeStatus && isQueueStatusTerminalForWatch(activeStatus)) {
             return true;
         }
@@ -566,8 +542,6 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return {};
         }
         var op = String(operation || '').trim().toLowerCase();
-        var key = resolveRuntimeQueueInfoKey(operation);
-        var scope = workspaceState.scope && typeof workspaceState.scope === 'object' ? workspaceState.scope : {};
         var nestedState = workspaceState.state && typeof workspaceState.state === 'object' && workspaceState.state !== workspaceState
             ? workspaceState.state
             : {};
@@ -581,19 +555,15 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             ? activeOperations[op]
             : {};
         var candidates = [
-            workspaceState[key],
-            scope[key],
-            nestedState[key],
-            scopedActive.queue_info,
-            scopedActive.queue_state,
-            active.queue_info,
-            active.queue_state,
-            workspaceState.queue_info,
-            scope.queue_info,
-            nestedState.queue_info
+            workspaceState.queue_status,
+            nestedState.queue_status,
+            scopedActive.queue_status,
+            active.queue_status,
+            scopedActive,
+            active
         ];
         for (var i = 0; i < candidates.length; i += 1) {
-            var queueInfo = normalizeRuntimeQueueState(candidates[i]);
+            var queueInfo = normalizeCanonicalRuntimeQueueStatusCandidate(candidates[i], op);
             if (Object.keys(queueInfo).length > 0 && queueInfoBelongsToRuntimeOperation(queueInfo, op)) {
                 return queueInfo;
             }
@@ -604,10 +574,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     function readQueueStatusForDeferredState(workspaceState, operation) {
         var queueInfo = resolveRuntimeQueueInfoFromState(workspaceState, operation);
         return String(
-            queueInfo.status
-            || queueInfo.queue_status
-            || queueInfo.state
-            || queueInfo.job_status
+            queueInfo.queue_status
             || ''
         ).trim().toLowerCase();
     }
@@ -640,7 +607,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             || scopedActive.message
             || readQueueMessageForDeferredState(state, op)
             || (status === 'running' || status === 'processing'
-                ? <?= \json_encode((string)__('队列任务正在后台执行，正在同步最新进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                ? <?= \json_encode((string)__('队列任务正在后台执行，持续同步状态。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
                 : <?= \json_encode((string)__('队列任务已进入系统队列，等待调度并持续同步状态。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>)
         ).trim();
         var progressPercent = parseInt(String(
@@ -670,7 +637,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             ? workspaceState.active_operation
             : {};
         var activeOperationName = String(active.operation || op || '').trim().toLowerCase();
-        var activeStatus = normalizeTerminalOperationStatus(active.status || '');
+        var activeStatus = normalizeTerminalOperationStatus(active.queue_status || '');
         if (activeStatus && (activeOperationName === 'plan' || isRuntimeVisualRefreshOperation(activeOperationName) || activeOperationName === 'publish')) {
             return Object.assign({}, active, {
                 operation: activeOperationName,
@@ -706,7 +673,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             state: workspaceState,
             active_operation: terminalActive,
             message: message
-        }, status === 'error' ? 'error' : status, message || (status === 'done' ? '队列执行完成' : '队列执行已停止'));
+        }, status === 'error' ? 'error' : status, message || (status === 'done' ? 'Queue execution completed' : 'Queue execution stopped'));
 
         if (status === 'error' || status === 'stop') {
             var failurePayload = {
@@ -831,40 +798,19 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
     var buildStartupPending = false;
     var runtimeLabels = {
-        statusDone: <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        statusRunning: <?= \json_encode((string)__('进行中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        statusFailed: <?= \json_encode((string)__('失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        statusPending: <?= \json_encode((string)__('待处理'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskBlock: <?= \json_encode((string)__('区块'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskComponent: <?= \json_encode((string)__('组件'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskAttempt: <?= \json_encode((string)__('尝试次数'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskUpdatedAt: <?= \json_encode((string)__('更新时间'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        taskFinishedAt: <?= \json_encode((string)__('完成时间'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        runningSummary: <?= \json_encode((string)__('进行中...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        aiGeneratingSummary: <?= \json_encode((string)__('AI 生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        aiQueuedSummary: <?= \json_encode((string)__('AI 排队中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        statusDone: 'done',
+        statusRunning: 'running',
+        statusFailed: 'failed',
+        statusPending: 'todo',
+        taskBlock: 'block',
+        taskComponent: 'component',
+        taskAttempt: 'attempts',
+        taskUpdatedAt: 'updated',
+        taskFinishedAt: 'finished',
+        runningSummary: 'running...',
+        aiGeneratingSummary: 'AI generating',
+        aiQueuedSummary: 'AI queued'
     };
-    runtimeLabels.statusDone = '已完成';
-    runtimeLabels.statusRunning = '进行中';
-    runtimeLabels.statusFailed = '失败';
-    runtimeLabels.statusPending = '待处理';
-    runtimeLabels.taskBlock = '区块';
-    runtimeLabels.taskComponent = '组件';
-    runtimeLabels.taskAttempt = '尝试次数';
-    runtimeLabels.taskUpdatedAt = '更新时间';
-    runtimeLabels.taskFinishedAt = '完成时间';
-    runtimeLabels.runningSummary = '进行中...';
-
-    runtimeLabels.statusDone = '已完成';
-    runtimeLabels.statusRunning = '进行中';
-    runtimeLabels.statusFailed = '失败';
-    runtimeLabels.statusPending = '待处理';
-    runtimeLabels.taskBlock = '区块';
-    runtimeLabels.taskComponent = '组件';
-    runtimeLabels.taskAttempt = '尝试次数';
-    runtimeLabels.taskUpdatedAt = '更新时间';
-    runtimeLabels.taskFinishedAt = '完成时间';
-    runtimeLabels.runningSummary = '进行中...';
 
     // A44 task-progress badges intentionally expose the semantic status contract.
     runtimeLabels.statusTodo = 'todo';
@@ -876,8 +822,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     runtimeLabels.statusCancelled = 'cancelled';
     runtimeLabels.statusBlocked = 'blocked';
     runtimeLabels.runningSummary = 'running...';
-    runtimeLabels.aiGeneratingSummary = 'AI 生成中';
-    runtimeLabels.aiQueuedSummary = 'AI 排队中';
+    runtimeLabels.aiGeneratingSummary = 'AI generating';
+    runtimeLabels.aiQueuedSummary = 'AI queued';
 
     function relayoutExpertWorkspaceWithRightLog() {
         if (isGuidedUi) {
@@ -905,6 +851,25 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return {};
         }
         return Object.assign({}, queueInfo);
+    }
+
+    function normalizeCanonicalRuntimeQueueStatusCandidate(candidate, operation) {
+        var op = normalizeRuntimeQueueOperation(operation);
+        if (typeof candidate === 'string' || typeof candidate === 'number') {
+            var scalarStatus = String(candidate || '').trim();
+            return scalarStatus !== '' ? { operation: op, queue_status: scalarStatus } : {};
+        }
+        if (!isRuntimePlainObject(candidate)) {
+            return {};
+        }
+        if (op && Object.prototype.hasOwnProperty.call(candidate, op)) {
+            return normalizeCanonicalRuntimeQueueStatusCandidate(candidate[op], op);
+        }
+        var directStatus = String(candidate.queue_status || '').trim();
+        if (directStatus !== '' || resolveRuntimeQueueInfoOperation(candidate) !== '') {
+            return normalizeRuntimeQueueState(candidate);
+        }
+        return {};
     }
 
     function copyRuntimeSummaryFields(source, fields, textLimit) {
@@ -971,9 +936,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (Object.keys(queueState).length > 0) {
             safe.queue_info = copyRuntimeSummaryFields(queueState, [
                 'queue_id',
-                'status',
                 'queue_status',
-                'job_status',
                 'pid',
                 'finished',
                 'process',
@@ -1047,7 +1010,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!text || text.length <= max) {
             return text;
         }
-        return text.slice(0, max - 1).replace(/\s+\S*$/, '') + '…';
+        return text.slice(0, max - 1).replace(/\s+\S*$/, '') + '...';
     }
 
     function extractQueueFailureSummary(value) {
@@ -1055,18 +1018,20 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!text) {
             return '';
         }
-        var patterns = [
-            /AI component HTML structure invalid:[^.。]*(?:[.。]|$)/i,
-            /AI hero image contract failed:[^.。]*(?:[.。]|$)/i,
-            /Required image slot is not referenced by generated block:[^.。]*(?:[.。]|$)/i,
-            /replacement\.field_schema must be an object/i,
-            /AI patch response is not valid JSON/i,
-            /Plan JSON block failed:[^.。]*(?:[.。]|$)/i
+        var markers = [
+            'AI component HTML structure invalid:',
+            'AI hero image contract failed:',
+            'Required image slot is not referenced by generated block:',
+            'replacement.field_schema must be an object',
+            'AI patch response is not valid JSON',
+            'Plan JSON block failed:'
         ];
-        for (var i = 0; i < patterns.length; i++) {
-            var matched = text.match(patterns[i]);
-            if (matched && matched[0]) {
-                return compactQueueFailureText(matched[0], 220);
+        var lower = text.toLowerCase();
+        for (var i = 0; i < markers.length; i++) {
+            var marker = markers[i];
+            var pos = lower.indexOf(marker.toLowerCase());
+            if (pos >= 0) {
+                return compactQueueFailureText(text.slice(pos), 220);
             }
         }
         return compactQueueFailureText(text, 220);
@@ -1086,14 +1051,14 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }
         var queueId = parseInt(String(queueState.queue_id || activeOperation.queue_id || 0), 10) || 0;
         if (queueId > 0) {
-            lines.push('队列ID：' + queueId);
+            lines.push('队列 ID：' + queueId);
         }
         var pageType = String(activeOperation.page_type || activeOperation.page || queueState.page_type || '').trim();
         var blockId = String(activeOperation.block_id || activeOperation.block || queueState.block_id || '').trim();
         if (pageType || blockId) {
-            lines.push('对象：' + [pageType, blockId].filter(function (item) { return item !== ''; }).join(' / '));
+            lines.push('Target: ' + [pageType, blockId].filter(function (item) { return item !== ''; }).join(' / '));
         }
-        var queueStatus = String(queueState.status || queueState.queue_status || queueState.job_status || '').trim();
+        var queueStatus = String(queueState.queue_status || '').trim();
         if (queueStatus) {
             lines.push('队列状态：' + queueStatus);
         }
@@ -1105,9 +1070,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }
         var queueProcess = String(queueState.process || '').trim();
         if (queueProcess && queueProcess !== opMessage && queueProcess !== summary) {
-            lines.push('当前进度：' + compactQueueFailureText(queueProcess, 120));
+            lines.push('Queue process: ' + compactQueueFailureText(queueProcess, 120));
         }
-        lines.push('详细日志已保留在队列日志区域，确认弹窗只展示可决策摘要。');
+        lines.push('详细日志已保存在队列日志面板。');
         return lines;
     }
 
@@ -1264,8 +1229,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
 
     function fetchWorkspaceState() {
-        // 状态轮询只读取持久化队列/会话数据，不能启动或认领队列。
-        return fetchWorkspaceStateForRuntime(deferredQueueStatePollOperation);
+        // 鐘舵€佽疆璇㈠彧璇诲彇鎸佷箙鍖栭槦鍒?浼氳瘽鏁版嵁锛屼笉鑳藉惎鍔ㄦ垨璁ら闃熷垪銆?        return fetchWorkspaceStateForRuntime(deferredQueueStatePollOperation);
     }
 
     function buildDeferredQueueStatePollSignature(operation, workspaceState) {
@@ -1273,15 +1237,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return '';
         }
         var normalizedOperation = String(operation || '').trim().toLowerCase();
-        var key = resolveRuntimeQueueInfoKey(normalizedOperation);
-        var queueInfo = normalizeRuntimeQueueState(
-            workspaceState[key] && typeof workspaceState[key] === 'object'
-                ? workspaceState[key]
-                : null
-        );
+        var queueInfo = resolveRuntimeQueueInfoFromState(workspaceState, normalizedOperation);
         return [
             normalizedOperation,
-            String(queueInfo.status || queueInfo.queue_status || queueInfo.state || queueInfo.job_status || ''),
+            String(queueInfo.queue_status || ''),
             String(queueInfo.process || queueInfo.message || workspaceState.queue_process || ''),
             buildDeferredQueueProgressSignature(queueInfo),
             String(queueInfo.updated_at || workspaceState.updated_at || '')
@@ -1401,13 +1360,6 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             workspaceState.publish_blocked_reason = '';
             workspaceState.can_publish = false;
             workspaceState.workspace_status = 'building';
-            if (workspaceState.scope && typeof workspaceState.scope === 'object') {
-                workspaceState.scope.latest_build_failed = 0;
-                workspaceState.scope.latest_build_failure = {};
-                workspaceState.scope.publish_blocked_by_latest_ai_failure = 0;
-                workspaceState.scope.publish_blocked_reason = '';
-                workspaceState.scope.workspace_status = 'building';
-            }
         }
         hydrateWorkspaceFromState(workspaceState);
         updateTaskSummaryFromState(workspaceState);
@@ -1519,7 +1471,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!op || (op !== 'plan' && !isRuntimeVisualRefreshOperation(op) && op !== 'publish')) {
             return false;
         }
-        var status = String(active.status || active.queue_status || '').trim().toLowerCase();
+        var status = String(active.queue_status || '').trim().toLowerCase();
         return isQueueStatusInProgressForWatch(status)
             || runtimeTruthyFlag(active.queue_waiting_for_scheduler)
             || runtimeTruthyFlag(active.can_close_stream)
@@ -1539,15 +1491,15 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var operation = String(active.operation || '').trim().toLowerCase();
         if (!operation && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'plan'))) {
             operation = 'plan';
-            active = Object.assign({ operation: 'plan', status: readQueueStatusForDeferredState(state, 'plan') || 'queued' }, active);
+            active = Object.assign({ operation: 'plan', queue_status: readQueueStatusForDeferredState(state, 'plan') || 'queued' }, active);
         }
         if (!operation && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'publish'))) {
             operation = 'publish';
-            active = Object.assign({ operation: 'publish', status: readQueueStatusForDeferredState(state, 'publish') || 'queued' }, active);
+            active = Object.assign({ operation: 'publish', queue_status: readQueueStatusForDeferredState(state, 'publish') || 'queued' }, active);
         }
         if (!operation && isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, 'build'))) {
             operation = 'build';
-            active = Object.assign({ operation: 'build', status: readQueueStatusForDeferredState(state, 'build') || 'queued' }, active);
+            active = Object.assign({ operation: 'build', queue_status: readQueueStatusForDeferredState(state, 'build') || 'queued' }, active);
         }
         return {
             state: state,
@@ -1562,19 +1514,19 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var active = ctx.active;
         var operation = ctx.operation;
         if (!operation) {
-            // 无活跃操作时仍保持工作区 SSE 流连接，确保后续操作能实时推送。
+            // 鏃犳椿璺冩搷浣滄椂浠嶄繚鎸佸伐浣滃尯 SSE 娴佽繛鎺ワ紝纭繚鍚庣画鎿嶄綔鑳藉疄鏃舵帹閫併€?
             ensureWorkspaceStreamRunning(sourceTag || 'load-bootstrap');
             return false;
         }
         if (isWorkspaceSseResumeBlockedByTerminal(active, state, operation)) {
-            // 操作已完成，不连接 operation-sse，但保持 stream-sse 以便后续操作实时推送。
+            // 鎿嶄綔宸插畬鎴愶紝涓嶈繛鎺?operation-sse锛屼絾淇濇寔 stream-sse 浠ヤ究鍚庣画鎿嶄綔瀹炴椂鎺ㄩ€併€?
             ensureWorkspaceStreamRunning(sourceTag || 'load-bootstrap-terminal');
             return false;
         }
         var shouldSyncUi = shouldObserveActiveQueueOperationOnLoad(active)
             || isQueueStatusInProgressForWatch(readQueueStatusForDeferredState(state, operation));
         if (shouldSyncUi) {
-            var status = String(active.status || active.queue_status || readQueueStatusForDeferredState(state, operation) || 'queued').trim().toLowerCase();
+            var status = String(active.queue_status || readQueueStatusForDeferredState(state, operation) || 'queued').trim().toLowerCase();
             syncQueuedStageUi(operation, 'progress', buildDeferredQueueProgressPayload(operation, Object.assign({}, state, {
                 active_operation: active,
                 active_operations: state.active_operations && typeof state.active_operations === 'object' ? state.active_operations : Object.create(null)
@@ -1591,20 +1543,24 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
 
     function scheduleWorkspaceSseBootstrap() {
-        bootstrapWorkspaceSseOnLoad('load-immediate');
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function () {
-                bootstrapWorkspaceSseOnLoad('load-dom');
-            });
-        } else {
-            bootstrapWorkspaceSseOnLoad('load-dom');
+        function startBootstrap(sourceTag) {
+            bootstrapWorkspaceSseOnLoad(sourceTag || 'load');
+            window.setTimeout(function () {
+                bootstrapWorkspaceSseOnLoad('load-retry-200');
+            }, 200);
+            window.setTimeout(function () {
+                bootstrapWorkspaceSseOnLoad('load-retry-800');
+            }, 800);
         }
-        window.setTimeout(function () {
-            bootstrapWorkspaceSseOnLoad('load-retry-200');
-        }, 200);
-        window.setTimeout(function () {
-            bootstrapWorkspaceSseOnLoad('load-retry-800');
-        }, 800);
+        if (document.readyState === 'complete') {
+            window.setTimeout(function () {
+                startBootstrap('load-complete');
+            }, 0);
+            return;
+        }
+        window.addEventListener('load', function () {
+            startBootstrap('load');
+        }, { once: true });
     }
 
     function startActiveQueueObservationOnLoad() {
@@ -1637,7 +1593,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return;
         }
         var operation = String(active.operation || '').trim().toLowerCase();
-        var status = normalizeTerminalOperationStatus(active.status || '');
+        var status = normalizeTerminalOperationStatus(active.queue_status || '');
         if (!status) {
             return;
         }
@@ -1669,7 +1625,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         markBuildOperationTerminalForRuntimeUi(operation, status, String(active.message || ''));
     }
 
-    // 已禁用页面加载阶段的自动续跑/自动接管提示逻辑，仅允许用户显式触发。
+    // 宸茬鐢ㄩ〉闈㈠姞杞介樁娈电殑鑷姩缁窇/鑷姩鎺ョ鎻愮ず閫昏緫锛屼粎鍏佽鐢ㄦ埛鏄惧紡瑙﹀彂銆?
 
     if (workspaceTerminal && typeof workspaceTerminal.on === 'function') {
         workspaceTerminal.on('state', function (event) {
@@ -1831,7 +1787,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
         });
         if (workspaceTerminal && operation) {
-            workspaceTerminal.log(<?= \json_encode((string)__('开始执行工作区操作：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + String(operation), 'start');
+            workspaceTerminal.log('Starting workspace operation: ' + String(operation), 'start');
         }
     }
 
@@ -1866,8 +1822,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
 
     /**
-     * 阶段一/二 SSE 终端镜像：优先使用事件载荷中的 operation（与后端一致），
-     * 避免仅依赖 runningOperationType 时 build 队列 info/progress 误写入方案生成终端。
+     * 闃舵涓€/浜?SSE 缁堢闀滃儚锛氫紭鍏堜娇鐢ㄤ簨浠惰浇鑽蜂腑鐨?operation锛堜笌鍚庣涓€鑷达級锛?
+     * 閬垮厤浠呬緷璧?runningOperationType 鏃?build 闃熷垪 info/progress 璇啓鍏ユ柟妗堢敓鎴愮粓绔€?
      */
     function resolveOperationForQueuedMirror(payload) {
         var p = payload && payload.operation ? String(payload.operation).toLowerCase().trim() : '';
@@ -1890,7 +1846,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         } else if (kind === 'done') {
             mirroredKind = 'done';
         } else if (kind === 'warning') {
-            // 后台队列观察模式：首条 warning 需驱动阶段一/二 SSE 终端与进度条，否则面板空白且一直显示「已断开」
+            // 鍚庡彴闃熷垪瑙傚療妯″紡锛氶鏉?warning 闇€椹卞姩闃舵涓€/浜?SSE 缁堢涓庤繘搴︽潯锛屽惁鍒欓潰鏉跨┖鐧戒笖涓€鐩存樉绀恒€屽凡鏂紑銆?
             mirroredKind = 'warning';
         } else if (kind === 'info') {
             mirroredKind = 'info';
@@ -2000,19 +1956,12 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (normalized !== 'plan') {
             return false;
         }
-        if (Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')) {
-            return !!state.has_stage_one_plan || runtimePlanJsonPagesHaveBlocks(resolveRuntimePlanJson(state));
-        }
         return runtimePlanJsonPagesHaveBlocks(resolveRuntimePlanJson(state))
             || (String(eventKind || '') === 'done' && (!payload || payload.success !== false));
     }
 
     /**
-     * 从 SSE/queue payload 中读取队列权威状态。
-     *
-     * 主字段：payload.queue_status（由 AiSiteSsePayloadNormalizer 写入并强制小写）。
-     * 过渡 fallback（normalizer 镜像）：payload.status / queue_info.status / queue_state.job_status 等。
-     * 契约稳定后可在 1-2 个 release 内仅保留 queue_status 主字段。
+     * Read canonical queue status from the normalized SSE/queue payload.
      */
     function readQueueStatusFromPayload(operation, payload) {
         if (!payload || typeof payload !== 'object') {
@@ -2026,20 +1975,15 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             ? payload.queue_state
             : null;
         if (queueState) {
-            status = String(queueState.status || queueState.job_status || queueState.queue_status || '').trim().toLowerCase();
+            status = String(queueState.queue_status || '').trim().toLowerCase();
             if (status !== '') {
                 return status;
             }
         }
         var state = payload.state && typeof payload.state === 'object' ? payload.state : {};
-        var key = resolveRuntimeQueueInfoKey(operation || payload.operation || '');
-        var queueInfo = state[key] && typeof state[key] === 'object' ? state[key] : {};
-        queueInfo = normalizeRuntimeQueueState(queueInfo);
+        var queueInfo = resolveRuntimeQueueInfoFromState(state, operation || payload.operation || '');
         return String(
-            queueInfo.status
-            || queueInfo.queue_status
-            || queueInfo.state
-            || queueInfo.job_status
+            queueInfo.queue_status
             || ''
         ).trim().toLowerCase();
     }
@@ -2086,9 +2030,6 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
         containers.forEach(function (container) {
             appendFromLedger(container.retryable_ai_failures);
-            if (container.scope && typeof container.scope === 'object') {
-                appendFromLedger(container.scope.retryable_ai_failures);
-            }
         });
 
         var seen = {};
@@ -2349,7 +2290,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             );
         }
 
-        // 若后端仅返回 stream_url，尝试反解 execution_token
+        // 鑻ュ悗绔粎杩斿洖 stream_url锛屽皾璇曞弽瑙?execution_token
         if (!executionToken && streamUrl) {
             try {
                 var parsed = new URL(streamUrl, window.location.origin);
@@ -2362,7 +2303,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
         }
 
-        // 仅接受 operation-sse 作为 EventSource 目标；否则回退到本地拼装
+        // 浠呮帴鍙?operation-sse 浣滀负 EventSource 鐩爣锛涘惁鍒欏洖閫€鍒版湰鍦版嫾瑁?
         var streamLooksValid = false;
         if (streamUrl) {
             try {
@@ -2461,11 +2402,6 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             if (nextState) {
                 hydrateWorkspaceFromState(nextState);
                 updateTaskSummaryFromState(nextState);
-                if (nextState.virtual_pages_by_type && typeof nextState.virtual_pages_by_type === 'object') {
-                    if (typeof previewBridge.setVirtualPagesByType === 'function') {
-                        previewBridge.setVirtualPagesByType(nextState.virtual_pages_by_type);
-                    }
-                }
             }
             return;
         }
@@ -2657,9 +2593,36 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return null;
     }
 
-    function runtimeVirtualPageBlockList(pageState) {
-        var key = 'blo' + 'cks';
-        return pageState && Array.isArray(pageState[key]) ? pageState[key] : [];
+    function runtimePlanJsonPageBlockList(workspaceState, pageType) {
+        var planJson = resolveRuntimePlanJson(workspaceState || {});
+        var pages = planJson && planJson.pages && typeof planJson.pages === 'object' ? planJson.pages : {};
+        var page = pages[pageType] && typeof pages[pageType] === 'object' ? pages[pageType] : {};
+        var metaKeys = {
+            name: true,
+            title: true,
+            label: true,
+            page_type: true,
+            type: true,
+            status: true,
+            seo: true,
+            meta_title: true,
+            meta_description: true,
+            handle: true,
+            layout: true,
+            style: true,
+            error: true,
+            message: true
+        };
+        return Object.keys(page).map(function (blockKey) {
+            var block = page[blockKey];
+            if (metaKeys[blockKey] || !block || typeof block !== 'object' || Array.isArray(block)) {
+                return null;
+            }
+            return Object.assign({}, block, {
+                block_key: String(block.block_key || blockKey),
+                page_type: String(pageType || page.page_type || '')
+            });
+        }).filter(Boolean);
     }
 
     function refreshEmbeddedPreviewFrame(delayMs) {
@@ -2686,6 +2649,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
     function normalizeTaskProgressStatus(status) {
         var normalized = String(status || '').trim().toLowerCase();
+        if (normalized === '1') { return 'done'; }
+        if (normalized === '2') { return 'running'; }
+        if (normalized === '0') { return 'todo'; }
+        if (normalized === '-1') { return 'failed'; }
         if (normalized === '' || normalized === 'pending') { return 'todo'; }
         if (normalized === 'in_progress' || normalized === 'processing') { return 'running'; }
         if (normalized === 'error') { return 'failed'; }
@@ -2867,8 +2834,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (source.state && typeof source.state === 'object' && shouldConsumePlanJsonTaskProgressSummary(source.state)) {
             return true;
         }
-        var buildSummary = readPlanJsonTaskSummaryCandidate(source);
-        if (readTaskProgressSummaryTotal(buildSummary) > 0 && (source.has_pending_plan_json_block_nodes)) {
+        if (runtimePlanJsonPagesHaveBlocks(resolveRuntimePlanJson(source))) {
             return true;
         }
         return false;
@@ -2905,16 +2871,13 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!queueState && source.queue_info && typeof source.queue_info === 'object') {
             queueState = normalizeRuntimeQueueState(source.queue_info);
         }
-        if (!queueState && source.build_queue_info && typeof source.build_queue_info === 'object') {
-            queueState = normalizeRuntimeQueueState(source.build_queue_info);
-        }
         var activeOperation = source.active_operation && typeof source.active_operation === 'object' ? source.active_operation : null;
         var status = String(
             source.status
             || source.queue_status
-            || (queueState ? (queueState.status || queueState.job_status || queueState.queue_status || '') : '')
+            || (queueState ? (queueState.queue_status || '') : '')
             || source.active_operation_status
-            || (activeOperation ? activeOperation.status : '')
+            || (activeOperation ? activeOperation.queue_status : '')
             || ''
         ).trim().toLowerCase();
         if (!status && source.state && typeof source.state === 'object') {
@@ -2949,7 +2912,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var terminalQueueStatuses = { done: 1, complete: 1, completed: 1, stop: 1, stopped: 1, cancelled: 1, canceled: 1, error: 1 };
         var st = String(status || '').trim().toLowerCase();
         var blockedByFailure = hasPublishBlockingAiFailureStateForRuntime(source);
-        // 队列已标记完成（或失败）但 plan_json_progress / active_operation 未归一时，避免因 shouldConsume=false 永远不清理生成中骨架态
+        // 闃熷垪宸叉爣璁板畬鎴愶紙鎴栧け璐ワ級浣?plan_json_progress / active_operation 鏈綊涓€鏃讹紝閬垮厤鍥?shouldConsume=false 姘歌繙涓嶆竻鐞嗙敓鎴愪腑楠ㄦ灦鎬?
         if ((isBuildSignal || operation === 'build') && terminalQueueStatuses[st]) {
             active = false;
         }
@@ -3009,14 +2972,14 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             ? state.active_operation
             : {};
         var activeOp = String(activeOperation.operation || '').trim().toLowerCase();
-        var activeStatus = String(activeOperation.status || '').trim().toLowerCase();
+        var activeStatus = String(activeOperation.queue_status || '').trim().toLowerCase();
         if (activeOp === 'plan' && ['queued', 'running', 'pending', 'processing', 'in_progress'].indexOf(activeStatus) !== -1) {
             return false;
         }
         if (isPlanJsonTaskProgressOperation(activeOp)) {
             return true;
         }
-        if (state.has_pending_plan_json_block_nodes) {
+        if (runtimePlanJsonPagesHaveBlocks(resolveRuntimePlanJson(state))) {
             return true;
         }
         if ((runtimePlanJsonConfirmed(state) || hasRuntimePlanJsonBuildEvidence(state)) && readTaskProgressSummaryTotal(readPlanJsonTaskSummaryCandidate(state)) > 0) {
@@ -3343,7 +3306,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var active = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : (activeOperation || {});
         var activeOp = String(active.operation || '').toLowerCase();
-        var activeStatus = String(active.status || '').toLowerCase();
+        var activeStatus = String(active.queue_status || '').toLowerCase();
         var activeMessage = String(active.message || '').trim();
         var workspaceStatus = String(state.workspace_status || '').toLowerCase();
         var publishStatus = String(state.publish_status || '').toLowerCase();
@@ -3352,10 +3315,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }
         var planConfirmed = runtimePlanJsonConfirmed(state);
         var hasPlanJsonBuild = hasRuntimePlanJsonBuildEvidence(state);
-        var buildReadyForBuild = planConfirmed || hasPlanJsonBuild;
-        var hasPlanDraft = Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')
-            ? !!state.has_stage_one_plan
-            : !!planConfirmed;
+        var buildReadyForBuild = planConfirmed;
+        var hasPlanDraft = runtimePlanJsonPagesHaveBlocks(resolveRuntimePlanJson(state));
 
         function make(label, badgeClass, message) {
             return { label: label, badgeClass: badgeClass, message: message };
@@ -3364,10 +3325,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         function readStageQueueStatus(queueInfo) {
             var queueState = normalizeRuntimeQueueState(queueInfo);
             return String(
-                queueState.status
-                || queueState.queue_status
-                || queueState.state
-                || queueState.job_status
+                queueState.queue_status
                 || ''
             ).trim().toLowerCase();
         }
@@ -3508,8 +3466,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
 
     /**
-     * 队列守卫「跳过重复生成」等会以 success=false + terminal_status=stop 结束 SSE；
-     * 与致命失败区分，避免把工作区 active_operation 篡改成 error。
+     * 闃熷垪瀹堝崼銆岃烦杩囬噸澶嶇敓鎴愩€嶇瓑浼氫互 success=false + terminal_status=stop 缁撴潫 SSE锛?
+     * 涓庤嚧鍛藉け璐ュ尯鍒嗭紝閬垮厤鎶婂伐浣滃尯 active_operation 绡℃敼鎴?error銆?
      */
     function isPlanningQueueSoftTerminalStop(payload, queueStatusOnDone, normalizedDoneOperation) {
         var op = String(normalizedDoneOperation || '').trim().toLowerCase();
@@ -3597,8 +3555,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (runningSource && runningOperationKey === operationKey) {
             return true;
         }
-        // 同一个 operation_key 在短时间内可能会被多路触发（state 自动恢复、state 拉取、手工启动返回）
-        // 这里增加冷却窗口，避免出现“同一条 SSE 被接管多次”的重复连接。
+        // 鍚屼竴涓?operation_key 鍦ㄧ煭鏃堕棿鍐呭彲鑳戒細琚璺Е鍙戯紙state 鑷姩鎭㈠銆乻tate 鎷夊彇銆佹墜宸ュ惎鍔ㄨ繑鍥烇級
+        // 杩欓噷澧炲姞鍐峰嵈绐楀彛锛岄伩鍏嶅嚭鐜扳€滃悓涓€鏉?SSE 琚帴绠″娆♀€濈殑閲嶅杩炴帴銆?
         if (runningOperationKey === operationKey) {
             var lastStartedAt = parseInt(runningStartAtByOperationKey[operationKey] || 0, 10) || 0;
             if (lastStartedAt > 0 && (now - lastStartedAt) < 3000) {
@@ -3608,10 +3566,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
         if (String(operation || '') === 'build') {
             var isLoadResume = isLoadResumeOperationSourceTag(sourceTag);
-            // 页面刷新/队列续听时不重新弹出构建遮罩，避免已完成页面标签再次走一遍进度动画。
+            // 椤甸潰鍒锋柊/闃熷垪缁惉鏃朵笉閲嶆柊寮瑰嚭鏋勫缓閬僵锛岄伩鍏嶅凡瀹屾垚椤甸潰鏍囩鍐嶆璧颁竴閬嶈繘搴﹀姩鐢汇€?
             if (!isLoadResume) {
                 if (buildStartupPending && document.getElementById('pb-ai-build-guard') && !document.getElementById('pb-ai-build-guard').classList.contains('d-none')) {
-                    // Build guard 已经显示了（由 pbAiConfirmGenerateThemeContinue 显示），不重复显示
+                    // Build guard 宸茬粡鏄剧ず浜嗭紙鐢?pbAiConfirmGenerateThemeContinue 鏄剧ず锛夛紝涓嶉噸澶嶆樉绀?
                 } else {
                     buildStartupPending = true;
                     if (typeof previewBridge.showBuildGuard === 'function') {
@@ -3689,7 +3647,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             try {
                 source = new EventSource(streamUrl);
             } catch (eventSourceError) {
-                toast('error', <?= \json_encode((string)__('操作事件流创建失败，请检查 URL 或浏览器连接策略。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                toast('error', 'Failed to open operation SSE stream.');
                 if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                     previewBridge.resumeWorkspaceStream();
                 }
@@ -3732,7 +3690,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                     handleTransportErrorStateFallback();
                     return;
                 }
-                lastServerError = normalizeToastMessage(parsedMessage || <?= \json_encode((string)__('操作执行失败（服务端返回错误事件）'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                lastServerError = normalizeToastMessage(parsedMessage || <?= \json_encode((string)__('操作执行失败，服务端返回错误事件。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
                 var failureMessage = resolveQueueFailureMessage(payload, operation) || lastServerError;
                 lastServerError = normalizeToastMessage(failureMessage);
                 if (payload && typeof payload === 'object') {
@@ -3742,7 +3700,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                             payload.state.active_operation = {};
                         }
                         payload.state.active_operation.operation = String(payload.state.active_operation.operation || payload.operation || operation || '');
-                        payload.state.active_operation.status = 'error';
+                        payload.state.active_operation.queue_status = 'error';
                         payload.state.active_operation.message = lastServerError;
                         hydrateWorkspaceFromState(payload.state);
                         updateTaskSummaryFromState(payload.state);
@@ -3799,9 +3757,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 }
             });
 
-            // 历史 'total' SSE 事件已废弃：后端不再发出，AiSiteSseEventContractTest 锁住此契约。
-            // 若将来需要批次总数事件，新增名应进 AiSiteSsePayloadNormalizer::authoritativeEventNames()
-            // 并同步前后端两端实现。
+            // 鍘嗗彶 'total' SSE 浜嬩欢宸插簾寮冿細鍚庣涓嶅啀鍙戝嚭锛孉iSiteSseEventContractTest 閿佷綇姝ゅ绾︺€?
+            // 鑻ュ皢鏉ラ渶瑕佹壒娆℃€绘暟浜嬩欢锛屾柊澧炲悕搴旇繘 AiSiteSsePayloadNormalizer::authoritativeEventNames()
+            // 骞跺悓姝ュ墠鍚庣涓ょ瀹炵幇銆?
 
             source.addEventListener('environment_ready', function (event) {
             stopObserverSyncTerminalPulse();
@@ -3809,7 +3767,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             if (payload && payload.state) {
                 hydrateWorkspaceFromState(payload.state);
             }
-            // 确保清理 buildStartupPending 状态
+            // 纭繚娓呯悊 buildStartupPending 鐘舵€?
             buildStartupPending = false;
             if (typeof previewBridge.hideBuildGuard === 'function') {
                 previewBridge.hideBuildGuard();
@@ -3950,8 +3908,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 var chunkText = String(payload.chunk || '');
                 var regionText = String(payload.region || '');
                 payload.message = regionText
-                    ? (<?= \json_encode((string)__('AI 片段（区域）'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + regionText + ': ' + chunkText)
-                    : (<?= \json_encode((string)__('AI 片段'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ': ' + chunkText);
+                    ? ('AI streaming ' + regionText + ': ' + chunkText)
+                    : ('AI streaming: ' + chunkText);
             }
             logOperationToWorkspaceTerminal('chunk', payload, 'info', payload.message);
         });
@@ -3967,11 +3925,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 
             var region = String(payload.region || '');
             var regionLabel = region === 'header'
-                ? <?= \json_encode((string)__('Header'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                : (region === 'footer'
-                    ? <?= \json_encode((string)__('Footer'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                    : region);
-            var logMessage = payload.message || (regionLabel ? (regionLabel + ' ' + <?= \json_encode((string)__('已同步到可视化主题'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>) : '');
+                ? 'Header'
+                : (region === 'footer' ? 'Footer' : region);
+            var logMessage = payload.message || (regionLabel ? (regionLabel + ' component generated') : '');
             logOperationToWorkspaceTerminal('shared_component_generated', payload, 'progress', logMessage);
 
             var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
@@ -3982,7 +3938,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
 
             if (regionLabel) {
-                toast('success', regionLabel + ' ' + <?= \json_encode((string)__('已生成并同步'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                toast('success', regionLabel + ' generated');
             }
         });
 
@@ -4003,8 +3959,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 payload,
                 pageCompleted ? 'done' : 'progress',
                 pageCompleted
-                    ? <?= \json_encode((string)__('页面已完成真实 AI 生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                    : <?= \json_encode((string)__('页面已更新并可提前编辑'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    ? 'Page generated'
+                    : 'Page updated'
             );
 
             if (window.PbAiWorkspacePreview) {
@@ -4016,9 +3972,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 window.PbAiWorkspacePreview.markPageGenerationStatus(
                     pageType,
                     pageCompleted ? 'done' : 'ready',
-                    pageCompleted
-                        ? <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                        : <?= \json_encode((string)__('可编辑'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    pageCompleted ? 'Page generated' : 'Page updated'
                 );
                 if (shouldActivate) {
                     window.PbAiWorkspacePreview.switchPreviewByType(pageType);
@@ -4032,23 +3986,23 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 }
             }
 
-            // 页面生成完成，实时刷新预览
+            // 椤甸潰鐢熸垚瀹屾垚锛屽疄鏃跺埛鏂伴瑙?
             var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
             if (previewFrame && previewFrame.src && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === getCurrentPreviewPageType())) {
                 window.setTimeout(function() {
-                    // 刷新 iframe 以显示新生成的页面
+                    // 鍒锋柊 iframe 浠ユ樉绀烘柊鐢熸垚鐨勯〉闈?
                     previewFrame.src = previewFrame.src;
                 }, 800);
             }
 
-            // 显示页面生成完成的提示
+            // 鏄剧ず椤甸潰鐢熸垚瀹屾垚鐨勬彁绀?
             var pageLabel = payload.page_label || payload.page_type;
             toast(
                 'success',
                 (pageCompleted
-                    ? <?= \json_encode((string)__('页面已生成完成：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                    : <?= \json_encode((string)__('页面已更新，可提前编辑：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>)
-                + pageLabel
+                    ? 'Page generated'
+                    : 'Page updated'
+                ) + ': ' + pageLabel
             );
         });
 
@@ -4105,8 +4059,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         source.addEventListener('asset_generation_failed', function (event) {
             handleAssetGenerationStreamEvent(event, 'asset_generation_failed');
         });
-        // asset_generation_skipped：资产复用命中、跳过实际生成的提示。补齐前端监听让 workspace
-        // 收到"slot 被复用"的硬信号，避免与 *_started/*_done 不一致导致 UI 卡在 generating 态。
+        // asset_generation_skipped锛氳祫浜у鐢ㄥ懡涓€佽烦杩囧疄闄呯敓鎴愮殑鎻愮ず銆傝ˉ榻愬墠绔洃鍚 workspace
+        // 鏀跺埌"slot 琚鐢?鐨勭‖淇″彿锛岄伩鍏嶄笌 *_started/*_done 涓嶄竴鑷村鑷?UI 鍗″湪 generating 鎬併€?
         source.addEventListener('asset_generation_skipped', function (event) {
             handleAssetGenerationStreamEvent(event, 'asset_generation_skipped');
         });
@@ -4122,13 +4076,13 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
             updateTaskSummaryFromState(payload);
             syncPreviewTabsFromTaskProgressPayload(payload, payload.state && typeof payload.state === 'object' ? payload.state : null);
-            var taskMessage = String(payload.message || <?= \json_encode((string)__('任务已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            var taskMessage = String(payload.message || 'Task completed');
             logOperationToWorkspaceTerminal('plan_json_block_completed', payload, 'done', taskMessage);
         });
 
-        // plan_json_block_failed：单个方案块构建失败的硬信号。
-        // 失败信号直接进入 plan_json_progress，避免 UI 只能等汇总间接刷新。
-        // 这里 hydrate state + 刷新构建进度 + 把失败行写入 workspace terminal。
+        // plan_json_block_failed锛氬崟涓柟妗堝潡鏋勫缓澶辫触鐨勭‖淇″彿銆?
+        // 澶辫触淇″彿鐩存帴杩涘叆 plan_json_progress锛岄伩鍏?UI 鍙兘绛夋眹鎬婚棿鎺ュ埛鏂般€?
+        // 杩欓噷 hydrate state + 鍒锋柊鏋勫缓杩涘害 + 鎶婂け璐ヨ鍐欏叆 workspace terminal銆?
         source.addEventListener('plan_json_block_failed', function (event) {
             var payload = parsePayload(event);
             if (!payload || typeof payload !== 'object') {
@@ -4156,15 +4110,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             if (
                 blockRefreshState.active
                 && payload.state
-                && payload.state.virtual_pages_by_type
             ) {
-                if (typeof previewBridge.setVirtualPagesByType === 'function') {
-                    previewBridge.setVirtualPagesByType(payload.state.virtual_pages_by_type);
-                }
                 var pageType = String(payload.page_type || blockRefreshState.pageType || '');
                 var blockId = String(payload.block_id || blockRefreshState.blockId || '');
-                var pageState = payload.state.virtual_pages_by_type[pageType] || null;
-                var pageBlockList = runtimeVirtualPageBlockList(pageState);
+                var pageBlockList = runtimePlanJsonPageBlockList(payload.state, pageType);
                 var nextBlock = pageBlockList.length
                     ? runtimeFindNextBlock(pageType, pageBlockList, blockId)
                     : null;
@@ -4227,7 +4176,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 updateTaskSummaryFromState(payload);
                 var continueMessage = (payload && payload.message)
                     ? String(payload.message)
-                    : <?= \json_encode((string)__('队列尚未完成，继续同步后台执行进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+                    : 'Queue is still running; syncing progress.';
                 syncQueuedStageUi(operation, 'progress', Object.assign({}, payload || {}, {
                     message: continueMessage,
                     queue_status: queueStatusOnDone || 'queued',
@@ -4294,7 +4243,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                     'done',
                     payload,
                     'warning',
-                    softMsg || softMsgRaw || <?= \json_encode((string)__('操作已中断'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    softMsg || softMsgRaw || 'Operation interrupted'
                 );
                 finishOperation(normalizedDonePayload);
                 if (typeof enableNavigationAfterOperation === 'function') {
@@ -4315,7 +4264,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                             normalizedDonePayload.state.active_operation = {};
                         }
                         normalizedDonePayload.state.active_operation.operation = String(normalizedDonePayload.state.active_operation.operation || normalizedDoneOperation || operation || '');
-                        normalizedDonePayload.state.active_operation.status = 'error';
+                        payload.state.active_operation.queue_status = 'error';
                         normalizedDonePayload.state.active_operation.message = lastServerError;
                         hydrateWorkspaceFromState(normalizedDonePayload.state);
                         updateTaskSummaryFromState(normalizedDonePayload.state);
@@ -4330,9 +4279,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 }
                 rememberOperationFailurePayload(normalizedDoneOperation, normalizedDonePayload, lastServerError);
                 markBuildOperationTerminalForRuntimeUi(normalizedDoneOperation, 'error', lastServerError);
-                logOperationToWorkspaceTerminal('done_error', payload, 'error', lastServerError || '工作区操作执行失败');
+                logOperationToWorkspaceTerminal('done_error', payload, 'error', lastServerError || 'Workspace operation failed');
                 resetOperationUiOnFailure(operation);
-                // 操作失败，恢复导航按钮
+                // 鎿嶄綔澶辫触锛屾仮澶嶅鑸寜閽?
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
@@ -4403,9 +4352,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
 
             toast('success', resolveOperationDoneToastMessage(normalizedDoneOperation, payload));
-            logOperationToWorkspaceTerminal('done', payload, 'done', '工作区操作执行完成');
+            logOperationToWorkspaceTerminal('done', payload, 'done', 'Workspace operation completed');
 
-            // 操作完成，恢复导航按钮
+            // 鎿嶄綔瀹屾垚锛屾仮澶嶅鑸寜閽?
             if (typeof enableNavigationAfterOperation === 'function') {
                 enableNavigationAfterOperation();
             }
@@ -4453,13 +4402,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 && ['regenerate_page', 'block_regenerate', 'block_partial_patch', 'block_refine'].indexOf(String(operation || '')) !== -1
                 && payload
                 && payload.state
-                && payload.state.virtual_pages_by_type
             ) {
-                if (typeof previewBridge.setVirtualPagesByType === 'function') {
-                    previewBridge.setVirtualPagesByType(payload.state.virtual_pages_by_type);
-                }
-                var pageState = payload.state.virtual_pages_by_type[blockRefreshState.pageType] || null;
-                var pageBlockList = runtimeVirtualPageBlockList(pageState);
+                var pageBlockList = runtimePlanJsonPageBlockList(payload.state, blockRefreshState.pageType);
                 var nextBlock = pageBlockList.length
                     ? runtimeFindNextBlock(blockRefreshState.pageType, pageBlockList, blockRefreshState.blockId)
                     : null;
@@ -4511,7 +4455,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 }
                 markBuildOperationTerminalForRuntimeUi(operation, 'error', lastServerError);
                 resetOperationUiOnFailure(operation);
-                // 操作错误，恢复导航按钮
+                // 鎿嶄綔閿欒锛屾仮澶嶅鑸寜閽?
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
@@ -4755,11 +4699,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         });
     }
 
-    // 禁止页面加载时自动弹出继续构建/观察执行流确认。
+    // 绂佹椤甸潰鍔犺浇鏃惰嚜鍔ㄥ脊鍑虹户缁瀯寤?瑙傚療鎵ц娴佺‘璁ゃ€?
 
-    // 禁用会跳走的导航按钮
+    // 绂佺敤浼氳烦璧扮殑瀵艰埅鎸夐挳
     function disableNavigationDuringOperation() {
-        // 禁用返回按钮
+        // 绂佺敤杩斿洖鎸夐挳
         document.querySelectorAll('.pb-guided-sidebar .btn[href], .pb-ai-back-btn, #pb-guided-back').forEach(function(btn) {
             if (btn.tagName === 'A' || btn.classList.contains('btn')) {
                 btn.setAttribute('data-disabled-during-operation', 'true');
@@ -4769,7 +4713,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
         });
 
-        // 禁用切换到其他页面的按钮（如 expert/guided 切换）
+        // 绂佺敤鍒囨崲鍒板叾浠栭〉闈㈢殑鎸夐挳锛堝 expert/guided 鍒囨崲锛?
         document.querySelectorAll('.pb-ai-expert-toggle, [data-switch-workspace]').forEach(function(btn) {
             btn.setAttribute('data-disabled-during-operation', 'true');
             btn.setAttribute('disabled', 'disabled');
@@ -4777,7 +4721,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             btn.style.pointerEvents = 'none';
         });
 
-        // 禁用开始新的构建按钮（但保留当前构建的进度显示）
+        // 绂佺敤寮€濮嬫柊鐨勬瀯寤烘寜閽紙浣嗕繚鐣欏綋鍓嶆瀯寤虹殑杩涘害鏄剧ず锛?
         document.querySelectorAll('.pb-ai-run-virtual-theme, .pb-ai-start-build').forEach(function(btn) {
             if (!btn.classList.contains('pb-ai-run-virtual-theme-running')) {
                 btn.setAttribute('data-disabled-during-operation', 'true');
@@ -4788,7 +4732,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         });
     }
 
-    // 恢复导航按钮
+    // 鎭㈠瀵艰埅鎸夐挳
     function enableNavigationAfterOperation() {
         document.querySelectorAll('[data-disabled-during-operation]').forEach(function(el) {
             el.removeAttribute('data-disabled-during-operation');

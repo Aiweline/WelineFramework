@@ -172,7 +172,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $scope = \array_replace($scope, [
             'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'workspace_status' => \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH,
-            'workspace_track' => \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+            'workspace_track' => \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
             'page_types' => [Page::TYPE_HOME],
             'preview_page_type' => Page::TYPE_HOME,
             'website_profile' => ['business_name' => 'Patch Test'],
@@ -180,7 +180,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
                 Page::TYPE_HOME => [
                     'page_type' => Page::TYPE_HOME,
                     'title' => 'Home',
-                    'block_nodes' => [
+                    'blocks' => [
                         [
                             'block_id' => 'hero',
                             'type' => 'hero',
@@ -312,7 +312,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         $scope = \array_replace($scope, [
             'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH,
-            'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+            'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
             'page_types' => [Page::TYPE_HOME],
             'preview_page_type' => Page::TYPE_HOME,
             'fake_mode' => 1,
@@ -361,7 +361,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
                 Page::TYPE_HOME => [
                     'page_type' => Page::TYPE_HOME,
                     'title' => 'Home',
-                    'block_nodes' => [
+                    'blocks' => [
                         [
                             'block_id' => 'hero',
                             'type' => 'hero',
@@ -442,7 +442,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         self::assertNotNull($fresh);
         $nextScope = $this->sessionService->loadScopeForBuildOperation($fresh);
         self::assertSame(AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH, (string)($nextScope['workspace_status'] ?? ''));
-        self::assertSame('done', (string)($nextScope['active_operation']['status'] ?? ''));
+        self::assertSame('done', (string)($nextScope['active_operation']['queue_status'] ?? ''));
         self::assertSame('block_partial_patch', (string)($nextScope['active_operation']['operation'] ?? ''));
         $layoutContent = $nextScope['page_type_layouts'][Page::TYPE_HOME]['content'] ?? [];
         self::assertIsArray($layoutContent);
@@ -707,9 +707,15 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
                 'confirmed' => 1,
                 'summary' => 'confirmed blueprint',
                 'pages' => [
-                    [
+                    Page::TYPE_HOME => [
                         'page_type' => Page::TYPE_HOME,
                         'title' => 'Home',
+                        'hero' => [
+                            'block_key' => 'hero',
+                            'status' => 1,
+                            'html' => '<section><h1>Home</h1></section>',
+                            'fields' => ['headline' => 'Home'],
+                        ],
                     ],
                 ],
             ];
@@ -1033,7 +1039,7 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
             self::assertSame('plan', (string)($activeOperation['operation'] ?? ''));
             self::assertSame((string)($meta['execution_token'] ?? ''), (string)($activeOperation['execution_token'] ?? ''));
-            self::assertSame('queued', (string)($activeOperation['status'] ?? ''));
+            self::assertSame('queued', (string)($activeOperation['queue_status'] ?? ''));
             self::assertSame('Operation completed.', (string)($activeOperation['message'] ?? ''));
         });
         RequestContext::set('pagebuilder.ai.queue.dispatcher', static function (string $processName, array $meta): array {
@@ -1723,6 +1729,12 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
             'pages' => [
                 'home_page' => [
                     'title' => 'Home',
+                    'hero' => [
+                        'block_key' => 'hero',
+                        'status' => 1,
+                        'html' => '<section><h1>Home</h1></section>',
+                        'fields' => ['headline' => 'Home'],
+                    ],
                 ],
             ],
         ];

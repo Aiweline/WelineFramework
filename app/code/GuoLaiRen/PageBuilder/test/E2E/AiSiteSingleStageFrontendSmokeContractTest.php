@@ -9,25 +9,39 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
 {
-    public function testWorkspaceFrontendDoesNotExposeRemovedPlanStageLabels(): void
+    /**
+     * @return list<string>
+     */
+    private static function workspaceSourceTemplateFiles(): array
     {
         $moduleRoot = \dirname(__DIR__, 2);
         $files = [
+            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml',
+            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace-preview-unavailable.phtml',
+        ];
+        $workspaceDir = $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace';
+        if (\is_dir($workspaceDir)) {
+            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($workspaceDir, \FilesystemIterator::SKIP_DOTS));
+            /** @var \SplFileInfo $file */
+            foreach ($iterator as $file) {
+                if ($file->isFile() && \strtolower($file->getExtension()) === 'phtml') {
+                    $files[] = $file->getPathname();
+                }
+            }
+        }
+        \sort($files);
+
+        return \array_values(\array_unique($files));
+    }
+
+    public function testWorkspaceFrontendDoesNotExposeRemovedPlanStageLabels(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 2);
+        $files = \array_merge([
             $moduleRoot . '/Controller/Backend/AiSiteAgent.php',
             $moduleRoot . '/Queue/AiSitePlanQueue.php',
             $moduleRoot . '/Service/AiSiteAgentQueueObserverStreamService.php',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace-preview-unavailable.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/modals.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main-core.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main-boot.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-head.phtml',
-            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml',
-        ];
+        ], self::workspaceSourceTemplateFiles());
 
         foreach ($files as $file) {
             self::assertFileExists($file);
@@ -35,6 +49,30 @@ final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
             self::assertIsString($content);
             self::assertDoesNotMatchRegularExpression('/方案1|阶段一方案|第二阶段|第三阶段|阶段三|共享任务|整个阶段/u', $content, $file);
         }
+    }
+
+    public function testWorkspaceSourceTemplatesDoNotContainUserVisibleMojibake(): void
+    {
+        $failures = [];
+        foreach (self::workspaceFrontendSourceFiles() as $file) {
+            self::assertFileExists($file);
+            $content = \file_get_contents($file);
+            self::assertIsString($content);
+            $visibleSource = $this->removeSourceComments($content);
+
+            if (\preg_match_all('/Ã.|Â.|â€[\x80-\x9f]?|�|銆|俔|寮€|鍙戜|閫|浠诲|澶辫|鎵ц|绔|闃舵/u', $visibleSource, $matches, \PREG_OFFSET_CAPTURE) === false) {
+                self::fail('mojibake 正则执行失败：' . $file);
+            }
+            foreach ($matches[0] as [$fragment, $offset]) {
+                $failures[] = $file . ':' . $this->lineNumberAtOffset($visibleSource, (int)$offset) . ' => ' . $fragment;
+            }
+        }
+
+        self::assertSame(
+            [],
+            $failures,
+            "AiSiteAgent workspace 源模板包含疑似会进入用户可见文案的乱码片段：\n" . \implode("\n", $failures)
+        );
     }
 
     public function testConfirmedBlueprintPreviewUsesNonEmptySingleStageFallbacks(): void
@@ -51,11 +89,12 @@ final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
     {
         $moduleRoot = \dirname(__DIR__, 2);
         $script = AiSiteWorkspaceScriptReader::loadBundledJavaScript();
-        self::assertStringContainsString('pickStructuredPlanRoot', $script);
-        self::assertStringContainsString('plan.structured', $script);
-        self::assertStringContainsString('payload.structured_plan', $script);
+        self::assertStringContainsString('resolvePlanJsonFromWorkspaceState', $script);
+        self::assertStringContainsString('resolvePlanJsonArtifactsFromWorkspaceState', $script);
         self::assertStringContainsString('payload.plan_json', $script);
         self::assertStringContainsString('parsed.plan_json', $script);
+        self::assertStringNotContainsString('plan.structured', $script);
+        self::assertStringNotContainsString('payload.structured_plan', $script);
     }
 
     public function testConfirmedPlanModalBindsPreviewInteractionsAfterRendering(): void
@@ -98,5 +137,34 @@ final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
         self::assertStringContainsString('transform: none;', $rule);
         self::assertStringNotContainsString('opacity: 0;', $rule);
         self::assertStringNotContainsString('pointer-events: none;', $rule);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function workspaceFrontendSourceFiles(): array
+    {
+        $moduleRoot = \dirname(__DIR__, 2);
+
+        return \array_values(\array_unique(\array_merge([
+            $moduleRoot . '/Controller/Backend/AiSiteAgent.php',
+            $moduleRoot . '/Queue/AiSitePlanQueue.php',
+            $moduleRoot . '/Service/AiSiteAgentQueueObserverStreamService.php',
+        ], self::workspaceSourceTemplateFiles())));
+    }
+
+    private function removeSourceComments(string $content): string
+    {
+        $content = (string)\preg_replace('/<\?php\s*\/\*.*?\*\/\s*\?>/s', '', $content);
+        $content = (string)\preg_replace('/\/\*.*?\*\//s', '', $content);
+        $content = (string)\preg_replace('/<!--.*?-->/s', '', $content);
+        $content = (string)\preg_replace('/^[ \t]*(?:\/\/|#).*$/m', '', $content);
+
+        return $content;
+    }
+
+    private function lineNumberAtOffset(string $content, int $offset): int
+    {
+        return \substr_count(\substr($content, 0, $offset), "\n") + 1;
     }
 }

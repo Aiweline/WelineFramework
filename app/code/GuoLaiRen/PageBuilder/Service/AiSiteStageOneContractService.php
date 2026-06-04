@@ -91,9 +91,9 @@ final class AiSiteStageOneContractService
             $preferredGeneratedImageBlockKey = $isPolicyPage ? '' : $this->resolvePreferredGeneratedImageBlockKey($pageType, $budget);
             $pageContracts[$pageType] = [
                 'page_type' => $pageType,
-                'min_block_nodes' => $budget['min'],
-                'max_block_nodes' => $budget['max'],
-                'target_block_nodes' => $budget['target'],
+                'min_blocks' => $budget['min'],
+                'max_blocks' => $budget['max'],
+                'target_blocks' => $budget['target'],
                 'required_block_keys' => $budget['required'],
                 'recommended_optional_block_keys' => $budget['optional'],
                 'field_plan_count' => self::FIELD_PLAN_COUNT,
@@ -106,7 +106,7 @@ final class AiSiteStageOneContractService
                 'requires_execution_core_copy' => true,
                 'requires_visual_signature' => true,
                 'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
-                'visual_signature_uniqueness_scope' => !$isPolicyPage ? 'same_page_adjacent_block_nodes' : 'same_page_adjacent_block_nodes_soft',
+                'visual_signature_uniqueness_scope' => !$isPolicyPage ? 'same_page_adjacent_blocks' : 'same_page_adjacent_blocks_soft',
                 'visual_signature_duplicate_severity' => !$isPolicyPage ? 'high' : 'medium',
                 'forbid_repeated_composition_patterns_within_page' => !$isPolicyPage,
                 'composition_overuse_severity' => 'medium',
@@ -185,8 +185,8 @@ final class AiSiteStageOneContractService
                 'forbid_prompt_like_copy' => true,
                 'forbid_schema_filler_values' => true,
                 'must_reuse_brief_nouns' => true,
-                'same_page_block_nodes_must_not_reuse_same_opening_message' => true,
-                'same_page_block_nodes_must_not_reuse_same_core_copy' => true,
+                'same_page_blocks_must_not_reuse_same_opening_message' => true,
+                'same_page_blocks_must_not_reuse_same_core_copy' => true,
             ],
             'field_plan_rules' => [
                 'rows_per_block' => self::FIELD_PLAN_COUNT,
@@ -227,7 +227,7 @@ final class AiSiteStageOneContractService
                 'needs_image_must_be_json_boolean_true_or_false' => true,
                 'needs_image_true_requires_role_subject_placement' => true,
                 'needs_image_false_requires_css_motif_and_treatment' => true,
-                'opening_or_media_asset_block_nodes_prefer_generated_image_intent' => true,
+                'opening_or_media_asset_blocks_prefer_generated_image_intent' => true,
                 'non_policy_pages_prefer_rich_visual_media' => true,
                 'non_policy_pages_require_at_least_one_generated_image_intent' => false,
                 'non_policy_first_block_requires_generated_image_intent' => false,
@@ -255,7 +255,7 @@ final class AiSiteStageOneContractService
                 'stage1_block_key_order_is_build_order' => true,
                 'one_page_section_execution_per_stage1_block' => true,
                 'completed_block_must_match_block_identity' => true,
-                'duplicated_html_or_title_between_page_block_nodes_is_invalid' => true,
+                'duplicated_html_or_title_between_page_blocks_is_invalid' => true,
             ],
             'retry_policy' => [
                 'product_flow_allows_ai_recovery' => true,
@@ -311,7 +311,7 @@ final class AiSiteStageOneContractService
                 $pageContracts[$pageType] = \array_replace($basePageContract, $sourcePageContracts[$pageType], [
                     'requires_visual_signature' => true,
                     'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
-                    'visual_signature_uniqueness_scope' => 'same_page_adjacent_block_nodes',
+                    'visual_signature_uniqueness_scope' => 'same_page_adjacent_blocks',
                     'forbid_repeated_composition_patterns_within_page' => true,
                     'requires_image_intent' => true,
                     'image_intent_keys' => self::IMAGE_INTENT_KEYS,
@@ -402,8 +402,8 @@ final class AiSiteStageOneContractService
         $isCardGameStyle = $styleCode === 'india-card-game-apk-dark-neon'
             && $this->scopeHasPositiveCardGameIntent($scope);
         if ($pageType === Page::TYPE_HOME || $pageType === 'home_page') {
-            $sourceRequired = \is_array($scope['source_truth_contract']['required_home_block_nodes'] ?? null)
-                ? \array_values(\array_filter(\array_map('strval', $scope['source_truth_contract']['required_home_block_nodes'])))
+            $sourceRequired = \is_array($scope['source_truth_contract']['required_home_blocks'] ?? null)
+                ? \array_values(\array_filter(\array_map('strval', $scope['source_truth_contract']['required_home_blocks'])))
                 : [];
             if ($isCardGameStyle) {
                 $hasDownloadIntent = $this->scopeHasPositiveDownloadIntent($scope)
@@ -618,9 +618,9 @@ final class AiSiteStageOneContractService
             ? $contract['page_contracts'][$pageType]
             : [
                 'page_type' => $pageType,
-                'min_block_nodes' => 3,
-                'max_block_nodes' => 5,
-                'target_block_nodes' => 4,
+                'min_blocks' => 3,
+                'max_blocks' => 5,
+                'target_blocks' => 4,
                 'required_block_keys' => [],
                 'recommended_optional_block_keys' => [],
                 'field_plan_count' => self::FIELD_PLAN_COUNT,
@@ -628,7 +628,7 @@ final class AiSiteStageOneContractService
                 'forbidden_block_keys' => self::GENERIC_BLOCK_KEYS,
                 'requires_visual_signature' => true,
                 'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
-                'visual_signature_uniqueness_scope' => 'same_page_adjacent_block_nodes',
+                'visual_signature_uniqueness_scope' => 'same_page_adjacent_blocks',
                 'visual_signature_duplicate_severity' => 'high',
                 'forbid_repeated_composition_patterns_within_page' => true,
                 'composition_overuse_severity' => 'medium',

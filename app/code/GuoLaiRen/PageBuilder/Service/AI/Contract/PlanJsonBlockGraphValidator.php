@@ -14,25 +14,18 @@ final class PlanJsonBlockGraphValidator
     {
         $errors = [];
         [$pagesById, $pageErrors] = $this->indexById($contract['pages'] ?? [], ['page_id', 'id'], 'pages');
-        [$blocksById, $blockErrors] = $this->indexById($contract['block_nodes'] ?? [], ['block_id', 'id'], 'block_nodes');
-        $errors = \array_merge($errors, $pageErrors, $blockErrors);
+        $errors = \array_merge($errors, $pageErrors);
 
         foreach ($pagesById as $pageId => $page) {
-            $blockRefs = $this->extractPageBlockRefs($page);
-            if ($blockRefs === []) {
-                $errors[] = 'Page has no block_nodes: ' . $pageId;
+            $blocks = $this->extractPageBlocks($page);
+            if ($blocks === []) {
+                $errors[] = 'Page has no dynamic blocks: ' . $pageId;
             }
-            foreach ($blockRefs as $blockId) {
-                if (!isset($blocksById[$blockId])) {
-                    $errors[] = 'Page ' . $pageId . ' references missing block: ' . $blockId;
+            foreach ($blocks as $blockKey => $block) {
+                $blockPageId = \trim((string)($block['page_id'] ?? $pageId));
+                if ($blockPageId !== '' && $blockPageId !== $pageId && !isset($pagesById[$blockPageId])) {
+                    $errors[] = 'Block ' . $blockKey . ' references missing page: ' . $blockPageId;
                 }
-            }
-        }
-
-        foreach ($blocksById as $blockId => $block) {
-            $pageId = \trim((string)($block['page_id'] ?? ''));
-            if ($pageId === '' || !isset($pagesById[$pageId])) {
-                $errors[] = 'Block ' . $blockId . ' references missing page: ' . ($pageId !== '' ? $pageId : '(empty)');
             }
         }
 
@@ -88,20 +81,36 @@ final class PlanJsonBlockGraphValidator
      * @param array<string, mixed> $page
      * @return list<string>
      */
-    private function extractPageBlockRefs(array $page): array
+    private function extractPageBlocks(array $page): array
     {
-        $source = \is_array($page['block_node_ids'] ?? null) ? $page['block_node_ids'] : [];
-        $refs = [];
-        foreach ($source as $item) {
-            if (\is_array($item)) {
-                $item = $item['block_id'] ?? $item['id'] ?? '';
+        $reserved = [
+            'page_id' => true,
+            'id' => true,
+            'page_type' => true,
+            'type' => true,
+            'title' => true,
+            'description' => true,
+            'page_goal' => true,
+            'page_design_plan' => true,
+            'theme_alignment_summary' => true,
+            'status' => true,
+            'seo' => true,
+            'route' => true,
+            'meta' => true,
+            'layout' => true,
+            'blocks' => true,
+            'block_previews' => true,
+            'sections' => true,
+            'components' => true,
+        ];
+        $blocks = [];
+        foreach ($page as $key => $value) {
+            if (!\is_string($key) || isset($reserved[$key]) || !\is_array($value)) {
+                continue;
             }
-            $blockId = \trim((string)$item);
-            if ($blockId !== '') {
-                $refs[] = $blockId;
-            }
+            $blocks[$key] = $value;
         }
 
-        return \array_values(\array_unique($refs));
+        return $blocks;
     }
 }

@@ -2,33 +2,33 @@
 /**
  * FinTech Hub - Stats Section Component
  * 
- * 平台数据展示区域，大型指标卡片布局
+ * 骞冲彴鏁版嵁灞曠ず鍖哄煙锛屽ぇ鍨嬫寚鏍囧崱鐗囧竷灞€
  * 
  * @var \Weline\Framework\View\Template $this
- * @var array $colors 颜色配置
- * @var array $component_config 组件配置
+ * @var array $colors 棰滆壊閰嶇疆
+ * @var array $component_config 缁勪欢閰嶇疆
  * 
  * @fields_start
  * 
- * group:content => 内容设置
- * content.badge => 徽章文字:text:Platform Metrics
- * content.title => 标题:text:Numbers that speak for themselves
- * content.description => 描述:textarea:Our platform processes billions in transactions while maintaining the highest standards of security and reliability.
+ * group:content => 鍐呭璁剧疆
+ * content.badge => 寰界珷鏂囧瓧:text:Platform Metrics
+ * content.title => 鏍囬:text:Numbers that speak for themselves
+ * content.description => 鎻忚堪:textarea:Our platform processes billions in transactions while maintaining the highest standards of security and reliability.
  * 
- * group:stats => 统计数据
- * stats.items => 统计列表:textarea:$2B+|Total Processed|Total transaction volume processed through our platform\r\n1M+|Active Users|Verified users across personal and business accounts\r\n150+|Countries|Global coverage with local payment support\r\n99.99%|Uptime|Industry-leading reliability and availability|格式：数值|标签|描述，一行一个
+ * group:stats => 缁熻鏁版嵁
+ * stats.items => 缁熻鍒楄〃:textarea:$2B+|Total Processed|Total transaction volume processed through our platform\r\n1M+|Active Users|Verified users across personal and business accounts\r\n150+|Countries|Global coverage with local payment support\r\n99.99%|Uptime|Industry-leading reliability and availability|鏍煎紡锛氭暟鍊紎鏍囩|鎻忚堪锛屼竴琛屼竴涓?
  * 
  * @fields_end
  */
 
 $config = $component_config ?? [];
 
-// 确保颜色变量可用
+// 纭繚棰滆壊鍙橀噺鍙敤
 if (!isset($colors) || !is_array($colors)) {
     $colors = [];
 }
 
-// 颜色配置
+// 棰滆壊閰嶇疆
 $sectionBg = $colors['stats_bg'] ?? '#0e1425';
 $textPrimary = $colors['text_primary'] ?? '#f8fafc';
 $textSecondary = $colors['text_secondary'] ?? '#94a3b8';
@@ -41,13 +41,13 @@ $borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
 $badgeBg = $colors['badge_bg'] ?? 'rgba(37, 99, 235, 0.15)';
 $badgeBorder = $colors['badge_border'] ?? 'rgba(37, 99, 235, 0.3)';
 
-// 内容配置
+// 鍐呭閰嶇疆
 $badge = $config['content.badge'] ?? 'Platform Metrics';
 $title = $config['content.title'] ?? 'Numbers that speak for themselves';
 $description = $config['content.description'] ?? 'Our platform processes billions in transactions while maintaining the highest standards of security and reliability.';
 
-// 统计数据
-$statsRaw = $config['stats.items'] ?? "\$2B+|Total Processed|Total transaction volume processed through our platform\n1M+|Active Users|Verified users across personal and business accounts\n150+|Countries|Global coverage with local payment support\n99.99%|Uptime|Industry-leading reliability and availability";
+// 缁熻鏁版嵁
+$statsRaw = $config['stats.items'] ?? "$2B+|Total Processed|Total transaction volume processed through our platform\n1M+|Active Users|Verified users across personal and business accounts\n150+|Countries|Global coverage with local payment support\n99.99%|Uptime|Industry-leading reliability and availability";
 
 $stats = [];
 $lines = preg_split('/[\r\n]+/', $statsRaw);

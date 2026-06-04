@@ -17,22 +17,20 @@ final class AiSitePlanJsonProjectionService
         $content = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
         $items = \is_array($content['items'] ?? null) ? $content['items'] : [];
         $pages = $this->normalizeRecordSet($contract['pages'] ?? [], ['page_id', 'id']);
-        $blockNodes = $this->normalizeRecordSet($contract['block_nodes'] ?? [], ['block_id', 'id']);
         $tasks = $this->normalizeRecordSet($contract['tasks'] ?? [], ['task_id', 'id']);
         $design = \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [];
         $policyProjection = \is_array($contract['policy_projection'] ?? null) ? $contract['policy_projection'] : [];
 
         $projectedPages = [];
+        $blockCount = 0;
         foreach ($pages as $pageId => $page) {
-            $pageBlockIds = $this->stringList($page['block_node_ids'] ?? []);
             $projectedBlocks = [];
-            foreach ($pageBlockIds as $blockId) {
-                $block = \is_array($blockNodes[$blockId] ?? null) ? $blockNodes[$blockId] : [];
-                if ($block === []) {
-                    continue;
-                }
+            foreach ($this->extractPageBlocks($page) as $blockKey => $block) {
+                $blockId = \trim((string)($block['block_id'] ?? $block['id'] ?? $blockKey));
+                ++$blockCount;
                 $projectedBlocks[] = [
                     'block_id' => $blockId,
+                    'block_key' => (string)$blockKey,
                     'type' => (string)($block['block_type'] ?? ''),
                     'title' => $this->firstContentValue($items, $this->stringList($block['content_keys'] ?? [])),
                     'task_count' => \count($this->stringList($block['task_ids'] ?? [])),
@@ -44,7 +42,7 @@ final class AiSitePlanJsonProjectionService
                 'page_type' => (string)($page['page_type'] ?? $pageId),
                 'title' => $this->contentValue($items, (string)($page['title_key'] ?? ''), (string)($page['title'] ?? $pageId)),
                 'description' => $this->contentValue($items, (string)($page['description_key'] ?? ''), (string)($page['description'] ?? '')),
-                'block_nodes' => $projectedBlocks,
+                'blocks' => $projectedBlocks,
             ];
         }
 
@@ -58,7 +56,7 @@ final class AiSitePlanJsonProjectionService
             'primary_goal' => (string)($brief['primary_goal'] ?? ''),
             'summary' => (string)($brief['summary'] ?? $brief['primary_goal'] ?? ''),
             'page_count' => \count($projectedPages),
-            'block_count' => \count($blockNodes),
+            'block_count' => $blockCount,
             'task_count' => \count($tasks),
             'pages' => $projectedPages,
             'design' => [
@@ -100,6 +98,43 @@ final class AiSitePlanJsonProjectionService
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @return array<string, array<string, mixed>>
+     */
+    private function extractPageBlocks(array $page): array
+    {
+        $reserved = [
+            'page_id' => true,
+            'id' => true,
+            'page_type' => true,
+            'type' => true,
+            'title' => true,
+            'description' => true,
+            'page_goal' => true,
+            'page_design_plan' => true,
+            'theme_alignment_summary' => true,
+            'status' => true,
+            'seo' => true,
+            'route' => true,
+            'meta' => true,
+            'layout' => true,
+            'blocks' => true,
+            'block_previews' => true,
+            'sections' => true,
+            'components' => true,
+        ];
+        $blocks = [];
+        foreach ($page as $key => $value) {
+            if (!\is_string($key) || isset($reserved[$key]) || !\is_array($value)) {
+                continue;
+            }
+            $blocks[$key] = $value;
+        }
+
+        return $blocks;
     }
 
     /**

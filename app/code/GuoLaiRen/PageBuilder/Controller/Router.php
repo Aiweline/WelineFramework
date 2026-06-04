@@ -9,6 +9,7 @@ use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\RouterInterface;
 use Weline\Server\Service\LocalDomainPolicy;
+use Weline\Websites\Model\Website;
 
 /**
  * PageBuilder 路由重写器
@@ -49,7 +50,7 @@ class Router implements RouterInterface
         
         // 3. 处理空路径：域名根直接显示当前站点首页，或预览时用 query 的 handle
         if ($isRootPath) {
-            $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? 0;
+            $websiteId = self::resolvePageBuilderWebsiteIdFromCurrentContext() ?? 0;
             // 预览模式：优先用 query 的 handle + website_id 配合 URL 解码
             $isPreview = (string)WelineEnv::getGet('preview', '') === '1';
             $queryHandleValue = WelineEnv::getGet('handle');
@@ -87,7 +88,7 @@ class Router implements RouterInterface
         }
         
         // 5. 检查当前站点下 handle 是否存在；同站可省略前缀，如 /about 匹配 handle about 或 home-about
-        $websiteId = self::resolveWebsiteIdFromCurrentHost() ?? 0;
+        $websiteId = self::resolvePageBuilderWebsiteIdFromCurrentContext() ?? 0;
         $isPreview = (string)WelineEnv::getGet('preview', '') === '1';
         if ($websiteId <= 0 && $isPreview) {
             $websiteIdParam = (int)WelineEnv::getGet('website_id', 0);
@@ -349,6 +350,50 @@ class Router implements RouterInterface
         }
 
         return \array_values($hosts);
+    }
+
+    private static function resolvePageBuilderWebsiteIdFromCurrentContext(): ?int
+    {
+        $websiteId = (int)(WelineEnv::server('WELINE_WEBSITE_ID', '') ?: WelineEnv::get('website_id', 0));
+        if ($websiteId <= 0) {
+            return null;
+        }
+
+        $currentHosts = self::currentHostCandidates();
+        $websiteUrlHost = self::normalizeHostCandidate((string)WelineEnv::server('WELINE_WEBSITE_URL', ''));
+        if ($websiteUrlHost === '' || self::isReservedProjectHost($websiteUrlHost)) {
+            return null;
+        }
+        if ($currentHosts === [] || !\in_array($websiteUrlHost, $currentHosts, true)) {
+            return null;
+        }
+
+        if (!self::isPageBuilderWebsite($websiteId)) {
+            return null;
+        }
+
+        return $websiteId;
+    }
+
+    private static function isPageBuilderWebsite(int $websiteId): bool
+    {
+        if ($websiteId <= 0) {
+            return false;
+        }
+
+        try {
+            /** @var Website $websiteModel */
+            $websiteModel = ObjectManager::getInstance(Website::class);
+            $website = clone $websiteModel;
+            $website->clearData()->clearQuery()->load($websiteId);
+            if (!$website->getId()) {
+                return false;
+            }
+
+            return (string)$website->getData(Website::schema_fields_SCOPE) === 'page_builder';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private static function normalizeHostCandidate(string $host): string

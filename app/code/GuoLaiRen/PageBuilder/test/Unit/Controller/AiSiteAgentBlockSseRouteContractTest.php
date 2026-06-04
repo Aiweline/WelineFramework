@@ -20,8 +20,8 @@ final class AiSiteAgentBlockSseRouteContractTest extends TestCase
         self::assertStringContainsString('public function getBlockRegenerateSse()', $controllerSource);
         self::assertStringContainsString('public function getPostBlockRefineSse()', $controllerSource);
         self::assertStringContainsString('public function getPostBlockRegenerateSse()', $controllerSource);
-        self::assertStringNotContainsString("start_block_refine_sse_url', \$this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-block-refine-sse')", $controllerSource);
-        self::assertStringNotContainsString("start_block_regenerate_sse_url', \$this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-block-regenerate-sse')", $controllerSource);
+        self::assertStringNotContainsString("start_block_refine_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-block-refine-sse')", $controllerSource);
+        self::assertStringNotContainsString("start_block_regenerate_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-block-regenerate-sse')", $controllerSource);
 
         $reflection = new ReflectionClass(AiSiteAgent::class);
         foreach ([
@@ -42,7 +42,8 @@ final class AiSiteAgentBlockSseRouteContractTest extends TestCase
         $scriptSource = AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertStringContainsString('function blockMatchesComponentCode(pageType, block, componentCode)', $scriptSource);
-        self::assertStringContainsString('findVirtualBlockInList(pageType, pageState.block_nodes, blockId)', $scriptSource);
+        self::assertStringContainsString('findVirtualBlockInList(pageType, normalizePlanJsonPageBlocks(pageType, pageState), blockId)', $scriptSource);
+        self::assertStringNotContainsString('findVirtualBlockInList(pageType, pageState.blocks, blockId)', $scriptSource);
         self::assertStringContainsString("resolveSharedComponentRegionFromCode(pageType, String(candidate || ''))", $scriptSource);
         self::assertStringContainsString('updateVirtualBlockState(context.page_type, refreshedBlock)', $scriptSource);
     }

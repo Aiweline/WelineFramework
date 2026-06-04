@@ -5,18 +5,18 @@
  * 4 poker variants: Texas Hold'em, Omaha, Sit & Go, MTT
  * 
  * @var \Weline\Framework\View\Template $this
- * @var array $colors 颜色配置
- * @var array $component_config 组件配置
+ * @var array $colors 棰滆壊閰嶇疆
+ * @var array $component_config 缁勪欢閰嶇疆
  * 
  * @fields_start
  * 
- * group:content => 内容设置
- * content.badge => 徽章文字:text:♠ Our Games
- * content.title => 标题:text:Choose Your Game
- * content.description => 描述:textarea:From casual cash games to high-stakes tournaments, find the perfect table for your skill level.
+ * group:content => 鍐呭璁剧疆
+ * content.badge => 寰界珷鏂囧瓧:text:鈾?Our Games
+ * content.title => 鏍囬:text:Choose Your Game
+ * content.description => 鎻忚堪:textarea:From casual cash games to high-stakes tournaments, find the perfect table for your skill level.
  * 
- * group:games => 游戏列表
- * games.items => 游戏列表:textarea:♠|Texas Hold'em|The world's most popular poker variant. Master the art of reading opponents and playing your position.|$0.01/$0.02 - $500/$1000|2-9 Players|#holdem\r\n♥|Omaha Poker|Four hole cards, five community cards — more action, bigger pots. Perfect for players who love multi-way action.|$0.05/$0.10 - $200/$400|2-9 Players|#omaha\r\n♦|Sit & Go Tournaments|Quick tournaments that start as soon as seats fill. Fast-paced action with escalating blinds.|$1 - $500 Buy-in|6-9 Players|#sitandgo\r\n♣|Multi-Table Tournaments|Compete against hundreds of players for massive prize pools. Deep-stacked, slow-structured events.|$0.50 - $10K Buy-in|100-10000 Players|#mtt|格式：花色|名称|描述|筹码范围|玩家数|链接
+ * group:games => 娓告垙鍒楄〃
+ * games.items => 娓告垙鍒楄〃:textarea:鈾爘Texas Hold'em|The world's most popular poker variant. Master the art of reading opponents and playing your position.|$0.01/$0.02 - $500/$1000|2-9 Players|#holdem\r\n鈾Omaha Poker|Four hole cards, five community cards 鈥?more action, bigger pots. Perfect for players who love multi-way action.|$0.05/$0.10 - $200/$400|2-9 Players|#omaha\r\n鈾Sit & Go Tournaments|Quick tournaments that start as soon as seats fill. Fast-paced action with escalating blinds.|$1 - $500 Buy-in|6-9 Players|#sitandgo\r\n鈾Multi-Table Tournaments|Compete against hundreds of players for massive prize pools. Deep-stacked, slow-structured events.|$0.50 - $10K Buy-in|100-10000 Players|#mtt|鏍煎紡锛氳姳鑹瞸鍚嶇О|鎻忚堪|绛圭爜鑼冨洿|鐜╁鏁皘閾炬帴
  * 
  * @fields_end
  */
@@ -42,11 +42,11 @@ $badgeBg = $colors['badge_bg'] ?? 'rgba(4, 120, 87, 0.15)';
 $badgeBorder = $colors['badge_border'] ?? 'rgba(4, 120, 87, 0.3)';
 $badgeText = $colors['badge_text'] ?? '#10b981';
 
-$badge = $config['content.badge'] ?? '♠ Our Games';
+$badge = $config['content.badge'] ?? '鈾?Our Games';
 $title = $config['content.title'] ?? 'Choose Your Game';
 $description = $config['content.description'] ?? 'From casual cash games to high-stakes tournaments, find the perfect table for your skill level.';
 
-$gamesRaw = $config['games.items'] ?? "♠|Texas Hold'em|The world's most popular poker variant. Master the art of reading opponents and playing your position.|\$0.01/\$0.02 - \$500/\$1000|2-9 Players|#holdem\n♥|Omaha Poker|Four hole cards, five community cards — more action, bigger pots. Perfect for players who love multi-way action.|\$0.05/\$0.10 - \$200/\$400|2-9 Players|#omaha\n♦|Sit & Go Tournaments|Quick tournaments that start as soon as seats fill. Fast-paced action with escalating blinds.|\$1 - \$500 Buy-in|6-9 Players|#sitandgo\n♣|Multi-Table Tournaments|Compete against hundreds of players for massive prize pools. Deep-stacked, slow-structured events.|\$0.50 - \$10K Buy-in|100-10000 Players|#mtt";
+$gamesRaw = $config['games.items'] ?? "鈾爘Texas Hold'em|The world's most popular poker variant. Master the art of reading opponents and playing your position.|$0.01/$0.02 - $500/$1000|2-9 Players|#holdem\n鈾Omaha Poker|Four hole cards, five community cards 鈥?more action, bigger pots. Perfect for players who love multi-way action.|$0.05/$0.10 - $200/$400|2-9 Players|#omaha\n鈾Sit & Go Tournaments|Quick tournaments that start as soon as seats fill. Fast-paced action with escalating blinds.|$1 - $500 Buy-in|6-9 Players|#sitandgo\n鈾Multi-Table Tournaments|Compete against hundreds of players for massive prize pools. Deep-stacked, slow-structured events.|$0.50 - $10K Buy-in|100-10000 Players|#mtt";
 
 $games = [];
 foreach (preg_split('/[\r\n]+/', $gamesRaw) as $line) {
@@ -55,7 +55,7 @@ foreach (preg_split('/[\r\n]+/', $gamesRaw) as $line) {
     $parts = explode('|', $line);
     if (count($parts) >= 3) {
         $games[] = [
-            'suit' => trim($parts[0] ?? '♠'),
+            'suit' => trim($parts[0] ?? '鈾?),
             'name' => trim($parts[1] ?? ''),
             'desc' => trim($parts[2] ?? ''),
             'stakes' => trim($parts[3] ?? ''),
@@ -65,7 +65,7 @@ foreach (preg_split('/[\r\n]+/', $gamesRaw) as $line) {
     }
 }
 
-$suitColors = ['♠' => '#ecfdf5', '♥' => '#ef4444', '♦' => '#f59e0b', '♣' => '#10b981'];
+$suitColors = ['鈾? => '#ecfdf5', '鈾? => '#ef4444', '鈾? => '#f59e0b', '鈾? => '#10b981'];
 
 $instanceId = 'pa-games-' . uniqid();
 ?>

@@ -1055,11 +1055,13 @@ class AiSiteAssetQueue implements QueueInterface
         $siblingPattern = $this->buildGeneratedAssetSiblingPattern($finalUrl);
         $scopeReferencePatch = [];
 
-        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        if (\is_array($virtualPage['block_nodes'] ?? null)) {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $planPage = \is_array($planPages[$pageType] ?? null) ? $planPages[$pageType] : [];
+        $dynamicBlocks = $this->planJsonDynamicBlocks($planPage);
+        if ($dynamicBlocks !== []) {
             [$blocks, $blockChanged] = $this->patchBlocksImageUrls(
-                \array_values($virtualPage['block_nodes']),
+                \array_values($dynamicBlocks),
                 $candidates,
                 $finalUrl,
                 $targetBlockId,
@@ -1067,10 +1069,19 @@ class AiSiteAssetQueue implements QueueInterface
                 $siblingPattern
             );
             if ($blockChanged) {
-                $virtualPage['block_nodes'] = \array_values($blocks);
-                $virtualPage['updated_at'] = $updatedAt;
-                $virtualPages[$pageType] = $virtualPage;
-                $scope['virtual_pages_by_type'] = $virtualPages;
+                foreach ($blocks as $block) {
+                    if (!\is_array($block)) {
+                        continue;
+                    }
+                    $blockKey = \trim((string)($block['block_key'] ?? $block['block_id'] ?? $block['section_code'] ?? $block['component_code'] ?? ''));
+                    if ($blockKey !== '') {
+                        $planPage[$blockKey] = $block;
+                    }
+                }
+                $planPage['updated_at'] = $updatedAt;
+                $planPages[$pageType] = $planPage;
+                $planJson['pages'] = $planPages;
+                $scope['plan_json'] = $planJson;
                 $changed = true;
                 $patchedBlocks = \array_values($blocks);
             }
@@ -1101,8 +1112,8 @@ class AiSiteAssetQueue implements QueueInterface
         if (!empty($materializedPatch['changed'])) {
             $changed = true;
             $materializedPageId = (int)($materializedPatch['page_id'] ?? 0);
-            if ($patchedBlocks === [] && \is_array($materializedPatch['block_nodes'] ?? null)) {
-                $patchedBlocks = \array_values($materializedPatch['block_nodes']);
+            if ($patchedBlocks === [] && \is_array($materializedPatch['blocks'] ?? null)) {
+                $patchedBlocks = \array_values($materializedPatch['blocks']);
             }
         }
 
@@ -1135,14 +1146,34 @@ class AiSiteAssetQueue implements QueueInterface
                 'virtual_theme_patch' => $virtualThemePatch,
             ],
         ];
-        if (\is_array($scope['virtual_pages_by_type'] ?? null)) {
-            $patch['virtual_pages_by_type'] = $scope['virtual_pages_by_type'];
+        if (\is_array($scope['plan_json'] ?? null)) {
+            $patch['plan_json'] = $scope['plan_json'];
         }
         if ($scopeReferencePatch !== []) {
             $patch = \array_replace($patch, $scopeReferencePatch);
         }
 
         return ['scope' => $scope, 'patch' => $patch, 'changed' => true];
+    }
+
+    /**
+     * @param array<string,mixed> $page
+     * @return array<string,array<string,mixed>>
+     */
+    private function planJsonDynamicBlocks(array $page): array
+    {
+        $blocks = [];
+        foreach ($page as $blockKey => $block) {
+            if (!\is_string($blockKey) || !\is_array($block)) {
+                continue;
+            }
+            if (\in_array($blockKey, ['name', 'title', 'status', 'layout', 'page_meta', 'meta', 'seo', 'route', 'assets', 'handle', 'page_type', 'updated_at', 'last_generated_at'], true)) {
+                continue;
+            }
+            $blocks[$blockKey] = $block;
+        }
+
+        return $blocks;
     }
 
     /**
@@ -1252,9 +1283,9 @@ class AiSiteAssetQueue implements QueueInterface
     ): array {
         $changedTopLevel = [];
         foreach ([
-            ['page_type_layouts', $pageType],
-            ['render_data_contract', 'payload', 'page_type_layouts', $pageType],
-            ['build_contracts', 'render_data', 'payload', 'page_type_layouts', $pageType],
+            ['plan_json', 'pages', $pageType],
+            ['render_data_contract', 'payload', 'plan_json', 'pages', $pageType],
+            ['build_contracts', 'render_data', 'payload', 'plan_json', 'pages', $pageType],
         ] as $path) {
             $pathChanged = false;
             $scope = $this->replaceScopePathImageReferences($scope, $path, $candidates, $finalUrl, $siblingPattern, $pathChanged);
@@ -1349,7 +1380,7 @@ class AiSiteAssetQueue implements QueueInterface
     /**
      * @param array<string,mixed> $scope
      * @param list<string> $candidates
-     * @return array{changed:bool,page_id?:int,block_nodes?:list<mixed>}
+     * @return array{changed:bool,page_id?:int,blocks?:list<mixed>}
      */
     private function patchMaterializedPageImageUrls(
         array $scope,
@@ -1377,7 +1408,7 @@ class AiSiteAssetQueue implements QueueInterface
         $renderMode = \trim((string)$page->getData(Page::schema_fields_RENDER_MODE));
         if ($renderMode === Page::RENDER_MODE_AI_HTML) {
             $layout = \json_decode((string)$page->getData(Page::schema_fields_AI_LAYOUT), true);
-            $blocks = \is_array($layout['block_nodes'] ?? null) ? \array_values($layout['block_nodes']) : [];
+            $blocks = \is_array($layout['blocks'] ?? null) ? \array_values($layout['blocks']) : [];
             if ($blocks !== []) {
                 [$nextBlocks, $blockChanged] = $this->patchBlocksImageUrls(
                     $blocks,
@@ -1388,7 +1419,7 @@ class AiSiteAssetQueue implements QueueInterface
                     $siblingPattern
                 );
                 if ($blockChanged) {
-                    $layout['block_nodes'] = \array_values($nextBlocks);
+                    $layout['blocks'] = \array_values($nextBlocks);
                     $page->setData(
                         Page::schema_fields_AI_LAYOUT,
                         \json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)
@@ -1432,7 +1463,7 @@ class AiSiteAssetQueue implements QueueInterface
         return [
             'changed' => true,
             'page_id' => $pageId,
-            'block_nodes' => \array_values($nextBlocks),
+            'blocks' => \array_values($nextBlocks),
         ];
     }
 
@@ -1742,10 +1773,9 @@ class AiSiteAssetQueue implements QueueInterface
     private function resolveMaterializedPageId(array $scope, string $pageType): int
     {
         foreach ([
-            $scope['virtual_pages_by_type'][$pageType]['materialized_page_id'] ?? null,
-            $scope['virtual_pages_by_type'][$pageType]['page_id'] ?? null,
-            $scope['pagebuilder_pages_by_type'][$pageType]['page_id'] ?? null,
             $scope['materialized_pages_by_type'][$pageType]['page_id'] ?? null,
+            $scope['plan_json']['pages'][$pageType]['materialized_page_id'] ?? null,
+            $scope['plan_json']['pages'][$pageType]['page_id'] ?? null,
         ] as $value) {
             $pageId = (int)$value;
             if ($pageId > 0) {
@@ -2036,40 +2066,49 @@ class AiSiteAssetQueue implements QueueInterface
      */
     private function applyIdentityAssetToRenderPayload(array $payload, string $role, string $finalUrl): array
     {
+        if (!\is_array($payload['plan_json'] ?? null)) {
+            $payload['plan_json'] = [];
+        }
+        if (!\is_array($payload['plan_json']['shared_components'] ?? null)) {
+            $payload['plan_json']['shared_components'] = \is_array($payload['shared_components'] ?? null)
+                ? $payload['shared_components']
+                : [];
+        }
+
         if ($role === 'logo') {
-            if (\is_array($payload['shared_components']['header']['default_config'] ?? null)) {
-                $payload['shared_components']['header']['default_config']['logo']['url'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['logo']['image'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['logo.url'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['logo.image'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['identity.shared_logo_asset'] = $finalUrl;
+            if (\is_array($payload['plan_json']['shared_components']['header']['default_config'] ?? null)) {
+                $payload['plan_json']['shared_components']['header']['default_config']['logo']['url'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['logo']['image'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['logo.url'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['logo.image'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['identity.shared_logo_asset'] = $finalUrl;
             }
-            if (\is_array($payload['shared_components']['footer']['default_config'] ?? null)) {
-                $payload['shared_components']['footer']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
-                $payload['shared_components']['footer']['default_config']['identity.shared_logo_asset'] = $finalUrl;
-                $payload['shared_components']['footer']['default_config']['brand']['logo'] = $finalUrl;
-                $payload['shared_components']['footer']['default_config']['brand.logo'] = $finalUrl;
+            if (\is_array($payload['plan_json']['shared_components']['footer']['default_config'] ?? null)) {
+                $payload['plan_json']['shared_components']['footer']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
+                $payload['plan_json']['shared_components']['footer']['default_config']['identity.shared_logo_asset'] = $finalUrl;
+                $payload['plan_json']['shared_components']['footer']['default_config']['brand']['logo'] = $finalUrl;
+                $payload['plan_json']['shared_components']['footer']['default_config']['brand.logo'] = $finalUrl;
             }
-            foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $pageType => $layout) {
-                if (!\is_string($pageType) || !\is_array($layout)) {
+            foreach (\is_array($payload['plan_json']['pages'] ?? null) ? $payload['plan_json']['pages'] : [] as $pageType => $page) {
+                if (!\is_string($pageType) || !\is_array($page)) {
                     continue;
                 }
-                if (\is_array($layout['header']['config'] ?? null)) {
-                    $layout['header']['config']['logo']['url'] = $finalUrl;
-                    $layout['header']['config']['logo']['image'] = $finalUrl;
-                    $layout['header']['config']['logo.url'] = $finalUrl;
-                    $layout['header']['config']['logo.image'] = $finalUrl;
-                    $layout['header']['config']['identity']['shared_logo_asset'] = $finalUrl;
-                    $layout['header']['config']['identity.shared_logo_asset'] = $finalUrl;
+                if (\is_array($page['header']['config'] ?? null)) {
+                    $page['header']['config']['logo']['url'] = $finalUrl;
+                    $page['header']['config']['logo']['image'] = $finalUrl;
+                    $page['header']['config']['logo.url'] = $finalUrl;
+                    $page['header']['config']['logo.image'] = $finalUrl;
+                    $page['header']['config']['identity']['shared_logo_asset'] = $finalUrl;
+                    $page['header']['config']['identity.shared_logo_asset'] = $finalUrl;
                 }
-                if (\is_array($layout['footer']['config'] ?? null)) {
-                    $layout['footer']['config']['identity']['shared_logo_asset'] = $finalUrl;
-                    $layout['footer']['config']['identity.shared_logo_asset'] = $finalUrl;
-                    $layout['footer']['config']['brand']['logo'] = $finalUrl;
-                    $layout['footer']['config']['brand.logo'] = $finalUrl;
+                if (\is_array($page['footer']['config'] ?? null)) {
+                    $page['footer']['config']['identity']['shared_logo_asset'] = $finalUrl;
+                    $page['footer']['config']['identity.shared_logo_asset'] = $finalUrl;
+                    $page['footer']['config']['brand']['logo'] = $finalUrl;
+                    $page['footer']['config']['brand.logo'] = $finalUrl;
                 }
-                $payload['page_type_layouts'][$pageType] = $layout;
+                $payload['plan_json']['pages'][$pageType] = $page;
             }
             if (\is_array($payload['asset_manifest']['slots']['identity:website-logo'] ?? null)) {
                 $payload['asset_manifest']['slots']['identity:website-logo']['final_url'] = $finalUrl;
@@ -2088,21 +2127,23 @@ class AiSiteAssetQueue implements QueueInterface
                     $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['path'] = \ltrim($finalUrl, '/');
                 }
             }
-            if (\is_array($payload['shared_components']['header']['default_config'] ?? null)) {
-                $payload['shared_components']['header']['default_config']['identity']['shared_icon_asset'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['identity.shared_icon_asset'] = $finalUrl;
+            if (\is_array($payload['plan_json']['shared_components']['header']['default_config'] ?? null)) {
+                $payload['plan_json']['shared_components']['header']['default_config']['identity']['shared_icon_asset'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['identity.shared_icon_asset'] = $finalUrl;
             }
-            foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $pageType => $layout) {
-                if (!\is_string($pageType) || !\is_array($layout)) {
+            foreach (\is_array($payload['plan_json']['pages'] ?? null) ? $payload['plan_json']['pages'] : [] as $pageType => $page) {
+                if (!\is_string($pageType) || !\is_array($page)) {
                     continue;
                 }
-                if (\is_array($layout['header']['config'] ?? null)) {
-                    $layout['header']['config']['identity']['shared_icon_asset'] = $finalUrl;
-                    $layout['header']['config']['identity.shared_icon_asset'] = $finalUrl;
+                if (\is_array($page['header']['config'] ?? null)) {
+                    $page['header']['config']['identity']['shared_icon_asset'] = $finalUrl;
+                    $page['header']['config']['identity.shared_icon_asset'] = $finalUrl;
                 }
-                $payload['page_type_layouts'][$pageType] = $layout;
+                $payload['plan_json']['pages'][$pageType] = $page;
             }
         }
+
+        unset($payload['shared_components']);
 
         return $payload;
     }

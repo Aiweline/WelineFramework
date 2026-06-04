@@ -1,137 +1,137 @@
-# CTA 转化事件跟踪功能 - 测试报告
+﻿# CTA 杞寲浜嬩欢璺熻釜鍔熻兘 - 娴嬭瘯鎶ュ憡
 
-## 测试日期
+## 娴嬭瘯鏃ユ湡
 2025-10-27
 
-## 测试环境
-- 系统：Windows 10
-- PHP：8.x
-- 数据库：MySQL (weline)
-- 表名：guolairen_page_builder_page
+## 娴嬭瘯鐜
+- 绯荤粺锛歐indows 10
+- PHP锛?.x
+- 鏁版嵁搴擄細MySQL (weline)
+- 琛ㄥ悕锛歡uolairen_page_builder_page
 
-## 测试内容
+## 娴嬭瘯鍐呭
 
-### 1. 数据库字段验证 ✅
+### 1. 鏁版嵁搴撳瓧娈甸獙璇?鉁?
 
-**测试结果：**
+**娴嬭瘯缁撴灉锛?*
 ```
-字段名：cta_event_name
-类型：VARCHAR(100)
-注释：CTA转化事件名称
-位置：在 fb_pixel_id 之后
-默认值：NULL
+瀛楁鍚嶏細cta_event_name
+绫诲瀷锛歏ARCHAR(100)
+娉ㄩ噴锛欳TA杞寲浜嬩欢鍚嶇О
+浣嶇疆锛氬湪 fb_pixel_id 涔嬪悗
+榛樿鍊硷細NULL
 ```
 
-### 2. 后台表单显示 ✅
+### 2. 鍚庡彴琛ㄥ崟鏄剧ず 鉁?
 
-**测试页面：** `pagebuilder/backend/page/edit?id=1`
+**娴嬭瘯椤甸潰锛?* `pagebuilder/backend/page/edit?id=1`
 
-**测试结果：**
-- ✅ 「跟踪代码」区域正确显示「CTA 转化事件名称」输入框
-- ✅ 输入框带有帮助信息图标
-- ✅ 输入框有 placeholder 提示：`例如：money_calendar_signup (留空自动生成)`
-- ✅ 下方显示帮助文本：`用于 Google Analytics 和 Facebook Pixel 事件跟踪。留空时将自动生成为：<页面句柄>_form_submit`
+**娴嬭瘯缁撴灉锛?*
+- 鉁?銆岃窡韪唬鐮併€嶅尯鍩熸纭樉绀恒€孋TA 杞寲浜嬩欢鍚嶇О銆嶈緭鍏ユ
+- 鉁?杈撳叆妗嗗甫鏈夊府鍔╀俊鎭浘鏍?
+- 鉁?杈撳叆妗嗘湁 placeholder 鎻愮ず锛歚渚嬪锛歮oney_calendar_signup (鐣欑┖鑷姩鐢熸垚)`
+- 鉁?涓嬫柟鏄剧ず甯姪鏂囨湰锛歚鐢ㄤ簬 Google Analytics 鍜?Facebook Pixel 浜嬩欢璺熻釜銆傜暀绌烘椂灏嗚嚜鍔ㄧ敓鎴愪负锛?椤甸潰鍙ユ焺>_form_submit`
 
-### 3. 自动生成默认值 ✅
+### 3. 鑷姩鐢熸垚榛樿鍊?鉁?
 
-**测试场景：** 编辑已存在的页面（cta_event_name 字段为空）
+**娴嬭瘯鍦烘櫙锛?* 缂栬緫宸插瓨鍦ㄧ殑椤甸潰锛坈ta_event_name 瀛楁涓虹┖锛?
 
-**页面数据：**
-- 页面 ID：1
-- 页面句柄：`index`
-- CTA 事件名称（数据库）：NULL
+**椤甸潰鏁版嵁锛?*
+- 椤甸潰 ID锛?
+- 椤甸潰鍙ユ焺锛歚index`
+- CTA 浜嬩欢鍚嶇О锛堟暟鎹簱锛夛細NULL
 
-**测试结果：**
-- ✅ 编辑页面时，输入框自动显示：`index_form_submit`
-- ✅ 符合预期的自动生成规则：`{页面句柄}_form_submit`
+**娴嬭瘯缁撴灉锛?*
+- 鉁?缂栬緫椤甸潰鏃讹紝杈撳叆妗嗚嚜鍔ㄦ樉绀猴細`index_form_submit`
+- 鉁?绗﹀悎棰勬湡鐨勮嚜鍔ㄧ敓鎴愯鍒欙細`{椤甸潰鍙ユ焺}_form_submit`
 
-### 4. 保存功能测试 ✅
+### 4. 淇濆瓨鍔熻兘娴嬭瘯 鉁?
 
-**测试步骤：**
-1. 访问编辑页面：`pagebuilder/backend/page/edit?id=1`
-2. CTA 事件名称输入框显示：`index_form_submit`
-3. 点击「更新页面」按钮
-4. 观察保存结果
+**娴嬭瘯姝ラ锛?*
+1. 璁块棶缂栬緫椤甸潰锛歚pagebuilder/backend/page/edit?id=1`
+2. CTA 浜嬩欢鍚嶇О杈撳叆妗嗘樉绀猴細`index_form_submit`
+3. 鐐瑰嚮銆屾洿鏂伴〉闈€嶆寜閽?
+4. 瑙傚療淇濆瓨缁撴灉
 
-**测试结果：**
-- ✅ 显示成功消息：**「操作成功！ 页面更新成功！」**
-- ✅ 页面保持在编辑页面（URL未变）
-- ✅ 无SQL错误
-- ✅ 数据库验证：`cta_event_name = 'index_form_submit'`
+**娴嬭瘯缁撴灉锛?*
+- 鉁?鏄剧ず鎴愬姛娑堟伅锛?*銆屾搷浣滄垚鍔燂紒 椤甸潰鏇存柊鎴愬姛锛併€?*
+- 鉁?椤甸潰淇濇寔鍦ㄧ紪杈戦〉闈紙URL鏈彉锛?
+- 鉁?鏃燬QL閿欒
+- 鉁?鏁版嵁搴撻獙璇侊細`cta_event_name = 'index_form_submit'`
 
-### 5. 数据库持久化验证 ✅
+### 5. 鏁版嵁搴撴寔涔呭寲楠岃瘉 鉁?
 
-**验证SQL：**
+**楠岃瘉SQL锛?*
 ```sql
 SELECT page_id, handle, cta_event_name 
 FROM guolairen_page_builder_page 
 WHERE page_id = 1;
 ```
 
-**验证结果：**
+**楠岃瘉缁撴灉锛?*
 ```
-页面 ID: 1
-页面句柄: index
-CTA 事件名称: index_form_submit
+椤甸潰 ID: 1
+椤甸潰鍙ユ焺: index
+CTA 浜嬩欢鍚嶇О: index_form_submit
 ```
 
-## 功能特性确认
+## 鍔熻兘鐗规€х‘璁?
 
-### ✅ 已实现的功能
+### 鉁?宸插疄鐜扮殑鍔熻兘
 
-1. **数据库层面**
-   - [x] 添加 `cta_event_name` 字段到数据库
-   - [x] 字段类型：VARCHAR(100) NULL
-   - [x] 字段位置：在 `fb_pixel_id` 之后
+1. **鏁版嵁搴撳眰闈?*
+   - [x] 娣诲姞 `cta_event_name` 瀛楁鍒版暟鎹簱
+   - [x] 瀛楁绫诲瀷锛歏ARCHAR(100) NULL
+   - [x] 瀛楁浣嶇疆锛氬湪 `fb_pixel_id` 涔嬪悗
 
-2. **后台表单**
-   - [x] 在跟踪代码区域添加输入框
-   - [x] 显示帮助信息图标
-   - [x] 显示 placeholder 提示
-   - [x] 显示详细说明文本
+2. **鍚庡彴琛ㄥ崟**
+   - [x] 鍦ㄨ窡韪唬鐮佸尯鍩熸坊鍔犺緭鍏ユ
+   - [x] 鏄剧ず甯姪淇℃伅鍥炬爣
+   - [x] 鏄剧ず placeholder 鎻愮ず
+   - [x] 鏄剧ず璇︾粏璇存槑鏂囨湰
 
-3. **自动生成逻辑**
-   - [x] 编辑时如果为空，显示自动生成的值
-   - [x] 保存时如果为空，自动生成并保存
-   - [x] 生成规则：`{页面句柄}_form_submit`
+3. **鑷姩鐢熸垚閫昏緫**
+   - [x] 缂栬緫鏃跺鏋滀负绌猴紝鏄剧ず鑷姩鐢熸垚鐨勫€?
+   - [x] 淇濆瓨鏃跺鏋滀负绌猴紝鑷姩鐢熸垚骞朵繚瀛?
+   - [x] 鐢熸垚瑙勫垯锛歚{椤甸潰鍙ユ焺}_form_submit`
 
-4. **保存功能**
-   - [x] 新建页面时自动生成
-   - [x] 编辑页面时自动生成
-   - [x] 自定义值优先于自动生成
+4. **淇濆瓨鍔熻兘**
+   - [x] 鏂板缓椤甸潰鏃惰嚜鍔ㄧ敓鎴?
+   - [x] 缂栬緫椤甸潰鏃惰嚜鍔ㄧ敓鎴?
+   - [x] 鑷畾涔夊€间紭鍏堜簬鑷姩鐢熸垚
 
-5. **前端事件跟踪**
-   - [x] Google Analytics 4 事件跟踪
-   - [x] Facebook Pixel 事件跟踪
-   - [x] 使用自定义或自动生成的事件名称
+5. **鍓嶇浜嬩欢璺熻釜**
+   - [x] Google Analytics 4 浜嬩欢璺熻釜
+   - [x] Facebook Pixel 浜嬩欢璺熻釜
+   - [x] 浣跨敤鑷畾涔夋垨鑷姩鐢熸垚鐨勪簨浠跺悕绉?
 
-## 代码修改清单
+## 浠ｇ爜淇敼娓呭崟
 
-### 修改的文件
+### 淇敼鐨勬枃浠?
 
 1. `app/code/GuoLaiRen/PageBuilder/Model/Page.php`
-   - 添加 `fields_CTA_EVENT_NAME` 常量
-   - 在 `upgrade()` 方法中添加字段迁移逻辑
+   - 娣诲姞 `fields_CTA_EVENT_NAME` 甯搁噺
+   - 鍦?`upgrade()` 鏂规硶涓坊鍔犲瓧娈佃縼绉婚€昏緫
 
 2. `app/code/GuoLaiRen/PageBuilder/Controller/Backend/Page.php`
-   - `postCreate()` 方法：添加自动生成逻辑
-   - `postEdit()` 方法：添加自动生成逻辑
+   - `postCreate()` 鏂规硶锛氭坊鍔犺嚜鍔ㄧ敓鎴愰€昏緫
+   - `postEdit()` 鏂规硶锛氭坊鍔犺嚜鍔ㄧ敓鎴愰€昏緫
 
 3. `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/Page/form.phtml`
-   - 添加 CTA 事件名称输入框
-   - 添加自动生成显示逻辑
+   - 娣诲姞 CTA 浜嬩欢鍚嶇О杈撳叆妗?
+   - 娣诲姞鑷姩鐢熸垚鏄剧ず閫昏緫
 
 4. `app/code/GuoLaiRen/PageBuilder/view/templates/style/marketing-landing/content.phtml`
-   - 添加事件名称配置变量
-   - 添加 GA4 事件跟踪代码
-   - 添加 Facebook Pixel 事件跟踪代码
+   - 娣诲姞浜嬩欢鍚嶇О閰嶇疆鍙橀噺
+   - 娣诲姞 GA4 浜嬩欢璺熻釜浠ｇ爜
+   - 娣诲姞 Facebook Pixel 浜嬩欢璺熻釜浠ｇ爜
 
-### 新增的文件
+### 鏂板鐨勬枃浠?
 
-1. `app/code/GuoLaiRen/PageBuilder/doc/功能-CTA转化事件跟踪.md`
-   - 功能说明文档
+1. `app/code/GuoLaiRen/PageBuilder/doc/鍔熻兘-CTA杞寲浜嬩欢璺熻釜.md`
+   - 鍔熻兘璇存槑鏂囨。
 
-## Git 提交记录
+## Git 鎻愪氦璁板綍
 
 ```
 c17d6cbf - feat: Add CTA conversion event tracking for PageBuilder
@@ -139,49 +139,49 @@ c17d6cbf - feat: Add CTA conversion event tracking for PageBuilder
 4be65b16 - feat: Auto-generate CTA event name when empty
 ```
 
-## 测试结论
+## 娴嬭瘯缁撹
 
-✅ **所有测试通过！功能正常运行！**
+鉁?**鎵€鏈夋祴璇曢€氳繃锛佸姛鑳芥甯歌繍琛岋紒**
 
-### 已验证的功能点
+### 宸查獙璇佺殑鍔熻兘鐐?
 
-- [x] 数据库字段正确添加
-- [x] 后台表单正常显示
-- [x] 自动生成逻辑正确
-- [x] 保存功能正常
-- [x] 数据正确持久化
-- [x] 无 PHP 错误
-- [x] 无 SQL 错误
-- [x] 用户体验良好
+- [x] 鏁版嵁搴撳瓧娈垫纭坊鍔?
+- [x] 鍚庡彴琛ㄥ崟姝ｅ父鏄剧ず
+- [x] 鑷姩鐢熸垚閫昏緫姝ｇ‘
+- [x] 淇濆瓨鍔熻兘姝ｅ父
+- [x] 鏁版嵁姝ｇ‘鎸佷箙鍖?
+- [x] 鏃?PHP 閿欒
+- [x] 鏃?SQL 閿欒
+- [x] 鐢ㄦ埛浣撻獙鑹ソ
 
-### 使用说明
+### 浣跨敤璇存槑
 
-**场景 1：留空自动生成（推荐）**
-1. 编辑页面，不填写 CTA 事件名称
-2. 保存时自动生成为：`{页面句柄}_form_submit`
-3. 例如：页面句柄为 `money-calendar`，则生成 `money-calendar_form_submit`
+**鍦烘櫙 1锛氱暀绌鸿嚜鍔ㄧ敓鎴愶紙鎺ㄨ崘锛?*
+1. 缂栬緫椤甸潰锛屼笉濉啓 CTA 浜嬩欢鍚嶇О
+2. 淇濆瓨鏃惰嚜鍔ㄧ敓鎴愪负锛歚{椤甸潰鍙ユ焺}_form_submit`
+3. 渚嬪锛氶〉闈㈠彞鏌勪负 `money-calendar`锛屽垯鐢熸垚 `money-calendar_form_submit`
 
-**场景 2：自定义事件名**
-1. 在 CTA 事件名称输入框中输入自定义值
-2. 例如：`custom_event_signup`
-3. 保存后使用自定义值
+**鍦烘櫙 2锛氳嚜瀹氫箟浜嬩欢鍚?*
+1. 鍦?CTA 浜嬩欢鍚嶇О杈撳叆妗嗕腑杈撳叆鑷畾涔夊€?
+2. 渚嬪锛歚custom_event_signup`
+3. 淇濆瓨鍚庝娇鐢ㄨ嚜瀹氫箟鍊?
 
-### 后续建议
+### 鍚庣画寤鸿
 
-1. 建议在 `install()` 方法中也添加该字段（新安装时）
-2. 考虑添加事件名称格式验证（只允许字母、数字、下划线）
-3. 考虑在列表页显示事件名称
-4. 考虑添加批量设置事件名称功能
+1. 寤鸿鍦?`install()` 鏂规硶涓篃娣诲姞璇ュ瓧娈碉紙鏂板畨瑁呮椂锛?
+2. 鑰冭檻娣诲姞浜嬩欢鍚嶇О鏍煎紡楠岃瘉锛堝彧鍏佽瀛楁瘝銆佹暟瀛椼€佷笅鍒掔嚎锛?
+3. 鑰冭檻鍦ㄥ垪琛ㄩ〉鏄剧ず浜嬩欢鍚嶇О
+4. 鑰冭檻娣诲姞鎵归噺璁剧疆浜嬩欢鍚嶇О鍔熻兘
 
-## 附录：测试命令
+## 闄勫綍锛氭祴璇曞懡浠?
 
-### 验证字段是否存在
+### 楠岃瘉瀛楁鏄惁瀛樺湪
 ```bash
-php -r "require 'app/bootstrap.php'; use GuoLaiRen\PageBuilder\Model\Page; use Weline\Framework\Manager\ObjectManager; \$p = ObjectManager::getInstance(Page::class); \$pdo = \$p->getConnection()->getConnector()->getLink(); \$stmt = \$pdo->query('DESCRIBE guolairen_page_builder_page'); while(\$row = \$stmt->fetch(PDO::FETCH_ASSOC)) { if(\$row['Field'] == 'cta_event_name') { echo 'Found: ' . \$row['Field'] . PHP_EOL; } }"
+php -r "require 'app/bootstrap.php'; use GuoLaiRen\PageBuilder\Model\Page; use Weline\Framework\Manager\ObjectManager; $p = ObjectManager::getInstance(Page::class); $pdo = $p->getConnection()->getConnector()->getLink(); $stmt = $pdo->query('DESCRIBE guolairen_page_builder_page'); while($row = $stmt->fetch(PDO::FETCH_ASSOC)) { if($row['Field'] == 'cta_event_name') { echo 'Found: ' . $row['Field'] . PHP_EOL; } }"
 ```
 
-### 查看页面数据
+### 鏌ョ湅椤甸潰鏁版嵁
 ```bash
-php -r "require 'app/bootstrap.php'; use GuoLaiRen\PageBuilder\Model\Page; use Weline\Framework\Manager\ObjectManager; \$p = ObjectManager::getInstance(Page::class); \$p->load(1); echo 'Handle: ' . \$p->getData('handle') . PHP_EOL; echo 'Event Name: ' . \$p->getData('cta_event_name') . PHP_EOL;"
+php -r "require 'app/bootstrap.php'; use GuoLaiRen\PageBuilder\Model\Page; use Weline\Framework\Manager\ObjectManager; $p = ObjectManager::getInstance(Page::class); $p->load(1); echo 'Handle: ' . $p->getData('handle') . PHP_EOL; echo 'Event Name: ' . $p->getData('cta_event_name') . PHP_EOL;"
 ```
 
