@@ -6,20 +6,151 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 final class AiSitePlanJsonStateService
 {
-    private const STATUS_PENDING = 'pending';
-    private const STATUS_RUNNING = 'running';
-    private const STATUS_DONE = 'done';
-    private const STATUS_FAILED = 'failed';
-    private const STATUS_SKIPPED = 'skipped';
+    private const STATUS_PENDING = 0;
+    private const STATUS_RUNNING = 2;
+    private const STATUS_DONE = 1;
+    private const STATUS_FAILED = -1;
     private const MAX_CHANGED_PATHS = 128;
+    private readonly int $sessionId;
+
+    public function __construct(int|string|null $sessionId = null)
+    {
+        $this->sessionId = \max(0, (int)($sessionId ?? 0));
+    }
+
+    public function sessionId(): int
+    {
+        return $this->sessionId;
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return array{plan_json:array<string, mixed>, plan_json_editor:array<string, mixed>}
+     */
+    public function scopePatch(array $planJson): array
+    {
+        return [
+            'plan_json' => $this->normalizePlanJson($planJson),
+            'plan_json_editor' => [
+                'session_id' => $this->sessionId,
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return array{plan_json:array<string, mixed>, plan_json_editor:array<string, mixed>}
+     */
+    public function setConfirmedScopePatch(array $planJson, bool $confirmed, ?string $confirmedAt = null): array
+    {
+        return $this->scopePatch($this->setConfirmed($planJson, $confirmed, $confirmedAt));
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $blockPatch
+     * @return array{plan_json:array<string, mixed>, plan_json_editor:array<string, mixed>}
+     */
+    public function applyBlockScopePatch(array $planJson, string $pageType, string $blockKey, array $blockPatch): array
+    {
+        return $this->scopePatch($this->applyBlockPatch($planJson, $pageType, $blockKey, $blockPatch));
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return array{plan_json:array<string, mixed>, plan_json_editor:array<string, mixed>}
+     */
+    public function normalizeExecutionStateScopePatch(array $planJson, ?string $now = null): array
+    {
+        return $this->scopePatch($this->normalizeExecutionState($planJson, $now));
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return array{plan_json:array<string, mixed>, plan_json_editor:array<string, mixed>}
+     */
+    public function resetBlockExecutionStateScopePatch(array $planJson, ?string $now = null): array
+    {
+        return $this->scopePatch($this->resetBlockExecutionState($planJson, $now));
+    }
 
     /** @var array<string, true> */
-    private const VALID_STATUSES = [
-        self::STATUS_PENDING => true,
-        self::STATUS_RUNNING => true,
-        self::STATUS_DONE => true,
-        self::STATUS_FAILED => true,
-        self::STATUS_SKIPPED => true,
+    private const STATUS_BUCKETS = [
+        'pending' => true,
+        'running' => true,
+        'done' => true,
+        'failed' => true,
+    ];
+
+    /** @var array<int, string> */
+    private const STATUS_BUCKET_BY_VALUE = [
+        self::STATUS_PENDING => 'pending',
+        self::STATUS_RUNNING => 'running',
+        self::STATUS_DONE => 'done',
+        self::STATUS_FAILED => 'failed',
+    ];
+
+    /** @var array<string, true> */
+    private const FORBIDDEN_ROOT_KEYS = [
+        'plan_confirmed' => true,
+        'plan_confirmed_at' => true,
+        'plan_projection' => true,
+    ];
+
+    /** @var array<string, true> */
+    private const FORBIDDEN_PAGE_KEYS = [
+        'block_nodes' => true,
+        'block_node_previews' => true,
+    ];
+
+    /** @var array<string, true> */
+    private const PAGE_META_KEYS = [
+        'page_key' => true,
+        'page_type' => true,
+        'type' => true,
+        'status' => true,
+        'message' => true,
+        'error' => true,
+        'error_message' => true,
+        'updated_at' => true,
+        'started_at' => true,
+        'finished_at' => true,
+        'attempt_no' => true,
+        'result_ref' => true,
+        'title' => true,
+        'label' => true,
+        'page_label' => true,
+        'page_title' => true,
+        'page_goal' => true,
+        'page_status' => true,
+        'content_locale' => true,
+        'shared_context_hash' => true,
+        'theme_context_hash' => true,
+        'assembly_version' => true,
+        'generation_method' => true,
+        'page_design_plan' => true,
+        'theme_alignment_summary' => true,
+        'page_context_hash' => true,
+        'block_nodes' => true,
+        'block_node_previews' => true,
+        'ordered_block_keys' => true,
+        'seo' => true,
+        'meta_title' => true,
+        'meta_description' => true,
+        'meta_keywords' => true,
+        'route' => true,
+        'slug' => true,
+        'path' => true,
+        'layout' => true,
+        'sections' => true,
+        'section_refinements' => true,
+        'content' => true,
+        'description' => true,
+        'summary' => true,
+        'html' => true,
+        'html_content' => true,
+        'fields' => true,
     ];
 
     /**
@@ -30,6 +161,19 @@ final class AiSitePlanJsonStateService
     {
         if ($planJson === []) {
             return [];
+        }
+
+        foreach (self::FORBIDDEN_ROOT_KEYS as $key => $_) {
+            unset($planJson[$key]);
+        }
+        $planJson['confirmed'] = $this->truthy($planJson['confirmed'] ?? 0) ? 1 : 0;
+        if (isset($planJson['confirmed_at'])) {
+            $confirmedAt = \trim((string)$planJson['confirmed_at']);
+            if ($confirmedAt !== '') {
+                $planJson['confirmed_at'] = $confirmedAt;
+            } else {
+                unset($planJson['confirmed_at']);
+            }
         }
 
         if (\is_array($planJson['design'] ?? null)) {
@@ -44,14 +188,13 @@ final class AiSitePlanJsonStateService
                     continue;
                 }
                 $normalizedPageKey = $this->resolvePageKey($pageKey, $page);
-                if (\is_array($page['blocks'] ?? null)) {
-                    $blocks = [];
-                    foreach ($page['blocks'] as $blockKey => $block) {
-                        $blocks[$blockKey] = \is_array($block)
-                            ? $this->normalizeNode($block, $this->inferNodeStatus($block))
-                            : $block;
+                foreach (self::FORBIDDEN_PAGE_KEYS as $forbiddenPageKey => $_) {
+                    unset($page[$forbiddenPageKey]);
+                }
+                foreach ($page as $blockKey => $block) {
+                    if ($this->isDynamicBlockNode($blockKey, $block)) {
+                        $page[$blockKey] = $this->normalizeNode($block, $this->inferNodeStatus($block));
                     }
-                    $page['blocks'] = $blocks;
                 }
                 $pages[$normalizedPageKey] = $this->normalizeNode($page, $this->inferPageStatus($page));
             }
@@ -65,35 +208,169 @@ final class AiSitePlanJsonStateService
      * @param array<string, mixed> $planJson
      * @return array<string, mixed>
      */
+    public function setConfirmed(array $planJson, bool $confirmed, ?string $confirmedAt = null): array
+    {
+        $planJson['confirmed'] = $confirmed ? 1 : 0;
+        if ($confirmed) {
+            $planJson['confirmed_at'] = \trim((string)($confirmedAt ?? '')) !== ''
+                ? \trim((string)$confirmedAt)
+                : \date('Y-m-d H:i:s');
+        } else {
+            unset($planJson['confirmed_at']);
+        }
+
+        return $this->normalizePlanJson($planJson);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     */
+    public function isConfirmed(array $planJson): bool
+    {
+        return $this->truthy($planJson['confirmed'] ?? 0);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return array<string, mixed>
+     */
+    public function normalizeExecutionState(array $planJson, ?string $now = null): array
+    {
+        $now = \trim((string)($now ?? '')) !== '' ? \trim((string)$now) : \date('Y-m-d H:i:s');
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        foreach ($pages as $pageType => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            foreach ($page as $blockKey => $block) {
+                if (!$this->isDynamicBlockNode($blockKey, $block)) {
+                    continue;
+                }
+                $block['status'] = $this->normalizeStatus($block['status'] ?? self::STATUS_PENDING);
+                $block['attempt_no'] = (int)($block['attempt_no'] ?? 0);
+                if (!\array_key_exists('updated_at', $block)) {
+                    $block['updated_at'] = $now;
+                }
+                $page[$blockKey] = $this->normalizeNode($block, $this->inferNodeStatus($block));
+            }
+            $page['status'] = $this->inferPageStatus($page);
+            $page['updated_at'] = (string)($page['updated_at'] ?? $now);
+            $pages[$pageType] = $page;
+        }
+        $planJson['pages'] = $pages;
+
+        return $this->normalizePlanJson($planJson);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return array<string, mixed>
+     */
+    public function resetBlockExecutionState(array $planJson, ?string $now = null): array
+    {
+        $now = \trim((string)($now ?? '')) !== '' ? \trim((string)$now) : \date('Y-m-d H:i:s');
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        foreach ($pages as $pageType => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            foreach ($page as $blockKey => $block) {
+                if (!$this->isDynamicBlockNode($blockKey, $block)) {
+                    continue;
+                }
+                $page[$blockKey] = $this->normalizeNode(\array_replace($block, [
+                    'status' => self::STATUS_PENDING,
+                    'attempt_no' => 0,
+                    'message' => '',
+                    'result_ref' => [],
+                    'updated_at' => $now,
+                    'started_at' => '',
+                    'finished_at' => '',
+                    'error' => '',
+                    'error_message' => '',
+                ]), self::STATUS_PENDING);
+                unset($page[$blockKey]['error'], $page[$blockKey]['error_message']);
+            }
+            $page['status'] = $this->inferPageStatus($page);
+            $page['updated_at'] = $now;
+            $pages[$pageType] = $page;
+        }
+        $planJson['pages'] = $pages;
+
+        return $this->normalizePlanJson($planJson);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $blockPatch
+     * @return array<string, mixed>
+     */
+    public function applyBlockPatch(array $planJson, string $pageType, string $blockKey, array $blockPatch): array
+    {
+        $pageType = \trim($pageType);
+        $blockKey = \trim($blockKey);
+        if ($pageType === '' || $blockKey === '') {
+            return $this->normalizePlanJson($planJson);
+        }
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $pageStorageKey = $this->resolvePageStorageKey($pages, $pageType);
+        if ($pageStorageKey === null || !\is_array($pages[$pageStorageKey] ?? null)) {
+            return $this->normalizePlanJson($planJson);
+        }
+
+        $page = $pages[$pageStorageKey];
+        $block = \is_array($page[$blockKey] ?? null) ? $page[$blockKey] : [];
+        $mergedBlock = \array_replace($block, $blockPatch);
+        foreach (['error', 'error_message'] as $errorKey) {
+            if (\array_key_exists($errorKey, $blockPatch) && \trim((string)$blockPatch[$errorKey]) === '') {
+                unset($mergedBlock[$errorKey]);
+            }
+        }
+        $page[$blockKey] = $this->normalizeNode($mergedBlock, self::STATUS_PENDING);
+        $page['status'] = $this->inferPageStatus($page);
+        $page['updated_at'] = \date('Y-m-d H:i:s');
+        $pages[$pageStorageKey] = $page;
+        $planJson['pages'] = $pages;
+
+        return $this->normalizePlanJson($planJson);
+    }
+
+    public function normalizeBlockStatus(mixed $status): int
+    {
+        return $this->normalizeStatus($status);
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return array<string, mixed>
+     */
     public function buildStatusSummary(array $planJson): array
     {
         $summary = [
             'design' => $this->emptyCounter(),
             'pages' => $this->emptyCounter(),
-            'blocks' => $this->emptyCounter(),
+            'block_nodes' => $this->emptyCounter(),
             'total' => $this->emptyCounter(),
             'updated_at' => $this->latestUpdatedAt($planJson),
         ];
 
         $design = \is_array($planJson['design'] ?? null) ? $planJson['design'] : [];
         if ($design !== []) {
-            $this->countStatus($summary['design'], $this->normalizeStatus((string)($design['status'] ?? $this->inferNodeStatus($design))));
+            $this->countStatus($summary['design'], $this->normalizeStatus($design['status'] ?? $this->inferNodeStatus($design)));
         }
 
         foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $page) {
             if (!\is_array($page)) {
                 continue;
             }
-            $this->countStatus($summary['pages'], $this->normalizeStatus((string)($page['status'] ?? $this->inferPageStatus($page))));
-            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
-                if (\is_array($block)) {
-                    $this->countStatus($summary['blocks'], $this->normalizeStatus((string)($block['status'] ?? $this->inferNodeStatus($block))));
-                }
+            $this->countStatus($summary['pages'], $this->normalizeStatus($page['status'] ?? $this->inferPageStatus($page)));
+            foreach ($this->extractDynamicBlockNodes($page) as $block) {
+                $this->countStatus($summary['block_nodes'], $this->normalizeStatus($block['status'] ?? $this->inferNodeStatus($block)));
             }
         }
 
-        foreach (['design', 'pages', 'blocks'] as $bucket) {
-            foreach (self::VALID_STATUSES as $status => $_) {
+        foreach (['design', 'pages', 'block_nodes'] as $bucket) {
+            foreach (self::STATUS_BUCKETS as $status => $_) {
                 $summary['total'][$status] += (int)$summary[$bucket][$status];
             }
             $summary['total']['count'] += (int)$summary[$bucket]['count'];
@@ -141,7 +418,7 @@ final class AiSitePlanJsonStateService
      * @param array<string, mixed> $nextPlanJson
      * @return array{plan_json:array<string,mixed>,plan_status_summary:array<string,mixed>,changed_paths:list<string>,updated_at:string}
      */
-    public function buildPlanStatePayload(array $previousPlanJson, array $nextPlanJson): array
+    public function PlanJsonStatePayload(array $previousPlanJson, array $nextPlanJson): array
     {
         $normalized = $this->normalizePlanJson($nextPlanJson);
         $summary = $this->buildStatusSummary($normalized);
@@ -161,25 +438,25 @@ final class AiSitePlanJsonStateService
     /**
      * @param array<string, int> $counter
      */
-    private function countStatus(array &$counter, string $status): void
+    private function countStatus(array &$counter, int $status): void
     {
         $status = $this->normalizeStatus($status);
-        $counter[$status]++;
+        $bucket = self::STATUS_BUCKET_BY_VALUE[$status] ?? 'pending';
+        $counter[$bucket]++;
         $counter['count']++;
     }
 
     /**
-     * @return array{count:int,pending:int,running:int,done:int,failed:int,skipped:int}
+     * @return array{count:int,pending:int,running:int,done:int,failed:int}
      */
     private function emptyCounter(): array
     {
         return [
             'count' => 0,
-            self::STATUS_PENDING => 0,
-            self::STATUS_RUNNING => 0,
-            self::STATUS_DONE => 0,
-            self::STATUS_FAILED => 0,
-            self::STATUS_SKIPPED => 0,
+            'pending' => 0,
+            'running' => 0,
+            'done' => 0,
+            'failed' => 0,
         ];
     }
 
@@ -187,9 +464,9 @@ final class AiSitePlanJsonStateService
      * @param array<string, mixed> $node
      * @return array<string, mixed>
      */
-    private function normalizeNode(array $node, string $defaultStatus): array
+    private function normalizeNode(array $node, int $defaultStatus): array
     {
-        $node['status'] = $this->normalizeStatus((string)($node['status'] ?? $defaultStatus));
+        $node['status'] = $this->normalizeStatus($node['status'] ?? $defaultStatus);
         if (isset($node['updated_at'])) {
             $updatedAt = \trim((string)$node['updated_at']);
             if ($updatedAt !== '') {
@@ -225,9 +502,30 @@ final class AiSitePlanJsonStateService
     }
 
     /**
+     * @param array<string|int, mixed> $pages
+     */
+    private function resolvePageStorageKey(array $pages, string $pageType): int|string|null
+    {
+        if (\array_key_exists($pageType, $pages)) {
+            return $pageType;
+        }
+        foreach ($pages as $key => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $candidate = \trim((string)($page['page_type'] ?? $page['type'] ?? ''));
+            if ($candidate === $pageType) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param array<string, mixed> $node
      */
-    private function inferNodeStatus(array $node): string
+    private function inferNodeStatus(array $node): int
     {
         if (\trim((string)($node['error_message'] ?? $node['error'] ?? '')) !== '') {
             return self::STATUS_FAILED;
@@ -244,9 +542,9 @@ final class AiSitePlanJsonStateService
     /**
      * @param array<string, mixed> $page
      */
-    private function inferPageStatus(array $page): string
+    private function inferPageStatus(array $page): int
     {
-        $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+        $blocks = $this->extractDynamicBlockNodes($page);
         if ($blocks === []) {
             return $this->inferNodeStatus($page);
         }
@@ -256,10 +554,7 @@ final class AiSitePlanJsonStateService
         $hasFailed = false;
         $hasDone = false;
         foreach ($blocks as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $status = $this->normalizeStatus((string)($block['status'] ?? $this->inferNodeStatus($block)));
+            $status = $this->normalizeStatus($block['status'] ?? $this->inferNodeStatus($block));
             $hasRunning = $hasRunning || $status === self::STATUS_RUNNING;
             $hasPending = $hasPending || $status === self::STATUS_PENDING;
             $hasFailed = $hasFailed || $status === self::STATUS_FAILED;
@@ -278,18 +573,35 @@ final class AiSitePlanJsonStateService
         return $hasDone ? self::STATUS_DONE : $this->inferNodeStatus($page);
     }
 
-    private function normalizeStatus(string $status): string
+    private function normalizeStatus(mixed $status): int
     {
-        $status = \strtolower(\trim($status));
-        $status = match ($status) {
-            'complete', 'completed', 'success', 'succeeded', 'ready', 'finished', 'passed', 'persisted' => self::STATUS_DONE,
-            'processing', 'generating', 'started', 'in_progress', 'queued', 'retrying' => self::STATUS_RUNNING,
-            'error', 'fail', 'failure', 'retryable_failure', 'cancelled', 'canceled' => self::STATUS_FAILED,
-            'skip', 'ignored' => self::STATUS_SKIPPED,
-            default => $status,
-        };
+        if (\is_int($status)) {
+            return isset(self::STATUS_BUCKET_BY_VALUE[$status]) ? $status : self::STATUS_PENDING;
+        }
+        if (\is_float($status)) {
+            $intStatus = (int)$status;
+            return isset(self::STATUS_BUCKET_BY_VALUE[$intStatus]) ? $intStatus : self::STATUS_PENDING;
+        }
+        $status = \strtolower(\trim((string)$status));
+        if ($status === '1') {
+            return self::STATUS_DONE;
+        }
+        if ($status === '2') {
+            return self::STATUS_RUNNING;
+        }
+        if ($status === '-1') {
+            return self::STATUS_FAILED;
+        }
+        if ($status === '0' || $status === '') {
+            return self::STATUS_PENDING;
+        }
 
-        return isset(self::VALID_STATUSES[$status]) ? $status : self::STATUS_PENDING;
+        return match ($status) {
+            'done', 'complete', 'completed', 'success', 'succeeded', 'ready', 'finished', 'passed', 'persisted', 'skipped', 'skip', 'ignored' => self::STATUS_DONE,
+            'running', 'processing', 'generating', 'started', 'in_progress', 'queued', 'retrying' => self::STATUS_RUNNING,
+            'failed', 'error', 'fail', 'failure', 'retryable_failure', 'cancelled', 'canceled' => self::STATUS_FAILED,
+            default => self::STATUS_PENDING,
+        };
     }
 
     private function hasMeaningfulValue(mixed $value): bool
@@ -302,6 +614,18 @@ final class AiSitePlanJsonStateService
         }
 
         return $value !== null && $value !== false;
+    }
+
+    private function truthy(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value === 1;
+        }
+
+        return \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'confirmed'], true);
     }
 
     /**
@@ -334,12 +658,39 @@ final class AiSitePlanJsonStateService
                 continue;
             }
             $visitor($page);
-            foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
-                if (\is_array($block)) {
-                    $visitor($block);
-                }
+            foreach ($this->extractDynamicBlockNodes($page) as $block) {
+                $visitor($block);
             }
         }
+    }
+
+    private function isDynamicBlockNode(int|string $key, mixed $value): bool
+    {
+        if (!\is_array($value) || !\is_string($key)) {
+            return false;
+        }
+        $key = \trim($key);
+        if ($key === '' || isset(self::PAGE_META_KEYS[$key])) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @return list<array<string, mixed>>
+     */
+    private function extractDynamicBlockNodes(array $page): array
+    {
+        $blocks = [];
+        foreach ($page as $key => $value) {
+            if ($this->isDynamicBlockNode($key, $value)) {
+                $blocks[] = $value;
+            }
+        }
+
+        return $blocks;
     }
 
     /**

@@ -15,9 +15,10 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
         self::assertStringContainsString("private const CONTENT_ATTEMPT_KEY = 'attempt';", $source);
         self::assertStringContainsString("private const CONTENT_MAX_ATTEMPTS_KEY = 'max_attempts';", $source);
         self::assertStringContainsString("private const CONTENT_LAST_GATE_REASON_KEY = 'last_gate_reason';", $source);
+        self::assertStringContainsString('private const DEFAULT_MAX_ATTEMPTS = 3;', $source);
         self::assertStringNotContainsString('completion_gate_snapshot', $source);
         self::assertStringContainsString("private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';", $source);
-        self::assertStringContainsString('finalizeBuildTaskStatesAfterRunLoop($scope)', $source);
+        self::assertStringContainsString('finalizePlanJsonTaskStatesAfterRunLoop($scope)', $source);
         self::assertStringContainsString('inspectBuildCompletionGate($scope)', $source);
         self::assertStringContainsString('createCompletionGateRetryQueue($queue, $content, $message)', $source);
         self::assertStringContainsString('queuedPayloadDisablesInlineImageGeneration($content, $scopePatch)', $source);
@@ -32,9 +33,9 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
         self::assertStringContainsString('[AI Site Build Queue Diagnostic]', $source);
         self::assertStringContainsString('$throwable = new \RuntimeException($surfaceMessage, 0, $throwable);', $source);
         self::assertStringContainsString('ERROR_DIAGNOSTIC', $source);
-        self::assertStringContainsString("'missing_build_plan_blocks'", $source);
-        self::assertStringContainsString("'failed_build_plan_blocks'", $source);
-        self::assertStringContainsString("reason === 'cancelled_build_plan_blocks'", $source);
+        self::assertStringContainsString("'missing_plan_json_block_nodes'", $source);
+        self::assertStringContainsString("'failed_plan_json_block_nodes'", $source);
+        self::assertStringContainsString("reason === 'cancelled_plan_json_block_nodes'", $source);
         self::assertStringNotContainsString('Build queue returned without any build task summary.', $source);
 
         $passedGateSource = $this->extractMethodSource($source, 'markQueueBuildOperationPassedGate');
@@ -43,6 +44,26 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
         self::assertStringContainsString('syncPageTypeLayoutsWithSharedComponents($scope)', $passedGateSource);
         self::assertStringContainsString("\$buildSummary['completion_gate'] = \$this->stripGateSummary(\$gate);", $passedGateSource);
         self::assertStringContainsString("\$buildSummary['page_block_progress']", $source);
+
+        $executeSource = $this->extractMethodSource($source, 'execute');
+        self::assertStringContainsString('if ($attempt > $maxAttempts) {', $executeSource);
+        self::assertStringContainsString('patchBuildActiveOperationForAttemptLimit(', $executeSource);
+        self::assertStringContainsString('$this->markQueueStopped($queue, $content, $message);', $executeSource);
+
+        $beginAttemptSource = $this->extractMethodSource($source, 'beginQueueAttempt');
+        self::assertStringContainsString('$maxAttempts = self::DEFAULT_MAX_ATTEMPTS;', $beginAttemptSource);
+        self::assertStringNotContainsString('$content[self::CONTENT_MAX_ATTEMPTS_KEY] ??', $beginAttemptSource);
+
+        $attemptLimitSource = $this->extractMethodSource($source, 'patchBuildActiveOperationForAttemptLimit');
+        self::assertStringContainsString("'status' => 'stop'", $attemptLimitSource);
+        self::assertStringContainsString("'retry_allowed' => 1", $attemptLimitSource);
+        self::assertStringContainsString("'failure_mode' => 'build_retry_exhausted'", $attemptLimitSource);
+        self::assertStringContainsString("\$failurePayload['gate_reason'] = 'automatic_attempt_limit';", $attemptLimitSource);
+
+        $markStoppedSource = $this->extractMethodSource($source, 'markQueueStopped');
+        self::assertStringContainsString("'manual_confirmation_required'", $markStoppedSource);
+        self::assertStringContainsString("'automatic_attempt_limit'", $markStoppedSource);
+        self::assertStringContainsString('Queue::status_stop', $markStoppedSource);
 
         $markDoneSource = $this->extractMethodSource($source, 'markQueueDone');
         self::assertStringContainsString("'result' => \$line", $markDoneSource);

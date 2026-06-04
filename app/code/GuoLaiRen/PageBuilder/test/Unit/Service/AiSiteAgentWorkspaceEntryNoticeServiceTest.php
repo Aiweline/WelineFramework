@@ -110,7 +110,7 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
         self::assertSame(3, $result['queue_id']);
     }
 
-    public function testFallbackSkipsTerminalBuildAndIgnoresLegacyTaskPlan(): void
+    public function testFallbackSkipsTerminalBuildAndIgnoresRemovedTaskPlan(): void
     {
         $result = $this->service()->buildWorkspaceEntryQueueNotice(
             [],
@@ -125,7 +125,7 @@ final class AiSiteAgentWorkspaceEntryNoticeServiceTest extends TestCase
         self::assertSame(77, $result['queue_id']);
     }
 
-    public function testLegacyTaskPlanOperationDoesNotRenderNotice(): void
+    public function testRemovedTaskPlanOperationDoesNotRenderNotice(): void
     {
         self::assertSame(
             ['show' => false],

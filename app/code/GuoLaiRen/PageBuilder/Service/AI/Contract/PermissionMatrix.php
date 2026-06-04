@@ -14,27 +14,27 @@ final class PermissionMatrix
         return match ($stage) {
             ContractType::STAGE_STAGE1 => [
                 'stage' => ContractType::STAGE_STAGE1,
-                'can_create' => ['site_brief', 'design_manifest', 'page_contract', 'block_plan'],
-                'can_patch' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'block_plan.*'],
+                'can_create' => ['site_brief', 'design_manifest', 'page_contract', 'plan_json.pages'],
+                'can_patch' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'plan_json.pages.*'],
                 'read_only' => [],
             ],
-            ContractType::STAGE_BUILD_PLAN => [
-                'stage' => ContractType::STAGE_BUILD_PLAN,
+            ContractType::STAGE_PLAN_JSON => [
+                'stage' => ContractType::STAGE_PLAN_JSON,
                 'can_create' => ['block_visual_contract', 'block_task_contract'],
                 'can_patch' => ['block_visual_contract.*', 'block_task_contract.*'],
-                'read_only' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'block_plan.*'],
+                'read_only' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'plan_json.pages.*'],
             ],
             ContractType::STAGE_BUILD => [
                 'stage' => ContractType::STAGE_BUILD,
                 'can_create' => ['render_data', 'theme_manifest'],
                 'can_patch' => ['render_data.*', 'theme_manifest.*'],
-                'read_only' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'block_plan.*', 'block_visual_contract.*', 'block_task_contract.*'],
+                'read_only' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'plan_json.pages.*', 'block_visual_contract.*', 'block_task_contract.*'],
             ],
             ContractType::STAGE_QA => [
                 'stage' => ContractType::STAGE_QA,
                 'can_create' => ['qa_report'],
                 'can_patch' => ['qa_gates.*'],
-                'read_only' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'block_plan.*', 'block_visual_contract.*', 'block_task_contract.*', 'render_data.*', 'theme_manifest.*'],
+                'read_only' => ['site_brief.*', 'design_manifest.*', 'page_contract.*', 'plan_json.pages.*', 'block_visual_contract.*', 'block_task_contract.*', 'render_data.*', 'theme_manifest.*'],
             ],
             ContractType::STAGE_REPAIR => [
                 'stage' => ContractType::STAGE_REPAIR,
@@ -57,12 +57,12 @@ final class PermissionMatrix
     public function defaultFrozenFields(string $stage): array
     {
         return match ($stage) {
-            ContractType::STAGE_BUILD_PLAN => [
+            ContractType::STAGE_PLAN_JSON => [
                 'site_brief.site_title',
                 'design_manifest.theme_design',
                 'design_manifest.palette',
                 'page_contract.pages',
-                'block_plan.pages.*.blocks',
+                'plan_json.pages.*',
             ],
             ContractType::STAGE_BUILD,
             ContractType::STAGE_QA,
@@ -70,7 +70,7 @@ final class PermissionMatrix
                 'site_brief.*',
                 'design_manifest.*',
                 'page_contract.*',
-                'block_plan.*',
+                'plan_json.pages.*',
                 'block_visual_contract.*',
                 'block_task_contract.*',
             ],

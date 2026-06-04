@@ -19,7 +19,7 @@ class AiSiteAgentSessionArtifactService
 
     private const ARTIFACT_FILE_BASE_DIR = 'data/pagebuilder/session-artifacts';
 
-    // build 流程中同一会话的 plan_workbench / build_plan_v2 等 artifact 单文件可能达到 6-8MB JSON，
+    // build 流程中同一会话的大 artifact 单文件可能达到 6-8MB JSON，
     // 同进程内 hydrateScope 会被反复触发（loadScopeForStage 调用 50+ 次）。每次都做 file_get_contents +
     // json_decode 会让 worker 在 512MB memory_limit 下 OOM。这里按 payload_hash 做 LRU 缓存，
     // 命中时直接复用已解码的 array（PHP COW 不会立即翻倍内存），未命中再走 disk + decode。
@@ -44,34 +44,9 @@ class AiSiteAgentSessionArtifactService
             'path' => ['plan_json'],
             'empty' => [],
         ],
-        'plan_markdown' => [
-            'stage' => AiSiteAgentSession::STAGE_PLAN,
-            'path' => ['plan_markdown'],
-            'empty' => '',
-        ],
-        'build_plan_v2' => [
-            'stage' => AiSiteAgentSession::STAGE_PLAN,
-            'path' => ['build_plan_v2'],
-            'empty' => [],
-        ],
-        'plan_projection' => [
-            'stage' => AiSiteAgentSession::STAGE_PLAN,
-            'path' => ['plan_projection'],
-            'empty' => [],
-        ],
         'content_manifest' => [
             'stage' => AiSiteAgentSession::STAGE_PLAN,
             'path' => ['content_manifest'],
-            'empty' => [],
-        ],
-        'plan_workbench' => [
-            'stage' => AiSiteAgentSession::STAGE_PLAN,
-            'path' => ['plan_workbench'],
-            'empty' => [],
-        ],
-        'build_workbench' => [
-            'stage' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'path' => ['build_workbench'],
             'empty' => [],
         ],
         'build_contracts' => [
@@ -112,20 +87,11 @@ class AiSiteAgentSessionArtifactService
     private const ARTIFACT_KEYS_BY_STAGE = [
         AiSiteAgentSession::STAGE_PLAN => [
             'plan_json',
-            'plan_markdown',
-            'build_plan_v2',
-            'plan_projection',
             'content_manifest',
-            'plan_workbench',
         ],
         AiSiteAgentSession::STAGE_VISUAL_EDIT => [
             'plan_json',
-            'plan_markdown',
-            'build_plan_v2',
-            'plan_projection',
             'content_manifest',
-            'plan_workbench',
-            'build_workbench',
             'build_contracts',
             'render_data_contract',
             'task_results',
@@ -135,12 +101,7 @@ class AiSiteAgentSessionArtifactService
         ],
         AiSiteAgentSession::STAGE_PUBLISH => [
             'plan_json',
-            'plan_markdown',
-            'build_plan_v2',
-            'plan_projection',
             'content_manifest',
-            'plan_workbench',
-            'build_workbench',
             'build_contracts',
             'render_data_contract',
             'task_results',
@@ -190,16 +151,6 @@ class AiSiteAgentSessionArtifactService
                     $artifactKey === 'plan_json'
                     && \is_array($value)
                     && !$this->hasCompleteStageOnePlanPayload($value)
-                    && $existingRef !== []
-                ) {
-                    $refs[$stageCode][$artifactKey] = $existingRef;
-                    $scope = $this->setPathValue($scope, $definition['path'], $definition['empty']);
-                    continue;
-                }
-                if (
-                    $artifactKey === 'build_plan_v2'
-                    && \is_array($value)
-                    && !$this->hasCompleteBuildPlanArtifactPayload($value)
                     && $existingRef !== []
                 ) {
                     $refs[$stageCode][$artifactKey] = $existingRef;
@@ -306,12 +257,7 @@ class AiSiteAgentSessionArtifactService
     private function hasCompleteStageOnePlanPayload(array $value): bool
     {
         $pages = \is_array($value['pages'] ?? null) ? $value['pages'] : [];
-        if ($pages !== []) {
-            return true;
-        }
-
-        $pagePlans = \is_array($value['page_plans'] ?? null) ? $value['page_plans'] : [];
-        return $pagePlans !== [];
+        return $pages !== [];
     }
 
     /**
@@ -545,11 +491,7 @@ class AiSiteAgentSessionArtifactService
         $keys = [];
         foreach ([
             'plan_json',
-            'plan_markdown',
-            'build_plan_v2',
-            'plan_projection',
             'content_manifest',
-            'build_workbench',
             'build_contracts',
             'render_data_contract',
             'task_results',
@@ -572,11 +514,6 @@ class AiSiteAgentSessionArtifactService
     {
         $expanded = $artifactKeys;
         foreach ($artifactKeys as $artifactKey) {
-            if (\in_array($artifactKey, ['build_plan_v2', 'plan_projection', 'content_manifest'], true)) {
-                $expanded[] = 'build_plan_v2';
-                $expanded[] = 'plan_projection';
-                $expanded[] = 'content_manifest';
-            }
             if (\in_array($artifactKey, ['task_results', 'qa_report', 'repair_patch'], true)) {
                 $expanded[] = 'task_results';
                 $expanded[] = 'qa_report';
@@ -624,38 +561,8 @@ class AiSiteAgentSessionArtifactService
         $temporaryPath = $path . '.tmp.' . \getmypid() . '.' . \bin2hex(\random_bytes(4));
         \file_put_contents($temporaryPath, $payloadJson, \LOCK_EX);
         \rename($temporaryPath, $path);
-        $this->deleteLegacyExternalPayloadDocuments($directory, $artifactKey, $filename);
 
         return self::ARTIFACT_FILE_BASE_DIR . '/' . $sessionId . '/' . $stageCode . '/' . $filename;
-    }
-
-    private function deleteLegacyExternalPayloadDocuments(string $directory, string $artifactKey, string $currentFilename): void
-    {
-        if (!\is_dir($directory)) {
-            return;
-        }
-
-        $prefix = $artifactKey . '-';
-        $handle = @\opendir($directory);
-        if ($handle === false) {
-            return;
-        }
-        while (($entry = \readdir($handle)) !== false) {
-            if (
-                $entry === '.'
-                || $entry === '..'
-                || $entry === $currentFilename
-                || !\str_starts_with($entry, $prefix)
-                || !\str_ends_with($entry, '.json')
-            ) {
-                continue;
-            }
-            $path = $directory . \DIRECTORY_SEPARATOR . $entry;
-            if (\is_file($path)) {
-                @\unlink($path);
-            }
-        }
-        \closedir($handle);
     }
 
     private function deleteSessionExternalPayloadDirectory(int $sessionId): void
@@ -861,22 +768,8 @@ SQL);
         if ($artifactKey === 'plan_json' && \is_array($inlineValue)) {
             return !$this->hasCompleteStageOnePlanPayload($inlineValue);
         }
-        if ($artifactKey === 'build_plan_v2' && \is_array($inlineValue)) {
-            return !$this->hasCompleteBuildPlanArtifactPayload($inlineValue);
-        }
 
         return false;
-    }
-
-    /**
-     * @param array<string, mixed> $contract
-     */
-    private function hasCompleteBuildPlanArtifactPayload(array $contract): bool
-    {
-        $blocks = \is_array($contract['blocks'] ?? null) ? $contract['blocks'] : [];
-        $pages = \is_array($contract['pages'] ?? null) ? $contract['pages'] : [];
-
-        return $blocks !== [] && $pages !== [];
     }
 
     private function encodeValueDocument(mixed $value): string

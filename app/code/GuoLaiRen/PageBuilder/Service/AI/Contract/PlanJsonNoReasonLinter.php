@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
 
-final class BuildPlanNoReasonLinter
+final class PlanJsonNoReasonLinter
 {
     public function __construct(
-        private readonly ?BuildPlanContractSchema $schema = null
+        private readonly ?PlanJsonContractSchema $schema = null
     ) {
     }
 
@@ -65,8 +65,8 @@ final class BuildPlanNoReasonLinter
         return false;
     }
 
-    private function schema(): BuildPlanContractSchema
+    private function schema(): PlanJsonContractSchema
     {
-        return $this->schema ?? new BuildPlanContractSchema();
+        return $this->schema ?? new PlanJsonContractSchema();
     }
 }

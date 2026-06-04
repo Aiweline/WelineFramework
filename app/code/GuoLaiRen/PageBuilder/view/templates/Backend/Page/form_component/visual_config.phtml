@@ -3010,7 +3010,7 @@ function renderTemplateConfig(configGroups) {
                     section.classList.add('collapsed');
                     saveSectionState(sectionId, false);
                 } else if (!hasAnySavedState && !firstSectionFound && index === 0) {
-                    // 旧模板：首次加载且是第一个组，默认展开
+                    // 既有模板：首次加载且是第一个组，默认展开
                     firstSectionFound = true;
                     section.classList.remove('collapsed');
                     saveSectionState(sectionId, true);
@@ -3731,7 +3731,7 @@ function showResetConfigConfirmModal(title, message, details, onConfirm) {
         detailsEl.style.display = 'none';
     }
     
-    // 移除旧的确认按钮事件监听器
+    // 移除既有的确认按钮事件监听器
     const confirmBtn = document.getElementById('confirmResetConfigBtn');
     const newConfirmBtn = confirmBtn.cloneNode(true);
     confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
@@ -4386,7 +4386,7 @@ window.setupPreviewDropZones = function() {
         
         // 为每个区域添加放置监听
         doc.querySelectorAll('[data-region]').forEach(zone => {
-            // 移除旧的监听器（如果有）
+            // 移除既有的监听器（如果有）
             zone.removeEventListener('dragover', handlePreviewDragOver);
             zone.removeEventListener('dragleave', handlePreviewDragLeave);
             zone.removeEventListener('drop', handlePreviewDrop);
@@ -4416,7 +4416,7 @@ window.setupPreviewDropZones = function() {
                 }
             }
             
-            // 移除旧的操作按钮（如果存在）
+            // 移除既有的操作按钮（如果存在）
             const oldActions = wrapper.querySelector('.component-actions');
             if (oldActions) {
                 oldActions.remove();
@@ -4990,7 +4990,7 @@ async function saveComponentOrder() {
         if (!contentZone) return;
         
         // 获取当前 DOM 顺序的组件原始索引
-        // 后端期望的是：旧索引的新顺序数组，例如 [1, 0, 2] 表示新顺序是：旧索引1的组件、旧索引0的组件、旧索引2的组件
+        // 后端期望的是：既有索引的新顺序数组，例如 [1, 0, 2] 表示新顺序是：既有索引1的组件、既有索引0的组件、既有索引2的组件
         const components = Array.from(contentZone.querySelectorAll('.tpmst-component-wrapper[data-region="content"]'));
         const newOrder = components.map(wrapper => {
             // 优先使用 data-original-index，如果没有则使用 data-index

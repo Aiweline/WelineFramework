@@ -65,7 +65,7 @@ final class ContractCoreServiceTest extends TestCase
 
     public function testPermissionMatrixReadOnlyPathRejectsDownstreamMutation(): void
     {
-        $matrix = (new PermissionMatrix())->forStage(ContractType::STAGE_BUILD_PLAN);
+        $matrix = (new PermissionMatrix())->forStage(ContractType::STAGE_PLAN_JSON);
         $previous = [
             'site_brief' => ['site_title' => 'Original'],
             'block_task_contract' => ['tasks' => []],
@@ -91,7 +91,7 @@ final class ContractCoreServiceTest extends TestCase
 
         $result = (new ContractPatchValidator())->validate($previous, $next, [
             'patch' => ['content_manifest.items.*', 'qa_gates.*'],
-            'forbidden' => ['pages', 'blocks', 'tasks'],
+            'forbidden' => ['pages', 'block_nodes', 'tasks'],
         ]);
 
         self::assertFalse($result['valid']);
@@ -170,7 +170,7 @@ final class ContractCoreServiceTest extends TestCase
         self::assertIsString($forbidden);
         self::assertStringContainsString('casino', $forbidden);
         self::assertStringContainsString('APK', $forbidden);
-        self::assertNotContains('hero_download', $contract['required_home_blocks']);
+        self::assertNotContains('hero_download', $contract['required_home_block_nodes']);
         self::assertNotContains('Drive APK/app download click', $contract['conversion_goals']);
     }
 
@@ -203,7 +203,7 @@ final class ContractCoreServiceTest extends TestCase
         ], [
             ContractType::TYPE_RENDER_DATA => [
                 ContractType::TYPE_BLOCK_TASK_CONTRACT,
-                ContractType::TYPE_BLOCK_PLAN,
+                ContractType::TYPE_PAGE_CONTRACT,
             ],
         ]);
 
@@ -214,7 +214,7 @@ final class ContractCoreServiceTest extends TestCase
         self::assertSame(QaGateHelper::STATUS_PASS, $report['qa_gates']['structure_quality']['status']);
         self::assertSame(QaGateHelper::STATUS_PASS, $report['payload']['structure_quality']['status']);
         self::assertSame('source_contracts', $report['payload']['findings'][0]['category']);
-        self::assertStringContainsString(ContractType::TYPE_BLOCK_PLAN, $report['payload']['findings'][0]['message']);
+        self::assertStringContainsString(ContractType::TYPE_PAGE_CONTRACT, $report['payload']['findings'][0]['message']);
     }
 
     public function testQaReportDetectsFrozenFieldMutation(): void

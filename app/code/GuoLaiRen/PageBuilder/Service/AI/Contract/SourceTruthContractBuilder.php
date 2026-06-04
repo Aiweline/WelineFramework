@@ -27,7 +27,7 @@ final class SourceTruthContractBuilder
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
-     * @param array<string, mixed> $referenceImageInsights 已解析的参考图洞察
+     * @param array<string, mixed> $referenceImageInsights 宸茶В鏋愮殑鍙傝€冨浘娲炲療
      * @param string $instruction
      * @param list<string> $pageTypes
      * @param string $contentLocale
@@ -67,7 +67,7 @@ final class SourceTruthContractBuilder
             'must_include_facts',
             'must_include_keywords',
             'conversion_goals',
-            'required_home_blocks',
+            'required_home_block_nodes',
             'visual_must_honor',
             'must_not_do',
             'content_locale',
@@ -118,7 +118,7 @@ final class SourceTruthContractBuilder
             'must_include_facts' => $facts,
             'must_include_keywords' => $keywords,
             'conversion_goals' => $this->extractConversionGoals($positiveBrief, $pageTypes),
-            'required_home_blocks' => $requiredBlocks,
+            'required_home_block_nodes' => $requiredBlocks,
             'visual_must_honor' => $visualHonor,
             'must_not_do' => $forbidden,
         ];
@@ -189,14 +189,14 @@ final class SourceTruthContractBuilder
      */
     private function splitBriefFactClauses(string $line): array
     {
-        $parts = \preg_split('/(?<=[.!?;。！？；])\s+/u', $line) ?: [];
+        $parts = \preg_split('/(?<=[.!?;銆傦紒锛燂紱])\s+/u', $line) ?: [];
         $clauses = [];
         foreach ($parts as $part) {
             $part = \trim((string)$part);
             if ($part === '') {
                 continue;
             }
-            $clauses[] = \trim($part, " \t\n\r\0\x0B.;。！？；");
+            $clauses[] = \trim($part, " \t\n\r\0\x0B.;銆傦紒锛燂紱");
         }
 
         return \array_values(\array_filter($clauses, static fn(string $part): bool => $part !== ''));
@@ -209,7 +209,7 @@ final class SourceTruthContractBuilder
             return false;
         }
 
-        return \preg_match('/(?:^\s*\[FORCE\]|queue:run|--force|\s-f\b|强制重建建站方案|重新跑队列)/iu', $instruction) === 1;
+        return \preg_match('/(?:^\s*\[FORCE\]|queue:run|--force|\s-f\b|寮哄埗閲嶅缓寤虹珯鏂规|閲嶆柊璺戦槦鍒?/iu', $instruction) === 1;
     }
 
     private function removeNegativeConstraintSegments(string $text): string
@@ -219,7 +219,7 @@ final class SourceTruthContractBuilder
         }
 
         return \trim((string)\preg_replace(
-            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|不是|非|勿|请勿)[^.;!?。！？\r\n]*/iu',
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|绂佹|閬垮厤|涓嶈|涓嶅緱|鎺掗櫎|涓嶆槸|闈瀨鍕縷璇峰嬁)[^.;!?銆傦紒锛焅r\n]*/iu',
             '',
             $text
         ));
@@ -227,7 +227,7 @@ final class SourceTruthContractBuilder
 
     private function isStyleOnlyBriefClause(string $clause): bool
     {
-        return \preg_match('/(?:风格|丝滑|动效|视觉|配色|色彩|土豪气|高级感|氛围感|质感|\bUI\b|界面效果|\bvisual\s+direction\b|\baesthetic\b|\bstyle\b|\bpalette\b|\btypography\b|\bmotion\b)/iu', $clause) === 1;
+        return \preg_match('/(?:椋庢牸|涓濇粦|鍔ㄦ晥|瑙嗚|閰嶈壊|鑹插僵|鍦熻豹姘攟楂樼骇鎰焲姘涘洿鎰焲璐ㄦ劅|\bUI\b|鐣岄潰鏁堟灉|\bvisual\s+direction\b|\baesthetic\b|\bstyle\b|\bpalette\b|\btypography\b|\bmotion\b)/iu', $clause) === 1;
     }
 
     private function isConstraintOnlyBriefClause(string $clause): bool
@@ -240,12 +240,12 @@ final class SourceTruthContractBuilder
         if (\preg_match('/^(?:home_page|about_page|contact_page|custom_page|blog_page|blog_list|blog_category)$/iu', $lower) === 1) {
             return true;
         }
-        if (\preg_match('/(?:页面代码|page\s*(?:type|code)|品牌名保留原文|preserve\s+brand\s+name|用户请求的页面意图|requested\s+page\s+intent)/iu', $clause) === 1) {
+        if (\preg_match('/(?:椤甸潰浠ｇ爜|page\s*(?:type|code)|鍝佺墝鍚嶄繚鐣欏師鏂噟preserve\s+brand\s+name|鐢ㄦ埛璇锋眰鐨勯〉闈㈡剰鍥緗requested\s+page\s+intent)/iu', $clause) === 1) {
             return true;
         }
 
         return \preg_match(
-            '/(?:不要|禁止|不得|不能|必须使用|除.+外|语言|简体中文|英文|大段描述|合同字段|提示词|JSON|do not|must not|forbid|forbidden|except|visible copy|contract field|prompt|json)/iu',
+            '/(?:涓嶈|绂佹|涓嶅緱|涓嶈兘|蹇呴』浣跨敤|闄?+澶東璇█|绠€浣撲腑鏂噟鑻辨枃|澶ф鎻忚堪|鍚堝悓瀛楁|鎻愮ず璇峾JSON|do not|must not|forbid|forbidden|except|visible copy|contract field|prompt|json)/iu',
             $clause
         ) === 1;
     }
@@ -259,9 +259,9 @@ final class SourceTruthContractBuilder
         $combined = $brief . "\n" . $instruction;
 
         $patterns = [
-            '/(?:推广|宣传|promote|\bdownload\b|APK|\bapp\b)\s*(?:下载|\bdownload\b)?/iu',
-            '/(印度|India|棋牌|card game|\bgame\b|gaming)/iu',
-            '/(下载|\bdownload\b|\binstall\b|\bapp\b)/iu',
+            '/(?:鎺ㄥ箍|瀹ｄ紶|promote|\bdownload\b|APK|\bapp\b)\s*(?:涓嬭浇|\bdownload\b)?/iu',
+            '/(鍗板害|India|妫嬬墝|card game|\bgame\b|gaming)/iu',
+            '/(涓嬭浇|\bdownload\b|\binstall\b|\bapp\b)/iu',
         ];
         foreach ($patterns as $pattern) {
             if (\preg_match_all($pattern, $combined, $matches)) {
@@ -309,17 +309,17 @@ final class SourceTruthContractBuilder
             }
         }
 
-        if (\preg_match('/(?:APK|download|推广)/iu', $brief)) {
+        if (\preg_match('/(?:APK|download|鎺ㄥ箍)/iu', $brief)) {
             $forbidden[] = 'generic corporate profile site';
             $forbidden[] = 'flat blue SaaS style';
         }
         foreach ($this->extractNegativeConstraintTerms($brief) as $term) {
             $forbidden[] = 'Do not use excluded user term as visible site category, CTA, copy, or visual style: ' . $term;
         }
-        if (\preg_match('/(?:英文|大段描述|language|locale|do not.*English)/iu', $brief)) {
+        if (\preg_match('/(?:鑻辨枃|澶ф鎻忚堪|language|locale|do not.*English)/iu', $brief)) {
             $forbidden[] = 'large visible copy passages outside the requested website language';
         }
-        if (\preg_match('/(?:合同字段|提示词|JSON|contract field|prompt|json)/iu', $brief)) {
+        if (\preg_match('/(?:鍚堝悓瀛楁|鎻愮ず璇峾JSON|contract field|prompt|json)/iu', $brief)) {
             $forbidden[] = 'internal contract fields, prompt text, JSON names, or implementation identifiers in visitor-visible copy';
         }
 
@@ -332,7 +332,7 @@ final class SourceTruthContractBuilder
     private function resolveRequiredHomeBlocks(string $brief, string $instruction): array
     {
         $combined = $brief . "\n" . $instruction;
-        $downloadIntent = \preg_match('/(?:APK|\bdownload\b|\bapp\b|安装|下载|推广)/iu', $combined) === 1;
+        $downloadIntent = \preg_match('/(?:APK|\bdownload\b|\bapp\b|瀹夎|涓嬭浇|鎺ㄥ箍)/iu', $combined) === 1;
         $blocks = $downloadIntent
             ? ['hero_download']
             : ['hero'];
@@ -341,17 +341,17 @@ final class SourceTruthContractBuilder
             $blocks[] = $downloadIntent ? 'final_download_cta' : 'final_cta';
         }
 
-        if (\preg_match('/(?:游戏|\bgame\b|棋牌|\bcard\b|Teen\s*Patti|rummy)/iu', $combined)) {
+        if (\preg_match('/(?:娓告垙|\bgame\b|妫嬬墝|\bcard\b|Teen\s*Patti|rummy)/iu', $combined)) {
             $blocks[] = 'game_showcase_or_features';
         }
-        if ($downloadIntent && \preg_match('/(?:游戏|\bgame\b|棋牌|\bcard\b|Teen\s*Patti|rummy|APK|\bdownload\b|\bapp\b)/iu', $combined)) {
+        if ($downloadIntent && \preg_match('/(?:娓告垙|\bgame\b|妫嬬墝|\bcard\b|Teen\s*Patti|rummy|APK|\bdownload\b|\bapp\b)/iu', $combined)) {
             $blocks[] = 'player_reviews';
             $blocks[] = 'faq_or_rules';
         }
-        if (\preg_match('/(?:信任|trust|安全|secure|放心)/iu', $combined)) {
+        if (\preg_match('/(?:淇′换|trust|瀹夊叏|secure|鏀惧績)/iu', $combined)) {
             $blocks[] = 'trust_security';
         }
-        if (\preg_match('/(?:SEO|seo|关键词|keyword)/iu', $combined)) {
+        if (\preg_match('/(?:SEO|seo|鍏抽敭璇峾keyword)/iu', $combined)) {
             $blocks[] = 'seo_faq';
         }
 
@@ -361,7 +361,7 @@ final class SourceTruthContractBuilder
     private function hasExplicitFinalCtaIntent(string $value): bool
     {
         return \preg_match(
-            '/(?:final|bottom|footer|last|end|closing|末尾|底部|最后|最终|收口).{0,32}(?:cta|download|action|conversion|下载|行动|转化|引导)/iu',
+            '/(?:final|bottom|footer|last|end|closing|鏈熬|搴曢儴|鏈€鍚巪鏈€缁坾鏀跺彛).{0,32}(?:cta|download|action|conversion|涓嬭浇|琛屽姩|杞寲|寮曞)/iu',
             $value
         ) === 1;
     }
@@ -372,7 +372,7 @@ final class SourceTruthContractBuilder
     private function extractBrandTerms(string $brief): array
     {
         $terms = [];
-        if (\preg_match('/(?:推广|推介|介绍)\s*(\S{1,20})/iu', $brief, $m)) {
+        if (\preg_match('/(?:鎺ㄥ箍|鎺ㄤ粙|浠嬬粛)\s*(\S{1,20})/iu', $brief, $m)) {
             $terms[] = \trim($m[1]);
         }
 
@@ -428,7 +428,7 @@ final class SourceTruthContractBuilder
         $goals = [];
 
         if (\in_array('home_page', $pageTypes, true)) {
-            if (\preg_match('/(?:下载|APK|\bapp\b|\bdownload\b)/iu', $brief)) {
+            if (\preg_match('/(?:涓嬭浇|APK|\bapp\b|\bdownload\b)/iu', $brief)) {
                 $goals[] = 'Drive APK/app download click';
             }
             $goals[] = 'Introduce products or services above the fold';
@@ -461,7 +461,7 @@ final class SourceTruthContractBuilder
             return [];
         }
         if (\preg_match_all(
-            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|请勿)\s*([^.;!?。！？\r\n]+)/iu',
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|绂佹|閬垮厤|涓嶈|涓嶅緱|鎺掗櫎|璇峰嬁)\s*([^.;!?銆傦紒锛焅r\n]+)/iu',
             $text,
             $matches
         ) < 1) {
@@ -470,7 +470,7 @@ final class SourceTruthContractBuilder
 
         $terms = [];
         foreach ($matches[1] as $rawTerms) {
-            foreach (\preg_split('/[,，、]|\bor\b|\band\b/iu', (string)$rawTerms) ?: [] as $term) {
+            foreach (\preg_split('/[,锛屻€乚|\bor\b|\band\b/iu', (string)$rawTerms) ?: [] as $term) {
                 $term = \trim((string)$term);
                 if ($term === '' || \mb_strlen($term) > 48) {
                     continue;

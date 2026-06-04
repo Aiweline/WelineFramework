@@ -33,18 +33,11 @@ class AiSiteAgentSession extends Model
     private const ARTIFACT_BACKED_SCOPE_PATHS = [
         self::STAGE_PLAN => [
             'plan_json' => [['plan_json'], []],
-            'build_plan_v2' => [['build_plan_v2'], []],
-            'plan_projection' => [['plan_projection'], []],
             'content_manifest' => [['content_manifest'], []],
-            'plan_workbench' => [['plan_workbench'], []],
         ],
         self::STAGE_VISUAL_EDIT => [
             'plan_json' => [['plan_json'], []],
-            'build_plan_v2' => [['build_plan_v2'], []],
-            'plan_projection' => [['plan_projection'], []],
             'content_manifest' => [['content_manifest'], []],
-            'plan_workbench' => [['plan_workbench'], []],
-            'build_workbench' => [['build_workbench'], []],
             'build_contracts' => [['build_contracts'], []],
             'render_data_contract' => [['render_data_contract'], []],
             'task_results' => [['task_results'], []],
@@ -176,7 +169,7 @@ class AiSiteAgentSession extends Model
 
     /**
      * Metadata-only session loads intentionally do not select scope_json. Preserve
-     * legacy callers by loading only the current stage fragment on demand.
+     * existing callers by loading only the current stage fragment on demand.
      *
      * @return array<string, mixed>
      */
@@ -246,7 +239,7 @@ class AiSiteAgentSession extends Model
     public function compactScopeForStorage(array $scope): array
     {
         $scope = (new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer()))
-            ->stripDeprecatedScopeArtifactKeys($scope);
+            ->stripUnsupportedScopeArtifactKeys($scope);
 
         foreach (['events', 'top_logs'] as $field) {
             $scope[$field] = $this->compactScopeLogEntries($scope[$field] ?? []);
@@ -355,166 +348,22 @@ class AiSiteAgentSession extends Model
                 if (!\is_array($virtualPage)) {
                     continue;
                 }
-                if (\is_array($virtualPage['blocks'] ?? null) && $virtualPage['blocks'] !== []) {
-                    $virtualPage['blocks'] = [];
+                if (\is_array($virtualPage['block_nodes'] ?? null) && $virtualPage['block_nodes'] !== []) {
+                    $virtualPage['block_nodes'] = [];
                     $scope['virtual_pages_by_type'][$pageType] = $virtualPage;
                 }
             }
         }
 
-        $scope = $this->compactPlanWorkbenchArtifactsForStorage($scope);
-        $scope = $this->compactConfirmedStageOnePlanPayloadsForStorage($scope);
         $scope = $this->removeDuplicatedStageOneFieldsForStorage($scope);
 
         return $scope;
     }
 
     /**
-     * Keep only the latest confirmed stage-one artifact plus the request summary
-     * needed by later stages.
-     *
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactPlanWorkbenchArtifactsForStorage(array $scope): array
-    {
-        $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
-        $confirmed = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
-        $stageOne = \is_array($planWorkbench['stage1'] ?? null) ? $planWorkbench['stage1'] : [];
-        if ($confirmed === []) {
-            return $scope;
-        }
-
-        if ((int)($scope['plan_confirmed'] ?? 0) === 1) {
-            $scope = $this->materializeConfirmedStageOnePlanArtifactsForStorage($scope, $confirmed);
-        }
-
-        if ($stageOne !== []) {
-            $slimStageOne = [];
-            $requestSummary = \is_array($stageOne['request_summary'] ?? null) ? $stageOne['request_summary'] : [];
-            if ($requestSummary !== []) {
-                $slimStageOne['request_summary'] = $requestSummary;
-            }
-            $progress = \is_array($stageOne['progress'] ?? null) ? $stageOne['progress'] : [];
-            if ($progress !== []) {
-                $slimStageOne['progress'] = $progress;
-            }
-
-            $planWorkbench['stage1'] = $slimStageOne;
-        }
-        if ((int)($scope['plan_confirmed'] ?? 0) === 1 || $this->hasMaterializedStageOnePlanArtifacts($scope)) {
-            $planWorkbench['confirmed'] = $this->compactPlanWorkbenchConfirmedForStorage($planWorkbench['confirmed']);
-        }
-        $scope['plan_workbench'] = $planWorkbench;
-
-        return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function hasMaterializedStageOnePlanArtifacts(array $scope): bool
-    {
-        foreach (['plan_json', 'build_plan_v2'] as $key) {
-            if (\is_array($scope[$key] ?? null) && $scope[$key] !== []) {
-                return true;
-            }
-        }
-
-        return \trim((string)($scope['plan_markdown'] ?? '')) !== '';
-    }
-
-    /**
-     * @param array<string, mixed> $scope
      * @param array<string, mixed> $confirmed
      * @return array<string, mixed>
      */
-    private function materializeConfirmedStageOnePlanArtifactsForStorage(array $scope, array $confirmed): array
-    {
-        if (
-            (!\is_array($scope['plan_json'] ?? null) || $scope['plan_json'] === [])
-            && \is_array($confirmed['plan_json'] ?? null)
-            && $confirmed['plan_json'] !== []
-        ) {
-            $scope['plan_json'] = $confirmed['plan_json'];
-        }
-
-        return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $confirmed
-     * @return array<string, mixed>
-     */
-    private function extractConfirmedStageOnePlanBook(array $confirmed): array
-    {
-        foreach ([$confirmed['plan_book']['structured'] ?? null, $confirmed['plan_book'] ?? null] as $candidate) {
-            if (\is_array($candidate) && $this->looksLikeConfirmedStageOnePlanBook($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @param array<string, mixed> $planBook
-     */
-    private function looksLikeConfirmedStageOnePlanBook(array $planBook): bool
-    {
-        return \is_array($planBook['pages'] ?? null)
-            || \is_array($planBook['shared_blocks'] ?? null)
-            || (string)($planBook['source'] ?? '') === 'stage1.block_tree';
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function compactConfirmedStageOnePlanPayloadsForStorage(array $scope): array
-    {
-        if ((int)($scope['plan_confirmed'] ?? 0) !== 1) {
-            return $scope;
-        }
-
-        return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $confirmed
-     * @return array<string, mixed>
-     */
-    private function compactPlanWorkbenchConfirmedForStorage(array $confirmed): array
-    {
-        $slim = [];
-        foreach ([
-            'signature',
-            'plan_signature',
-            'content_locale',
-            'plan_locale',
-            'source',
-            'version',
-            'generated_at',
-            'confirmed_at',
-            'updated_at',
-            'summary',
-        ] as $key) {
-            if (\array_key_exists($key, $confirmed)) {
-                $slim[$key] = $confirmed[$key];
-            }
-        }
-
-        if (\is_array($confirmed['structured_plan'] ?? null) || \is_array($confirmed['plan_json'] ?? null)) {
-            $slim['structured_plan_ref'] = ['storage_compacted' => 1];
-        }
-        if (\is_array($confirmed['plan_book'] ?? null)) {
-            $slim['plan_book_ref'] = ['field' => 'plan_json'];
-        }
-        $slim['_storage_compacted'] = 1;
-
-        return $slim;
-    }
-
     /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>

@@ -47,7 +47,7 @@ final class AiSiteVirtualLayoutServiceTest extends TestCase
         self::assertNull($svc->loadContext('pub_1', 1, Page::TYPE_HOME));
     }
 
-    public function testLoadContextAllowsHtmlBlocksPreviewWithoutVirtualThemeId(): void
+    public function testLoadContextAllowsHtmlBlockNodesPreviewWithoutVirtualThemeId(): void
     {
         $session = $this->createMock(AiSiteAgentSession::class);
         $session->method('getScopeArray')->willReturn([
@@ -57,7 +57,7 @@ final class AiSiteVirtualLayoutServiceTest extends TestCase
                 Page::TYPE_HOME => [
                     'page_type' => Page::TYPE_HOME,
                     'title' => 'Generated Home',
-                    'blocks' => [
+                    'block_nodes' => [
                         [
                             'block_id' => 'hero',
                             'type' => 'content/hero',
@@ -107,7 +107,7 @@ final class AiSiteVirtualLayoutServiceTest extends TestCase
                     'locale' => 'en_US',
                     'style_code' => 'default',
                     'style_settings' => [],
-                    'blocks' => [
+                    'block_nodes' => [
                         [
                             'block_id' => 'home-site-header',
                             'type' => 'site_header',

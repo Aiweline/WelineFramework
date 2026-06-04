@@ -410,7 +410,7 @@ class AiComponent extends BackendController
      * 支持的参数：
      * - component_id: 组件 ID（优先使用，自动获取模板内容）
      * - code + style_code: 组件代码（备选，自动获取模板内容）
-     * - refine_token: 临时文件引用（旧方式，兼容）
+     * - refine_token: 临时文件引用（既有方式，兼容）
      * - template_content: 模板内容（最后备选）
      * - adjustment_prompt: 微调描述（必填）
      * - category: 组件区域

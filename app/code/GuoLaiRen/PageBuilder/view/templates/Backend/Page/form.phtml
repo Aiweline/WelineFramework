@@ -3025,7 +3025,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // 如果选择了父页面，禁用"主页"选项
             if (isChildPage && option.value === 'home_page') {
                 option.disabled = true;
-                // 移除旧的提示文字，再添加新的
+                // 移除既有的提示文字，再添加新的
                 const baseText = option.textContent.replace(/ \(.*?\)$/, '');
                 option.textContent = baseText + ' <?= __('(子页面不能是主页)') ?>';
             } else if (option.value === 'home_page') {

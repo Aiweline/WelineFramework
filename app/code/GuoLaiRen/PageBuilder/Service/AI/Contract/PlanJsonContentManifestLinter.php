@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
 
-final class BuildPlanContentManifestLinter
+final class PlanJsonContentManifestLinter
 {
     private const GENERIC_CTA_TEXT = [
         'learn more',
@@ -67,7 +67,7 @@ final class BuildPlanContentManifestLinter
             }
         }
 
-        $blocksById = $this->normalizeRecordSet($contract['blocks'] ?? [], ['block_id', 'id']);
+        $blocksById = $this->normalizeRecordSet($contract['block_nodes'] ?? [], ['block_id', 'id']);
         foreach ($blocksById as $blockId => $block) {
             foreach ($this->stringList($block['content_keys'] ?? []) as $key) {
                 if (!isset($items[$key])) {
@@ -380,7 +380,7 @@ final class BuildPlanContentManifestLinter
     }
 
     /**
-     * BuildPlan visible copy can legitimately contain source-provided brand,
+     * PlanJson visible copy can legitimately contain source-provided brand,
      * product, and game names in Latin characters inside CJK copy.
      *
      * @param array<string, mixed> $contract

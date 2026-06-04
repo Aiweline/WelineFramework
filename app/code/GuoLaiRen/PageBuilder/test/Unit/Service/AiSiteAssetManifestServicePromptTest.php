@@ -8,10 +8,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteAssetManifestService;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 强行契约：图像 prompt 的"PRIMARY SUBJECT"必须由用户业务诉求（brief_description）
- * 主导，site_title 仅作为 wordmark 参考；同时单 block 图像必须禁止整页 mockup。
- * 本测试锁定 buildPrompt 在不同 slot 类型下的强契约约束。
- */
+ * 閻庢鍣ｇ紓姘躲€侀幋鐐甸檮闁瑰濮撮濠囨煥濞戞瑨澹樻繛瀛橈耿瀹?prompt 闂?PRIMARY SUBJECT"闂婎偄娲ら幊姗€濡磋箛娑欏仺閺夊牃鏅滈弳蹇涙煙绾惧鑵圭紒妤冨枛瀹曟繈妾遍柣锔芥煥鏁堥柛宀嬪缁€鍒ief_description闂? * 婵炴垶鎹侀褔顢氶柆宥嗘櫖閻庡湱鏉痶e_title 婵炲濮撮幊宥囩礊閺冣偓缁?wordmark 闂佸憡鐟ラ崐浠嬪焵椤掆偓閸犳稓妲愰柆宥呰Е閻忕偟鍋撻ˇ褔鏌?block 闂佹悶鍎查崕鎶藉磿濮樺磭鐤€闁告稒鐣埀顒€绻掔划瀣媴鐠団€冲闂佽桨鐒﹂幐鎶藉Υ?mockup闂? * 闂佸搫鐗滈崜姘辩矈鐎靛憡瀚氶柡鍥ュ灪閺佹岸鎮?buildPrompt 闂侀潻璐熼崝瀣箔婢舵劕瑙?slot 缂備緡鍋夐褔鎮楅柨瀣枖閻庯綆鍓氶悾杈┾偓娈垮枛閹碱偊銆冮弽顐ゆ／闁挎梹鍎抽濠囨煛婢跺苯鏋傞柍? */
 final class AiSiteAssetManifestServicePromptTest extends TestCase
 {
     public function testNonLogoSlotPromptForbidsFullSiteMockup(): void
@@ -42,15 +39,12 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertStringContainsString('multi-section page previews', $prompt);
 
         self::assertStringContainsString('Brand context (do not render as text on the image): Teenipiya', $prompt);
-        self::assertStringNotContainsString('Website: Teenipiya', $prompt, 'Website: 标签会被解读为画一个网站，必须避免。');
+        self::assertStringNotContainsString('Website: Teenipiya', $prompt, 'Brand context must not become visible website text in the image prompt.');
     }
 
     public function testLogoSlotPromptUsesSubjectFirstContractInsteadOfBrandFirst(): void
     {
-        // 强行契约：logo prompt 不能再用"Brand name (for logo only): X"作为主体，
-        // 而必须以"PRIMARY SUBJECT"为首要契约——AI 才会把业务主体（如棋牌）画进图，
-        // 不会照着站名字面（如 "Teenipiya"）凭空发挥。
-        $service = new AiSiteAssetManifestService();
+        // Logo prompts must lead with the visual subject instead of asking the image model to render the brand name as readable text.
 
         $slot = [
             'slot_id' => 'identity:website-logo',
@@ -64,32 +58,31 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
             'website_profile' => [
                 'site_title' => 'Teenipiya',
                 'brief_description' => 'India-focused online card gaming club with APK downloads and 200% welcome bonus.',
-                'site_tagline' => 'Play & Win Big — Royal Card Club India',
+                'site_tagline' => 'Play & Win Big 闂?Royal Card Club India',
             ],
         ];
 
         $prompt = $service->buildPrompt($slot, $scope);
 
-        // 主体契约必须是第一行，且必须包含业务诉求关键名词
-        $firstLine = \explode("\n", $prompt)[0] ?? '';
+        // 婵炴垶鎹侀濠勭礊鐎ｎ偆闄勯柟瀵稿Т椤斿﹪鐓崶褎鍤囬柕鍡楃箻瀵即顢涘搴″壋婵炴垶鎸撮崑鎾绘偠濞戞鐒跨紒杈ㄧ箖缁嬪寮捄銊х暠婵＄偑鍊涢褏鈧灚锕㈠畷銉╊敃閿涘嫮鎳濋梺鍛婃瀫閵堝洦顫濆┑顔炬嚀閸婃悂宕ｈ閺屻劑顢欓崗鐓庘偓鎶芥偣?        $firstLine = \explode("\n", $prompt)[0] ?? '';
         self::assertStringStartsWith('PRIMARY SUBJECT', $firstLine);
         self::assertStringContainsString('the logo mark/glyph MUST visually depict this business', $firstLine);
         self::assertStringContainsString('India-focused online card gaming club', $firstLine);
 
-        // brand name 必须降级为 wordmark text，不能作为 primary subject
+        // brand name 闂婎偄娲ら幊姗€濡磋箛娑欌挃鐎广儱娲悰鎾斥槈?wordmark text闂佹寧绋戞總鏃傜箔婢舵劖鍤勯柟瀛樺笧缁嬪﹤鈽?primary subject
         self::assertStringContainsString('Optional brand wordmark text', $prompt);
         self::assertStringContainsString('Teenipiya', $prompt);
         self::assertStringNotContainsString('Brand name (for logo only)', $prompt);
 
-        // logo 输出物理约束保留
+        // logo 闁哄鐗婇幐鎼佸吹椤撱垺鍋嬮柍鍝勫暞閸婄偟绱掗幘鍛存婵炵⒈鍋呯粚鍗炩攽閸喐鐣?
         self::assertStringContainsString('Logo output requirements', $prompt);
         self::assertStringContainsString('transparent alpha background', $prompt);
 
-        // slot.brief 中 "Generate the official website logo for X" 必须被改写，避免主体冲突
+        // slot.brief 婵?"Generate the official website logo for X" 闂婎偄娲ら幊姗€濡磋箛鏇熷仏妞ゆ劧绲鹃弳顓㈡煕閹邦厾鎳曠紒杈ㄧ箞閺屽棝宕归鐓庤祴婵炴垶鎹侀濠勭礊鐎ｎ喖绀冮柤纰卞墰瀹?
         self::assertStringNotContainsString('Generate the official website logo for "Teenipiya"', $prompt);
         self::assertStringContainsString('Logo specification:', $prompt);
 
-        // 必须有契约复述，避免 prompt 漂移
+        // 闂婎偄娲ら幊姗€濡磋箛娑樺珘濠㈣泛顭▓鈺冪磼閹惧懐鐣辨い锕€寮跺鑽ゆ暜椤斿墽顦梻渚囧墮閻忔繈宕?prompt 濠电姵娲栭崐璁崇昂
         self::assertStringContainsString('Reinforced contract', $prompt);
     }
 
@@ -119,7 +112,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertStringContainsString('favicon/title icon glyph MUST visually depict this business', $firstLine);
         self::assertStringContainsString('India-focused online card gaming club', $firstLine);
 
-        // favicon brief 头句也必须被改写
+        // favicon brief 婵犮垼鍩栧娆掋亹閻愬鈻曢柣鏃堫棑缁犳垵顪冮妶鍡橆潡妞ゎ偓绠撳銊╂偡閺夋寧娅?
         self::assertStringNotContainsString('Generate the website title icon / favicon for "Teenipiya"', $prompt);
         self::assertStringContainsString('Icon specification:', $prompt);
     }
@@ -145,20 +138,20 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
         $prompt = $service->buildPrompt($slot, $scope);
 
-        // 第 1 行必须是 PRIMARY SUBJECT，第 1 行必须出现"India ... card gaming"
+        // The first line should keep the concrete visual subject ahead of brand context.
         $lines = \explode("\n", $prompt);
         self::assertStringStartsWith('PRIMARY SUBJECT', $lines[0] ?? '');
         self::assertStringContainsString('India-focused online card gaming club', $lines[0] ?? '');
 
-        // brand 仅出现在 PRIMARY SUBJECT 之后，且仅作为 "Brand context"，不作为主体
+        // Brand context must stay after PRIMARY SUBJECT so it is not rendered as visible image text.
         $brandPos = \strpos($prompt, 'Brand context (do not render as text on the image): Teenipiya');
         $subjectPos = \strpos($prompt, 'PRIMARY SUBJECT');
         self::assertNotFalse($brandPos);
         self::assertNotFalse($subjectPos);
-        self::assertGreaterThan($subjectPos, $brandPos, 'PRIMARY SUBJECT 必须出现在 brand context 之前。');
+        self::assertGreaterThan($subjectPos, $brandPos, 'PRIMARY SUBJECT must appear before brand context.');
     }
 
-    public function testSyncFromTaskPlanAddsHeroBannerSlotFromExecutionBlueprintPages(): void
+    public function testSyncFromPlanJsonAddsHeroBannerSlotFromPageBlockNodes(): void
     {
         $service = new AiSiteAssetManifestService();
 
@@ -166,35 +159,39 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
             'website_profile' => [
                 'brief_description' => 'India card gaming club with APK downloads.',
             ],
-            'build_plan_v2' => [
-                'blocks' => [
-                    [
-                        'page_type' => 'home_page',
-                        'section_key' => 'home_hero',
-                        'page_flow_role' => 'opening',
-                        'goal' => 'Play royal card games tonight',
-                        'image_intent' => [
-                            'needs_image' => true,
-                            'image_role' => 'hero_image',
-                            'image_subject' => 'card game lobby hero',
+            'plan_json' => [
+                'pages' => [
+                    'home_page' => [
+                        'home_hero' => [
+                            'page_type' => 'home_page',
+                            'section_key' => 'home_hero',
+                            'block_key' => 'home_hero',
+                            'page_flow_role' => 'opening',
+                            'goal' => 'Play royal card games tonight',
+                            'image_intent' => [
+                                'needs_image' => true,
+                                'image_role' => 'hero_image',
+                                'image_subject' => 'card game lobby hero',
+                            ],
                         ],
-                    ],
-                    [
-                        'page_type' => 'home_page',
-                        'section_key' => 'features',
-                        'page_flow_role' => 'details',
-                        'goal' => 'Show card room features',
-                        'image_intent' => [
-                            'needs_image' => true,
-                            'image_role' => 'section_image',
-                            'image_subject' => 'card room features',
+                        'features' => [
+                            'page_type' => 'home_page',
+                            'section_key' => 'features',
+                            'block_key' => 'features',
+                            'page_flow_role' => 'details',
+                            'goal' => 'Show card room features',
+                            'image_intent' => [
+                                'needs_image' => true,
+                                'image_role' => 'section_image',
+                                'image_subject' => 'card room features',
+                            ],
                         ],
                     ],
                 ],
             ],
         ];
 
-        $manifest = $service->syncFromBuildPlan($scope);
+        $manifest = $service->syncFromPlanJson($scope);
         $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
 
         self::assertArrayHasKey('page:home_page:content-home-page-home-hero', $slots);
@@ -206,8 +203,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertSame('hero_image', (string)($heroSlot['slot_type'] ?? ''));
         self::assertStringContainsString('Play royal card games tonight', (string)($heroSlot['label'] ?? ''));
 
-        // banner slot.brief 必须以 PRIMARY SUBJECT 开头，业务诉求必须出现在第 1 行
-        $brief = (string)($heroSlot['brief'] ?? '');
+        // banner slot.brief 闂婎偄娲ら幊姗€濡磋箛鏃傤浄?PRIMARY SUBJECT 閻庢鍠掗崑鎾愁熆閹増褰х紒杈ㄧ箖缁嬪顫濋鈧～銈夋偣閸パ屾Ч闁活亝濯界粻娑㈠川濞ｎ兘鍋撹箛娑樼闁惧繒鎳撶粻娑㈡煕閿斿搫濡挎い?1 闁?        $brief = (string)($heroSlot['brief'] ?? '');
         self::assertStringStartsWith('PRIMARY SUBJECT', $brief);
         self::assertStringContainsString('India card gaming club', $brief);
     }
@@ -227,9 +223,9 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         ];
         $scope = [
             'website_profile' => [
-                'site_title' => '霓虹棋牌馆',
-                'brief_description' => '霓虹棋牌风格的线上娱乐网站，包含游戏房间、玩家证明、攻略内容和客服支持。',
-                'site_tagline' => '深色霓虹牌桌体验',
+                'site_title' => 'Neon Card Club',
+                'brief_description' => 'India-focused online card gaming club with APK downloads, poker cards, mahjong tiles, chips, and live table UI.',
+                'site_tagline' => 'Royal Card Club India',
             ],
         ];
 
@@ -245,18 +241,49 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertStringContainsString('game_features', $prompt);
     }
 
-    public function testSyncFromBuildPlanPreservesVerifiedSlotAcrossSamePlanningContext(): void
+    public function testSyncFromPlanJsonPreservesVerifiedSlotAcrossSamePlanningContext(): void
     {
         $service = new AiSiteAssetManifestService();
         $slotId = 'page:home_page:hero:opening:image';
         $finalUrl = '/pub/media/page-build/ai-generated/example.test/page-home_page-hero-opening-image.png';
 
         $scope = [
-            'stage1_contract' => [
-                'contract_hash' => 'same-stage-contract',
-            ],
             'website_profile' => [
                 'brief_description' => 'A premium Sichuan restaurant website.',
+            ],
+            'plan_json' => [
+                'signature' => 'same-plan-json-signature',
+                'pages' => [
+                    'home_page' => [
+                        'hero' => [
+                            'page_type' => 'home_page',
+                            'section_key' => 'hero',
+                            'block_key' => 'hero',
+                            'page_flow_role' => 'opening',
+                            'image_intent' => [
+                                'needs_image' => true,
+                                'image_role' => 'hero_image',
+                                'image_subject' => 'restaurant hero',
+                            ],
+                            'asset_requirements' => [
+                                [
+                                    'slot_id' => $slotId,
+                                    'slot_type' => 'hero_image',
+                                    'brief' => 'Duplicate requirement for the same slot.',
+                                ],
+                            ],
+                            'block_contract' => [
+                                'page_flow_role' => 'opening',
+                                'media_strategy' => [
+                                    'needs_real_image' => true,
+                                    'asset_slot_id' => $slotId,
+                                    'image_subject' => 'restaurant hero',
+                                    'placement' => 'background_layer',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
             ],
             'asset_manifest' => [
                 'slots' => [
@@ -278,47 +305,13 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
                             'mime_type' => 'image/png',
                             'mode' => 'fixture',
                         ]],
-                        'planning_context_hash' => 'same-stage-contract',
+                        'planning_context_hash' => 'same-plan-json-signature',
                     ],
-                ],
-            ],
-            'build_plan_v2' => [
-                'blocks' => [
-                    [
-                        'page_type' => 'home_page',
-                        'section_key' => 'hero',
-                        'block_id' => 'home_page.hero',
-                        'page_flow_role' => 'opening',
-                        'image_intent' => [
-                            'needs_image' => true,
-                            'image_role' => 'hero_image',
-                            'image_subject' => 'restaurant hero',
-                        ],
-                        'asset_requirements' => [
-                            [
-                                'slot_id' => $slotId,
-                                'slot_type' => 'hero_image',
-                                'brief' => 'Legacy duplicate requirement for the same slot.',
-                            ],
-                        ],
-                        'block_contract' => [
-                            'page_flow_role' => 'opening',
-                            'media_strategy' => [
-                                'needs_real_image' => true,
-                                'asset_slot_id' => $slotId,
-                                'image_subject' => 'restaurant hero',
-                                'placement' => 'background_layer',
-                            ],
-                        ],
-                    ],
-                ],
-                'content_manifest' => [
-                    'items' => [],
                 ],
             ],
         ];
 
-        $manifest = $service->syncFromBuildPlan($scope);
+        $manifest = $service->syncFromPlanJson($scope);
         $slot = $manifest['slots'][$slotId] ?? [];
 
         self::assertSame($finalUrl, (string)($slot['final_url'] ?? ''));
@@ -328,10 +321,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
     public function testRequiredIdentityLogoSlotBriefIsSubjectFirst(): void
     {
-        // 锁定 buildRequiredIdentitySlots 写入 manifest 的 slot.brief 是主体优先：
-        // 之前以 "Generate the official website logo for X" 开头，会被 AI 解读为
-        // 画一个 X 形象（脱离业务）；现在必须以 PRIMARY SUBJECT 作为强契约。
-        $service = new AiSiteAssetManifestService();
+        // 闂備礁銇樼粈渚€鎮?buildRequiredIdentitySlots 闂佸憡鍔栭悷銉╁矗?manifest 闂?slot.brief 闂佸搫瀚烽崹顖溾偓闈涙湰閹峰懘骞橀懠顒€鏋犻梺绋跨箰閻楃偟妲?        // 婵炴垶鏌ㄩ鍛櫠閻樺磭顩?"Generate the official website logo for X" 閻庢鍠掗崑鎾愁熆閹増褰х紒杈ㄧ箖鐎电厧顫濋幇浣硅晧 AI 闁荤喐鐟辩紞鈧い鏇犲缁?        // 闂佹眹鍨奸濠勭博鐎涙鈻?X 閻熸粏鍩囬崹濂告寘閸曨垱鏅柛顐到婵海绱掗崒婵愬敽缂佹鍠栧畷婵嬪煡閸涱垳顦梺鎸庣⊕缁嬫捇鐛崶顒€鎹堕柕濞垮劤缁犳垵顪冮妶鍫敽濞?PRIMARY SUBJECT 婵炶揪绲剧划鍫㈡嫻閻斿鍤曢柛婵嗗濞堚晝绱掗幘鍛扮闁?        $service = new AiSiteAssetManifestService();
 
         $scope = [
             'website_profile' => [
@@ -340,7 +330,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
             ],
         ];
 
-        $manifest = $service->syncFromBuildPlan($scope);
+        $manifest = $service->syncFromPlanJson($scope);
         $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
         self::assertArrayHasKey('identity:website-logo', $slots);
 

@@ -116,7 +116,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
             ],
             'virtual_pages_by_type' => [
                 'home_page' => [
-                    'blocks' => [],
+                    'block_nodes' => [],
                 ],
             ],
         ];
@@ -147,7 +147,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
             '<section><h1>New headline</h1></section>',
             $result['scope']['page_type_layouts']['home_page']['content'][0]['html'] ?? null
         );
-        self::assertSame([], $result['scope']['virtual_pages_by_type']['home_page']['blocks'] ?? null);
+        self::assertSame([], $result['scope']['virtual_pages_by_type']['home_page']['block_nodes'] ?? null);
     }
 
     public function testReadCurrentSharedHeaderComponentFromScope(): void
@@ -177,7 +177,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
             'content/home-page-hero-banner'
         );
         $scope = $this->materializedScope(555);
-        $scope['virtual_pages_by_type']['home_page']['blocks'] = $currentBlocks;
+        $scope['virtual_pages_by_type']['home_page']['block_nodes'] = $currentBlocks;
         $service = new AiSiteBlockPartialPatchService();
 
         $result = $service->applyReplacementBlockToScope(
@@ -188,7 +188,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         );
 
         self::assertTrue($result['success']);
-        self::assertSame('Patched Materialized Headline', $result['scope']['virtual_pages_by_type']['home_page']['blocks'][0]['config']['headline']);
+        self::assertSame('Patched Materialized Headline', $result['scope']['virtual_pages_by_type']['home_page']['block_nodes'][0]['config']['headline']);
         self::assertArrayNotHasKey('ai_layout', $result['scope']['pagebuilder_pages_by_type']['home_page']);
     }
 
@@ -205,7 +205,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         ]);
 
         self::assertTrue($result['success']);
-        $blocks = $result['scope']['virtual_pages_by_type']['home']['blocks'];
+        $blocks = $result['scope']['virtual_pages_by_type']['home']['block_nodes'];
         self::assertCount(2, $blocks);
         self::assertSame(['hero', 'features'], \array_column($blocks, 'block_id'));
         self::assertSame('New Headline', $blocks[0]['config']['headline']);
@@ -263,13 +263,13 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
     {
         $service = new AiSiteBlockPartialPatchService();
         $scope = $this->scope();
-        $scope['virtual_pages_by_type']['home']['blocks'][0]['section_code'] = 'home:content/hero';
+        $scope['virtual_pages_by_type']['home']['block_nodes'][0]['section_code'] = 'home:content/hero';
         $replacement = $this->block('hero', 'Alias Headline', '<section>Alias Headline</section>', 'content/hero');
 
         $result = $service->applyReplacementBlockToScope($scope, 'home', 'home:content/hero', $replacement);
 
         self::assertTrue($result['success']);
-        self::assertSame('Alias Headline', $result['scope']['virtual_pages_by_type']['home']['blocks'][0]['config']['headline']);
+        self::assertSame('Alias Headline', $result['scope']['virtual_pages_by_type']['home']['block_nodes'][0]['config']['headline']);
     }
 
     public function testReplaceCurrentBlockPreservesOtherPagesWithoutHydratingThem(): void
@@ -301,7 +301,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
 
         self::assertTrue($result['success']);
         self::assertSame([['home'], ['home']], $scopeService->requestedPageTypes);
-        self::assertSame('About headline', $result['scope']['virtual_pages_by_type']['about']['blocks'][0]['config']['headline']);
+        self::assertSame('About headline', $result['scope']['virtual_pages_by_type']['about']['block_nodes'][0]['config']['headline']);
     }
 
     public function testReadCurrentBlockCompactsPageContextForPrompt(): void
@@ -506,7 +506,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
 
     public function testGenerateReplacementPromptCarriesLanguageAndCurrentBlockContract(): void
     {
-        $scope = $this->scopeWithBuildPlanTaskLanguageAndContract();
+        $scope = $this->scopeWithPlanJsonTaskLanguageAndContract();
         $read = (new AiSiteBlockPartialPatchService())->readCurrentBlockFromScope($scope, 'home', 'hero');
         $replacement = $this->block(
             'hero',
@@ -552,7 +552,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertStringContainsString('CTX_CURRENT_BLOCK_CONTEXT', $captured['prompt'] ?? '');
         self::assertStringContainsString('current_block_context', $captured['prompt'] ?? '');
         self::assertStringContainsString('block_context_source', $captured['prompt'] ?? '');
-        self::assertStringContainsString('confirmed_build_task', $captured['prompt'] ?? '');
+        self::assertStringContainsString('confirmed_plan_json_task', $captured['prompt'] ?? '');
         self::assertStringContainsString('editorial_split_media', $captured['prompt'] ?? '');
         self::assertStringContainsString('Patch block-context execution rule', $captured['prompt'] ?? '');
         self::assertStringContainsString('Patch anti-repetition rule', $captured['prompt'] ?? '');
@@ -675,7 +675,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
             'virtual_pages_by_type' => [
                 'home' => [
                     'title' => 'Home',
-                    'blocks' => [
+                    'block_nodes' => [
                         $this->block('hero', 'Headline', '<section>Headline</section>', 'content/hero'),
                         $this->block('features', 'Features', '<section>Features</section>', 'content/features'),
                     ],
@@ -693,7 +693,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         $scope['page_types'] = ['home', 'about'];
         $scope['virtual_pages_by_type']['about'] = [
             'title' => 'About',
-            'blocks' => [
+            'block_nodes' => [
                 $this->block('about-hero', 'About headline', '<section>About headline</section>', 'content/about-hero'),
             ],
         ];
@@ -720,7 +720,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
                 'home_page' => [
                     'title' => 'Home',
                     'materialized_page_id' => $pageId,
-                    'blocks' => [],
+                    'block_nodes' => [],
                 ],
             ],
         ];
@@ -729,7 +729,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private function scopeWithBuildPlanTaskLanguageAndContract(): array
+    private function scopeWithPlanJsonTaskLanguageAndContract(): array
     {
         $scope = $this->scope();
         $scope['plan_locale'] = 'en_US';
@@ -751,73 +751,18 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         $scope['plan_json'] = [
             'pages' => [
                 'home' => [
-                    'blocks' => [
-                        [
-                            'block_key' => 'hero',
-                            'component_code' => 'content/hero',
-                            'block_contract' => $blockContract,
-                            'image_intent' => [
-                                'needs_image' => true,
-                                'asset_slot_id' => 'page:home:hero',
-                            ],
+                    'hero' => [
+                        'block_key' => 'hero',
+                        'component_code' => 'content/hero',
+                        'block_contract' => $blockContract,
+                        'image_intent' => [
+                            'needs_image' => true,
+                            'asset_slot_id' => 'page:home:hero',
                         ],
                     ],
                 ],
             ],
         ];
-        $scope['build_plan_v2'] = [
-            'contract_meta' => [
-                'id' => 'test-build-plan-v2',
-                'version' => '2.2',
-                'status' => 'confirmed',
-                'source_signature' => 'test-build-plan-signature',
-            ],
-            'site_brief' => [
-                'site_name' => 'Restaurant Test',
-                'primary_goal' => 'Convert visitors to restaurant reservations.',
-                'locale' => 'de_DE',
-            ],
-            'i18n' => [
-                'primary_locale' => 'de_DE',
-            ],
-            'content_manifest' => [
-                'primary_locale' => 'de_DE',
-                'items' => [
-                    'page.home.title' => 'Home',
-                    'block.home.hero.title' => 'Reservierung starten',
-                    'block.home.hero.goal' => 'Plan intent only; rewrite into German before output.',
-                ],
-            ],
-            'pages' => [
-                [
-                    'page_id' => 'home',
-                    'page_type' => 'home',
-                    'title_key' => 'page.home.title',
-                    'blocks' => ['block.home.hero'],
-                ],
-            ],
-            'blocks' => [
-                [
-                    'block_id' => 'block.home.hero',
-                    'page_id' => 'home',
-                    'page_type' => 'home',
-                    'section_key' => 'hero',
-                    'block_type' => 'hero',
-                    'page_flow_role' => 'opening_conversion',
-                    'content_keys' => [
-                        'block.home.hero.title',
-                        'block.home.hero.goal',
-                    ],
-                    'block_contract' => $blockContract,
-                    'image_intent' => [
-                        'needs_image' => true,
-                        'asset_slot_id' => 'page:home:hero',
-                    ],
-                    'sort_order' => 100,
-                ],
-            ],
-        ];
-
         return $scope;
     }
 
@@ -832,7 +777,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
             'virtual_pages_by_type' => [
                 'home_page' => [
                     'title' => 'Home',
-                    'blocks' => [
+                    'block_nodes' => [
                         $this->block('home-page-hero', 'Headline', '<section>Headline</section>', 'content/home-page-hero'),
                     ],
                 ],

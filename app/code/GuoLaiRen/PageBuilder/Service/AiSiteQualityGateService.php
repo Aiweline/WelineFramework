@@ -13,27 +13,27 @@ final class AiSiteQualityGateService
      * @var array<string, array{label:string,page_report_field?:string}>
      */
     private const QUALITY_ITEM_SPECS = [
-        'build_plan_blocks_done' => ['label' => 'BuildPlan blocks completed'],
+        'plan_json_block_nodes_done' => ['label' => 'Plan JSON block nodes completed'],
         'required_pages_render' => ['label' => 'Required pages render'],
-        'shared_blocks_ready' => ['label' => 'Shared header/footer ready', 'page_report_field' => 'shared_blocks'],
+        'shared_block_nodes_ready' => ['label' => 'Shared header/footer ready', 'page_report_field' => 'shared_block_nodes'],
         'responsive_support' => ['label' => 'Responsive CSS support', 'page_report_field' => 'responsive_support'],
         'render_data_quality' => ['label' => 'Render data structure valid'],
     ];
 
-    private readonly AiSiteBuildTaskService $buildTaskService;
+    private readonly AiSitePlanJsonTaskService $planJsonTaskService;
     private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService;
     private readonly AiSiteVirtualLayoutService $virtualLayoutService;
     private readonly PageRenderService $pageRenderService;
     private readonly Page $pageModel;
 
     public function __construct(
-        ?AiSiteBuildTaskService $buildTaskService = null,
+        ?AiSitePlanJsonTaskService $planJsonTaskService = null,
         ?AiSiteScopeCompatibilityService $scopeCompatibilityService = null,
         ?AiSiteVirtualLayoutService $virtualLayoutService = null,
         ?PageRenderService $pageRenderService = null,
         ?Page $pageModel = null
     ) {
-        $this->buildTaskService = $buildTaskService ?? ObjectManager::getInstance(AiSiteBuildTaskService::class);
+        $this->planJsonTaskService = $planJsonTaskService ?? ObjectManager::getInstance(AiSitePlanJsonTaskService::class);
         $this->scopeCompatibilityService = $scopeCompatibilityService ?? ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
         $this->virtualLayoutService = $virtualLayoutService ?? ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
         $this->pageRenderService = $pageRenderService ?? ObjectManager::getInstance(PageRenderService::class);
@@ -53,15 +53,15 @@ final class AiSiteQualityGateService
         $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         $pageReports = [];
 
-        $completionGate = $this->buildTaskService->inspectBuildCompletionGate($scope);
+        $completionGate = $this->planJsonTaskService->inspectBuildCompletionGate($scope);
         $summary = \is_array($completionGate['summary'] ?? null)
             ? $completionGate['summary']
-            : $this->buildTaskService->summarize($scope);
+            : $this->planJsonTaskService->summarize($scope);
         $summary['completion_gate'] = \array_diff_key($completionGate, ['summary' => true]);
 
         $allBlocksDone = !empty($completionGate['passed']);
         $requiredPagesReady = $pageTypes !== [];
-        $sharedBlocksReady = true;
+        $sharedBlockNodesReady = true;
         $responsiveSupportReady = true;
 
         foreach ($pageTypes as $pageType) {
@@ -112,8 +112,8 @@ final class AiSiteQualityGateService
             if ($layout === [] && \is_array($pagesByType[$pageType]['ai_layout'] ?? null)) {
                 $layout = $pagesByType[$pageType]['ai_layout'];
             }
-            if ($layout === [] && \is_array($scope['virtual_pages_by_type'][$pageType]['blocks'] ?? null)) {
-                $layout = ['blocks' => $scope['virtual_pages_by_type'][$pageType]['blocks']];
+            if ($layout === [] && \is_array($scope['virtual_pages_by_type'][$pageType]['block_nodes'] ?? null)) {
+                $layout = ['block_nodes' => $scope['virtual_pages_by_type'][$pageType]['block_nodes']];
             }
 
             $report = $this->inspectRenderedPage($pageType, $html, $layout, $pageId, $renderError);
@@ -126,7 +126,7 @@ final class AiSiteQualityGateService
                 && $html !== ''
                 && $renderError === ''
                 && ($pageId > 0 || $hasRenderableVirtualDraft || \array_key_exists($pageType, $renderedHtmlByPageType));
-            $sharedBlocksReady = $sharedBlocksReady && (bool)($report['shared_blocks_ready'] ?? false);
+            $sharedBlockNodesReady = $sharedBlockNodesReady && (bool)($report['shared_block_nodes_ready'] ?? false);
             $responsiveSupportReady = $responsiveSupportReady && (bool)($report['responsive_support_ready'] ?? false);
             unset($html, $layout, $report);
         }
@@ -147,9 +147,9 @@ final class AiSiteQualityGateService
             }
         }
         $items = $this->normalizeQualityItems([
-            $this->buildItem('build_plan_blocks_done', $allBlocksDone, $summary),
+            $this->buildItem('plan_json_block_nodes_done', $allBlocksDone, $summary),
             $this->buildItem('required_pages_render', $requiredPagesReady, \array_keys($pageReports)),
-            $this->buildItem('shared_blocks_ready', $sharedBlocksReady, $this->extractPageValues($pageReports, 'shared_blocks')),
+            $this->buildItem('shared_block_nodes_ready', $sharedBlockNodesReady, $this->extractPageValues($pageReports, 'shared_block_nodes')),
             $this->buildItem('responsive_support', $responsiveSupportReady, $this->extractPageValues($pageReports, 'responsive_support')),
             $this->buildItem('render_data_quality', $renderData['ok'], $renderData),
         ], $pageReports);
@@ -252,32 +252,14 @@ final class AiSiteQualityGateService
             return $pageTypes;
         }
 
-        $found = [];
-        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        foreach (\is_array($buildPlan['pages'] ?? null) ? $buildPlan['pages'] : [] as $page) {
-            if (!\is_array($page)) {
-                continue;
-            }
-            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? ''));
-            if ($pageType !== '') {
-                $found[$pageType] = true;
-            }
-        }
-        foreach (\is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [] as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $pageType = \trim((string)($block['page_type'] ?? ''));
-            if ($pageType !== '') {
-                $found[$pageType] = true;
-            }
-        }
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
 
-        return \array_keys($found);
+        return \array_values(\array_filter(\array_map('strval', \array_keys($pages)), static fn(string $pageType): bool => $pageType !== ''));
     }
 
     /**
-     * @return array{page_id:int,rendered:bool,render_error:string,structure_clean:bool,structure_issues:list<string>,shared_blocks_ready:bool,shared_blocks:array{header:bool,footer:bool}}
+     * @return array{page_id:int,rendered:bool,render_error:string,structure_clean:bool,structure_issues:list<string>,shared_block_nodes_ready:bool,shared_block_nodes:array{header:bool,footer:bool}}
      */
     private function inspectRenderedPage(
         string $pageType,
@@ -286,7 +268,7 @@ final class AiSiteQualityGateService
         int $pageId,
         string $renderError
     ): array {
-        $sharedBlocks = $this->detectSharedBlocks($layout, $html);
+        $sharedBlockNodes = $this->detectSharedBlockNodes($layout, $html);
         $structureIssues = $this->matchMalformedGeneratedHtml($html);
         $responsiveSupport = $this->matchResponsiveSignals($html, $layout);
 
@@ -297,8 +279,8 @@ final class AiSiteQualityGateService
             'render_error' => $renderError,
             'structure_clean' => $structureIssues === [],
             'structure_issues' => $structureIssues,
-            'shared_blocks_ready' => !empty($sharedBlocks['header']) && !empty($sharedBlocks['footer']),
-            'shared_blocks' => $sharedBlocks,
+            'shared_block_nodes_ready' => !empty($sharedBlockNodes['header']) && !empty($sharedBlockNodes['footer']),
+            'shared_block_nodes' => $sharedBlockNodes,
             'responsive_support_ready' => !empty($responsiveSupport['media_768']) && !empty($responsiveSupport['media_420']),
             'responsive_support' => $responsiveSupport,
         ];
@@ -332,7 +314,7 @@ final class AiSiteQualityGateService
         $styleCode = $styleCode !== '' ? $styleCode : 'default';
         $locale = \trim((string)($virtualPage['locale'] ?? \Weline\Framework\App\State::getLang()));
         $locale = $locale !== '' ? $locale : \Weline\Framework\App\State::getLang();
-        $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $virtualBlocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
         $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
 
         $page = ObjectManager::make(Page::class);
@@ -359,7 +341,7 @@ final class AiSiteQualityGateService
             ], \JSON_UNESCAPED_UNICODE),
             Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, \JSON_UNESCAPED_UNICODE),
             Page::schema_fields_RENDER_MODE => $renderMode,
-            Page::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], \JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_AI_LAYOUT => \json_encode(['block_nodes' => $virtualBlocks], \JSON_UNESCAPED_UNICODE),
         ]);
         $page->setData('virtual_theme_id', $virtualThemeId);
         $page->setData('virtual_page_type', $pageType);
@@ -439,9 +421,9 @@ final class AiSiteQualityGateService
      * @param array<string, mixed> $layout
      * @return array{header:bool,footer:bool}
      */
-    private function detectSharedBlocks(array $layout, string $html): array
+    private function detectSharedBlockNodes(array $layout, string $html): array
     {
-        $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+        $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
         if ($blocks === [] && \is_array($layout['content'] ?? null)) {
             $blocks = $layout['content'];
         }
@@ -573,9 +555,9 @@ final class AiSiteQualityGateService
     {
         if ($ok) {
             return match ($key) {
-                'build_plan_blocks_done' => 'All BuildPlan blocks are complete.',
+                'plan_json_block_nodes_done' => 'All plan_json block nodes are complete.',
                 'required_pages_render' => 'All required pages rendered.',
-                'shared_blocks_ready' => 'Shared header and footer are present.',
+                'shared_block_nodes_ready' => 'Shared header and footer are present.',
                 'responsive_support' => 'Required responsive CSS breakpoints are present.',
                 'render_data_quality' => 'Render data passed structure checks.',
                 default => '',
@@ -583,9 +565,9 @@ final class AiSiteQualityGateService
         }
 
         return match ($key) {
-            'build_plan_blocks_done' => $this->formatBuildPlanBlocksFailureDetail(\is_array($value) ? $value : []),
+            'plan_json_block_nodes_done' => $this->formatPlanJsonBlocksFailureDetail(\is_array($value) ? $value : []),
             'required_pages_render' => 'At least one required page is missing or failed to render.',
-            'shared_blocks_ready' => 'Generated pages must include shared header and footer blocks.',
+            'shared_block_nodes_ready' => 'Generated pages must include shared header and footer blocks.',
             'responsive_support' => 'Generated pages must include responsive @media rules for 768px and 420px.',
             'render_data_quality' => $this->formatStructuralFindingsFailureDetail(\is_array($value) ? $value : []),
             default => '',
@@ -595,7 +577,7 @@ final class AiSiteQualityGateService
     /**
      * @param array<string,mixed> $summary
      */
-    private function formatBuildPlanBlocksFailureDetail(array $summary): string
+    private function formatPlanJsonBlocksFailureDetail(array $summary): string
     {
         $total = (int)($summary['total'] ?? 0);
         $done = (int)($summary['done'] ?? 0);
@@ -603,13 +585,13 @@ final class AiSiteQualityGateService
         $running = (int)($summary['running'] ?? 0);
         $failed = (int)($summary['failed'] ?? 0);
         if ($failed > 0) {
-            return "BuildPlan has {$failed}/{$total} failed block(s).";
+            return "plan_json has {$failed}/{$total} failed block(s).";
         }
         if ($pending > 0 || $running > 0) {
-            return "BuildPlan is not finished: {$done}/{$total} done, {$pending} pending, {$running} running.";
+            return "plan_json is not finished: {$done}/{$total} done, {$pending} pending, {$running} running.";
         }
 
-        return 'BuildPlan has no completed executable block evidence.';
+        return 'plan_json has no completed executable block evidence.';
     }
 
     /**

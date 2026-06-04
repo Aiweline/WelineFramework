@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
 
-final class BuildPlanBlockGraphValidator
+final class PlanJsonBlockGraphValidator
 {
     /**
      * @param array<string, mixed> $contract
@@ -14,13 +14,13 @@ final class BuildPlanBlockGraphValidator
     {
         $errors = [];
         [$pagesById, $pageErrors] = $this->indexById($contract['pages'] ?? [], ['page_id', 'id'], 'pages');
-        [$blocksById, $blockErrors] = $this->indexById($contract['blocks'] ?? [], ['block_id', 'id'], 'blocks');
+        [$blocksById, $blockErrors] = $this->indexById($contract['block_nodes'] ?? [], ['block_id', 'id'], 'block_nodes');
         $errors = \array_merge($errors, $pageErrors, $blockErrors);
 
         foreach ($pagesById as $pageId => $page) {
             $blockRefs = $this->extractPageBlockRefs($page);
             if ($blockRefs === []) {
-                $errors[] = 'Page has no blocks: ' . $pageId;
+                $errors[] = 'Page has no block_nodes: ' . $pageId;
             }
             foreach ($blockRefs as $blockId) {
                 if (!isset($blocksById[$blockId])) {
@@ -90,7 +90,7 @@ final class BuildPlanBlockGraphValidator
      */
     private function extractPageBlockRefs(array $page): array
     {
-        $source = \is_array($page['blocks'] ?? null) ? $page['blocks'] : (\is_array($page['block_ids'] ?? null) ? $page['block_ids'] : []);
+        $source = \is_array($page['block_node_ids'] ?? null) ? $page['block_node_ids'] : [];
         $refs = [];
         foreach ($source as $item) {
             if (\is_array($item)) {

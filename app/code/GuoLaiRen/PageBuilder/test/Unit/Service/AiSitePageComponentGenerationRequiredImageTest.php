@@ -77,7 +77,7 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
         $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'prepareInlineImageAssetForComponentSpec');
         $reflection->setAccessible(true);
 
-        $buildTask = [
+        $planJsonTask = [
             'task_key' => 'page:about_page:content/about-page-origin-story',
             'page_type' => 'about_page',
             'section_code' => 'content/about-page-origin-story',
@@ -90,7 +90,7 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
                 'runtime.section_image_slot_id' => 'asset:first:image',
             ],
             'renderContext' => [
-                '_build_plan_task' => $buildTask,
+                '_plan_json_task' => $planJsonTask,
                 '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:first:image'],
                 '_inline_image_asset_generator' => static function (): void {
                     throw new \RuntimeException('VectorEngine timed out');
@@ -106,7 +106,7 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
                 'runtime.section_image_slot_id' => 'asset:second:image',
             ],
             'renderContext' => [
-                '_build_plan_task' => \array_replace($buildTask, ['task_key' => 'page:blog_list:content/blog-list-resource-hero']),
+                '_plan_json_task' => \array_replace($planJsonTask, ['task_key' => 'page:blog_list:content/blog-list-resource-hero']),
                 '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:second:image'],
                 '_inline_image_asset_generator' => static function () use (&$called): array {
                     $called = true;
@@ -147,7 +147,7 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
                         'skip_inline_image_generation' => 1,
                     ],
                 ],
-                '_build_plan_task' => [
+                '_plan_json_task' => [
                     'task_key' => 'page:home_page:content/home-page-hero',
                 ],
                 '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:test:image'],
@@ -186,7 +186,7 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
                     'runtime.section_image_slot_id' => 'asset:test:queue-context-image',
                 ],
                 'renderContext' => [
-                    '_build_plan_task' => [
+                    '_plan_json_task' => [
                         'task_key' => 'page:blog_list:content/blog-list-resource-hero',
                     ],
                     '_visual_contract' => ['required' => 1, 'slot_id' => 'asset:test:queue-context-image'],
@@ -334,7 +334,7 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
         $service = new AiSitePageComponentGenerationService();
         $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'buildRenderContext');
         $reflection->setAccessible(true);
-        $buildPlanTask = [
+        $PlanJsonTask = [
             'task_key' => 'page:home_page:content/home-page-hero',
             'task_type' => 'page_section',
             'page_type' => 'home_page',
@@ -347,27 +347,21 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
         ];
         $scope = [
             'website_profile' => ['content_locale' => 'fr_FR'],
-            'build_plan_v2' => [
-                'contract_meta' => [
-                    'status' => 'confirmed',
-                    'signature' => 'unit-render-context-locale',
-                ],
+            'plan_json' => [
+                'confirmed' => 1,
+                'signature' => 'unit-render-context-locale',
                 'i18n' => ['primary_locale' => 'fr_FR'],
                 'pages' => [
-                    [
-                        'page_id' => 'home_page',
+                    'home_page' => [
                         'page_type' => 'home_page',
-                    ],
-                ],
-                'blocks' => [
-                    [
-                        'block_id' => 'home_page.hero',
-                        'page_id' => 'home_page',
-                        'page_type' => 'home_page',
-                        'section_key' => 'hero',
-                        'block_type' => 'hero',
-                        'page_flow_role' => 'hero',
-                        'content_keys' => ['hero.headline'],
+                        'hero' => [
+                            'block_id' => 'home_page.hero',
+                            'block_key' => 'hero',
+                            'section_key' => 'hero',
+                            'block_type' => 'hero',
+                            'page_flow_role' => 'hero',
+                            'content_keys' => ['hero.headline'],
+                        ],
                     ],
                 ],
                 'content_manifest' => [
@@ -387,8 +381,8 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
             $scope,
             [
                 'runtime.content_locale' => 'fr_FR',
-                'runtime.build_plan_task_json' => (string)\json_encode(
-                    $buildPlanTask,
+                'runtime.plan_json_task_json' => (string)\json_encode(
+                    $PlanJsonTask,
                     \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
                 ),
             ]
@@ -403,7 +397,7 @@ final class AiSitePageComponentGenerationRequiredImageTest extends TestCase
     public function testFrozenTaskPromptPassesLanguageAndCurrentBlockContext(): void
     {
         $service = new AiSitePageComponentGenerationService();
-        $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'buildBuildPlanTaskPromptAddon');
+        $reflection = new \ReflectionMethod(AiSitePageComponentGenerationService::class, 'planJsonJsonTaskPromptAddon');
         $reflection->setAccessible(true);
 
         $task = [

@@ -430,7 +430,7 @@ class ComponentService
      * 查找顺序：
      * 1. 如果指定了 styleCode，先精确匹配 code + style_code
      * 2. 如果没有指定 styleCode 或没找到，尝试只用 code 查找
-     * 3. 如果组件代码是旧格式（带模板前缀），尝试解析并查找
+     * 3. 如果组件代码是既有格式（带模板前缀），尝试解析并查找
      * 
      * @param string $componentCode 组件代码
      * @param string|null $styleCode 模板代码（可选，推荐传入）
@@ -467,7 +467,7 @@ class ComponentService
             return $component;
         }
         
-        // 3. 如果还没找到，尝试用原始代码查找（兼容旧格式）
+        // 3. 如果还没找到，尝试用原始代码查找（兼容既有格式）
         if ($normalizedCode !== $componentCode) {
             $component = clone $this->componentModel;
             $component->clear()

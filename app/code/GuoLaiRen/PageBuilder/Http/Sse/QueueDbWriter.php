@@ -66,9 +66,9 @@ class QueueDbWriter extends SseWriter
 
     private const STAGE_ONE_PROGRESS_BLOCK_LIMIT = 48;
 
-    private const BUILD_PLAN_BLOCK_PROGRESS_LIMIT = 64;
+    private const plan_json_block_progress_LIMIT = 64;
 
-    private const BUILD_PLAN_BLOCK_PROGRESS_MESSAGE_BYTES = 160;
+    private const plan_json_block_progress_MESSAGE_BYTES = 160;
 
     private const HEAVY_QUEUE_EVENT_FIELDS = [
         'state',
@@ -79,13 +79,12 @@ class QueueDbWriter extends SseWriter
         'result_log',
         'queue_result_delta',
         'queue_result',
-        'plan_workbench',
-        'build_plan_v2',
+        'plan_json',
         'task_results',
         'pagebuilder_pages_by_type',
         'virtual_pages_by_type',
         'page_type_layouts',
-        'blocks',
+        'block_nodes',
         'component',
         'html',
         'css',
@@ -732,26 +731,26 @@ class QueueDbWriter extends SseWriter
      */
     private function sanitizePayloadForQueueEvent(string $event, array $payload): array
     {
-        $payload = $this->discardLegacyStatePayloadFields($payload);
+        $payload = $this->discardTransientStatePayloadFields($payload);
         if (\is_array($payload['stage1_page_progress'] ?? null)) {
             $payload['stage1_page_progress'] = $this->compactStageOnePageProgress($payload['stage1_page_progress']);
         }
         if (\is_array($payload['task_summary'] ?? null)) {
-            $payload['task_summary'] = $this->compactBuildTaskSummary($payload['task_summary']);
+            $payload['task_summary'] = $this->compactPlanJsonTaskSummary($payload['task_summary']);
         }
         if (\is_array($payload['task_progress'] ?? null)) {
-            $payload['task_progress'] = $this->compactBuildTaskSummary($payload['task_progress']);
+            $payload['task_progress'] = $this->compactPlanJsonTaskSummary($payload['task_progress']);
         }
-        if (\is_array($payload['build_task_summary'] ?? null)) {
-            $payload['build_task_summary'] = $this->compactBuildTaskSummary($payload['build_task_summary']);
+        if (\is_array($payload['plan_json_task_summary'] ?? null)) {
+            $payload['plan_json_task_summary'] = $this->compactPlanJsonTaskSummary($payload['plan_json_task_summary']);
         }
         if (\is_array($payload['page_block_progress'] ?? null)) {
             $payload['page_block_progress'] = $this->compactBuildPageBlockProgress($payload['page_block_progress']);
         }
-        if (\is_array($payload['build_plan_block_progress'] ?? null)) {
-            $payload['build_plan_block_progress'] = $this->compactBuildPlanBlockProgress($payload['build_plan_block_progress']);
-        } elseif (\is_array($payload['state']['build_plan_block_progress'] ?? null)) {
-            $payload['build_plan_block_progress'] = $this->compactBuildPlanBlockProgress($payload['state']['build_plan_block_progress']);
+        if (\is_array($payload['plan_json_block_progress'] ?? null)) {
+            $payload['plan_json_block_progress'] = $this->compactPlanJsonBlockProgress($payload['plan_json_block_progress']);
+        } elseif (\is_array($payload['state']['plan_json_block_progress'] ?? null)) {
+            $payload['plan_json_block_progress'] = $this->compactPlanJsonBlockProgress($payload['state']['plan_json_block_progress']);
         }
         if (!$this->isContentBearingStreamPayload($event, $payload)) {
             return $this->capQueueEventPayloadBytes($this->pruneHeavyQueuePayloadFields($payload));
@@ -794,7 +793,7 @@ class QueueDbWriter extends SseWriter
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
-    private function discardLegacyStatePayloadFields(array $payload): array
+    private function discardTransientStatePayloadFields(array $payload): array
     {
         unset($payload['snapshot'], $payload['queue_snapshot'], $payload['checkpoint']);
         foreach (['payload', 'details', 'terminal_summary'] as $nestedField) {
@@ -914,9 +913,9 @@ class QueueDbWriter extends SseWriter
             'stage1_page_progress',
             'task_summary',
             'task_progress',
-            'build_task_summary',
+            'plan_json_task_summary',
             'page_block_progress',
-            'build_plan_block_progress',
+            'plan_json_block_progress',
         ] as $field) {
             if (\array_key_exists($field, $payload)) {
                 $compact[$field] = $payload[$field];
@@ -1060,8 +1059,8 @@ class QueueDbWriter extends SseWriter
             'started',
             'status',
             'status_transition',
-            'build_plan_block_completed',
-            'build_plan_block_failed',
+            'plan_json_block_completed',
+            'plan_json_block_failed',
             'complete',
             'completed',
             'done',
@@ -1149,9 +1148,9 @@ class QueueDbWriter extends SseWriter
             'stage1_page_progress',
             'task_summary',
             'task_progress',
-            'build_task_summary',
+            'plan_json_task_summary',
             'page_block_progress',
-            'build_plan_block_progress',
+            'plan_json_block_progress',
         ] as $field) {
             if (\is_array($payload[$field] ?? null)) {
                 $progress[$field] = $payload[$field];
@@ -1276,19 +1275,19 @@ class QueueDbWriter extends SseWriter
     private function buildQueueContentBuildProgressValues(array $payload): array
     {
         $progress = [];
-        $summary = \is_array($payload['build_task_summary'] ?? null)
-            ? $payload['build_task_summary']
+        $summary = \is_array($payload['plan_json_task_summary'] ?? null)
+            ? $payload['plan_json_task_summary']
             : (\is_array($payload['task_summary'] ?? null)
                 ? $payload['task_summary']
                 : (\is_array($payload['task_progress'] ?? null) ? $payload['task_progress'] : []));
         if ($summary !== []) {
-            $progress['build_task_summary'] = $this->compactBuildTaskSummary($summary);
+            $progress['plan_json_task_summary'] = $this->compactPlanJsonTaskSummary($summary);
         }
         if (\is_array($payload['page_block_progress'] ?? null)) {
             $progress['page_block_progress'] = $this->compactBuildPageBlockProgress($payload['page_block_progress']);
         }
-        if (\is_array($payload['build_plan_block_progress'] ?? null)) {
-            $progress['build_plan_block_progress'] = $this->compactBuildPlanBlockProgress($payload['build_plan_block_progress']);
+        if (\is_array($payload['plan_json_block_progress'] ?? null)) {
+            $progress['plan_json_block_progress'] = $this->compactPlanJsonBlockProgress($payload['plan_json_block_progress']);
         }
         if (\array_key_exists('progress_percent', $payload)) {
             $progress['progress_percent'] = \max(0, \min(100, (int)$payload['progress_percent']));
@@ -1524,7 +1523,7 @@ class QueueDbWriter extends SseWriter
      * @param array<string, mixed> $progress
      * @return array<string, mixed>
      */
-    private function compactBuildTaskSummary(array $summary): array
+    private function compactPlanJsonTaskSummary(array $summary): array
     {
         $compact = [];
         foreach (['total', 'done', 'pending', 'todo', 'queued', 'running', 'failed', 'cancelled', 'stale'] as $key) {
@@ -1625,7 +1624,7 @@ class QueueDbWriter extends SseWriter
      * @param array<int|string, mixed> $progress
      * @return list<array<string, string>>
      */
-    private function compactBuildPlanBlockProgress(array $progress): array
+    private function compactPlanJsonBlockProgress(array $progress): array
     {
         $rows = [];
         foreach ($progress as $row) {
@@ -1645,10 +1644,10 @@ class QueueDbWriter extends SseWriter
                 'section_key' => $this->strcutQueueTail($sectionKey, 96),
                 'label' => $this->strcutQueueTail($label, 120),
                 'status' => $this->normalizeCompactBlockStatus((string)($row['status'] ?? ($row['state'] ?? ($row['execution_status'] ?? 'pending')))),
-                'message' => $this->strcutQueueTail(\trim((string)($row['message'] ?? ($row['error_message'] ?? ($row['failure_reason'] ?? '')))), self::BUILD_PLAN_BLOCK_PROGRESS_MESSAGE_BYTES),
+                'message' => $this->strcutQueueTail(\trim((string)($row['message'] ?? ($row['error_message'] ?? ($row['failure_reason'] ?? '')))), self::plan_json_block_progress_MESSAGE_BYTES),
                 'updated_at' => $this->strcutQueueTail(\trim((string)($row['updated_at'] ?? ($row['finished_at'] ?? ''))), 96),
             ];
-            if (\count($rows) >= self::BUILD_PLAN_BLOCK_PROGRESS_LIMIT) {
+            if (\count($rows) >= self::plan_json_block_progress_LIMIT) {
                 break;
             }
         }
@@ -1713,8 +1712,8 @@ class QueueDbWriter extends SseWriter
                     ? \max(0, (int)$detail[$field])
                     : $this->strcutQueueTail(\trim((string)$detail[$field]), 180);
             }
-            if (\is_array($detail['blocks'] ?? null)) {
-                $row['blocks'] = $this->compactStageOneBlockProgressList($detail['blocks']);
+            if (\is_array($detail['block_rows'] ?? null)) {
+                $row['block_rows'] = $this->compactStageOneBlockProgressList($detail['block_rows']);
             }
             $details[] = $row;
             if (\count($details) >= self::STAGE_ONE_PROGRESS_DETAIL_LIMIT) {

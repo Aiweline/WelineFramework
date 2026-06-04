@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service\AI\Contract;
 
-use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContentManifestLinter;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PlanJsonContentManifestLinter;
 use PHPUnit\Framework\TestCase;
 
-final class BuildPlanContentManifestLinterTest extends TestCase
+final class PlanJsonContentManifestLinterTest extends TestCase
 {
     public function testContentManifestCoversPageAndBlockKeys(): void
     {
-        $result = (new BuildPlanContentManifestLinter())->validate($this->contract([
+        $result = (new PlanJsonContentManifestLinter())->validate($this->contract([
             'home.title' => 'AI tool platform',
             'home.desc' => 'A product website for AI teams.',
             'home.hero.title' => 'Build faster with focused AI workflows',
@@ -23,7 +23,7 @@ final class BuildPlanContentManifestLinterTest extends TestCase
 
     public function testRejectsMissingContentKeysAndPlaceholderCopy(): void
     {
-        $result = (new BuildPlanContentManifestLinter())->validate($this->contract([
+        $result = (new PlanJsonContentManifestLinter())->validate($this->contract([
             'home.title' => 'Lorem ipsum headline',
             'home.desc' => 'A product website for AI teams.',
             'home.hero.cta' => 'Start building',
@@ -43,9 +43,9 @@ final class BuildPlanContentManifestLinterTest extends TestCase
             'home.hero.cta' => 'Learn more',
             'pricing.cta' => 'Learn more',
         ]);
-        $contract['blocks'][0]['content_keys'][] = 'pricing.cta';
+        $contract['block_nodes'][0]['content_keys'][] = 'pricing.cta';
 
-        $result = (new BuildPlanContentManifestLinter())->validate($contract);
+        $result = (new PlanJsonContentManifestLinter())->validate($contract);
 
         self::assertFalse($result['valid']);
         self::assertTrue($this->hasErrorContaining($result['errors'], 'CTA copy'));
@@ -64,7 +64,7 @@ final class BuildPlanContentManifestLinterTest extends TestCase
         $contract['i18n']['primary_locale'] = 'zh_Hans_CN';
         $contract['content_manifest']['primary_locale'] = 'zh_Hans_CN';
 
-        $result = (new BuildPlanContentManifestLinter())->validate($contract);
+        $result = (new PlanJsonContentManifestLinter())->validate($contract);
 
         self::assertTrue($result['valid'], \implode("\n", $result['errors']));
     }
@@ -80,16 +80,16 @@ final class BuildPlanContentManifestLinterTest extends TestCase
         ]);
         $contract['i18n']['primary_locale'] = 'pt_BR';
         $contract['content_manifest']['primary_locale'] = 'pt_BR';
-        $contract['blocks'][0]['content_keys'][] = 'home.hero.copy';
+        $contract['block_nodes'][0]['content_keys'][] = 'home.hero.copy';
 
-        $result = (new BuildPlanContentManifestLinter())->validate($contract);
+        $result = (new PlanJsonContentManifestLinter())->validate($contract);
 
         self::assertTrue($result['valid'], \implode("\n", $result['errors']));
     }
 
     public function testTodoMarkerStillCountsAsPlaceholder(): void
     {
-        $result = (new BuildPlanContentManifestLinter())->validate($this->contract([
+        $result = (new PlanJsonContentManifestLinter())->validate($this->contract([
             'home.title' => 'Teenipiya',
             'home.desc' => 'Um site para jogadores de Teen Patti no Brasil.',
             'home.hero.title' => 'TODO: replace this headline',
@@ -117,10 +117,10 @@ final class BuildPlanContentManifestLinterTest extends TestCase
                     'page_id' => 'home',
                     'title_key' => 'home.title',
                     'description_key' => 'home.desc',
-                    'blocks' => ['home.hero'],
+                    'block_node_ids' => ['home.hero'],
                 ],
             ],
-            'blocks' => [
+            'block_nodes' => [
                 [
                     'block_id' => 'home.hero',
                     'page_id' => 'home',

@@ -101,7 +101,7 @@ HTML;
 
         $html = '<header><a class="logo"><span>Card Room Download Hub</span></a><nav>'
             . '<a>Card Room Download Hub</a><a>Card Room Download Hub</a><a>Card Room Download Hub</a>'
-            . '</nav></header><main><h1>Old hero headline</h1></main>';
+            . '</nav></header><main><h1>Prior hero headline</h1></main>';
         $referenceConfig = [
             'logo.text' => 'Card Room Download Hub',
             'navigation.items' => "Card Room Download Hub=>/\nCard Room Download Hub=>/about\nCard Room Download Hub=>/contact",
@@ -110,7 +110,7 @@ HTML;
                 ['text' => 'Card Room Download Hub', 'href' => '/about'],
                 ['text' => 'Card Room Download Hub', 'href' => '/contact'],
             ],
-            'content.title' => 'Old hero headline',
+            'content.title' => 'Prior hero headline',
         ];
         $currentConfig = [
             'logo.text' => 'Card Room Download Hub',

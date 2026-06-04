@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
-final class AiSiteBuildPlanProjectionService
+final class AiSitePlanJsonProjectionService
 {
     /**
      * @param array<string, mixed> $contract
@@ -17,17 +17,17 @@ final class AiSiteBuildPlanProjectionService
         $content = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
         $items = \is_array($content['items'] ?? null) ? $content['items'] : [];
         $pages = $this->normalizeRecordSet($contract['pages'] ?? [], ['page_id', 'id']);
-        $blocks = $this->normalizeRecordSet($contract['blocks'] ?? [], ['block_id', 'id']);
+        $blockNodes = $this->normalizeRecordSet($contract['block_nodes'] ?? [], ['block_id', 'id']);
         $tasks = $this->normalizeRecordSet($contract['tasks'] ?? [], ['task_id', 'id']);
         $design = \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : [];
         $policyProjection = \is_array($contract['policy_projection'] ?? null) ? $contract['policy_projection'] : [];
 
         $projectedPages = [];
         foreach ($pages as $pageId => $page) {
-            $pageBlockIds = $this->stringList($page['blocks'] ?? $page['block_ids'] ?? []);
+            $pageBlockIds = $this->stringList($page['block_node_ids'] ?? []);
             $projectedBlocks = [];
             foreach ($pageBlockIds as $blockId) {
-                $block = \is_array($blocks[$blockId] ?? null) ? $blocks[$blockId] : [];
+                $block = \is_array($blockNodes[$blockId] ?? null) ? $blockNodes[$blockId] : [];
                 if ($block === []) {
                     continue;
                 }
@@ -44,7 +44,7 @@ final class AiSiteBuildPlanProjectionService
                 'page_type' => (string)($page['page_type'] ?? $pageId),
                 'title' => $this->contentValue($items, (string)($page['title_key'] ?? ''), (string)($page['title'] ?? $pageId)),
                 'description' => $this->contentValue($items, (string)($page['description_key'] ?? ''), (string)($page['description'] ?? '')),
-                'blocks' => $projectedBlocks,
+                'block_nodes' => $projectedBlocks,
             ];
         }
 
@@ -58,7 +58,7 @@ final class AiSiteBuildPlanProjectionService
             'primary_goal' => (string)($brief['primary_goal'] ?? ''),
             'summary' => (string)($brief['summary'] ?? $brief['primary_goal'] ?? ''),
             'page_count' => \count($projectedPages),
-            'block_count' => \count($blocks),
+            'block_count' => \count($blockNodes),
             'task_count' => \count($tasks),
             'pages' => $projectedPages,
             'design' => [

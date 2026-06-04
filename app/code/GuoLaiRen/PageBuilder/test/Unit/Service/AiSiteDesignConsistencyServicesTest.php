@@ -13,12 +13,18 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteDesignConsistencyServicesTest extends TestCase
 {
-    public function testManifestPolicyRejectsInlineBuildPlanArtifact(): void
+    public function testManifestPolicyRejectsInlinePlanJsonArtifact(): void
     {
         $policy = new AiSiteScopeManifestPolicy();
         $this->expectException(\InvalidArgumentException::class);
         $policy->assertManifestClean([
-            'build_plan_v2' => ['blocks' => [['payload' => \str_repeat('x', AiSiteScopeManifestPolicy::MANIFEST_INLINE_MAX_BYTES + 1)]]],
+            'plan_json' => [
+                'pages' => [
+                    'home_page' => [
+                        'hero' => ['html' => \str_repeat('x', AiSiteScopeManifestPolicy::MANIFEST_INLINE_MAX_BYTES + 1)],
+                    ],
+                ],
+            ],
         ], true);
     }
 
@@ -29,7 +35,7 @@ final class AiSiteDesignConsistencyServicesTest extends TestCase
             'plan_json' => ['pages' => []],
             'virtual_pages_by_type' => [
                 'home_page' => [
-                    'blocks' => [
+                    'block_nodes' => [
                         ['block_id' => 'hero', 'html' => str_repeat('x', 600)],
                     ],
                 ],
@@ -37,8 +43,8 @@ final class AiSiteDesignConsistencyServicesTest extends TestCase
         ];
         $dehydrated = $policy->dehydrateScopePaths($scope);
         self::assertSame([], $dehydrated['plan_json']);
-        self::assertArrayNotHasKey('html', $dehydrated['virtual_pages_by_type']['home_page']['blocks'][0]);
-        self::assertNotEmpty($dehydrated['virtual_page_index']['home_page']['blocks']);
+        self::assertArrayNotHasKey('html', $dehydrated['virtual_pages_by_type']['home_page']['block_nodes'][0]);
+        self::assertNotEmpty($dehydrated['virtual_page_index']['home_page']['block_nodes']);
     }
 
     public function testDesignTokenResolverBuildsRootCss(): void
@@ -100,7 +106,13 @@ final class AiSiteDesignConsistencyServicesTest extends TestCase
         for ($i = 0; $i < 50; ++$i) {
             $scope = [
                 'design_tokens' => ['font_display' => 'A', 'font_body' => 'A'],
-                'build_plan_v2' => ['blocks' => [['block_id' => 'hero-' . $i, 'execution' => ['status' => 'done']]]],
+                'plan_json' => [
+                    'pages' => [
+                        'home_page' => [
+                            'hero_' . $i => ['status' => 1, 'html' => '<section>Hero</section>'],
+                        ],
+                    ],
+                ],
             ];
             $policy->dehydrateScopePaths($scope);
             unset($scope);

@@ -61,12 +61,12 @@ final class AiHtmlSanitizerService
     }
 
     /**
-     * @param array<string, mixed> $layout 须含 blocks:list
+     * @param array<string, mixed> $layout
      * @return array<string, mixed>
      */
     public function sanitizeAiLayout(array $layout): array
     {
-        $blocks = $layout['blocks'] ?? [];
+        $blocks = $layout['block_nodes'] ?? [];
         if (!\is_array($blocks)) {
             $blocks = [];
         }
@@ -86,6 +86,6 @@ final class AiHtmlSanitizerService
             ];
         }
 
-        return ['blocks' => $out];
+        return ['block_nodes' => $out];
     }
 }
