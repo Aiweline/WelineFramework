@@ -1390,6 +1390,74 @@ Next,Next
 姓名,姓名
 消息内容,消息内容
 提交请求,提交请求
+"Weline default page","Weline default page"
+"This default Theme page is ready for module hooks, visual slots, and direct controller content.","This default Theme page is ready for module hooks, visual slots, and direct controller content."
+"Go home","Go home"
+Contact,Contact
+"Weline Default Theme","Weline Default Theme"
+"Build a clean storefront","Build a clean storefront"
+"A ready homepage with graceful defaults, module hooks, and visual slots for real content.","A ready homepage with graceful defaults, module hooks, and visual slots for real content."
+"Browse products","Browse products"
+"Talk to us","Talk to us"
+"Ready layout regions","Ready layout regions"
+"Footer extension slots","Footer extension slots"
+"Required commerce modules","Required commerce modules"
+"Featured picks","Featured picks"
+"Use product, banner, or content widgets here when real data is available.","Use product, banner, or content widgets here when real data is available."
+"View all","View all"
+"Starter Kit","Starter Kit"
+"Modern Pack","Modern Pack"
+"Growth Bundle","Growth Bundle"
+"Studio Set","Studio Set"
+"Default product placeholder. Replace with module data or widgets.","Default product placeholder. Replace with module data or widgets."
+"Explore sections","Explore sections"
+"Default cards keep the page useful before a category module is installed.","Default cards keep the page useful before a category module is installed."
+Collections,Collections
+"Curated groups for product or content modules.","Curated groups for product or content modules."
+Promotions,Promotions
+"Seasonal banners, offers, or announcement widgets.","Seasonal banners, offers, or announcement widgets."
+Services,Services
+"Support blocks, guides, and contact entry points.","Support blocks, guides, and contact entry points."
+"Launch-ready by default","Launch-ready by default"
+"Publish a clean page first, then let modules replace each region with live data.","Publish a clean page first, then let modules replace each region with live data."
+"Get started","Get started"
+"Latest updates","Latest updates"
+"Use this slot for new products, posts, releases, or campaigns.","Use this slot for new products, posts, releases, or campaigns."
+"New content","New content"
+"Fresh module output can replace this fallback.","Fresh module output can replace this fallback."
+"Featured story","Featured story"
+"Ideal for CMS, blog, or landing content.","Ideal for CMS, blog, or landing content."
+"Active campaign","Active campaign"
+"Drop in a banner or promotion widget.","Drop in a banner or promotion widget."
+"Popular now","Popular now"
+"A neutral region for ranked items, recommended content, or highlights.","A neutral region for ranked items, recommended content, or highlights."
+"Top item","Top item"
+"Ready for ranking widgets.","Ready for ranking widgets."
+"Customer choice","Customer choice"
+"Ready for review or recommendation modules.","Ready for review or recommendation modules."
+"Editor pick","Editor pick"
+"Ready for curated content.","Ready for curated content."
+"Trusted ecosystem","Trusted ecosystem"
+"Brand, partner, certification, or channel widgets can live here.","Brand, partner, certification, or channel widgets can live here."
+Reliable,Reliable
+"Defaults render without optional commerce dependencies.","Defaults render without optional commerce dependencies."
+Composable,Composable
+"Each important region has a named slot and hook.","Each important region has a named slot and hook."
+Replaceable,Replaceable
+"Real module output can replace fallback content cleanly.","Real module output can replace fallback content cleanly."
+"Default Theme","Default Theme"
+"A clean Weline homepage","A clean Weline homepage"
+"Use slots for visual composition, hooks for real module data, and this fallback for a complete default page.","Use slots for visual composition, hooks for real module data, and this fallback for a complete default page."
+Explore,Explore
+"Logo, navigation, search, account, and cart slots.","Logo, navigation, search, account, and cart slots."
+"Hero, products, categories, banners, and module content.","Hero, products, categories, banners, and module content."
+"Links, social, newsletter, payment, and copyright slots.","Links, social, newsletter, payment, and copyright slots."
+"Real data first","Real data first"
+"Modules can replace this card through hooks without changing Theme code.","Modules can replace this card through hooks without changing Theme code."
+"Visual slots","Visual slots"
+"The editor can place widgets into clearly named homepage regions.","The editor can place widgets into clearly named homepage regions."
+"Safe defaults","Safe defaults"
+"The page remains readable when optional modules are not installed.","The page remains readable when optional modules are not installed."
 "本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。","This page explains how we use cookies and related technologies on this website, as well as your choices for managing cookies."
 "一、什么是 Cookie？","1. What are Cookies?"
 "Cookie 是当您访问网站时，由网站服务器存储在您设备上的小型文本文件。Cookie 有助于网站识别您的设备，记住您的偏好设置，并改进服务体验。","Cookies are small text files that are stored on your device by the website server when you visit a website. Cookies help websites recognize your device, remember your preferences, and improve your experience."
@@ -1646,37 +1714,29 @@ Next,Next
 "推荐产品区域 - 拖拽推荐部件到此处","Recommended product area - Drag recommended widgets here"
 示例分类,"Example Category"
 当前页面,"Current page"
-了解我们,"About Us"
-职业机会,"Career opportunities"
-新闻中心,"News Center"
-投资者关系,"Investor Relations"
-设备与服务,"Devices & Services"
-赚钱,"Earn money"
-在网站上销售,"Sell on the website"
-销售您的应用,"Sell Your App"
-成为合作伙伴,"Become a partner"
-广告,Advertisement
-自助出版,Self-publishing
-付款产品,"Payment product"
-商店卡,"Store Card"
-购物积分,"Shopping points"
-货币转换器,"Currency Converter"
-礼品卡,"Gift Card"
-需要帮助？,"Need assistance?"
-COVID-19和网站,"COVID-19 and website"
-您的账户,"Your account"
-配送率和政策,"Shipping rates and policies"
-退货和换货,"Returns and Exchanges"
-管理您的内容和设备,"Manage Your Content and Devices"
-帮助,Help
-法律与政策,"Legal & Policy"
-微信公众号,"WeChat official account"
-微博,Weibo
-抖音,TikTok
-B站,"Station B"
-小红书,Xiaohongshu
-关注我们,"Follow Us"
-返回顶部,"Back to Top"
+Theme,Theme
+Home,Home
+Products,Products
+Solutions,Solutions
+Support,Support
+"Help Center","Help Center"
+Orders,Orders
+Returns,Returns
+FAQ,FAQ
+Policies,Policies
+Privacy,Privacy
+Terms,Terms
+Cookie,Cookie
+Disclaimer,Disclaimer
+WeChat,WeChat
+Douyin,Douyin
+YouTube,YouTube
+Instagram,Instagram
+"A clean default theme surface for modules, real data hooks, and visual composition.","A clean default theme surface for modules, real data hooks, and visual composition."
+"Get updates","Get updates"
+"Email address","Email address"
+Subscribe,Subscribe
+"Back to top","Back to top"
 "Weline Framework","Weline Framework"
 Weline,Weline
 网站Logo,"Site Logo"
@@ -1684,158 +1744,13 @@ Weline,Weline
 切换语言,"Change language"
 语言,Language
 切换货币,"Change currency"
-跳转到主要内容,"Skip to main content"
-选择配送地址,"Choose delivery address"
-配送至,"Deliver to"
-中国大陆,"China Mainland"
-搜索建议,"Search suggestions"
-我的,My
-我的菜单,"My menu"
-账户及心愿单,"Account & Wishlist"
-我的订单,"My orders"
-账户设置,"Account settings"
-简体中文,"Simplified Chinese"
-繁體中文,"Traditional Chinese"
-货币,Currency
-ZH,ZH
-语言选项,"Language options"
-English,English
-CNY,CNY
-货币选项,"Currency options"
-账户菜单,"Account menu"
-"您好, 登录","Hello, sign in"
-退货,Return
-与我的订单,"with my order"
-打开购物车,"Open shopping cart"
-关闭购物车,"Close shopping cart"
-总计,Total
-查看购物车,"View Shopping Cart"
-去结算,"Proceed to Checkout"
-打开所有类别菜单,"Open all categories menu"
-关闭菜单,"Close menu"
-电子产品,Electronics
-手机通讯,"Mobile Phones & Communication"
-智能手机,Smartphones
-功能手机,"Feature phones"
-5G手机,"5G phones"
-折叠手机,"Foldable phones"
-手机壳,"Phone cases"
-屏幕保护膜,"Screen protectors"
-充电器,Chargers
-数据线,Cables
-移动电源,"Power banks"
-手机耳机,"Phone headsets"
-电脑办公,"Computers & Office"
-笔记本,Laptops
-游戏本,"Gaming laptops"
-超极本,Ultrabooks
-台式机,Desktops
-一体机,"All-in-one PCs"
-平板电脑,Tablets
-显示器,Monitors
-键盘,Keyboards
-鼠标,Mice
-摄像头,Webcams
-存储设备,"Storage devices"
-智能设备,"Smart devices"
-智能手表,Smartwatches
-运动手环,"Fitness trackers"
-智能音箱,"Smart speakers"
-智能照明,"Smart lighting"
-智能门锁,"Smart locks"
-智能摄像头,"Smart cameras"
-智能家居套装,"Smart home kits"
-可穿戴设备,Wearables
-影音娱乐,"Audio & Video"
-无线耳机,"Wireless headphones"
-有线耳机,"Wired headphones"
-入耳式耳机,Earbuds
-蓝牙音响,Speakers
-Soundbar,Soundbar
-单反相机,"DSLR Camera"
-微单相机,"Mirrorless camera"
-运动相机,"Action camera"
-游戏主机,"Game console"
-游戏配件,"Gaming accessories"
-服装服饰,"Clothing & Accessories"
-男装,"Men's clothing"
-衬衫,Shirt
-T恤,T-shirt
-Polo衫,"Polo shirt"
-长裤,Pants
-短裤,Shorts
-外套,Coat
-毛衣,Sweater
-皮鞋,"Leather shoes"
-运动鞋,"Sports shoes"
-皮带,Belt
-手表,Watch
-包袋,Bag
-女装,"Women's Clothing"
-连衣裙,Dress
-上装,Tops
-下装,Bottoms
-半身裙,Skirt
-大衣,Coat
-高跟鞋,"High heels"
-平底鞋,"Flat shoes"
-靴子,Boots
-手提包,Handbag
-斜挎包,"Crossbody Bag"
-首饰,Jewelry
-童装,"Children's Clothing"
-男童装,"Boys' clothing"
-女童装,"Girls' Clothing"
-婴儿装,"Baby Clothing"
-童鞋,"Children's Shoes"
-童装配饰,"Children's Accessories"
-校服,"School uniform"
-泳装,Swimsuit
-运动服饰,Sportswear
-运动装,"Sports attire"
-跑步装备,"Running gear"
-健身服,"Fitness Wear"
-跑鞋,"Running shoes"
-篮球鞋,"Basketball shoes"
-户外装备,"Outdoor Gear"
-露营装备,"Camping Gear"
-家居用品,"Home & Living"
-家具,Furniture
-沙发,Sofa
-沙发床,"Sofa bed"
-餐桌,"Dining Table"
-茶几,"Coffee table"
-椅子,Chair.
-办公椅,"Office Chair"
-床具,"Bed Frames"
-衣柜,Wardrobe
-书柜,Bookshelf
-家纺,"Home Textiles"
-床上用品,Bedding
-床单被套,"Bed Sheets and Pillowcases"
-枕头,Pillow
-被子,Quilt
-窗帘,Curtains
-毛巾,Towel
-地毯,Carpet
-靠垫,Cushion
-厨房用品,"Kitchen Supplies"
-锅具,Cookware
-刀具,Tool
-餐具,Tableware
-杯具,Tragic
-收纳,Organize
-厨房工具,"Kitchen Tools"
-小家电,"Small Appliances"
-装饰用品,"Decorative Items"
-墙饰,"Wall Decor"
-花瓶,Vase
-灯具,"Lighting fixtures"
-镜子,Mirror
-绿植,"Green plants"
-运动户外,"Sports & Outdoors"
-图书音像,"Books & Media"
-食品饮料,"Food & Drinks"
+Docs,Docs
+"Free theme-ready header. Replace this area from any module hook or slot.","Free theme-ready header. Replace this area from any module hook or slot."
+Search...,Search...
+Search,Search
+Account,Account
+Cart,Cart
+"Toggle navigation","Toggle navigation"
 分页导航,"Pagination navigation"
 NEW,NEW
 SALE,SALE
@@ -1844,6 +1759,7 @@ SALE,SALE
 加入购物车,"Add to Cart"
 暂时缺货,"Temporarily out of stock"
 已添加,Added
+广告,Advertisement
 2026春季新品上市,"2026 spring new product launch"
 探索最新时尚潮流,"Explore the latest fashion trends"
 立即选购,"Buy Now"
@@ -1862,6 +1778,7 @@ SALE,SALE
 时,Hour
 分,Minute
 秒,second
+电子产品,Electronics
 面包屑导航,"Breadcrumb Navigation"
 "轮播产品 %d","Carousel product %d"
 热门分类,"Popular Categories"
@@ -1871,9 +1788,16 @@ SALE,SALE
 美妆个护,"Beauty & Personal Care"
 食品生鲜,"Food & Fresh Produce"
 母婴用品,"Baby & Maternity Products"
+运动户外,"Sports & Outdoors"
 图书文具,"Books and stationery"
 件商品,"items of goods"
 商品分类,"Product Category"
+男装,"Men's clothing"
+女装,"Women's Clothing"
+童装,"Children's Clothing"
+家具,Furniture
+家纺,"Home Textiles"
+收纳,Organize
 清除全部,"Clear all"
 "100 - 299 元","100 - 299 yuan"
 价格区间,"Price range"
@@ -1919,6 +1843,7 @@ SSL安全,"SSL security"
 搜索问题...,"Search issues..."
 公司简介,"Company Profile"
 加入我们,"Join Us"
+新闻中心,"News Center"
 客户服务,"Customer Service"
 帮助中心,"Help center"
 配送说明,"Shipping instructions"
@@ -1930,6 +1855,7 @@ SSL安全,"SSL security"
 法律条款,"Terms of Service"
 使用条款,"Terms of use"
 Cookie政策,"Cookie Policy"
+我的订单,"My orders"
 我的收藏,"My Favorites"
 地址管理,"Address Management"
 欢迎回来,"Welcome back"
@@ -1948,6 +1874,8 @@ Cookie政策,"Cookie Policy"
 促销活动,"Promotional Campaign"
 示例商品名称,"Example Product Name"
 小计,Subtotal
+查看购物车,"View Shopping Cart"
+去结算,"Proceed to Checkout"
 全部分类,"All categories"
 配件,Accessories
 商品,Product
@@ -2005,14 +1933,21 @@ Cookie政策,"Cookie Policy"
 订阅获取最新优惠信息,"Subscribe for the Latest Deals"
 请输入邮箱地址,"Please enter the email address"
 我们不会分享您的邮箱地址,"We will not share your email address"
+关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
 热门标签,"Popular Tags"
 耳机,Headphones
 相机,Camera
+智能手表,Smartwatches
+充电器,Chargers
+数据线,Cables
 保护壳,"Protective Case"
 蓝牙,Bluetooth
 音箱,Speaker
+键盘,Keyboards
+鼠标,Mice
+显示器,Monitors
 路由器,Router
 分享到,"Share to"
 邮件,Mail

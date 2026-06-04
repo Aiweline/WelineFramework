@@ -50,7 +50,7 @@ class AiSiteQueueStateService
         $publicIdHint = '';
         $jobKey = '';
         $jobType = '';
-        $jobStatus = '';
+        $contentStatus = '';
         $token = '';
         $tokenUsage = $this->normalizeTokenUsage($queueRow);
         $stageOnePageProgress = [];
@@ -70,7 +70,7 @@ class AiSiteQueueStateService
                 }
                 $jobKey = \trim((string)($decoded['job_key'] ?? ''));
                 $jobType = \trim((string)($decoded['job_type'] ?? ''));
-                $jobStatus = \trim((string)($decoded['status'] ?? ''));
+                $contentStatus = \trim((string)($decoded['queue_status'] ?? ''));
                 $token = \trim((string)($decoded['token'] ?? ($decoded['execution_token'] ?? '')));
                 $contentTokenUsage = $this->normalizeTokenUsage($decoded);
                 foreach (['input_tokens', 'output_tokens', 'total_tokens'] as $tokenKey) {
@@ -90,14 +90,14 @@ class AiSiteQueueStateService
             $stageOnePageProgress = $this->extractStageOnePageProgressFromRawContent($rawContent);
         }
 
-        $effectiveJobStatus = $status !== '' ? $status : $jobStatus;
+        $queueStatus = $status !== '' ? $status : $contentStatus;
 
         return [
             'queue_id' => $queueId,
             'name' => $name,
             'module' => $module,
             'biz_key' => $bizKey,
-            'status' => $status,
+            'queue_status' => $queueStatus,
             'pid' => $pid,
             'type_id' => $typeId,
             'finished' => $finished,
@@ -106,7 +106,6 @@ class AiSiteQueueStateService
             'public_id_hint' => $publicIdHint,
             'job_key' => $jobKey,
             'job_type' => $jobType,
-            'job_status' => $effectiveJobStatus,
             'token' => $token,
             'token_usage' => $tokenUsage,
             'stage1_page_progress' => $stageOnePageProgress,

@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteQualityGateServiceTest extends TestCase
 {
-    public function testInspectScopePassesWithCompletedPlanJsonRenderedPageAndSharedBlockNodes(): void
+    public function testInspectScopePassesWithCompletedPlanJsonRenderedPageAndSharedBlocks(): void
     {
         $service = $this->createService();
         $report = $service->inspectScope($this->buildScope(), [
@@ -22,7 +22,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
 
         self::assertTrue($report['passed'], \json_encode($report, \JSON_UNESCAPED_UNICODE));
         self::assertSame(
-            ['plan_json_block_nodes_done', 'required_pages_render', 'shared_block_nodes_ready', 'responsive_support', 'render_data_quality'],
+            ['plan_json_blocks_done', 'required_pages_render', 'shared_blocks_ready', 'responsive_support', 'render_data_quality'],
             \array_map(static fn(array $item): string => (string)$item['key'], $report['items'])
         );
     }
@@ -38,7 +38,42 @@ final class AiSiteQualityGateServiceTest extends TestCase
         ]);
 
         self::assertFalse($report['passed']);
-        self::assertFalse((bool)($this->findItem($report['items'], 'plan_json_block_nodes_done')['ok'] ?? true));
+        self::assertFalse((bool)($this->findItem($report['items'], 'plan_json_blocks_done')['ok'] ?? true));
+    }
+
+    public function testInspectScopeDoesNotUseMaterializedOrVirtualPagesToCompletePlanJsonBlocks(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        $scope['plan_json']['pages']['home_page']['hero_banner']['status'] = 0;
+        $scope['materialized_pages_by_type'] = [
+            'home_page' => [
+                'page_id' => 123,
+                'ai_layout' => [
+                    'blocks' => [
+                        ['block_id' => 'header-ai-site-header', 'type' => 'ai_generated_shared_header'],
+                        ['block_id' => 'home-page-hero-banner', 'type' => 'ai_generated_section'],
+                        ['block_id' => 'footer-ai-site-footer', 'type' => 'ai_generated_shared_footer'],
+                    ],
+                ],
+            ],
+        ];
+        $scope['virtual_pages_by_type']['home_page']['blocks'][] = [
+            'block_id' => 'extra-generated-proof',
+            'type' => 'ai_generated_section',
+            'html' => '<section class="pb-c-root"><h2>Generated elsewhere</h2></section>',
+        ];
+
+        $report = $service->inspectScope($scope, [
+            'home_page' => $this->pageHtml('<section><h1>Rendered old artifact</h1></section>'),
+        ]);
+
+        $item = $this->findItem($report['items'], 'plan_json_blocks_done');
+        $statusGate = $item['value']['plan_json_block_status_gate'] ?? [];
+        self::assertFalse($report['passed']);
+        self::assertFalse((bool)($item['ok'] ?? true));
+        self::assertSame(1, (int)($statusGate['pending'] ?? -1));
+        self::assertSame(0, (int)($statusGate['done'] ?? -1));
     }
 
     public function testInspectScopeBlocksWhenRequiredPageDoesNotRender(): void
@@ -46,6 +81,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         $service = $this->createService();
         $scope = $this->buildScope();
         unset($scope['pagebuilder_pages_by_type'], $scope['virtual_pages_by_type']);
+        unset($scope['plan_json']['pages']['home_page']['hero_banner']['html']);
 
         $report = $service->inspectScope($scope);
 
@@ -53,11 +89,24 @@ final class AiSiteQualityGateServiceTest extends TestCase
         self::assertFalse((bool)($this->findItem($report['items'], 'required_pages_render')['ok'] ?? true));
     }
 
+    public function testInspectScopeUsesCanonicalPlanJsonHtmlWhenRenderedPageIsMissing(): void
+    {
+        $service = $this->createService();
+        $scope = $this->buildScope();
+        unset($scope['pagebuilder_pages_by_type'], $scope['virtual_pages_by_type'], $scope['page_type_layouts']);
+        $scope['plan_json']['pages']['home_page']['hero_banner']['html'] = '<section class="pb-c-root"><h1>Canonical Plan JSON</h1><p>Rendered from block HTML.</p><style>@media (max-width: 768px){.pb-c-root{max-width:100%;}}@media (max-width: 420px){.pb-c-root{width:100%;}}</style></section>';
+
+        $report = $service->inspectScope($scope);
+
+        self::assertTrue($report['passed'], \json_encode($report, \JSON_UNESCAPED_UNICODE));
+        self::assertTrue((bool)($this->findItem($report['items'], 'required_pages_render')['ok'] ?? false));
+    }
+
     public function testInspectScopeBlocksWhenSharedFooterIsMissing(): void
     {
         $service = $this->createService();
         $scope = $this->buildScope();
-        $scope['virtual_pages_by_type']['home_page']['block_nodes'] = [
+        $scope['virtual_pages_by_type']['home_page']['blocks'] = [
             ['block_id' => 'header-ai-site-header', 'type' => 'ai_generated_shared_header'],
             ['block_id' => 'home-page-hero-banner', 'section_code' => 'content/home-page-hero-banner', 'code' => 'content/home-page-hero-banner', 'type' => 'ai_generated_section'],
         ];
@@ -66,7 +115,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         ]);
 
         self::assertFalse($report['passed']);
-        self::assertFalse((bool)($this->findItem($report['items'], 'shared_block_nodes_ready')['ok'] ?? true));
+        self::assertFalse((bool)($this->findItem($report['items'], 'shared_blocks_ready')['ok'] ?? true));
     }
 
     public function testInspectScopeBlocksWhenResponsiveBreakpointsAreMissing(): void
@@ -170,7 +219,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
 
         self::assertTrue($report['passed'], \json_encode($report, \JSON_UNESCAPED_UNICODE));
         self::assertSame(
-            ['plan_json_block_nodes_done', 'required_pages_render', 'shared_block_nodes_ready', 'responsive_support', 'render_data_quality'],
+            ['plan_json_blocks_done', 'required_pages_render', 'shared_blocks_ready', 'responsive_support', 'render_data_quality'],
             \array_map(static fn(array $item): string => (string)$item['key'], $report['items'])
         );
     }
@@ -211,7 +260,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
                     'title' => 'Neon Chess Casino',
                     'handle' => 'home',
                     'style_code' => 'neon_chess_casino_dark',
-                    'block_nodes' => [
+                    'blocks' => [
                         ['block_id' => 'header-ai-site-header', 'type' => 'ai_generated_shared_header'],
                         ['block_id' => 'home-page-hero-banner', 'section_code' => 'content/home-page-hero-banner', 'code' => 'content/home-page-hero-banner', 'type' => 'ai_generated_section', 'html' => '<section class="pb-c-root"><h2>Neon chess room</h2></section>'],
                         ['block_id' => 'footer-ai-site-footer', 'type' => 'ai_generated_shared_footer'],

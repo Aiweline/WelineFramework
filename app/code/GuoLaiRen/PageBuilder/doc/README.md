@@ -6,10 +6,11 @@
 
 1. 模块入口：[../README.md](../README.md)
 2. 长期规范：[../docs/TEMPLATE_SPEC.md](../docs/TEMPLATE_SPEC.md)、[../docs/COMPONENT_SPEC.md](../docs/COMPONENT_SPEC.md)
-3. AI 建站主线：[PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md](PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md)
-4. SSE 契约：[SSE-契约清单.md](SSE-契约清单.md)
-5. 表结构升级规范：[../开发文档.md](../开发文档.md)
-6. 架构变更记录：[../CHANGELOG-重构日志.md](../CHANGELOG-重构日志.md)
+3. AI 运行模式：[../docs/AI_RUNTIME_MODE_SPEC.md](../docs/AI_RUNTIME_MODE_SPEC.md)
+4. AI 建站主线：[PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md](PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md)
+5. SSE 契约：[SSE-契约清单.md](SSE-契约清单.md)
+6. 表结构升级规范：[../开发文档.md](../开发文档.md)
+7. 架构变更记录：[../CHANGELOG-重构日志.md](../CHANGELOG-重构日志.md)
 
 ## 文档边界
 
@@ -28,6 +29,7 @@
 | 文档 | 主题 |
 | --- | --- |
 | [PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md](PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md) | AI 建站工作台主架构与 PlanJson |
+| [../docs/AI_RUNTIME_MODE_SPEC.md](../docs/AI_RUNTIME_MODE_SPEC.md) | AI 运行模式，明确 fake 模式只替代真实 AI 调用，不跳过完整逻辑 |
 | [PR需求-PageBuilder-AI智能建站强契约与整站视觉验收.md](PR需求-PageBuilder-AI智能建站强契约与整站视觉验收.md) | 强契约与整站视觉验收需求 |
 | [PageBuilder_AI建站_13项门禁与Prompt对照表.md](PageBuilder_AI建站_13项门禁与Prompt对照表.md) | 质量门禁与 Prompt 契约映射 |
 | [SSE-契约清单.md](SSE-契约清单.md) | AI 工作台 SSE 事件契约 |

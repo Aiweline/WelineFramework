@@ -39,7 +39,7 @@ block status 使用数字：
 | FE-02 | 阶段一计划 | `post-start-plan`、`post-confirm-plan`、`plan_queue_info` | 只在 `plan_json.pages` 覆盖所选 page_type 后允许进入 build |
 | FE-03 | 页面/block 预览 | `plan_json.pages.{page_type}` | 按动态 block key 渲染页面结构，不读取既有 移除页面表 或 移除派生计划 |
 | FE-04 | 构建与恢复 | `post-start-build`、`post-resume-build`、operation SSE、`plan_json.pages` | 进度、失败、重试以 block status `0/2/1/-1` 为准 |
-| FE-05 | 局部再生成 | `page_type`、`block_key`、当前 block node | 只重试目标 block，成功后写回同一 block 节点 |
+| FE-05 | 局部再生成 | `page_type`、`block_key`、当前 block | 只重试目标 block，成功后写回同一 block 节点 |
 | FE-06 | 发布检查 | publish checklist、`plan_json.pages` | 只有所选页面所有有效 block 都为 `1` 时通过构建完成 gate |
 | FE-07 | SSE 日志 | queue status、terminal status、latest workspace state | SSE 可以展示运行事件，但最终状态必须回读 `plan_json.pages` |
 

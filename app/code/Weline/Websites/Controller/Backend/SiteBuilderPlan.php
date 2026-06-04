@@ -533,7 +533,6 @@ class SiteBuilderPlan extends BackendController
             return $scope;
         }
 
-        $scope['stage1_contract'] = $stageOneContract;
         if (\is_array($stageOneContract['page_route_contract'] ?? null)) {
             $scope['page_route_contract'] = $stageOneContract['page_route_contract'];
             $scope['site_plan'] = \is_array($scope['site_plan'] ?? null) ? $scope['site_plan'] : $plan;

@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 /**
- * 椤甸潰娓叉煋鏈嶅姟
+ * 妞ょ敻娼板〒鍙夌厠閺堝秴濮?
  * 
- * 缁熶竴娓叉煋閫昏緫锛岀‘淇濆彲瑙嗗寲缂栬緫鍣ㄩ瑙堝拰姝ｅ紡涓婄嚎椤甸潰鏁堟灉涓€鑷?
+ * 缂佺喍绔村〒鍙夌厠闁槒绶敍宀€鈥樻穱婵嗗讲鐟欏棗瀵茬紓鏍帆閸ｃ劑顣╃憴鍫濇嫲濮濓絽绱℃稉濠勫殠妞ょ敻娼伴弫鍫熺亯娑撯偓閼?
  * 
- * 娓叉煋妯″紡锛?
- * - visual: 鍙鍖栫紪杈戞ā寮忥紙甯︽嫋鎷芥彃妲藉鍣ㄣ€佺粍浠跺寘瑁呭櫒锛?
- * - preview: 棰勮妯″紡锛堢函鍑€娓叉煋锛屽彲鏌ョ湅鏈彂甯冮〉闈紝甯﹂瑙堟爣璁拌剼鏈級
- * - live: 姝ｅ紡涓婄嚎妯″紡锛堢函鍑€娓叉煋锛屼粎宸插彂甯冮〉闈級
+ * 濞撳弶鐓嬪Ο鈥崇础閿?
+ * - visual: 閸欘垵顫嬮崠鏍椽鏉堟垶膩瀵骏绱欑敮锔藉珛閹疯姤褰冨Σ钘夘啇閸ｃ劊鈧胶绮嶆禒璺哄瘶鐟佸懎娅掗敍?
+ * - preview: 妫板嫯顫嶅Ο鈥崇础閿涘牏鍑介崙鈧〒鍙夌厠閿涘苯褰查弻銉ф箙閺堫亜褰傜敮鍐€夐棃顫礉鐢箓顣╃憴鍫熺垼鐠佹媽鍓奸張顒婄礆
+ * - live: 濮濓絽绱℃稉濠勫殠濡€崇础閿涘牏鍑介崙鈧〒鍙夌厠閿涘奔绮庡鎻掑絺鐢啴銆夐棃顫礆
  */
 
 namespace GuoLaiRen\PageBuilder\Service;
@@ -30,10 +30,10 @@ use Weline\Framework\View\Template;
 
 class PageRenderService
 {
-    /** 娓叉煋妯″紡甯搁噺 */
-    public const MODE_VISUAL = 'visual';   // 鍙鍖栫紪杈戞ā寮?
-    public const MODE_PREVIEW = 'preview'; // 棰勮妯″紡
-    public const MODE_LIVE = 'live';       // 姝ｅ紡涓婄嚎妯″紡
+    /** 濞撳弶鐓嬪Ο鈥崇础鐢悂鍣?*/
+    public const MODE_VISUAL = 'visual';   // 閸欘垵顫嬮崠鏍椽鏉堟垶膩瀵?
+    public const MODE_PREVIEW = 'preview'; // 妫板嫯顫嶅Ο鈥崇础
+    public const MODE_LIVE = 'live';       // 濮濓絽绱℃稉濠勫殠濡€崇础
     
     private LayoutAssembler $layoutAssembler;
     private LayoutOwnerResolver $layoutOwnerResolver;
@@ -46,10 +46,10 @@ class PageRenderService
     private ?Request $request = null;
     private ?Template $template = null;
     
-    /** @var array 妯℃澘鍙橀噺 */
+    /** @var array 濡剝婢橀崣姗€鍣?*/
     private array $templateVars = [];
     
-    /** @var array 缁勪欢鏂囦欢鏄犲皠缂撳瓨 */
+    /** @var array 缂佸嫪娆㈤弬鍥︽閺勭姴鐨犵紓鎾崇摠 */
     private static array $componentFilesCache = [];
     
     public function __construct(
@@ -73,7 +73,7 @@ class PageRenderService
     }
     
     /**
-     * 璁剧疆璇锋眰瀵硅薄锛堢敤浜庤幏鍙栧弬鏁帮級
+     * 鐠佸墽鐤嗙拠閿嬬湴鐎电钖勯敍鍫㈡暏娴滃氦骞忛崣鏍у棘閺佸府绱?
      */
     public function setRequest(Request $request): self
     {
@@ -82,7 +82,7 @@ class PageRenderService
     }
     
     /**
-     * 鑾峰彇 Template 瀹炰緥
+     * 閼惧嘲褰?Template 鐎圭偘绶?
      */
     private function getTemplate(): Template
     {
@@ -93,7 +93,7 @@ class PageRenderService
     }
     
     /**
-     * 璁剧疆妯℃澘鍙橀噺
+     * 鐠佸墽鐤嗗Ο鈩冩緲閸欐﹢鍣?
      */
     private function assign(string $key, $value): void
     {
@@ -102,7 +102,7 @@ class PageRenderService
     }
     
     /**
-     * 娓叉煋妯℃澘
+     * 濞撳弶鐓嬪Ο鈩冩緲
      */
     private function fetch(string $templatePath): string
     {
@@ -111,13 +111,13 @@ class PageRenderService
     }
     
     /**
-     * 娓叉煋椤甸潰
+     * 濞撳弶鐓嬫い鐢告桨
      * 
-     * @param Page $page 椤甸潰瀵硅薄
-     * @param string $mode 娓叉煋妯″紡 (visual/preview/live)
-     * @param string|null $locale 璇█浠ｇ爜
-     * @param string|null $tempStyleCode 涓存椂鏍峰紡浠ｇ爜锛堢敤浜庨瑙堬級
-     * @return string 娓叉煋鍚庣殑 HTML
+     * @param Page $page 妞ょ敻娼扮€电钖?
+     * @param string $mode 濞撳弶鐓嬪Ο鈥崇础 (visual/preview/live)
+     * @param string|null $locale 鐠囶叀鈻堟禒锝囩垳
+     * @param string|null $tempStyleCode 娑撳瓨妞傞弽宄扮础娴狅絿鐖滈敍鍫㈡暏娴滃酣顣╃憴鍫礆
+     * @return string 濞撳弶鐓嬮崥搴ｆ畱 HTML
      */
     public function render(
         Page $page,
@@ -142,119 +142,120 @@ class PageRenderService
             $profile['elapsed_ms'] = \round(($now - $profileStart) * 1000, 2);
         };
 
-        // 閲嶇疆妯℃澘鍙橀噺
+        // 闁插秶鐤嗗Ο鈩冩緲閸欐﹢鍣?
         $this->templateVars = [];
         if ($virtualThemeId !== null && $virtualThemeId > 0) {
             $page->setData('virtual_theme_id', $virtualThemeId);
         }
         
-        // 鑾峰彇鏍峰紡浠ｇ爜
+        // 閼惧嘲褰囬弽宄扮础娴狅絿鐖?
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
         
-        // 鑾峰彇褰撳墠璇█銆傚彂甯冮〉娌℃湁鏄惧紡 locale 鏃讹紝浠ラ〉闈㈤粯璁よ瑷€涓哄噯锛岄伩鍏嶅悗鍙?Cookie 姹℃煋璁垮绔欑偣銆?        $pageDefaultLocale = \trim((string)$page->getData(Page::schema_fields_DEFAULT_LOCALE));
-        $currentLocale = $locale ?: ($pageDefaultLocale !== '' ? $pageDefaultLocale : \Weline\Framework\Http\Cookie::getLang());
+        // 閼惧嘲褰囪ぐ鎾冲鐠囶叀鈻堥妴鍌氬絺鐢啴銆夊▽鈩冩箒閺勬儳绱?locale 閺冭绱濇禒銉┿€夐棃銏ょ帛鐠併倛顕㈢懛鈧稉鍝勫櫙閿涘矂浼╅崗宥呮倵閸?Cookie 濮光剝鐓嬬拋鍨吂缁旀瑧鍋ｉ妴?        $pageDefaultLocale = \trim((string)$page->getData(Page::schema_fields_DEFAULT_LOCALE));
+        $cookieLocale = \trim((string)\Weline\Framework\Http\Cookie::getLang());
+        $currentLocale = $locale ?: ($pageDefaultLocale !== '' ? $pageDefaultLocale : ($cookieLocale !== '' ? $cookieLocale : 'en_US'));
         
-        // 鏋勫缓鏍峰紡閰嶇疆
+        // 閺嬪嫬缂撻弽宄扮础闁板秶鐤?
         $finalSettings = $this->buildStyleSettings($page, $styleCode, $currentLocale, $tempStyleCode);
         $profileMark('style_settings');
         
-        // 妫€鏌ユ槸鍚︿负铏氭嫙椤甸潰锛坕d=0锛岀敤浜庢ā鏉块瑙堢瓑鍦烘櫙锛?
+        // 濡偓閺屻儲妲搁崥锔胯礋閾忔碍瀚欐い鐢告桨閿涘潟d=0閿涘瞼鏁ゆ禍搴⒛侀弶鍧楊暕鐟欏牏鐡戦崷鐑樻珯閿?
         $isVirtualPage = !$page->getId();
         
-        // 鑾峰彇甯冨眬閰嶇疆锛堥€氳繃 LayoutOwnerResolver 缁熶竴澶勭悊 layout_page_id 鍜?header/footer 缁ф壙锛?
-        // 鍙鍖栫紪杈戞ā寮忎笅鍏佽璁块棶鑽夌鐘舵€侀椤电殑 header/footer
-        // 棰勮鏃朵紶鍏?tempStyleCode锛屼娇鈥滄棤鑷畾涔夊竷灞€鈥濇椂鎸夊綋鍓嶉瑙堟牱寮忓姞杞介粯璁?header/footer锛岄伩鍏嶉〉闈?DB 涓?default 鏃朵粛鏄剧ず default 澶撮儴
+        // 閼惧嘲褰囩敮鍐ㄧ湰闁板秶鐤嗛敍鍫モ偓姘崇箖 LayoutOwnerResolver 缂佺喍绔存径鍕倞 layout_page_id 閸?header/footer 缂佈勫閿?
+        // 閸欘垵顫嬮崠鏍椽鏉堟垶膩瀵繋绗呴崗浣筋啅鐠佸潡妫堕懡澶岊焾閻樿埖鈧線顩绘い鐢垫畱 header/footer
+        // 妫板嫯顫嶉弮鏈电炊閸?tempStyleCode閿涘奔濞囬垾婊勬￥閼奉亜鐣炬稊澶婄鐏炩偓閳ユ繃妞傞幐澶婄秼閸撳秹顣╃憴鍫熺壉瀵繐濮炴潪浠嬬帛鐠?header/footer閿涘矂浼╅崗宥夈€夐棃?DB 娑?default 閺冩湹绮涢弰鍓с仛 default 婢舵挳鍎?
         $forBackend = ($mode === self::MODE_VISUAL);
         $layoutConfig = $this->layoutOwnerResolver->getFullLayoutConfig($page, $forBackend, $tempStyleCode);
         $profileMark('layout_config');
         
-        // 鑾峰彇甯冨眬鎷ユ湁鑰呴〉闈D锛堢敤浜庡彲瑙嗗寲缂栬緫鏃朵紶閫掔粰鑴氭湰锛?
+        // 閼惧嘲褰囩敮鍐ㄧ湰閹枫儲婀侀懓鍛淬€夐棃顢疍閿涘牏鏁ゆ禍搴″讲鐟欏棗瀵茬紓鏍帆閺冩湹绱堕柅鎺旂舶閼存碍婀伴敍?
         $layoutOwnerPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageId($page);
         $this->assign('layout_owner_page_id', $layoutOwnerPageId);
         
-        // 鑾峰彇甯冨眬椤甸潰淇℃伅锛堝鏋滀娇鐢ㄥ閮ㄥ竷灞€椤甸潰锛?
+        // 閼惧嘲褰囩敮鍐ㄧ湰妞ょ敻娼版穱鈩冧紖閿涘牆顩ч弸婊€濞囬悽銊ヮ樆闁劌绔风仦鈧い鐢告桨閿?
         $layoutPageInfo = $isVirtualPage ? null : $this->layoutOwnerResolver->getLayoutPageInfo($page);
         $this->assign('layout_page_info', $layoutPageInfo);
         $profileMark('layout_owner_info');
         
-        // 鑾峰彇鏈湴鍖栧唴瀹癸紙铏氭嫙椤甸潰璺宠繃鏁版嵁搴撴煡璇級
+        // 閼惧嘲褰囬張顒€婀撮崠鏍у敶鐎圭櫢绱欓搹姘珯妞ょ敻娼扮捄瀹犵箖閺佺増宓佹惔鎾寸叀鐠囶澁绱?
         $localizedContent = $isVirtualPage ? null : $this->getLocalizedContent($page, $currentLocale);
         $profileMark('localized_content');
         
-        // 璁剧疆妯℃澘鍙橀噺
+        // 鐠佸墽鐤嗗Ο鈩冩緲閸欐﹢鍣?
         $this->assign('page', $page);
         $this->assign('style_settings', $finalSettings);
         $this->assign('style', $finalSettings);
         $this->assign('is_preview', $mode !== self::MODE_LIVE);
-        $this->assign('is_virtual_page', $isVirtualPage); // 鏍囪涓鸿櫄鎷熼〉闈?
+        $this->assign('is_virtual_page', $isVirtualPage); // 閺嶅洩顔囨稉楦挎珓閹风喖銆夐棃?
         $this->assign('lang', $currentLocale);
         $this->assign('lang_local', $currentLocale);
         $this->assign('current_locale', $currentLocale);
         $this->assign('layout_config', $layoutConfig);
         $this->assign('render_mode', $mode);
         
-        // 鑾峰彇瀵艰埅椤甸潰锛堢敤浜?header 缁勪欢锛?
-        // 铏氭嫙椤甸潰杩斿洖绌烘暟缁勶紝閬垮厤鏁版嵁搴撴煡璇?
+        // 閼惧嘲褰囩€佃壈鍩呮い鐢告桨閿涘牏鏁ゆ禍?header 缂佸嫪娆㈤敍?
+        // 閾忔碍瀚欐い鐢告桨鏉╂柨娲栫粚鐑樻殶缂佸嫸绱濋柆鍨帳閺佺増宓佹惔鎾寸叀鐠?
         $navigationPages = $isVirtualPage ? [] : $page->getNavigationPages([], 10);
         $this->assign('navigation_pages', $navigationPages);
         $profileMark('navigation_pages');
         
-        // 濡傛灉鏄崥瀹㈢被鍨嬮〉闈㈡垨甯冨眬涓寘鍚崥瀹㈢粍浠讹紝鍔犺浇鍗氬鏁版嵁
-        // 铏氭嫙椤甸潰璺宠繃鍗氬鏁版嵁鍔犺浇
+        // 婵″倹鐏夐弰顖氬触鐎广垻琚崹瀣€夐棃銏″灗鐢啫鐪稉顓炲瘶閸氼偄宕ョ€广垻绮嶆禒璁圭礉閸旂姾娴囬崡姘吂閺佺増宓?
+        // 閾忔碍瀚欐い鐢告桨鐠哄疇绻冮崡姘吂閺佺増宓侀崝鐘烘祰
         $hasBlogComponent = $this->hasBlogComponent($layoutConfig);
         if (!$isVirtualPage && ($page->isBlogType() || $hasBlogComponent)) {
             $this->loadBlogData($page);
         }
         $profileMark('blog_data');
         
-        // 娓叉煋 header/content/footer
+        // 濞撳弶鐓?header/content/footer
         $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
         
-        // 鑾峰彇椤甸潰绫诲瀷
+        // 閼惧嘲褰囨い鐢告桨缁鐎?
         $pageType = $page->getData(Page::schema_fields_TYPE);
         
-        // 鑾峰彇椤甸潰绫诲瀷瀵瑰簲鐨勫竷灞€淇℃伅
+        // 閼惧嘲褰囨い鐢告桨缁鐎风€电懓绨查惃鍕鐏炩偓娣団剝浼?
         $layoutInfo = $this->getLayoutInfoForPageType($styleCode, $pageType);
         $this->assign('page_type', $pageType);
         $this->assign('layout_info', $layoutInfo);
         $profileMark('layout_info');
         
-        // 濡傛灉椤甸潰娌℃湁鑷畾涔夊竷灞€閰嶇疆锛屽姞杞借椤甸潰绫诲瀷鐨勯粯璁ゅ竷灞€閰嶇疆
-        // 娉ㄦ剰锛氶渶瑕佹鏌ュ尯鍩熸槸鍚︾湡鐨勬湁鏈夋晥缁勪欢锛岃€屼笉浠呬粎鏄潪绌烘暟缁?
+        // 婵″倹鐏夋い鐢告桨濞屸剝婀侀懛顏勭暰娑斿绔风仦鈧柊宥囩枂閿涘苯濮炴潪鍊燁嚉妞ょ敻娼扮猾璇茬€烽惃鍕帛鐠併倕绔风仦鈧柊宥囩枂
+        // 濞夈劍鍓伴敍姘舵付鐟曚焦顥呴弻銉ュ隘閸╃喐妲搁崥锔炬埂閻ㄥ嫭婀侀張澶嬫櫏缂佸嫪娆㈤敍宀冣偓灞肩瑝娴犲懍绮庨弰顖炴姜缁岀儤鏆熺紒?
         $hasCustomHeader = $this->regionHasValidComponents($layoutConfig['header'] ?? null);
         $hasCustomContent = $this->regionHasValidComponents($layoutConfig['content'] ?? null);
         $hasCustomFooter = $this->regionHasValidComponents($layoutConfig['footer'] ?? null);
         $hasCustomLayout = $hasCustomHeader || $hasCustomContent || $hasCustomFooter;
         
-        // 濡傛灉 header銆乧ontent 鎴?footer 娌℃湁鏈夋晥缁勪欢锛屽皾璇曚粠榛樿閰嶇疆鍔犺浇
+        // 婵″倹鐏?header閵嗕恭ontent 閹?footer 濞屸剝婀侀張澶嬫櫏缂佸嫪娆㈤敍灞界毦鐠囨洑绮犳妯款吇闁板秶鐤嗛崝鐘烘祰
         if (!$hasCustomHeader || !$hasCustomContent || !$hasCustomFooter) {
             $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
             
-            // 濡傛灉 header 涓虹┖锛屼娇鐢ㄩ粯璁?header
+            // 婵″倹鐏?header 娑撹櫣鈹栭敍灞煎▏閻劑绮拋?header
             if (!$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
                 $layoutConfig['header'] = $defaultLayoutConfig['header'];
                 $this->assign('using_default_header', true);
             }
             
-            // 濡傛灉 content 涓虹┖锛屼娇鐢ㄩ粯璁?content
+            // 婵″倹鐏?content 娑撹櫣鈹栭敍灞煎▏閻劑绮拋?content
             if (!$hasCustomContent && !empty($defaultLayoutConfig['content'])) {
                 $layoutConfig['content'] = $defaultLayoutConfig['content'];
                 $this->assign('using_default_content', true);
             }
             
-            // 濡傛灉 footer 涓虹┖锛屼娇鐢ㄩ粯璁?footer
+            // 婵″倹鐏?footer 娑撹櫣鈹栭敍灞煎▏閻劑绮拋?footer
             if (!$hasCustomFooter && !empty($defaultLayoutConfig['footer'])) {
                 $layoutConfig['footer'] = $defaultLayoutConfig['footer'];
                 $this->assign('using_default_footer', true);
             }
             
-            // 鏇存柊甯冨眬閰嶇疆
+            // 閺囧瓨鏌婄敮鍐ㄧ湰闁板秶鐤?
             $this->assign('layout_config', $layoutConfig);
         }
         $profileMark('default_layout_merge');
         
         if (!$hasCustomLayout && $pageType) {
-            // 鍔犺浇椤甸潰绫诲瀷鐨勯粯璁ゅ竷灞€閰嶇疆
+            // 閸旂姾娴囨い鐢告桨缁鐎烽惃鍕帛鐠併倕绔风仦鈧柊宥囩枂
             $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
             
             if (!empty($defaultLayoutConfig['header']) || 
@@ -267,19 +268,19 @@ class PageRenderService
         }
         $profileMark('default_layout_fallback');
         
-        // 妫€鏌ユ槸鍚︿娇鐢ㄧ粍浠跺寲娓叉煋
+        // 濡偓閺屻儲妲搁崥锔垮▏閻劎绮嶆禒璺哄濞撳弶鐓?
         $useComponentRendering = !empty($layoutConfig) && (
             !empty($layoutConfig['header']) || 
             !empty($layoutConfig['content']) || 
             !empty($layoutConfig['footer'])
         );
         
-        // 璋冭瘯淇℃伅
+        // 鐠嬪啳鐦穱鈩冧紖
         $debugInfo = $this->buildDebugInfo($useComponentRendering, $layoutConfig);
         $profileMark('debug_info');
         
         if ($useComponentRendering) {
-            // 浣跨敤缁勪欢鍖栨覆鏌?
+            // 娴ｈ法鏁ょ紒鍕閸栨牗瑕嗛弻?
             $headerHtml = $this->renderRegion('header', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
             $profileMark('render_header');
             $contentHtml = $this->renderRegion('content', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode, $localizedContent);
@@ -287,7 +288,7 @@ class PageRenderService
             $footerHtml = $this->renderRegion('footer', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
             $profileMark('render_footer');
         } else {
-            // 浣跨敤浼犵粺娓叉煋鏂瑰紡
+            // 娴ｈ法鏁ゆ导鐘电埠濞撳弶鐓嬮弬鐟扮础
             $headerHtml = $this->fetch("{$stylePath}/header.phtml");
             $profileMark('render_header');
             $contentHtml = $this->renderTraditionalContent($page, $stylePath, $localizedContent);
@@ -296,12 +297,12 @@ class PageRenderService
             $profileMark('render_footer');
         }
         
-        // 鎻掑叆鑷畾涔変唬鐮?
+        // 閹绘帒鍙嗛懛顏勭暰娑斿鍞惍?
         $headerHtml = $this->injectHeaderCustomCode($headerHtml, $page);
         $footerHtml = $this->injectFooterCustomCode($footerHtml, $page);
         $profileMark('custom_code');
         
-        // 鏍规嵁妯″紡澶勭悊杈撳嚭
+        // 閺嶈宓佸Ο鈥崇础婢跺嫮鎮婃潏鎾冲毉
         $html = $this->finalizeOutput($headerHtml, $contentHtml, $footerHtml, $debugInfo, $page, $styleCode, $mode, $virtualThemeId);
         $profileMark('finalize_output');
         $profile['total_ms'] = \round((\microtime(true) - $profileStart) * 1000, 2);
@@ -363,14 +364,14 @@ class PageRenderService
     }
     
     /**
-     * 鑾峰彇椤甸潰绫诲瀷瀵瑰簲鐨勫竷灞€妯℃澘璺緞
+     * 閼惧嘲褰囨い鐢告桨缁鐎风€电懓绨查惃鍕鐏炩偓濡剝婢樼捄顖氱窞
      * 
-     * 鏍规嵁鏍峰紡浠ｇ爜鍜岄〉闈㈢被鍨嬶紝鏌ユ壘瀵瑰簲鐨勫竷灞€妯℃澘鏂囦欢
-     * 鏄犲皠鍏崇郴瀹氫箟鍦?style/{styleCode}/layouts/layouts.json 涓?
+     * 閺嶈宓侀弽宄扮础娴狅絿鐖滈崪宀勩€夐棃銏㈣閸ㄥ绱濋弻銉﹀鐎电懓绨查惃鍕鐏炩偓濡剝婢橀弬鍥︽
+     * 閺勭姴鐨犻崗宕囬兇鐎规矮绠熼崷?style/{styleCode}/layouts/layouts.json 娑?
      * 
-     * @param string $styleCode 鏍峰紡浠ｇ爜
-     * @param string|null $pageType 椤甸潰绫诲瀷
-     * @return string|null 甯冨眬妯℃澘璺緞锛屼笉瀛樺湪鍒欒繑鍥?null
+     * @param string $styleCode 閺嶅嘲绱℃禒锝囩垳
+     * @param string|null $pageType 妞ょ敻娼扮猾璇茬€?
+     * @return string|null 鐢啫鐪Ο鈩冩緲鐠侯垰绶為敍灞肩瑝鐎涙ê婀崚娆掔箲閸?null
      */
     private function getLayoutTemplateForPageType(string $styleCode, ?string $pageType): ?string
     {
@@ -378,7 +379,7 @@ class PageRenderService
             return null;
         }
         
-        // 璇诲彇甯冨眬閰嶇疆鏂囦欢
+        // 鐠囪褰囩敮鍐ㄧ湰闁板秶鐤嗛弬鍥︽
         $layoutsJsonPath = $this->pathResolver->getLayoutsJsonPath($styleCode);
         
         if (!file_exists($layoutsJsonPath)) {
@@ -388,7 +389,7 @@ class PageRenderService
         $layoutsConfig = json_decode(file_get_contents($layoutsJsonPath), true);
         
         if (empty($layoutsConfig['layouts'][$pageType])) {
-            // 濡傛灉娌℃湁瀵瑰簲鐨勫竷灞€锛屾鏌ユ槸鍚︽湁 fallback
+            // 婵″倹鐏夊▽鈩冩箒鐎电懓绨查惃鍕鐏炩偓閿涘本顥呴弻銉︽Ц閸氾附婀?fallback
             $fallback = $layoutsConfig['fallback_layout'] ?? null;
             if ($fallback && !empty($layoutsConfig['layouts'][$fallback])) {
                 $layoutFile = $layoutsConfig['layouts'][$fallback]['file'] ?? null;
@@ -403,10 +404,10 @@ class PageRenderService
             return null;
         }
         
-        // 鏋勫缓甯冨眬妯℃澘瀹屾暣璺緞
+        // 閺嬪嫬缂撶敮鍐ㄧ湰濡剝婢樼€瑰本鏆ｇ捄顖氱窞
         $templatePath = "GuoLaiRen_PageBuilder::style/{$styleCode}/layouts/{$layoutFile}";
         
-        // 楠岃瘉妯℃澘鏂囦欢鏄惁瀛樺湪
+        // 妤犲矁鐦夊Ο鈩冩緲閺傚洣娆㈤弰顖氭儊鐎涙ê婀?
         $layoutsPath = $this->pathResolver->getLayoutsPath($styleCode);
         $fullPath = $layoutsPath . '/' . $layoutFile;
         
@@ -418,11 +419,11 @@ class PageRenderService
     }
     
     /**
-     * 鑾峰彇椤甸潰绫诲瀷瀵瑰簲鐨勫竷灞€閰嶇疆淇℃伅
+     * 閼惧嘲褰囨い鐢告桨缁鐎风€电懓绨查惃鍕鐏炩偓闁板秶鐤嗘穱鈩冧紖
      * 
-     * @param string $styleCode 鏍峰紡浠ｇ爜
-     * @param string|null $pageType 椤甸潰绫诲瀷
-     * @return array|null 甯冨眬閰嶇疆淇℃伅
+     * @param string $styleCode 閺嶅嘲绱℃禒锝囩垳
+     * @param string|null $pageType 妞ょ敻娼扮猾璇茬€?
+     * @return array|null 鐢啫鐪柊宥囩枂娣団剝浼?
      */
     public function getLayoutInfoForPageType(string $styleCode, ?string $pageType): ?array
     {
@@ -430,7 +431,7 @@ class PageRenderService
             return null;
         }
         
-        // 璇诲彇甯冨眬閰嶇疆鏂囦欢
+        // 鐠囪褰囩敮鍐ㄧ湰闁板秶鐤嗛弬鍥︽
         $layoutsJsonPath = $this->pathResolver->getLayoutsJsonPath($styleCode);
         
         if (!file_exists($layoutsJsonPath)) {
@@ -440,7 +441,7 @@ class PageRenderService
         $layoutsConfig = json_decode(file_get_contents($layoutsJsonPath), true);
         
         if (empty($layoutsConfig['layouts'][$pageType])) {
-            // 濡傛灉娌℃湁瀵瑰簲鐨勫竷灞€锛屼娇鐢?fallback
+            // 婵″倹鐏夊▽鈩冩箒鐎电懓绨查惃鍕鐏炩偓閿涘奔濞囬悽?fallback
             $fallback = $layoutsConfig['fallback_layout'] ?? null;
             if ($fallback && !empty($layoutsConfig['layouts'][$fallback])) {
                 return [
@@ -460,14 +461,14 @@ class PageRenderService
     }
     
     /**
-     * 鑾峰彇椤甸潰绫诲瀷鐨勯粯璁ゅ竷灞€閰嶇疆
+     * 閼惧嘲褰囨い鐢告桨缁鐎烽惃鍕帛鐠併倕绔风仦鈧柊宥囩枂
      * 
-     * 绠€鍖栭€昏緫锛氱洿鎺ヤ娇鐢ㄩ〉闈㈢被鍨嬩唬鐮佷綔涓烘枃浠跺悕
-     * 渚嬪锛歜log_post 鈫?layouts/default/blog_post.json
+     * 缁犫偓閸栨牠鈧槒绶敍姘辨纯閹恒儰濞囬悽銊┿€夐棃銏㈣閸ㄥ鍞惍浣风稊娑撶儤鏋冩禒璺烘倳
+     * 娓氬顩ч敍姝渓og_post 閳?layouts/default/blog_post.json
      * 
-     * @param string $styleCode 鏍峰紡浠ｇ爜
-     * @param string|null $pageType 椤甸潰绫诲瀷
-     * @return array 榛樿甯冨眬閰嶇疆 ['header' => [], 'content' => [], 'footer' => []]
+     * @param string $styleCode 閺嶅嘲绱℃禒锝囩垳
+     * @param string|null $pageType 妞ょ敻娼扮猾璇茬€?
+     * @return array 姒涙顓荤敮鍐ㄧ湰闁板秶鐤?['header' => [], 'content' => [], 'footer' => []]
      */
     public function getDefaultLayoutConfigForPageType(string $styleCode, ?string $pageType): array
     {
@@ -481,11 +482,11 @@ class PageRenderService
             return $defaultConfig;
         }
         
-        // 鐩存帴浣跨敤椤甸潰绫诲瀷浠ｇ爜浣滀负閰嶇疆鏂囦欢鍚?
+        // 閻╁瓨甯存担璺ㄦ暏妞ょ敻娼扮猾璇茬€锋禒锝囩垳娴ｆ粈璐熼柊宥囩枂閺傚洣娆㈤崥?
         $configFilePath = $this->pathResolver->getLayoutConfigPath($styleCode, $pageType);
         
         if (!file_exists($configFilePath)) {
-            // fallback 鍒?custom_page
+            // fallback 閸?custom_page
             $configFilePath = $this->pathResolver->getLayoutConfigPath($styleCode, 'custom_page');
             if (!file_exists($configFilePath)) {
                 return $defaultConfig;
@@ -500,11 +501,11 @@ class PageRenderService
         
         $pageConfig = $configData['layout_config'];
         
-        // 澶勭悊缁ф壙锛坔eader/footer 浠庨椤电户鎵匡級
+        // 婢跺嫮鎮婄紒褎澹欓敍鍧攅ader/footer 娴犲酣顩绘い鐢垫埛閹靛尅绱?
         $inheritRegions = $configData['inherit_regions'] ?? [];
         
         foreach (['header', 'footer'] as $region) {
-            // 濡傛灉璇ュ尯鍩熶负绌烘暟缁勪笖闇€瑕佺户鎵?
+            // 婵″倹鐏夌拠銉ュ隘閸╃喍璐熺粚鐑樻殶缂佸嫪绗栭棁鈧憰浣烘埛閹?
             if (empty($pageConfig[$region]) && isset($inheritRegions[$region])) {
                 $inheritFrom = $inheritRegions[$region];
                 $inheritConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $inheritFrom);
@@ -520,14 +521,14 @@ class PageRenderService
     }
     
     /**
-     * 妫€鏌ュ尯鍩熼厤缃槸鍚﹀寘鍚湁鏁堢殑缁勪欢
+     * 濡偓閺屻儱灏崺鐔煎帳缂冾喗妲搁崥锕€瀵橀崥顐ｆ箒閺佸牏娈戠紒鍕
      * 
-     * 澶勭悊涓ょ鏍煎紡锛?
-     * 1. 鏁扮粍鏍煎紡锛歔{code: ..., enabled: ...}, ...]
-     * 2. PageLayout 瀵煎嚭鏍煎紡锛歿component: ..., config: ...}
+     * 婢跺嫮鎮婃稉銈囶潚閺嶇厧绱￠敍?
+     * 1. 閺佹壆绮嶉弽鐓庣础閿涙瓟{code: ..., enabled: ...}, ...]
+     * 2. PageLayout 鐎电厧鍤弽鐓庣础閿涙component: ..., config: ...}
      * 
-     * @param mixed $regionConfig 鍖哄煙閰嶇疆
-     * @return bool 鏄惁鏈夋湁鏁堢粍浠?
+     * @param mixed $regionConfig 閸栧搫鐓欓柊宥囩枂
+     * @return bool 閺勵垰鎯侀張澶嬫箒閺佸牏绮嶆禒?
      */
     private function regionHasValidComponents($regionConfig): bool
     {
@@ -535,7 +536,7 @@ class PageRenderService
             return false;
         }
         
-        // 濡傛灉鏄暟缁勬牸寮?[{code: ...}, ...]
+        // 婵″倹鐏夐弰顖涙殶缂佸嫭鐗稿?[{code: ...}, ...]
         if (is_array($regionConfig) && isset($regionConfig[0])) {
             foreach ($regionConfig as $component) {
                 if (!empty($component['code']) || !empty($component['component'])) {
@@ -545,12 +546,12 @@ class PageRenderService
             return false;
         }
         
-        // 濡傛灉鏄?PageLayout 瀵煎嚭鏍煎紡 {component: ..., config: ...}
+        // 婵″倹鐏夐弰?PageLayout 鐎电厧鍤弽鐓庣础 {component: ..., config: ...}
         if (is_array($regionConfig) && array_key_exists('component', $regionConfig)) {
             return !empty($regionConfig['component']);
         }
         
-        // 濡傛灉鏄崟缁勪欢鏍煎紡 {code: ...}
+        // 婵″倹鐏夐弰顖氬礋缂佸嫪娆㈤弽鐓庣础 {code: ...}
         if (is_array($regionConfig) && isset($regionConfig['code'])) {
             return !empty($regionConfig['code']);
         }
@@ -559,7 +560,7 @@ class PageRenderService
     }
     
     /**
-     * 妫€鏌ュ竷灞€閰嶇疆涓槸鍚﹀寘鍚崥瀹㈢粍浠?
+     * 濡偓閺屻儱绔风仦鈧柊宥囩枂娑擃厽妲搁崥锕€瀵橀崥顐㈠触鐎广垻绮嶆禒?
      */
     private function hasBlogComponent(array $layoutConfig): bool
     {
@@ -580,23 +581,23 @@ class PageRenderService
     }
     
     /**
-     * 鏋勫缓鏍峰紡閰嶇疆
+     * 閺嬪嫬缂撻弽宄扮础闁板秶鐤?
      */
     private function buildStyleSettings(Page $page, string $styleCode, string $currentLocale, ?string $tempStyleCode): array
     {
         $finalSettings = [];
         
-        // 妫€鏌ユ槸鍚︿负铏氭嫙椤甸潰
+        // 濡偓閺屻儲妲搁崥锔胯礋閾忔碍瀚欐い鐢告桨
         $isVirtualPage = !$page->getId();
         
-        // 鍔犺浇鏍峰紡妯″瀷鑾峰彇榛樿閰嶇疆
+        // 閸旂姾娴囬弽宄扮础濡€崇€烽懢宄板絿姒涙顓婚柊宥囩枂
         $style = clone $this->styleModel;
         $style->clear()
             ->where(Style::schema_fields_CODE, $styleCode)
             ->find()
             ->fetch();
         
-        // 绗竴姝ワ細浣跨敤妯℃澘榛樿閰嶇疆鍊硷紙鏈€浣庝紭鍏堢骇锛?
+        // 缁楊兛绔村銉窗娴ｈ法鏁ゅΟ鈩冩緲姒涙顓婚柊宥囩枂閸婄》绱欓張鈧担搴濈喘閸忓牏楠囬敍?
         if ($style->getId()) {
             $parsed = $style->parseStyleConfig();
             $styleConfigs = $parsed['configs'] ?? [];
@@ -608,14 +609,14 @@ class PageRenderService
             }
         }
         
-        // 绗簩姝ワ細鐢ㄩ〉闈繚瀛樼殑閰嶇疆瑕嗙洊锛堜腑绛変紭鍏堢骇锛?
-        // 濡傛灉浣跨敤涓存椂鏍峰紡锛岃烦杩囬〉闈㈤厤缃紙鍙娇鐢ㄦā鏉块粯璁ゅ€硷級
-        // 铏氭嫙椤甸潰涔熻烦杩囨姝ラ
+        // 缁楊兛绨╁銉窗閻劑銆夐棃顫箽鐎涙娈戦柊宥囩枂鐟曞棛娲婇敍鍫滆厬缁涘绱崗鍫㈤獓閿?
+        // 婵″倹鐏夋担璺ㄦ暏娑撳瓨妞傞弽宄扮础閿涘矁鐑︽潻鍥€夐棃銏ゅ帳缂冾噯绱欓崣顏冨▏閻劍膩閺夊潡绮拋銈呪偓纭风礆
+        // 閾忔碍瀚欐い鐢告桨娑旂喕鐑︽潻鍥劃濮濄儵顎?
         if (!$isVirtualPage && (!$tempStyleCode || $tempStyleCode === $page->getData('style'))) {
             $allStyleSettings = $page->getStyleSetting();
             if ($styleCode && isset($allStyleSettings[$styleCode])) {
                 $rawSettings = $allStyleSettings[$styleCode];
-                // 娓呯悊鍙兘瀛樺湪鐨勪笁灞傜粨鏋勶紝鍙繚鐣欐爣閲忓€?
+                // 濞撳懐鎮婇崣顖濆厴鐎涙ê婀惃鍕瑏鐏炲倻绮ㄩ弸鍕剁礉閸欘亙绻氶悾娆愮垼闁插繐鈧?
                 foreach ($rawSettings as $key => $value) {
                     if (!is_array($value)) {
                         $finalSettings[$key] = $value;
@@ -624,8 +625,8 @@ class PageRenderService
             }
         }
         
-        // 绗笁姝ワ細鐢ㄧ炕璇戠殑閰嶇疆瑕嗙洊锛堟渶楂樹紭鍏堢骇锛?
-        // 铏氭嫙椤甸潰璺宠繃鏁版嵁搴撴煡璇?
+        // 缁楊兛绗佸銉窗閻劎鐐曠拠鎴犳畱闁板秶鐤嗙憰鍡欐磰閿涘牊娓舵妯圭喘閸忓牏楠囬敍?
+        // 閾忔碍瀚欐い鐢告桨鐠哄疇绻冮弫鐗堝祦鎼存挻鐓＄拠?
         if (!$isVirtualPage) {
             $localizedContent = $this->getLocalizedContent($page, $currentLocale);
             if ($localizedContent && !empty($localizedContent['config'])) {
@@ -645,7 +646,7 @@ class PageRenderService
     }
     
     /**
-     * 鑾峰彇鏈湴鍖栧唴瀹?
+     * 閼惧嘲褰囬張顒€婀撮崠鏍у敶鐎?
      */
     private function getLocalizedContent(Page $page, string $locale): ?array
     {
@@ -671,24 +672,24 @@ class PageRenderService
     }
     
     /**
-     * 涓哄崥瀹㈢被鍨嬮〉闈㈠姞杞藉崥瀹㈡暟鎹?
+     * 娑撳搫宕ョ€广垻琚崹瀣€夐棃銏犲鏉炶棄宕ョ€广垺鏆熼幑?
      * 
-     * 浼樺厛浣跨敤宸查€氳繃 Template::getInstance()->assign() 棰勮鐨勬暟鎹?
-     * 濡傛灉娌℃湁棰勮鏁版嵁锛屽垯鑷姩鍔犺浇
+     * 娴兼ê鍘涙担璺ㄦ暏瀹告煡鈧俺绻?Template::getInstance()->assign() 妫板嫯顔曢惃鍕殶閹?
+     * 婵″倹鐏夊▽鈩冩箒妫板嫯顔曢弫鐗堝祦閿涘苯鍨懛顏勫З閸旂姾娴?
      */
     private function loadBlogData(Page $page): void
     {
         $pageType = $page->getData(Page::schema_fields_TYPE);
         $template = $this->getTemplate();
         
-        // 妫€鏌ユ槸鍚﹀凡鏈夐璁剧殑鍗氬鏁版嵁锛堢敱鎺у埗鍣ㄩ鍏堣缃級
+        // 濡偓閺屻儲妲搁崥锕€鍑￠張澶愵暕鐠佸墽娈戦崡姘吂閺佺増宓侀敍鍫㈡暠閹貉冨煑閸ｃ劑顣╅崗鍫ｎ啎缂冾噯绱?
         $existingBlogPosts = $template->getData('blog_posts');
         $existingCategories = $template->getData('blog_categories');
         $existingCurrentPost = $template->getData('current_post');
         $existingRelatedPosts = $template->getData('related_posts');
         $existingRecentPosts = $template->getData('recent_posts');
         
-        // 鍗氬鏂囩珷鍒楄〃锛氫紭鍏堜娇鐢ㄩ璁炬暟鎹?
+        // 閸楁艾顓归弬鍥╃彿閸掓銆冮敍姘喘閸忓牅濞囬悽銊╊暕鐠佺偓鏆熼幑?
         if (!empty($existingBlogPosts)) {
             $this->assign('blog_posts', $existingBlogPosts);
         } else {
@@ -696,7 +697,7 @@ class PageRenderService
             $this->assign('blog_posts', $blogPosts);
         }
         
-        // 鍗氬鍒嗙被锛氫紭鍏堜娇鐢ㄩ璁炬暟鎹?
+        // 閸楁艾顓归崚鍡欒閿涙矮绱崗鍫滃▏閻劑顣╃拋鐐殶閹?
         if (!empty($existingCategories)) {
             $this->assign('blog_categories', $existingCategories);
         } else {
@@ -704,12 +705,12 @@ class PageRenderService
             $this->assign('blog_categories', $blogCategories);
         }
         
-        // 濡傛灉鏄崥瀹㈡枃绔犺鎯呴〉锛岃幏鍙栧綋鍓嶆枃绔?
+        // 婵″倹鐏夐弰顖氬触鐎广垺鏋冪粩鐘侯嚊閹懘銆夐敍宀冨箯閸欐牕缍嬮崜宥嗘瀮缁?
         if ($pageType === Page::TYPE_BLOG || !empty($existingCurrentPost)) {
             if (!empty($existingCurrentPost)) {
                 $this->assign('current_post', $existingCurrentPost);
                 
-                // 鐩稿叧鏂囩珷锛氫紭鍏堜娇鐢ㄩ璁炬暟鎹?
+                // 閻╃鍙ч弬鍥╃彿閿涙矮绱崗鍫滃▏閻劑顣╃拋鐐殶閹?
                 if (!empty($existingRelatedPosts)) {
                     $this->assign('related_posts', $existingRelatedPosts);
                 } elseif ($existingCurrentPost) {
@@ -717,13 +718,13 @@ class PageRenderService
                     $this->assign('related_posts', $relatedPosts);
                 }
             } else {
-                // 浠?URL 鍙傛暟鑾峰彇鏂囩珷 slug
+                // 娴?URL 閸欏倹鏆熼懢宄板絿閺傚洨鐝?slug
                 $slug = $this->request ? $this->request->getGet('slug') : null;
                 if ($slug) {
                     $currentPost = $this->getBlogPostBySlug($slug);
                     $this->assign('current_post', $currentPost);
                     
-                    // 鑾峰彇鐩稿叧鏂囩珷
+                    // 閼惧嘲褰囬惄绋垮彠閺傚洨鐝?
                     if ($currentPost) {
                         $relatedPosts = $this->getRelatedBlogPosts($currentPost, 6);
                         $this->assign('related_posts', $relatedPosts);
@@ -732,7 +733,7 @@ class PageRenderService
             }
         }
         
-        // 濡傛灉鏄崥瀹㈠垎绫婚〉锛岃幏鍙栧綋鍓嶅垎绫诲拰鍒嗙被涓嬬殑鏂囩珷
+        // 婵″倹鐏夐弰顖氬触鐎广垹鍨庣猾濠氥€夐敍宀冨箯閸欐牕缍嬮崜宥呭瀻缁鎷伴崚鍡欒娑撳娈戦弬鍥╃彿
         if ($pageType === Page::TYPE_BLOG_CATEGORY) {
             $categorySlug = $this->request ? $this->request->getGet('category') : null;
             if ($categorySlug) {
@@ -746,7 +747,7 @@ class PageRenderService
             }
         }
         
-        // 鏈€杩戞枃绔狅紙鐢ㄤ簬渚ц竟鏍忥級锛氫紭鍏堜娇鐢ㄩ璁炬暟鎹?
+        // 閺堚偓鏉╂垶鏋冪粩鐙呯礄閻劋绨笟褑绔熼弽蹇ョ礆閿涙矮绱崗鍫滃▏閻劑顣╃拋鐐殶閹?
         if (!empty($existingRecentPosts)) {
             $this->assign('recent_posts', $existingRecentPosts);
         } else {
@@ -792,7 +793,7 @@ class PageRenderService
     }
     
     /**
-     * 鑾峰彇鐩稿叧鍗氬鏂囩珷
+     * 閼惧嘲褰囬惄绋垮彠閸楁艾顓归弬鍥╃彿
      */
     private function getRelatedBlogPosts(array $currentPost, int $limit = 6): array
     {
@@ -810,7 +811,7 @@ class PageRenderService
     }
 
     /**
-     * 娓叉煋鍖哄煙
+     * 濞撳弶鐓嬮崠鍝勭厵
      */
     private function renderRegion(
         string $region,
@@ -824,9 +825,9 @@ class PageRenderService
     ): string {
         $regionConfig = $layoutConfig[$region] ?? [];
         
-        // 瑙勮寖鍖栧竷灞€閰嶇疆缁撴瀯
-        // PageLayout.exportConfig() 杩斿洖 header/footer 涓?{component: ..., config: ...}
-        // 浣?renderRegionComponents() 鏈熸湜 [{code: ..., enabled: ..., config: ...}]
+        // 鐟欏嫯瀵栭崠鏍х鐏炩偓闁板秶鐤嗙紒鎾寸€?
+        // PageLayout.exportConfig() 鏉╂柨娲?header/footer 娑?{component: ..., config: ...}
+        // 娴?renderRegionComponents() 閺堢喐婀?[{code: ..., enabled: ..., config: ...}]
         if (!empty($regionConfig)) {
             $components = $this->normalizeRegionConfig($region, $regionConfig);
             if (!empty($components)) {
@@ -841,7 +842,7 @@ class PageRenderService
             }
         }
         
-        // 鍥為€€鍒伴粯璁ゆā鏉挎垨鑷畾涔夊唴瀹?
+        // 閸ョ偤鈧偓閸掍即绮拋銈喣侀弶鎸庡灗閼奉亜鐣炬稊澶婂敶鐎?
         if ($region === 'content') {
             return $this->renderTraditionalContent($page, $stylePath, $localizedContent);
         }
@@ -850,13 +851,13 @@ class PageRenderService
     }
     
     /**
-     * 瑙勮寖鍖栧尯鍩熼厤缃粨鏋?
+     * 鐟欏嫯瀵栭崠鏍у隘閸╃喖鍘ょ純顔剧波閺?
      * 
-     * 灏嗕笉鍚屾牸寮忕殑閰嶇疆杞崲涓虹粺涓€鐨勭粍浠舵暟缁勬牸寮?
+     * 鐏忓棔绗夐崥灞剧壐瀵繒娈戦柊宥囩枂鏉烆剚宕叉稉铏圭埠娑撯偓閻ㄥ嫮绮嶆禒鑸垫殶缂佸嫭鐗稿?
      * 
-     * @param string $region 鍖哄煙鍚嶇О (header/content/footer)
-     * @param mixed $config 鍖哄煙閰嶇疆
-     * @return array 缁熶竴鏍煎紡鐨勭粍浠舵暟缁?
+     * @param string $region 閸栧搫鐓欓崥宥囆?(header/content/footer)
+     * @param mixed $config 閸栧搫鐓欓柊宥囩枂
+     * @return array 缂佺喍绔撮弽鐓庣础閻ㄥ嫮绮嶆禒鑸垫殶缂?
      */
     private function normalizeRegionConfig(string $region, $config): array
     {
@@ -864,12 +865,12 @@ class PageRenderService
             return [];
         }
         
-        // 濡傛灉宸茬粡鏄纭殑缁勪欢鏁扮粍鏍煎紡 [{code: ..., ...}, ...]
+        // 婵″倹鐏夊鑼病閺勵垱顒滅涵顔炬畱缂佸嫪娆㈤弫鎵矋閺嶇厧绱?[{code: ..., ...}, ...]
         if (is_array($config) && isset($config[0]) && isset($config[0]['code'])) {
             return $config;
         }
         
-        // 濡傛灉鏄?PageLayout.exportConfig() 鏍煎紡鐨?header/footer: {component: ..., config: ...}
+        // 婵″倹鐏夐弰?PageLayout.exportConfig() 閺嶇厧绱￠惃?header/footer: {component: ..., config: ...}
         if (is_array($config) && isset($config['component'])) {
             $component = $config['component'];
             if (empty($component)) {
@@ -884,21 +885,21 @@ class PageRenderService
             ];
         }
         
-        // 濡傛灉鏄甫鏈?code 鐨勫崟缁勪欢閰嶇疆 {code: ..., config: ...}
+        // 婵″倹鐏夐弰顖氱敨閺?code 閻ㄥ嫬宕熺紒鍕闁板秶鐤?{code: ..., config: ...}
         if (is_array($config) && isset($config['code'])) {
             return [$config];
         }
         
-        // content 鍖哄煙鍙兘鐩存帴鏄粍浠舵暟缁勶紙涓嶉渶瑕佽浆鎹級
+        // content 閸栧搫鐓欓崣顖濆厴閻╁瓨甯撮弰顖滅矋娴犺埖鏆熺紒鍕剁礄娑撳秹娓剁憰浣芥祮閹诡澁绱?
         if ($region === 'content' && is_array($config)) {
-            // 妫€鏌ョ涓€涓厓绱犳槸鍚︽湁 code 鎴?component 閿?
+            // 濡偓閺屻儳顑囨稉鈧稉顏勫帗缁辩姵妲搁崥锔芥箒 code 閹?component 闁?
             $firstItem = reset($config);
             if (is_array($firstItem)) {
                 if (isset($firstItem['code'])) {
                     return $config;
                 }
                 if (isset($firstItem['component'])) {
-                    // 杞崲鏍煎紡
+                    // 鏉烆剚宕查弽鐓庣础
                     return array_map(function($item) {
                         return [
                             'code' => $item['component'] ?? '',
@@ -914,7 +915,7 @@ class PageRenderService
     }
     
     /**
-     * 娓叉煋浼犵粺鍐呭锛堥潪缁勪欢鍖栵級
+     * 濞撳弶鐓嬫导鐘电埠閸愬懎顔愰敍鍫ユ姜缂佸嫪娆㈤崠鏍电礆
      */
     private function renderTraditionalContent(Page $page, string $stylePath, ?array $localizedContent): string
     {
@@ -933,7 +934,7 @@ class PageRenderService
     }
     
     /**
-     * 娓叉煋鍖哄煙缁勪欢
+     * 濞撳弶鐓嬮崠鍝勭厵缂佸嫪娆?
      */
     private function renderRegionComponents(
         string $region,
@@ -950,7 +951,7 @@ class PageRenderService
         $html = '';
         $isVisualEditor = ($mode === self::MODE_VISUAL);
         
-        // 缁勪欢浠ｇ爜鍒版枃浠剁殑鏄犲皠
+        // 缂佸嫪娆㈡禒锝囩垳閸掔増鏋冩禒鍓佹畱閺勭姴鐨?
         $componentFiles = $this->getComponentFilesMap($styleCode);
         
         $html .= "<!-- Rendering region: {$region}, styleCode: {$styleCode}, components: " . count($components) . ", mode: {$mode} -->\n";
@@ -967,13 +968,13 @@ class PageRenderService
                 continue;
             }
             
-            // 纭畾浣跨敤鍝釜妯℃澘鐨勭粍浠舵枃浠?
+            // 绾喖鐣炬担璺ㄦ暏閸濐亙閲滃Ο鈩冩緲閻ㄥ嫮绮嶆禒鑸垫瀮娴?
             $useTemplateCode = $styleCode;
             
-            // 鏌ユ壘缁勪欢鏂囦欢
+            // 閺屻儲澹樼紒鍕閺傚洣娆?
             $componentFile = $componentFiles[$code] ?? null;
             
-            // 馃敡 澶勭悊 {styleCode}-header/footer 鏍煎紡
+            // 棣冩暋 婢跺嫮鎮?{styleCode}-header/footer 閺嶇厧绱?
             if (!$componentFile) {
                 if ($code === $styleCode . '-header' || $code === 'header') {
                     $componentFile = $componentFiles['header-nav'] ?? null;
@@ -982,7 +983,7 @@ class PageRenderService
                 }
             }
             
-            // 馃敡 澶勭悊 Component 妯″瀷鐢熸垚鐨勭壒娈婃牸寮忥細{styleCode}_header_header, {styleCode}_footer_footer
+            // 棣冩暋 婢跺嫮鎮?Component 濡€崇€烽悽鐔稿灇閻ㄥ嫮澹掑▓濠冪壐瀵骏绱皗styleCode}_header_header, {styleCode}_footer_footer
             if (!$componentFile) {
                 if (preg_match('/^' . preg_quote($styleCode, '/') . '_header_header$/i', $code)) {
                     $componentFile = $componentFiles['header-nav'] ?? null;
@@ -991,27 +992,27 @@ class PageRenderService
                 }
             }
             
-            // 馃敡 澶勭悊涓嬪垝绾挎牸寮忕殑缁勪欢浠ｇ爜锛圕omponent 妯″瀷鐢熸垚鐨勬牸寮忥級
-            // 渚嬪锛歵pmst_header_nav -> header-nav
+            // 棣冩暋 婢跺嫮鎮婃稉瀣灊缁炬寧鐗稿蹇曟畱缂佸嫪娆㈡禒锝囩垳閿涘湑omponent 濡€崇€烽悽鐔稿灇閻ㄥ嫭鐗稿蹇ョ礆
+            // 娓氬顩ч敍姝祊mst_header_nav -> header-nav
             if (!$componentFile && strpos($code, $styleCode . '_') === 0) {
                 $codeWithoutPrefix = substr($code, strlen($styleCode) + 1);
                 $codeWithDash = str_replace('_', '-', $codeWithoutPrefix);
                 $componentFile = $componentFiles[$codeWithDash] ?? null;
             }
             
-            // 灏濊瘯鍘绘帀妯℃澘鍓嶇紑锛堢牬鎶樺彿鏍煎紡锛?
+            // 鐏忔繆鐦崢缁樺竴濡剝婢橀崜宥囩磻閿涘牏鐗幎妯哄娇閺嶇厧绱￠敍?
             if (!$componentFile && strpos($code, $styleCode . '-') === 0) {
                 $codeWithoutPrefix = substr($code, strlen($styleCode) + 1);
                 $componentFile = $componentFiles[$codeWithoutPrefix] ?? null;
             }
             
-            // 馃敡 灏濊瘯杞崲涓嬪垝绾夸负鐮存姌鍙峰悗鏌ユ壘
+            // 棣冩暋 鐏忔繆鐦潪顒佸床娑撳鍨濈痪澶歌礋閻瓨濮岄崣宄版倵閺屻儲澹?
             if (!$componentFile && str_contains($code, '_')) {
                 $codeWithDash = str_replace('_', '-', $code);
                 $componentFile = $componentFiles[$codeWithDash] ?? null;
             }
             
-            // 灏濊瘯浠庢寚瀹氱殑鍏朵粬妯℃澘鏌ユ壘
+            // 鐏忔繆鐦禒搴㈠瘹鐎规氨娈戦崗鏈电铂濡剝婢橀弻銉﹀
             if (!$componentFile && !empty($componentTemplateCode) && $componentTemplateCode !== $styleCode) {
                 $otherComponentFiles = $this->getComponentFilesMap($componentTemplateCode);
                 $componentFile = $otherComponentFiles[$code] ?? null;
@@ -1026,7 +1027,7 @@ class PageRenderService
                 }
             }
             
-            // 濡傛灉浠嶆湭鎵惧埌锛屽皾璇曢€氳繃 Component 妯″瀷瑙ｆ瀽锛堟敮鎸佹暟鎹簱娉ㄥ唽鐨勭粍浠讹級
+            // 婵″倹鐏夋禒宥嗘弓閹垫儳鍩岄敍灞界毦鐠囨洟鈧俺绻?Component 濡€崇€风憴锝嗙€介敍鍫熸暜閹镐焦鏆熼幑顔肩氨濞夈劌鍞介惃鍕矋娴犺绱?
             $componentPath = null;
             if (!$componentFile) {
                 $modelResolution = $this->resolveComponentViaModel($code, $styleCode);
@@ -1061,12 +1062,12 @@ class PageRenderService
                 continue;
             }
             
-            // 鏋勫缓缁勪欢妯℃澘璺緞锛堝鏋滄湭閫氳繃 Component 妯″瀷瑙ｆ瀽锛?
+            // 閺嬪嫬缂撶紒鍕濡剝婢樼捄顖氱窞閿涘牆顩ч弸婊勬弓闁俺绻?Component 濡€崇€风憴锝嗙€介敍?
             if (!$componentPath) {
                 $componentPath = $this->pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
             }
             
-            // 浼犻€掓暟鎹埌缁勪欢
+            // 娴肩娀鈧帗鏆熼幑顔煎煂缂佸嫪娆?
             $this->assign('page', $page);
             $this->assign('style', $styleSettings);
             $this->assign('style_settings', $styleSettings);
@@ -1078,12 +1079,12 @@ class PageRenderService
                 if (empty($componentHtml)) {
                     $html .= "<!-- Component {$code} rendered but output is empty -->\n";
                 } else {
-                    // 鍦ㄥ彲瑙嗗寲缂栬緫鍣ㄦā寮忎笅锛屾坊鍔犵粍浠跺寘瑁呭櫒
+                    // 閸︺劌褰茬憴鍡楀缂傛牞绶崳銊δ佸蹇庣瑓閿涘本鍧婇崝鐘电矋娴犺泛瀵樼憗鍛珤
                     if ($isVisualEditor) {
                         $escapedCode = htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
                         $escapedRegion = htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
                         $escapedPageType = htmlspecialchars((string)$page->getData(Page::schema_fields_TYPE), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-                        // 瀛樺偍缁勪欢瀹為檯鎵€灞炵殑妯℃澘浠ｇ爜锛堢敤浜庤法妯℃澘缁勪欢缂栬緫锛?
+                        // 鐎涙ê鍋嶇紒鍕鐎圭偤妾幍鈧仦鐐垫畱濡剝婢樻禒锝囩垳閿涘牏鏁ゆ禍搴ゆ硶濡剝婢樼紒鍕缂傛牞绶敍?
                         $escapedStyleCode = htmlspecialchars($useTemplateCode, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
                         $configScript = $this->buildVisualEditorComponentConfigScript(\is_array($config) ? $config : []);
                         $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-component-code=\"{$escapedCode}\" data-block-id=\"{$escapedCode}\" data-page-type=\"{$escapedPageType}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\" tabindex=\"0\">" . $this->buildVisualEditorComponentActionsHtml() . $configScript . "{$componentHtml}</div>";
@@ -1102,9 +1103,9 @@ class PageRenderService
     }
     
     /**
-     * 鑾峰彇缁勪欢鏂囦欢鏄犲皠
+     * 閼惧嘲褰囩紒鍕閺傚洣娆㈤弰鐘茬殸
      * 
-     * 浣跨敤 ComponentResolver 鑾峰彇缁勪欢鏄犲皠
+     * 娴ｈ法鏁?ComponentResolver 閼惧嘲褰囩紒鍕閺勭姴鐨?
      */
     private function renderVirtualThemeComponent(
         string $code,
@@ -1834,14 +1835,14 @@ HTML;
     }
     
     /**
-     * 閫氳繃 Component 妯″瀷瑙ｆ瀽缁勪欢妯℃澘璺緞
+     * 闁俺绻?Component 濡€崇€风憴锝嗙€界紒鍕濡剝婢樼捄顖氱窞
      * 
-     * 杩欐槸涓€涓鐢ㄦ柟娉曪紝褰?component.json 涓壘涓嶅埌缁勪欢鏃朵娇鐢?
-     * 鍙互鏀寔璺ㄦā鏉跨粍浠惰В鏋?
+     * 鏉╂瑦妲告稉鈧稉顏勵槵閻劍鏌熷▔鏇礉瑜?component.json 娑擃厽澹樻稉宥呭煂缂佸嫪娆㈤弮鏈靛▏閻?
+     * 閸欘垯浜掗弨顖涘瘮鐠恒劍膩閺夎法绮嶆禒鎯靶掗弸?
      * 
-     * @param string $componentCode 缁勪欢浠ｇ爜
-     * @param string $preferredStyleCode 棣栭€夋牱寮忎唬鐮?
-     * @return array|null ['path' => '妯℃澘璺緞', 'style_code' => '瀹為檯浣跨敤鐨勬牱寮忎唬鐮?]
+     * @param string $componentCode 缂佸嫪娆㈡禒锝囩垳
+     * @param string $preferredStyleCode 妫ｆ牠鈧鐗卞蹇庡敩閻?
+     * @return array|null ['path' => '濡剝婢樼捄顖氱窞', 'style_code' => '鐎圭偤妾担璺ㄦ暏閻ㄥ嫭鐗卞蹇庡敩閻?]
      */
     private function resolveComponentViaModel(string $componentCode, string $preferredStyleCode): ?array
     {
@@ -1853,7 +1854,7 @@ HTML;
             
             $componentModel = ObjectManager::getInstance($componentModelClass);
             
-            // 棣栧厛灏濊瘯鍦ㄩ閫夋牱寮忎腑鏌ユ壘
+            // 妫ｆ牕鍘涚亸婵婄槸閸︺劑顩婚柅澶嬬壉瀵繋鑵戦弻銉﹀
             $component = clone $componentModel;
             $component->clear()
                 ->where($componentModelClass::schema_fields_CODE, $componentCode)
@@ -1866,7 +1867,7 @@ HTML;
                 $styleCode = $component->getData($componentModelClass::schema_fields_STYLE_CODE);
                 
                 if ($path) {
-                    // 濡傛灉鏄浉瀵硅矾寰勶紝杞崲涓烘ā鏉垮紩鐢?
+                    // 婵″倹鐏夐弰顖滄祲鐎电鐭惧鍕剁礉鏉烆剚宕叉稉鐑樐侀弶鍨穿閻?
                     if (strpos($path, 'style/') === 0) {
                         return [
                             'path' => "GuoLaiRen_PageBuilder::templates/{$path}",
@@ -1880,7 +1881,7 @@ HTML;
                 }
             }
             
-            // 灏濊瘯甯︽牱寮忓墠缂€鐨勭粍浠朵唬鐮?
+            // 鐏忔繆鐦敮锔界壉瀵繐澧犵紓鈧惃鍕矋娴犳湹鍞惍?
             $prefixedCode = $preferredStyleCode . '-' . $componentCode;
             $component2 = clone $componentModel;
             $component2->clear()
@@ -1914,7 +1915,7 @@ HTML;
     }
     
     /**
-     * 鏋勫缓璋冭瘯淇℃伅
+     * 閺嬪嫬缂撶拫鍐槸娣団剝浼?
      */
     private function buildDebugInfo(bool $useComponentRendering, array $layoutConfig): string
     {
@@ -1926,7 +1927,7 @@ HTML;
     }
     
     /**
-     * 娉ㄥ叆 Header 鑷畾涔変唬鐮?
+     * 濞夈劌鍙?Header 閼奉亜鐣炬稊澶夊敩閻?
      */
     private function injectHeaderCustomCode(string $headerHtml, Page $page): string
     {
@@ -1943,7 +1944,7 @@ HTML;
     }
     
     /**
-     * 娉ㄥ叆 Footer 鑷畾涔変唬鐮?
+     * 濞夈劌鍙?Footer 閼奉亜鐣炬稊澶夊敩閻?
      */
     private function injectFooterCustomCode(string $footerHtml, Page $page): string
     {
@@ -1960,7 +1961,7 @@ HTML;
     }
     
     /**
-     * 鏈€缁堝鐞嗚緭鍑?
+     * 閺堚偓缂佸牆顦╅悶鍡氱翻閸?
      */
     private function finalizeOutput(
         string $headerHtml,
@@ -1972,7 +1973,7 @@ HTML;
         string $mode,
         ?int $virtualThemeId = null
     ): string {
-        // 棰勮鏍囪鑴氭湰锛坧review 鍜?visual 妯″紡閮介渶瑕侊級
+        // 妫板嫯顫嶉弽鍥唶閼存碍婀伴敍鍧eview 閸?visual 濡€崇础闁粙娓剁憰渚婄礆
         $previewBoot = '';
         if ($mode !== self::MODE_LIVE) {
             $previewBoot = '<script>(function(){
@@ -1988,7 +1989,7 @@ HTML;
         }
         
         if ($page->isAiHtmlRenderMode()) {
-            $aiHtml = $this->renderAiHtmlBlockNodes($page, $mode !== self::MODE_LIVE, $mode === self::MODE_VISUAL);
+            $aiHtml = $this->renderAiHtmlBlocks($page, $mode !== self::MODE_LIVE, $mode === self::MODE_VISUAL);
             if ($aiHtml !== '') {
                 if ($mode === self::MODE_VISUAL) {
                     return $this->renderVisualMode($headerHtml, $aiHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
@@ -1999,11 +2000,11 @@ HTML;
         }
 
         if ($mode === self::MODE_VISUAL) {
-            // 鍙鍖栫紪杈戝櫒妯″紡锛氭坊鍔犳彃妲藉鍣ㄥ拰鎷栨嫿鏀寔
+            // 閸欘垵顫嬮崠鏍椽鏉堟垵娅掑Ο鈥崇础閿涙碍鍧婇崝鐘冲絻濡茶棄顔愰崳銊ユ嫲閹锋牗瀚块弨顖涘瘮
             return $this->renderVisualMode($headerHtml, $contentHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
         }
         
-        // preview 鍜?live 妯″紡锛氱函鍑€杈撳嚭
+        // preview 閸?live 濡€崇础閿涙氨鍑介崙鈧潏鎾冲毉
         return $this->renderStandardDocument($headerHtml, $contentHtml, $footerHtml, $previewBoot, $page);
     }
 
@@ -2393,10 +2394,10 @@ body > *{max-width:100%;box-sizing:border-box;}
         }
     }
 
-    private function renderAiHtmlBlockNodes(Page $page, bool $useDraftLayout = false, bool $visualEditor = false): string
+    private function renderAiHtmlBlocks(Page $page, bool $useDraftLayout = false, bool $visualEditor = false): string
     {
         $layout = $page->resolveAiLayoutForFrontend($useDraftLayout);
-        $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
+        $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
         if ($blocks === []) {
             return '';
         }
@@ -2407,7 +2408,7 @@ body > *{max-width:100%;box-sizing:border-box;}
             if (!\is_array($block)) {
                 continue;
             }
-            if (AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($block)) {
+            if (AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($block)) {
                 continue;
             }
             $blockHtml = \trim((string)($block['html'] ?? $block['config']['html_content'] ?? ''));
@@ -2459,10 +2460,10 @@ body > *{max-width:100%;box-sizing:border-box;}
     }
     
     /**
-     * 娓叉煋鍙鍖栫紪杈戝櫒妯″紡
+     * 濞撳弶鐓嬮崣顖濐潒閸栨牜绱潏鎴濇珤濡€崇础
      * 
-     * 缁熶竴浣跨敤缁勪欢鍖栨ā寮忥細濮嬬粓鏋勫缓瀹屾暣 HTML 缁撴瀯
-     * header/content/footer 缁勪欢鍙槸 HTML 鐗囨锛屼笉鍖呭惈瀹屾暣鐨?HTML 鏂囨。缁撴瀯
+     * 缂佺喍绔存担璺ㄦ暏缂佸嫪娆㈤崠鏍佸蹇ョ窗婵绮撻弸鍕紦鐎瑰本鏆?HTML 缂佹挻鐎?
+     * header/content/footer 缂佸嫪娆㈤崣顏呮Ц HTML 閻楀洦顔岄敍灞肩瑝閸栧懎鎯堢€瑰本鏆ｉ惃?HTML 閺傚洦銆傜紒鎾寸€?
      */
     private function getComponentActionInlineDispatchJs(): string
     {
@@ -2547,15 +2548,15 @@ JS;
     ): string {
         $dropZoneStyles = $this->getDropZoneStyles();
         
-        // 鑾峰彇甯冨眬鎷ユ湁鑰呴〉闈D锛堢敤浜庡彲瑙嗗寲缂栬緫API璋冪敤锛?
+        // 閼惧嘲褰囩敮鍐ㄧ湰閹枫儲婀侀懓鍛淬€夐棃顢疍閿涘牏鏁ゆ禍搴″讲鐟欏棗瀵茬紓鏍帆API鐠嬪啰鏁ら敍?
         $layoutOwnerPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageId($page);
         $dropZoneScripts = $this->getDropZoneScripts((int)$page->getId(), $layoutOwnerPageId);
         
-        // 娓呯悊 header/footer 涓彲鑳藉瓨鍦ㄧ殑 HTML 鏂囨。缁撴瀯鏍囩锛堝吋瀹规棦鏈夋ā鏉匡級
+        // 濞撳懐鎮?header/footer 娑擃厼褰查懗钘夌摠閸︺劎娈?HTML 閺傚洦銆傜紒鎾寸€弽鍥╊劮閿涘牆鍚嬬€硅妫﹂張澶嬆侀弶鍖＄礆
         $headerHtml = $this->cleanHtmlDocumentTags($headerHtml);
         $footerHtml = $this->cleanHtmlDocumentTags($footerHtml);
         
-        // 缁勪欢鍖栨ā寮忥細鏋勫缓瀹屾暣 HTML
+        // 缂佸嫪娆㈤崠鏍佸蹇ョ窗閺嬪嫬缂撶€瑰本鏆?HTML
         $pageTitle = $page ? ($page->getData('title') ?: 'Preview') : 'Preview';
         $templateHelper = Template::getInstance();
         $baseCssSource = 'GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css';
@@ -2592,35 +2593,35 @@ JS;
     }
     
     /**
-     * 娓呯悊 HTML 鏂囨。缁撴瀯鏍囩
+     * 濞撳懐鎮?HTML 閺傚洦銆傜紒鎾寸€弽鍥╊劮
      * 
-     * 绉婚櫎缁勪欢 HTML 涓彲鑳藉瓨鍦ㄧ殑瀹屾暣鏂囨。缁撴瀯鏍囩锛?
-     * 鎻愬彇缁勪欢鍐呮墍鏈?<style> 鍒扮墖娈靛墠閮紝骞朵粠鍘熶綅缃Щ闄わ紝閬垮厤 <style> 鍑虹幇鍦?nav 绛夋爣绛惧唴銆?
-     * 纭繚缁勪欢鍙槸绾补鐨?HTML 鐗囨锛屼笖鏍峰紡闆嗕腑鍦ㄧ墖娈靛墠閮ㄣ€?
+     * 缁夊娅庣紒鍕 HTML 娑擃厼褰查懗钘夌摠閸︺劎娈戠€瑰本鏆ｉ弬鍥ㄣ€傜紒鎾寸€弽鍥╊劮閿?
+     * 閹绘劕褰囩紒鍕閸愬懏澧嶉張?<style> 閸掓壆澧栧▓闈涘闁煉绱濋獮鏈电矤閸樼喍缍呯純顔拘╅梽銈忕礉闁灝鍘?<style> 閸戣櫣骞囬崷?nav 缁涘鐖ｇ粵鎯у敶閵?
+     * 绾喕绻氱紒鍕閸欘亝妲哥痪顖滆ˉ閻?HTML 閻楀洦顔岄敍灞肩瑬閺嶅嘲绱￠梿鍡曡厬閸︺劎澧栧▓闈涘闁劊鈧?
      */
     private function cleanHtmlDocumentTags(string $html): string
     {
-        // 绉婚櫎 DOCTYPE
+        // 缁夊娅?DOCTYPE
         $html = preg_replace('/<!DOCTYPE[^>]*>/i', '', $html);
         
-        // 绉婚櫎 <html> 鏍囩锛堜繚鐣欏唴瀹癸級
+        // 缁夊娅?<html> 閺嶅洨顒烽敍鍫滅箽閻ｆ瑥鍞寸€圭櫢绱?
         $html = preg_replace('/<html[^>]*>/i', '', $html);
         $html = preg_replace('/<\/html>/i', '', $html);
         
-        // 鎻愬彇鎵€鏈?style 鏍囩锛堝寘鎷粍浠跺唴閮ㄧ殑锛屽 <nav><style>...</style>锛?
+        // 閹绘劕褰囬幍鈧張?style 閺嶅洨顒烽敍鍫濆瘶閹奉剛绮嶆禒璺哄敶闁劎娈戦敍灞筋洤 <nav><style>...</style>閿?
         $styles = '';
         if (preg_match_all('/<style[^>]*>.*?<\/style>/is', $html, $matches)) {
             $styles = implode("\n", $matches[0]);
-            // 浠庣墖娈典腑绉婚櫎杩欎簺 style 鏍囩锛岄伩鍏?header 绛夌粍浠堕噷娈嬬暀 <style> 瀵艰嚧缁撴瀯娣蜂贡
+            // 娴犲海澧栧▓鍏歌厬缁夊娅庢潻娆庣昂 style 閺嶅洨顒烽敍宀勪缉閸?header 缁涘绮嶆禒鍫曞櫡濞堝鏆€ <style> 鐎佃壈鍤х紒鎾寸€ǎ铚傝础
             $html = preg_replace('/<style[^>]*>.*?<\/style>/is', '', $html);
         }
         $html = preg_replace('/<head[^>]*>.*?<\/head>/is', '', $html);
         
-        // 绉婚櫎 <body> 鏍囩锛堜繚鐣欏唴瀹癸級
+        // 缁夊娅?<body> 閺嶅洨顒烽敍鍫滅箽閻ｆ瑥鍞寸€圭櫢绱?
         $html = preg_replace('/<body[^>]*>/i', '', $html);
         $html = preg_replace('/<\/body>/i', '', $html);
         
-        // 灏嗘彁鍙栫殑鏍峰紡鏀惧湪鐗囨鍓嶉儴锛屾渶缁堟彃鍏ュ埌鎻掓Ы鍐呮椂鏍峰紡鍦ㄧ粍浠剁粨鏋勪箣鍓?
+        // 鐏忓棙褰侀崣鏍畱閺嶅嘲绱￠弨鎯ф躬閻楀洦顔岄崜宥夊劥閿涘本娓剁紒鍫熷絻閸忋儱鍩岄幓鎺撔崘鍛閺嶅嘲绱￠崷銊х矋娴犲墎绮ㄩ弸鍕閸?
         if (!empty($styles)) {
             $html = $styles . "\n" . trim($html);
         }
@@ -2629,20 +2630,20 @@ JS;
     }
     
     /**
-     * 鑾峰彇鎷栨嫿鍖哄煙鏍峰紡
+     * 閼惧嘲褰囬幏鏍ㄥ閸栧搫鐓欓弽宄扮础
      * 
-     * 缁熶竴浣跨敤 inset box-shadow 浣滀负瑙嗚鏁堟灉锛岄伩鍏?outline 瀵艰嚧鐨勫竷灞€闂
+     * 缂佺喍绔存担璺ㄦ暏 inset box-shadow 娴ｆ粈璐熺憴鍡氼潕閺佸牊鐏夐敍宀勪缉閸?outline 鐎佃壈鍤ч惃鍕鐏炩偓闂傤噣顣?
      */
     private function getDropZoneStyles(): string
     {
         return '<style>
-            /* 鎷栨嫿鎻掓Ы鍖哄煙 */
+            /* 閹锋牗瀚块幓鎺撔崠鍝勭厵 */
             .pb-slot {
                 position: relative;
                 min-height: 50px;
                 transition: box-shadow 0.2s ease;
             }
-            /* 绉婚櫎 pb-slot 鍜?pb-slot-content 鐨?hover 鏁堟灉 */
+            /* 缁夊娅?pb-slot 閸?pb-slot-content 閻?hover 閺佸牊鐏?*/
             .pb-slot:hover,
             .pb-slot-content:hover {
                 box-shadow: none !important;
@@ -2652,7 +2653,7 @@ JS;
                 background: rgba(74, 144, 217, 0.05);
             }
             
-            /* 鎻掓Ы鍚嶇О鏍囩 */
+            /* 閹绘帗蝎閸氬秶袨閺嶅洨顒?*/
             .pb-slot::before {
                 content: attr(data-slot-name);
                 position: absolute;
@@ -2669,13 +2670,13 @@ JS;
                 z-index: 1000;
                 pointer-events: none;
             }
-            /* 绉婚櫎 hover 鏃舵樉绀烘爣绛剧殑鏁堟灉 */
+            /* 缁夊娅?hover 閺冭埖妯夌粈鐑樼垼缁涘墽娈戦弫鍫熺亯 */
             .pb-slot:hover::before,
             .pb-slot-content:hover::before {
                 opacity: 0 !important;
             }
             
-            /* 缁勪欢鍖呰鍣紙缁熶竴鏍峰紡锛岄€傜敤浜庢墍鏈夋ā鏉匡級 */
+            /* 缂佸嫪娆㈤崠鍛邦棅閸ｎ煉绱欑紒鐔剁閺嶅嘲绱￠敍宀勨偓鍌滄暏娴滃孩澧嶉張澶嬆侀弶鍖＄礆 */
             .tpmst-component-wrapper,
             .pb-component-wrapper {
                 position: relative !important;
@@ -2702,14 +2703,14 @@ JS;
                 box-shadow: inset 0 0 0 3px #4a90d9;
             }
             
-            /* 缁勪欢鎷栨嫿鐘舵€?*/
+            /* 缂佸嫪娆㈤幏鏍ㄥ閻樿埖鈧?*/
             .tpmst-component-wrapper.dragging,
             .pb-component-wrapper.dragging {
                 opacity: 0.6;
                 box-shadow: inset 0 0 0 2px rgba(74, 144, 217, 0.8);
             }
             
-            /* 缁勪欢鎿嶄綔鎸夐挳瀹瑰櫒 */
+            /* 缂佸嫪娆㈤幙宥勭稊閹稿鎸崇€圭懓娅?*/
             .tpmst-component-wrapper .component-actions,
             .pb-component-wrapper .component-actions {
                 position: absolute !important;
@@ -3077,18 +3078,18 @@ JS;
     }
     
     /**
-     * 鑾峰彇鎷栨嫿鍖哄煙鑴氭湰
+     * 閼惧嘲褰囬幏鏍ㄥ閸栧搫鐓欓懘姘拱
      * 
-     * @param int $pageId 褰撳墠椤甸潰ID
-     * @param int $layoutOwnerPageId 甯冨眬鎷ユ湁鑰呴〉闈D锛堢敤浜嶢PI璋冪敤锛?
+     * @param int $pageId 瑜版挸澧犳い鐢告桨ID
+     * @param int $layoutOwnerPageId 鐢啫鐪幏銉︽箒閼板懘銆夐棃顢疍閿涘牏鏁ゆ禍宥I鐠嬪啰鏁ら敍?
      */
     private function getDropZoneScripts(int $pageId, int $layoutOwnerPageId): string
     {
         return '<script>
             (function() {
-                // 鍙鍖栫紪杈戝櫒鑴氭湰
+                // 閸欘垵顫嬮崠鏍椽鏉堟垵娅掗懘姘拱
                 window.__PAGEBUILDER_PAGE_ID__ = ' . $pageId . ';
-                // 甯冨眬鎷ユ湁鑰呴〉闈D锛圓PI璋冪敤鏃朵娇鐢ㄦID锛?
+                // 鐢啫鐪幏銉︽箒閼板懘銆夐棃顢疍閿涘湏PI鐠嬪啰鏁ら弮鏈靛▏閻劍顒滻D閿?
                 window.__PAGEBUILDER_LAYOUT_OWNER_PAGE_ID__ = ' . $layoutOwnerPageId . ';
                 var pbStandalonePreview = !window.parent || window.parent === window;
                 var pbVirtualEditorEnabled = false;
@@ -3120,7 +3121,7 @@ JS;
                 } catch (err) {
                 }
                 
-                // 鍒濆鍖栨嫋鎷藉尯鍩?
+                // 閸掓繂顫愰崠鏍ㄥ珛閹疯棄灏崺?
                 document.querySelectorAll(".pb-slot").forEach(function(slot) {
                     slot.addEventListener("dragover", function(e) {
                         e.preventDefault();
@@ -3132,7 +3133,7 @@ JS;
                     slot.addEventListener("drop", function(e) {
                         e.preventDefault();
                         this.classList.remove("drag-over");
-                        // 閫氱煡鐖剁獥鍙?
+                        // 闁氨鐓￠悥鍓佺崶閸?
                         if (window.parent && window.parent !== window) {
                             window.parent.postMessage({
                                 type: "pb-component-drop",
@@ -3143,7 +3144,7 @@ JS;
                     });
                 });
                 
-                // 缁勪欢閫夋嫨
+                // 缂佸嫪娆㈤柅澶嬪
                 document.querySelectorAll(".tpmst-component-wrapper").forEach(function(wrapper) {
                     wrapper.addEventListener("click", function(e) {
                         e.stopPropagation();
@@ -3151,7 +3152,7 @@ JS;
                             el.classList.remove("selected");
                         });
                         this.classList.add("selected");
-                        // 閫氱煡鐖剁獥鍙?
+                        // 闁氨鐓￠悥鍓佺崶閸?
                         if (window.parent && window.parent !== window) {
                             window.parent.postMessage({
                                 type: "pb-component-select",
@@ -3884,7 +3885,7 @@ JS;
     }
     
     /**
-     * 娓呴櫎缂撳瓨
+     * 濞撳懘娅庣紓鎾崇摠
      */
     public static function clearCache(): void
     {

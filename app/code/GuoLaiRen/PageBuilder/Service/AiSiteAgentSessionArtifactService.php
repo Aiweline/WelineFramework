@@ -39,11 +39,6 @@ class AiSiteAgentSessionArtifactService
      * @var array<string, array{stage:string, path:list<string>, empty:mixed}>
      */
     private const ARTIFACT_DEFINITIONS = [
-        'plan_json' => [
-            'stage' => AiSiteAgentSession::STAGE_PLAN,
-            'path' => ['plan_json'],
-            'empty' => [],
-        ],
         'content_manifest' => [
             'stage' => AiSiteAgentSession::STAGE_PLAN,
             'path' => ['content_manifest'],
@@ -86,11 +81,9 @@ class AiSiteAgentSessionArtifactService
      */
     private const ARTIFACT_KEYS_BY_STAGE = [
         AiSiteAgentSession::STAGE_PLAN => [
-            'plan_json',
             'content_manifest',
         ],
         AiSiteAgentSession::STAGE_VISUAL_EDIT => [
-            'plan_json',
             'content_manifest',
             'build_contracts',
             'render_data_contract',
@@ -100,7 +93,6 @@ class AiSiteAgentSessionArtifactService
             'theme_css',
         ],
         AiSiteAgentSession::STAGE_PUBLISH => [
-            'plan_json',
             'content_manifest',
             'build_contracts',
             'render_data_contract',
@@ -131,6 +123,7 @@ class AiSiteAgentSessionArtifactService
             && \is_array($scope[self::REF_KEY])
             && $scope[self::REF_KEY] === [];
         $refs = \is_array($scope[self::REF_KEY] ?? null) ? $scope[self::REF_KEY] : [];
+        $refs = $this->removePlanJsonArtifactReferences($refs);
         $touchedMap = \array_fill_keys($touchedArtifactKeys, true);
         $artifacts = [];
 
@@ -147,16 +140,6 @@ class AiSiteAgentSessionArtifactService
             }
 
             if ($hasValue) {
-                if (
-                    $artifactKey === 'plan_json'
-                    && \is_array($value)
-                    && !$this->hasCompleteStageOnePlanPayload($value)
-                    && $existingRef !== []
-                ) {
-                    $refs[$stageCode][$artifactKey] = $existingRef;
-                    $scope = $this->setPathValue($scope, $definition['path'], $definition['empty']);
-                    continue;
-                }
                 $value = $this->compactArtifactPayloadForStorage($artifactKey, $value);
                 $json = $this->encodeValueDocument($value);
                 $hash = \sha1($json);
@@ -490,7 +473,6 @@ class AiSiteAgentSessionArtifactService
     {
         $keys = [];
         foreach ([
-            'plan_json',
             'content_manifest',
             'build_contracts',
             'render_data_contract',
@@ -762,14 +744,26 @@ SQL);
 
     private function shouldHydrateArtifactFromStorage(string $artifactKey, mixed $inlineValue): bool
     {
-        if (!$this->hasArtifactPayload($inlineValue)) {
-            return true;
-        }
-        if ($artifactKey === 'plan_json' && \is_array($inlineValue)) {
-            return !$this->hasCompleteStageOnePlanPayload($inlineValue);
+        return !$this->hasArtifactPayload($inlineValue);
+    }
+
+    /**
+     * @param array<string, mixed> $refs
+     * @return array<string, mixed>
+     */
+    private function removePlanJsonArtifactReferences(array $refs): array
+    {
+        foreach ([AiSiteAgentSession::STAGE_PLAN, AiSiteAgentSession::STAGE_VISUAL_EDIT, AiSiteAgentSession::STAGE_PUBLISH] as $stageCode) {
+            if (!\is_array($refs[$stageCode] ?? null)) {
+                continue;
+            }
+            unset($refs[$stageCode]['plan_json']);
+            if ($refs[$stageCode] === []) {
+                unset($refs[$stageCode]);
+            }
         }
 
-        return false;
+        return $refs;
     }
 
     private function encodeValueDocument(mixed $value): string

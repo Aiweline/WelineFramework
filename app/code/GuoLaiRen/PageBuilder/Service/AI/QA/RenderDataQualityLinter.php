@@ -6,6 +6,41 @@ namespace GuoLaiRen\PageBuilder\Service\AI\QA;
 
 final class RenderDataQualityLinter
 {
+    /** @var array<string, true> */
+    private const PLAN_JSON_PAGE_META_KEYS = [
+        'layout' => true,
+        'page_meta' => true,
+        'meta' => true,
+        'seo' => true,
+        'route' => true,
+        'route_path' => true,
+        'path' => true,
+        'assets' => true,
+        'blocks' => true,
+        'block_previews' => true,
+        'sections' => true,
+        'components' => true,
+        'page_design_plan' => true,
+        'primary_keywords' => true,
+        'secondary_keywords' => true,
+        'style_code' => true,
+        'style_settings' => true,
+        'design_tokens' => true,
+        'theme_css_ref' => true,
+        'navigation' => true,
+        'menus' => true,
+        'links' => true,
+        'settings' => true,
+        'preview_url' => true,
+        'preview_full_url' => true,
+        'visual_preview_url' => true,
+        'visual_edit_url' => true,
+        'virtual_preview_url' => true,
+        'virtual_edit_url' => true,
+        'section_refinements' => true,
+        'ai_description' => true,
+    ];
+
     /**
      * Validate only render-data structure. Copy, SEO, locale, style, and
      * aesthetic judgments are intentionally left to AI prompt quality and
@@ -17,54 +52,64 @@ final class RenderDataQualityLinter
     public function lint(array $renderDataContract): array
     {
         $payload = \is_array($renderDataContract['payload'] ?? null) ? $renderDataContract['payload'] : $renderDataContract;
-        $layouts = \is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [];
-        if ($layouts === []) {
+        $planJson = \is_array($payload['plan_json'] ?? null) ? $payload['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        if ($pages === []) {
             return [
-                $this->finding('error', 'structure', 'structure.missing_page_layouts', 'Build render data has no page layout output.', 'payload.page_type_layouts'),
+                $this->finding('error', 'structure', 'structure.missing_plan_json_pages', 'Build render data has no plan_json page output.', 'payload.plan_json.pages'),
             ];
         }
 
         $findings = [];
-        foreach ($layouts as $pageType => $layout) {
-            if (!\is_array($layout)) {
+        foreach ($pages as $pageType => $page) {
+            if (!\is_array($page)) {
                 $findings[] = $this->finding(
                     'error',
                     'structure',
-                    'structure.invalid_page_layout',
-                    'Page layout must be an object.',
-                    'payload.page_type_layouts.' . (string)$pageType
+                    'structure.invalid_plan_json_page',
+                    'Plan JSON page must be an object.',
+                    'payload.plan_json.pages.' . (string)$pageType
                 );
                 continue;
             }
-            $blocks = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+            $blocks = $this->extractPlanJsonPageBlocks($page);
             if ($blocks === []) {
                 $findings[] = $this->finding(
                     'error',
                     'structure',
-                    'structure.empty_page_layout',
-                    'Page layout has no rendered sections.',
-                    'payload.page_type_layouts.' . (string)$pageType . '.content'
+                    'structure.empty_plan_json_page',
+                    'Plan JSON page has no generated blocks.',
+                    'payload.plan_json.pages.' . (string)$pageType
                 );
                 continue;
             }
-            foreach ($blocks as $index => $block) {
+            foreach ($blocks as $blockKey => $block) {
                 if (!\is_array($block)) {
                     $findings[] = $this->finding(
                         'error',
                         'structure',
-                        'structure.invalid_section',
-                        'Section must be an object.',
-                        'payload.page_type_layouts.' . (string)$pageType . '.content.' . (string)$index
+                        'structure.invalid_plan_json_block',
+                        'Plan JSON block must be an object.',
+                        'payload.plan_json.pages.' . (string)$pageType . '.' . (string)$blockKey
                     );
                     continue;
                 }
-                $path = 'payload.page_type_layouts.' . (string)$pageType . '.content.' . (string)$index;
-                if ($this->firstNonEmptyString([$block['code'] ?? null, $block['component'] ?? null, $block['template'] ?? null]) === '') {
+                $path = 'payload.plan_json.pages.' . (string)$pageType . '.' . (string)$blockKey;
+                if ($this->firstNonEmptyString([(string)$blockKey, $block['block_key'] ?? null, $block['section_code'] ?? null, $block['code'] ?? null]) === '') {
                     $findings[] = $this->finding(
                         'error',
                         'structure',
-                        'structure.missing_section_identity',
-                        'Section is missing a code/component identity.',
+                        'structure.missing_block_identity',
+                        'Plan JSON block is missing a block identity.',
+                        $path
+                    );
+                }
+                if ($this->firstNonEmptyString([$block['html'] ?? null, $block['html_content'] ?? null, $block['phtml'] ?? null]) === '') {
+                    $findings[] = $this->finding(
+                        'error',
+                        'structure',
+                        'structure.missing_block_artifact',
+                        'Plan JSON block is missing generated HTML/PHTML.',
                         $path
                     );
                 }
@@ -74,7 +119,7 @@ final class RenderDataQualityLinter
                         'error',
                         'structure',
                         'structure.malformed_html',
-                        'Section HTML has malformed tags or unbalanced structure: ' . $htmlStructureReason,
+                        'Plan JSON block HTML has malformed tags or unbalanced structure: ' . $htmlStructureReason,
                         $path
                     );
                 }
@@ -82,6 +127,41 @@ final class RenderDataQualityLinter
         }
 
         return $findings;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @return array<string, mixed>
+     */
+    private function extractPlanJsonPageBlocks(array $page): array
+    {
+        $blocks = [];
+        foreach ($page as $key => $value) {
+            if (!\is_string($key) || !\is_array($value)) {
+                continue;
+            }
+            if (isset(self::PLAN_JSON_PAGE_META_KEYS[$key])) {
+                continue;
+            }
+            if (!$this->isPlanJsonBlockNode($value)) {
+                continue;
+            }
+            $blocks[$key] = $value;
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     */
+    private function isPlanJsonBlockNode(array $node): bool
+    {
+        return $this->firstNonEmptyString([$node['block_key'] ?? null, $node['section_code'] ?? null, $node['code'] ?? null]) !== ''
+            || \array_key_exists('html', $node)
+            || \array_key_exists('html_content', $node)
+            || \array_key_exists('phtml', $node)
+            || \array_key_exists('status', $node);
     }
 
     /**

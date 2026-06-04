@@ -1,59 +1,70 @@
-# Multica Skill Index
+# Weline AI Skill Index
 
-本索引是 `dev/ai/skills` 的统一入口，用于让 Multica 按角色选择技能。
+本文件只负责技能路由。不要一次性读取全部 `skills/*/SKILL.md`；默认保留 1 到 3 个最相关技能进入上下文。
 
-## 智能体名录
+## 必读顺序
 
-- 智能体说明入口：`dev/ai/agent/README.md`
-- 每个智能体 Markdown 包含“指令”和“Skill”两部分。
-- 所有专业智能体都必须同时遵守 `通用工程师-开发规范与代码质量`。
-- 发现问题、风险、阻塞、跨角色影响或验证失败时，必须通知 `@Weline-技术主管`。
+1. `AI-ENTRY.md`
+2. `dev/ai/global-constraints.md`
+3. 本索引
+4. 命中的技能正文
+5. 相关模块文档和源码
 
-## 调度原则
+## 组合触发
 
-1. 先按职责选角色，再按任务选技能。
-2. 同一任务优先保留 1 到 3 个最相关技能，避免一次加载过多技能。
-3. 先读 `AI-ENTRY.md` 和 `dev/ai/global-constraints.md`，再读图谱、模块文档和命中技能，最后才读源码。
-4. 涉及实现、验证、文档、验收时，分别调用对应角色技能，不要让单个技能跨越全部职责。
+- 任意工程任务：遵守 `通用工程师-开发规范与代码质量`。
+- 浏览器可见 UI、页面、组件、布局、样式、响应式、状态、可用性或审美：加载命中的 `前端主题工程师-*` + `ui-ux-pro-max`。
+- 前端请求、QueryProvider、流式订阅、worker 链路：加载 `前端主题工程师-前端API交互`。
+- 测试策略、质量门禁或验收：加载 `QA测试主管-*`；单测细节加载 `单元测试工程师-*`；浏览器/E2E 加载 `E2E自动化工程师-*`。
+- WLS、Worker、reload/restart、Session Server、SSE：加载 `WLS运行时工程师-*`。
+- ACL、后台安全、会话、数据保护：加载 `安全权限工程师-*`。
+- README、API、架构、索引、规则沉淀、复盘：加载 `文档知识库工程师-*`。
+- CI、发布、环境兼容、Windows 命令安全：加载 `CI发布工程师-*`。
+- 代码图谱、调用链、影响分析、重构、索引维护：加载 `.claude/skills/gitnexus/*/SKILL.md` 中命中的 GitNexus 技能。
 
-## 组合触发规则
+## 角色路由
 
-- 只要任务涉及浏览器可见前端界面、组件、页面、布局、样式、响应式、状态展示或可用性/审美优化，必须自动同时使用命中的 `前端主题工程师-*` 技能和 `ui-ux-pro-max`；用户没有点名 `ui-ux-pro-max` 时也必须触发。
-- 涉及前端请求、QueryProvider、流式订阅或 worker 链路时，在上述组合外还必须使用 `前端主题工程师-前端API交互`。
-- `ui-ux-pro-max` 的设计建议必须服从 Weline 框架规则；不得因此引入 direct fetch、硬编码文案、CDN 依赖、layout 业务逻辑或未验证的视觉改动。
-- 强制用法：前端实现前先运行或等价执行 `python dev/ai/skills/ui-ux-pro-max/scripts/search.py "<页面类型 行业 风格关键词>" --design-system -p "<项目名>"` 形成设计约束，再按 Weline 技能实现。
-
-## 角色清单
-
-| 角色 | 技能 |
+| 场景 | 技能 |
 |---|---|
-| 技术主管 | 任务拆分与调度；一级验收与进度追踪 |
-| 框架核心工程师 | 框架核心开发；ORM与数据模型；路由事件与扩展；命令与代码生成 |
-| 业务模块工程师 | 模块开发；服务层与业务逻辑；配置缓存与后台权限 |
-| 前端主题工程师 | 主题模板开发；组件与页面构建 |
-| 通用工程师 | 开发规范与代码质量；国际化与用户提示 |
-| WLS运行时工程师 | WLS进程稳定；Session与SSE运行时 |
-| 安全权限工程师 | ACL与后台安全；会话配置与数据保护 |
-| QA测试主管 | 测试策略治理；质量门禁验收 |
-| 单元测试工程师 | 单元测试覆盖；测试数据与回归 |
-| E2E自动化工程师 | 端到端流程测试；路由与UI冒烟验证 |
-| CI发布工程师 | CI与发布门禁；环境兼容与命令安全 |
-| 文档知识库工程师 | 文档规范与变更记录；技能索引与知识库；会话复盘与规则沉淀 |
+| 需求拆分、调度、进度、一级验收 | `技术主管-任务拆分与调度`；`技术主管-一级验收与进度追踪` |
+| 框架底层、DI、扩展机制 | `框架核心工程师-框架核心开发` |
+| ORM、模型、字段、索引 | `框架核心工程师-ORM与数据模型` |
+| 路由、事件、Hook、扩展点 | `框架核心工程师-路由事件与扩展` |
+| 命令、代码生成、生成链路 | `框架核心工程师-命令与代码生成` |
+| 业务模块功能 | `业务模块工程师-模块开发`；`业务模块工程师-服务层与业务逻辑` |
+| 配置、缓存、后台权限 | `业务模块工程师-配置缓存与后台权限` |
+| 主题模板、Taglib、Widget、PageBuilder | `前端主题工程师-主题模板开发` |
+| 组件、页面、视觉状态 | `前端主题工程师-组件与页面构建`；`ui-ux-pro-max` |
+| 前端 API / worker 请求链 | `前端主题工程师-前端API交互` |
+| 开发规范、边界、验证证据 | `通用工程师-开发规范与代码质量` |
+| i18n、用户提示、可见文案 | `通用工程师-国际化与用户提示` |
+| WLS 进程稳定 | `WLS运行时工程师-WLS进程稳定` |
+| Session / SSE 运行时 | `WLS运行时工程师-Session与SSE运行时` |
+| ACL 与后台安全 | `安全权限工程师-ACL与后台安全` |
+| 会话配置与数据保护 | `安全权限工程师-会话配置与数据保护` |
+| 测试策略、质量门禁 | `QA测试主管-测试策略治理`；`QA测试主管-质量门禁验收` |
+| 单元测试、测试数据、回归 | `单元测试工程师-单元测试覆盖`；`单元测试工程师-测试数据与回归` |
+| E2E、路由、UI 冒烟 | `E2E自动化工程师-端到端流程测试`；`E2E自动化工程师-路由与UI冒烟验证` |
+| CI、发布、环境兼容 | `CI发布工程师-CI与发布门禁`；`CI发布工程师-环境兼容与命令安全` |
+| 文档、知识库、规则沉淀 | `文档知识库工程师-文档规范与变更记录`；`文档知识库工程师-技能索引与知识库`；`文档知识库工程师-会话复盘与规则沉淀` |
 
-## 路由建议
+## GitNexus 路由
 
-- 需求拆分、任务编排、多角色协作：`技术主管-*`
-- 框架底层、ORM、路由、事件、命令、代码生成：`框架核心工程师-*`
-- 模块功能、服务层、配置、缓存、后台权限：`业务模块工程师-*`
-- 主题、模板、Taglib、Widget、PageBuilder：`前端主题工程师-*`
-- UI/UX 设计系统、视觉风格、可用性审查、前端界面方案：`ui-ux-pro-max`
-- 主题前端交互 API、`Weline.Api.resource()/graph()/stream()`、worker 请求链路：`前端主题工程师-前端API交互`
-- 开发规范、代码质量、边界约束、验证证据：`通用工程师-开发规范与代码质量`
-- 用户可见文案、i18n、提示语和确认交互：`通用工程师-国际化与用户提示`
-- WLS、Worker、reload/restart、Session Server、SSE：`WLS运行时工程师-*`
-- ACL、后台安全、会话与数据保护：`安全权限工程师-*`
-- 测试策略、质量门禁、验收节奏：`QA测试主管-*`
-- PHPUnit、Pest、回归数据、单测设计：`单元测试工程师-*`
-- Playwright、HTTP、路由冒烟、交互回归：`E2E自动化工程师-*`
-- 命令安全、Windows quoting、发布检查、环境兼容：`CI发布工程师-*`
-- README、API、架构文档、索引维护、迁移记录、会话复盘知识沉淀：`文档知识库工程师-*`
+GitNexus 技能保留在 `.claude/skills/gitnexus/`，这里只做引用，不复制正文。
+
+| 场景 | 技能文件 |
+|---|---|
+| 理解架构、执行流、调用链 | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| 修改前影响分析、blast radius | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| 调试错误、追踪失败路径 | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| rename、extract、move、refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| GitNexus 工具、资源、schema | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| analyze、status、clean、wiki、list | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+强制规则仍以根目录 `AGENTS.md` 的 GitNexus 区块为准：改函数、类、方法前先做 upstream impact；提交前做 detect_changes。
+
+## 智能体入口
+
+- 智能体名录：`dev/ai/agent/README.md`
+- 团队流程：`dev/ai/skills/TEAM_WORKFLOW.md`
+- 全局规则：`dev/ai/global-constraints.md`

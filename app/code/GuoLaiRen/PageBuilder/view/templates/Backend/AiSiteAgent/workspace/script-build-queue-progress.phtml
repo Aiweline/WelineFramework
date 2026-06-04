@@ -12,22 +12,22 @@
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceStateUrl = <?= \json_encode((string)($workspaceStateUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var queueMessages = {
-        emptyBuild: <?= \json_encode((string)__('褰撳墠娌℃湁鍙睍绀虹殑鐢熸垚涓婚闃熷垪璁板綍銆?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refreshed: <?= \json_encode((string)__('闃熷垪淇℃伅宸插埛鏂?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refreshFailed: <?= \json_encode((string)__('鍒锋柊闃熷垪淇℃伅澶辫触'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        queueIdLabel: <?= \json_encode((string)__('闃熷垪缂栧彿'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        unknown: <?= \json_encode((string)__('鈥?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        emptyBuild: <?= \json_encode((string)__('No build queue is available.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        refreshed: <?= \json_encode((string)__('Queue information refreshed.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        refreshFailed: <?= \json_encode((string)__('Failed to refresh queue information.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        queueIdLabel: <?= \json_encode((string)__('Queue ID'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        unknown: <?= \json_encode((string)__('Unknown'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         jobKeyLabel: <?= \json_encode((string)__('Job'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        jobTypeLabel: <?= \json_encode((string)__('绫诲瀷'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        statusLabel: <?= \json_encode((string)__('鐘舵€?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        jobTypeLabel: <?= \json_encode((string)__('Job type'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        statusLabel: <?= \json_encode((string)__('Status'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         tokenLabel: <?= \json_encode((string)__('Token'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        inputTokensLabel: <?= \json_encode((string)__('杈撳叆 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        outputTokensLabel: <?= \json_encode((string)__('杈撳嚭 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        totalTokensLabel: <?= \json_encode((string)__('鎬?tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        inputTokensLabel: <?= \json_encode((string)__('Input tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        outputTokensLabel: <?= \json_encode((string)__('Output tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        totalTokensLabel: <?= \json_encode((string)__('Total tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
     };
     var panelMap = {
         build: {
-            stateKey: 'build_queue_info',
+            operation: 'build',
             meta: 'pb-ai-build-queue-info-meta',
             process: 'pb-ai-build-queue-info-process',
             result: 'pb-ai-build-queue-info-result',
@@ -56,6 +56,18 @@
 
     function normalizeTaskStatus(status) {
         var normalized = String(status || '').toLowerCase().trim();
+        if (normalized === '1') {
+            return 'done';
+        }
+        if (normalized === '2') {
+            return 'running';
+        }
+        if (normalized === '0') {
+            return 'pending';
+        }
+        if (normalized === '-1') {
+            return 'failed';
+        }
         if (normalized === 'todo' || normalized === 'pending') {
             return 'pending';
         }
@@ -126,8 +138,8 @@
             row = row && typeof row === 'object' ? row : {};
             return {
                 page_type: String(row.page_type || ''),
-                done: normalizeCount(row.done || row.completed_block_nodes || row.block_done_count),
-                total: normalizeCount(row.total || row.expected_block_nodes || row.executable_block_nodes || row.block_total),
+                done: normalizeCount(row.done || row.completed_blocks || row.block_done_count),
+                total: normalizeCount(row.total || row.expected_blocks || row.executable_blocks || row.block_total),
                 running: normalizeCount(row.running),
                 queued: normalizeCount(row.queued),
                 pending: normalizeCount(row.pending || row.todo || row.block_pending_count),
@@ -211,6 +223,48 @@
         });
     }
 
+    function derivePlanJsonBlockRowsFromPages(planJson) {
+        var pages = planJson && typeof planJson === 'object' && planJson.pages && typeof planJson.pages === 'object'
+            ? planJson.pages
+            : {};
+        var pageMeta = {
+            page_key: true, page_type: true, type: true, status: true, message: true, error: true, error_message: true,
+            updated_at: true, started_at: true, finished_at: true, attempt_no: true, result_ref: true,
+            title: true, label: true, page_label: true, page_title: true, page_goal: true, page_status: true,
+            content_locale: true, ordered_block_keys: true,
+            seo: true, route: true, slug: true, path: true, layout: true, sections: true, content: true,
+            description: true, summary: true, html: true, html_content: true, fields: true
+        };
+        var rows = [];
+        Object.keys(pages).forEach(function (pageType) {
+            var page = pages[pageType];
+            if (!page || typeof page !== 'object' || Array.isArray(page)) {
+                return;
+            }
+            var keys = Array.isArray(page.ordered_block_keys) && page.ordered_block_keys.length > 0
+                ? page.ordered_block_keys.slice()
+                : Object.keys(page);
+            keys.forEach(function (blockKey) {
+                if (pageMeta[blockKey]) {
+                    return;
+                }
+                var block = page[blockKey];
+                if (!block || typeof block !== 'object' || Array.isArray(block)) {
+                    return;
+                }
+                rows.push({
+                    page_type: String(block.page_type || page.page_type || pageType || '').trim(),
+                    block_key: String(block.block_key || block.block_id || block.section_key || blockKey || '').trim(),
+                    block_id: String(block.block_key || block.block_id || block.section_key || blockKey || '').trim(),
+                    label: String(block.label || block.title || block.name || blockKey || '').trim(),
+                    status: normalizeTaskStatus(block.status),
+                    message: String(block.error || block.error_message || block.message || '').trim()
+                });
+            });
+        });
+        return compactPlanJsonBlockProgressForMemory(rows);
+    }
+
     function attachPlanJsonBlockRowsToPages(pageRows, blockRows) {
         var grouped = groupPlanJsonBlockProgressByPage(blockRows);
         if (grouped.length === 0) {
@@ -256,6 +310,10 @@
     function derivePageBlockProgressRows(info) {
         if (!info || typeof info !== 'object') {
             return [];
+        }
+        var planJsonBlockRows = derivePlanJsonBlockRowsFromPages(info.plan_json || (info.state && info.state.plan_json));
+        if (planJsonBlockRows.length > 0) {
+            return groupPlanJsonBlockProgressByPage(planJsonBlockRows);
         }
         var blockRows = compactPlanJsonBlockProgressForMemory(info.plan_json_block_progress);
         var direct = compactPageBlockProgressForMemory(info.page_block_progress);
@@ -469,12 +527,12 @@
         var tokenUsage = resolveTokenUsage(info || {});
         var jobKey = (info && (info.job_key || info.biz_key)) || '';
         var jobType = (info && info.job_type) || '';
-        var status = (info && (info.status || info.queue_status || info.job_status)) || '';
+        var status = (info && info.queue_status) || '';
         var token = (info && (info.token || info.execution_token)) || '';
         return '<div class="row g-2 mb-2 pb-ai-build-queue-token-summary" role="list" data-queue-info-list="' + escapeHtml(operation) + '">'
             + renderQueueSummaryItem('job_key', queueMessages.jobKeyLabel, jobKey, true)
             + renderQueueSummaryItem('job_type', queueMessages.jobTypeLabel, jobType, false)
-            + renderQueueSummaryItem('job_status', queueMessages.statusLabel, status, false)
+            + renderQueueSummaryItem('queue_status', queueMessages.statusLabel, status, false)
             + renderQueueSummaryItem('token', queueMessages.tokenLabel, token, true)
             + renderQueueSummaryItem('input_tokens', queueMessages.inputTokensLabel, formatTokenCount(tokenUsage.input_tokens), false)
             + renderQueueSummaryItem('output_tokens', queueMessages.outputTokensLabel, formatTokenCount(tokenUsage.output_tokens), false)
@@ -536,7 +594,7 @@
         procEl.textContent = String(info.process || '').trim() || queueMessages.unknown;
         renderLiveLogSummary(normalized, String(info.terminal_summary || info.message || '').trim());
         if (statusEl) {
-            statusEl.textContent = String(info.status || info.queue_status || info.job_status || '').trim();
+            statusEl.textContent = String(info.queue_status || '').trim();
         }
     }
 
@@ -544,9 +602,7 @@
         var parsedPayload = payload && typeof payload === 'object' ? payload : {};
         var status = String(
             parsedPayload.queue_status
-            || parsedPayload.job_status
-            || parsedPayload.status
-            || (info && (info.job_status || info.status || info.queue_status))
+            || (info && info.queue_status)
             || ''
         ).toLowerCase().trim();
         if (status) {
@@ -582,7 +638,10 @@
             return getLastWorkspaceState();
         }
         var state = sanitizeWorkspaceStateForMemory(getLastWorkspaceState());
-        state[panel.stateKey] = sanitizeQueueInfoForMemory(info);
+        state.queue_status = state.queue_status && typeof state.queue_status === 'object' && !Array.isArray(state.queue_status)
+            ? Object.assign({}, state.queue_status)
+            : {};
+        state.queue_status[panel.operation] = sanitizeQueueInfoForMemory(info);
         var remembered = sanitizeWorkspaceStateForMemory(state);
         try {
             window.__pbLastWorkspaceState = remembered;
@@ -617,6 +676,39 @@
         return safe;
     }
 
+    function resolveCanonicalQueueInfo(workspaceState, operation) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var op = String(operation || '').trim().toLowerCase();
+        function normalize(candidate) {
+            if (typeof candidate === 'string' || typeof candidate === 'number') {
+                var scalarStatus = String(candidate || '').trim();
+                return scalarStatus !== '' ? { operation: op, queue_status: scalarStatus } : {};
+            }
+            if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+                return {};
+            }
+            if (op && Object.prototype.hasOwnProperty.call(candidate, op)) {
+                return normalize(candidate[op]);
+            }
+            var directStatus = String(candidate.queue_status || '').trim();
+            if (directStatus === '' && !candidate.operation && !candidate.job_type && !candidate.job_key && !candidate.biz_key) {
+                return {};
+            }
+            return sanitizeQueueInfoForMemory(candidate);
+        }
+        var active = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
+        var activeOperations = state.active_operations && typeof state.active_operations === 'object' ? state.active_operations : {};
+        var scopedActive = op && activeOperations[op] && typeof activeOperations[op] === 'object' ? activeOperations[op] : {};
+        var candidates = [state.queue_status, scopedActive.queue_status, active.queue_status, scopedActive, active];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var info = normalize(candidates[i]);
+            if (Object.keys(info).length > 0) {
+                return info;
+            }
+        }
+        return {};
+    }
+
     function sanitizeWorkspaceStateForMemory(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? Object.assign({}, workspaceState) : {};
         ['events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'].forEach(function (key) {
@@ -627,20 +719,14 @@
             ['events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'].forEach(function (key) {
                 delete state.scope[key];
             });
-            ['plan_queue_info', 'build_queue_info'].forEach(function (key) {
-                if (state.scope[key] && typeof state.scope[key] === 'object') {
-                    state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);
+        }
+        if (state.queue_status && typeof state.queue_status === 'object' && !Array.isArray(state.queue_status)) {
+            state.queue_status = Object.assign({}, state.queue_status);
+            ['plan', 'build', 'publish'].forEach(function (key) {
+                if (state.queue_status[key] && typeof state.queue_status[key] === 'object') {
+                    state.queue_status[key] = sanitizeQueueInfoForMemory(state.queue_status[key]);
                 }
             });
-            if (Array.isArray(state.scope.plan_json_block_progress)) {
-                state.scope.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(state.scope.plan_json_block_progress);
-            }
-        }
-        if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
-            state.plan_queue_info = sanitizeQueueInfoForMemory(state.plan_queue_info);
-        }
-        if (state.build_queue_info && typeof state.build_queue_info === 'object') {
-            state.build_queue_info = sanitizeQueueInfoForMemory(state.build_queue_info);
         }
         if (Array.isArray(state.plan_json_block_progress)) {
             state.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(state.plan_json_block_progress);
@@ -724,8 +810,10 @@
         if (!panel || !payload || typeof payload !== 'object') {
             return null;
         }
-        if (payload.state && payload.state[panel.stateKey] && typeof payload.state[panel.stateKey] === 'object') {
-            var stateQueueInfo = sanitizeQueueInfoForMemory(payload.state[panel.stateKey]);
+        var stateQueueInfo = payload.state && typeof payload.state === 'object'
+            ? resolveCanonicalQueueInfo(payload.state, panel.operation)
+            : {};
+        if (Object.keys(stateQueueInfo).length > 0) {
             if (payload.state.plan_json_task_summary && typeof payload.state.plan_json_task_summary === 'object') {
                 stateQueueInfo.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(payload.state.plan_json_task_summary);
             }
@@ -757,8 +845,6 @@
             (payload.queue_state && typeof payload.queue_state === 'object')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_id')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_status')
-            || Object.prototype.hasOwnProperty.call(payload, 'job_status')
-            || Object.prototype.hasOwnProperty.call(payload, 'status')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_process')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_log')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')
@@ -779,7 +865,7 @@
             return null;
         }
         var state = getLastWorkspaceState();
-        var existing = state[panel.stateKey] && typeof state[panel.stateKey] === 'object' ? state[panel.stateKey] : {};
+        var existing = resolveCanonicalQueueInfo(state, panel.operation);
         var queueState = Object.assign({}, existing);
         if (payload.queue_state && typeof payload.queue_state === 'object') {
             queueState = Object.assign(queueState, payload.queue_state);
@@ -788,13 +874,13 @@
         if (payloadQueueId > 0) {
             queueState.queue_id = payloadQueueId;
         }
-        ['queue_status', 'status', 'job_status', 'job_key', 'job_type', 'token', 'execution_token', 'input_tokens', 'output_tokens', 'total_tokens'].forEach(function (key) {
+        ['queue_status', 'job_key', 'job_type', 'token', 'execution_token', 'input_tokens', 'output_tokens', 'total_tokens'].forEach(function (key) {
             if (Object.prototype.hasOwnProperty.call(payload, key)) {
-                var targetKey = key === 'queue_status' ? 'status' : key;
-                queueState[targetKey] = payload[key];
                 if (key === 'queue_status') {
                     queueState.queue_status = payload[key];
+                    return;
                 }
+                queueState[key] = payload[key];
             }
         });
         if (payload.token_usage && typeof payload.token_usage === 'object') {
@@ -843,10 +929,8 @@
             name: String(queueState.name || ''),
             module: String(queueState.module || ''),
             biz_key: String(queueState.biz_key || ''),
-            status: String(queueState.status || ''),
-            queue_status: String(queueState.queue_status || queueState.status || ''),
-            job_status: String(queueState.job_status || queueState.status || ''),
-            semantic_status: String(queueState.semantic_status || queueState.job_status || queueState.status || ''),
+            queue_status: String(queueState.queue_status || ''),
+            semantic_status: String(queueState.semantic_status || ''),
             pid: normalizeQueueId(queueState.pid),
             type_id: normalizeQueueId(queueState.type_id),
             finished: Number(queueState.finished || 0),
@@ -872,7 +956,7 @@
             ? workspaceState.active_operation
             : {};
         var op = normalizeOperation(active.operation);
-        var activeStatus = String(active.status || '').toLowerCase();
+        var activeStatus = String(active.queue_status || '').toLowerCase();
         var shouldOpen = activeStatus === 'queued' || activeStatus === 'pending' || activeStatus === 'running' || activeStatus === 'processing';
         Object.keys(panelMap).forEach(function (key) {
             var panelEl = document.getElementById(panelMap[key].panel);
@@ -937,10 +1021,12 @@
         } catch (e) {
             // ignore
         }
-        var buildInfo = safeState.build_queue_info && typeof safeState.build_queue_info === 'object'
-            ? Object.assign({}, safeState.build_queue_info)
-            : null;
-        if (buildInfo) {
+        var buildInfo = resolveCanonicalQueueInfo(safeState, 'build');
+        var planJsonRows = derivePlanJsonBlockRowsFromPages(safeState.plan_json);
+        if (planJsonRows.length > 0) {
+            buildInfo.plan_json_block_progress = planJsonRows;
+        }
+        if (Object.keys(buildInfo).length > 0) {
             if (safeState.plan_json_task_summary && typeof safeState.plan_json_task_summary === 'object') {
                 buildInfo.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(safeState.plan_json_task_summary);
             }

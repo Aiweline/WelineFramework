@@ -21,7 +21,7 @@ final class AiSitePublishVerificationServiceTest extends TestCase
             ->with(
                 self::isInstanceOf(Page::class),
                 PageRenderService::MODE_LIVE,
-                null,
+                'en_US',
                 null,
                 185
             )
@@ -35,7 +35,7 @@ final class AiSitePublishVerificationServiceTest extends TestCase
             ['home_page' => ['page_id' => 74]],
             185,
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-            ['site_title' => 'Teen Patti Royal APK']
+            ['site_title' => 'Teen Patti Royal APK', 'target_domain' => 'unit-test.weline.test']
         );
     }
 
@@ -62,12 +62,51 @@ final class AiSitePublishVerificationServiceTest extends TestCase
             ['home_page' => ['page_id' => 74]],
             185,
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-            ['site_title' => 'Teen Patti Royal APK']
+            ['site_title' => 'Teen Patti Royal APK', 'target_domain' => 'unit-test.weline.test']
         );
 
         self::assertTrue($report['passed']);
+        self::assertTrue((bool)($report['domain']['skipped'] ?? false));
         self::assertTrue((bool)($report['pages']['home_page']['signals']['internal_planning_copy_marker'] ?? false));
         self::assertSame([], $report['pages']['home_page']['failures'] ?? null);
+    }
+
+    public function testPublishVerificationPassesWebsiteProfileLocaleToRenderer(): void
+    {
+        $page = $this->createPageModel(true);
+        $renderer = $this->createMock(PageRenderService::class);
+        $renderer->expects(self::once())
+            ->method('render')
+            ->with(
+                self::isInstanceOf(Page::class),
+                PageRenderService::MODE_LIVE,
+                'fr_FR',
+                null,
+                185
+            )
+            ->willReturn(
+                '<html><body class="pb-ai-site">'
+                . '<header>Royal Card Arena</header>'
+                . '<main><section class="pb-ai-generated-section"><h1>Royal Card Arena</h1>'
+                . '<p>Localized download guidance stays visible after publish verification renders the page.</p>'
+                . '</section></main>'
+                . '<footer>Royal Card Arena</footer>'
+                . '</body></html>'
+            );
+
+        $service = new AiSitePublishVerificationService($page, $renderer);
+        $report = $service->assertPublishedPagesRenderable(
+            ['home_page' => ['page_id' => 74]],
+            185,
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            [
+                'site_title' => 'Royal Card Arena',
+                'content_locale' => 'fr_FR',
+                'target_domain' => 'unit-test.weline.test',
+            ]
+        );
+
+        self::assertTrue($report['passed']);
     }
 
     public function testPassesPublishedVirtualThemePageWithAiThemeMarkersAndBrand(): void
@@ -90,7 +129,7 @@ final class AiSitePublishVerificationServiceTest extends TestCase
             ['home_page' => ['page_id' => 74]],
             185,
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-            ['site_title' => 'Teen Patti Royal APK']
+            ['site_title' => 'Teen Patti Royal APK', 'target_domain' => 'unit-test.weline.test']
         );
 
         self::assertTrue($report['passed']);
@@ -117,12 +156,140 @@ final class AiSitePublishVerificationServiceTest extends TestCase
             ['home_page' => ['page_id' => 74]],
             185,
             AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-            ['site_title' => 'India Card Game APK Guide']
+            ['site_title' => 'India Card Game APK Guide', 'target_domain' => 'unit-test.weline.test']
         );
 
         self::assertTrue($report['passed']);
         self::assertFalse((bool)($report['pages']['home_page']['signals']['brand_visible'] ?? true));
         self::assertSame([], $report['pages']['home_page']['failures'] ?? null);
+    }
+
+    public function testPublishVerificationBlocksInaccessibleOnlineDomain(): void
+    {
+        $page = $this->createPageModel(false);
+        $renderer = $this->createMock(PageRenderService::class);
+        $renderer->expects(self::never())->method('render');
+
+        $service = new AiSitePublishVerificationService($page, $renderer, static function (string $domain): array {
+            self::assertSame('example.com', $domain);
+
+            return [
+                'passed' => false,
+                'status_code' => 0,
+                'error' => 'domain returned no HTTP response',
+                'url' => 'https://example.com/',
+            ];
+        });
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('publish domain is not accessible');
+        $service->assertPublishedPagesRenderable(
+            ['home_page' => ['page_id' => 74]],
+            185,
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            ['site_title' => 'Online Site', 'target_domain' => 'example.com']
+        );
+    }
+
+    public function testPublishVerificationBlocksPlanJsonModuleCountMismatch(): void
+    {
+        $page = $this->createPageModel(false);
+        $renderer = $this->createMock(PageRenderService::class);
+        $renderer->expects(self::never())->method('render');
+
+        $service = new AiSitePublishVerificationService($page, $renderer);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('plan_json module count mismatch');
+        $service->assertPublishedPagesRenderable(
+            [
+                'home_page' => [
+                    'page_id' => 74,
+                    'block_nodes' => [
+                        ['html' => '<section>Hero</section>'],
+                    ],
+                ],
+            ],
+            185,
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            ['site_title' => 'Local Site', 'target_domain' => 'unit-test.weline.test'],
+            [
+                'page_types' => ['home_page'],
+                'plan_json' => [
+                    'pages' => [
+                        'home_page' => [
+                            'hero' => [
+                                'status' => 1,
+                                'section_code' => 'content/home-page-hero',
+                                'html' => '<section>Hero</section>',
+                            ],
+                            'features' => [
+                                'status' => 1,
+                                'section_code' => 'content/home-page-features',
+                                'html' => '<section>Features</section>',
+                            ],
+                        ],
+                    ],
+                ],
+            ]
+        );
+    }
+
+    public function testPublishVerificationCountsAiLayoutBlocksAgainstPlanJson(): void
+    {
+        $page = $this->createPageModel(false);
+        $renderer = $this->createMock(PageRenderService::class);
+        $renderer->expects(self::once())
+            ->method('render')
+            ->willReturn(
+                '<html><body class="pb-ai-site">'
+                . '<header>Local Site</header>'
+                . '<!-- Component content/home-page-hero resolved via Weline_Theme virtual theme (theme_id=185) -->'
+                . '<main><section class="pb-ai-generated-section"><h1>Hero</h1></section>'
+                . '<section class="pb-ai-generated-section"><h2>Features</h2></section></main>'
+                . '<footer>Local Site</footer>'
+                . '</body></html>'
+            );
+
+        $service = new AiSitePublishVerificationService($page, $renderer);
+        $report = $service->assertPublishedPagesRenderable(
+            [
+                'home_page' => [
+                    'page_id' => 74,
+                    'ai_layout' => [
+                        'blocks' => [
+                            ['html' => '<section>Hero</section>'],
+                            ['html' => '<section>Features</section>'],
+                        ],
+                    ],
+                ],
+            ],
+            185,
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            ['site_title' => 'Local Site', 'target_domain' => 'unit-test.weline.test'],
+            [
+                'page_types' => ['home_page'],
+                'plan_json' => [
+                    'pages' => [
+                        'home_page' => [
+                            'hero' => [
+                                'status' => 1,
+                                'section_code' => 'content/home-page-hero',
+                                'html' => '<section>Hero</section>',
+                            ],
+                            'features' => [
+                                'status' => 1,
+                                'section_code' => 'content/home-page-features',
+                                'html' => '<section>Features</section>',
+                            ],
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        self::assertTrue($report['passed']);
+        self::assertSame(['home_page' => 2], $report['module_alignment']['actual_blocks_by_page'] ?? []);
     }
 
     public function testPublishServiceCallsVerificationBeforeReturningSuccess(): void
@@ -133,6 +300,21 @@ final class AiSitePublishVerificationServiceTest extends TestCase
         self::assertStringContainsString('AiSitePublishVerificationService $publishVerificationService', $source);
         self::assertStringContainsString('$this->publishVerificationService->assertPublishedPagesRenderable(', $source);
         self::assertStringContainsString("'publish_verification' => $verification", $source);
+        self::assertStringContainsString("'plan_json' => \\is_array(\$materializationProfile['plan_json'] ?? null) ? \$materializationProfile['plan_json'] : []", $source);
+    }
+
+    public function testPublishServiceVerifiesRequestedPageTypesInsteadOfMaterializedSnapshotKeys(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSitePublishService.php');
+        self::assertIsString($source);
+
+        self::assertStringContainsString(
+            '$verificationPagesByType = $this->resolvePublishVerificationPagesByType($pageTypes, $materializedPagesByType);',
+            $source
+        );
+        self::assertStringContainsString('$this->sanitizeAiLayoutsForMaterializedPages($verificationPagesByType);', $source);
+        self::assertStringContainsString('$verificationPagesByType,', $source);
+        self::assertStringContainsString('requested page %{1} was not materialized', $source);
     }
 
     public function testPublishOperationPersistsVerificationReportInWorkspaceScope(): void

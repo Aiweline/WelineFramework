@@ -110,9 +110,9 @@ final class AiSiteStageOneContractValidator
             ]);
         }
 
-        $blocks = $this->extractPlanJsonPageBlockNodes($planJsonPage);
-        $minBlocks = \max(0, (int)($pageContract['min_block_nodes'] ?? 0));
-        $maxBlocks = \max($minBlocks, (int)($pageContract['max_block_nodes'] ?? $minBlocks));
+        $blocks = $this->extractPlanJsonPageBlocks($planJsonPage);
+        $minBlocks = \max(0, (int)($pageContract['min_blocks'] ?? 0));
+        $maxBlocks = \max($minBlocks, (int)($pageContract['max_blocks'] ?? $minBlocks));
         if (\count($blocks) < $minBlocks || \count($blocks) > $maxBlocks) {
             $issues[] = $this->issue('invalid_block_count', 'pages.' . $pageType, 'high', [
                 'page_type' => $pageType,
@@ -120,7 +120,7 @@ final class AiSiteStageOneContractValidator
                 'actual' => \count($blocks),
             ]);
         }
-        $targetBlocks = \max(0, (int)($pageContract['target_block_nodes'] ?? 0));
+        $targetBlocks = \max(0, (int)($pageContract['target_blocks'] ?? 0));
         if ($targetBlocks > 0 && !empty($pageContract['block_count_handoff_required']) && \count($blocks) !== $targetBlocks) {
             $issues[] = $this->issue('target_block_count_mismatch', 'pages.' . $pageType, 'high', [
                 'page_type' => $pageType,
@@ -228,7 +228,7 @@ final class AiSiteStageOneContractValidator
      * @param array<string, mixed> $planJsonPage
      * @return list<array<string, mixed>>
      */
-    private function extractPlanJsonPageBlockNodes(array $planJsonPage): array
+    private function extractPlanJsonPageBlocks(array $planJsonPage): array
     {
         $reservedPageKeys = [
             'name' => true,
@@ -242,10 +242,12 @@ final class AiSiteStageOneContractValidator
             'page_goal' => true,
             'page_design_plan' => true,
             'theme_alignment_summary' => true,
+            'primary_keywords' => true,
+            'secondary_keywords' => true,
             'updated_at' => true,
             'error' => true,
-            'block_nodes' => true,
-            'block_node_previews' => true,
+            'blocks' => true,
+            'block_previews' => true,
         ];
         $blocks = [];
         foreach ($planJsonPage as $key => $value) {
@@ -1171,7 +1173,7 @@ final class AiSiteStageOneContractValidator
      */
     private function validateVisualSignatureDiversity(array $visualSignatures, string $pageType, array $pageContract, array &$issues): void
     {
-        $uniquenessScope = \trim((string)($pageContract['visual_signature_uniqueness_scope'] ?? 'same_page_adjacent_block_nodes'));
+        $uniquenessScope = \trim((string)($pageContract['visual_signature_uniqueness_scope'] ?? 'same_page_adjacent_blocks'));
         $adjacentSeverity = \trim((string)($pageContract['visual_signature_duplicate_severity'] ?? 'medium'));
         if ($adjacentSeverity === '') {
             $adjacentSeverity = 'medium';
@@ -1179,7 +1181,7 @@ final class AiSiteStageOneContractValidator
         if (\in_array($adjacentSeverity, ['high', 'blocking'], true)) {
             $adjacentSeverity = 'medium';
         }
-        $checkAdjacent = \in_array($uniquenessScope, ['same_page_adjacent_block_nodes', 'same_page_adjacent_block_nodes_soft'], true);
+        $checkAdjacent = \in_array($uniquenessScope, ['same_page_adjacent_blocks', 'same_page_adjacent_blocks_soft'], true);
         $checkCompositionOveruse = !empty($pageContract['forbid_repeated_composition_patterns_within_page'])
             || \trim((string)($pageContract['composition_overuse_severity'] ?? '')) !== '';
         $compositionOveruseSeverity = \trim((string)($pageContract['composition_overuse_severity'] ?? 'medium'));
@@ -1379,7 +1381,7 @@ final class AiSiteStageOneContractValidator
             return true;
         }
 
-        return \preg_match('/^(?:write|rewrite|describe\s+(?:the|this)\s+(?:block|section|field|content|layout|purpose)|use this field|do not output|鍥寸粫|绐佸嚭|璇存槑|瀹屽杽|浼樺寲)\b/iu', $value) === 1;
+        return \preg_match('/^(?:write|rewrite|describe\s+(?:the|this)\s+(?:block|section|field|content|layout|purpose)|use this field|do not output)\b/iu', $value) === 1;
     }
 
     private function hasNonEmptyValue(mixed $value): bool

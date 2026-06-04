@@ -43,6 +43,8 @@ class AiSiteProfileGenerationService
         $titleLocked = $this->hasManualOverride($scope, 'site_title', $manualFlags);
         $taglineLocked = $this->hasManualOverride($scope, 'site_tagline', $manualFlags);
         $briefLocked = $this->hasManualOverride($scope, 'brief_description', $manualFlags);
+        $planJsonTitle = $this->resolvePlanJsonSiteTitle($scope, $internalVisibleCopyTerms);
+        $planJsonTagline = $this->resolvePlanJsonSiteTagline($scope, $internalVisibleCopyTerms);
 
         $scopeTitle = $this->normalizeMeaningfulTitle($scope['site_title'] ?? null, $internalVisibleCopyTerms);
         $scopeTitleCanLock = !$hasManualMap && !$this->hasManagedProfileMeta($existing);
@@ -97,6 +99,7 @@ class AiSiteProfileGenerationService
         $siteTitle = ($titleLocked || $lockedTitle !== '')
             ? $lockedTitle
             : $this->pickString(
+                $planJsonTitle,
                 $generated['site_title'] ?? null,
                 $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain, $internalVisibleCopyTerms)
             );
@@ -107,6 +110,7 @@ class AiSiteProfileGenerationService
         $siteTagline = ($taglineLocked || $lockedTagline !== '')
             ? $lockedTagline
             : $this->pickString(
+                $planJsonTagline,
                 $generated['site_tagline'] ?? null,
                 $this->deriveSiteTaglineFromBrief($sourceBrief, $siteTitle, $internalVisibleCopyTerms)
             );
@@ -692,6 +696,63 @@ class AiSiteProfileGenerationService
 
     /**
      * @param array<string, mixed> $scope
+     * @param list<string> $internalVisibleCopyTerms
+     */
+    private function resolvePlanJsonSiteTitle(array $scope, array $internalVisibleCopyTerms = []): string
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $siteBrief = \is_array($planJson['site_brief'] ?? null) ? $planJson['site_brief'] : [];
+        $sharedPrompt = \is_array($planJson['shared_prompt_context'] ?? null) ? $planJson['shared_prompt_context'] : [];
+        $themeContext = \is_array($planJson['theme_context_snapshot'] ?? null) ? $planJson['theme_context_snapshot'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $home = \is_array($pages['home_page'] ?? null) ? $pages['home_page'] : [];
+
+        return $this->normalizeMeaningfulTitle($this->pickString(
+            $planJson['site_title'] ?? null,
+            $planJson['site_name'] ?? null,
+            $sharedPrompt['site_display_name'] ?? null,
+            $sharedPrompt['site_title'] ?? null,
+            $themeContext['site_display_name'] ?? null,
+            $themeContext['site_title'] ?? null,
+            $siteBrief['site_title'] ?? null,
+            $siteBrief['site_name'] ?? null,
+            $siteBrief['title'] ?? null,
+            $siteBrief['name'] ?? null,
+            $home['meta_title'] ?? null,
+            $home['page_title'] ?? null,
+            $home['title'] ?? null,
+            $home['name'] ?? null
+        ), $internalVisibleCopyTerms);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param list<string> $internalVisibleCopyTerms
+     */
+    private function resolvePlanJsonSiteTagline(array $scope, array $internalVisibleCopyTerms = []): string
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $siteBrief = \is_array($planJson['site_brief'] ?? null) ? $planJson['site_brief'] : [];
+        $sharedPrompt = \is_array($planJson['shared_prompt_context'] ?? null) ? $planJson['shared_prompt_context'] : [];
+        $themeContext = \is_array($planJson['theme_context_snapshot'] ?? null) ? $planJson['theme_context_snapshot'] : [];
+        $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
+
+        return $this->normalizeProfileTagline($this->pickString(
+            $planJson['site_tagline'] ?? null,
+            $planJson['tagline'] ?? null,
+            $sharedPrompt['site_tagline'] ?? null,
+            $sharedPrompt['tagline'] ?? null,
+            $themeContext['site_tagline'] ?? null,
+            $themeContext['tagline'] ?? null,
+            $siteBrief['site_tagline'] ?? null,
+            $siteBrief['tagline'] ?? null,
+            $siteBrief['summary'] ?? null,
+            $requirementExpansion['site_goal'] ?? null
+        ), '', $internalVisibleCopyTerms);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      * @return list<string>
      */
     private function buildInternalVisibleCopyTerms(array $scope): array
@@ -974,7 +1035,7 @@ class AiSiteProfileGenerationService
         }
         $title = $this->stripInternalProfileTokens($title, $internalVisibleCopyTerms);
         $title = $this->stripGeneratedRunSuffixFromTitle($title);
-        if ($title === '' || $this->isPlaceholderSiteTitle($title)) {
+        if ($title === '' || $this->isPlaceholderSiteTitle($title) || $this->isGenericPageTitle($title)) {
             return '';
         }
 
@@ -1051,6 +1112,7 @@ class AiSiteProfileGenerationService
         $candidates = $this->buildDescriptionSegments($briefDescription);
         foreach ($candidates as $candidate) {
             $candidate = $this->stripTitleLeadIn($candidate);
+            $candidate = $this->stripDescriptiveTitleTail($candidate);
             $candidate = $this->normalizeMeaningfulTitle($candidate, $internalVisibleCopyTerms);
             if ($candidate === '' || $this->isPlaceholderSiteTitle($candidate)) {
                 continue;
@@ -1071,6 +1133,12 @@ class AiSiteProfileGenerationService
         $explicit = $this->extractLabeledProfileSegment($briefDescription, $this->profileTitleLabelPatterns());
         if ($explicit !== '' && !$this->looksLikeSentenceTitle($explicit)) {
             return $explicit;
+        }
+        if (\preg_match('/\b(?:website|site|homepage|landing\s+page)\s+(?:for|about)\s+([A-Za-z][A-Za-z0-9 .&\'-]{2,80}?)(?:\.|,|;|$)/iu', $briefDescription, $matches) === 1) {
+            $title = $this->stripDescriptiveTitleTail((string)($matches[1] ?? ''));
+            if ($title !== '' && !$this->looksLikeSentenceTitle($title)) {
+                return $title;
+            }
         }
 
         $patterns = [
@@ -1138,7 +1206,7 @@ class AiSiteProfileGenerationService
             return [];
         }
 
-        $sentences = \preg_split('/[\r\n]+|[\x{3002}\x{FF01}\x{FF1F}!?;]+/u', $briefDescription, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
+        $sentences = \preg_split('/[\r\n]+|(?<=[A-Za-z0-9])\.(?=\s|$)|[\x{3002}\x{FF01}\x{FF1F}!?;]+/u', $briefDescription, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
         $segments = [];
         foreach ($sentences as $sentence) {
             $sentence = $this->normalizeWhitespace($sentence);
@@ -1183,6 +1251,17 @@ class AiSiteProfileGenerationService
         return $this->normalizeWhitespace($candidate);
     }
 
+    private function stripDescriptiveTitleTail(string $title): string
+    {
+        $title = $this->normalizeWhitespace($title);
+        $title = (string)\preg_replace('/\b(?:downloads?|download\s+hub|comparison|comparisons|recommendations?)$/iu', '', $title);
+        if (\preg_match('/APK$/iu', $title) === 1) {
+            $title .= ' Guide';
+        }
+
+        return $this->normalizeWhitespace($title);
+    }
+
     private function stripRepeatedTitlePrefix(string $candidate, string $siteTitle): string
     {
         $candidate = $this->normalizeWhitespace($candidate);
@@ -1223,6 +1302,13 @@ class AiSiteProfileGenerationService
         $normalized = \strtolower($this->normalizeWhitespace($value));
 
         return \in_array($normalized, ['ai site', 'pagebuilder ai draft', 'page builder ai draft'], true);
+    }
+
+    private function isGenericPageTitle(string $value): bool
+    {
+        $normalized = \strtolower($this->normalizeWhitespace($value));
+
+        return \in_array($normalized, ['home', 'home page', 'homepage', 'index', 'landing page'], true);
     }
 
     private function normalizeWhitespace(string $value): string

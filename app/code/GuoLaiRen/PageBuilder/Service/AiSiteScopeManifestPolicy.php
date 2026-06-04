@@ -5,17 +5,14 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 /**
- * ScopeManifest 白名单 / 黑名单与脱水规则。
- *
- * 持久层 scope_json 应只保留小对象；大 artifact 与块 HTML 不得内联驻留。
- */
+ * ScopeManifest 鐧藉悕鍗?/ 榛戝悕鍗曚笌鑴辨按瑙勫垯銆? *
+ * 鎸佷箙灞?scope_json 搴斿彧淇濈暀灏忓璞★紱澶?artifact 涓庡潡 HTML 涓嶅緱鍐呰仈椹荤暀銆? */
 final class AiSiteScopeManifestPolicy
 {
     public const MANIFEST_INLINE_MAX_BYTES = 131072;
 
     /** @var list<string> */
     public const INLINE_ARTIFACT_KEYS = [
-        'plan_json',
         'content_manifest',
         'build_contracts',
         'render_data_contract',
@@ -51,21 +48,20 @@ final class AiSiteScopeManifestPolicy
             if (!$strict) {
                 continue;
             }
-            throw new \InvalidArgumentException('ScopeManifest 禁止内联大 artifact: ' . $key);
+            throw new \InvalidArgumentException('ScopeManifest 绂佹鍐呰仈澶?artifact: ' . $key);
         }
 
-        $this->assertVirtualPagesClean($scope);
+        $this->assertPlanJsonPagesClean($scope);
         $encoded = $this->estimateJsonBytes($scope);
         if ($strict && $encoded > self::MANIFEST_INLINE_MAX_BYTES) {
             throw new \InvalidArgumentException(
-                'ScopeManifest 内联体积超限: ' . $encoded . ' bytes (max ' . self::MANIFEST_INLINE_MAX_BYTES . ')'
+                'ScopeManifest 鍐呰仈浣撶Н瓒呴檺: ' . $encoded . ' bytes (max ' . self::MANIFEST_INLINE_MAX_BYTES . ')'
             );
         }
     }
 
     /**
-     * 从 manifest 摘掉 artifact 路径与块 HTML，保留 refs 与小字段。
-     *
+     * 浠?manifest 鎽樻帀 artifact 璺緞涓庡潡 HTML锛屼繚鐣?refs 涓庡皬瀛楁銆?     *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
@@ -87,52 +83,7 @@ final class AiSiteScopeManifestPolicy
             unset($scope['theme_css_ref']['css']);
         }
 
-        if (\is_array($scope['virtual_pages_by_type'] ?? null)) {
-            $scope['virtual_pages_by_type'] = $this->stripBlockPayloadFromVirtualPages($scope['virtual_pages_by_type']);
-        }
-
-        $scope['virtual_page_index'] = $this->buildVirtualPageIndex(
-            \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : []
-        );
-
         return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $virtualPages
-     * @return array<string, mixed>
-     */
-    public function buildVirtualPageIndex(array $virtualPages): array
-    {
-        $index = [];
-        foreach ($virtualPages as $pageType => $pageData) {
-            if (!\is_array($pageData)) {
-                continue;
-            }
-            $blocks = \is_array($pageData['block_nodes'] ?? null) ? $pageData['block_nodes'] : [];
-            $entries = [];
-            foreach ($blocks as $block) {
-                if (!\is_array($block)) {
-                    continue;
-                }
-                $blockId = \trim((string)($block['block_id'] ?? $block['id'] ?? $block['code'] ?? ''));
-                if ($blockId === '') {
-                    continue;
-                }
-                $entries[] = [
-                    'block_id' => $blockId,
-                    'component_code' => \trim((string)($block['component_code'] ?? $block['component'] ?? '')),
-                    'status' => \trim((string)($block['status'] ?? 'ready')),
-                    'hash' => \trim((string)($block['hash'] ?? $block['content_hash'] ?? '')),
-                ];
-            }
-            $index[(string)$pageType] = [
-                'page_type' => (string)$pageType,
-                'block_nodes' => $entries,
-            ];
-        }
-
-        return $index;
     }
 
     /**
@@ -185,14 +136,15 @@ final class AiSiteScopeManifestPolicy
     /**
      * @param array<string, mixed> $scope
      */
-    private function assertVirtualPagesClean(array $scope): void
+    private function assertPlanJsonPagesClean(array $scope): void
     {
-        $pages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         foreach ($pages as $pageType => $pageData) {
             if (!\is_array($pageData)) {
                 continue;
             }
-            foreach (\is_array($pageData['block_nodes'] ?? null) ? $pageData['block_nodes'] : [] as $block) {
+            foreach (\is_array($pageData['blocks'] ?? null) ? $pageData['blocks'] : [] as $block) {
                 if (!\is_array($block)) {
                     continue;
                 }
@@ -200,7 +152,7 @@ final class AiSiteScopeManifestPolicy
                     $payload = $block[$payloadKey] ?? null;
                     if (\is_string($payload) && \strlen(\trim($payload)) > 512) {
                         throw new \InvalidArgumentException(
-                            'ScopeManifest 禁止 virtual_pages 内联大块 ' . $payloadKey . ' @ ' . (string)$pageType
+                            'ScopeManifest 绂佹 virtual_pages 鍐呰仈澶у潡 ' . $payloadKey . ' @ ' . (string)$pageType
                         );
                     }
                 }
@@ -212,13 +164,14 @@ final class AiSiteScopeManifestPolicy
      * @param array<string, mixed> $virtualPages
      * @return array<string, mixed>
      */
-    private function stripBlockPayloadFromVirtualPages(array $virtualPages): array
+    private function stripBlockPayloadFromPlanJson(array $planJson): array
     {
+        $virtualPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         foreach ($virtualPages as $pageType => $pageData) {
             if (!\is_array($pageData)) {
                 continue;
             }
-            $blocks = \is_array($pageData['block_nodes'] ?? null) ? $pageData['block_nodes'] : [];
+            $blocks = \is_array($pageData['blocks'] ?? null) ? $pageData['blocks'] : [];
             foreach ($blocks as $idx => $block) {
                 if (!\is_array($block)) {
                     continue;
@@ -228,11 +181,13 @@ final class AiSiteScopeManifestPolicy
                 }
                 $blocks[$idx] = $block;
             }
-            $pageData['block_nodes'] = $blocks;
+            $pageData['blocks'] = $blocks;
             $virtualPages[$pageType] = $pageData;
         }
 
-        return $virtualPages;
+        $planJson['pages'] = $virtualPages;
+
+        return $planJson;
     }
 
     private function emptyValueForArtifactKey(string $key): mixed

@@ -34,6 +34,7 @@ const pageTypes = (process.env.WELINE_ONCE_PAGE_TYPES || [
   'blog_list',
   'custom_page',
 ].join(',')).split(',').map((value) => value.trim()).filter(Boolean);
+const fakeMode = ['1', 'true', 'yes', 'on'].includes(String(process.env.WELINE_FAKE_MODE || '').trim().toLowerCase());
 
 const planDeadlineMs = Number(process.env.WELINE_PLAN_TIMEOUT_MS || 45 * 60 * 1000);
 const buildDeadlineMs = Number(process.env.WELINE_BUILD_TIMEOUT_MS || 90 * 60 * 1000);
@@ -64,7 +65,7 @@ function jsonSummary(value, max = 800) {
   }
 }
 
-async function okJson(response, label) {
+async function okJson(response, label, options = {}) {
   const status = response.status();
   const text = await response.text();
   let data = {};
@@ -73,7 +74,18 @@ async function okJson(response, label) {
   } catch {
     throw new Error(`${label} returned non-json HTTP ${status}: ${text.slice(0, 500)}`);
   }
-  if (status < 200 || status >= 300 || (Object.prototype.hasOwnProperty.call(data, 'success') && !data.success)) {
+  const acceptFailureCodes = new Set(Array.isArray(options.acceptFailureCodes) ? options.acceptFailureCodes : []);
+  const failureCode = typeof data.code === 'string' ? data.code : '';
+  const acceptedFailure =
+    (failureCode !== '' && acceptFailureCodes.has(failureCode))
+    || (Array.isArray(options.acceptFailure)
+      && options.acceptFailure.some((accept) => {
+        if (!accept || typeof accept !== 'object') return false;
+        if (accept.operation && data.operation !== accept.operation) return false;
+        if (accept.messageIncludes && !String(data.message || '').includes(accept.messageIncludes)) return false;
+        return true;
+      }));
+  if (status < 200 || status >= 300 || (Object.prototype.hasOwnProperty.call(data, 'success') && !data.success && !acceptedFailure)) {
     throw new Error(`${label} failed HTTP ${status}: ${jsonSummary(data, 1000)}`);
   }
   return data;
@@ -94,13 +106,23 @@ function isTransientApiPostError(error) {
 
 async function apiPost(api, url, options, label, attempts = 3) {
   let lastError;
+  const timeoutMs = Number(options?.timeout || process.env.WELINE_API_POST_TIMEOUT_MS || 60000);
+  const method = String(options?.method || 'POST').toUpperCase();
   const requestOptions = {
     ...(options || {}),
-    timeout: Number(options?.timeout || process.env.WELINE_API_POST_TIMEOUT_MS || 60000),
+    timeout: timeoutMs,
   };
+  delete requestOptions.method;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    let timeoutId = null;
     try {
-      return await api.post(url, requestOptions);
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs + 1000);
+      });
+      const requestPromise = method === 'GET'
+        ? api.get(url, requestOptions)
+        : api.post(url, requestOptions);
+      return await Promise.race([requestPromise, timeoutPromise]);
     } catch (error) {
       lastError = error;
       if (attempt >= attempts || !isTransientApiPostError(error)) {
@@ -109,13 +131,30 @@ async function apiPost(api, url, options, label, attempts = 3) {
       const delayMs = 800 * attempt;
       log(`api_post_retry label=${label} attempt=${attempt + 1}/${attempts} delay_ms=${delayMs} error=${String(error.message || error).slice(0, 180)}`);
       await sleep(delayMs);
+    } finally {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
     }
   }
   throw lastError;
 }
 
-async function postOkJson(api, relativePath, options, label, attempts = 3) {
-  return okJson(await apiPost(api, route(relativePath), options, label, attempts), label);
+async function postOkJson(api, relativePath, options, label, attempts = 3, okOptions = {}) {
+  if (attempts && typeof attempts === 'object') {
+    okOptions = attempts;
+    attempts = 3;
+  }
+  return okJson(await apiPost(api, route(relativePath), options, label, attempts), label, okOptions);
+}
+
+async function reloadOrGoto(page, url, label) {
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+  } catch (error) {
+    log(`${label} reload fallback: ${String(error?.message || error).slice(0, 180)}`);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  }
 }
 
 function pickState(payload) {
@@ -179,12 +218,19 @@ function slugifyDomainLabel(value) {
 
 function planConfirmedFromPayload(payload) {
   return Number(
-    payload?.data?.plan_confirmed
-    ?? payload?.data?.state?.plan_confirmed
-    ?? payload?.state?.plan_confirmed
-    ?? payload?.plan_confirmed
+    payload?.data?.plan_json?.confirmed
+    ?? payload?.data?.state?.plan_json?.confirmed
+    ?? payload?.state?.plan_json?.confirmed
+    ?? payload?.plan_json?.confirmed
     ?? 0
   ) === 1;
+}
+
+function stateStageAfterPlanConfirmation(state) {
+  const stage = String(state?.stage || state?.workspace_stage || '').toLowerCase();
+  const workspaceStatus = String(state?.workspace_status || '').toLowerCase();
+  return ['visual_edit', 'publish'].includes(stage)
+    || ['ready', 'can_publish', 'published', 'publishing'].includes(workspaceStatus);
 }
 
 function planRequiresStaleConfirmation(payload) {
@@ -200,19 +246,17 @@ function planRequiresStaleConfirmation(payload) {
 }
 
 function buildAlreadyStarted(state) {
-  const workspaceStatus = String(state.workspace_status || state.stage || '').toLowerCase();
-  return ['can_publish', 'published', 'publishing'].includes(workspaceStatus)
-    || isRunningStatus(activeStatus(state, 'build'))
-    || isRunningStatus(queueStatus(state, 'build'))
-    || ['done', 'complete', 'completed', 'success'].includes(activeStatus(state, 'build'))
-    || ['done', 'complete', 'completed', 'success'].includes(queueStatus(state, 'build'));
+  const workspaceStatus = String(state?.workspace_status || '').toLowerCase();
+  const buildActive = activeStatus(state, 'build');
+  const buildQueue = queueStatus(state, 'build');
+  return ['published', 'publishing'].includes(workspaceStatus)
+    || isRunningStatus(buildActive)
+    || isRunningStatus(buildQueue);
 }
 
 function hasPlanPayload(state) {
   const candidates = [
     state?.plan_json,
-    state?.plan?.json,
-    state?.plan?.plan_json,
     state?.scope?.plan_json,
     state?.data?.plan_json,
   ];
@@ -234,7 +278,7 @@ async function waitForPlanReady(api, publicId) {
     const planActive = activeStatus(state, 'plan');
     const planQueue = queueStatus(state, 'plan');
     const progress = state.plan_queue_info?.stage1_page_progress || {};
-    const stateConfirmed = Number(state.plan_confirmed ?? state.build_plan_confirmed ?? state.scope?.plan_confirmed ?? 0) === 1;
+    const stateConfirmed = Number(state.plan_json?.confirmed ?? state.scope?.plan_json?.confirmed ?? 0) === 1;
     const lineBeforeConfirm = `plan confirmed=${stateConfirmed ? 1 : 0} queue=${planQueue} active=${planActive} pages=${progress.done_count || 0}/${progress.total || 0} running=${progress.running_count || 0} failed=${progress.failed_count || 0} msg=${stateMessage(state, 'plan').slice(0, 180)}`;
     if (lineBeforeConfirm !== last) {
       log(lineBeforeConfirm);
@@ -246,7 +290,7 @@ async function waitForPlanReady(api, publicId) {
     if (isFailureStatus(planActive) || isFailureStatus(planQueue)) {
       throw new Error(`plan failed: ${stateMessage(state, 'plan') || jsonSummary(state.plan_queue_info || state, 1000)}`);
     }
-    if (isRunningStatus(planActive) || isRunningStatus(planQueue) || !hasPlanPayload(state)) {
+    if (isRunningStatus(planActive) || isRunningStatus(planQueue)) {
       await sleep(pollMs);
       continue;
     }
@@ -290,7 +334,7 @@ async function waitForPlanReady(api, publicId) {
       log(line);
       last = line;
     }
-    if (confirmed || stateConfirmed || buildAlreadyStarted(state)) {
+    if (confirmed || stateConfirmed || stateStageAfterPlanConfirmation(state) || buildAlreadyStarted(state)) {
       return state;
     }
     await sleep(pollMs);
@@ -304,34 +348,24 @@ async function waitForBuildReady(api, publicId) {
   while (Date.now() <= deadline) {
     const state = await workspaceState(api, publicId);
     const gate = state.build_completion_gate || state.completion_gate || {};
-    const legacyBuildSummary = state.build_summary && typeof state.build_summary === 'object' ? state.build_summary : {};
-    const legacyGate = legacyBuildSummary.completion_gate && typeof legacyBuildSummary.completion_gate === 'object'
-      ? legacyBuildSummary.completion_gate
-      : {};
     const buildSummary = state.build_task_summary || state.task_summary || {};
     const done = Number(buildSummary.done ?? buildSummary.completed ?? gate.done_count ?? 0);
     const total = Number(buildSummary.total ?? gate.total_count ?? 0);
     const failed = Number(buildSummary.failed ?? gate.failed_count ?? 0);
-    const legacyDone = Number(legacyGate.done_count ?? legacyBuildSummary.done_count ?? legacyBuildSummary.done ?? 0);
-    const legacyTotal = Number(legacyGate.total_count ?? legacyBuildSummary.total_count ?? legacyBuildSummary.total ?? 0);
-    const legacyFailed = Number(legacyGate.failed_count ?? legacyBuildSummary.failed_count ?? legacyBuildSummary.failed ?? 0);
     const canPublish = Boolean(state.can_publish)
       || Number(state.can_publish || 0) === 1
-      || Boolean(legacyBuildSummary.can_publish)
-      || Number(legacyBuildSummary.can_publish || 0) === 1
-      || Boolean(legacyGate.passed);
-    const line = `build can_publish=${canPublish ? 1 : 0} active=${activeStatus(state, 'build')} queue=${queueStatus(state, 'build')} tasks=${done || legacyDone}/${total || legacyTotal} failed=${failed || legacyFailed} stage=${state.stage || state.workspace_stage || state.workspace_status || ''} msg=${stateMessage(state, 'build').slice(0, 180)}`;
+      || Boolean(gate.passed);
+    const line = `build can_publish=${canPublish ? 1 : 0} active=${activeStatus(state, 'build')} queue=${queueStatus(state, 'build')} tasks=${done}/${total} failed=${failed} stage=${state.stage || state.workspace_stage || state.workspace_status || ''} msg=${stateMessage(state, 'build').slice(0, 180)}`;
     if (line !== last) {
       log(line);
       last = line;
     }
     if (canPublish
       || (total > 0 && done >= total && failed === 0)
-      || (legacyTotal > 0 && legacyDone >= legacyTotal && legacyFailed === 0)
     ) {
       return state;
     }
-    if (failed > 0 || legacyFailed > 0 || isFailureStatus(activeStatus(state, 'build')) || isFailureStatus(queueStatus(state, 'build'))) {
+    if (failed > 0 || isFailureStatus(activeStatus(state, 'build')) || isFailureStatus(queueStatus(state, 'build'))) {
       throw new Error(`build failed: ${stateMessage(state, 'build') || jsonSummary(state.build_queue_info || state, 1000)}`);
     }
     await sleep(pollMs);
@@ -366,6 +400,7 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   log(`out_dir=${outDir}`);
   log(`base=${baseUrl} prefix=${prefix}`);
+  log(`fake_mode=${fakeMode ? 1 : 0}`);
 
   const api = await request.newContext({
     baseURL: baseUrl,
@@ -374,7 +409,9 @@ async function main() {
   });
 
   log('login page');
-  const loginPage = await api.get(route('/admin/login'));
+  const loginPage = await apiPost(api, route('/admin/login'), {
+    method: 'GET',
+  }, 'login page', 5);
   const loginHtml = await loginPage.text();
   const formKey = /name="form_key"\s+value="([^"]+)"/.exec(loginHtml)?.[1] || '';
   log(`form_key=${formKey ? 'yes' : 'no'}`);
@@ -418,6 +455,7 @@ async function main() {
         brief_description: brief,
         default_locale: 'en_US',
         design_direction_mode: 'auto',
+        fake_mode: fakeMode ? 1 : 0,
       },
     }, 'create session');
     const publicId = String(create.public_id || create.data?.public_id || '').trim();
@@ -425,6 +463,7 @@ async function main() {
       throw new Error(`missing public_id: ${jsonSummary(create)}`);
     }
     log(`public_id=${publicId}`);
+    log(`page_types=${pageTypes.join(',')}`);
 
     log('recommend domain');
     const recommend = await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-recommend-domain', {
@@ -456,7 +495,9 @@ async function main() {
           default_locale: 'en_US',
           plan_locale: 'en_US',
           page_types: pageTypes,
+          page_types_user_customized: 1,
           selected_skill_codes: ['claude-design'],
+          fake_mode: fakeMode ? 1 : 0,
         },
       },
     }, 'merge scope');
@@ -481,29 +522,37 @@ async function main() {
       data: {
         public_id: publicId,
         selected_skill_codes: ['claude-design'],
+        fake_mode: fakeMode ? 1 : 0,
         scope_patch: {
           page_types: pageTypes,
           target_domain: workspaceDomain,
           selected_domain: workspaceDomain,
           default_locale: 'en_US',
           plan_locale: 'en_US',
+          page_types_user_customized: 1,
         },
       },
     }, 'start plan');
     const planState = await waitForPlanReady(api, publicId);
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+    await reloadOrGoto(page, workspaceUrl, 'plan confirmed');
     await page.screenshot({ path: path.join(outDir, 'plan-confirmed.png'), fullPage: true });
 
     log('start build');
     if (buildAlreadyStarted(planState)) {
       log('build already queued by plan confirmation');
     } else {
-      await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-start-build', {
+      const startBuild = await postOkJson(api, '/pagebuilder/backend/ai-site-agent/post-start-build', {
         data: { public_id: publicId },
-      }, 'start build');
+      }, 'start build', {
+        acceptFailureCodes: ['AI_SITE_QUEUE_ALREADY_ACTIVE'],
+        acceptFailure: [{ operation: 'build', messageIncludes: 'reusing the current queue progress' }],
+      });
+      if (startBuild && startBuild.success === false) {
+        log(`build queue reused code=${startBuild.code || ''} msg=${startBuild.message || ''}`);
+      }
     }
     const buildState = await waitForBuildReady(api, publicId);
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+    await reloadOrGoto(page, workspaceUrl, 'build ready');
     await page.screenshot({ path: path.join(outDir, 'build-ready-workspace.png'), fullPage: true });
 
     const previewPages = ['home_page', 'about_page', 'contact_page', 'blog_list'].filter((pageType) => pageTypes.includes(pageType));

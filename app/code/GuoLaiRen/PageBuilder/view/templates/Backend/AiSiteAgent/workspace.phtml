@@ -26,7 +26,7 @@ $designDirectionCloneBuiltinUrl = (string)($this->getData('design_direction_clon
 $designDirectionMatchUrl = (string)($this->getData('design_direction_match_url') ?? '');
 $designDirectionManageUrl = (string)($this->getData('design_direction_manage_url') ?? '');
 $confirmPlanUrl = (string)($this->getData('confirm_plan_url') ?? '');
-$sortPlanBlockNodesUrl = (string)($this->getData('sort_plan_block_nodes_url') ?? '');
+$sortPlanBlocksUrl = (string)($this->getData('sort_plan_blocks_url') ?? '');
 $mutatePlanBlockUrl = (string)($this->getData('mutate_plan_block_url') ?? '');
 $refinePlanPageUrl = (string)($this->getData('refine_plan_page_url') ?? '');
 $planSseUrl = (string)($this->getData('plan_sse_url') ?? $this->getData('start_plan_sse_url') ?? '');
@@ -85,7 +85,7 @@ foreach ($registrarAccounts as $account) {
     $registrarSelectOptions[] = [
         'value' => (string)$optAccountId,
         'label' => $optLabel,
-        'group' => $registrarName !== '' ? $registrarName : (string)__('鍏朵粬'),
+        'group' => $registrarName !== '' ? $registrarName : (string)__('其他'),
         'meta' => (string)($account['registrar_code'] ?? ''),
     ];
 }
@@ -201,14 +201,14 @@ $addDomainChoice = static function (string $domain, int $accountId, string $sour
         'source_label' => $sourceLabel,
     ];
 };
-$addDomainChoice($sessionResolvedTargetDomain, $domainChoiceDefaultAccountId, 'current', (string)__('褰撳墠鍩熷悕'));
+$addDomainChoice($sessionResolvedTargetDomain, $domainChoiceDefaultAccountId, 'current', (string)__('当前域名'));
 foreach ($recommendedDomainList as $recommendedDomain) {
-    $addDomainChoice((string)$recommendedDomain, $domainChoiceDefaultAccountId, 'recommended', (string)__('AI 鎺ㄨ崘'));
+    $addDomainChoice((string)$recommendedDomain, $domainChoiceDefaultAccountId, 'recommended', (string)__('AI 推荐'));
 }
 $purchaseStateDomain = \trim((string)($domainPurchaseState['domain'] ?? ''));
 if ($purchaseStateDomain !== '') {
     $purchaseStateAccountId = (int)($domainPurchaseState['registrar_account_id'] ?? $domainChoiceDefaultAccountId);
-    $addDomainChoice($purchaseStateDomain, $purchaseStateAccountId, 'purchase', (string)__('璐拱璁板綍'));
+    $addDomainChoice($purchaseStateDomain, $purchaseStateAccountId, 'purchase', (string)__('购买记录'));
 }
 $domainChoiceState = [
     'environment' => $domainChoiceEnvironment,
@@ -224,9 +224,7 @@ try {
 }
 
 /** 寤虹珯鏂规鏄惁宸插湪浼氳瘽涓瓨鍦紙鐢ㄤ簬鏂规纭鍚庣洿鎺ヨ繘鍏ユ瀯寤虹殑闂ㄩ棭锛?*/
-$statePlanBlock = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
 $scopePlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-$statePlanJson = \is_array($statePlanBlock['json'] ?? null) ? $statePlanBlock['json'] : [];
 $planJsonHasPages = static function (array $planJson): bool {
     $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
     foreach ($pages as $page) {
@@ -237,8 +235,7 @@ $planJsonHasPages = static function (array $planJson): bool {
 
     return false;
 };
-$pbAiPhaseOnePlanPresent = $planJsonHasPages($scopePlanJson)
-    || $planJsonHasPages($statePlanJson);
+$pbAiPhaseOnePlanPresent = $planJsonHasPages($scopePlanJson);
 
 $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];
@@ -264,16 +261,17 @@ if ($pageTypeLabels === []) {
 }
 if ($pageTypeLabels === []) {
     $pageTypeLabels = [
-        'home_page' => (string)__('棣栭〉'),
-        'about_page' => (string)__('鍏充簬鎴戜滑'),
-        'contact_page' => (string)__('鑱旂郴鎴戜滑'),
+        'home_page' => (string)__('首页'),
+        'about_page' => (string)__('关于我们'),
+        'contact_page' => (string)__('联系我们'),
     ];
 }
-$virtualPagesByType = \is_array($state['virtual_pages_by_type'] ?? null) ? $state['virtual_pages_by_type'] : [];
-$pagesByType = \is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : [];
+$planJsonPagesByType = \is_array($scopePlanJson['pages'] ?? null)
+    ? $scopePlanJson['pages']
+    : [];
 $previewPageOptions = \is_array($state['preview_page_options'] ?? null) ? $state['preview_page_options'] : [];
-if ($previewPageOptions === [] && $virtualPagesByType !== []) {
-    foreach ($virtualPagesByType as $pageType => $pageData) {
+if ($previewPageOptions === [] && $planJsonPagesByType !== []) {
+    foreach ($planJsonPagesByType as $pageType => $pageData) {
         if (!\is_string($pageType) || !\is_array($pageData)) {
             continue;
         }
@@ -323,7 +321,6 @@ foreach ($previewPageOptions as &$previewPageOption) {
     $previewPageOption['label'] = $optLabel;
 }
 unset($previewPageOption);
-$displayPagesByType = $pagesByType !== [] ? $pagesByType : $virtualPagesByType;
 $draftWebsiteId = (int)($state['draft_website_id'] ?? 0);
 $virtualThemeId = (int)($state['virtual_theme_id'] ?? 0);
 $previewPageId = (int)($state['preview_page_id'] ?? 0);
@@ -333,31 +330,10 @@ $visualPreviewUrl = (string)($state['visual_preview_url'] ?? '');
 $visualEditUrl = (string)($state['visual_edit_url'] ?? '');
 $embeddedVisualUrl = $visualPreviewUrl !== '' ? $visualPreviewUrl : $visualEditUrl;
 $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
-$activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+$activeOperationStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
 $canPublish = !empty($state['can_publish']);
 $events = \is_array($state['top_logs'] ?? null) ? $state['top_logs'] : (\is_array($state['events'] ?? null) ? $state['events'] : []);
-$initialVirtualPagesByTypeState = [];
-if ($previewPageType !== '' && \is_array($virtualPagesByType[$previewPageType] ?? null)) {
-    $initialBlocks = [];
-    $previewBlocks = \is_array($virtualPagesByType[$previewPageType]['block_nodes'] ?? null)
-        ? $virtualPagesByType[$previewPageType]['block_nodes']
-        : [];
-    foreach ($previewBlocks as $previewBlock) {
-        if (!\is_array($previewBlock)) {
-            continue;
-        }
-        $initialBlocks[] = [
-            'block_id' => (string)($previewBlock['block_id'] ?? ''),
-            'type' => (string)($previewBlock['type'] ?? ''),
-            'html' => (string)($previewBlock['html'] ?? ''),
-            'config' => \is_array($previewBlock['config'] ?? null) ? $previewBlock['config'] : [],
-            'field_schema' => \is_array($previewBlock['field_schema'] ?? null) ? $previewBlock['field_schema'] : [],
-        ];
-    }
-    $initialVirtualPagesByTypeState[$previewPageType] = [
-        'block_nodes' => $initialBlocks,
-    ];
-}
+$initialPlanJsonPagesByTypeState = $planJsonPagesByType;
 $workspaceTrack = (string)($state['workspace_track'] ?? \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME);
 $isVirtualThemeTrack = $workspaceTrack === \GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
 $planJsonTaskSummary = \is_array($state['plan_json_execution_summary'] ?? null) ? $state['plan_json_execution_summary'] : [];
@@ -381,19 +357,19 @@ $extraPageTypesOpenByDefault = (int)($scope['extra_page_types_panel_open'] ?? 0)
 $guidedSteps = [
     [
         'key' => 'plan',
-        'label' => __('濉啓寤虹珯闇€姹?),
+        'label' => __('Plan'),
         'icon' => 'mdi-pencil-outline',
         'done_when' => $draftWebsiteId > 0,
     ],
     [
         'key' => 'visual_edit',
-        'label' => __('纭鏂规骞剁敓鎴?),
+        'label' => __('Visual Edit'),
         'icon' => 'mdi-eye-outline',
         'done_when' => $visualPreviewUrl !== '',
     ],
     [
         'key' => 'publish',
-        'label' => __('鍙戝竷纭'),
+        'label' => __('Publish'),
         'icon' => 'mdi-rocket-launch-outline',
         'done_when' => $currentStage === 'publish',
     ],
@@ -411,15 +387,15 @@ foreach ($guidedSteps as $i => $s) {
 <?php
 $pbAiGuidedFakeMode = !empty($scope['fake_mode']);
 $pbAiTargetDomainHelpTitle = $pbAiGuidedFakeMode
-    ? (string)__('鐣欑┖鏃剁敱 AI 鏍规嵁鍙敤渚涘簲鍟嗚嚜鍔ㄩ€夋嫨骞跺畬鎴愬煙鍚嶈喘涔般€傚綋鍓嶄负鏈湴妯℃嫙鐜锛岀偣鍑?AI 鍒锋柊灏嗘帹鑽?*.weline.test 瀛愬煙鐢ㄤ簬鑱旇皟銆?)
-    : (string)__('鐣欑┖鏃剁敱 AI 鏍规嵁鍙敤渚涘簲鍟嗚嚜鍔ㄩ€夋嫨骞跺畬鎴愬煙鍚嶈喘涔般€傚彲鐐瑰嚮 AI 鍒锋柊鏍规嵁绔欑偣鍚嶇О涓庢弿杩版櫤鑳芥帹鑽愬煙鍚嶅苟濉叆銆?);
+    ? (string)__('Fake mode uses local test domains and does not call real AI services.')
+    : (string)__('AI can recommend a domain from your site brief. You can edit it before generation.');
 $designDirectionState = \is_array($state['design_direction'] ?? null) ? $state['design_direction'] : [];
 $designDirectionSnapshot = \is_array($state['design_direction_snapshot'] ?? null)
     ? $state['design_direction_snapshot']
     : (\is_array($scope['design_direction_snapshot'] ?? null) ? $scope['design_direction_snapshot'] : []);
 $designDirectionLabel = \trim((string)($designDirectionState['label'] ?? $designDirectionSnapshot['name'] ?? $designDirectionSnapshot['code'] ?? ''));
 if ($designDirectionLabel === '') {
-    $designDirectionLabel = (string)__('閫氱敤璁捐鏂瑰悜');
+    $designDirectionLabel = (string)__('Automatic');
 }
 $designDirectionReason = \trim((string)($state['design_direction_match_reason'] ?? $scope['design_direction_match_reason'] ?? $designDirectionSnapshot['match_reason'] ?? ''));
 $guidedScopeDefaults = [
@@ -447,7 +423,7 @@ $guidedSessionSummary = [
     'plan_locale' => (string)($guidedScopeDefaults['plan_locale'] ?? ''),
     'design_direction' => $designDirectionLabel,
     'page_types' => $selectedPageTypesSafe,
-    'plan_json_confirmed_at' => (string)($statePlanJson['confirmed_at'] ?? $scopePlanJson['confirmed_at'] ?? ''),
+    'confirmed_at' => (string)($scopePlanJson['confirmed_at'] ?? ''),
 ];
 $domainStatus = (string)($domainPurchaseState['status'] ?? 'idle');
 $domainStatusBadgeClass = match ($domainStatus) {
@@ -457,16 +433,16 @@ $domainStatusBadgeClass = match ($domainStatus) {
     default => 'bg-soft-secondary text-muted',
 };
 $domainActionLabel = match ($domainStatus) {
-    'completed' => (string)__('宸茶喘涔板畬鎴?),
-    'queued', 'running' => (string)__('姝ｅ湪璐拱鍩熷悕'),
-    'failed' => (string)__('閲嶆柊鍙戣捣璐拱'),
-    default => (string)__('璐拱鍩熷悕骞跺缓绔?),
+    'completed' => (string)__('Domain purchased'),
+    'queued', 'running' => (string)__('Domain purchase running'),
+    'failed' => (string)__('Retry domain purchase'),
+    default => (string)__('Purchase domain and build site'),
 };
 $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     ? (string)((int)($domainPurchaseState['order_id'] ?? 0))
     : ((int)($domainPurchaseState['purchase_order_id'] ?? 0) > 0
         ? (string)((int)($domainPurchaseState['purchase_order_id'] ?? 0))
-        : (string)__('鏆傛湭鐢熸垚'));
+        : (string)__('Pending'));
 ?>
 <?php
 $workspaceRenderStage = \in_array($currentStage, ['plan', 'visual_edit', 'publish'], true)
@@ -516,6 +492,8 @@ $workspaceTplData = [
     'planJsonTaskSummary' => $planJsonTaskSummary ?? [],
     'planJsonTaskGroups' => $planJsonTaskGroups ?? [],
     'workspaceEventPreviewList' => $workspaceEventPreviewList ?? [],
+    'displayPagesByType' => $initialPlanJsonPagesByTypeState,
+    'initialPlanJsonPagesByTypeState' => $initialPlanJsonPagesByTypeState,
     'previewPageType' => $previewPageType ?? '',
     'virtualThemeId' => $virtualThemeId ?? 0,
     'draftWebsiteId' => $draftWebsiteId ?? 0,
@@ -534,7 +512,7 @@ $workspaceTplData = [
     'designDirectionMatchUrl' => $designDirectionMatchUrl,
     'designDirectionManageUrl' => $designDirectionManageUrl,
     'confirmPlanUrl' => $confirmPlanUrl,
-    'sortPlanBlockNodesUrl' => $sortPlanBlockNodesUrl,
+    'sortPlanBlocksUrl' => $sortPlanBlocksUrl,
     'mutatePlanBlockUrl' => $mutatePlanBlockUrl,
     'refinePlanPageUrl' => $refinePlanPageUrl,
     'planSseUrl' => $planSseUrl,

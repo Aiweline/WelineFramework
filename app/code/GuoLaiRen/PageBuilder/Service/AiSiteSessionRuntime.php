@@ -9,7 +9,7 @@ use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * AI 建站会话运行时：懒加载租借（Lease）大对象，闭包结束脱水归还。
+ * AI 寤虹珯浼氳瘽杩愯鏃讹細鎳掑姞杞界鍊燂紙Lease锛夊ぇ瀵硅薄锛岄棴鍖呯粨鏉熻劚姘村綊杩樸€?
  */
 final class AiSiteSessionRuntime
 {
@@ -42,7 +42,7 @@ final class AiSiteSessionRuntime
     ): mixed {
         $artifactKey = \trim($artifactKey);
         if ($artifactKey === '') {
-            throw new \InvalidArgumentException('artifactKey 不能为空');
+            throw new \InvalidArgumentException('artifactKey 涓嶈兘涓虹┖');
         }
 
         $sessionId = (int)$session->getId();
@@ -74,7 +74,7 @@ final class AiSiteSessionRuntime
     ): mixed {
         $artifactKey = \trim($artifactKey);
         if ($artifactKey === '') {
-            throw new \InvalidArgumentException('artifactKey 不能为空');
+            throw new \InvalidArgumentException('artifactKey 涓嶈兘涓虹┖');
         }
 
         $sessionId = (int)$session->getId();
@@ -101,13 +101,13 @@ final class AiSiteSessionRuntime
         $pageType = \trim($pageType);
         $blockId = \trim($blockId);
         if ($pageType === '' || $blockId === '') {
-            throw new \InvalidArgumentException('pageType 与 blockId 不能为空');
+            throw new \InvalidArgumentException('pageType 涓?blockId 涓嶈兘涓虹┖');
         }
 
         $manifest = $this->loadScopeManifest($session);
         $virtualThemeId = (int)($manifest['virtual_theme_id'] ?? 0);
         if ($virtualThemeId <= 0) {
-            throw new \RuntimeException('virtual_theme_id 未就绪，无法 withBlock');
+            throw new \RuntimeException('virtual_theme_id 鏈氨缁紝鏃犳硶 withBlock');
         }
 
         $component = $this->resolveVirtualThemeComponent($virtualThemeId, $pageType, $blockId, $manifest);
@@ -139,7 +139,7 @@ final class AiSiteSessionRuntime
     ): mixed {
         $pageType = \trim($pageType);
         if ($pageType === '') {
-            throw new \InvalidArgumentException('pageType 不能为空');
+            throw new \InvalidArgumentException('pageType 涓嶈兘涓虹┖');
         }
 
         $manifest = $this->loadScopeManifest($session);
@@ -218,9 +218,10 @@ final class AiSiteSessionRuntime
         array $manifest
     ): VirtualThemeComponent {
         $componentCode = $blockId;
-        $pages = \is_array($manifest['virtual_pages_by_type'] ?? null) ? $manifest['virtual_pages_by_type'] : [];
+        $planJson = \is_array($manifest['plan_json'] ?? null) ? $manifest['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-        foreach (\is_array($page['block_nodes'] ?? null) ? $page['block_nodes'] : [] as $block) {
+        foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
             if (!\is_array($block)) {
                 continue;
             }
@@ -240,7 +241,7 @@ final class AiSiteSessionRuntime
             ->fetch();
 
         if ((int)$model->getId() <= 0) {
-            throw new \RuntimeException('VirtualThemeComponent 未找到: ' . $componentCode);
+            throw new \RuntimeException('VirtualThemeComponent 鏈壘鍒? ' . $componentCode);
         }
 
         return $model;
@@ -299,32 +300,34 @@ final class AiSiteSessionRuntime
      */
     private function updateBlockIndexEntry(array $manifest, string $pageType, string $blockId, string $hash): array
     {
-        $index = \is_array($manifest['virtual_page_index'] ?? null)
-            ? $manifest['virtual_page_index']
-            : $this->manifestPolicy()->buildVirtualPageIndex(
-                \is_array($manifest['virtual_pages_by_type'] ?? null) ? $manifest['virtual_pages_by_type'] : []
-            );
-
-        $pageIndex = \is_array($index[$pageType] ?? null) ? $index[$pageType] : ['page_type' => $pageType, 'block_nodes' => []];
-        $blocks = \is_array($pageIndex['block_nodes'] ?? null) ? $pageIndex['block_nodes'] : [];
-        $found = false;
-        foreach ($blocks as $idx => $entry) {
-            if (!\is_array($entry)) {
+        if (!\is_array($manifest['plan_json'] ?? null)) {
+            $manifest['plan_json'] = [];
+        }
+        if (!\is_array($manifest['plan_json']['pages'] ?? null)) {
+            $manifest['plan_json']['pages'] = [];
+        }
+        if (!\is_array($manifest['plan_json']['pages'][$pageType] ?? null)) {
+            $manifest['plan_json']['pages'][$pageType] = ['page_type' => $pageType];
+        }
+        foreach ($manifest['plan_json']['pages'][$pageType] as $blockKey => $block) {
+            if (!\is_string($blockKey) || !\is_array($block)) {
                 continue;
             }
-            if ((string)($entry['block_id'] ?? '') === $blockId) {
-                $blocks[$idx]['hash'] = $hash;
-                $blocks[$idx]['status'] = 'ready';
-                $found = true;
-                break;
+            $candidate = \trim((string)($block['block_id'] ?? $block['id'] ?? $blockKey));
+            if ($candidate !== $blockId) {
+                continue;
             }
+            $manifest['plan_json']['pages'][$pageType][$blockKey]['hash'] = $hash;
+            $manifest['plan_json']['pages'][$pageType][$blockKey]['status'] = 1;
+
+            return $this->manifestPolicy()->dehydrateScopePaths($manifest);
         }
-        if (!$found) {
-            $blocks[] = ['block_id' => $blockId, 'hash' => $hash, 'status' => 'ready', 'component_code' => ''];
-        }
-        $pageIndex['block_nodes'] = $blocks;
-        $index[$pageType] = $pageIndex;
-        $manifest['virtual_page_index'] = $index;
+        $manifest['plan_json']['pages'][$pageType][$blockId] = [
+            'block_id' => $blockId,
+            'hash' => $hash,
+            'status' => 1,
+            'component_code' => '',
+        ];
 
         return $this->manifestPolicy()->dehydrateScopePaths($manifest);
     }

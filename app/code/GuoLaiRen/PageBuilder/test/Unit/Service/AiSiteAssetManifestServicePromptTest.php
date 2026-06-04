@@ -8,7 +8,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteAssetManifestService;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 閻庢鍣ｇ紓姘躲€侀幋鐐甸檮闁瑰濮撮濠囨煥濞戞瑨澹樻繛瀛橈耿瀹?prompt 闂?PRIMARY SUBJECT"闂婎偄娲ら幊姗€濡磋箛娑欏仺閺夊牃鏅滈弳蹇涙煙绾惧鑵圭紒妤冨枛瀹曟繈妾遍柣锔芥煥鏁堥柛宀嬪缁€鍒ief_description闂? * 婵炴垶鎹侀褔顢氶柆宥嗘櫖閻庡湱鏉痶e_title 婵炲濮撮幊宥囩礊閺冣偓缁?wordmark 闂佸憡鐟ラ崐浠嬪焵椤掆偓閸犳稓妲愰柆宥呰Е閻忕偟鍋撻ˇ褔鏌?block 闂佹悶鍎查崕鎶藉磿濮樺磭鐤€闁告稒鐣埀顒€绻掔划瀣媴鐠団€冲闂佽桨鐒﹂幐鎶藉Υ?mockup闂? * 闂佸搫鐗滈崜姘辩矈鐎靛憡瀚氶柡鍥ュ灪閺佹岸鎮?buildPrompt 闂侀潻璐熼崝瀣箔婢舵劕瑙?slot 缂備緡鍋夐褔鎮楅柨瀣枖閻庯綆鍓氶悾杈┾偓娈垮枛閹碱偊銆冮弽顐ゆ／闁挎梹鍎抽濠囨煛婢跺苯鏋傞柍? */
+ * 闁诲孩顔栭崳锝囩磽濮樿翰鈧線骞嬮悙鐢告闂佺懓顕慨鎾敊婵犲洦鐓ユ繛鎴炵懆婢规ɑ绻涚€涙﹫鑰跨€?prompt 闂?PRIMARY SUBJECT"闂傚鍋勫ú銈夊箠濮椻偓婵＄绠涘☉娆忎缓闁哄鐗冮弲婊堝汲韫囨稒鐓欑痪鎯ь儐閼靛湱绱掑Δ鍐ㄦ灈鐎规洘绻堝閬嶆煟閿旇姤鐓ラ弫鍫ユ煕瀹€瀣洭缂佲偓閸掝摳ief_description闂? * 濠电偞鍨堕幑渚€顢氳椤㈡岸鏌嗗鍡樻珫闁诲骸婀遍弶鐥秂_title 濠电偛顕慨鎾箠瀹ュ洨绀婇柡鍐ｅ亾缂?wordmark 闂備礁鎲￠悷銉╁磹娴犲鐒垫い鎺嗗亾闁哥姵绋撳Σ鎰版焼瀹ュ懓袝闁诲繒鍋熼崑鎾凰囪閺?block 闂備焦鎮堕崕鏌ュ磿閹惰棄纾挎慨妯虹－閻も偓闂佸憡绋掗悾顏堝焵椤掆偓缁绘帞鍒掔€ｎ偅濯撮悹鍥ｂ偓鍐差棟闂備浇妗ㄩ悞锕傚箰閹惰棄违?mockup闂? * 闂備礁鎼悧婊堝礈濮樿京鐭堥悗闈涙啞鐎氭岸鏌￠崶銉ョ仾闁轰焦宀搁幃?buildPrompt 闂備線娼荤拹鐔煎礉鐎ｎ剛绠斿鑸靛姇鐟?slot 缂傚倷绶￠崑澶愵敋瑜旈幃妤呮煥鐎ｎ兘鏋栭柣搴秵閸撴岸鎮炬潏鈹惧亾濞堝灝鏋涢柟纰卞亰閵嗗啴寮介銈嗭紡闂佹寧姊归崕鎶筋敊婵犲洦鐓涘璺鸿嫰閺嬪倿鏌? */
 final class AiSiteAssetManifestServicePromptTest extends TestCase
 {
     public function testNonLogoSlotPromptForbidsFullSiteMockup(): void
@@ -64,25 +64,25 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
         $prompt = $service->buildPrompt($slot, $scope);
 
-        // 婵炴垶鎹侀濠勭礊鐎ｎ偆闄勯柟瀵稿Т椤斿﹪鐓崶褎鍤囬柕鍡楃箻瀵即顢涘搴″壋婵炴垶鎸撮崑鎾绘偠濞戞鐒跨紒杈ㄧ箖缁嬪寮捄銊х暠婵＄偑鍊涢褏鈧灚锕㈠畷銉╊敃閿涘嫮鎳濋梺鍛婃瀫閵堝洦顫濆┑顔炬嚀閸婃悂宕ｈ閺屻劑顢欓崗鐓庘偓鎶芥偣?        $firstLine = \explode("\n", $prompt)[0] ?? '';
+        // 濠电偞鍨堕幑渚€顢欐繝鍕閻庯綆鍋嗛梽鍕煙鐎电孝妞ゆ柨锕悡顐﹀炊瑜庨崵鍥煏閸℃绠荤€殿喕鍗抽、娑橆煥鎼粹€冲濠电偞鍨堕幐鎾磻閹剧粯鍋犳繛鎴烆焽閻掕法绱掓潏銊х畺缂佸顦靛顒傛崉閵娧呮殸濠碉紕鍋戦崐娑㈩敋瑜忛埀顒€鐏氶敃銏犵暦閵夆晩鏁冮柨娑樺閹虫繈姊洪崨濠冪€柕鍫濇处椤繂鈹戦鐐殌闁稿﹥鎮傚畷锝堫樄闁哄被鍔戦、娆撳礂閻撳簶鍋撻幎鑺ュ仯?        $firstLine = \explode("\n", $prompt)[0] ?? '';
         self::assertStringStartsWith('PRIMARY SUBJECT', $firstLine);
         self::assertStringContainsString('the logo mark/glyph MUST visually depict this business', $firstLine);
         self::assertStringContainsString('India-focused online card gaming club', $firstLine);
 
-        // brand name 闂婎偄娲ら幊姗€濡磋箛娑欌挃鐎广儱娲悰鎾斥槈?wordmark text闂佹寧绋戞總鏃傜箔婢舵劖鍤勯柟瀛樺笧缁嬪﹤鈽?primary subject
+        // brand name 闂傚鍋勫ú銈夊箠濮椻偓婵＄绠涘☉娆屾寖閻庡箍鍎卞ú顓㈡偘閹炬枼妲?wordmark text闂備焦瀵х粙鎴炵附閺冨倻绠斿鑸靛姈閸ゅ嫰鏌熺€涙ê绗х紒瀣工閳?primary subject
         self::assertStringContainsString('Optional brand wordmark text', $prompt);
         self::assertStringContainsString('Teenipiya', $prompt);
         self::assertStringNotContainsString('Brand name (for logo only)', $prompt);
 
-        // logo 闁哄鐗婇幐鎼佸吹椤撱垺鍋嬮柍鍝勫暞閸婄偟绱掗幘鍛存婵炵⒈鍋呯粚鍗炩攽閸喐鐣?
+        // logo 闂佸搫顦悧濠囧箰閹间礁鍚规い鎾卞灪閸嬪鏌嶉崫鍕殲闁稿﹦鍋熺槐鎺楀箻閸涘瓨顎嶅┑鐐碘拡閸嬪懐绮氶崡鐐╂斀闁割偆鍠愰悾?
         self::assertStringContainsString('Logo output requirements', $prompt);
         self::assertStringContainsString('transparent alpha background', $prompt);
 
-        // slot.brief 婵?"Generate the official website logo for X" 闂婎偄娲ら幊姗€濡磋箛鏇熷仏妞ゆ劧绲鹃弳顓㈡煕閹邦厾鎳曠紒杈ㄧ箞閺屽棝宕归鐓庤祴婵炴垶鎹侀濠勭礊鐎ｎ喖绀冮柤纰卞墰瀹?
+        // slot.brief 濠?"Generate the official website logo for X" 闂傚鍋勫ú銈夊箠濮椻偓婵＄绠涢弴鐔蜂粡濡炪倖鍔х徊楣冨汲椤撱垺鐓曢柟閭﹀幘閹虫洜绱掓潏銊х疄闁哄苯妫濆畷褰掝敊閻撳氦绁村┑鐐村灦閹逛線顢欐繝鍕閻庯綆鍠栫粈鍐煠绾板崬澧扮€?
         self::assertStringNotContainsString('Generate the official website logo for "Teenipiya"', $prompt);
         self::assertStringContainsString('Logo specification:', $prompt);
 
-        // 闂婎偄娲ら幊姗€濡磋箛娑樺珘濠㈣泛顭▓鈺冪磼閹惧懐鐣辨い锕€寮跺鑽ゆ暜椤斿墽顦梻渚囧墮閻忔繈宕?prompt 濠电姵娲栭崐璁崇昂
+        // 闂傚鍋勫ú銈夊箠濮椻偓婵＄绠涘☉妯虹彉婵犮垼娉涢…顒€鈻撻埡鍐＜闁规儳鎳愰悾杈ㄣ亜閿曗偓瀵泛顭囬懡銈嗘殰妞ゆ柨澧介ˇ顕€姊绘笟鍥у闁诲繑绻堝畷?prompt 婵犵數濮靛ú鏍磹鐠佸磭鏄?
         self::assertStringContainsString('Reinforced contract', $prompt);
     }
 
@@ -112,7 +112,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertStringContainsString('favicon/title icon glyph MUST visually depict this business', $firstLine);
         self::assertStringContainsString('India-focused online card gaming club', $firstLine);
 
-        // favicon brief 婵犮垼鍩栧娆掋亹閻愬鈻曢柣鏃堫棑缁犳垵顪冮妶鍡橆潡妞ゎ偓绠撳銊╂偡閺夋寧娅?
+        // favicon brief 濠电姰鍨奸崺鏍ь焽濞嗘帇浜归柣鎰嚟閳绘洟鏌ｉ弮鍫缂佺姵鍨甸—鍐Χ閸℃﹩娼″銈庡亾缁犳挸顕ｉ妸鈺傚仭闁哄瀵у▍?
         self::assertStringNotContainsString('Generate the website title icon / favicon for "Teenipiya"', $prompt);
         self::assertStringContainsString('Icon specification:', $prompt);
     }
@@ -151,7 +151,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertGreaterThan($subjectPos, $brandPos, 'PRIMARY SUBJECT must appear before brand context.');
     }
 
-    public function testSyncFromPlanJsonAddsHeroBannerSlotFromPageBlockNodes(): void
+    public function testSyncFromPlanJsonAddsHeroBannerSlotFromPageBlocks(): void
     {
         $service = new AiSiteAssetManifestService();
 
@@ -203,7 +203,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertSame('hero_image', (string)($heroSlot['slot_type'] ?? ''));
         self::assertStringContainsString('Play royal card games tonight', (string)($heroSlot['label'] ?? ''));
 
-        // banner slot.brief 闂婎偄娲ら幊姗€濡磋箛鏃傤浄?PRIMARY SUBJECT 閻庢鍠掗崑鎾愁熆閹増褰х紒杈ㄧ箖缁嬪顫濋鈧～銈夋偣閸パ屾Ч闁活亝濯界粻娑㈠川濞ｎ兘鍋撹箛娑樼闁惧繒鎳撶粻娑㈡煕閿斿搫濡挎い?1 闁?        $brief = (string)($heroSlot['brief'] ?? '');
+        // banner slot.brief 闂傚鍋勫ú銈夊箠濮椻偓婵＄绠涢弮鍌ゆ祫?PRIMARY SUBJECT 闁诲孩顔栭崰鎺楀磻閹炬剚鐔嗛柟顖滃瑜把呯磼鏉堛劎绠栫紒瀣槸椤繈顢楅埀顒勶綖閵堝鍋ｉ柛銉戝本效闂佹椿浜濇刊鐣岀不濞戙垹宸濇繛锝庡厴閸嬫捁绠涘☉妯碱槱闂佹儳绻掗幊鎾剁不濞戙垺鐓曢柨鏂挎惈婵℃寧銇?1 闂?        $brief = (string)($heroSlot['brief'] ?? '');
         self::assertStringStartsWith('PRIMARY SUBJECT', $brief);
         self::assertStringContainsString('India card gaming club', $brief);
     }
@@ -321,7 +321,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
     public function testRequiredIdentityLogoSlotBriefIsSubjectFirst(): void
     {
-        // 闂備礁銇樼粈渚€鎮?buildRequiredIdentitySlots 闂佸憡鍔栭悷銉╁矗?manifest 闂?slot.brief 闂佸搫瀚烽崹顖溾偓闈涙湰閹峰懘骞橀懠顒€鏋犻梺绋跨箰閻楃偟妲?        // 婵炴垶鏌ㄩ鍛櫠閻樺磭顩?"Generate the official website logo for X" 閻庢鍠掗崑鎾愁熆閹増褰х紒杈ㄧ箖鐎电厧顫濋幇浣硅晧 AI 闁荤喐鐟辩紞鈧い鏇犲缁?        // 闂佹眹鍨奸濠勭博鐎涙鈻?X 閻熸粏鍩囬崹濂告寘閸曨垱鏅柛顐到婵海绱掗崒婵愬敽缂佹鍠栧畷婵嬪煡閸涱垳顦梺鎸庣⊕缁嬫捇鐛崶顒€鎹堕柕濞垮劤缁犳垵顪冮妶鍫敽濞?PRIMARY SUBJECT 婵炶揪绲剧划鍫㈡嫻閻斿鍤曢柛婵嗗濞堚晝绱掗幘鍛扮闁?        $service = new AiSiteAssetManifestService();
+        // 闂傚倷绀侀妵妯肩矆娓氣偓閹?buildRequiredIdentitySlots 闂備礁鎲￠崝鏍偡閵夆晛鐭?manifest 闂?slot.brief 闂備礁鎼€氱兘宕归婧惧亾闂堟稒婀伴柟宄版嚇楠炴﹢鎳犻鈧弸鐘绘⒑缁嬭法绠伴柣妤冨仧濡?        // 濠电偞鍨堕弻銊╊敄閸涱喗娅犻柣妯虹－椤?"Generate the official website logo for X" 闁诲孩顔栭崰鎺楀磻閹炬剚鐔嗛柟顖滃瑜把呯磼鏉堛劎绠栭悗鐢靛帶椤繈骞囨担纭呮櫑 AI 闂佽崵鍠愰悷杈╃礊閳ь剚銇勯弴鐘差暭缂?        // 闂備焦鐪归崹濂割敊婵犲嫮鍗氶悗娑欘焽閳?X 闁荤喐绮忛崺鍥垂婵傚憡瀵橀柛鏇ㄥ灡閺咁剟鏌涢顒傚埌濠殿喖娴风槐鎺楀磼濠垫劕鏁界紓浣诡殘閸犳牕鐣峰┑瀣叀闁告侗鍨抽ˇ顐︽⒑閹稿海鈯曠紒瀣崌閻涱噣宕堕鈧幑鍫曟煏婵炲灝鍔ょ紒鐘冲灥椤啴濡堕崼顐㈡暯婵?PRIMARY SUBJECT 濠电偠鎻徊鍓у垝閸垺瀚婚柣鏂款殠閸ゆ洟鏌涘┑鍡楊伌婵炲牃鏅濈槐鎺楀箻閸涙壆顦伴梺?        $service = new AiSiteAssetManifestService();
 
         $scope = [
             'website_profile' => [

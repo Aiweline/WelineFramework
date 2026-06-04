@@ -21,7 +21,7 @@ final class AiSitePlanJsonBuildStateSourceTest extends TestCase
             'hero' => ['status' => 0, 'title' => 'Hero'],
             'proof' => ['status' => 1, 'title' => 'Proof', 'html' => '<section>Proof</section>'],
             'cta' => ['status' => -1, 'title' => 'CTA', 'error' => 'Previous failure'],
-        ]), [], 'html_block_nodes');
+        ]), [], 'html_blocks');
 
         self::assertSame(
             ['page:home_page:content/home-page-hero', 'page:home_page:content/home-page-cta'],
@@ -79,7 +79,7 @@ final class AiSitePlanJsonBuildStateSourceTest extends TestCase
         $patch = $scheduler->buildConfirmationScopePatch(
             $this->PlanJsonJsonScope(['hero' => ['status' => 0]]),
             [],
-            'html_block_nodes'
+            'html_blocks'
         );
 
         self::assertSame(1, (int)($patch['plan_json']['confirmed'] ?? 0));
@@ -87,7 +87,7 @@ final class AiSitePlanJsonBuildStateSourceTest extends TestCase
         self::assertTrue((bool)($patch['plan_json_pages_validation']['valid'] ?? false));
     }
 
-    public function testStageOnePlanJsonPersistsDynamicBlockNodes(): void
+    public function testStageOnePlanJsonPersistsDynamicBlocks(): void
     {
         $service = new AiSitePlanJsonGenerationService(new AiSitePageBlueprintService());
         $method = new ReflectionMethod($service, 'PlanJsonJson');
