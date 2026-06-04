@@ -6,11 +6,11 @@ namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
 
 use GuoLaiRen\PageBuilder\Service\AiSiteDesignPolicyRegistry;
 
-final class BuildPlanDesignPolicyLinter
+final class PlanJsonDesignPolicyLinter
 {
     public function __construct(
         private readonly ?AiSiteDesignPolicyRegistry $registry = null,
-        private readonly ?BuildPlanContractSchema $schema = null
+        private readonly ?PlanJsonContractSchema $schema = null
     ) {
     }
 
@@ -64,7 +64,7 @@ final class BuildPlanDesignPolicyLinter
             }
         }
 
-        foreach ($this->normalizeRecordSet($contract['blocks'] ?? [], ['block_id', 'id']) as $blockId => $block) {
+        foreach ($this->normalizeRecordSet($contract['block_nodes'] ?? [], ['block_id', 'id']) as $blockId => $block) {
             $blockType = \strtolower((string)($block['block_type'] ?? $block['type'] ?? ''));
             if ($this->isImageRelatedBlock($blockType)) {
                 $visual = \is_array($block['visual'] ?? null) ? $block['visual'] : [];
@@ -158,7 +158,7 @@ final class BuildPlanDesignPolicyLinter
     {
         $scan = [
             'pages' => $contract['pages'] ?? [],
-            'blocks' => $contract['blocks'] ?? [],
+            'block_nodes' => $contract['block_nodes'] ?? [],
         ];
         $haystack = \strtolower((string)\json_encode($scan, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
 
@@ -170,8 +170,8 @@ final class BuildPlanDesignPolicyLinter
         return $this->registry ?? new AiSiteDesignPolicyRegistry();
     }
 
-    private function schema(): BuildPlanContractSchema
+    private function schema(): PlanJsonContractSchema
     {
-        return $this->schema ?? new BuildPlanContractSchema();
+        return $this->schema ?? new PlanJsonContractSchema();
     }
 }

@@ -299,7 +299,7 @@ class WebsiteManagement extends BaseController
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);
         $this->assign('sub_path', '');
-        $this->assign('selected_legacy_domains', []);
+        $this->assign('selected_existing_domains', []);
         // 支持 URL 传入 pool_id 或 pool_ids，创建站点时预选域名并会在保存时自动绑定
         $poolIdParam = $this->request->getParam('pool_id');
         $poolIdsParam = $this->request->getParam('pool_ids');
@@ -536,7 +536,7 @@ class WebsiteManagement extends BaseController
         
         // 获取网站已关联的域名（用于编辑时显示）
         $selectedPoolIds = [];
-        $selectedLegacyDomains = [];
+        $selectedExistingDomains = [];
         try {
             $websiteDomain = $this->objectManager->getInstance(WebsiteDomain::class);
             $domains = $websiteDomain->getWebsiteDomains($websiteId);
@@ -554,17 +554,17 @@ class WebsiteManagement extends BaseController
                 if ($poolId > 0) {
                     $selectedPoolIds[] = $poolId;
                 } elseif ($domainName !== '') {
-                    $selectedLegacyDomains[] = $domainName;
+                    $selectedExistingDomains[] = $domainName;
                 }
             }
         } catch (\Exception $e) {
             $selectedPoolIds = [];
-            $selectedLegacyDomains = [];
+            $selectedExistingDomains = [];
         }
         $selectedPoolIds = \is_array($selectedPoolIds) ? $selectedPoolIds : [];
-        $selectedLegacyDomains = \is_array($selectedLegacyDomains) ? $selectedLegacyDomains : [];
+        $selectedExistingDomains = \is_array($selectedExistingDomains) ? $selectedExistingDomains : [];
         $this->assign('selected_pool_ids', \array_values(\array_unique($selectedPoolIds)));
-        $this->assign('selected_legacy_domains', \array_values(\array_unique($selectedLegacyDomains)));
+        $this->assign('selected_existing_domains', \array_values(\array_unique($selectedExistingDomains)));
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());

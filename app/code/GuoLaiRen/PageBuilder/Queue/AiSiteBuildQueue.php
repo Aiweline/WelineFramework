@@ -7,7 +7,8 @@ namespace GuoLaiRen\PageBuilder\Queue;
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
-use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonStateService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQueueLogWriter;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
@@ -29,18 +30,15 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     private const CONTENT_LAST_GATE_DECISION_KEY = 'completion_gate_decision';
     private const QUEUE_CONTENT_PROGRESS_MERGE_MAX_BYTES = 262144;
     private const QUEUE_CONTENT_PROGRESS_KEYS = [
-        'build_task_summary' => true,
+        'plan_json_task_summary' => true,
         'page_block_progress' => true,
-        'build_plan_block_progress' => true,
+        'plan_json_block_progress' => true,
         'progress_percent' => true,
         'active_concurrency' => true,
     ];
     private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';
     private const QUEUE_SCOPE_PATCH_REDUNDANT_KEYS = [
-        'build_plan_v2' => true,
-        'plan_projection' => true,
         'content_manifest' => true,
-        'build_workbench' => true,
         'build_contracts' => true,
         'render_data_contract' => true,
         'qa_report_contract' => true,
@@ -50,25 +48,16 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     ];
     private const BUILD_QUEUE_SCOPE_ARTIFACT_KEYS = [
         'plan_json',
-        'build_plan_v2',
-        'plan_projection',
-        'content_manifest',
-        'build_workbench',
-        'build_contracts',
-        'render_data_contract',
-        'task_results',
-        'qa_report',
-        'repair_patch',
     ];
 
     public function name(): string
     {
-        return 'PageBuilder AI 建站构建队列';
+        return 'PageBuilder AI site build';
     }
 
     public function tip(): string
     {
-        return '异步执行 PageBuilder 建站构建任务，并写入构建状态与队列日志。';
+        return 'Run PageBuilder AI site plan_json block node work asynchronously and persist build progress.';
     }
 
     public function attributes(): array
@@ -166,18 +155,39 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 $inlineImageDisabledRegistered = true;
                 $this->appendQueueLifecycleLine($queue, 'Inline image generation disabled for this queue run; image slots will be deferred for later retry.');
             }
-            $this->appendQueueLifecycleLine($queue, '开始执行 queue_id=' . $queueId . ' public_id=' . $publicId . ' admin_id=' . $adminId);
+            $this->appendQueueLifecycleLine($queue, '闁诲孩顔栭崰鎺楀磻閹炬枼鏀芥い鏃傗拡閸庢劕顭胯閺咁偊骞?queue_id=' . $queueId . ' public_id=' . $publicId . ' admin_id=' . $adminId);
 
             /** @var AiSiteAgentSessionService $sessionService */
             $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
             /** @var AiSiteScopeCompatibilityService $scopeService */
             $scopeService = ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
-            /** @var AiSiteBuildTaskService $buildTaskService */
-            $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
+            /** @var AiSitePlanJsonTaskService $planJsonTaskService */
+            $planJsonTaskService = ObjectManager::getInstance(AiSitePlanJsonTaskService::class);
 
             $session = $sessionService->loadByPublicId($publicId, $adminId);
             if (!$session instanceof AiSiteAgentSession) {
-                throw new \RuntimeException('会话不存在或无权访问。');
+                throw new \RuntimeException('Session not found or access denied.');
+            }
+            if ($attempt > $maxAttempts) {
+                $message = 'PageBuilder build queue has already run '
+                    . $maxAttempts
+                    . ' automatic attempts; automatic retry is stopped. Please confirm manually before running again.';
+                $scope = $scopeService->normalizeScope(
+                    $this->loadBuildQueueScope($sessionService, $session)
+                );
+                $scope = $this->patchBuildActiveOperationForAttemptLimit(
+                    $scope,
+                    $operation,
+                    $queueId,
+                    $attempt,
+                    $maxAttempts,
+                    $effectiveExecutionToken,
+                    $message
+                );
+                $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
+                $this->markQueueStopped($queue, $content, $message);
+
+                return $message;
             }
             AiSiteWorkflowTrace::log('queue_build_execute_start', [
                 'public_id' => $publicId,
@@ -186,7 +196,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 'execution_token' => $effectiveExecutionToken,
                 'force_rebuild' => $forceFullBuildRegeneration,
             ]);
-            $this->appendQueueLifecycleLine($queue, '已加载会话 session_id=' . (int)$session->getId());
+            $this->appendQueueLifecycleLine($queue, '闁诲海鎳撻幉陇銇愰崘鈺傚弿闁绘劕鐡ㄦ慨婊堟煙鐎涙ê绗х紒鎰殜閹?session_id=' . (int)$session->getId());
             $supersedingQueueRow = $this->findSupersedingQueueRow(
                 $queueId,
                 $queue->getBizKey(),
@@ -217,7 +227,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 $session = $this->applyForceBuildQueuePreset($sessionService, $scopeService, $session, $adminId);
                 $this->appendQueueLifecycleLine(
                     $queue,
-                    '检测到 _force_rebuild=1，已换新 execution_token 以允许重新认领构建，token=' . \substr($effectiveExecutionToken, 0, 24) . '…'
+                    'force rebuild requested; refreshed execution_token=' . \substr($effectiveExecutionToken, 0, 24)
                 );
             }
 
@@ -232,7 +242,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             );
             $this->appendQueueLifecycleLine(
                 $queue,
-                '已同步 active_operation=queued operation=' . $operation . ' execution_token=' . \substr($effectiveExecutionToken, 0, 12) . '…'
+                'active_operation=queued operation=' . $operation . ' execution_token=' . \substr($effectiveExecutionToken, 0, 12)
             );
 
             $scope = $scopeService->normalizeScope(
@@ -240,22 +250,22 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             );
             $confirmedScope = $scope;
             if ($operation === 'build') {
-                $scopePatch = $buildTaskService->stripBuildPlanMutationScopePatch($scopePatch, $confirmedScope);
+                $scopePatch = $planJsonTaskService->stripPlanJsonMutationScopePatch($scopePatch, $confirmedScope);
                 if ($scopePatch !== []) {
             $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
                 }
-                $scope = $buildTaskService->restoreBuildPlanContract($scope, $confirmedScope);
+                $scope = $planJsonTaskService->restorePlanJsonContract($scope, $confirmedScope);
                 $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
-                $scope = $buildTaskService->ensureTaskScope(
+                $scope = $planJsonTaskService->ensureTaskScope(
                     $scope,
                     \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
                     $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
                 );
                 if ($forceFullBuildRegeneration) {
-                    $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
-                    $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope, false);
+                    $scope = $planJsonTaskService->clearBuildArtifactsForRegeneration($scope);
+                    $scope = $planJsonTaskService->resetPlanJsonTasksToPendingForRebuild($scope, false);
                 }
-                $normalizedScope = $buildTaskService->normalizeConfirmedBuildPlanFlag($scope);
+                $normalizedScope = $planJsonTaskService->normalizeConfirmedPlanJsonFlag($scope);
                 $scopeChanged = $normalizedScope !== $confirmedScope;
                 $scope = $normalizedScope;
             } elseif (\in_array($operation, ['block_regenerate', 'block_partial_patch'], true) && $scopePatch !== []) {
@@ -268,8 +278,8 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 $sessionService->replaceScope((int)$session->getId(), $adminId, $scope);
                 $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
             }
-            if (!$buildTaskService->hasConfirmedBuildPlanForBuild($scope)) {
-                throw new \RuntimeException('请先确认建站方案，再开始执行构建。');
+            if (!$planJsonTaskService->hasConfirmedPlanJsonForBuild($scope)) {
+                throw new \RuntimeException('Please confirm plan_json before build.');
             }
 
             $sse = new AiSiteQueueLogWriter(
@@ -294,56 +304,56 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $claim = $this->invokePrivate($controller, 'claimActiveOperationExecution', [$session, $adminId, $effectiveExecutionToken, $operation, 'queue']);
             if (!\is_array($claim) || !($claim['ok'] ?? false)) {
                 if ((string)($claim['reason'] ?? '') === 'duplicate_stream') {
-                    $this->queueTrace($sse, '认领跳过：duplicate_stream（拒绝将队列标记为完成，请刷新工作台后重试）');
+                    $this->queueTrace($sse, 'duplicate_stream claim rejected; keep queue open for manual retry.');
 
                     throw new \RuntimeException((string)__(
-                        '检测到重复构建任务认领，本次不结束队列；请刷新工作台后重试构建。'
+                        'Duplicate build task claim detected; refresh the workspace and retry build manually.'
                     ));
                 }
 
-                throw new \RuntimeException((string)($claim['message'] ?? '操作认领失败。'));
+                throw new \RuntimeException((string)($claim['message'] ?? 'Operation claim failed.'));
             }
-            $this->queueTrace($sse, '认领成功 claimActiveOperationExecution ok，进入队列操作执行 operation=' . $operation);
+            $this->queueTrace($sse, 'claimActiveOperationExecution ok; entering queued operation=' . $operation);
 
-            // mergeScope 只更新库内 scope；内存中的 $session 可能仍带旧执行状态，会导致 ensureTaskScope 继续合并为 done 从而秒结束。
+            // mergeScope 闂備礁鎲￠悷顖涚濠靛枹娲锤濡も偓濡﹢鏌℃径搴㈢《婵ǜ鍔戦弻?scope闂備焦瀵х粙鎺旂矙閹达箑鑸归悗鐢电《閸嬫挸鈽夊▍顓炪偢閹虫瑩骞嬮敂钘夊壄?$session 闂備礁鎲￠悷顖炲垂閻㈢绀傛俊顖濆吹椤╅鈧箍鍎遍幊鎰板极閵娾晜鐓涢柛鎰鐎氼剟鍩涢弮鍫熷仩婵炴垶顭囬悘鍗炩攽椤旇姤鍊愭鐐╁亾婵炴挻鑹鹃敃锔剧矆婢跺⊕褰掑礂閼规澘顥濆銈嗘礋娴滃爼骞?ensureTaskScope 缂傚倸鍊风紞鈧柛娑卞灡閺嗕即姊洪崨濠呭闁绘妫濋幊鐔兼偄閸濄儮鏋?done 濠电偛顕慨鏉戭潩閿曞倸鐒垫い鎺嗗亾闁活剙銈搁敐鐐参旈崘顏嗭紲闂佽鍎抽悺銊т焊閸℃稒鐓?
             $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
 
-            // 断点续生成入口防御：build operation 进入控制器之前，先把上次硬崩（OOM/kill -9/Worker 死亡，
-            // 没走 catch 分支）残留的 status=running 任务清回 pending+attempt_no=0。这样下次
-            // pickConcurrentTasks 能拾取干净的 task，避免 markTaskRunning 的 bumpAttempt 把
-            // attempt_no 累计到 BUILD_TASK_MAX_GENERATION_ATTEMPTS=3 之后被永久 failed，
-            // 让单页/单 section 的续生成可在不依赖 -f 的前提下成立。
-            // controller 入口 runHtmlBlocksBuildOperationV3 也有兜底 reset，这里属于双层防御。
+            // 闂備礁鎼崑鍡涘储妤ｅ啫纾婚柨婵嗘川绾惧吋銇勯幘璺盒ｉ柡鍛倐閺岀喓鈧稒锚婵洭鏌涘▎蹇旑棦鐎规洩缍侀弫鎰緞鐎ｆ挴鏅濋埀顒€鐏氭竟瀣ｉ崟顓燁潟闁谎呮疅ild operation 闂佸搫顦弲婊呯矙閹达箑鐭楅柛鈩冪☉缁犲磭鎲稿澶婃槬婵°倕鎳庨梻顖炴煏婵炲灝鈧顢樺ú顏呯厱闁规儳纾埢宀€绱掓潏銊х疄鐎规洘顨婂畷濂告偄閼茶　鏅涢埥澶愬箻缁涜鏁惧銈嗗姌閸嬫劕鈽夐悽鍓叉晢闁逞屽墰缁岸宕稿Δ浣规珫闂侀潻瀵屽鈧琈/kill -9/Worker 婵犳鍠楃换鍡涱敊婵犲喚娈介柟闂寸劍閺?
+            // 婵犵數鍋涢惇鏌ュΧ閸喎鍙?catch 闂備礁鎲＄敮鎺懳涘▎鎾虫瀬妞ゆ洍鍋撻柡浣哥У瀵板嫮鈧綆鍓氬▓顓㈡⒑娴兼瑧绋婚柣鐔濆啠鏋?status=running 濠电偛顕慨楣冾敋瑜庨幈銊╂偄閺嬵偀鍋撻幒妤€宸濇い鎾跺枔椤?pending+attempt_no=0闂備線娼уΛ妤呭磹閻ｅ本宕查柡宥庡幖閸愨偓闂佺偓鑹鹃崐濠氭偡閹惧绠?
+            // pickConcurrentTasks 闂備胶鍘ч悿鍥ㄦ叏閵堝洠鍋撻敐鍌氫壕闂備礁鎲￠悷锕傛偋閺囥垹绀傞梺顒€绉寸粈鍕煃瑜滈崜鐔煎箚?task闂備焦瀵х粙鎴︽儗閸屾稑顕遍柍鍝勬噹缁€?markTaskRunning 闂?bumpAttempt 闂?
+            // attempt_no 缂傚倷绶氱涵鎼佸垂閻㈠壊鏁囬柟闂寸缁€?PLAN_JSON_TASK_MAX_GENERATION_ATTEMPTS=3 濠电偞鍨堕弻銊╊敄閸涙潙绠栨俊銈呭暞閸嬫牗銇勯幇鍓佺ɑ妞ゃ垹绉撮埥?failed闂?
+            // 闂佽崵濮崇拋鏌ュ疾濞戞鏆﹂柣鏃€鎮舵禍?闂?section 闂備焦鐪归崝宀€鈧凹鍣ｉ幃鑺ョ節濮橆厼浠洪梺缁樻⒒椤牓鎮橀崶顒佺厱婵炲棙锚閻忕姵绻濋埀顒勵敂閸涱垪鏋栭悗骞垮劚鐎氼喚鎷归埡鍛仯?-f 闂備焦鐪归崝宀€鈧凹鍓氶弲鍫曟偐鐠囪尙顔岄梺褰掑亰娴滅偤鎮烽幘缁樼厵閻庢稒锚婵鏌ｅ┑鍥╂创濠?
+            // controller 闂備胶顭堢换鍫ュ磿鏉堫偁浜?runHtmlBlockNodesBuildOperationV3 濠电偞鍨跺濠氬窗閹邦剨鑰垮〒姘ｅ亾鐎规洘顨呴…銊╁礃椤忓啩瀛?reset闂備焦瀵х粙鎴︽儗娴ｇ儤宕查柡宥庡幗閻撳倿鎮橀悙鍨珪婵炵》绲介湁婵犲﹤鍟撮妤冣偓娈垮枦瀹曞灚绂掗敃鍌氱＜闁绘劘鎳曢埡鍐ｅ亾闂堟稏鍋夐柟闈涘暱娴?
             if ($operation === 'build') {
                 $resumeScope = $scopeService->normalizeScope(
                     $this->loadBuildQueueScope($sessionService, $session)
                 );
                 if ($forceFullBuildRegeneration) {
-                    $resetScope = $buildTaskService->clearBuildArtifactsForRegeneration($resumeScope);
-                    $resetScope = $buildTaskService->resetBuildTasksToPendingForRebuild($resetScope, false);
+                    $resetScope = $planJsonTaskService->clearBuildArtifactsForRegeneration($resumeScope);
+                    $resetScope = $planJsonTaskService->resetPlanJsonTasksToPendingForRebuild($resetScope, false);
                     if ($resetScope !== $resumeScope) {
                         $sessionService->replaceScope((int)$session->getId(), $adminId, $resetScope);
                         $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-                        $this->queueTrace($sse, '强制重新生成：已在执行前清空旧构建产物并重置全部构建任务。');
+                        $this->queueTrace($sse, 'force rebuild: cleared stale build artifacts and reset all plan_json block node work.');
                     }
                 } elseif (isset($resumeScope['_build_regeneration']) || isset($resumeScope['_queue_force_build'])) {
                     unset($resumeScope['_build_regeneration'], $resumeScope['_queue_force_build']);
-                    $resumeScope = $buildTaskService->reconcileGeneratedArtifactsWithTaskState($resumeScope, true);
+                    $resumeScope = $planJsonTaskService->reconcileGeneratedArtifactsWithTaskState($resumeScope, true);
                     $sessionService->replaceScope((int)$session->getId(), $adminId, $resumeScope);
                     $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-                    $this->queueTrace($sse, '断点续生成：已清除残留强制重建标记并同步已有产物。');
+                    $this->queueTrace($sse, 'resume build: cleared stale force markers and synced existing artifacts.');
                 }
                 $resumeScope = $scopeService->normalizeScope(
                     $this->loadBuildQueueScope($sessionService, $session)
                 );
-                $resetScope = $buildTaskService->resetRunningTasksForInterruptedBuild(
+                $resetScope = $planJsonTaskService->resetRunningTasksForInterruptedBuild(
                     $resumeScope,
                     'Queue restart: clearing stale running tasks for resume.'
                 );
                 if ($resetScope !== $resumeScope) {
                     $sessionService->replaceScope((int)$session->getId(), $adminId, $resetScope);
                     $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-                    $this->queueTrace($sse, '入口已清理脏 running 状态，断点续生成就绪');
+                    $this->queueTrace($sse, 'queue restart: cleared stale running tasks for resume.');
                 }
             }
 
@@ -384,14 +394,14 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             } else {
                 $this->invokePrivate($controller, 'runBuildOperation', [$sse, $session, $adminId]);
             }
-            $this->queueTrace($sse, '队列操作已返回 operation=' . $operation);
+            $this->queueTrace($sse, '闂傚倸鍊搁崯浼村窗鎼淬劌鍨傛い蹇撶墕缁犺偐鈧箍鍎辩€氼喚绮欐繝鍕ㄥ亾鐟欏嫮鎽冮悘蹇ｄ簽閹广垽骞嬮敃鈧悙?operation=' . $operation);
 
             if (\in_array($operation, ['build', 'regenerate_page'], true)) {
                 $gateAction = $this->finalizeQueueBuildCompletion(
                     $queue,
                     $sessionService,
                     $scopeService,
-                    $buildTaskService,
+                    $planJsonTaskService,
                     $session,
                     $adminId,
                     $operation,
@@ -409,7 +419,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 $this->markQueueBuildOperationPassedGate(
                     $sessionService,
                     $scopeService,
-                    $buildTaskService,
+                    $planJsonTaskService,
                     $session,
                     $adminId,
                     $operation,
@@ -420,7 +430,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 $this->markQueueBuildOperationPassedGate(
                     $sessionService,
                     $scopeService,
-                    $buildTaskService,
+                    $planJsonTaskService,
                     $session,
                     $adminId,
                     $operation,
@@ -433,11 +443,11 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             }
 
             if (\in_array($operation, ['build', 'regenerate_page'], true)) {
-                $this->assertBuildQueueMayFinish($sessionService, $scopeService, $buildTaskService, $session, $adminId, $operation);
+                $this->assertBuildQueueMayFinish($sessionService, $scopeService, $planJsonTaskService, $session, $adminId, $operation);
             }
 
             $doneMessage = $this->buildOperationDoneMessage($operation);
-            $this->queueTrace($sse, '队列执行成功：' . $doneMessage);
+            $this->queueTrace($sse, 'queue operation succeeded: ' . $doneMessage);
             $this->markQueueDone($queue, $doneMessage);
             $sse->complete();
 
@@ -457,12 +467,12 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $throwable = new \RuntimeException($surfaceMessage, 0, $throwable);
             $diagnostic = $surfaceMessage;
             if ($sse instanceof AiSiteQueueLogWriter) {
-                $this->queueTrace($sse, '异常：' . $diagnostic);
+                $this->queueTrace($sse, 'exception: ' . $diagnostic);
             } else {
-                $this->appendQueueLifecycleLine($queue, '异常（队列日志未初始化）：' . $diagnostic);
+                $this->appendQueueLifecycleLine($queue, 'exception before queue log writer initialized: ' . $diagnostic);
             }
             $this->updateSessionError($publicId, $adminId, $effectiveExecutionToken, $throwable->getMessage());
-            throw new \RuntimeException('构建失败：' . $throwable->getMessage(), 0, $throwable);
+            throw new \RuntimeException('Build failed: ' . $throwable->getMessage(), 0, $throwable);
         } finally {
             if ($aiRuntimeParamsRegistered) {
                 if ($previousAiRuntimeParamsExists) {
@@ -485,8 +495,8 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     }
 
     /**
-     * -f：换新 execution_token + 将 build_plan_v2 执行行全部置回 pending，否则已 done 会秒结束且不调 AI。
-     * 页面重建也必须支持该语义，否则 regenerate_page 失败后会复用旧 token 并触发 duplicate_stream。
+     * Forced retries rotate execution_token and reset plan_json block node status so
+     * page/block regeneration can run again without duplicate streams.
      */
     /**
      * @param array<string, mixed> $content
@@ -561,10 +571,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     private function buildOperationDoneMessage(string $operation): string
     {
         return match ($operation) {
-            'block_regenerate' => '区块重建完成。',
-            'block_partial_patch' => '区块局部修改完成。',
-            'regenerate_page' => '页面重新生成完成。',
-            default => '构建完成。',
+            default => 'Queued AI operation failed.',
         };
     }
 
@@ -611,7 +618,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             }
         }
         if ($pageType === '') {
-            throw new \RuntimeException('Page regenerate queue context is missing page_type.');
+            throw new \RuntimeException('Unable to resolve queued page type.');
         }
 
         return $pageType;
@@ -712,7 +719,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         }
 
         if ($pageTypes === [] || $componentCodes === []) {
-            throw new \RuntimeException('Block queue context is missing page_type or component_code.');
+            throw new \RuntimeException('Queued block operation requires page_type and component_code.');
         }
 
         $contexts = [];
@@ -729,7 +736,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         }
 
         if ($contexts === []) {
-            throw new \RuntimeException('Block queue context is missing page_type or component_code.');
+            throw new \RuntimeException('Queued block operation has no valid page/block contexts.');
         }
 
         return $this->uniqueQueuedOperationContexts($contexts);
@@ -845,7 +852,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $instruction = $this->firstNonEmptyString([$content['instruction'] ?? null, $details['instruction'] ?? null, $active['instruction'] ?? null, $activeDetails['instruction'] ?? null]);
 
         if ($pageType === '' || $componentCode === '') {
-            throw new \RuntimeException('Block queue context is missing page_type or component_code.');
+            throw new \RuntimeException('Queued block operation requires page_type and component_code.');
         }
 
         return [
@@ -917,7 +924,11 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         AiSiteAgentSessionService $sessionService,
         AiSiteAgentSession $session
     ): array {
-        return $sessionService->loadScopeForBuildOperation($session);
+        return $sessionService->loadScopeForStage(
+            $session,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            self::BUILD_QUEUE_SCOPE_ARTIFACT_KEYS
+        );
     }
 
     private function applyForceBuildQueuePreset(
@@ -927,17 +938,17 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         int $adminId
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        /** @var AiSiteBuildTaskService $buildTaskService */
-        $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
+        /** @var AiSitePlanJsonTaskService $planJsonTaskService */
+        $planJsonTaskService = ObjectManager::getInstance(AiSitePlanJsonTaskService::class);
             $scope = $scopeService->normalizeScope(
             $sessionService->loadScopeForStage(
                 $fresh,
                 AiSiteAgentSession::STAGE_PLAN,
-                ['build_plan_v2', 'plan_projection', 'content_manifest']
+                ['plan_json']
             )
         );
         $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
-        $scope = $buildTaskService->ensureTaskScope(
+        $scope = $planJsonTaskService->ensureTaskScope(
             $scope,
             \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
             $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
@@ -949,16 +960,15 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $virtualThemeService = ObjectManager::getInstance(AiSiteVirtualThemeService::class);
             $virtualThemeService->resetGeneratedPageLayoutsForRebuild($virtualThemeId, $pageTypes);
         }
-        $scope = $buildTaskService->clearBuildArtifactsForRegeneration($scope);
-        $scope = $buildTaskService->resetBuildTasksToPendingForRebuild($scope, false);
-        $sessionService->mergeScope((int)$fresh->getId(), $adminId, \array_replace($buildTaskService->extractBuildPlanDerivedScopePatch($scope), [
+        $scope = $planJsonTaskService->clearBuildArtifactsForRegeneration($scope);
+        $scope = $planJsonTaskService->resetPlanJsonTasksToPendingForRebuild($scope, false);
+        $sessionService->mergeScope((int)$fresh->getId(), $adminId, \array_replace($planJsonTaskService->extractPlanJsonDerivedScopePatch($scope), [
             'virtual_pages_by_type' => [],
             'pagebuilder_pages_by_type' => [],
             'materialized_pages_by_type' => [],
             'page_type_layouts' => [],
             'pending_generation_page_types' => [],
             'build_summary' => [],
-            'build_workbench' => [],
             'build_contracts' => [],
             'render_data_contract' => [],
             'qa_report_contract' => [],
@@ -993,7 +1003,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         Queue &$queue,
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,
-        AiSiteBuildTaskService $buildTaskService,
+        AiSitePlanJsonTaskService $planJsonTaskService,
         AiSiteAgentSession $session,
         int $adminId,
         string $operation,
@@ -1007,7 +1017,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $this->loadBuildQueueScope($sessionService, $fresh)
         );
         $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
-        $restoredScope = $buildTaskService->ensureTaskScope(
+        $restoredScope = $planJsonTaskService->ensureTaskScope(
             $scope,
             \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
             $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
@@ -1019,7 +1029,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 $this->loadBuildQueueScope($sessionService, $fresh)
             );
         }
-        $finalizedScope = $buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
+        $finalizedScope = $planJsonTaskService->finalizePlanJsonTaskStatesAfterRunLoop($scope);
         if ($finalizedScope !== $scope) {
             $sessionService->replaceScope((int)$fresh->getId(), $adminId, $finalizedScope);
             $fresh = $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
@@ -1029,7 +1039,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         } else {
             $scope = $finalizedScope;
         }
-        $gate = $buildTaskService->inspectBuildCompletionGate($scope);
+        $gate = $planJsonTaskService->inspectBuildCompletionGate($scope);
         $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
         $buildSummary['completion_gate'] = $this->stripGateSummary($gate);
         $buildSummary['page_block_progress'] = \is_array($gate['page_block_progress'] ?? null)
@@ -1054,11 +1064,11 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             ];
         }
 
-        $message = $this->formatBuildCompletionGateBlockedMessage($buildTaskService, $gate, $operation);
+        $message = $this->formatBuildCompletionGateBlockedMessage($planJsonTaskService, $gate, $operation);
         if ($this->shouldRetryBuildQueue($gate) && $attempt < $maxAttempts) {
             $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'retryable';
             $retryQueueId = $this->createCompletionGateRetryQueue($queue, $content, $message);
-            $scope = $buildTaskService->resetUnfinishedTasksForQueueRetry($scope, $message);
+            $scope = $planJsonTaskService->resetUnfinishedTasksForQueueRetry($scope, $message);
             $scope = $this->patchBuildActiveOperationForRetry(
                 $scope,
                 $operation,
@@ -1094,6 +1104,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'error';
         $this->saveQueueContent($queue, $content);
         $scope = $this->patchBuildActiveOperationForGateFailure(
+            (int)$fresh->getId(),
             $scope,
             $operation,
             $queueId,
@@ -1103,7 +1114,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $message,
             $gate
         );
-        $scope = $buildTaskService->syncBuildTaskFailuresToRetryableLedger($scope);
+        $scope = $planJsonTaskService->syncPlanJsonTaskFailuresToRetryableLedger($scope);
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
 
         throw new \RuntimeException($message);
@@ -1112,7 +1123,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     private function markQueueBuildOperationPassedGate(
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,
-        AiSiteBuildTaskService $buildTaskService,
+        AiSitePlanJsonTaskService $planJsonTaskService,
         AiSiteAgentSession $session,
         int $adminId,
         string $operation,
@@ -1123,8 +1134,8 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $fresh)
         );
-        $scope = $buildTaskService->syncPageTypeLayoutsWithSharedComponents($scope);
-        $gate = $buildTaskService->inspectBuildCompletionGate($scope);
+        $scope = $planJsonTaskService->syncPageTypeLayoutsWithSharedComponents($scope);
+        $gate = $planJsonTaskService->inspectBuildCompletionGate($scope);
         $fullBuildGatePassed = !empty($gate['passed']);
         $isScopedBuildOperation = \in_array($operation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true);
         if (!$fullBuildGatePassed && !$isScopedBuildOperation) {
@@ -1174,7 +1185,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         }
 
         if ($fullBuildGatePassed) {
-            $scope = $buildTaskService->clearRetryableAiFailures($scope, 'build');
+            $scope = $planJsonTaskService->clearRetryableAiFailures($scope, 'build');
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
             $scope['can_publish'] = 1;
             $scope['site_ready'] = 1;
@@ -1197,7 +1208,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 $scope,
                 $operation,
                 $executionToken,
-                $buildTaskService
+                $planJsonTaskService
             );
             $buildSummary = \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [];
             $buildSummary['active_operation'] = $operation;
@@ -1216,13 +1227,13 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         array $scope,
         string $operation,
         string $executionToken,
-        AiSiteBuildTaskService $buildTaskService
+        AiSitePlanJsonTaskService $planJsonTaskService
     ): array {
         if (isset($scope['retryable_ai_failures']['build']['items'][$operation])) {
             unset($scope['retryable_ai_failures']['build']['items'][$operation]);
         }
-        $scope = $buildTaskService->clearResolvedRetryableAiFailures($scope);
-        $buildLedger = $buildTaskService->getRetryableAiFailures($scope, 'build');
+        $scope = $planJsonTaskService->clearResolvedRetryableAiFailures($scope);
+        $buildLedger = $planJsonTaskService->getRetryableAiFailures($scope, 'build');
         $items = \is_array($buildLedger['build']['items'] ?? null) ? $buildLedger['build']['items'] : [];
         if ($items !== []) {
             foreach ($items as $itemKey => $item) {
@@ -1243,7 +1254,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 }
             }
         }
-        $scope = $buildTaskService->replaceRetryableAiFailures($scope, 'build', $items);
+        $scope = $planJsonTaskService->replaceRetryableAiFailures($scope, 'build', $items);
 
         $latestFailure = \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [];
         $latestOperation = \trim((string)($latestFailure['operation'] ?? ''));
@@ -1265,7 +1276,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     private function shouldRetryBuildQueue(array $gate): bool
     {
         $reason = \trim((string)($gate['reason'] ?? ''));
-        if (!empty($gate['passed']) || $reason === 'cancelled_build_plan_blocks') {
+        if (!empty($gate['passed']) || $reason === 'cancelled_plan_json_block_nodes') {
             return false;
         }
 
@@ -1274,16 +1285,16 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         }
 
         return \in_array($reason, [
-            'missing_build_plan_blocks',
-            'failed_build_plan_blocks',
+            'missing_plan_json_block_nodes',
+            'failed_plan_json_block_nodes',
             'invalid_generated_artifacts',
             'duplicate_generated_artifacts',
-            'unfinished_build_plan_blocks',
-            'missing_build_plan_page_types',
+            'unfinished_plan_json_block_nodes',
+            'missing_plan_json_page_types',
             'missing_page_type_layouts',
             'empty_page_type_layouts',
             'missing_persisted_virtual_theme_layouts',
-            'build_plan_missing_stage1_blocks',
+            'plan_json_missing_stage1_block_nodes',
             'default_template_page_layouts',
             'incomplete_page_block_counts',
         ], true);
@@ -1292,7 +1303,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     private function assertBuildQueueMayFinish(
         AiSiteAgentSessionService $sessionService,
         AiSiteScopeCompatibilityService $scopeService,
-        AiSiteBuildTaskService $buildTaskService,
+        AiSitePlanJsonTaskService $planJsonTaskService,
         AiSiteAgentSession $session,
         int $adminId,
         string $operation
@@ -1301,24 +1312,24 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $scope = $scopeService->normalizeScope(
             $this->loadBuildQueueScope($sessionService, $fresh)
         );
-        $scope = $buildTaskService->finalizeBuildTaskStatesAfterRunLoop($scope);
-        $gate = $buildTaskService->inspectBuildCompletionGate($scope);
+        $scope = $planJsonTaskService->finalizePlanJsonTaskStatesAfterRunLoop($scope);
+        $gate = $planJsonTaskService->inspectBuildCompletionGate($scope);
         if (!empty($gate['passed'])) {
             return;
         }
 
-        throw new \RuntimeException($this->formatBuildCompletionGateBlockedMessage($buildTaskService, $gate, $operation));
+        throw new \RuntimeException($this->formatBuildCompletionGateBlockedMessage($planJsonTaskService, $gate, $operation));
     }
 
     /**
      * @param array<string, mixed> $gate
      */
     private function formatBuildCompletionGateBlockedMessage(
-        AiSiteBuildTaskService $buildTaskService,
+        AiSitePlanJsonTaskService $planJsonTaskService,
         array $gate,
         string $operation
     ): string {
-        $detail = $buildTaskService->formatBuildCompletionGateFailureDetail($gate);
+        $detail = $planJsonTaskService->formatBuildCompletionGateFailureDetail($gate);
         $message = \sprintf(
             'Build queue operation %s cannot finish while completion gate is blocked: total=%d pending=%d running=%d failed=%d cancelled=%d invalid_artifacts=%d duplicate_artifacts=%d reason=%s.',
             $operation,
@@ -1385,10 +1396,57 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
 
     /**
      * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function patchBuildActiveOperationForAttemptLimit(
+        array $scope,
+        string $operation,
+        int $queueId,
+        int $attempt,
+        int $maxAttempts,
+        string $executionToken,
+        string $message
+    ): array {
+        $now = \date('Y-m-d H:i:s');
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $operationState = \array_replace($activeOperation, [
+            'operation' => $operation,
+            'status' => 'stop',
+            'queue_id' => $queueId,
+            'execution_token' => $executionToken,
+            'message' => $message,
+            'updated_at' => $now,
+            'finished_at' => $now,
+            'queue_waiting_for_scheduler' => false,
+            'attempt' => $attempt,
+            'max_attempts' => $maxAttempts,
+            'retry_allowed' => 1,
+            'failure_mode' => 'build_retry_exhausted',
+            'can_close_stream' => true,
+            'continue_other_operations' => true,
+        ]);
+        $scope['active_operation'] = $operationState;
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $activeOperations[$operation] = $operationState;
+        $scope['active_operations'] = $activeOperations;
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+        $failurePayload = $this->buildPublishBlockingAiFailurePayload($operation, $message);
+        $failurePayload['gate_reason'] = 'automatic_attempt_limit';
+        $scope['latest_build_failed'] = 1;
+        $scope['latest_build_failure'] = $failurePayload;
+        $scope['publish_blocked_by_latest_ai_failure'] = 1;
+        $scope['publish_blocked_reason'] = $this->formatPublishBlockedByAiFailureMessage($failurePayload);
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
      * @param array<string, mixed> $gate
      * @return array<string, mixed>
      */
     private function patchBuildActiveOperationForGateFailure(
+        int $sessionId,
         array $scope,
         string $operation,
         int $queueId,
@@ -1428,13 +1486,16 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $scope['publish_blocked_by_latest_ai_failure'] = 1;
         $scope['publish_blocked_reason'] = $this->formatPublishBlockedByAiFailureMessage($failurePayload);
         if (\in_array($gateReason, [
-            'missing_build_plan_page_types',
-            'missing_build_plan_blocks',
+            'missing_plan_json_page_types',
+            'missing_plan_json_block_nodes',
             'missing_page_type_layouts',
             'empty_page_type_layouts',
         ], true)) {
-            $scope['build_plan_confirmed'] = 0;
-            $scope['plan_confirmed'] = 0;
+            $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+            $scope = \array_replace(
+                $scope,
+                (new AiSitePlanJsonStateService($sessionId))->setConfirmedScopePatch($planJson, false)
+            );
         }
         $scope['_queue_force_build'] = [
             'active' => 0,
@@ -1473,8 +1534,8 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
             /** @var AiSiteScopeCompatibilityService $scopeService */
             $scopeService = ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
-            /** @var AiSiteBuildTaskService $buildTaskService */
-            $buildTaskService = ObjectManager::getInstance(AiSiteBuildTaskService::class);
+            /** @var AiSitePlanJsonTaskService $planJsonTaskService */
+            $planJsonTaskService = ObjectManager::getInstance(AiSitePlanJsonTaskService::class);
 
             $session = $sessionService->loadByPublicId($publicId, $adminId);
             if (!$session instanceof AiSiteAgentSession) {
@@ -1520,7 +1581,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                 $scope['publish_blocked_reason'] = $this->formatPublishBlockedByAiFailureMessage($failurePayload);
             }
             if ($operation === 'build') {
-                $scope = $buildTaskService->resetRunningTasksForInterruptedBuild(
+                $scope = $planJsonTaskService->resetRunningTasksForInterruptedBuild(
                     $scope,
                     'Build interrupted before task completion: ' . $message
                 );
@@ -1585,7 +1646,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             && $activeQueueId !== $queueId
             && $activeQueueId > $queueId
         ) {
-            throw new \RuntimeException('Duplicate build queue is superseded by active queue #' . $activeQueueId . '.');
+            throw new \RuntimeException('A newer build queue already owns this operation.');
         }
         if (
             (string)($active['operation'] ?? '') === $operation
@@ -1601,7 +1662,6 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             'execution_token' => $executionToken,
             'status' => 'queued',
             'queue_id' => $queueId,
-            'message' => '等待开始',
             'started_at' => (string)($active['started_at'] ?? \date('Y-m-d H:i:s')),
             'updated_at' => \date('Y-m-d H:i:s'),
         ]);
@@ -1789,6 +1849,29 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $this->mirrorToCli($line);
     }
 
+    /**
+     * @param array<string, mixed> $content
+     */
+    private function markQueueStopped(Queue &$queue, array $content, string $message): void
+    {
+        $qid = (int)$queue->getId();
+        if ($qid <= 0) {
+            return;
+        }
+        $content[self::CONTENT_LAST_GATE_DECISION_KEY] = 'manual_confirmation_required';
+        $content[self::CONTENT_LAST_GATE_REASON_KEY] = 'automatic_attempt_limit';
+        $content[self::CONTENT_LAST_GATE_AT_KEY] = \date('Y-m-d H:i:s');
+        $line = '[' . \date('H:i:s') . '] QUEUE_STOP ' . $message;
+        $queue->setStatus(Queue::status_stop)
+            ->setContent($this->encodeQueueContent($content))
+            ->setFinished(true)
+            ->setPid(0)
+            ->setProcess($message)
+            ->setResult($line)
+            ->save();
+        $this->mirrorToCli($line);
+    }
+
     private function queueTrace(AiSiteQueueLogWriter $sse, string $message): void
     {
         if ($message === '') {
@@ -1851,7 +1934,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             return $value;
         }
 
-        return \mb_substr($value, 0, $limit - 1, 'UTF-8') . '…';
+        return \mb_substr($value, 0, $limit - 1, 'UTF-8') . '...';
     }
 
     private function summarizeThrowableForQueueSurface(\Throwable $throwable): string
@@ -1891,7 +1974,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             || \str_contains($lower, 'quality gate did not')
             || \str_contains($lower, 'component contract')
             || \str_contains($lower, 'build prompt contract')
-            || \str_contains($lower, 'stage-2 build-plan task context')
+            || \str_contains($lower, 'stage-2 plan-json task context')
             || \str_contains($lower, 'scope-level prompt fallback')
         ) {
             return 'AI output did not pass the section quality gate. The section will need another generation attempt.';
@@ -1931,11 +2014,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     private function beginQueueAttempt(Queue &$queue, array $content, string $effectiveExecutionToken): array
     {
         $attempt = \max(0, (int)($content[self::CONTENT_ATTEMPT_KEY] ?? 0)) + 1;
-        $maxAttempts = \max(
-            $attempt,
-            (int)($content[self::CONTENT_MAX_ATTEMPTS_KEY] ?? self::DEFAULT_MAX_ATTEMPTS),
-            self::DEFAULT_MAX_ATTEMPTS
-        );
+        $maxAttempts = self::DEFAULT_MAX_ATTEMPTS;
         $content[self::CONTENT_ATTEMPT_KEY] = $attempt;
         $content[self::CONTENT_MAX_ATTEMPTS_KEY] = $maxAttempts;
         $content[self::CONTENT_LAST_GATE_REASON_KEY] = '';

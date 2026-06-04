@@ -1028,7 +1028,7 @@ $pbAiStageGuide = match ((string)$currentStage) {
                         <div class="small">
                             <div class="text-muted pb-ai-primary-action-hint"><?= htmlspecialchars((string)__('表单会自动保存；方案生成会进入后台队列，右侧会同步显示进度。'), ENT_QUOTES, 'UTF-8') ?></div>
                             <div class="text-muted" data-pb-skill-summary-stage="plan"><?= htmlspecialchars((string)__('默认启用通用设计能力；选择的技能和设计方向会一起进入方案契约。'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="text-muted" data-pb-queue-state-detail="plan"><?= htmlspecialchars((string)__('阶段一方案：待生成'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-muted" data-pb-queue-state-detail="plan"><?= htmlspecialchars((string)__('plan_json 方案：待生成'), ENT_QUOTES, 'UTF-8') ?></div>
                         </div>
                         <button type="button" class="btn btn-primary btn-lg pb-ai-run-virtual-theme">
                             <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('生成建站方案'), ENT_QUOTES, 'UTF-8') ?>
@@ -1088,13 +1088,13 @@ $pbAiStageGuide = match ((string)$currentStage) {
             <div class="card-body p-3">
                 <?php if ($currentStage !== 'plan'): ?>
                     <?php
-                    $pbAiShowBuildTaskProgress = (int)($state['build_plan_confirmed'] ?? 0) === 1
-                        || !empty($state['has_build_plan_v2']);
+                    $pbAiPlanJson = \is_array($state['plan_json'] ?? null) ? $state['plan_json'] : [];
+                    $pbAiShowPlanJsonTaskProgress = (int)($pbAiPlanJson['confirmed'] ?? 0) === 1;
                     $pbAiExpectedPageTypes = \is_array($state['page_types'] ?? null)
                         ? \array_values(\array_filter(\array_map('strval', $state['page_types']), static fn(string $pageType): bool => $pageType !== ''))
                         : [];
-                    if ($pbAiExpectedPageTypes === [] && \is_array($buildTaskGroups ?? null)) {
-                        foreach ($buildTaskGroups as $groupKey => $group) {
+                    if ($pbAiExpectedPageTypes === [] && \is_array($planJsonTaskGroups ?? null)) {
+                        foreach ($planJsonTaskGroups as $groupKey => $group) {
                             if ($groupKey === 'shared' || !\is_array($group)) {
                                 continue;
                             }
@@ -1107,7 +1107,7 @@ $pbAiStageGuide = match ((string)$currentStage) {
                     }
                     $pbAiCompletedPageCount = 0;
                     foreach ($pbAiExpectedPageTypes as $expectedPageType) {
-                        $group = \is_array($buildTaskGroups[$expectedPageType] ?? null) ? $buildTaskGroups[$expectedPageType] : [];
+                        $group = \is_array($planJsonTaskGroups[$expectedPageType] ?? null) ? $planJsonTaskGroups[$expectedPageType] : [];
                         $groupTotal = (int)($group['total'] ?? 0);
                         $groupDone = (int)($group['done'] ?? 0);
                         if ($groupTotal > 0 && $groupDone >= $groupTotal) {
@@ -1115,15 +1115,15 @@ $pbAiStageGuide = match ((string)$currentStage) {
                         }
                     }
                     ?>
-                    <div id="pb-ai-build-task-progress-panel"<?= $pbAiShowBuildTaskProgress ? '' : ' class="d-none"' ?>>
+                    <div id="pb-ai-build-task-progress-panel"<?= $pbAiShowPlanJsonTaskProgress ? '' : ' class="d-none"' ?>>
                     <h6 class="fw-semibold mb-3 d-flex align-items-center gap-2 flex-wrap">
                         <i class="mdi mdi-format-list-checks text-primary" aria-hidden="true"></i>
                         <span id="pb-ai-task-progress-heading" class="me-auto"><?= htmlspecialchars((string)__('方案块进度'), ENT_QUOTES, 'UTF-8') ?></span>
                         <span
                             id="pb-ai-task-running-indicator"
-                            class="badge text-bg-warning pb-ai-task-ai-indicator<?= ((int)($buildTaskSummary['running'] ?? 0) + (int)($buildTaskSummary['queued'] ?? 0)) > 0 ? ' pb-ai-task-ai-indicator--active' : ' d-none' ?>"
+                            class="badge text-bg-warning pb-ai-task-ai-indicator<?= ((int)($planJsonTaskSummary['running'] ?? 0) + (int)($planJsonTaskSummary['queued'] ?? 0)) > 0 ? ' pb-ai-task-ai-indicator--active' : ' d-none' ?>"
                             aria-live="polite"
-                            aria-busy="<?= ((int)($buildTaskSummary['running'] ?? 0) + (int)($buildTaskSummary['queued'] ?? 0)) > 0 ? 'true' : 'false' ?>">
+                            aria-busy="<?= ((int)($planJsonTaskSummary['running'] ?? 0) + (int)($planJsonTaskSummary['queued'] ?? 0)) > 0 ? 'true' : 'false' ?>">
                             <span class="pb-ai-task-ai-dot" aria-hidden="true"></span>
                             <span data-ai-indicator-text><?= htmlspecialchars((string)__('AI generating'), ENT_QUOTES, 'UTF-8') ?></span>
                         </span>
@@ -1140,40 +1140,40 @@ $pbAiStageGuide = match ((string)$currentStage) {
                     <div class="row g-2 small mb-3" data-task-progress-summary="build">
                         <div class="col-6">
                             <div class="text-muted"><?= htmlspecialchars((string)__('Total'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <strong id="pb-ai-task-total"><?= (int)($buildTaskSummary['total'] ?? 0) ?></strong>
+                            <strong id="pb-ai-task-total"><?= (int)($planJsonTaskSummary['total'] ?? 0) ?></strong>
                         </div>
                         <div class="col-6">
                             <div class="text-muted"><?= htmlspecialchars((string)__('todo'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <strong id="pb-ai-task-pending"><?= (int)(($buildTaskSummary['todo'] ?? 0) ?: ($buildTaskSummary['pending'] ?? 0)) ?></strong>
+                            <strong id="pb-ai-task-pending"><?= (int)(($planJsonTaskSummary['todo'] ?? 0) ?: ($planJsonTaskSummary['pending'] ?? 0)) ?></strong>
                         </div>
                         <div class="col-6">
                             <div class="text-muted"><?= htmlspecialchars((string)__('queued'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <strong id="pb-ai-task-queued"><?= (int)($buildTaskSummary['queued'] ?? 0) ?></strong>
+                            <strong id="pb-ai-task-queued"><?= (int)($planJsonTaskSummary['queued'] ?? 0) ?></strong>
                         </div>
                         <div class="col-6">
                             <div class="text-muted"><?= htmlspecialchars((string)__('running'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <strong id="pb-ai-task-running"><?= (int)($buildTaskSummary['running'] ?? 0) ?></strong>
+                            <strong id="pb-ai-task-running"><?= (int)($planJsonTaskSummary['running'] ?? 0) ?></strong>
                         </div>
                         <div class="col-6">
                             <div class="text-muted"><?= htmlspecialchars((string)__('done'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <strong id="pb-ai-task-done"><?= (int)($buildTaskSummary['done'] ?? 0) ?></strong>
+                            <strong id="pb-ai-task-done"><?= (int)($planJsonTaskSummary['done'] ?? 0) ?></strong>
                         </div>
                         <div class="col-6">
                             <div class="text-muted"><?= htmlspecialchars((string)__('failed'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <strong id="pb-ai-task-failed"><?= (int)($buildTaskSummary['failed'] ?? 0) ?></strong>
+                            <strong id="pb-ai-task-failed"><?= (int)($planJsonTaskSummary['failed'] ?? 0) ?></strong>
                         </div>
                         <div class="col-6">
                             <div class="text-muted"><?= htmlspecialchars((string)__('stale'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <strong id="pb-ai-task-stale"><?= (int)($buildTaskSummary['stale'] ?? 0) ?></strong>
+                            <strong id="pb-ai-task-stale"><?= (int)($planJsonTaskSummary['stale'] ?? 0) ?></strong>
                         </div>
                         <div class="col-6">
                             <div class="text-muted"><?= htmlspecialchars((string)__('cancelled'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <strong id="pb-ai-task-cancelled"><?= (int)($buildTaskSummary['cancelled'] ?? 0) ?></strong>
+                            <strong id="pb-ai-task-cancelled"><?= (int)($planJsonTaskSummary['cancelled'] ?? 0) ?></strong>
                         </div>
                     </div>
-                    <?php if ($buildTaskGroups !== []): ?>
+                    <?php if ($planJsonTaskGroups !== []): ?>
                         <div class="d-grid gap-2" id="pb-ai-task-groups">
-                            <?php foreach ($buildTaskGroups as $groupKey => $group): ?>
+                            <?php foreach ($planJsonTaskGroups as $groupKey => $group): ?>
                                 <?php if (!\is_array($group)) { continue; } ?>
                                 <?php $groupType = (string)($group['page_type'] ?? $groupKey); ?>
                                 <?php
@@ -1439,13 +1439,11 @@ $pbAiStageGuide = match ((string)$currentStage) {
                 <div class="summary-brief"><?= htmlspecialchars($guidedSessionSummary['brief_description'] !== '' ? $guidedSessionSummary['brief_description'] : (string)__(''), ENT_QUOTES, 'UTF-8') ?></div>
                 <?php
                 // T36: 侧栏展示已确认方案入口。
-                $hasConfirmedPlan = !empty($guidedSessionSummary['plan_confirmed_at']);
-                $hasConfirmedBuildPlan = $currentStage !== 'plan' && (
-                    !empty($state['build_plan_confirmed'])
-                    || !empty($state['build_plan_confirmed_at'])
-                );
+                $layoutPlanJson = \is_array($state['plan_json'] ?? null) ? $state['plan_json'] : [];
+                $hasConfirmedPlan = !empty($layoutPlanJson['confirmed_at']) || (int)($layoutPlanJson['confirmed'] ?? 0) === 1;
+                $hasConfirmedPlanJson = $currentStage !== 'plan' && $hasConfirmedPlan;
                 ?>
-                <?php if ($hasConfirmedPlan || $hasConfirmedBuildPlan): ?>
+                <?php if ($hasConfirmedPlan || $hasConfirmedPlanJson): ?>
                 <div class="summary-confirmed-plans mt-3 pt-3 border-top">
                     <div class="small fw-semibold mb-2 text-muted"><?= htmlspecialchars((string)__('已确认方案'), ENT_QUOTES, 'UTF-8') ?></div>
                     <?php if ($hasConfirmedPlan): ?>
@@ -1455,10 +1453,10 @@ $pbAiStageGuide = match ((string)$currentStage) {
                         <span class="badge bg-success ms-1">已确认</span>
                     </button>
                     <?php endif; ?>
-                    <?php if ($hasConfirmedBuildPlan): ?>
-                    <button type="button" class="btn btn-outline-warning btn-sm w-100 mb-2 pb-ai-view-confirmed-plan" data-plan-type="build_plan">
+                    <?php if ($hasConfirmedPlanJson): ?>
+                    <button type="button" class="btn btn-outline-warning btn-sm w-100 mb-2 pb-ai-view-confirmed-plan" data-plan-type="plan_json">
                         <i class="mdi mdi-file-chart-outline me-1"></i>
-                        <?= htmlspecialchars((string)__('查看构建任务计划'), ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars((string)__('查看plan_json block node 工作计划'), ENT_QUOTES, 'UTF-8') ?>
                         <span class="badge bg-success ms-1">已确认</span>
                     </button>
                     <?php endif; ?>
@@ -1471,189 +1469,3 @@ $pbAiStageGuide = match ((string)$currentStage) {
     </div>
 </div>
 <?php endif; return; ?>
-<?php /* ============================================================
-   Legacy workspace branch (hidden). Guided quick mode is the only active UI.
-   ============================================================ */ ?>
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <div>
-                <h4 class="mb-sm-0">
-                    <i class="mdi mdi-robot-outline me-1"></i>
-                    <?= htmlspecialchars((string)__('AI 建站工作台'), ENT_QUOTES, 'UTF-8') ?>
-                </h4>
-                <p class="text-muted mb-0 mt-2">
-                    <?= htmlspecialchars((string)__('专家模式：查看完整日志、预览与调试面板。'), ENT_QUOTES, 'UTF-8') ?>
-                </p>
-            </div>
-            <div class="d-flex gap-2 flex-wrap mt-3 mt-sm-0">
-                <?php if ($embeddedVisualUrl !== ''): ?>
-                    <button type="button" class="btn btn-primary btn-sm pb-ai-focus-embedded-editor" id="pb-ai-open-visual-editor">
-                        <i class="mdi mdi-open-in-new me-1"></i><?= htmlspecialchars((string)__('打开可视化编辑器'), ENT_QUOTES, 'UTF-8') ?>
-                    </button>
-                <?php endif; ?>
-                <?php if ($guidedUrl !== ''): ?>
-                    <a class="btn btn-soft-success btn-sm" href="<?= htmlspecialchars($guidedUrl, ENT_QUOTES, 'UTF-8') ?>">
-                        <i class="mdi mdi-lightning-bolt-outline me-1"></i><?= htmlspecialchars((string)__('返回引导模式'), ENT_QUOTES, 'UTF-8') ?>
-                    </a>
-                <?php endif; ?>
-                <a class="btn btn-soft-secondary btn-sm" href="<?= htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8') ?>">
-                    <i class="mdi mdi-arrow-left me-1"></i><?= htmlspecialchars((string)__('返回 Websites 入口'), ENT_QUOTES, 'UTF-8') ?>
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3 mb-3">
-    <div class="col-lg-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                    <span class="badge bg-soft-primary text-primary mb-3"><?= htmlspecialchars((string)__('快速建站'), ENT_QUOTES, 'UTF-8') ?></span>
-                <div class="fs-4 fw-semibold" id="pb-ai-draft-website-id"><?= $draftWebsiteId ?></div>
-                <div class="text-muted small"><?= htmlspecialchars((string)__('草稿站点 ID'), ENT_QUOTES, 'UTF-8') ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <span class="badge bg-soft-success text-success mb-3"><?= htmlspecialchars((string)__('虚拟主题'), ENT_QUOTES, 'UTF-8') ?></span>
-                <div class="fs-4 fw-semibold" id="pb-ai-virtual-theme-id"><?= $virtualThemeId ?></div>
-                <div class="text-muted small"><?= htmlspecialchars((string)__('虚拟主题 ID'), ENT_QUOTES, 'UTF-8') ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <span class="badge bg-soft-warning text-warning mb-3"><?= htmlspecialchars((string)__('当前阶段'), ENT_QUOTES, 'UTF-8') ?></span>
-                <div class="fs-4 fw-semibold" id="pb-ai-current-stage"><?= htmlspecialchars((string)($state['stage_label'] ?? $currentStage), ENT_QUOTES, 'UTF-8') ?></div>
-                <div class="text-muted small">Public ID: <code><?= htmlspecialchars($publicId, ENT_QUOTES, 'UTF-8') ?></code></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card border-0 shadow-sm mb-3 pb-ai-workspace-log-panel">
-    <div class="card-body">
-        <div class="d-flex flex-wrap gap-2">
-            <?php foreach ($stageOptions as $option): ?>
-                <?php
-                $value = (string)($option['value'] ?? '');
-                $pbAiStageButtonDisabled = $value === 'publish' && $pbAiPublishDisabled;
-                ?>
-                <button type="button"
-                        class="btn <?= $value === $currentStage ? 'btn-primary' : 'btn-outline-primary' ?> pb-ai-set-stage"
-                        data-stage="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"<?= !$pbAiStageButtonDisabled ? '' : ' disabled aria-disabled="true"' ?>>
-                    <?= htmlspecialchars((string)($option['label'] ?? $value), ENT_QUOTES, 'UTF-8') ?>
-                </button>
-            <?php endforeach; ?>
-        </div>
-    </div>
-</div>
-
-<div class="card border-0 shadow-sm mb-3">
-    <div class="card-header bg-transparent border-0 pt-4 pb-0">
-                        <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('工作区日志'), ENT_QUOTES, 'UTF-8') ?></h5>
-                        <p class="text-muted mb-0"><?= htmlspecialchars((string)__('用于观察队列调度、SSE 事件和流程状态。'), ENT_QUOTES, 'UTF-8') ?></p>
-    </div>
-    <div class="card-body p-4 pt-3">
-        <w:theme:sse-terminal id="pagebuilder-workspace-terminal" title="@lang{工作区日志}" height="420px" events="start,state,log,total,done,error,warning,info" show-start-toggle="false" />
-    </div>
-</div>
-
-<?php $stageView = (string)($workspaceRenderStage ?? $currentStage ?? 'plan'); ?>
-<?php $pbAiRenderInlinePanelInsideCard = false; ?>
-<?php $renderDetachedPlanPanel = $stageView === 'plan'; ?>
-<div class="row g-4 pb-ai-expert-main-grid">
-    <div class="col-12 col-xxl-4 col-xl-5 pb-ai-expert-plan-col">
-        <?php if ($stageView === 'plan'): ?>
-            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-card.phtml', $workspaceSectionData) ?>
-        <?php elseif ($stageView === 'visual_edit'): ?>
-            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/visual-edit-card.phtml', $workspaceSectionData) ?>
-        <?php else: ?>
-            <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/publish-card.phtml', $workspaceSectionData) ?>
-        <?php endif; ?>
-    </div>
-
-    <div class="col-12 col-xxl-8 col-xl-7 pb-ai-expert-preview-col">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-transparent border-0 pt-4 pb-0">
-                <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('实时预览'), ENT_QUOTES, 'UTF-8') ?></h5>
-                <p class="text-muted mb-0">
-                    <?= htmlspecialchars((string)__('根据当前阶段展示可预览页面。'), ENT_QUOTES, 'UTF-8') ?>
-                    <?php if ($previewPageType !== ''): ?>
-                        <span class="ms-2">页面类型：<code><?= htmlspecialchars($previewPageType, ENT_QUOTES, 'UTF-8') ?></code></span>
-                    <?php endif; ?>
-                </p>
-            </div>
-            <div class="card-body p-4">
-                <div id="pb-ai-visual-preview-stage" class="pb-ai-preview-device-stage is-desktop">
-                <div id="pb-ai-visual-preview-host">
-                    <?php if ($embeddedVisualUrl !== ''): ?>
-                        <iframe id="pb-ai-visual-preview-frame" title="<?= htmlspecialchars((string)__('站点预览'), ENT_QUOTES, 'UTF-8') ?>"
-                                src="<?= htmlspecialchars($embeddedVisualUrl, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" referrerpolicy="no-referrer"
-                                style="width:100%;min-height:860px;border:1px solid var(--backend-color-border-default, #e5e7eb);border-radius:16px;background:var(--backend-color-bg-primary, #fff);"></iframe>
-                    <?php else: ?>
-                        <div class="alert alert-info mb-0 pb-ai-preview-host-empty"><?= htmlspecialchars((string)__('当前没有可预览页面。'), ENT_QUOTES, 'UTF-8') ?></div>
-                    <?php endif; ?>
-                </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card border-0 shadow-sm mt-3 pb-ai-expert-event-card">
-            <div class="card-header bg-transparent border-0 pt-4 pb-0">
-                <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('事件记录'), ENT_QUOTES, 'UTF-8') ?></h5>
-            </div>
-            <div class="card-body p-4">
-                <?php $workspaceEventPreviewList = \array_slice(\is_array($events) ? $events : [], -24); ?>
-                <?php if ($workspaceEventPreviewList === []): ?>
-                    <div class="text-muted"><?= htmlspecialchars((string)__('暂无事件记录'), ENT_QUOTES, 'UTF-8') ?></div>
-                <?php else: ?>
-                    <?php if (\count($workspaceEventPreviewList) < \count($events)): ?>
-                        <div class="small text-muted mb-3"><?= htmlspecialchars((string)__('仅显示最近 24 条事件'), ENT_QUOTES, 'UTF-8') ?></div>
-                    <?php endif; ?>
-                    <div class="d-grid gap-2 pb-ai-expert-event-list">
-                        <?php foreach ($workspaceEventPreviewList as $ev): ?>
-                            <?php $payload = \is_array($ev['payload'] ?? null) ? $ev['payload'] : []; ?>
-                            <?php
-                            $payloadPreview = '';
-                            if ($payload !== []) {
-                                try {
-                                    $payloadPreview = (string)\json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
-                                } catch (\JsonException) {
-                                    $payloadPreview = '{}';
-                                }
-                                if (\function_exists('mb_strimwidth')) {
-                                    $payloadPreview = (string)\mb_strimwidth($payloadPreview, 0, 1200, '...');
-                                } elseif (\strlen($payloadPreview) > 1200) {
-                                    $payloadPreview = \substr($payloadPreview, 0, 1200) . '...';
-                                }
-                            }
-                            ?>
-                            <div class="border rounded p-3">
-                                <div class="d-flex justify-content-between gap-3">
-                                    <strong><?= htmlspecialchars((string)($ev['event_type'] ?? 'event'), ENT_QUOTES, 'UTF-8') ?></strong>
-                                    <span class="text-muted small"><?= htmlspecialchars((string)($ev['create_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                                </div>
-                                <?php if ($payloadPreview !== ''): ?>
-                                    <pre class="bg-light rounded p-2 small mt-2 mb-0" style="max-height:120px;overflow:auto;"><?= htmlspecialchars($payloadPreview, ENT_QUOTES, 'UTF-8') ?></pre>
-                                <?php endif; ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-</div>
-
-<?php if ($renderDetachedPlanPanel): ?>
-    <div class="pb-ai-expert-stage-panel-wrap">
-        <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml', $workspaceSectionData) ?>
-    </div>
-<?php /* legacy workspace branch disabled */ ?>
-
-<?php endif; ?>

@@ -50,10 +50,10 @@ class AiSiteProfileGenerationService
             ? $this->normalizeMeaningfulTitle($scope['site_title'] ?? null, $internalVisibleCopyTerms)
             : ($scopeTitleCanLock && $scopeTitle !== ''
                 ? $scopeTitle
-                : $this->resolveLegacyLockedTitle($existing, $hasManualMap, $internalVisibleCopyTerms));
+                : $this->resolveStoredLockedTitle($existing, $hasManualMap, $internalVisibleCopyTerms));
         $lockedTagline = $taglineLocked
             ? $this->normalizeProfileTagline($this->readScopeString($scope, 'site_tagline'), $lockedTitle, $internalVisibleCopyTerms)
-            : $this->resolveLegacyLockedTagline($existing, $hasManualMap, $internalVisibleCopyTerms);
+            : $this->resolveStoredLockedTagline($existing, $hasManualMap, $internalVisibleCopyTerms);
         $lockedBrief = $briefLocked ? $this->normalizeProfileBriefDescription($this->readScopeString($scope, 'brief_description'), $internalVisibleCopyTerms) : '';
 
         $lockedLogo = $this->resolveLockedAsset($scope, $existing, 'logo', $hasManualMap);
@@ -223,7 +223,7 @@ class AiSiteProfileGenerationService
         $existingMeta = \is_array($existing['_ai_profile'] ?? null) ? $existing['_ai_profile'] : [];
 
         return $this->normalizeProfileBriefDescription($this->pickString(
-            $this->resolveBuildPlanSourceBrief($scope),
+            $this->resolvePlanJsonSourceBrief($scope),
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null,
             $existingMeta['source_brief'] ?? null,
@@ -371,7 +371,7 @@ class AiSiteProfileGenerationService
      * @param array<string, mixed> $existing
      * @param list<string> $internalVisibleCopyTerms
      */
-    private function resolveLegacyLockedTitle(array $existing, bool $hasManualMap, array $internalVisibleCopyTerms = []): string
+    private function resolveStoredLockedTitle(array $existing, bool $hasManualMap, array $internalVisibleCopyTerms = []): string
     {
         if ($hasManualMap || $this->hasManagedProfileMeta($existing)) {
             return '';
@@ -384,7 +384,7 @@ class AiSiteProfileGenerationService
      * @param array<string, mixed> $existing
      * @param list<string> $internalVisibleCopyTerms
      */
-    private function resolveLegacyLockedTagline(array $existing, bool $hasManualMap, array $internalVisibleCopyTerms = []): string
+    private function resolveStoredLockedTagline(array $existing, bool $hasManualMap, array $internalVisibleCopyTerms = []): string
     {
         if ($hasManualMap || $this->hasManagedProfileMeta($existing)) {
             return '';
@@ -667,13 +667,12 @@ class AiSiteProfileGenerationService
     /**
      * @param array<string, mixed> $scope
      */
-    private function resolveBuildPlanSourceBrief(array $scope): string
+    private function resolvePlanJsonSourceBrief(array $scope): string
     {
-        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
-        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
-        $siteBrief = \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [];
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $source = \is_array($planJson['source_of_truth'] ?? null) ? $planJson['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
+        $siteBrief = \is_array($planJson['site_brief'] ?? null) ? $planJson['site_brief'] : [];
         $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
         $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
 
@@ -702,8 +701,7 @@ class AiSiteProfileGenerationService
         foreach ([
             $scope['_plan_sse_request']['selected_skill_codes'] ?? null,
             $scope['selected_skill_codes'] ?? null,
-            $scope['plan_workbench']['confirmed']['contract_context']['selected_skill_codes'] ?? null,
-            $scope['plan_workbench']['contract_context']['selected_skill_codes'] ?? null,
+            $scope['plan_json']['contract_context']['selected_skill_codes'] ?? null,
             $scope['contract_context']['selected_skill_codes'] ?? null,
         ] as $candidate) {
             $this->collectInternalVisibleCopyTerms($candidate, $terms);
@@ -711,8 +709,7 @@ class AiSiteProfileGenerationService
 
         foreach ([
             $scope['skill_snapshots'] ?? null,
-            $scope['plan_workbench']['confirmed']['contract_context']['skill_snapshots'] ?? null,
-            $scope['plan_workbench']['contract_context']['skill_snapshots'] ?? null,
+            $scope['plan_json']['contract_context']['skill_snapshots'] ?? null,
             $scope['contract_context']['skill_snapshots'] ?? null,
         ] as $candidate) {
             $this->collectInternalVisibleCopyTerms($candidate, $terms);
@@ -724,10 +721,8 @@ class AiSiteProfileGenerationService
             $scope['design_direction_match_reason'] ?? null,
             $scope['design_direction'] ?? null,
             $scope['design_direction_snapshot'] ?? null,
-            $scope['plan_workbench']['confirmed']['contract_context']['design_direction_code'] ?? null,
-            $scope['plan_workbench']['confirmed']['contract_context']['design_direction_snapshot'] ?? null,
-            $scope['plan_workbench']['contract_context']['design_direction_code'] ?? null,
-            $scope['plan_workbench']['contract_context']['design_direction_snapshot'] ?? null,
+            $scope['plan_json']['contract_context']['design_direction_code'] ?? null,
+            $scope['plan_json']['contract_context']['design_direction_snapshot'] ?? null,
             $scope['contract_context']['design_direction_code'] ?? null,
             $scope['contract_context']['design_direction_snapshot'] ?? null,
         ] as $candidate) {

@@ -135,4 +135,4 @@
 
 第二轮验证新增会话 `62a8aa7b20b174b9a8f43c6a6b1b7e6a`，站点为 BharatPlay 印度棋牌官网，目标是引导用户下载印度棋牌 App。方案覆盖 `home_page`、`about_page`、`contact_page`、`privacy_policy`、`terms_of_service`、`custom_page` 六个页面。构建过程中暴露的问题均从框架层修复：中文内容语言门禁需要允许 brief 中的 Latin 专有名词（如 BharatPlay、Teen Patti、Rummy、Ludo、APK），hero 恢复提示需要明确可读遮罩/文字安全面板，FAQ 恢复提示需要独立 FAQ 骨架，并且最终 HTML 质量门禁必须传入 `css_extra/css_responsive` 才能正确判断 `.pb-c-faq-item` 表面样式。
 
-印度棋牌 App 站点最终通过构建队列 `2203`，状态为 `done`、`finished=1`，`build_task_summary` 为 `done=28/total=28/failed=0/pending=0`。Browser 验收覆盖 6 个桌面页面：首页、规则/下载自定义页、联系页、关于页、隐私政策、服务条款；移动端覆盖首页、规则/下载自定义页、联系页；并额外检查联系页 FAQ 区域。截图结论为首屏品牌与下载目标明确、印度棋牌与 App 下载视觉资产可见、CTA 清楚、FAQ 卡片样式可见、移动端无横向溢出，内容贴合印度棋牌官网与 App 下载转化目标。
+印度棋牌 App 站点最终通过构建队列 `2203`，状态为 `done`、`finished=1`，`plan_json_task_summary` 为 `done=28/total=28/failed=0/pending=0`。Browser 验收覆盖 6 个桌面页面：首页、规则/下载自定义页、联系页、关于页、隐私政策、服务条款；移动端覆盖首页、规则/下载自定义页、联系页；并额外检查联系页 FAQ 区域。截图结论为首屏品牌与下载目标明确、印度棋牌与 App 下载视觉资产可见、CTA 清楚、FAQ 卡片样式可见、移动端无横向溢出，内容贴合印度棋牌官网与 App 下载转化目标。

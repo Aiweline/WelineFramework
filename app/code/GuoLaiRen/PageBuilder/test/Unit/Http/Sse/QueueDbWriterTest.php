@@ -196,7 +196,7 @@ final class QueueDbWriterTest extends TestCase
             'state' => [
                 'virtual_pages_by_type' => [
                     'home_page' => [
-                        'blocks' => \array_fill(0, 80, ['html' => \str_repeat('x', 128)]),
+                        'block_nodes' => \array_fill(0, 80, ['html' => \str_repeat('x', 128)]),
                     ],
                 ],
                 'top_logs' => \array_fill(0, 50, ['message' => \str_repeat('y', 64)]),
@@ -254,7 +254,7 @@ final class QueueDbWriterTest extends TestCase
                         'page_type' => 'home_page',
                         'status' => 'running',
                         'message' => 'Generating blocks',
-                        'blocks' => [
+                        'block_rows' => [
                             [
                                 'block_key' => 'hero',
                                 'status' => 'running',
@@ -279,8 +279,8 @@ final class QueueDbWriterTest extends TestCase
         self::assertSame(['about_page'], $progress['done'] ?? []);
         self::assertIsArray($progress['details'] ?? null);
         self::assertSame('home_page', (string)($progress['details'][0]['page_type'] ?? ''));
-        self::assertSame('hero', (string)($progress['details'][0]['blocks'][0]['block_key'] ?? ''));
-        self::assertLessThanOrEqual(160, \strlen((string)($progress['details'][0]['blocks'][0]['message'] ?? '')));
+        self::assertSame('hero', (string)($progress['details'][0]['block_rows'][0]['block_key'] ?? ''));
+        self::assertLessThanOrEqual(160, \strlen((string)($progress['details'][0]['block_rows'][0]['message'] ?? '')));
     }
 
     public function testBuildProgressIsPersistedAsBoundedQueueContent(): void
@@ -299,7 +299,7 @@ final class QueueDbWriterTest extends TestCase
                 'operation' => 'build',
                 'progress_percent' => 42,
                 'active_concurrency' => 5,
-                'build_task_summary' => [
+                'plan_json_task_summary' => [
                     'total' => 3,
                     'done' => 1,
                     'running' => 2,
@@ -327,7 +327,7 @@ final class QueueDbWriterTest extends TestCase
                 'page_block_progress' => [
                     ['page_type' => 'home_page', 'done' => 1, 'total' => 2, 'running' => 1],
                 ],
-                'build_plan_block_progress' => [
+                'plan_json_block_progress' => [
                     [
                         'page_type' => 'home_page',
                         'block_id' => 'home_page:hero',
@@ -348,14 +348,14 @@ final class QueueDbWriterTest extends TestCase
         self::assertSame('keep', (string)($content['existing'] ?? ''));
         self::assertSame(42, (int)($content['progress_percent'] ?? 0));
         self::assertSame(5, (int)($content['active_concurrency'] ?? 0));
-        self::assertSame(3, (int)($content['build_task_summary']['total'] ?? 0));
-        self::assertSame(2, (int)($content['build_task_summary']['running'] ?? 0));
-        self::assertLessThanOrEqual(180, \strlen((string)($content['build_task_summary']['groups']['home_page']['tasks'][0]['message'] ?? '')));
+        self::assertSame(3, (int)($content['plan_json_task_summary']['total'] ?? 0));
+        self::assertSame(2, (int)($content['plan_json_task_summary']['running'] ?? 0));
+        self::assertLessThanOrEqual(180, \strlen((string)($content['plan_json_task_summary']['groups']['home_page']['tasks'][0]['message'] ?? '')));
         self::assertSame('home_page', (string)($content['page_block_progress'][0]['page_type'] ?? ''));
         self::assertSame(1, (int)($content['page_block_progress'][0]['running'] ?? 0));
-        self::assertSame('done', (string)($content['build_plan_block_progress'][0]['status'] ?? ''));
-        self::assertArrayNotHasKey('html', $content['build_plan_block_progress'][0]);
-        self::assertLessThanOrEqual(160, \strlen((string)($content['build_plan_block_progress'][0]['message'] ?? '')));
+        self::assertSame('done', (string)($content['plan_json_block_progress'][0]['status'] ?? ''));
+        self::assertArrayNotHasKey('html', $content['plan_json_block_progress'][0]);
+        self::assertLessThanOrEqual(160, \strlen((string)($content['plan_json_block_progress'][0]['message'] ?? '')));
 
         $patch = QueueDbWriterWQuerySpy::$updates[0]['patch'] ?? [];
         self::assertIsArray($patch);
@@ -480,7 +480,7 @@ final class QueueDbWriterTest extends TestCase
             self::assertTrue((bool)$shouldPersistSession->invoke($writer, $event, $payload), $event);
         }
 
-        $staleTransientPayload = ['message' => 'old transient payload', 'checkpoint' => ['step' => 'theme']];
+        $staleTransientPayload = ['message' => 'prior transient payload', 'checkpoint' => ['step' => 'theme']];
         self::assertFalse((bool)$shouldPersistQueue->invoke($writer, 'progress', $staleTransientPayload));
         self::assertFalse((bool)$shouldPersistSession->invoke($writer, 'progress', $staleTransientPayload));
 
@@ -490,7 +490,7 @@ final class QueueDbWriterTest extends TestCase
         self::assertStringContainsString('ERROR terminal failure', (string)($patch['result'] ?? ''));
     }
 
-    public function testLegacyTransientPayloadsAreDiscardedBeforePersistence(): void
+    public function testRemovedTransientPayloadsAreDiscardedBeforePersistence(): void
     {
         $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_PLAN, 'plan');
         $sanitize = new ReflectionMethod(QueueDbWriter::class, 'sanitizePayloadForQueueEvent');
@@ -518,7 +518,7 @@ final class QueueDbWriterTest extends TestCase
         self::assertArrayNotHasKey('checkpoint', $payload['payload']);
     }
 
-    public function testBuildPlanBlockProgressIsCompactedBeforeQueuePersistence(): void
+    public function testPlanJsonBlockProgressIsCompactedBeforeQueuePersistence(): void
     {
         $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build');
         $sanitize = new ReflectionMethod(QueueDbWriter::class, 'sanitizePayloadForQueueEvent');
@@ -527,7 +527,7 @@ final class QueueDbWriterTest extends TestCase
         $payload = $sanitize->invoke($writer, 'progress', [
             'message' => 'block progress',
             'state' => [
-                'build_plan_block_progress' => [
+                'plan_json_block_progress' => [
                     [
                         'page_type' => 'home_page',
                         'block_id' => 'home:hero',
@@ -539,19 +539,18 @@ final class QueueDbWriterTest extends TestCase
                         'html' => \str_repeat('<div>heavy</div>', 100),
                     ],
                 ],
-                'build_plan_v2' => ['heavy' => \str_repeat('y', 4096)],
             ],
         ]);
 
         self::assertIsArray($payload);
         self::assertArrayNotHasKey('state', $payload);
         self::assertSame(false, $payload['state_loaded'] ?? null);
-        self::assertIsArray($payload['build_plan_block_progress'] ?? null);
-        self::assertCount(1, $payload['build_plan_block_progress']);
-        self::assertSame('home_page', $payload['build_plan_block_progress'][0]['page_type'] ?? null);
-        self::assertSame('done', $payload['build_plan_block_progress'][0]['status'] ?? null);
-        self::assertArrayNotHasKey('html', $payload['build_plan_block_progress'][0]);
-        self::assertLessThanOrEqual(160, \strlen((string)($payload['build_plan_block_progress'][0]['message'] ?? '')));
+        self::assertIsArray($payload['plan_json_block_progress'] ?? null);
+        self::assertCount(1, $payload['plan_json_block_progress']);
+        self::assertSame('home_page', $payload['plan_json_block_progress'][0]['page_type'] ?? null);
+        self::assertSame('done', $payload['plan_json_block_progress'][0]['status'] ?? null);
+        self::assertArrayNotHasKey('html', $payload['plan_json_block_progress'][0]);
+        self::assertLessThanOrEqual(160, \strlen((string)($payload['plan_json_block_progress'][0]['message'] ?? '')));
     }
 
     public function testStageOneProgressUpdatesBypassDuplicateSummarySuppression(): void
@@ -622,7 +621,7 @@ final class QueueDbWriterTest extends TestCase
             $writer->sendEvent('progress', [
                 'message' => 'Build progress',
                 'operation' => 'build',
-                'build_task_summary' => [
+                'plan_json_task_summary' => [
                     'total' => 2,
                     'done' => 0,
                     'running' => 1,
@@ -638,7 +637,7 @@ final class QueueDbWriterTest extends TestCase
             $writer->sendEvent('progress', [
                 'message' => 'Build progress',
                 'operation' => 'build',
-                'build_task_summary' => [
+                'plan_json_task_summary' => [
                     'total' => 2,
                     'done' => 1,
                     'running' => 1,
@@ -662,7 +661,7 @@ final class QueueDbWriterTest extends TestCase
         self::assertIsArray($lastPatch);
         $content = \json_decode((string)($lastPatch['content'] ?? ''), true);
         self::assertIsArray($content);
-        self::assertSame(1, (int)($content['build_task_summary']['done'] ?? 0));
+        self::assertSame(1, (int)($content['plan_json_task_summary']['done'] ?? 0));
         self::assertSame('about_page', (string)($content['page_block_progress'][1]['page_type'] ?? ''));
     }
 

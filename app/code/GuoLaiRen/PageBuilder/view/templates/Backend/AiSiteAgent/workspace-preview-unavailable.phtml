@@ -5,15 +5,16 @@
  * @var \Weline\Framework\View\Template $this
  */
 $sessionOk = (bool)($this->getData('pb_preview_unavailable_session_ok') ?? false);
-$buildPlanConfirmed = (bool)($this->getData('pb_preview_unavailable_build_plan_confirmed') ?? false);
+$planJson = \is_array($this->getData('pb_preview_unavailable_plan_json') ?? null) ? $this->getData('pb_preview_unavailable_plan_json') : [];
+$planJsonConfirmed = (int)($planJson['confirmed'] ?? 0) === 1;
 $buildQueueRunning = (bool)($this->getData('pb_preview_unavailable_build_queue_running') ?? false);
 $pageTypeRaw = \trim((string)($this->getData('pb_preview_unavailable_page_type') ?? ''));
 $pageTypeJson = \json_encode($pageTypeRaw, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
-$buildPlanConfirmedJson = $buildPlanConfirmed ? 'true' : 'false';
+$planJsonConfirmedJson = $planJsonConfirmed ? 'true' : 'false';
 $buildQueueRunningJson = $buildQueueRunning ? 'true' : 'false';
 $titleGeneric = (string)__('预览页面不存在或无访问权限');
 $titleNotGenerated = (string)__('预览页面尚未生成');
-$hintReady = (string)__('当前预览页面尚未生成。确认建站方案后，系统会基于构建任务计划直接创建后台构建任务。');
+$hintReady = (string)__('当前预览页面尚未生成。确认建站方案后，系统会基于plan_json block node 工作计划直接创建后台plan_json block node 工作。');
 $btnTitleLocked = (string)__('请先确认建站方案，再进行 AI 生成。');
 $btnTitleBuilding = (string)__('虚拟主题构建中，请等待当前构建完成。');
 $btnLabel = (string)__('AI生成');
@@ -45,13 +46,13 @@ $btnLabelBuilding = (string)__('构建中');
             <h1><?= htmlspecialchars($titleNotGenerated, ENT_QUOTES, 'UTF-8') ?></h1>
             <p><?= htmlspecialchars($hintReady, ENT_QUOTES, 'UTF-8') ?></p>
             <div class="actions">
-                <button type="button" id="pb-ai-preview-generate"<?= ($buildPlanConfirmed && !$buildQueueRunning) ? '' : ' disabled aria-disabled="true"' ?>
-                    <?= !$buildPlanConfirmed ? (' title="' . htmlspecialchars($btnTitleLocked, ENT_QUOTES, 'UTF-8') . '"') : ($buildQueueRunning ? (' title="' . htmlspecialchars($btnTitleBuilding, ENT_QUOTES, 'UTF-8') . '"') : '') ?>>
+                <button type="button" id="pb-ai-preview-generate"<?= ($planJsonConfirmed && !$buildQueueRunning) ? '' : ' disabled aria-disabled="true"' ?>
+                    <?= !$planJsonConfirmed ? (' title="' . htmlspecialchars($btnTitleLocked, ENT_QUOTES, 'UTF-8') . '"') : ($buildQueueRunning ? (' title="' . htmlspecialchars($btnTitleBuilding, ENT_QUOTES, 'UTF-8') . '"') : '') ?>>
                     <?= htmlspecialchars($buildQueueRunning ? $btnLabelBuilding : $btnLabel, ENT_QUOTES, 'UTF-8') ?>
                 </button>
             </div>
-            <?php if (!$buildPlanConfirmed || $buildQueueRunning): ?>
-                <p class="muted" style="margin-top:14px;margin-bottom:0;"><?= htmlspecialchars(!$buildPlanConfirmed ? $btnTitleLocked : $btnTitleBuilding, ENT_QUOTES, 'UTF-8') ?></p>
+            <?php if (!$planJsonConfirmed || $buildQueueRunning): ?>
+                <p class="muted" style="margin-top:14px;margin-bottom:0;"><?= htmlspecialchars(!$planJsonConfirmed ? $btnTitleLocked : $btnTitleBuilding, ENT_QUOTES, 'UTF-8') ?></p>
             <?php endif; ?>
         </div>
     <?php else: ?>
@@ -60,11 +61,11 @@ $btnLabelBuilding = (string)__('构建中');
 </div>
 <script>
 (function () {
-    var buildPlanOk = <?= $buildPlanConfirmedJson ?>;
+    var planJsonOk = <?= $planJsonConfirmedJson ?>;
     var buildRunning = <?= $buildQueueRunningJson ?>;
     var pageType = <?= $pageTypeJson ?>;
     var btn = document.getElementById('pb-ai-preview-generate');
-    if (!btn || !buildPlanOk || buildRunning) {
+    if (!btn || !planJsonOk || buildRunning) {
         return;
     }
     btn.addEventListener('click', function () {

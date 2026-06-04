@@ -189,19 +189,17 @@ final class AiSiteSkillRegistryTest extends TestCase
             new SkillSnapshotBuilder($resolver)
         );
 
-        $payload = \implode("\n", $registry->buildPromptGuideLinesForScope('build_plan', [
-            'plan_workbench' => [
-                'contract_context' => [
-                    'selected_skill_codes' => ['conversion-copy'],
-                    'skill_snapshots' => [[
-                        'code' => 'conversion-copy',
-                        'name' => 'Conversion Copy',
-                        'description' => 'Frozen version.',
-                        'source' => 'custom_db',
-                        'normalized_body' => 'FROZEN SNAPSHOT BODY MUST BE USED.',
-                        'body_hash' => \hash('sha256', 'FROZEN SNAPSHOT BODY MUST BE USED.'),
-                    ]],
-                ],
+        $payload = \implode("\n", $registry->buildPromptGuideLinesForScope('plan_json', [
+            'plan_json' => [
+                'selected_skill_codes' => ['conversion-copy'],
+                'skill_snapshots' => [[
+                    'code' => 'conversion-copy',
+                    'name' => 'Conversion Copy',
+                    'description' => 'Frozen version.',
+                    'source' => 'custom_db',
+                    'normalized_body' => 'FROZEN SNAPSHOT BODY MUST BE USED.',
+                    'body_hash' => \hash('sha256', 'FROZEN SNAPSHOT BODY MUST BE USED.'),
+                ]],
             ],
         ]));
 

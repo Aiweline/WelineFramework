@@ -18,7 +18,7 @@ final class AiSiteBlockContractAssemblerService
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $planJson
-     * @param array<string, mixed> $pagePlans
+     * @param array<string, mixed> $planJsonPages
      * @param array<string, mixed> $siteDesignSystem
      * @param array<string, mixed> $assetManifest
      * @return array<string, mixed>
@@ -27,7 +27,7 @@ final class AiSiteBlockContractAssemblerService
         array $scope,
         array $websiteProfile,
         array $planJson,
-        array $pagePlans,
+        array $planJsonPages,
         array $siteDesignSystem,
         array $assetManifest = []
     ): array {
@@ -36,11 +36,11 @@ final class AiSiteBlockContractAssemblerService
                 $scope,
                 $websiteProfile,
                 \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [],
-                $pagePlans
+                $planJsonPages
             );
         }
 
-        $normalizedPagePlans = $this->normalizePagePlans($planJson, $pagePlans);
+        $normalizedPlanJsonPages = $this->normalizePlanJsonPages($planJson, $planJsonPages);
         $updatedPages = [];
         $distribution = [
             'version' => '1.0',
@@ -49,8 +49,8 @@ final class AiSiteBlockContractAssemblerService
             'per_page' => [],
         ];
 
-        foreach ($normalizedPagePlans as $pageType => $pagePlan) {
-            $blocks = $this->normalizeBlocks($pagePlan);
+        foreach ($normalizedPlanJsonPages as $pageType => $planJsonPage) {
+            $blocks = $this->normalizeBlocks($planJsonPage);
             $imageTargets = $this->pageImageTargets((string)$pageType, \count($blocks), $siteDesignSystem, $scope);
             $requiredImageIndexes = $this->selectRequiredImageIndexes(
                 (string)$pageType,
@@ -114,21 +114,20 @@ final class AiSiteBlockContractAssemblerService
                 $blocks[$index] = $block;
             }
 
-            $pagePlan['blocks'] = \array_values($blocks);
-            $pagePlan['asset_distribution_policy'] = $this->buildAssetDistributionPolicy(
+            $assetDistributionPolicy = $this->buildAssetDistributionPolicy(
                 (string)$pageType,
-                $pagePlan['blocks'],
+                \array_values($blocks),
                 $requiredSlots,
                 $cssOnlyBlocks,
                 $imageTargets
             );
-            $updatedPages[(string)$pageType] = $pagePlan;
-            $distribution['per_page'][(string)$pageType] = $pagePlan['asset_distribution_policy'];
+            $updatedPages[(string)$pageType] = $this->buildDynamicPageNode($planJsonPage, \array_values($blocks), $assetDistributionPolicy);
+            $distribution['per_page'][(string)$pageType] = $assetDistributionPolicy;
         }
 
         return [
             'site_design_system' => $siteDesignSystem,
-            'page_plans' => $updatedPages,
+            'pages' => $updatedPages,
             'asset_distribution_policy' => $distribution,
             'asset_manifest_ref' => $this->assetManifestRef($assetManifest),
             'contract_summary' => $this->buildContractSummary($updatedPages),
@@ -137,20 +136,20 @@ final class AiSiteBlockContractAssemblerService
 
     /**
      * @param array<string, mixed> $planJson
-     * @param array<string, mixed> $pagePlans
+     * @param array<string, mixed> $planJsonPages
      * @return array<string, array<string, mixed>>
      */
-    public function attachToPagePlans(
+    public function attachToPlanJsonPages(
         array $scope,
         array $websiteProfile,
         array $planJson,
-        array $pagePlans,
+        array $planJsonPages,
         array $siteDesignSystem,
         array $assetManifest = []
     ): array {
-        $assembled = $this->assemble($scope, $websiteProfile, $planJson, $pagePlans, $siteDesignSystem, $assetManifest);
+        $assembled = $this->assemble($scope, $websiteProfile, $planJson, $planJsonPages, $siteDesignSystem, $assetManifest);
 
-        return \is_array($assembled['page_plans'] ?? null) ? $assembled['page_plans'] : [];
+        return \is_array($assembled['pages'] ?? null) ? $assembled['pages'] : [];
     }
 
     private function morphologyRegistry(): AiSiteBlockMorphologyRegistry
@@ -165,14 +164,14 @@ final class AiSiteBlockContractAssemblerService
 
     /**
      * @param array<string, mixed> $planJson
-     * @param array<string, mixed> $pagePlans
+     * @param array<string, mixed> $planJsonPages
      * @return array<string, array<string, mixed>>
      */
-    private function normalizePagePlans(array $planJson, array $pagePlans): array
+    private function normalizePlanJsonPages(array $planJson, array $planJsonPages): array
     {
         $pages = [];
-        if ($pagePlans !== []) {
-            foreach ($pagePlans as $key => $plan) {
+        if ($planJsonPages !== []) {
+            foreach ($planJsonPages as $key => $plan) {
                 if (!\is_array($plan)) {
                     continue;
                 }
@@ -198,18 +197,68 @@ final class AiSiteBlockContractAssemblerService
     }
 
     /**
-     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $planJsonPage
      * @return list<array<string, mixed>>
      */
-    private function normalizeBlocks(array $pagePlan): array
+    private function normalizeBlocks(array $planJsonPage): array
     {
-        foreach (['blocks', 'sections', 'components'] as $key) {
-            if (\is_array($pagePlan[$key] ?? null)) {
-                return \array_values(\array_filter($pagePlan[$key], 'is_array'));
+        $blocks = [];
+        foreach ($planJsonPage as $key => $value) {
+            if (!\is_string($key) || !\is_array($value) || !$this->looksLikeDynamicBlockNode($key, $value)) {
+                continue;
+            }
+            $value['block_key'] = (string)($value['block_key'] ?? $key);
+            $blocks[] = $value;
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @param array<string, mixed> $assetDistributionPolicy
+     * @return array<string, mixed>
+     */
+    private function buildDynamicPageNode(array $planJsonPage, array $blocks, array $assetDistributionPolicy): array
+    {
+        $page = [];
+        foreach ($planJsonPage as $key => $value) {
+            if (\in_array((string)$key, ['blocks', 'sections', 'components'], true)) {
+                continue;
+            }
+            if (\is_string($key) && \is_array($value) && $this->looksLikeDynamicBlockNode($key, $value)) {
+                continue;
+            }
+            $page[$key] = $value;
+        }
+        $page['asset_distribution_policy'] = $assetDistributionPolicy;
+
+        foreach ($blocks as $index => $block) {
+            $blockKey = $this->resolveBlockKey($block, (int)$index);
+            $block['block_key'] = $blockKey;
+            $page[$blockKey] = $block;
+        }
+
+        return $page;
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     */
+    private function looksLikeDynamicBlockNode(string $key, array $node): bool
+    {
+        if (\in_array($key, ['seo', 'page_design_plan', 'asset_distribution_policy', 'theme_context_snapshot'], true)) {
+            return false;
+        }
+
+        foreach (['block_key', 'section_code', 'page_flow_role', 'block_contract', 'visual_signature', 'image_intent', 'field_plan', 'execution_script'] as $field) {
+            if (\array_key_exists($field, $node)) {
+                return true;
             }
         }
 
-        return [];
+        return \array_key_exists('status', $node)
+            && (\array_key_exists('html', $node) || \array_key_exists('fields', $node) || \array_key_exists('demo', $node));
     }
 
     /**

@@ -8,7 +8,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 
 final class AiSiteStageOneContractService
 {
-    public const CONTRACT_VERSION = 'stage1_contract_v4';
+    public const CONTRACT_VERSION = 'stage1_validation_contract_v1';
     public const FIELD_PLAN_COUNT = 3;
 
     /** @var list<string> */
@@ -91,9 +91,9 @@ final class AiSiteStageOneContractService
             $preferredGeneratedImageBlockKey = $isPolicyPage ? '' : $this->resolvePreferredGeneratedImageBlockKey($pageType, $budget);
             $pageContracts[$pageType] = [
                 'page_type' => $pageType,
-                'min_blocks' => $budget['min'],
-                'max_blocks' => $budget['max'],
-                'target_blocks' => $budget['target'],
+                'min_block_nodes' => $budget['min'],
+                'max_block_nodes' => $budget['max'],
+                'target_block_nodes' => $budget['target'],
                 'required_block_keys' => $budget['required'],
                 'recommended_optional_block_keys' => $budget['optional'],
                 'field_plan_count' => self::FIELD_PLAN_COUNT,
@@ -106,7 +106,7 @@ final class AiSiteStageOneContractService
                 'requires_execution_core_copy' => true,
                 'requires_visual_signature' => true,
                 'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
-                'visual_signature_uniqueness_scope' => !$isPolicyPage ? 'same_page_adjacent_blocks' : 'same_page_adjacent_blocks_soft',
+                'visual_signature_uniqueness_scope' => !$isPolicyPage ? 'same_page_adjacent_block_nodes' : 'same_page_adjacent_block_nodes_soft',
                 'visual_signature_duplicate_severity' => !$isPolicyPage ? 'high' : 'medium',
                 'forbid_repeated_composition_patterns_within_page' => !$isPolicyPage,
                 'composition_overuse_severity' => 'medium',
@@ -185,8 +185,8 @@ final class AiSiteStageOneContractService
                 'forbid_prompt_like_copy' => true,
                 'forbid_schema_filler_values' => true,
                 'must_reuse_brief_nouns' => true,
-                'same_page_blocks_must_not_reuse_same_opening_message' => true,
-                'same_page_blocks_must_not_reuse_same_core_copy' => true,
+                'same_page_block_nodes_must_not_reuse_same_opening_message' => true,
+                'same_page_block_nodes_must_not_reuse_same_core_copy' => true,
             ],
             'field_plan_rules' => [
                 'rows_per_block' => self::FIELD_PLAN_COUNT,
@@ -220,14 +220,14 @@ final class AiSiteStageOneContractService
             ],
             'image_planning_rules' => [
                 'cache_grain' => 'session:block:planning_signature',
-                'reuse_when_stage1_contract_hash_and_block_intent_match' => true,
+                'reuse_when_stage1_validation_contract_hash_and_block_intent_match' => true,
                 'regenerate_when_contract_hash_or_block_image_intent_changes' => true,
                 'forbid_external_symbolic_urls' => true,
                 'each_block_must_declare_image_intent' => true,
                 'needs_image_must_be_json_boolean_true_or_false' => true,
                 'needs_image_true_requires_role_subject_placement' => true,
                 'needs_image_false_requires_css_motif_and_treatment' => true,
-                'opening_or_media_asset_blocks_prefer_generated_image_intent' => true,
+                'opening_or_media_asset_block_nodes_prefer_generated_image_intent' => true,
                 'non_policy_pages_prefer_rich_visual_media' => true,
                 'non_policy_pages_require_at_least_one_generated_image_intent' => false,
                 'non_policy_first_block_requires_generated_image_intent' => false,
@@ -251,11 +251,11 @@ final class AiSiteStageOneContractService
                 'stage3_must_consume_visual_signature' => true,
             ],
             'build_handoff_rules' => [
-                'stage1_page_block_count_is_build_plan_truth' => true,
+                'stage1_page_block_count_is_plan_json_truth' => true,
                 'stage1_block_key_order_is_build_order' => true,
                 'one_page_section_execution_per_stage1_block' => true,
                 'completed_block_must_match_block_identity' => true,
-                'duplicated_html_or_title_between_page_blocks_is_invalid' => true,
+                'duplicated_html_or_title_between_page_block_nodes_is_invalid' => true,
             ],
             'retry_policy' => [
                 'product_flow_allows_ai_recovery' => true,
@@ -311,7 +311,7 @@ final class AiSiteStageOneContractService
                 $pageContracts[$pageType] = \array_replace($basePageContract, $sourcePageContracts[$pageType], [
                     'requires_visual_signature' => true,
                     'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
-                    'visual_signature_uniqueness_scope' => 'same_page_adjacent_blocks',
+                    'visual_signature_uniqueness_scope' => 'same_page_adjacent_block_nodes',
                     'forbid_repeated_composition_patterns_within_page' => true,
                     'requires_image_intent' => true,
                     'image_intent_keys' => self::IMAGE_INTENT_KEYS,
@@ -402,8 +402,8 @@ final class AiSiteStageOneContractService
         $isCardGameStyle = $styleCode === 'india-card-game-apk-dark-neon'
             && $this->scopeHasPositiveCardGameIntent($scope);
         if ($pageType === Page::TYPE_HOME || $pageType === 'home_page') {
-            $sourceRequired = \is_array($scope['source_truth_contract']['required_home_blocks'] ?? null)
-                ? \array_values(\array_filter(\array_map('strval', $scope['source_truth_contract']['required_home_blocks'])))
+            $sourceRequired = \is_array($scope['source_truth_contract']['required_home_block_nodes'] ?? null)
+                ? \array_values(\array_filter(\array_map('strval', $scope['source_truth_contract']['required_home_block_nodes'])))
                 : [];
             if ($isCardGameStyle) {
                 $hasDownloadIntent = $this->scopeHasPositiveDownloadIntent($scope)
@@ -497,12 +497,12 @@ final class AiSiteStageOneContractService
             'APK',
             'download',
             'app',
-            '安装',
-            '下载',
-            '推广',
-            '游戏',
+            '瀹夎',
+            '涓嬭浇',
+            '鎺ㄥ箍',
+            '娓告垙',
             'game',
-            '棋牌',
+            '妫嬬墝',
             'card game',
             'Teen Patti',
             'rummy',
@@ -533,9 +533,9 @@ final class AiSiteStageOneContractService
             'APK',
             'download',
             'app',
-            '安装',
-            '下载',
-            '推广',
+            '瀹夎',
+            '涓嬭浇',
+            '鎺ㄥ箍',
         ]);
     }
 
@@ -551,7 +551,7 @@ final class AiSiteStageOneContractService
             return false;
         }
 
-        return \preg_match('/(?:APK|\bdownload\b|\bapp\b|casino|gambling|gaming|\bcard\b|card game|Teen\s*Patti|rummy|棋牌|游戏|下载|安装)/iu', $text) === 1;
+        return \preg_match('/(?:APK|\bdownload\b|\bapp\b|casino|gambling|gaming|\bcard\b|card game|Teen\s*Patti|rummy|妫嬬墝|娓告垙|涓嬭浇|瀹夎)/iu', $text) === 1;
     }
 
     /**
@@ -600,10 +600,10 @@ final class AiSiteStageOneContractService
     {
         $start = \max(0, $bytePosition - 140);
         $prefix = \substr($haystack, $start, $bytePosition - $start);
-        $prefix = (string)\preg_replace('/^.*[.;!?。！？\r\n]/u', '', $prefix);
+        $prefix = (string)\preg_replace('/^.*[.;!?銆傦紒锛焅r\n]/u', '', $prefix);
 
         return \preg_match(
-            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|禁止|避免|不要|不得|排除|不是|非|勿|请勿)[^.;!?。！？\r\n]{0,140}$/iu',
+            '/(?:\b(?:avoid|exclude|excluding|without|no|not|never|forbid|forbidden|do\s+not|don\'t)\b|绂佹|閬垮厤|涓嶈|涓嶅緱|鎺掗櫎|涓嶆槸|闈瀨鍕縷璇峰嬁)[^.;!?銆傦紒锛焅r\n]{0,140}$/iu',
             $prefix
         ) === 1;
     }
@@ -618,9 +618,9 @@ final class AiSiteStageOneContractService
             ? $contract['page_contracts'][$pageType]
             : [
                 'page_type' => $pageType,
-                'min_blocks' => 3,
-                'max_blocks' => 5,
-                'target_blocks' => 4,
+                'min_block_nodes' => 3,
+                'max_block_nodes' => 5,
+                'target_block_nodes' => 4,
                 'required_block_keys' => [],
                 'recommended_optional_block_keys' => [],
                 'field_plan_count' => self::FIELD_PLAN_COUNT,
@@ -628,7 +628,7 @@ final class AiSiteStageOneContractService
                 'forbidden_block_keys' => self::GENERIC_BLOCK_KEYS,
                 'requires_visual_signature' => true,
                 'visual_signature_keys' => self::VISUAL_SIGNATURE_KEYS,
-                'visual_signature_uniqueness_scope' => 'same_page_adjacent_blocks',
+                'visual_signature_uniqueness_scope' => 'same_page_adjacent_block_nodes',
                 'visual_signature_duplicate_severity' => 'high',
                 'forbid_repeated_composition_patterns_within_page' => true,
                 'composition_overuse_severity' => 'medium',

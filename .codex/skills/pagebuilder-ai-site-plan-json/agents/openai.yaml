@@ -1,0 +1,4 @@
+interface:
+  display_name: "PageBuilder AI Site Plan JSON"
+  short_description: "Keep PageBuilder AI state in plan_json.pages."
+  default_prompt: "Use $pagebuilder-ai-site-plan-json when changing PageBuilder AI site generation data or prompts."

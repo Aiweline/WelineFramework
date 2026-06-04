@@ -147,9 +147,9 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('workspaceApi.syncStageOnePlanPreviewFromWorkspaceState = syncStageOnePlanPreviewFromWorkspaceState;', $script);
 
         // 濠电姷顣藉Σ鍛村磻閸涱収鐔嗘俊顖氱毞閸嬫挸顫濋悡搴ｄ桓闂佹寧绻勯崑娑㈩敇閸忕厧绶炲┑鐘插暔娴犮垽鏌ｆ惔鈥冲辅闁稿鎹囬弻宥堫檨闁告挻鐟╅、娆掔疀閺冣偓缂嶅洭鏌曟繝蹇曞缂併劌顭峰娲礈閼碱剙甯ラ梺绋款儐鐢帡锝炶箛娑欏€锋い鎺戝€婚鏇㈡⒑閸濆嫷妲归柛鈺佺墦瀹曟洝绠涢弴鐔锋瀾闂佺娉涢敃銈吤洪妶鍥╃焼闁稿本顕㈣ぐ鎺撴櫜闁搞儮鏅滈幉姗€姊洪崫銉ユ瀻闁瑰啿绻掗幑銏犫槈閵忕姷顓哄┑鐘绘涧閻楀棝鍩呴弻銉︹拺?plan_json.pages 闂傚倸鍊风粈渚€骞夐敓鐘茶摕闁挎繂顦粈澶屸偓骞垮劚椤︻垶鎮為崹顐犱簻闁硅揪绲剧涵鍫曟煕閺傝法效闁哄矉缍佸浠嬪Ω瑜嶅銊╂⒑鏉炴壆顦︾紒澶庡煐缁傛帡鏁冮崒娑樻異闂佸啿鎼崯顖炲窗閹烘鈷掑ù锝呮啞閸熺偤鏌涢弮鈧ú婊呭垝閺冨牊鍊荤紒娑橆儐閺咁亝绻涢弶鎴濇倯婵炲吋鐟╅幆灞轿旈崨顔惧幐閻庡箍鍎遍崯顐ｄ繆娴犲鐓ユ繛鎴炆戦ˉ銏ゆ煛瀹€瀣瘈鐎规洜鍘ч埞鎴﹀箛椤撳／鍐ｆ斀闁绘垵娲ㄧ粙璇测攽閻愯韬鐐插暞缁傛帞鈧綆鍋勬禍婊堟⒑閹呯妞ゎ偄顦辨禍绋库攽鐎ｎ偀鎷洪梺鍛婄箓鐎氱兘宕曡箛娑欏€垫慨妯稿劚婵倿鏌涢埞鎯т壕?        self::assertStringContainsString('function resolvePlanJsonFromWorkspaceState(workspaceState)', $script);
-        self::assertStringContainsString('function hasPlanJsonPagesWithBlocks(planJson)', $script);
-        self::assertStringContainsString('function collectPlanJsonPageBlockNodes(page)', $script);
-        self::assertStringContainsString('function normalizePlanJsonBlockStatus(status)', $script);
+        self::assertStringContainsString('function phaseOnePlanPresentFromWorkspaceState(workspaceState)', $script);
+        self::assertStringContainsString('planJson.pages && typeof planJson.pages === \'object\'', $script);
+        self::assertStringContainsString('function normalizePlanNodeStatus(status)', $script);
         self::assertStringContainsString('function pickFirstNonEmptyPlanObject()', $script);
         self::assertStringContainsString('json: pickFirstNonEmptyPlanObject.apply(null, [', $script);
         self::assertStringContainsString('structured: pickFirstNonEmptyPlanObject.apply(null, [', $script);

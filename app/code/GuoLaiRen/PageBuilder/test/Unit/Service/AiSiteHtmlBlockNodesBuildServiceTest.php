@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
-use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
+use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlockNodesBuildService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use PHPUnit\Framework\TestCase;
 
-class AiSiteHtmlBlocksBuildServiceTest extends TestCase
+class AiSiteHtmlBlockNodesBuildServiceTest extends TestCase
 {
     public function testBuildSharedHeaderAndFooterUseStructuredNavAndGroupedFooterLinks(): void
     {
-        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+        $service = new AiSiteHtmlBlockNodesBuildService(new AiSitePageBlueprintService());
 
         $websiteProfile = [
             'site_title' => 'West Sydney Support Hub',
@@ -66,7 +66,7 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
 
     public function testBuildSharedHeaderSurfacesCustomPageWhenPolicyAndUtilityPagesExist(): void
     {
-        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+        $service = new AiSiteHtmlBlockNodesBuildService(new AiSitePageBlueprintService());
         $websiteProfile = [
             'site_title' => 'OpsFlow AI',
             'default_locale' => 'en_US',
@@ -99,7 +99,7 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
 
     public function testBuildGeneratedSharedBlockParsesSchemaFromGeneratedPhtml(): void
     {
-        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+        $service = new AiSiteHtmlBlockNodesBuildService(new AiSitePageBlueprintService());
 
         $block = $service->buildGeneratedSharedBlock('header', Page::TYPE_HOME, [
             'code' => 'header/ai-site-header',
@@ -142,7 +142,7 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
                 ];
             }
         };
-        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService(), $pageGenerator);
+        $service = new AiSiteHtmlBlockNodesBuildService(new AiSitePageBlueprintService(), $pageGenerator);
 
         $blocks = $service->buildPlaceholderBlocksForPageType(Page::TYPE_BLOG_LIST, [
             'site_title' => 'Demo Site',
@@ -152,15 +152,15 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
         self::assertCount(1, $blocks);
         self::assertSame('blog-hero-header', (string)($blocks[0]['block_id'] ?? ''));
         self::assertSame('ai_generated_section', (string)($blocks[0]['type'] ?? ''));
-        self::assertFalse(AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($blocks[0]));
+        self::assertFalse(AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($blocks[0]));
         self::assertSame('', $service->resolveSharedBlockRegion($blocks[0]));
     }
 
     public function testSharedLayoutBlockDetectionDoesNotMatchContentHeaderNames(): void
     {
-        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+        $service = new AiSiteHtmlBlockNodesBuildService(new AiSitePageBlueprintService());
 
-        self::assertFalse(AiSiteHtmlBlocksBuildService::isSharedLayoutBlock([
+        self::assertFalse(AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock([
             'block_id' => 'blog-list-blog-hero-header',
             'type' => 'ai_generated_section',
             'html' => '<section>Blog</section>',
@@ -177,7 +177,7 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
             'config' => ['region' => 'content'],
         ]));
 
-        self::assertTrue(AiSiteHtmlBlocksBuildService::isSharedLayoutBlock([
+        self::assertTrue(AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock([
             'block_id' => 'header-ai-site-header',
             'type' => 'ai_generated_shared_header',
             'html' => '<header>Header</header>',
@@ -192,7 +192,7 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
 
     public function testRebuildGeneratedSharedHeaderUsesEditableConfigAndPreservesSharedNavigation(): void
     {
-        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+        $service = new AiSiteHtmlBlockNodesBuildService(new AiSitePageBlueprintService());
 
         $original = $service->buildGeneratedSharedBlock('header', Page::TYPE_HOME, [
             'code' => 'header/ai-site-header',
@@ -245,7 +245,7 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
 
     public function testHydrateGeneratedBlockMetadataFallsBackToConfigKeys(): void
     {
-        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+        $service = new AiSiteHtmlBlockNodesBuildService(new AiSitePageBlueprintService());
 
         $hydrated = $service->hydrateGeneratedBlockMetadata([
             'block_id' => 'header-ai-site-header',
@@ -266,7 +266,7 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
 
     public function testBuildSharedHeaderAndFooterLocalizeFallbackNavigationForEnglishLocale(): void
     {
-        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+        $service = new AiSiteHtmlBlockNodesBuildService(new AiSitePageBlueprintService());
 
         $websiteProfile = [
             'site_title' => 'Teenipiya',
@@ -283,9 +283,9 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
                 Page::TYPE_CONTACT,
             ],
             'virtual_pages_by_type' => [
-                Page::TYPE_ABOUT => ['title' => '关于我们'],
-                Page::TYPE_TERMS_OF_SERVICE => ['title' => '服务条款'],
-                Page::TYPE_CONTACT => ['title' => '联系我们'],
+                Page::TYPE_ABOUT => ['title' => '鍏充簬鎴戜滑'],
+                Page::TYPE_TERMS_OF_SERVICE => ['title' => '鏈嶅姟鏉℃'],
+                Page::TYPE_CONTACT => ['title' => '鑱旂郴鎴戜滑'],
             ],
         ];
 
@@ -297,7 +297,7 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
         self::assertContains('Contact', \array_column($headerBlock['config']['nav_items'] ?? [], 'label'));
         self::assertSame('Policy Info', (string)($footerBlock['config']['links.column2_title'] ?? ''));
         self::assertStringContainsString('About', (string)($footerBlock['html'] ?? ''));
-        self::assertStringNotContainsString('关于我们', (string)($footerBlock['html'] ?? ''));
+        self::assertStringNotContainsString('鍏充簬鎴戜滑', (string)($footerBlock['html'] ?? ''));
     }
 
     private function buildGeneratedHeaderPhtml(): string

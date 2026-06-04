@@ -42,7 +42,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         })->call(
             $service,
             ['site_title' => 'Teenipiya', 'default_locale' => 'pt_BR'],
-            $this->scopeWithBuildPlanV2([
+            $this->scopeWithPlanJson([
                 'default_locale' => 'pt_BR',
                 'content_locale' => 'pt_BR',
                 'page_types' => ['home_page', 'about_page', 'contact_page', 'privacy_policy', 'terms_of_service'],
@@ -83,7 +83,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
                 'content_locale' => 'zh_Hans_CN',
                 'default_locale' => 'pt_BR',
             ],
-            $this->scopeWithBuildPlanV2([
+            $this->scopeWithPlanJson([
                 'content_locale' => 'zh_Hans_CN',
                 'plan_generated_locale' => 'zh_Hans_CN',
                 'default_locale' => 'pt_BR',
@@ -111,12 +111,12 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
                 'content_locale' => 'en_US',
                 'default_locale' => 'en_US',
             ],
-            $this->scopeWithBuildPlanV2([
+            $this->scopeWithPlanJson([
                 'content_locale' => 'en_US',
                 'default_locale' => 'en_US',
                 'plan_json' => [
                     'content_locale' => 'zh_Hans_CN',
-                    'stage1_contract' => ['content_locale' => 'zh_Hans_CN'],
+                    'i18n' => ['content_locale' => 'zh_Hans_CN'],
                 ],
                 'page_types' => ['home_page', 'contact_page', 'privacy_policy'],
             ], 'zh_Hans_CN', "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}"),
@@ -143,7 +143,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
                 'content_locale' => 'en_US',
                 'default_locale' => 'en_US',
             ],
-            $this->scopeWithBuildPlanV2([
+            $this->scopeWithPlanJson([
                 'content_locale' => 'en_US',
                 'plan_generated_locale' => 'zh_Hans_CN',
                 'plan_json' => ['content_locale' => 'en_US'],
@@ -155,6 +155,29 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         self::assertSame('zh_Hans_CN', $config['runtime.content_locale'] ?? null);
         self::assertSame("\u{91CD}\u{70B9}\u{9875}\u{9762}", $config['links.column1_title'] ?? null);
         self::assertStringNotContainsString('Featured Pages', (string)($config['links.column1_title'] ?? ''));
+    }
+
+    public function testPrimaryLocaleIgnoresPlanJsonLocaleWhenScopeContentLocaleExists(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $locale = (function (array $websiteProfile, array $scope): string {
+            return $this->resolvePrimaryLocale($websiteProfile, $scope);
+        })->call($service, [
+            'content_locale' => 'de_DE',
+            'default_locale' => 'en_US',
+        ], [
+            'content_locale' => 'pt_BR',
+            'default_locale' => 'pt_BR',
+            'plan_json' => [
+                'content_locale' => 'de_DE',
+                'i18n' => ['content_locale' => 'de_DE'],
+            ],
+        ]);
+
+        self::assertSame('pt_BR', $locale);
     }
 
     public function testPortugueseRenderedHtmlLocaleGateAllowsPortugueseCopy(): void
@@ -407,7 +430,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function scopeWithBuildPlanV2(array $scope, string $locale, string $siteName): array
+    private function scopeWithPlanJson(array $scope, string $locale, string $siteName): array
     {
         $pageTypes = array_values(array_filter(array_map('strval', $scope['page_types'] ?? ['home_page'])));
         if ($pageTypes === []) {
@@ -421,45 +444,41 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         $pages = [];
 
         foreach ($pageTypes as $pageType) {
-            $pageId = str_replace('_', '-', $pageType);
             $titleKey = 'page.' . $pageType . '.title';
             $contentItems[$titleKey] = $this->localizedPageTitle($pageType, $locale);
             $pages[] = [
-                'page_id' => $pageId,
                 'page_type' => $pageType,
                 'title_key' => $titleKey,
-                'blocks' => [],
             ];
         }
 
         return array_replace_recursive([
-            'build_plan_v2' => [
-                'contract_meta' => [
-                    'id' => 'locale-test-build-plan-v2',
-                    'version' => '2.2',
-                    'status' => 'confirmed',
-                    'signature' => 'locale-test-signature',
-                    'source_signature' => 'locale-test-source-signature',
-                ],
-                'site_brief' => [
-                    'site_name' => $siteName,
-                    'primary_goal' => 'Localized site defaults',
-                    'locale' => $locale,
-                ],
-                'source_of_truth' => [
-                    'user_requirements' => [
-                        'site_name' => $siteName,
-                    ],
-                ],
-                'i18n' => [
-                    'primary_locale' => $locale,
-                ],
+            'plan_json' => [
+                'confirmed' => 1,
+                'signature' => 'locale-test-signature',
+                'site_name' => $siteName,
+                'content_locale' => $locale,
+                'i18n' => ['primary_locale' => $locale],
                 'content_manifest' => [
                     'primary_locale' => $locale,
                     'items' => $contentItems,
                 ],
-                'pages' => $pages,
-                'blocks' => [],
+                'pages' => \array_reduce($pages, static function (array $carry, array $page): array {
+                    $pageType = (string)($page['page_type'] ?? '');
+                    if ($pageType !== '') {
+                        $carry[$pageType] = [
+                            'page_type' => $pageType,
+                            'title_key' => (string)($page['title_key'] ?? ''),
+                            'hero' => [
+                                'block_key' => 'hero',
+                                'section_code' => 'content/' . str_replace('_', '-', $pageType) . '-hero',
+                                'status' => 0,
+                                'fields' => ['content.title' => ['sample' => (string)($page['title_key'] ?? '')]],
+                            ],
+                        ];
+                    }
+                    return $carry;
+                }, []),
             ],
         ], $scope);
     }

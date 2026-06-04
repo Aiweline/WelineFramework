@@ -2994,7 +2994,7 @@ function _workshopAbort() {
     _workshopGoToStep(1);
 }
 
-// 重新生成（视为新流程，清除旧未保存数据）
+// 重新生成（视为新流程，清除既有未保存数据）
 function _workshopRegenerate() {
     clearGeneratedComponentFromLocal();
     if (_aiWorkshop.params) {

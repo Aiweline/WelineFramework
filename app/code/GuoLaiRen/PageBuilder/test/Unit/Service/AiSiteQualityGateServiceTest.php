@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
-use GuoLaiRen\PageBuilder\Service\AiSiteBuildTaskService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQualityGateService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteQualityGateServiceTest extends TestCase
 {
-    public function testInspectScopePassesWithCompletedBuildPlanRenderedPageAndSharedBlocks(): void
+    public function testInspectScopePassesWithCompletedPlanJsonRenderedPageAndSharedBlockNodes(): void
     {
         $service = $this->createService();
         $report = $service->inspectScope($this->buildScope(), [
@@ -22,23 +22,23 @@ final class AiSiteQualityGateServiceTest extends TestCase
 
         self::assertTrue($report['passed'], \json_encode($report, \JSON_UNESCAPED_UNICODE));
         self::assertSame(
-            ['build_plan_blocks_done', 'required_pages_render', 'shared_blocks_ready', 'responsive_support', 'render_data_quality'],
+            ['plan_json_block_nodes_done', 'required_pages_render', 'shared_block_nodes_ready', 'responsive_support', 'render_data_quality'],
             \array_map(static fn(array $item): string => (string)$item['key'], $report['items'])
         );
     }
 
-    public function testInspectScopeBlocksWhenBuildPlanBlockIsStillPending(): void
+    public function testInspectScopeBlocksWhenPlanJsonBlockIsStillPending(): void
     {
         $service = $this->createService();
         $scope = $this->buildScope();
-        $scope['build_plan_v2']['blocks'][0]['execution']['status'] = 'pending';
+        $scope['plan_json']['pages']['home_page']['hero_banner']['status'] = 0;
 
         $report = $service->inspectScope($scope, [
             'home_page' => $this->pageHtml('<section><h1>Pending section</h1></section>'),
         ]);
 
         self::assertFalse($report['passed']);
-        self::assertFalse((bool)($this->findItem($report['items'], 'build_plan_blocks_done')['ok'] ?? true));
+        self::assertFalse((bool)($this->findItem($report['items'], 'plan_json_block_nodes_done')['ok'] ?? true));
     }
 
     public function testInspectScopeBlocksWhenRequiredPageDoesNotRender(): void
@@ -57,7 +57,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
     {
         $service = $this->createService();
         $scope = $this->buildScope();
-        $scope['virtual_pages_by_type']['home_page']['blocks'] = [
+        $scope['virtual_pages_by_type']['home_page']['block_nodes'] = [
             ['block_id' => 'header-ai-site-header', 'type' => 'ai_generated_shared_header'],
             ['block_id' => 'home-page-hero-banner', 'section_code' => 'content/home-page-hero-banner', 'code' => 'content/home-page-hero-banner', 'type' => 'ai_generated_section'],
         ];
@@ -66,7 +66,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
         ]);
 
         self::assertFalse($report['passed']);
-        self::assertFalse((bool)($this->findItem($report['items'], 'shared_blocks_ready')['ok'] ?? true));
+        self::assertFalse((bool)($this->findItem($report['items'], 'shared_block_nodes_ready')['ok'] ?? true));
     }
 
     public function testInspectScopeBlocksWhenResponsiveBreakpointsAreMissing(): void
@@ -170,7 +170,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
 
         self::assertTrue($report['passed'], \json_encode($report, \JSON_UNESCAPED_UNICODE));
         self::assertSame(
-            ['build_plan_blocks_done', 'required_pages_render', 'shared_blocks_ready', 'responsive_support', 'render_data_quality'],
+            ['plan_json_block_nodes_done', 'required_pages_render', 'shared_block_nodes_ready', 'responsive_support', 'render_data_quality'],
             \array_map(static fn(array $item): string => (string)$item['key'], $report['items'])
         );
     }
@@ -178,7 +178,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
     private function createService(): AiSiteQualityGateService
     {
         return new AiSiteQualityGateService(
-            buildTaskService: new AiSiteBuildTaskService(new AiSitePageBlueprintService()),
+            planJsonTaskService: new AiSitePlanJsonTaskService(new AiSitePageBlueprintService()),
             scopeCompatibilityService: new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer()),
         );
     }
@@ -211,7 +211,7 @@ final class AiSiteQualityGateServiceTest extends TestCase
                     'title' => 'Neon Chess Casino',
                     'handle' => 'home',
                     'style_code' => 'neon_chess_casino_dark',
-                    'blocks' => [
+                    'block_nodes' => [
                         ['block_id' => 'header-ai-site-header', 'type' => 'ai_generated_shared_header'],
                         ['block_id' => 'home-page-hero-banner', 'section_code' => 'content/home-page-hero-banner', 'code' => 'content/home-page-hero-banner', 'type' => 'ai_generated_section', 'html' => '<section class="pb-c-root"><h2>Neon chess room</h2></section>'],
                         ['block_id' => 'footer-ai-site-footer', 'type' => 'ai_generated_shared_footer'],
@@ -228,24 +228,15 @@ final class AiSiteQualityGateServiceTest extends TestCase
                     'html' => '<footer data-region="footer">Support</footer>',
                 ],
             ],
-            'build_plan_v2' => [
+            'plan_json' => [
+                'confirmed' => 1,
                 'pages' => [
-                    ['page_id' => 'home_page', 'page_type' => 'home_page', 'title' => 'Neon Chess Casino'],
-                ],
-                'shared_execution' => [
-                    'header' => ['task_key' => 'shared:header', 'status' => 'done'],
-                    'footer' => ['task_key' => 'shared:footer', 'status' => 'done'],
-                ],
-                'blocks' => [
-                    [
-                        'block_id' => 'home_page.hero_banner',
-                        'page_id' => 'home_page',
-                        'page_type' => 'home_page',
-                        'section_key' => 'hero_banner',
-                        'section_code' => 'content/home-page-hero-banner',
-                        'execution' => [
-                            'task_key' => 'page:home_page:content/home-page-hero-banner',
-                            'status' => 'done',
+                    'home_page' => [
+                        'status' => 1,
+                        'hero_banner' => [
+                            'status' => 1,
+                            'section_code' => 'content/home-page-hero-banner',
+                            'html' => '<section class="pb-c-root"><h2>Neon chess room</h2></section>',
                         ],
                     ],
                 ],

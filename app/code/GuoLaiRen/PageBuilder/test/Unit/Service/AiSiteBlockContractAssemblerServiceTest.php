@@ -23,29 +23,29 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
                 'accent' => '#C9972B',
             ],
         ];
-        $pagePlans = [
-            'home_page' => [
-                'page_goal' => 'Explain the advisory offer and convert qualified visitors.',
-                'blocks' => [
+        $planJsonPages = [
+            'home_page' => $this->pageWithBlocks(
+                ['page_goal' => 'Explain the advisory offer and convert qualified visitors.'],
+                [
                     ['block_key' => 'hero', 'page_flow_role' => 'opening', 'title' => 'Plan with clarity', 'goal' => 'Introduce advisory value.'],
                     ['block_key' => 'services', 'page_flow_role' => 'details', 'title' => 'Services', 'goal' => 'Show planning services.'],
                     ['block_key' => 'proof', 'page_flow_role' => 'proof', 'title' => 'Proof', 'goal' => 'Show measurable client outcomes.'],
                     ['block_key' => 'process', 'page_flow_role' => 'details', 'title' => 'Process', 'goal' => 'Explain consultation steps.'],
                     ['block_key' => 'cta', 'page_flow_role' => 'cta', 'title' => 'Book now', 'goal' => 'Invite a consultation.'],
-                ],
-            ],
+                ]
+            ),
         ];
-        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $pagePlans);
+        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $planJsonPages);
 
         $assembled = (new AiSiteBlockContractAssemblerService())->assemble(
             $scope,
             [],
             [],
-            $pagePlans,
+            $planJsonPages,
             $siteDesignSystem
         );
 
-        $blocks = $assembled['page_plans']['home_page']['blocks'] ?? [];
+        $blocks = $this->dynamicPageBlockNodes($assembled['pages']['home_page'] ?? []);
         self::assertCount(5, $blocks);
 
         $morphologies = \array_map(static fn (array $block): string => (string)($block['block_contract']['morphology_id'] ?? ''), $blocks);
@@ -101,21 +101,22 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
                 'accent' => '#D97706',
             ],
         ];
-        $pagePlans = [
-            'services_page' => [
-                'blocks' => [
+        $planJsonPages = [
+            'services_page' => $this->pageWithBlocks(
+                [],
+                [
                     ['block_key' => 'hero', 'page_flow_role' => 'opening', 'goal' => 'Frame the service promise.'],
                     ['block_key' => 'service_grid', 'page_flow_role' => 'details', 'goal' => 'Show service categories.'],
                     ['block_key' => 'proof', 'page_flow_role' => 'proof', 'goal' => 'Show credibility and outcomes.'],
                     ['block_key' => 'process', 'page_flow_role' => 'details', 'goal' => 'Explain the work process.'],
                     ['block_key' => 'support', 'page_flow_role' => 'support', 'goal' => 'Answer buyer concerns.'],
                     ['block_key' => 'cta', 'page_flow_role' => 'cta', 'goal' => 'Invite consultation.'],
-                ],
-            ],
+                ]
+            ),
         ];
-        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $pagePlans);
+        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $planJsonPages);
 
-        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $pagePlans, $siteDesignSystem);
+        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $planJsonPages, $siteDesignSystem);
         $policy = $assembled['asset_distribution_policy']['per_page']['services_page'] ?? [];
 
         self::assertGreaterThanOrEqual(5, (int)($policy['target_real_image_slots'] ?? 0));
@@ -137,20 +138,21 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
                 'accent' => '#0EA5E9',
             ],
         ];
-        $pagePlans = [
-            'home_page' => [
-                'blocks' => [
+        $planJsonPages = [
+            'home_page' => $this->pageWithBlocks(
+                [],
+                [
                     ['block_key' => 'hero', 'page_flow_role' => 'opening', 'goal' => 'Introduce the product.'],
                     ['block_key' => 'features', 'page_flow_role' => 'details', 'goal' => 'Explain workflow features.'],
                     ['block_key' => 'proof', 'page_flow_role' => 'proof', 'goal' => 'Show operational proof.'],
                     ['block_key' => 'cta', 'page_flow_role' => 'cta', 'goal' => 'Invite a demo.'],
-                ],
-            ],
+                ]
+            ),
         ];
-        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $pagePlans);
+        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $planJsonPages);
 
-        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $pagePlans, $siteDesignSystem);
-        $blocks = $assembled['page_plans']['home_page']['blocks'] ?? [];
+        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $planJsonPages, $siteDesignSystem);
+        $blocks = $this->dynamicPageBlockNodes($assembled['pages']['home_page'] ?? []);
 
         foreach ($blocks as $block) {
             self::assertFalse($block['image_intent']['needs_image'] ?? true);
@@ -162,25 +164,26 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
     public function testNeonCardBriefCreatesRoleSpecificImageSubjects(): void
     {
         $scope = [
-            'site_title' => '霓虹棋牌馆',
-            'brief_description' => '打造一个霓虹棋牌风格的线上娱乐网站，包含玩家证明、玩法亮点、攻略内容和客服支持。',
+            'site_title' => 'Neon Card Club',
+            'brief_description' => 'India-focused online card game APK download site with hero, features, proof, support, and final CTA sections.',
             'page_types' => ['home_page'],
         ];
-        $pagePlans = [
-            'home_page' => [
-                'blocks' => [
-                    ['block_key' => 'hero', 'page_flow_role' => 'opening', 'goal' => '用霓虹牌桌主视觉吸引玩家进入房间。'],
-                    ['block_key' => 'game_features', 'page_flow_role' => 'details', 'goal' => '展示热门棋牌房间、活动福利和快速上手体验。'],
-                    ['block_key' => 'player_proof', 'page_flow_role' => 'proof', 'goal' => '展示玩家评价、规则透明和支持入口。'],
-                    ['block_key' => 'support_center', 'page_flow_role' => 'support', 'goal' => '说明客服、账号和规则帮助。'],
-                    ['block_key' => 'final_cta', 'page_flow_role' => 'cta', 'goal' => '邀请玩家进入下一场牌局。'],
-                ],
-            ],
+        $planJsonPages = [
+            'home_page' => $this->pageWithBlocks(
+                [],
+                [
+                    ['block_key' => 'hero', 'page_flow_role' => 'opening', 'goal' => 'Introduce the card game club and APK download offer.'],
+                    ['block_key' => 'game_features', 'page_flow_role' => 'details', 'goal' => 'Explain game modes, bonuses, and safe Android play.'],
+                    ['block_key' => 'player_proof', 'page_flow_role' => 'proof', 'goal' => 'Show player trust signals and responsible gaming cues.'],
+                    ['block_key' => 'support_center', 'page_flow_role' => 'support', 'goal' => 'Present help options and account support paths.'],
+                    ['block_key' => 'final_cta', 'page_flow_role' => 'cta', 'goal' => 'Close with a focused APK download action.'],
+                ]
+            ),
         ];
-        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $pagePlans);
+        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $planJsonPages);
 
-        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $pagePlans, $siteDesignSystem);
-        $blocks = $assembled['page_plans']['home_page']['blocks'] ?? [];
+        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $planJsonPages, $siteDesignSystem);
+        $blocks = $this->dynamicPageBlockNodes($assembled['pages']['home_page'] ?? []);
 
         $subjectsByKey = [];
         foreach ($blocks as $block) {
@@ -203,9 +206,10 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
             'brief_description' => 'Neon card-game site with game rooms, player proof, strategy guides, and support.',
             'page_types' => ['home_page'],
         ];
-        $pagePlans = [
-            'home_page' => [
-                'blocks' => [[
+        $planJsonPages = [
+            'home_page' => $this->pageWithBlocks(
+                [],
+                [[
                     'block_key' => 'reward_feature',
                     'page_flow_role' => 'details',
                     'goal' => 'Show limited-time table rewards.',
@@ -214,13 +218,14 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
                         'image_subject' => 'block visual for rewards: neon poker chips, mahjong tiles, bonus cards, and live table prize UI',
                         'image_treatment' => 'tight section crop with cyan-magenta prize glow',
                     ],
-                ]],
-            ],
+                ]]
+            ),
         ];
-        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $pagePlans);
+        $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $planJsonPages);
 
-        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $pagePlans, $siteDesignSystem);
-        $block = $assembled['page_plans']['home_page']['blocks'][0] ?? [];
+        $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $planJsonPages, $siteDesignSystem);
+        $blocks = $this->dynamicPageBlockNodes($assembled['pages']['home_page'] ?? []);
+        $block = $blocks[0] ?? [];
         $media = \is_array($block['block_contract']['media_strategy'] ?? null)
             ? $block['block_contract']['media_strategy']
             : [];
@@ -230,5 +235,40 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
             (string)($media['image_subject'] ?? '')
         );
         self::assertSame('tight section crop with cyan-magenta prize glow', (string)($media['image_treatment'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @return list<array<string, mixed>>
+     */
+    private function dynamicPageBlockNodes(array $page): array
+    {
+        $blocks = [];
+        foreach ($page as $key => $node) {
+            if (!\is_string($key) || !\is_array($node)) {
+                continue;
+            }
+            if (!\array_key_exists('block_key', $node) && !\array_key_exists('block_contract', $node)) {
+                continue;
+            }
+            $blocks[] = $node;
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @param list<array<string, mixed>> $blocks
+     * @return array<string, mixed>
+     */
+    private function pageWithBlocks(array $page, array $blocks): array
+    {
+        foreach ($blocks as $index => $block) {
+            $key = (string)($block['block_key'] ?? ('block_' . $index));
+            $page[$key] = $block;
+        }
+
+        return $page;
     }
 }

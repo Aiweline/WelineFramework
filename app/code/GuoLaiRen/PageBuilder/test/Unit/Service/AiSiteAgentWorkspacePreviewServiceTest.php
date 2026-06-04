@@ -18,10 +18,12 @@ use Weline\Framework\Http\Url;
 
 final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
 {
-    public function testBuildUnavailablePayloadReflectsConfirmedBuildPlanState(): void
+    public function testBuildUnavailablePayloadReflectsConfirmedPlanJsonState(): void
     {
+        $scope = ['plan_json' => ['confirmed' => 1]];
+
         $session = $this->createMock(AiSiteAgentSession::class);
-        $session->method('getScopeArray')->willReturn(['build_plan_confirmed' => 1]);
+        $session->method('getScopeArray')->willReturn($scope);
 
         $sessionService = $this->createMock(AiSiteAgentSessionService::class);
         $sessionService->expects(self::once())
@@ -31,13 +33,13 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
         $sessionService->expects(self::once())
             ->method('loadScopeForStage')
             ->with($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
-            ->willReturn(['build_plan_confirmed' => 1]);
+            ->willReturn($scope);
 
         $scopeCompatibility = $this->createMock(AiSiteScopeCompatibilityService::class);
         $scopeCompatibility->expects(self::once())
             ->method('normalizeScope')
-            ->with(['build_plan_confirmed' => 1])
-            ->willReturn(['build_plan_confirmed' => 1]);
+            ->with($scope)
+            ->willReturn($scope);
 
         $service = new AiSiteAgentWorkspacePreviewService(
             $sessionService,
@@ -50,7 +52,7 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
 
         self::assertSame([
             'session_accessible' => true,
-            'build_plan_confirmed' => true,
+            'plan_json' => ['confirmed' => 1],
             'page_type' => 'home',
         ], $payload);
     }
@@ -90,7 +92,6 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
         $session = $this->createStub(AiSiteAgentSession::class);
         $scope = [
             'page_types' => [Page::TYPE_HOME],
-            'draft_website_id' => 9,
             'virtual_pages_by_type' => [],
         ];
 
@@ -135,7 +136,7 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
                     'locale' => 'en_US',
                     'style_code' => 'default',
                     'style_settings' => [],
-                    'blocks' => [],
+                    'block_nodes' => [],
                 ],
             ]);
         $scopeCompatibility->expects(self::once())
@@ -161,13 +162,13 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
         self::assertSame(Page::TYPE_HOME, $context['page']->getData(Page::schema_fields_TYPE));
     }
 
-    public function testBuildPreviewContextFallsBackToMaterializedAiHtmlBlocksWhenSessionBlocksAreCompacted(): void
+    public function testBuildPreviewContextFallsBackToMaterializedAiHtmlBlockNodesWhenSessionBlocksAreCompacted(): void
     {
         $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteAgentWorkspacePreviewService.php');
         self::assertIsString($source);
 
         self::assertStringContainsString('$materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);', $source);
-        self::assertStringContainsString('$virtualPage[\'blocks\'] = $virtualBlocks;', $source);
+        self::assertStringContainsString('$virtualPage[\'block_nodes\'] = $virtualBlocks;', $source);
         self::assertStringContainsString('Page::RENDER_MODE_AI_HTML', $source);
         self::assertStringContainsString('loadMaterializedAiHtmlPreviewPageRow', $source);
     }

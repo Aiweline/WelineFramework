@@ -186,7 +186,7 @@ sqlite3 app/etc/sandbox_db.sqlite \
 - 统一为正确的二层结构
 
 ### 兼容性
-- ✅ 向后兼容：旧的二层结构数据仍然可用
+- ✅ 向后兼容：既有的二层结构数据仍然可用
 - ✅ 自动修复：保存时会自动清理三层结构
 - ✅ 前端渲染：支持两种变量名（`style`和`style_settings`）
 
@@ -344,7 +344,7 @@ if ($translation->getId()) {
 数据库中uz_Arab_AF（默认语言）的配置是center，但可视化编辑器获取到的是left。
 
 #### 根本原因
-`getStyleConfig` API的读取逻辑还在查找旧的三层结构：
+`getStyleConfig` API的读取逻辑还在查找既有的三层结构：
 ```php
 if ($locale && isset($styleSettings[$locale])) {
     $pageSettings = $styleSettings[$locale];  // ❌ 找不到
@@ -1141,7 +1141,7 @@ height: clamp(60px, calc(60px + 20 * ((100vw - 375px) / 905)), 80px);
 **配置项更新：**
 
 ```php
-// 旧配置（单一值）
+// 既有配置（单一值）
 * size.height => 头部高度:number:80|px
 * size.max_width => 内容最大宽度:number:1200|px
 * size.padding_horizontal => 左右内边距:number:40|px
@@ -1211,7 +1211,7 @@ $paddingHResponsive = generateClamp($paddingHMobile, $paddingHDesktop, 'px', 'px
 **配置项更新：**
 
 ```php
-// 旧配置
+// 既有配置
 * layout.padding => 页脚内边距:number:30|px
 * typography.font_size => 字体大小:number:14|px
 
@@ -1242,7 +1242,7 @@ $paddingHResponsive = generateClamp($paddingHMobile, $paddingHDesktop, 'px', 'px
 
 ✅ **性能优异** - CSS原生计算，无JavaScript开销
 
-✅ **向后兼容** - 旧配置会自动使用默认值
+✅ **向后兼容** - 既有配置会自动使用默认值
 
 ### 响应式效果演示
 
@@ -1320,7 +1320,7 @@ $paddingHResponsive = generateClamp($paddingHMobile, $paddingHDesktop, 'px', 'px
 * size.padding_h => 左右内边距:number:16/40|px
 * typography.font_size => 字体大小:number:12/14|px
 
-// ❌ 旧格式（已废弃）- 配置项翻倍
+// ❌ 既有格式（已废弃）- 配置项翻倍
 * size.height_mobile => 移动端头部高度:number:60|px
 * size.height_desktop => PC端头部高度:number:80|px
 ```
@@ -1449,7 +1449,7 @@ $heightResponsive = generateResponsiveCSS($height);
 #### Header 配置
 
 ```php
-// 旧格式（6个配置项）
+// 既有格式（6个配置项）
 * size.height_mobile => 移动端头部高度:number:60|px
 * size.height_desktop => PC端头部高度:number:80|px
 * size.max_width_mobile => 移动端内容最大宽度:number:100|%
@@ -1466,7 +1466,7 @@ $heightResponsive = generateResponsiveCSS($height);
 #### Footer 配置
 
 ```php
-// 旧格式（4个配置项）
+// 既有格式（4个配置项）
 * layout.padding_mobile => 移动端页脚内边距:number:20|px
 * layout.padding_desktop => PC端页脚内边距:number:40|px
 * typography.font_size_mobile => 移动端字体大小:number:12|px

@@ -8,7 +8,7 @@
 ## 1. 核心原则
 
 1. **事件名集合是封闭契约**：后端发的 `sendEvent('xxx', ...)` 必须在 `AiSiteSsePayloadNormalizer::authoritativeEventNames()` 中存在；前端 `addEventListener('xxx', ...)` 同理。两边集合必须**对称**（白名单允许的差异除外），由 `AiSiteSseEventContractTest` 自动锁住。
-2. **payload 字段唯一权威**：每个语义字段只有一个权威键名，所有 SSE payload 通过 `AiSiteSsePayloadNormalizer::normalize()` 统一产出。过渡期 normalizer 会自动把权威字段镜像到旧别名，老前端读取点不破坏。
+2. **payload 字段唯一权威**：每个语义字段只有一个权威键名，所有 SSE payload 通过 `AiSiteSsePayloadNormalizer::normalize()` 统一产出。过渡期 normalizer 会自动把权威字段镜像到既有别名，老前端读取点不破坏。
 3. **状态机以队列 status 为准**：`queue_status` 字段是面向前端的唯一权威，**强制小写**。任何 `Status`/`RUNNING` 这种大小写漂移都被 normalizer 拒收。
 
 ## 2. 事件名权威清单
@@ -51,7 +51,7 @@
 | `operation` | string | 当前操作名（plan/build/regenerate_page/...） | — |
 | `message` | string | 面向用户的可读消息 | — |
 | `queue_status` | string（小写） | 队列权威状态 | `status`、`job_status`、`state`、`semantic_status` |
-| `task_summary` | object | 任务汇总 { total, todo, doing, done, failed, cancelled, groups[] } | `task_progress`、`build_task_summary` |
+| `task_summary` | object | 任务汇总 { total, todo, doing, done, failed, cancelled, groups[] } | `task_progress`、`plan_json_task_summary` |
 | `progress_kind` | string | payload 子类（task_progress/queue_info/page_progress/asset_progress） | — |
 | `progress_percent` | int 0-100 | 整体进度百分比 | — |
 
@@ -70,7 +70,7 @@
 | `shared_component_generated` | `shared_component_generated` |
 | `page_generated` | `page_generated` |
 | `task_completed` | `task_completed` |
-| `task_failed` / `build_task_failed` | `task_failed` |
+| `task_failed` / `plan_json_task_failed` | `task_failed` |
 | `error` / `operation_failed` | `error` |
 
 **新增 event_type 时必须同步**：mapping 表 + `isOperationEventRelevant` 白名单 + `buildObservedOperationEventPayload` payload case。三处不齐就会让事件被静默丢弃。
@@ -84,7 +84,7 @@
 function extractTaskProgressSummary(source) {
   if (source.task_summary) return source.task_summary;      // 主字段
   if (source.task_progress) return source.task_progress;    // 过渡 fallback
-  if (source.build_task_summary) return source.build_task_summary; // 过渡 fallback
+  if (source.plan_json_task_summary) return source.plan_json_task_summary; // 过渡 fallback
   ...
 }
 
@@ -96,7 +96,7 @@ function readQueueStatusFromPayload(operation, payload) {
 }
 ```
 
-**未来稳定后**（normalizer 上线 1-2 个 release）可把 `EMITTED_DEPRECATED_ALIASES = false`，同时把前端 fallback 删除，只保留主字段读取。
+**未来稳定后**（normalizer 上线 1-2 个 release）可把 `EMITTED_UNSUPPORTED_ALIASES = false`，同时把前端 fallback 删除，只保留主字段读取。
 
 ## 6. 新增/重命名事件流程
 

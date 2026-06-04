@@ -113,7 +113,7 @@ if (有 locale) {
     // 按语言保存
     $settings[$locale] = array_merge($settings[$locale], $newConfig);
 } else {
-    // 通用配置（兼容旧版本）
+    // 通用配置（兼容既有版本）
     $settings = array_merge($settings, $newConfig);
 }
 ```
@@ -424,7 +424,7 @@ const requestData = {
 
 ## ⚠️ 注意事项
 
-1. **向后兼容**: 如果 `style_setting` 不是按语言分组的（旧数据），系统会将其视为通用配置
+1. **向后兼容**: 如果 `style_setting` 不是按语言分组的（既有数据），系统会将其视为通用配置
 2. **默认值降级**: 如果某语言没有配置，会自动使用默认语言的配置
 3. **实时同步**: 切换语言时会立即重新加载配置和预览
 4. **防抖机制**: 自动保存有1秒延迟，避免频繁请求

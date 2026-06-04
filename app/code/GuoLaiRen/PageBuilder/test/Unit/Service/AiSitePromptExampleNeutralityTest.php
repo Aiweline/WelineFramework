@@ -13,7 +13,7 @@ final class AiSitePromptExampleNeutralityTest extends TestCase
         $root = \dirname(__DIR__, 3) . '/Service';
         $sources = [
             $root . '/AiSiteStageOneContractService.php',
-            $root . '/AiSiteExecutionBlueprintService.php',
+            $root . '/AiSitePlanJsonGenerationService.php',
             $root . '/AiSiteStageOnePromptContractRenderer.php',
             $root . '/AiSitePageComponentGenerationService.php',
         ];

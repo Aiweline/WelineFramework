@@ -147,7 +147,7 @@ Don't screenshot-verify your own work speculatively — rely on a real browser l
 ## File hygiene
 
 - Descriptive filenames: `Landing Page.html`, `Pricing — Option B.html`. Never `output.html` or `design1.html`.
-- For significant revisions, copy the file and edit the copy so old versions survive: `My Design.html` → `My Design v2.html`.
+- For significant revisions, copy the file and edit the copy so prior versions survive: `My Design.html` → `My Design v2.html`.
 - Split large React prototypes into multiple `.jsx` files and import via script tags. Files over ~1000 lines are hard to edit reliably.
 - Write media files next to the HTML that uses them, not in a distant shared folder. Keep the artifact portable.
 - Use `text-wrap: pretty`, CSS Grid, `oklch()` for harmonious color math, `container queries` for responsive variants — modern CSS is your friend.
