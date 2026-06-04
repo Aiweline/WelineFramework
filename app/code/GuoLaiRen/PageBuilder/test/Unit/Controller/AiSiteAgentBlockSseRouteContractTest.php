@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Controller;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
+use GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
 final class AiSiteAgentBlockSseRouteContractTest extends TestCase
 {
-    public function testBlockSseEndpointsExposeCanonicalGetRoutesAndLegacyGetCompatibility(): void
+    public function testBlockSseEndpointsExposeCanonicalGetRoutesAndRemovedGetCompatibility(): void
     {
         $controllerSource = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
         self::assertIsString($controllerSource);
@@ -31,30 +32,27 @@ final class AiSiteAgentBlockSseRouteContractTest extends TestCase
         ] as $methodName) {
             self::assertTrue(
                 $reflection->hasMethod($methodName),
-                $methodName . ' must exist so EventSource GET subscriptions can resolve both canonical and legacy block SSE URLs.'
+                $methodName . ' must exist so EventSource GET subscriptions can resolve both canonical and removed block SSE URLs.'
             );
         }
     }
 
     public function testBlockSseApplyMatchesSharedComponentBlocksAndReplacesPreviewWrapper(): void
     {
-        $scriptSource = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
-        self::assertIsString($scriptSource);
+        $scriptSource = AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertStringContainsString('function blockMatchesComponentCode(pageType, block, componentCode)', $scriptSource);
-        self::assertStringContainsString('findVirtualBlockInList(pageType, pageState.blocks, blockId)', $scriptSource);
+        self::assertStringContainsString('findVirtualBlockInList(pageType, pageState.block_nodes, blockId)', $scriptSource);
         self::assertStringContainsString("resolveSharedComponentRegionFromCode(pageType, String(candidate || ''))", $scriptSource);
         self::assertStringContainsString('updateVirtualBlockState(context.page_type, refreshedBlock)', $scriptSource);
     }
 
     public function testPreviewStageToolbarKeepsStageLevelActionsWired(): void
     {
-        $scriptSource = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
-        self::assertIsString($scriptSource);
+        $scriptSource = AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
-        self::assertStringContainsString('function buildPreviewStageToolbar(stage)', $scriptSource);
-        self::assertStringContainsString('pb-ai-plan-preview-stage-toolbar', $scriptSource);
-        self::assertStringContainsString("buildPreviewActionButton('refine-stage'", $scriptSource);
-        self::assertStringContainsString("buildPreviewActionButton('rebuild-stage'", $scriptSource);
+        self::assertStringContainsString('function buildPreviewActionButton(action, label, tone, meta)', $scriptSource);
+        self::assertStringContainsString("buildPreviewActionButton('refine'", $scriptSource);
+        self::assertStringContainsString("buildPreviewActionButton('rebuild'", $scriptSource);
     }
 }

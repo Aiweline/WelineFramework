@@ -14,9 +14,7 @@ final class AiSiteWorkbenchBlockSseChatIntegrationTest extends AbstractAiSiteWor
         $modals = (string)\file_get_contents(
             BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/modals.phtml'
         );
-        $script = (string)\file_get_contents(
-            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertStringNotContainsString('var pendingBlockSseResult = null;', $script);
         self::assertStringNotContainsString('var pendingBlockSseStart = null;', $script);

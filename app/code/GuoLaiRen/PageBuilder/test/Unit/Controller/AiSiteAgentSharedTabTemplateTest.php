@@ -11,39 +11,40 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
     public function testSharedThemeTabRendersThemeDesignContractFields(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertIsString($script);
-        self::assertStringContainsString('function renderThemeSummarySection(planRoot)', $script);
+        self::assertStringContainsString('function renderThemeDirectEditSection(planRoot)', $script);
         self::assertStringContainsString('planRoot.theme_design', $script);
         self::assertStringContainsString('themeDesign && themeDesign.theme_purpose', $script);
-        self::assertStringContainsString('themeDesign && themeDesign.color_scheme', $script);
-        self::assertStringContainsString('themeDesign && themeDesign.forbidden_styles', $script);
+        self::assertStringContainsString('root.theme_design && root.theme_design.color_scheme', $script);
         self::assertStringContainsString('previewLabels.themePurpose', $script);
         self::assertStringContainsString('previewLabels.colorSystem', $script);
-        self::assertStringContainsString('previewLabels.forbiddenStyles', $script);
+        self::assertStringContainsString('previewLabels.visualKeywords', $script);
+        self::assertStringContainsString('previewLabels.toneOfVoice', $script);
     }
 
     public function testSharedThemeTabDoesNotRenderReasonDisclosureEntrypoints(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertIsString($script);
         self::assertStringNotContainsString('function renderPreviewReasonDisclosure(label, reasonItems)', $script);
         self::assertStringNotContainsString('class="pb-ai-reason-disclosure d-inline-block ms-2"', $script);
         self::assertStringNotContainsString('reasonItems: collectPreviewReasonItems(headerPlan)', $script);
         self::assertStringNotContainsString('reasonItems: collectPreviewReasonItems(footerPlan)', $script);
-        self::assertStringContainsString('renderPreviewSectionHeadingWithReason(previewLabels.themeSummary)', $script);
+        self::assertStringContainsString('renderThemeDirectEditSection(planRoot)', $script);
+        self::assertStringContainsString('previewLabels.themePurpose', $script);
     }
 
-    public function testBuildPlanPreviewRendersSingleStageDesignDetailsWithoutStageTwoTaskPlan(): void
+    public function testPlanJsonPreviewRendersSingleStageDesignDetailsWithoutStageTwoTaskPlan(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertIsString($script);
-        self::assertStringContainsString('function buildPlanPreviewHtml(markdownText, payload, options)', $script);
+        self::assertStringContainsString('function planJsonPreviewHtml(markdownText, payload, options)', $script);
         self::assertStringContainsString('previewLabels.designDetails', $script);
         self::assertStringContainsString('previewLabels.implementationNote', $script);
         self::assertStringContainsString('function normalizePlanSharedBlocks(planRoot)', $script);
@@ -55,18 +56,16 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringNotContainsString('renderTaskPlan', $script);
     }
 
-    public function testConfirmedPlanModalUsesBuildPlanV2ArtifactsAndBindsPreviewTabs(): void
+    public function testConfirmedPlanModalUsesPlanJsonArtifactsAndBindsPreviewTabs(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertIsString($script);
-        self::assertStringContainsString('resolveBuildPlanV2ArtifactsFromWorkspaceState(stateForBuildPlan)', $script);
-        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'projection'", $script);
-        self::assertStringContainsString("buildPlanPreviewHtml('', { structured: planData, json: planData })", $script);
+        self::assertStringContainsString('resolvePlanJsonArtifactsFromWorkspaceState(stateForPlanJson)', $script);
+        self::assertStringContainsString("planJsonPreviewHtml('', { structured: planData, json: planData })", $script);
         self::assertStringContainsString('bindPreviewTabButtons(planRenderedContent);', $script);
         self::assertStringContainsString('bindPreviewActionButtons(planRenderedContent);', $script);
-        self::assertStringNotContainsString('execution_blueprint', $script);
     }
 
     public function testCurrentPageRefineUsesDedicatedPageApi(): void
@@ -74,7 +73,7 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         $moduleRoot = \dirname(__DIR__, 3);
         $controller = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
         $workspace = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml');
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertIsString($controller);
         self::assertIsString($workspace);
@@ -97,7 +96,7 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         $moduleRoot = \dirname(__DIR__, 3);
         $controller = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
         $layout = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertIsString($controller);
         self::assertIsString($layout);
@@ -116,7 +115,7 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $workspace = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml');
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         $compiledScriptPath = $moduleRoot . '/view/tpl/zh_Hans_CN/templates/Backend/AiSiteAgent/workspace/com_script-main.phtml';
         $compiledScript = \is_file($compiledScriptPath) ? \file_get_contents($compiledScriptPath) : null;
 
@@ -134,12 +133,12 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         }
     }
 
-    public function testBuildPlanConfirmWorkspaceShowsBuildTaskProgress(): void
+    public function testPlanJsonConfirmWorkspaceShowsPlanJsonTaskProgress(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $workspace = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace.phtml');
         $layout = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         $runtime = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
         $buildQueueScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-build-queue-progress.phtml');
 
@@ -151,10 +150,12 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringContainsString("\$currentStage !== 'plan'", $layout);
         self::assertStringContainsString('id="pb-ai-task-progress-heading"', $layout);
         self::assertStringContainsString('data-task-progress-summary="build"', $layout);
-        self::assertStringContainsString('buildPlanConfirmedState = true;', $script);
+        self::assertStringContainsString('var planConfirmedState =', $script);
+        self::assertStringContainsString('$state[\'plan_json\'][\'confirmed\']', $script);
+        self::assertStringContainsString('function resolvePlanJsonFromWorkspaceState(workspaceState)', $script);
         self::assertStringNotContainsString('window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion', $script);
         self::assertStringContainsString('function setRunVirtualThemeButtonsDisabled(disabled)', $script);
-        self::assertStringContainsString('ensureBuildPlanConfirmedBeforeBuild(triggerBtn, selectedTypes, options)', $script);
+        self::assertStringContainsString('ensurePlanJsonConfirmedBeforeBuild(triggerBtn, selectedTypes, options)', $script);
         self::assertStringContainsString('startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, Object.assign({}, opts, {}));', $script);
         self::assertStringContainsString("window.__pbBuildQueueProgress = {", $buildQueueScript);
         self::assertStringContainsString("syncFromWorkspaceState: syncFromWorkspaceState", $buildQueueScript);

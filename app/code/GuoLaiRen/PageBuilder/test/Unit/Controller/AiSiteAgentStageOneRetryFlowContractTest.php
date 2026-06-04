@@ -6,7 +6,7 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Controller;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue;
-use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQueueLogWriter;
 use GuoLaiRen\PageBuilder\Service\AiSiteQueueStateService;
@@ -17,7 +17,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
 {
     public function testStageOneEmptyAiStreamFailureMatchesCurrentProviderMessage(): void
     {
-        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $service = new AiSitePlanJsonGenerationService(new AiSitePageBlueprintService());
         $method = new \ReflectionMethod($service, 'isEmptyAiStreamCompletionFailure');
         $method->setAccessible(true);
 
@@ -52,6 +52,44 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString('$this->markPlanRetryScheduledInScope(', $execute);
         self::assertStringNotContainsString('resolvePlanJsonForCompletionGate', $queueSource);
         self::assertStringNotContainsString('persistRecoveredCompletionGatePlanJson', $queueSource);
+    }
+
+    public function testPlanQueueAutomaticRetryStopsAfterThreeAttemptsAndRequiresManualRetry(): void
+    {
+        $queueSource = (string)\file_get_contents((new ReflectionClass(AiSitePlanQueue::class))->getFileName());
+
+        self::assertStringContainsString('private const MAX_PLAN_QUEUE_ATTEMPTS = 3;', $queueSource);
+        self::assertStringContainsString("private const CONTENT_AUTO_ATTEMPT_KEY = '_plan_auto_attempt';", $queueSource);
+        self::assertStringContainsString("private const CONTENT_MAX_AUTO_ATTEMPTS_KEY = 'max_auto_attempts';", $queueSource);
+        self::assertStringContainsString("private const CONTENT_AUTO_RETRY_SCHEDULED_KEY = '_auto_retry_scheduled';", $queueSource);
+        self::assertStringContainsString("private const CONTENT_LAST_GATE_DECISION_KEY = 'last_gate_decision';", $queueSource);
+        self::assertStringContainsString("private const CONTENT_LAST_GATE_REASON_KEY = 'last_gate_reason';", $queueSource);
+        self::assertStringContainsString("private const CONTENT_LAST_GATE_AT_KEY = 'last_gate_at';", $queueSource);
+
+        $execute = $this->extractMethodSource($queueSource, 'execute');
+        self::assertStringContainsString('[$content, $autoAttempt, $maxAutoAttempts] = $this->beginPlanQueueAttempt(', $execute);
+        self::assertStringContainsString('if ($autoAttempt > $maxAutoAttempts) {', $execute);
+        self::assertStringContainsString('persistPlanQueueStopState(', $execute);
+        self::assertStringContainsString('$this->markQueueStopped($queue, $message);', $execute);
+        self::assertStringContainsString('$hasQueuedPlanMutation || ($hasQueuedPlanResume && !$this->isAutomaticPlanRetryContent($content))', $execute);
+
+        $beginAttempt = $this->extractMethodSource($queueSource, 'beginPlanQueueAttempt');
+        self::assertStringContainsString('if (!$this->isAutomaticPlanRetryContent($content)) {', $beginAttempt);
+        self::assertStringContainsString('unset($content[self::CONTENT_AUTO_ATTEMPT_KEY], $content[self::CONTENT_MAX_AUTO_ATTEMPTS_KEY]);', $beginAttempt);
+        self::assertStringContainsString('$content[self::CONTENT_MAX_AUTO_ATTEMPTS_KEY] = self::MAX_PLAN_QUEUE_ATTEMPTS;', $beginAttempt);
+        self::assertStringContainsString('return [$content, $attempt, self::MAX_PLAN_QUEUE_ATTEMPTS];', $beginAttempt);
+
+        $retryGuard = $this->extractMethodSource($queueSource, 'canScheduleAutomaticPlanRetry');
+        self::assertStringContainsString('< self::MAX_PLAN_QUEUE_ATTEMPTS', $retryGuard);
+
+        $sameQueueRetry = $this->extractMethodSource($queueSource, 'prepareSamePlanQueueRetry');
+        self::assertStringContainsString('$content[self::CONTENT_AUTO_RETRY_SCHEDULED_KEY] = 1;', $sameQueueRetry);
+        self::assertStringContainsString('$content[\'_force_rebuild\'] = 0;', $sameQueueRetry);
+
+        $markStopped = $this->extractMethodSource($queueSource, 'markQueueStopped');
+        self::assertStringContainsString("'manual_confirmation_required'", $markStopped);
+        self::assertStringContainsString("'automatic_attempt_limit'", $markStopped);
+        self::assertStringContainsString("'content' => (string)(\\json_encode(\$content, \\JSON_UNESCAPED_UNICODE)", $markStopped);
     }
 
     public function testPlanOperationSseKeepsQueuedObserverStreamOpen(): void
@@ -100,9 +138,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
     public function testWorkspaceUiKeepsIncompletePlanGenerationRunningWhileQueueIsActive(): void
     {
         $moduleDir = \dirname((new ReflectionClass(AiSiteAgent::class))->getFileName(), 3);
-        $workspaceScript = (string)\file_get_contents(
-            $moduleDir . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $workspaceScript = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         $blockingMessage = $this->extractFunctionSource($workspaceScript, 'getPhaseOnePlanBlockingErrorMessage');
         self::assertStringContainsString("hasRunningQueueForUi(state, 'plan')", $blockingMessage);
         self::assertStringContainsString("return '';", $blockingMessage);
@@ -131,7 +167,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
 
         $moduleDir = \dirname((new ReflectionClass(AiSiteAgent::class))->getFileName(), 3);
         $serviceSource = (string)\file_get_contents(
-            $moduleDir . '/Service/AiSiteExecutionBlueprintService.php'
+            $moduleDir . '/Service/AiSitePlanJsonGenerationService.php'
         );
         self::assertStringContainsString('emitStageOnePageFanoutProgress(', $serviceSource);
         self::assertStringContainsString('Stage 1 page fanout: total ', $serviceSource);
@@ -165,9 +201,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString('publishPlanQueueLatestPageProgress(resolvePlanQueueLatestPageProgress(queueInfo), latestMessage)', $workspaceScript);
         self::assertStringContainsString('syncStageOnePlanPreviewFromWorkspaceState', $workspaceScript);
 
-        $mainScript = (string)\file_get_contents(
-            $moduleDir . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $mainScript = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         self::assertStringContainsString('function resolvePlanPageStatus(page)', $mainScript);
         self::assertStringContainsString('data-plan-node-status', $mainScript);
         self::assertStringNotContainsString('renderStageOnePageProgressPlaceholder', $mainScript);
@@ -193,8 +227,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringNotContainsString("artifactKey . '-'", $controllerSource);
         self::assertStringNotContainsString('latestFile', $controllerSource);
         self::assertStringContainsString('loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, $planArtifactKeys)', $controllerSource);
-        self::assertStringNotContainsString('hydrateStageOnePlanPayloadFromExecutionBlueprint', $controllerSource);
-        self::assertStringNotContainsString("'execution_blueprint' => \\is_array(\$plan['execution_blueprint']", $controllerSource);
+        self::assertStringNotContainsString('hydrateStageOnePlanPayloadFromPlanJsonGeneration', $controllerSource);
     }
 
     public function testPageBuilderWorkspaceOwnsDomainWorkbenchRoutes(): void
@@ -225,9 +258,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString('syncPageBuilderScopeFromLinkedWebsitesSession(', $domainPurchaseSse);
 
         $moduleDir = \dirname((new ReflectionClass(AiSiteAgent::class))->getFileName(), 3);
-        $mainScript = (string)\file_get_contents(
-            $moduleDir . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $mainScript = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         self::assertStringContainsString("var streamPublicId = String(data.public_id || publicId || linkedWorkbenchPublicId || '').trim();", $mainScript);
         self::assertStringContainsString('startDomainPurchaseStream(streamPublicId, executionToken);', $mainScript);
     }
@@ -250,9 +281,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringNotContainsString('$siteProfileManual[$manualField] = true;', $mutateScope);
 
         $moduleDir = \dirname((new ReflectionClass(AiSiteAgent::class))->getFileName(), 3);
-        $mainScript = (string)\file_get_contents(
-            $moduleDir . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $mainScript = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         self::assertStringContainsString('state.site_profile_manual = Object.assign({}, siteProfileManual);', $mainScript);
         self::assertStringContainsString('siteProfileManual[mapped] = true;', $mainScript);
     }
