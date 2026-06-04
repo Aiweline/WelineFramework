@@ -342,7 +342,8 @@ class Preview extends BackendController
                     $publicId,
                     $requestedPageType,
                     \trim((string)($this->request->getGet('style_code') ?: '')),
-                    \trim((string)($locale ?: ''))
+                    \trim((string)($locale ?: '')),
+                    (int)$this->request->getGet('virtual_theme_id', 0)
                 );
                 if ($context === null) {
                     throw new ResponseTerminateException(

@@ -78,7 +78,7 @@ class AiSiteAgentQueueObserverHelperService
             }
         }
 
-        return $success ? (string)__('鎿嶄綔鎵ц瀹屾垚') : (string)__('鎿嶄綔鎵ц澶辫触');
+        return $success ? (string)__('操作执行完成') : (string)__('操作执行失败');
     }
 
     /**
@@ -101,10 +101,9 @@ class AiSiteAgentQueueObserverHelperService
             'name' => (string)($currentState['name'] ?? ''),
             'module' => (string)($currentState['module'] ?? ''),
             'biz_key' => (string)($currentState['biz_key'] ?? ''),
-            'status' => (string)($currentState['status'] ?? ''),
-            'queue_status' => (string)($currentState['status'] ?? ''),
-            'job_status' => (string)($currentState['job_status'] ?? ($currentState['status'] ?? '')),
-            'semantic_status' => (string)($currentState['semantic_status'] ?? ($currentState['job_status'] ?? ($currentState['status'] ?? ''))),
+            'status' => (string)($currentState['queue_status'] ?? ''),
+            'queue_status' => (string)($currentState['queue_status'] ?? ''),
+            'semantic_status' => (string)($currentState['semantic_status'] ?? ''),
             'pid' => (int)($currentState['pid'] ?? 0),
             'type_id' => (int)($currentState['type_id'] ?? 0),
             'finished' => (int)($currentState['finished'] ?? 0),
@@ -393,7 +392,7 @@ class AiSiteAgentQueueObserverHelperService
             return $result;
         }
 
-        return (string)__('...(浠呮樉绀烘湯灏剧害 %{n} 瀛楄妭)', ['n' => (string)self::QUEUE_RESULT_TAIL_BYTES])
+        return (string)__('...(仅显示末尾约 %{n} 字节)', ['n' => (string)self::QUEUE_RESULT_TAIL_BYTES])
             . "\n"
             . $this->strcutTail($result, self::QUEUE_RESULT_TAIL_BYTES);
     }

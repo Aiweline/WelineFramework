@@ -1,0 +1,19 @@
+<?php
+/**
+ * Weline_Mail module - account page content section.
+ *
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 165
+ * @hook-sort-order 11
+ * @hook-solo false
+ */
+use Weline\Customer\Service\AccountSidebarContentGate;
+
+if (!AccountSidebarContentGate::accepts('mail')) {
+    return;
+}
+?>
+<section class="account-hook-section account-index__section d-none motor-account-section" id="mail-section" data-account-section="mail" hidden>
+    <?= $this->fetch('Weline_Mail::templates/frontend/account/mail.phtml') ?>
+</section>

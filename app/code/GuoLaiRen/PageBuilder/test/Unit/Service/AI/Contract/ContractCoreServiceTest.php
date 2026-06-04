@@ -91,7 +91,7 @@ final class ContractCoreServiceTest extends TestCase
 
         $result = (new ContractPatchValidator())->validate($previous, $next, [
             'patch' => ['content_manifest.items.*', 'qa_gates.*'],
-            'forbidden' => ['pages', 'block_nodes', 'tasks'],
+            'forbidden' => ['pages', 'blocks', 'tasks'],
         ]);
 
         self::assertFalse($result['valid']);
@@ -170,7 +170,7 @@ final class ContractCoreServiceTest extends TestCase
         self::assertIsString($forbidden);
         self::assertStringContainsString('casino', $forbidden);
         self::assertStringContainsString('APK', $forbidden);
-        self::assertNotContains('hero_download', $contract['required_home_block_nodes']);
+        self::assertNotContains('hero_download', $contract['required_home_blocks']);
         self::assertNotContains('Drive APK/app download click', $contract['conversion_goals']);
     }
 

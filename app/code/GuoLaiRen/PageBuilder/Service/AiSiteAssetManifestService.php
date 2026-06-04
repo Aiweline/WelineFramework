@@ -359,13 +359,13 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * 寮鸿濂戠害锛氬浘鍍?prompt 蹇呴』浠?涓氬姟涓讳綋"寮€澶达紝brand 鍚嶇О浠呬綔娆¤瑁呴グ锛屽惁鍒?AI 浼氬拷鐣?
-     * 鐢ㄦ埛鐨勭湡瀹炰笟鍔¤瘔姹傦紙濡傝涓氥€佷骇鍝併€佹湇鍔″満鏅級锛岀収鐫€ site_title 瀛楅潰鍑┖鍙戞尌
-     * 鍑烘棤鍏冲悏绁ョ墿/鎻掔敾銆傞噸鏋勫師鍒欙細
-     *   1. PRIMARY SUBJECT 蹇呴』鏄?prompt 鐨勭 1 琛岋紱
-     *   2. brand name 浠呬綔 wordmark text reference / brand context锛屼笉浣滀富浣擄紱
-     *   3. slot.brief 涓鏋滀互 "Generate the official website logo for X" 寮€澶达紝
-     *      浼氬厛鎶婂畠鏇挎崲鎴?subject-first 鍐欐硶锛岄伩鍏嶅拰 brand 涓讳綋璇箟鍐茬獊銆?
+     * 瀵缚顢戞總鎴犲閿涙艾娴橀崓?prompt 韫囧懘銆忔禒?娑撴艾濮熸稉璁崇秼"瀵偓婢惰揪绱漛rand 閸氬秶袨娴犲懍缍斿▎陇顩︾憗鍛淬偘閿涘苯鎯侀崚?AI 娴兼艾鎷烽悾?
+     * 閻劍鍩涢惃鍕埂鐎圭偘绗熼崝陇鐦斿Ч鍌︾礄婵″倽顢戞稉姘モ偓浣烽獓閸濅降鈧焦婀囬崝鈥虫簚閺咁垽绱氶敍宀€鍙庨惈鈧?site_title 鐎涙娼伴崙顓犫敄閸欐垶灏?
+     * 閸戠儤妫ら崗鍐叉倧缁併儳澧?閹绘帞鏁鹃妴鍌炲櫢閺嬪嫬甯崚娆欑窗
+     *   1. PRIMARY SUBJECT 韫囧懘銆忛弰?prompt 閻ㄥ嫮顑?1 鐞涘矉绱?
+     *   2. brand name 娴犲懍缍?wordmark text reference / brand context閿涘奔绗夋担婊€瀵屾担鎿勭幢
+     *   3. slot.brief 娑擃厼顩ч弸婊€浜?"Generate the official website logo for X" 瀵偓婢惰揪绱?
+     *      娴兼艾鍘涢幎濠傜暊閺囨寧宕查幋?subject-first 閸愭瑦纭堕敍宀勪缉閸忓秴鎷?brand 娑撹缍嬬拠顓濈疅閸愯尙鐛婇妴?
      *
      * @param array<string, mixed> $slot
      * @param array<string, mixed> $scope
@@ -398,35 +398,35 @@ final class AiSiteAssetManifestService
 
         $parts = [];
 
-        // 绗?1 琛岋細寮鸿濂戠害 PRIMARY SUBJECT锛堟渶楂樹紭鍏堢骇锛夈€?
+        // 缁?1 鐞涘矉绱板楦款攽婵傛垹瀹?PRIMARY SUBJECT閿涘牊娓舵妯圭喘閸忓牏楠囬敍澶堚偓?
         if ($primarySubject !== '') {
             if ($isFaviconLikeSlot) {
-                $parts[] = 'PRIMARY SUBJECT (CRITICAL 鈥?the favicon/title icon glyph MUST visually depict this business; do not invent unrelated mascots, animals, or fantasy creatures): ' . $primarySubject;
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL 閳?the favicon/title icon glyph MUST visually depict this business; do not invent unrelated mascots, animals, or fantasy creatures): ' . $primarySubject;
             } elseif ($isLogoSlot) {
-                $parts[] = 'PRIMARY SUBJECT (CRITICAL 鈥?the logo mark/glyph MUST visually depict this business; reject any unrelated mascot, animal, or fantasy figure that does not match the industry): ' . $primarySubject;
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL 閳?the logo mark/glyph MUST visually depict this business; reject any unrelated mascot, animal, or fantasy figure that does not match the industry): ' . $primarySubject;
             } else {
-                $parts[] = 'PRIMARY SUBJECT (CRITICAL 鈥?the entire scene MUST depict this exactly; every figure, prop, and setting comes from this domain): ' . $primarySubject;
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL 閳?the entire scene MUST depict this exactly; every figure, prop, and setting comes from this domain): ' . $primarySubject;
             }
         } elseif ($businessContext !== '') {
-            // 鍏滃簳锛氭病鏈夋彁鍙栧埌涓讳綋鏃讹紝鑷冲皯鎶?brief 褰撴垚涓讳綋鑰屼笉鏄?context銆?
-            $parts[] = 'PRIMARY SUBJECT (CRITICAL 鈥?depict this domain only): ' . $businessContext;
+            // 閸忔粌绨抽敍姘梾閺堝褰侀崣鏍у煂娑撹缍嬮弮璁圭礉閼峰啿鐨幎?brief 瑜版挻鍨氭稉璁崇秼閼板奔绗夐弰?context閵?
+            $parts[] = 'PRIMARY SUBJECT (CRITICAL 閳?depict this domain only): ' . $businessContext;
         }
 
-        // 绗?2 琛岋細涓氬姟鑳屾櫙锛堝鏋滀笌 PRIMARY SUBJECT 宸查噸澶嶅氨璺宠繃锛夈€?
+        // 缁?2 鐞涘矉绱版稉姘閼冲本娅欓敍鍫濐洤閺嬫粈绗?PRIMARY SUBJECT 瀹告煡鍣告径宥呮皑鐠哄疇绻冮敍澶堚偓?
         if ($businessContext !== '' && $businessContext !== $primarySubject) {
-            $parts[] = 'Business / cultural context (every figure, environment, and detail MUST match this exactly 鈥?never substitute a generic stock-photo subject): ' . $businessContext;
+            $parts[] = 'Business / cultural context (every figure, environment, and detail MUST match this exactly 閳?never substitute a generic stock-photo subject): ' . $businessContext;
         }
 
-        // 绗?3 琛岋細澶勭悊 slot.brief銆傚厛鍘绘帀 "Generate the official website logo for X" 杩欑被
-        // 鎶?brand 褰撲富浣撶殑鍙ュ紡锛屽惁鍒欎細涓?PRIMARY SUBJECT 褰㈡垚涓讳綋鍐茬獊銆?
+        // 缁?3 鐞涘矉绱版径鍕倞 slot.brief閵嗗倸鍘涢崢缁樺竴 "Generate the official website logo for X" 鏉╂瑧琚?
+        // 閹?brand 瑜版挷瀵屾担鎾舵畱閸欍儱绱￠敍灞芥儊閸掓瑤绱版稉?PRIMARY SUBJECT 瑜般垺鍨氭稉璁崇秼閸愯尙鐛婇妴?
         $sanitizedBrief = $this->sanitizeSlotBriefForPrompt($rawBrief, $siteTitle);
         if ($sanitizedBrief !== '') {
             $parts[] = $isLogoSlot
-                ? 'Slot brief (reference only 鈥?does not override PRIMARY SUBJECT): ' . $sanitizedBrief
+                ? 'Slot brief (reference only 閳?does not override PRIMARY SUBJECT): ' . $sanitizedBrief
                 : $sanitizedBrief;
         }
 
-        // 绗?4 琛岋細brand name 鈥斺€?浠呭綋 logo 鏃朵綔涓?wordmark text锛涘叾瀹冧粎浣滈鏍艰儗鏅紝涓嶇敾鏂囧瓧銆?
+        // 缁?4 鐞涘矉绱癰rand name 閳ユ柡鈧?娴犲懎缍?logo 閺冩湹缍旀稉?wordmark text閿涙稑鍙剧€瑰啩绮庢担婊堫棑閺嶈壈鍎楅弲顖ょ礉娑撳秶鏁鹃弬鍥х摟閵?
         if ($siteTitle !== '') {
             if ($isLogoSlot) {
                 $parts[] = 'Optional brand wordmark text (only as small typographic accompaniment to the PRIMARY SUBJECT glyph; never as the primary subject itself, never invent characters out of this name): ' . $siteTitle;
@@ -435,7 +435,7 @@ final class AiSiteAssetManifestService
             }
         }
 
-        // 绗?5 琛岋細tagline 浠呬綔涓烘儏缁?椋庢牸璋冨瓙锛屼笉鐢绘枃瀛椼€?
+        // 缁?5 鐞涘矉绱皌agline 娴犲懍缍旀稉鐑樺剰缂?妞嬪孩鐗哥拫鍐ㄧ摍閿涘奔绗夐悽缁樻瀮鐎涙ぜ鈧?
         if ($siteTagline !== '') {
             $parts[] = $isLogoSlot
                 ? 'Brand personality for styling (mood/color palette only; never spell out this tagline inside the logo): ' . $siteTagline
@@ -463,7 +463,7 @@ final class AiSiteAssetManifestService
         } elseif ($isLogoSlot) {
             $parts[] = 'Logo output requirements (HARD): generate a production-ready identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). Keep only the brand mark/wordmark pixels on transparency; do not place the logo on a white box, colored rectangle, rounded card, wall, photo scene, gradient backdrop, website mockup, screenshot frame, or any other background surface.';
         } elseif ($isHeroSlot) {
-            $parts[] = 'Hero banner default output requirements: when the user has not explicitly requested another hero image composition, compose for a 1920x750 website banner crop. Fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed 鈥?cover the full canvas with the subject matter and keep important subjects inside the center-safe area so CSS object-fit:cover can crop cleanly.';
+            $parts[] = 'Hero banner default output requirements: when the user has not explicitly requested another hero image composition, compose for a 1920x750 website banner crop. Fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed 閳?cover the full canvas with the subject matter and keep important subjects inside the center-safe area so CSS object-fit:cover can crop cleanly.';
             $parts[] = 'Hero visual quality bar (CRITICAL): premium cinematic website banner background, very wide horizontal composition, edge-to-edge coverage, strong depth, realistic lighting, high-end commercial art direction. Do NOT generate flat vector art, SVG-like shapes, childish cartoon, icon collage, clip-art, rough geometric placeholder art, cardboard-looking cards, UI mockups, or simplistic low-detail illustration. Prefer realistic/editorial photography or photoreal premium 3D only when the subject cannot be photographed.';
             $parts[] = $this->buildBlockImageArtifactContract(true);
         } else {
@@ -476,10 +476,10 @@ final class AiSiteAssetManifestService
         if ($pageType !== '') {
             $parts[] = 'Page type: ' . $pageType;
         }
-        // 寮鸿濂戠害锛歳eference_image_insights 涓殑 layout/component cues 缁忓父鎻忚堪
-        // "header + hero + columns + footer" 杩欑被鏁撮〉缁撴瀯锛屽杺缁欏崟 block 鍥惧儚鐢熸垚鏃?
-        // 浼氳 AI 澶嶅埗鎴愮綉绔?mockup銆備粎 logo 绫昏祫浜т繚鐣欓鏍?reference锛涘叾瀹冭瑙夌礌鏉?
-        // 浠呭惛鏀堕鑹?鎺掔増鍏抽敭璇嶏紝鍓ョ甯冨眬/缁勪欢灞傞潰鐨勯〉闈㈢粨鏋勬殫绀恒€?
+        // 瀵缚顢戞總鎴犲閿涙eference_image_insights 娑擃厾娈?layout/component cues 缂佸繐鐖堕幓蹇氬牚
+        // "header + hero + columns + footer" 鏉╂瑧琚弫鎾€夌紒鎾寸€敍灞芥澓缂佹瑥宕?block 閸ユ儳鍎氶悽鐔稿灇閺?
+        // 娴兼俺顔€ AI 婢跺秴鍩楅幋鎰秹缁?mockup閵嗗倷绮?logo 缁槒绁禍褌绻氶悾娆擃棑閺?reference閿涙稑鍙剧€瑰啳顫嬬憴澶岀閺?
+        // 娴犲懎鎯涢弨鍫曨杹閼?閹烘帞澧楅崗鎶芥暛鐠囧稄绱濋崜銉ь瀲鐢啫鐪?缂佸嫪娆㈢仦鍌炴桨閻ㄥ嫰銆夐棃銏㈢波閺嬪嫭娈粈鎭掆偓?
         $referenceInsightsPrompt = $isLogoSlot
             ? $this->buildReferenceInsightsPrompt($scope)
             : $this->buildBlockReferenceInsightsPrompt($scope);
@@ -487,7 +487,7 @@ final class AiSiteAssetManifestService
             $parts[] = $referenceInsightsPrompt;
         }
 
-        // 鏀跺熬锛氬啀娆″杩?PRIMARY SUBJECT锛岄伩鍏?AI 鍦ㄩ暱 prompt 涓?婕傜Щ"蹇樻帀棣栬濂戠害銆?
+        // 閺€璺虹啲閿涙艾鍟€濞嗏€愁槻鏉?PRIMARY SUBJECT閿涘矂浼╅崗?AI 閸︺劑鏆?prompt 娑?濠曞倻些"韫囨ɑ甯€妫ｆ牞顩︽總鎴犲閵?
         if ($primarySubject !== '') {
             $parts[] = 'Reinforced contract: the visual MUST stay within the PRIMARY SUBJECT domain stated above; reject any drift toward unrelated mascots, generic stock imagery, or off-topic scenery.';
         }
@@ -517,7 +517,7 @@ final class AiSiteAssetManifestService
             return false;
         }
 
-        return \preg_match('/(?:neon|casino|card\s*game|poker|mahjong|rummy|teen\s*patti|game\s*lobby|gaming|妫嬬墝|妫嬬墝娓告垙|闇撹櫣|鐗屾|鐗屽眬|鎵戝厠|楹诲皢|鐢电帺鍩巪绾夸笂濞变箰|娓告垙鎴块棿|璧涗簨鎴块棿)/iu', $text) === 1;
+        return \preg_match('/(?:neon|casino|card\s*game|poker|mahjong|rummy|teen\s*patti|game\s*lobby|gaming|濡澧潀濡澧濆〒鍛婂灆|闂囨捁娅閻楀本顢憒閻楀苯鐪瑋閹垫垵鍘爘妤硅鐨閻㈢數甯洪崺宸痪澶哥瑐婵炲彉绠皘濞撳憡鍨欓幋鍧楁？|鐠ф稐绨ㄩ幋鍧楁？)/iu', $text) === 1;
     }
 
     /**
@@ -557,14 +557,14 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * 寮鸿濂戠害鎶藉彇锛氬熀浜?brief_description 鎺ㄥ涓€缁?蹇呴』鍑虹幇鐨勫浘鍍忎富浣撳叧閿瘝"銆?
-     * 杩欐槸淇 logo/banner 涓庣敤鎴蜂笟鍔¤瘔姹傝劚鑺傜殑鍏抽敭鈥斺€擜I 鐪嬪埌鍏蜂綋鍚嶈瘝
-     * 锛堝叿浣撲骇鍝併€佹湇鍔°€佹潗鏂欍€佸満鏅瓑锛変細浼樺厛鎶婂畠浠敾杩涘浘锛?
-     * 鑰屽厜鐪?"Business context: ..." 闀垮彞鍙嶈€屼細琚饭娌°€?
+     * 瀵缚顢戞總鎴犲閹惰棄褰囬敍姘唨娴?brief_description 閹恒劌顕辨稉鈧紒?韫囧懘銆忛崙铏瑰箛閻ㄥ嫬娴橀崓蹇庡瘜娴ｆ挸鍙ч柨顔跨槤"閵?
+     * 鏉╂瑦妲告穱顔碱槻 logo/banner 娑撳海鏁ら幋铚傜瑹閸斅ょ様濮瑰倽鍔氶懞鍌滄畱閸忔娊鏁垾鏂衡偓鎿淚 閻鍩岄崗铚傜秼閸氬秷鐦?
+     * 閿涘牆鍙挎担鎾查獓閸濅降鈧焦婀囬崝掳鈧焦娼楅弬娆嶁偓浣告簚閺咁垳鐡戦敍澶夌窗娴兼ê鍘涢幎濠傜暊娴狀剛鏁炬潻娑樻禈閿?
+     * 閼板苯鍘滈惇?"Business context: ..." 闂€鍨綖閸欏秷鈧奔绱扮悮顐ｉキ濞屄扳偓?
      *
-     * 鍏抽敭璇嶇敓鎴愯鍒欙細
-     *   1. 浼樺厛浠?brief_description 鎶藉彇銆傜煭鍙ョ洿鎺ュ鐢紱闀垮彞淇濈暀鍓?240 瀛楃銆?
-     *   2. 鍚屾椂鍙犲姞 slot.brief 宸插瓨鍦ㄧ殑棰嗗煙鍚嶈瘝锛堝鏋滄湁锛夛紝鍑忓皯 prompt 婕傜Щ銆?
+     * 閸忔娊鏁拠宥囨晸閹存劘顫夐崚娆欑窗
+     *   1. 娴兼ê鍘涙禒?brief_description 閹惰棄褰囬妴鍌滅叚閸欍儳娲块幒銉ヮ槻閻㈩煉绱遍梹鍨綖娣囨繄鏆€閸?240 鐎涙顑侀妴?
+     *   2. 閸氬本妞傞崣鐘插 slot.brief 瀹告彃鐡ㄩ崷銊ф畱妫板棗鐓欓崥宥堢槤閿涘牆顩ч弸婊勬箒閿涘绱濋崙蹇撶毌 prompt 濠曞倻些閵?
      *
      * @param array<string, mixed> $slot
      */
@@ -583,7 +583,7 @@ final class AiSiteAssetManifestService
             return $this->clipText($slotBrief, 240);
         }
 
-        // 浼樺厛 business context锛涚己鐪侀€€鍒?tagline锛涘啀閫€鍒?slot.brief銆?
+        // 娴兼ê鍘?business context閿涙稓宸遍惇渚€鈧偓閸?tagline閿涙稑鍟€闁偓閸?slot.brief閵?
         if ($businessContext !== '') {
             return $this->clipText($businessContext, 240);
         }
@@ -595,8 +595,8 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * 鎶?slot.brief 涓?Generate the official website logo for X"杩欑被鎶?brand 褰撲富浣撶殑鍐欐硶
-     * 鏇挎崲鎴愪腑鎬?"Logo output for X"锛岄伩鍏?AI 鍑虹幇涓讳綋鍐茬獊锛圥RIMARY SUBJECT vs slot.brief锛夈€?
+     * 閹?slot.brief 娑?Generate the official website logo for X"鏉╂瑧琚幎?brand 瑜版挷瀵屾担鎾舵畱閸愭瑦纭?
+     * 閺囨寧宕查幋鎰厬閹?"Logo output for X"閿涘矂浼╅崗?AI 閸戣櫣骞囨稉璁崇秼閸愯尙鐛婇敍鍦IMARY SUBJECT vs slot.brief閿涘鈧?
      */
     /**
      * True only when slot.brief already carries a concrete block-level generated-image subject.
@@ -1021,8 +1021,8 @@ final class AiSiteAssetManifestService
         $existingLogo = $this->readExistingIdentityAssetUrl($scope, 'logo');
         $existingIcon = $this->readExistingIdentityAssetUrl($scope, 'icon');
 
-        // 寮鸿濂戠害锛歴lot.brief 蹇呴』浠?涓氬姟涓讳綋"寮€澶达紝閬垮厤 buildPrompt 鏃?brand name 鎶㈠崰
-        // PRIMARY SUBJECT 浣嶇疆锛堝鑷村嚭鐜颁笌璇夋眰鑴辫妭鐨勫悏绁ョ墿 logo锛夈€?
+        // 瀵缚顢戞總鎴犲閿涙lot.brief 韫囧懘銆忔禒?娑撴艾濮熸稉璁崇秼"瀵偓婢惰揪绱濋柆鍨帳 buildPrompt 閺?brand name 閹躲垹宕?
+        // PRIMARY SUBJECT 娴ｅ秶鐤嗛敍鍫濐嚤閼锋潙鍤悳棰佺瑢鐠囧鐪伴懘杈Ν閻ㄥ嫬鎮忕粊銉у⒖ logo閿涘鈧?
         $subjectAnchor = $briefDescription !== ''
             ? $briefDescription
             : ($siteTagline !== '' ? $siteTagline : $brandReference);
@@ -1123,7 +1123,7 @@ final class AiSiteAssetManifestService
 
     /**
      * Stage-1 JSON often omits a dedicated image row in {@see collectRequirementRows}, which leaves the
-     * asset manifest without a planned hero slot 鈥?previews fall back to bare gradients with no banner image.
+     * asset manifest without a planned hero slot 閳?previews fall back to bare gradients with no banner image.
      * We synthesize a stable hero_image slot per hero section derived from the same blueprint wiring as
      * {@see AiSitePlanJsonTaskService::buildBlueprintFromStageOnePlanJsonGeneration}.
      *
@@ -1146,14 +1146,14 @@ final class AiSiteAssetManifestService
                 'page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode)
             );
 
-            // 寮鸿濂戠害锛歜anner slot.brief 蹇呴』浠ヤ笟鍔′富浣撳紑澶达紝鍚﹀垯 AI 浼氱敾涓庤瘔姹傛棤鍏崇殑
-            // 閫氱敤娓愬彉/鎶借薄鍥炬锛岃窡"妫嬬墝/鍗板害甯傚満/APK 涓嬭浇"绛夌湡瀹炶瘔姹傝劚鑺傘€?
+            // 瀵缚顢戞總鎴犲閿涙瓬anner slot.brief 韫囧懘銆忔禒銉ょ瑹閸斺€插瘜娴ｆ挸绱戞径杈剧礉閸氾箑鍨?AI 娴兼氨鏁炬稉搴ょ様濮瑰倹妫ら崗宕囨畱
+            // 闁氨鏁ゅ〒鎰綁/閹跺€熻杽閸ョ偓顢嶉敍宀冪"濡澧?閸楁澘瀹崇敮鍌氭簚/APK 娑撳娴?缁涘婀＄€圭偠鐦斿Ч鍌濆姎閼哄倶鈧?
             $briefParts = [];
             if ($businessContext !== '') {
-                $briefParts[] = 'PRIMARY SUBJECT for the hero banner background (CRITICAL 鈥?the entire scene MUST depict this business and culture; do not substitute a generic abstract gradient, generic stock photo, or off-topic figures): '
+                $briefParts[] = 'PRIMARY SUBJECT for the hero banner background (CRITICAL 閳?the entire scene MUST depict this business and culture; do not substitute a generic abstract gradient, generic stock photo, or off-topic figures): '
                     . $businessContext;
             }
-            $briefParts[] = 'Format default: 1920x750-style full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Unless the user explicitly requests a different hero visual composition, fill the entire canvas edge-to-edge with one immersive wide scene and keep important subjects within the center-safe crop area. Apply a subtle gradient overlay at top and bottom edges (dark-to-transparent) so text and page content can overlay the image naturally. The style and color temperature MUST match the brand identity 鈥?not a generic stock photo.';
+            $briefParts[] = 'Format default: 1920x750-style full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Unless the user explicitly requests a different hero visual composition, fill the entire canvas edge-to-edge with one immersive wide scene and keep important subjects within the center-safe crop area. Apply a subtle gradient overlay at top and bottom edges (dark-to-transparent) so text and page content can overlay the image naturally. The style and color temperature MUST match the brand identity 閳?not a generic stock photo.';
             $briefParts[] = $this->buildBlockImageArtifactContract(true);
             if ($title !== '') {
                 $briefParts[] = 'Section headline context (do not render as readable slogan text inside the image): ' . $title;
@@ -1186,7 +1186,7 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * Build page-scoped image slots from plan_json.pages dynamic block nodes.
+     * Build page-scoped image slots from plan_json.pages dynamic blocks.
      *
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
@@ -1212,7 +1212,7 @@ final class AiSiteAssetManifestService
             if (!\is_string($pageType) || !\is_array($page)) {
                 continue;
             }
-            foreach ($this->extractPlanJsonPageBlockNodes($page) as $blockKey => $block) {
+            foreach ($this->extractPlanJsonPageBlocks($page) as $blockKey => $block) {
                 $blockKey = $this->normalizeSlotId((string)$blockKey);
             if ($pageType === '' || $blockKey === '') {
                 continue;
@@ -1336,7 +1336,7 @@ final class AiSiteAssetManifestService
      * @param array<string, mixed> $page
      * @return array<string, array<string, mixed>>
      */
-    private function extractPlanJsonPageBlockNodes(array $page): array
+    private function extractPlanJsonPageBlocks(array $page): array
     {
         $blocks = [];
         foreach ($page as $blockKey => $block) {
@@ -1365,8 +1365,8 @@ final class AiSiteAssetManifestService
                 'layout',
                 'sections',
                 'section_refinements',
-                'block_nodes',
-                'block_node_previews',
+                'blocks',
+                'block_previews',
                 'updated_at',
                 'started_at',
                 'finished_at',
@@ -1616,7 +1616,7 @@ final class AiSiteAssetManifestService
             ? $planJson['content_manifest']['items']
             : [];
         $homePage = \is_array($pages['home_page'] ?? null) ? $pages['home_page'] : [];
-        foreach ($this->extractPlanJsonPageBlockNodes($homePage) as $blockKey => $block) {
+        foreach ($this->extractPlanJsonPageBlocks($homePage) as $blockKey => $block) {
             $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
             $isHero = \in_array(\strtolower(\trim((string)($imageIntent['image_role'] ?? ''))), ['hero_image', 'hero_banner'], true)
                 || \strtolower(\trim((string)($block['page_flow_role'] ?? ''))) === 'opening'
@@ -2243,8 +2243,8 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * 鍧楃骇鍥惧儚涓撶敤 reference 鎽樿锛氫粎淇濈暀鑹插僵/璐ㄦ劅/椋庢牸绫绘彁绀猴紝
-     * 鍓ョ layout_cues / component_cues 绛変細琚?AI 瑙ｈ涓?鐢绘暣椤?鐨勭粨鏋勪俊鍙枫€?
+     * 閸ф楠囬崶鎯у剼娑撴挾鏁?reference 閹芥顩﹂敍姘矌娣囨繄鏆€閼规彃鍍?鐠愩劍鍔?妞嬪孩鐗哥猾缁樺絹缁€鐚寸礉
+     * 閸撱儳顬?layout_cues / component_cues 缁涘绱扮悮?AI 鐟欙綀顕版稉?閻㈢粯鏆ｆい?閻ㄥ嫮绮ㄩ弸鍕繆閸欐灚鈧?
      *
      * @param array<string, mixed> $scope
      */

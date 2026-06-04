@@ -513,7 +513,7 @@ final class AiSiteAgentQueueDispatchGuardServiceTest extends TestCase
 
     public function testRecoverableSettledDoesNotRecoverWhenActiveStatusIsDone(): void
     {
-        // active.status=done → !in_array(queued|running) → activeMatchesCurrent=false
+        // active.queue_status=done -> !in_array(queued|running) -> activeMatchesCurrent=false
         $sse = new SpySseWriterForQueueDispatchGuard(true);
         $dispatchInvoked = null;
 

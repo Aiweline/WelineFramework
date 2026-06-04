@@ -67,7 +67,7 @@ final class SourceTruthContractBuilder
             'must_include_facts',
             'must_include_keywords',
             'conversion_goals',
-            'required_home_block_nodes',
+            'required_home_blocks',
             'visual_must_honor',
             'must_not_do',
             'content_locale',
@@ -118,7 +118,7 @@ final class SourceTruthContractBuilder
             'must_include_facts' => $facts,
             'must_include_keywords' => $keywords,
             'conversion_goals' => $this->extractConversionGoals($positiveBrief, $pageTypes),
-            'required_home_block_nodes' => $requiredBlocks,
+            'required_home_blocks' => $requiredBlocks,
             'visual_must_honor' => $visualHonor,
             'must_not_do' => $forbidden,
         ];

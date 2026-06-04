@@ -13,11 +13,11 @@ final class PlanJsonBlockGraphValidatorTest extends TestCase
     {
         $result = (new PlanJsonBlockGraphValidator())->validate([
             'pages' => [
-                ['page_id' => 'home', 'block_node_ids' => ['home.hero', 'home.games']],
-            ],
-            'block_nodes' => [
-                ['block_id' => 'home.hero', 'page_id' => 'home'],
-                ['block_id' => 'home.games', 'page_id' => 'home'],
+                'home' => [
+                    'page_id' => 'home',
+                    'hero' => ['block_id' => 'home.hero', 'page_id' => 'home'],
+                    'games' => ['block_id' => 'home.games', 'page_id' => 'home'],
+                ],
             ],
         ]);
 
@@ -28,23 +28,22 @@ final class PlanJsonBlockGraphValidatorTest extends TestCase
     {
         $result = (new PlanJsonBlockGraphValidator())->validate([
             'pages' => [
-                ['page_id' => 'home', 'block_node_ids' => ['home.hero']],
+                'home' => ['page_id' => 'home'],
             ],
-            'block_nodes' => [],
         ]);
 
         self::assertFalse($result['valid']);
-        self::assertTrue($this->hasErrorContaining($result['errors'], 'references missing block'));
+        self::assertTrue($this->hasErrorContaining($result['errors'], 'has no dynamic blocks'));
     }
 
     public function testRejectsBlockReferenceToMissingPage(): void
     {
         $result = (new PlanJsonBlockGraphValidator())->validate([
             'pages' => [
-                ['page_id' => 'home', 'block_node_ids' => []],
-            ],
-            'block_nodes' => [
-                ['block_id' => 'about.hero', 'page_id' => 'about'],
+                'home' => [
+                    'page_id' => 'home',
+                    'hero' => ['block_id' => 'about.hero', 'page_id' => 'about'],
+                ],
             ],
         ]);
 

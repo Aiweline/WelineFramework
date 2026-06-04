@@ -33,23 +33,24 @@ final class AiSitePageBlueprintService
      */
     public function buildPageBlueprint(string $pageType, array $scope, array $websiteProfile): array
     {
-        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+        $planJsonPage = \is_array($scope['plan_json']['pages'][$pageType] ?? null)
+            ? $scope['plan_json']['pages'][$pageType]
+            : [];
         $contentLocale = $this->resolveContentLocale($scope, $websiteProfile);
         $pageLabel = $this->localizePageTypeLabel($pageType, $contentLocale);
         if ($pageLabel === '') {
             $pageLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
         }
         $siteDisplayName = $this->resolveSiteDisplayName($websiteProfile, $scope);
-        $pageTitle = \trim((string)($virtualPage['title'] ?? ''));
+        $pageTitle = \trim((string)($planJsonPage['title'] ?? $planJsonPage['name'] ?? ''));
         if ($pageTitle === '') {
             $pageTitle = $pageType === Page::TYPE_HOME ? $siteDisplayName : $pageLabel;
         }
 
-        $brief = $this->extractReusableBrief($virtualPage, $websiteProfile, $scope);
+        $brief = $this->extractReusableBrief($planJsonPage, $websiteProfile, $scope);
         $pageInstruction = (string)(Page::getPageTypePromptInstructionsMap()[$pageType] ?? '');
         $siteTagline = $this->pickString($websiteProfile['site_tagline'] ?? null, $scope['site_tagline'] ?? null);
-        $sectionRefinements = $this->normalizeStringMap($virtualPage['section_refinements'] ?? []);
+        $sectionRefinements = $this->normalizeStringMap($planJsonPage['section_refinements'] ?? []);
         $siteSummary = $this->buildSiteMarketingSummary($websiteProfile, $scope);
         $primaryCtaLabel = $this->resolveScopePrimaryCtaLabel($scope, $pageType, $pageLabel);
         $aiDescription = $this->buildCustomerFacingDescription($pageType, $pageLabel, $siteDisplayName, $siteSummary, $siteTagline);

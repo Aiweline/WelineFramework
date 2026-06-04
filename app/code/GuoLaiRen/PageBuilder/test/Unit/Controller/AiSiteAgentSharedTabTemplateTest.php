@@ -14,11 +14,12 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertIsString($script);
-        self::assertStringContainsString('function renderThemeDirectEditSection(planRoot)', $script);
+        self::assertStringContainsString('function renderThemeDirectEditSection(planRoot, sharedBlocksHtml)', $script);
         self::assertStringContainsString('planRoot.theme_design', $script);
-        self::assertStringContainsString('themeDesign && themeDesign.theme_purpose', $script);
+        self::assertStringContainsString('structured.theme_design.theme_purpose', $script);
         self::assertStringContainsString('root.theme_design && root.theme_design.color_scheme', $script);
-        self::assertStringContainsString('previewLabels.themePurpose', $script);
+        self::assertStringContainsString('themePurpose:', $script);
+        self::assertStringContainsString('theme_design.theme_purpose', $script);
         self::assertStringContainsString('previewLabels.colorSystem', $script);
         self::assertStringContainsString('previewLabels.visualKeywords', $script);
         self::assertStringContainsString('previewLabels.toneOfVoice', $script);
@@ -34,8 +35,8 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertStringNotContainsString('class="pb-ai-reason-disclosure d-inline-block ms-2"', $script);
         self::assertStringNotContainsString('reasonItems: collectPreviewReasonItems(headerPlan)', $script);
         self::assertStringNotContainsString('reasonItems: collectPreviewReasonItems(footerPlan)', $script);
-        self::assertStringContainsString('renderThemeDirectEditSection(planRoot)', $script);
-        self::assertStringContainsString('previewLabels.themePurpose', $script);
+        self::assertStringContainsString('renderThemeDirectEditSection(planRoot, sharedBlocksHtml)', $script);
+        self::assertStringContainsString('themePurpose:', $script);
     }
 
     public function testPlanJsonPreviewRendersSingleStageDesignDetailsWithoutStageTwoTaskPlan(): void
@@ -63,9 +64,26 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
 
         self::assertIsString($script);
         self::assertStringContainsString('resolvePlanJsonArtifactsFromWorkspaceState(stateForPlanJson)', $script);
-        self::assertStringContainsString("planJsonPreviewHtml('', { structured: planData, json: planData })", $script);
+        self::assertStringNotContainsString("planJsonPreviewHtml('', { structured: planData, json: planData })", $script);
+        self::assertStringNotContainsString("displayKind === 'projection'", $script);
         self::assertStringContainsString('bindPreviewTabButtons(planRenderedContent);', $script);
         self::assertStringContainsString('bindPreviewActionButtons(planRenderedContent);', $script);
+    }
+
+    public function testPlanJsonBlockCardsReadCanonicalGeneratedContentFallbacks(): void
+    {
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
+
+        self::assertIsString($script);
+        self::assertStringContainsString('function stripPreviewHtmlToText(value)', $script);
+        self::assertStringContainsString('fields.body', $script);
+        self::assertStringContainsString('defaultConfig.body', $script);
+        self::assertStringContainsString('aiData.body', $script);
+        self::assertStringContainsString('stripPreviewHtmlToText(block && block.html)', $script);
+        self::assertStringContainsString('function extractPreviewReadableText(value, depth)', $script);
+        self::assertStringContainsString('extractPreviewReadableText(block && block.components)', $script);
+        self::assertStringContainsString('extractPreviewReadableText(block && block.field_plan)', $script);
+        self::assertStringContainsString('extractPreviewReadableText(block)', $script);
     }
 
     public function testCurrentPageRefineUsesDedicatedPageApi(): void
@@ -147,7 +165,7 @@ final class AiSiteAgentSharedTabTemplateTest extends TestCase
         self::assertIsString($script);
         self::assertIsString($runtime);
         self::assertIsString($buildQueueScript);
-        self::assertStringContainsString("\$currentStage !== 'plan'", $layout);
+        self::assertStringContainsString("$currentStage !== 'plan'", $layout);
         self::assertStringContainsString('id="pb-ai-task-progress-heading"', $layout);
         self::assertStringContainsString('data-task-progress-summary="build"', $layout);
         self::assertStringContainsString('var planConfirmedState =', $script);

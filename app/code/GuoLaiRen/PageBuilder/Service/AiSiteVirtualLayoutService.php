@@ -38,7 +38,7 @@ class AiSiteVirtualLayoutService
             return null;
         }
 
-        $stageScope = $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+        $stageScope = $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT, []);
         if (!\is_array($stageScope) || $stageScope === []) {
             $stageScope = $session->getScopeArray();
         }
@@ -48,10 +48,11 @@ class AiSiteVirtualLayoutService
             (int)($scope['virtual_theme_id'] ?? 0),
             (int)$session->getVirtualThemeId()
         );
-        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $hasHtmlBlockNodes = \is_array($virtualPage['block_nodes'] ?? null) && $virtualPage['block_nodes'] !== [];
-        if ($virtualThemeId <= 0 && !$hasHtmlBlockNodes) {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $planPage = \is_array($planPages[$pageType] ?? null) ? $planPages[$pageType] : [];
+        $hasPlanBlocks = $this->extractPlanJsonPageBlocks($planPage) !== [];
+        if ($virtualThemeId <= 0 && !$hasPlanBlocks) {
             return null;
         }
 
@@ -249,19 +250,54 @@ class AiSiteVirtualLayoutService
         string $pageType,
         array $patch
     ): array {
-        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType(
-            $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []),
-            $scope,
-            false
-        );
-        $virtualPages[$pageType] = \array_replace(
-            $virtualPages[$pageType] ?? [],
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $planPages[$pageType] = \array_replace(
+            \is_array($planPages[$pageType] ?? null) ? $planPages[$pageType] : ['page_type' => $pageType],
             $patch
         );
-        $scope['virtual_pages_by_type'] = $virtualPages;
+        $planJson['pages'] = $planPages;
+        $scope['plan_json'] = $planJson;
         $this->sessionService->replaceScope($sessionId, $adminId, $scope);
 
-        return $virtualPages[$pageType];
+        return $planPages[$pageType];
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @return array<string, array<string, mixed>>
+     */
+    private function extractPlanJsonPageBlocks(array $page): array
+    {
+        $reserved = [
+            'page_id' => true,
+            'id' => true,
+            'page_type' => true,
+            'type' => true,
+            'title' => true,
+            'description' => true,
+            'page_goal' => true,
+            'page_design_plan' => true,
+            'theme_alignment_summary' => true,
+            'status' => true,
+            'seo' => true,
+            'route' => true,
+            'meta' => true,
+            'layout' => true,
+            'blocks' => true,
+            'block_previews' => true,
+            'sections' => true,
+            'components' => true,
+        ];
+        $blocks = [];
+        foreach ($page as $key => $value) {
+            if (!\is_string($key) || isset($reserved[$key]) || !\is_array($value)) {
+                continue;
+            }
+            $blocks[$key] = $value;
+        }
+
+        return $blocks;
     }
 
     /**

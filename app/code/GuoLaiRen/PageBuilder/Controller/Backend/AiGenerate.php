@@ -825,21 +825,16 @@ class AiGenerate extends BackendController
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planI18n = \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [];
         $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
-        $virtualPagesByType = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $pagebuilderPagesByType = \is_array($scope['pagebuilder_pages_by_type'] ?? null) ? $scope['pagebuilder_pages_by_type'] : [];
-        $virtualPage = $pageType !== '' && \is_array($virtualPagesByType[$pageType] ?? null) ? $virtualPagesByType[$pageType] : [];
-        $pagebuilderPage = $pageType !== '' && \is_array($pagebuilderPagesByType[$pageType] ?? null) ? $pagebuilderPagesByType[$pageType] : [];
+        $planPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $planPage = $pageType !== '' && \is_array($planPages[$pageType] ?? null) ? $planPages[$pageType] : [];
 
         foreach ([
             $componentConfig['runtime.content_locale'] ?? null,
             $componentConfig['_content_locale'] ?? null,
             $componentConfig['content_locale'] ?? null,
-            $virtualPage['content_locale'] ?? null,
-            $virtualPage['default_locale'] ?? null,
-            $virtualPage['locale'] ?? null,
-            $pagebuilderPage['content_locale'] ?? null,
-            $pagebuilderPage['default_locale'] ?? null,
-            $pagebuilderPage['locale'] ?? null,
+            $planPage['content_locale'] ?? null,
+            $planPage['default_locale'] ?? null,
+            $planPage['locale'] ?? null,
             $scope['content_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
             $planJson['content_locale'] ?? null,

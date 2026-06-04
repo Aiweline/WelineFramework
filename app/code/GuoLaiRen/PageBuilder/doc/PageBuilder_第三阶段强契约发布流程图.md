@@ -24,6 +24,6 @@ flowchart TD
 - `plan_json.pages.{page_type}.{block_key}.html`
 - `plan_json.pages.{page_type}.{block_key}.fields`
 - `asset_manifest` / `verified_assets`
-- `page_type_layouts` / `shared_components`
+- `plan_json.pages.{page_type}.{block_key}` / `shared_components`
 
 发布 gate 不读取 移除旁路结构 或 移除派生计划 来判断页面是否已经生成完成。

@@ -9,7 +9,7 @@ use GuoLaiRen\PageBuilder\Service\AI\MockPage;
 use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use Weline\Framework\Manager\ObjectManager;
 
-class AiSiteHtmlBlockNodesBuildService
+class AiSiteHtmlBlocksBuildService
 {
     private const META_TEMPLATE_PHTML = '_pb_server_template_phtml';
     private const META_COMPONENT_CODE = '_pb_server_component_code';
@@ -59,7 +59,7 @@ class AiSiteHtmlBlockNodesBuildService
             $sectionCount++;
         }
         if ($sectionCount === 0) {
-            throw new \RuntimeException((string)__('AI 闂佸搫鐗滄禍鐐哄极閹捐绠ｉ柟閭︿簼瀹曟彃霉閿濆棙绀€鐟滅増鐓￠幃浠嬪Ω閳瑰簱鍋撴径鎰棃闁靛繒濮撮梾姗€鏌涜椤ㄦ劗妲?{1}', [$pageType]));
+            throw new \RuntimeException((string)__('AI 闂備礁鎼悧婊勭閻愬搫鏋侀柟鎹愵嚙缁狅綁鏌熼柇锔跨凹鐎规洘褰冮湁闁挎繂妫欑粈鈧悷婊呭閻擄繝骞冩禒瀣╅柍鐟扮氨閸嬫挻寰勯幇顓ф闂侀潧绻掓慨鎾⒕濮椻偓閺屾稖顦虫い銊﹀姉濡?{1}', [$pageType]));
         }
 
         return $blocks;
@@ -576,14 +576,14 @@ class AiSiteHtmlBlockNodesBuildService
             if (!\is_string($pageType) || !\is_array($page)) {
                 continue;
             }
-            $blocks = \is_array($page['block_nodes'] ?? null) ? $page['block_nodes'] : [];
+            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
             foreach ($blocks as $index => $block) {
                 if (!\is_array($block)) {
                     continue;
                 }
                 $blocks[$index] = $this->stripServerOnlyBlock($block);
             }
-            $page['block_nodes'] = $blocks;
+            $page['blocks'] = $blocks;
             $virtualPages[$pageType] = $page;
         }
 
@@ -1363,8 +1363,9 @@ class AiSiteHtmlBlockNodesBuildService
     private function resolveScopedPageTypeLabel(array $scope, string $pageType): string
     {
         $locale = $this->resolveContentLocale($scope);
-        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $title = \trim((string)($virtualPages[$pageType]['title'] ?? ''));
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $title = \trim((string)($planPages[$pageType]['title'] ?? ''));
         if ($title !== '' && !($this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($title))) {
             return $title;
         }

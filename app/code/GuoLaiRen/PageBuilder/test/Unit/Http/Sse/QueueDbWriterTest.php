@@ -196,7 +196,7 @@ final class QueueDbWriterTest extends TestCase
             'state' => [
                 'virtual_pages_by_type' => [
                     'home_page' => [
-                        'block_nodes' => \array_fill(0, 80, ['html' => \str_repeat('x', 128)]),
+                        'blocks' => \array_fill(0, 80, ['html' => \str_repeat('x', 128)]),
                     ],
                 ],
                 'top_logs' => \array_fill(0, 50, ['message' => \str_repeat('y', 64)]),
@@ -228,6 +228,38 @@ final class QueueDbWriterTest extends TestCase
             $maxBytes,
             \strlen(\json_encode($result, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES))
         );
+    }
+
+    public function testSanitizePayloadForQueueEventDropsLegacyPageSources(): void
+    {
+        $writer = new QueueDbWriter(1, 1, 1, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build');
+        $method = new ReflectionMethod(QueueDbWriter::class, 'sanitizePayloadForQueueEvent');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($writer, 'task_completed', [
+            'message' => 'Task completed',
+            'operation' => 'build',
+            'virtual_pages_by_type' => ['home_page' => ['blocks' => [['html' => '<section></section>']]]],
+            'page_type_layouts' => ['home_page' => ['content' => [['component' => 'hero']]]],
+            'payload' => [
+                'virtual_pages_by_type' => ['about_page' => ['blocks' => []]],
+                'page_type_layouts' => ['about_page' => ['content' => []]],
+                'plan_json_block_progress' => [['page_type' => 'home_page', 'block_key' => 'hero', 'status' => 'done']],
+            ],
+            'details' => [
+                'virtual_pages_by_type' => ['contact_page' => ['blocks' => []]],
+                'page_type_layouts' => ['contact_page' => ['content' => []]],
+            ],
+        ]);
+
+        self::assertIsArray($result);
+        self::assertArrayNotHasKey('virtual_pages_by_type', $result);
+        self::assertArrayNotHasKey('page_type_layouts', $result);
+        self::assertArrayNotHasKey('virtual_pages_by_type', $result['payload'] ?? []);
+        self::assertArrayNotHasKey('page_type_layouts', $result['payload'] ?? []);
+        self::assertArrayNotHasKey('virtual_pages_by_type', $result['details'] ?? []);
+        self::assertArrayNotHasKey('page_type_layouts', $result['details'] ?? []);
+        self::assertSame('Task completed', (string)($result['message'] ?? ''));
     }
 
     public function testStageOnePageProgressIsPersistedAsBoundedQueueContent(): void
@@ -474,7 +506,7 @@ final class QueueDbWriterTest extends TestCase
         foreach ([
             ['error', ['message' => 'terminal failure']],
             ['progress', ['message' => 'terminal summary', 'terminal_summary' => true]],
-            ['progress', ['message' => 'queue done', 'status' => 'done']],
+            ['progress', ['message' => 'queue done', 'queue_status' => 'done']],
         ] as [$event, $payload]) {
             self::assertTrue((bool)$shouldPersistQueue->invoke($writer, $event, $payload), $event);
             self::assertTrue((bool)$shouldPersistSession->invoke($writer, $event, $payload), $event);
