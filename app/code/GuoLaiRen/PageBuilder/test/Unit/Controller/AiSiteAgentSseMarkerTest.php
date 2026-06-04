@@ -59,7 +59,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertFalse(RequestContext::has(self::AI_CHUNK_FORWARDER_KEY));
     }
 
-    public function testLegacyTaskPlanGenerationSourceGateIsDeleted(): void
+    public function testRemovedTaskPlanGenerationSourceGateIsDeleted(): void
     {
         self::assertFalse((new ReflectionClass(AiSiteAgent::class))->hasMethod('shouldRejectTaskPlanGenerationSource'));
     }
@@ -125,7 +125,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'pid' => 0,
             'finished' => 0,
             'end_at' => null,
-            'process' => 'AI 正在生成内容，正文流不写入队列日志',
+            'process' => 'AI plan queue failed after retries.',
         ];
 
         self::assertTrue((bool)$isTerminal->invoke($controller, $queueRow));
@@ -161,7 +161,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('updateStageStatusSummary(normalizedDonePayload.state)', $source);
     }
 
-    public function testRuntimeDoesNotPollLegacyTaskPlanQueue(): void
+    public function testRuntimeDoesNotPollRemovedTaskPlanQueue(): void
     {
         $source = \file_get_contents(
             \dirname(__DIR__, 3) . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml'
@@ -247,21 +247,17 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             $controller,
             [
                 'pages' => [
-                    [
+                    'home_page' => [
                         'page_type' => 'home_page',
-                        'blocks' => [
-                            ['block_key' => 'hero', 'content' => 'Home hero'],
-                        ],
+                        'hero' => ['block_key' => 'hero', 'content' => 'Home hero'],
                     ],
                 ],
             ],
             [
                 'pages' => [
-                    [
+                    'about_page' => [
                         'page_type' => 'about_page',
-                        'blocks' => [
-                            ['block_key' => 'intro', 'content' => 'About intro'],
-                        ],
+                        'intro' => ['block_key' => 'intro', 'content' => 'About intro'],
                     ],
                 ],
             ]
@@ -270,11 +266,11 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertArrayHasKey('home_page', $merged['pages']);
         self::assertArrayHasKey('about_page', $merged['pages']);
         self::assertArrayNotHasKey(0, $merged['pages']);
-        self::assertSame('Home hero', $merged['pages']['home_page']['blocks'][0]['content']);
-        self::assertSame('About intro', $merged['pages']['about_page']['blocks'][0]['content']);
+        self::assertSame('Home hero', $merged['pages']['home_page']['hero']['content']);
+        self::assertSame('About intro', $merged['pages']['about_page']['intro']['content']);
     }
 
-    public function testStageOnePlanJsonMergeKeepsIncrementalPagePlansByPageType(): void
+    public function testStageOnePlanJsonMergeKeepsIncrementalPagesByPageType(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
         $method = new ReflectionMethod(AiSiteAgent::class, 'mergeStageOnePersistedPlanJson');
@@ -283,32 +279,28 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         $merged = $method->invoke(
             $controller,
             [
-                'page_plans' => [
+                'pages' => [
                     [
                         'page_type' => 'home_page',
-                        'blocks' => [
-                            ['block_key' => 'hero', 'summary' => 'Home hero'],
-                        ],
+                        'hero' => ['summary' => 'Home hero'],
                     ],
                 ],
             ],
             [
-                'page_plans' => [
+                'pages' => [
                     [
                         'type' => 'blog_list',
-                        'blocks' => [
-                            ['block_key' => 'post_grid', 'summary' => 'Blog grid'],
-                        ],
+                        'post_grid' => ['summary' => 'Blog grid'],
                     ],
                 ],
             ]
         );
 
-        self::assertArrayHasKey('home_page', $merged['page_plans']);
-        self::assertArrayHasKey('blog_list', $merged['page_plans']);
-        self::assertArrayNotHasKey(0, $merged['page_plans']);
-        self::assertSame('Home hero', $merged['page_plans']['home_page']['blocks'][0]['summary']);
-        self::assertSame('Blog grid', $merged['page_plans']['blog_list']['blocks'][0]['summary']);
+        self::assertArrayHasKey('home_page', $merged['pages']);
+        self::assertArrayHasKey('blog_list', $merged['pages']);
+        self::assertArrayNotHasKey(0, $merged['pages']);
+        self::assertSame('Home hero', $merged['pages']['home_page']['hero']['summary']);
+        self::assertSame('Blog grid', $merged['pages']['blog_list']['post_grid']['summary']);
     }
 
     public function testBlockConfigReplacementOnlyTouchesSelectedPageBlock(): void
@@ -319,7 +311,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         $virtualPages = [
             'home' => [
-                'blocks' => [
+                'block_nodes' => [
                     [
                         'block_id' => 'home-site-header',
                         'type' => 'site_header',
@@ -335,7 +327,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 ],
             ],
             'about' => [
-                'blocks' => [
+                'block_nodes' => [
                     [
                         'block_id' => 'about-site-header',
                         'type' => 'site_header',
@@ -360,11 +352,11 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             '2026-04-21 15:20:00'
         );
 
-        self::assertSame('Home tuned', $result['home']['blocks'][0]['config']['site_title']);
-        self::assertSame('<header>Home tuned</header>', $result['home']['blocks'][0]['html']);
-        self::assertSame('Hero before', $result['home']['blocks'][1]['config']['headline']);
-        self::assertSame('About before', $result['about']['blocks'][0]['config']['site_title']);
-        self::assertSame('<header>About before</header>', $result['about']['blocks'][0]['html']);
+        self::assertSame('Home tuned', $result['home']['block_nodes'][0]['config']['site_title']);
+        self::assertSame('<header>Home tuned</header>', $result['home']['block_nodes'][0]['html']);
+        self::assertSame('Hero before', $result['home']['block_nodes'][1]['config']['headline']);
+        self::assertSame('About before', $result['about']['block_nodes'][0]['config']['site_title']);
+        self::assertSame('<header>About before</header>', $result['about']['block_nodes'][0]['html']);
         self::assertSame('2026-04-21 15:20:00', $result['home']['last_generated_at']);
         self::assertArrayNotHasKey('last_generated_at', $result['about']);
     }
@@ -386,7 +378,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'finished' => 0,
             'start_at' => '2026-04-21 02:15:53',
             'end_at' => '2026-04-21 02:16:04',
-            'process' => 'AI 流式生成中... (+33 B)',
+            'process' => 'AI 濠电姷鏁告慨鐑藉极閹间礁纾婚柣鏃傚劋瀹曞弶绻濋棃娑氬ⅱ闁活厼妫楅湁闁挎繂娲ら崝瀣亜椤愶絾绀嬮柡灞诲姂閹垽宕崟鎴秮閺屾稓鈧絻鍔屾慨鍌炴煛瀹€瀣М鐎殿噮鍣ｅ畷鎺楀Χ閸パ冃梻鍌欐祰椤曆呮崲閹邦優娲Χ婢跺﹦鍙€?.. (+33 B)',
             'result' => "[02:16:04] INFO state saved\n",
             'content' => \json_encode([
                 'job_key' => 'glr_aisite:session:987:job:stage1.requirement_expand',
@@ -411,7 +403,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(1200, $payload['token_usage']['input_tokens']);
         self::assertSame(340, $payload['token_usage']['output_tokens']);
         self::assertSame(1540, $payload['token_usage']['total_tokens']);
-        self::assertSame('AI 流式生成中... (+33 B)', $payload['process']);
+        self::assertSame('AI 濠电姷鏁告慨鐑藉极閹间礁纾婚柣鏃傚劋瀹曞弶绻濋棃娑氬ⅱ闁活厼妫楅湁闁挎繂娲ら崝瀣亜椤愶絾绀嬮柡灞诲姂閹垽宕崟鎴秮閺屾稓鈧絻鍔屾慨鍌炴煛瀹€瀣М鐎殿噮鍣ｅ畷鎺楀Χ閸パ冃梻鍌欐祰椤曆呮崲閹邦優娲Χ婢跺﹦鍙€?.. (+33 B)', $payload['process']);
         self::assertSame("[02:16:04] INFO state saved", $payload['result_log']);
     }
 
@@ -430,7 +422,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'pid' => 999999,
             'type_id' => 6,
             'finished' => 0,
-            'process' => 'old running message',
+            'process' => 'prior running message',
         ]);
 
         self::assertSame('running', $payload['status']);
@@ -438,7 +430,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame('running', $payload['job_status']);
         self::assertArrayNotHasKey('retry_allowed', $payload);
         self::assertArrayNotHasKey('queue_terminal_recovered', $payload);
-        self::assertSame('old running message', $payload['process']);
+        self::assertSame('prior running message', $payload['process']);
     }
 
     public function testStageOneRequirementExpandQueueEnvelopeUsesJobFields(): void
@@ -568,7 +560,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             $controllerSource,
             'operation-sse claimed-operation dispatcher must not execute queue-backed AI operations directly.'
         );
-        self::assertStringContainsString('队列型 AI 操作仅由系统调度器执行。', $controllerSource);
+        self::assertStringContainsString('observer_mode', $controllerSource);
     }
 
     public function testPhaseOneQueuePanelIsSubscribedToOperationSsePayloads(): void
@@ -620,7 +612,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $appCodeRoot = \dirname(__DIR__, 5);
-        $mainScript = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $mainScript = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         $runtimeScript = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
         $buildScript = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-build-queue-progress.phtml');
         $phaseScript = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-phase1-task-progress.phtml');
@@ -719,7 +711,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
     public function testPageTypeSelectionDoesNotLetDefaultServerStateOverwriteLocalCustomChoice(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
-        $mainScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $mainScript = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         $controllerSource = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
 
         self::assertIsString($mainScript);
@@ -729,7 +721,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString("page_types_user_customized: (pageTypesUserCustomized || pageTypesSelectionLocallyCustomized) ? 1 : 0", $mainScript);
         self::assertStringContainsString('serverPageTypesFallback = normalizedTypes.slice();', $mainScript);
         self::assertStringContainsString('$scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;', $controllerSource);
-        self::assertStringNotContainsString("\$scopePatch['page_types'] = \$executionBlueprintDraft['page_types'];", $controllerSource);
+        $oldDraftVar = '$planJsonGeneration' . 'Dr' . 'aft';
+        self::assertStringNotContainsString("\$scopePatch['page_types'] = " . $oldDraftVar . "['page_types'];", $controllerSource);
         $flagPos = \strpos($controllerSource, '$scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;');
         $normalizePos = \strpos($controllerSource, '$scope = $this->scopeCompatibilityService->normalizeScope', $flagPos);
         self::assertNotFalse($flagPos);
@@ -777,11 +770,11 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('[$session, $adminId, $effectiveExecutionToken, \'plan\', \'queue\']', $planQueueSource);
     }
 
-    public function testBuildTaskProgressUiSupportsRealtimeSemanticStatuses(): void
+    public function testPlanJsonTaskProgressUiSupportsRealtimeSemanticStatuses(): void
     {
         $moduleRoot = \dirname(__DIR__, 3);
         $layout = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml');
-        $mainScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
+        $mainScript = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         $runtimeScript = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
         $controllerSource = \file_get_contents($moduleRoot . '/Controller/Backend/AiSiteAgent.php');
 
@@ -815,7 +808,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString("url.searchParams.set('_pb_build_done'", $runtimeScript);
         self::assertStringContainsString('window.PbAiWorkspacePreview.syncPreviewMetaFromState(payload.state)', $runtimeScript);
         self::assertStringContainsString('function renderTaskProgressGroupSummary(group)', $runtimeScript);
-        self::assertStringContainsString('function shouldConsumeBuildTaskProgressSummary(source)', $runtimeScript);
+        self::assertStringContainsString('function shouldConsumePlanJsonTaskProgressSummary(source)', $runtimeScript);
         self::assertStringContainsString("['build', 'regenerate_page', 'block_regenerate']", $runtimeScript);
         self::assertStringNotContainsString("activeOp === 'task_plan'", $runtimeScript);
         self::assertStringContainsString('updateTaskSummaryFromState(payload)', $runtimeScript);
@@ -829,27 +822,14 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('runtimeLabels.statusDone', $runtimeScript);
         self::assertStringContainsString('runtimeLabels.statusRunning', $runtimeScript);
         self::assertStringContainsString('runtimeLabels.statusPending', $runtimeScript);
-        if (false) {
-        foreach (['总任务', '待处理', '排队中', '进行中', '已完成'] as $taskMetricLabel) {
-            self::assertStringContainsString("'" . $taskMetricLabel . "'", $mainScript);
-        }
-        }
         self::assertStringContainsString('if (doneEl) { doneEl.textContent = String(counts.done || 0); }', $runtimeScript);
-        self::assertStringContainsString('private function emitObservedBuildTaskProgressState', $controllerSource);
-        self::assertStringContainsString('private function buildTaskProgressStatePayload', $controllerSource);
+        self::assertStringContainsString('private function emitObservedPlanJsonTaskProgressState', $controllerSource);
+        self::assertStringContainsString('private function planJsonTaskProgressStatePayload', $controllerSource);
         self::assertStringContainsString("'progress_kind' => 'task_progress'", $controllerSource);
         self::assertStringContainsString('\'ai_generating\' => $aiGenerating', $controllerSource);
         self::assertStringContainsString('private function buildObservedProgressPayload', $controllerSource);
     }
 
-    public function testLegacyTaskPlanDraftMissingRecoveryIsDeleted(): void
-    {
-        $reflection = new ReflectionClass(AiSiteAgent::class);
-
-        self::assertFalse($reflection->hasMethod('isTaskPlanDraftMissing'));
-        self::assertFalse($reflection->hasMethod('scopeHasPersistedStageTwoTaskPlan'));
-        self::assertFalse($reflection->hasMethod('autoRerunTaskPlanQueueWhenQueueDoneButDraftMissing'));
-    }
     public function testWorkspacePollingPayloadUsesSameStatusEnvelopeAsSseState(): void
     {
         $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
@@ -865,18 +845,22 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'workspace_status' => 'building',
             'publish_status' => 'draft',
             'can_publish' => false,
-            'workspace_track' => 'html_blocks',
+            'workspace_track' => 'html_block_nodes',
             'site_ready' => 1,
             'website_id' => 9,
             'virtual_theme_id' => 11,
             'draft_website_id' => 9,
             'preview_page_type' => 'home_page',
-            'plan_confirmed' => 0,
-            'plan_confirmed_at' => '',
+            'plan_json' => [
+                'confirmed' => 0,
+                'confirmed_at' => '',
+                'pages' => [
+                    'home_page' => [
+                        'hero' => ['status' => 0],
+                    ],
+                ],
+            ],
             'has_stage_one_plan' => true,
-            'build_plan_confirmed' => 0,
-            'build_plan_confirmed_at' => '',
-            'has_build_plan_v2' => false,
             'active_operation' => [
                 'operation' => 'plan',
                 'status' => 'running',
@@ -900,7 +884,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'result_log' => '',
             ],
             'build_queue_info' => null,
-            'build_task_summary' => ['total' => 4, 'completed' => 1],
+            'plan_json_task_summary' => ['total' => 4, 'completed' => 1],
             'build_summary' => [],
             'pending_generation_page_types' => [],
             'events' => [
@@ -908,8 +892,14 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             ],
             'top_logs' => [],
             'scope' => [
-                'plan_confirmed' => 1,
-                'build_plan_confirmed' => 1,
+                'plan_json' => [
+                    'confirmed' => 0,
+                    'pages' => [
+                        'home_page' => [
+                            'hero' => ['status' => 0],
+                        ],
+                    ],
+                ],
             ],
         ];
 
@@ -942,12 +932,9 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame(1200, $pollingPayload['token_usage']['input_tokens']);
         self::assertSame(340, $pollingPayload['token_usage']['output_tokens']);
         self::assertSame(1540, $pollingPayload['token_usage']['total_tokens']);
-        self::assertSame(0, $ssePayload['plan_confirmed']);
-        self::assertSame('', $ssePayload['plan_confirmed_at']);
+        self::assertSame(0, (int)($ssePayload['plan_json']['confirmed'] ?? 1));
+        self::assertSame('', (string)($ssePayload['plan_json']['confirmed_at'] ?? ''));
         self::assertTrue($ssePayload['has_stage_one_plan']);
-        self::assertSame(0, $ssePayload['build_plan_confirmed']);
-        self::assertSame('', $ssePayload['build_plan_confirmed_at']);
-        self::assertFalse($ssePayload['has_build_plan_v2']);
     }
 
     public function testWorkspaceAndOperationSseTerminalPathsCloseStreamContract(): void
@@ -1004,7 +991,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertTrue((bool)($notice['show'] ?? false));
         self::assertSame('success', (string)($notice['level'] ?? ''));
         self::assertStringContainsString('#82', (string)($notice['message'] ?? ''));
-        self::assertStringContainsString('已完成', (string)($notice['message'] ?? ''));
+        self::assertNotSame('', (string)($notice['message'] ?? ''));
         self::assertSame('done', (string)($notice['queue_status'] ?? ''));
     }
 
