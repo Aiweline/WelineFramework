@@ -35,7 +35,7 @@ final class AiSiteDesignDirectorService
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $themePlan
-     * @param array<string, mixed> $pagePlans
+     * @param array<string, mixed> $planJsonPages
      * @param array<string, mixed> $referenceImageInsights
      * @return array<string, mixed>
      */
@@ -43,7 +43,7 @@ final class AiSiteDesignDirectorService
         array $scope,
         array $websiteProfile = [],
         array $themePlan = [],
-        array $pagePlans = [],
+        array $planJsonPages = [],
         array $referenceImageInsights = []
     ): array {
         $policy = $this->policyRegistry()->get();
@@ -52,8 +52,8 @@ final class AiSiteDesignDirectorService
         $visualDensity = $this->resolveVisualDensity($briefText, $referenceImageInsights);
         $assetDensity = $visualDensity === 'minimal' ? 'low' : ($isNeonCardDefault ? 'high' : 'medium');
         $styleDensity = $visualDensity === 'minimal' ? 'airy' : ($isNeonCardDefault ? 'immersive' : 'balanced');
-        $pageTypes = $this->resolvePageTypes($scope, $pagePlans);
-        $morphologyPool = $this->resolveMorphologyPool($pageTypes, $pagePlans, $visualDensity);
+        $pageTypes = $this->resolvePageTypes($scope, $planJsonPages);
+        $morphologyPool = $this->resolveMorphologyPool($pageTypes, $planJsonPages, $visualDensity);
         $colorRoles = $this->resolveColorRoles($scope, $themePlan, $referenceImageInsights, $websiteProfile);
         $typography = $this->resolveTypographyTokens($scope, $themePlan, $policy, $websiteProfile, $briefText);
         $marketPosition = $this->firstMeaningfulString([
@@ -307,10 +307,10 @@ final class AiSiteDesignDirectorService
 
     /**
      * @param array<string, mixed> $scope
-     * @param array<string, mixed> $pagePlans
+     * @param array<string, mixed> $planJsonPages
      * @return list<string>
      */
-    private function resolvePageTypes(array $scope, array $pagePlans): array
+    private function resolvePageTypes(array $scope, array $planJsonPages): array
     {
         $types = [];
         foreach ([$scope['page_types'] ?? null, $scope['pages'] ?? null] as $source) {
@@ -325,7 +325,7 @@ final class AiSiteDesignDirectorService
                 }
             }
         }
-        foreach ($pagePlans as $key => $plan) {
+        foreach ($planJsonPages as $key => $plan) {
             $type = \is_string($key) && !\is_numeric($key) ? $key : (string)($plan['page_type'] ?? $plan['type'] ?? '');
             $type = $this->normalizeToken($type);
             if ($type !== '') {
@@ -341,13 +341,13 @@ final class AiSiteDesignDirectorService
 
     /**
      * @param list<string> $pageTypes
-     * @param array<string, mixed> $pagePlans
+     * @param array<string, mixed> $planJsonPages
      * @return list<string>
      */
-    private function resolveMorphologyPool(array $pageTypes, array $pagePlans, string $visualDensity): array
+    private function resolveMorphologyPool(array $pageTypes, array $planJsonPages, string $visualDensity): array
     {
         $roles = ['opening', 'details', 'proof', 'support', 'cta'];
-        foreach ($pagePlans as $plan) {
+        foreach ($planJsonPages as $plan) {
             foreach ($this->extractBlocks($plan) as $block) {
                 $role = $this->normalizeToken((string)($block['page_flow_role'] ?? $block['role'] ?? ''));
                 if ($role !== '') {
@@ -392,13 +392,36 @@ final class AiSiteDesignDirectorService
      */
     private function extractBlocks(array $plan): array
     {
-        foreach (['blocks', 'sections', 'components'] as $key) {
-            if (\is_array($plan[$key] ?? null)) {
-                return \array_values(\array_filter($plan[$key], 'is_array'));
+        $blocks = [];
+        foreach ($plan as $key => $value) {
+            if (!\is_string($key) || !\is_array($value) || !$this->looksLikeDynamicBlockNode($key, $value)) {
+                continue;
+            }
+
+            $value['block_key'] = (string)($value['block_key'] ?? $key);
+            $blocks[] = $value;
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     */
+    private function looksLikeDynamicBlockNode(string $key, array $node): bool
+    {
+        if (\in_array($key, ['seo', 'page_design_plan', 'asset_distribution_policy', 'theme_context_snapshot'], true)) {
+            return false;
+        }
+
+        foreach (['block_key', 'page_flow_role', 'block_contract', 'visual_signature', 'image_intent', 'field_plan', 'execution_script'] as $field) {
+            if (\array_key_exists($field, $node)) {
+                return true;
             }
         }
 
-        return [];
+        return \array_key_exists('status', $node)
+            && (\array_key_exists('html', $node) || \array_key_exists('fields', $node) || \array_key_exists('demo', $node));
     }
 
     /**

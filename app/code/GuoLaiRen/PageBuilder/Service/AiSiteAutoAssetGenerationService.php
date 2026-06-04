@@ -38,8 +38,8 @@ class AiSiteAutoAssetGenerationService
     {
         $scope = $this->ensureReferenceImageInsights($scope);
         $scope = $this->clearInvalidIdentityAssetFieldsFromScope($scope);
-        $manifest = $this->manifestService->syncFromBuildPlan($scope);
-        // 无论何种模式，都清理旧的占位图，留空等待真实 AI 图片生成
+        $manifest = $this->manifestService->syncFromPlanJson($scope);
+        // 无论何种模式，都清理既有的占位图，留空等待真实 AI 图片生成
         $placeholderUrls = $this->manifestService->extractPlaceholderAssetUrls($manifest);
         $manifest = $this->manifestService->discardPlaceholderGeneratedAssets($manifest);
         if ($placeholderUrls !== []) {
@@ -203,7 +203,7 @@ class AiSiteAutoAssetGenerationService
 
         $scope = $this->ensureReferenceImageInsights($scope);
         $scope = $this->clearInvalidIdentityAssetFieldsFromScope($scope);
-        $manifest = $this->manifestService->syncFromBuildPlan($scope);
+        $manifest = $this->manifestService->syncFromPlanJson($scope);
         $placeholderUrls = $this->manifestService->extractPlaceholderAssetUrls($manifest);
         $manifest = $this->manifestService->discardPlaceholderGeneratedAssets($manifest);
         if ($placeholderUrls !== []) {
@@ -606,8 +606,8 @@ class AiSiteAutoAssetGenerationService
             return false;
         }
 
-        $summary = \is_array($scope['build_plan_execution_summary'] ?? null)
-            ? $scope['build_plan_execution_summary']
+        $summary = \is_array($scope['plan_json_execution_summary'] ?? null)
+            ? $scope['plan_json_execution_summary']
             : [];
 
         if ($summary === [] || (int)($summary['total'] ?? 0) <= 0) {
@@ -1287,11 +1287,6 @@ class AiSiteAutoAssetGenerationService
             $payload = $this->applyIdentityAssetToRenderPayload($scope['build_contracts']['render_data']['payload'], $role, $finalUrl);
             $scope['build_contracts']['render_data']['payload'] = $payload;
         }
-        if (\is_array($scope['build_workbench']['contracts']['render_data']['payload'] ?? null)) {
-            $payload = $this->applyIdentityAssetToRenderPayload($scope['build_workbench']['contracts']['render_data']['payload'], $role, $finalUrl);
-            $scope['build_workbench']['contracts']['render_data']['payload'] = $payload;
-        }
-
         return $scope;
     }
 

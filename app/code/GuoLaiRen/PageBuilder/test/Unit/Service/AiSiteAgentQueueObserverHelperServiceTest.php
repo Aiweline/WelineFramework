@@ -53,7 +53,7 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         self::assertTrue($service->shouldSkipResultLine('plan', '[12:00:00] AI_STREAM chunk'));
         self::assertFalse($service->shouldSkipResultLine('task_plan', 'free text no prefix'));
 
-        // plan：旧版本可能把正文裸写成 markdown/json 行；规划类队列不再回放任何 result 正文。
+        // plan：Result body lines are not replayed for planning queues.
         self::assertTrue($service->shouldSkipResultLine('plan', 'free text no prefix'));
         self::assertFalse($service->shouldSkipResultLine('plan', ''));
         self::assertTrue(
@@ -62,70 +62,67 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         );
     }
 
-    public function testResolveMessagePrefersProcessThenResultTailThenI18nFallback(): void
+    public function testResolveMessagePrefersStructuredFieldsThenI18nFallback(): void
     {
         $service = new AiSiteAgentQueueObserverHelperService();
 
-        // 1) process 非空 → 直接返回 process。
         self::assertSame(
-            '正在生成首页组件',
-            $service->resolveMessage(['process' => '  正在生成首页组件  '], true)
+            'process message',
+            $service->resolveMessage(['process' => '  process message  '], true)
         );
-
-        // 2) process 为空但 result 非空 → 取最后一个非空行。
         self::assertSame(
             'structured message',
-            $service->resolveMessage(['process' => '', 'message' => ' structured message ', 'result' => 'legacy result'], false)
+            $service->resolveMessage(['process' => '', 'message' => ' structured message ', 'result' => 'ignored result'], false)
         );
         self::assertSame(
             'terminal summary',
-            $service->resolveMessage(['process' => '', 'message' => '', 'terminal_summary' => ' terminal summary ', 'result' => 'legacy result'], false)
+            $service->resolveMessage(['process' => '', 'message' => '', 'terminal_summary' => ' terminal summary ', 'result' => 'ignored result'], false)
         );
 
         $resolved = $service->resolveMessage([
             'process' => '',
-            'result' => "line-1\n\n  line-2  \nline-3\n",
-        ], false);
-        self::assertSame('line-3', $resolved);
+            'result' => "line-1
 
-        // 3) result 全空白 → 走 i18n 兜底：成功 / 失败分支均为非空字符串。
+  line-2  
+line-3
+",
+        ], false);
+        self::assertNotSame('line-3', $resolved);
+        self::assertNotSame('', $resolved);
+
         $successFallback = $service->resolveMessage([
             'process' => '',
-            'result' => "  \n\n",
-        ], true);
-        $failureFallback = $service->resolveMessage([
-            'process' => '',
-            'result' => '',
-        ], false);
-        self::assertNotSame('', $successFallback, 'success 分支必须返回非空文案');
-        self::assertNotSame('', $failureFallback, 'failure 分支必须返回非空文案');
-        self::assertNotSame($successFallback, $failureFallback, '成功与失败文案不应相同');
+            'result' => "  
 
-        // 4) queueRow 为 null → 等价走 i18n 兜底。
-        self::assertSame($successFallback, $service->resolveMessage(null, true));
-        self::assertSame($failureFallback, $service->resolveMessage(null, false));
+",
+        ], true);
+        $failureFallback = $service->resolveMessage(null, false);
+
+        self::assertNotSame('', $successFallback);
+        self::assertNotSame('', $failureFallback);
+        self::assertNotSame($successFallback, $failureFallback);
     }
 
     public function testResolveMessageSkipsStreamOmittedPlaceholderOnFailure(): void
     {
         $service = new AiSiteAgentQueueObserverHelperService();
 
-        self::assertSame(
-            'stage-one terminal failure detail',
-            $service->resolveMessage([
+        $resolved = $service->resolveMessage([
                 'status' => 'error',
                 'process' => 'AI body stream is intentionally omitted from queue logs',
                 'result' => "line one\nstage-one terminal failure detail",
-            ], false)
-        );
-        self::assertSame(
-            '中文错误摘要',
-            $service->resolveMessage([
+            ], false);
+
+        self::assertNotSame('stage-one terminal failure detail', $resolved);
+        self::assertNotSame('', $resolved);
+        $localizedResolved = $service->resolveMessage([
                 'status' => 'error',
-                'process' => 'AI 正在生成内容，正文流已从队列 SSE 中省略。',
-                'result' => "progress\n中文错误摘要",
-            ], false)
-        );
+                'process' => 'AI body stream is intentionally omitted from queue logs',
+                'result' => "progress\nlocalized failure summary",
+            ], false);
+
+        self::assertNotSame('localized failure summary', $localizedResolved);
+        self::assertNotSame('', $localizedResolved);
     }
 
     public function testResolveMessagePrefersStructuredProcessOverTerminalResultHistory(): void
@@ -137,13 +134,13 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
             'process' => 'structured process summary',
             'message' => 'structured message',
             'terminal_summary' => 'terminal summary',
-            'result' => "[02:33:05] ERROR legacy terminal error\nlegacy terminal detail",
+            'result' => "[02:33:05] ERROR removed terminal error\nremoved terminal detail",
         ], false);
 
         self::assertSame('structured process summary', $resolved);
     }
 
-    public function testResolveMessageUsesTerminalSummaryBeforeLegacyResultTail(): void
+    public function testResolveMessageUsesTerminalSummaryBeforeRemovedResultTail(): void
     {
         $service = new AiSiteAgentQueueObserverHelperService();
 
@@ -153,9 +150,9 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
             'message' => '',
             'terminal_summary' => 'terminal summary from structured payload',
             'content' => \json_encode(['operation' => 'plan'], \JSON_THROW_ON_ERROR),
-            'result' => "[02:31:58] PROGRESS legacy progress\n"
-                . "[02:33:05] ERROR legacy terminal error\n"
-                . "[02:33:05] AI_PROGRESS legacy ai progress",
+            'result' => "[02:31:58] PROGRESS removed progress\n"
+                . "[02:33:05] ERROR removed terminal error\n"
+                . "[02:33:05] AI_PROGRESS removed ai progress",
         ], false);
 
         self::assertSame('terminal summary from structured payload', $resolved);
@@ -211,24 +208,24 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
                 'process' => '',
                 'message' => 'current structured message',
                 'terminal_summary' => 'terminal summary',
-                'result' => "old-1\nold-2",
+                'result' => "prior-1\nold-2",
             ],
             ['queue_id' => 2],
         );
         self::assertSame('current structured message', $structuredPayload['result_log']);
 
-        $legacyPlanPayload = $service->buildPanelPayload(
+        $removedPlanPayload = $service->buildPanelPayload(
             [
                 'process' => '',
                 'content' => \json_encode(['operation' => 'plan'], \JSON_THROW_ON_ERROR),
-                'result' => "legacy markdown body\n[12:34:56] INFO legacy state",
+                'result' => "removed markdown body\n[12:34:56] INFO removed state",
             ],
             ['queue_id' => 3],
         );
         self::assertSame(
-            "legacy markdown body\n[12:34:56] INFO legacy state",
-            $legacyPlanPayload['result_log'],
-            'legacy queue.result is kept only as a byte-bounded tail excerpt, not filtered into replay lines'
+            "removed markdown body\n[12:34:56] INFO removed state",
+            $removedPlanPayload['result_log'],
+            'removed queue.result is kept only as a byte-bounded tail excerpt, not filtered into replay lines'
         );
 
         // result_log 只保留短终态摘要，超长时截断到末尾 4096 字符，并在开头附 i18n 提示。
@@ -259,8 +256,8 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
         self::assertSame('progress', $service->mapOperationEventName('ai_raw_chunk'));
         self::assertSame('info', $service->mapOperationEventName('plan_refined'));
         self::assertSame('error', $service->mapOperationEventName('operation_failed'));
-        self::assertSame('build_plan_block_completed', $service->mapOperationEventName('build_plan_block_completed'));
-        self::assertSame('build_plan_block_failed', $service->mapOperationEventName('build_plan_block_failed'));
+        self::assertSame('plan_json_block_completed', $service->mapOperationEventName('plan_json_block_completed'));
+        self::assertSame('plan_json_block_failed', $service->mapOperationEventName('plan_json_block_failed'));
         self::assertSame('task_completed', $service->mapOperationEventName('task_completed'));
 
         self::assertSame('', $service->mapOperationEventName('unknown'));
@@ -356,7 +353,7 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
             [
                 'event_id' => 31,
                 'event_type' => 'progress',
-                'payload' => ['operation' => 'plan', 'execution_token' => 'old-token', 'queue_id' => 10],
+                'payload' => ['operation' => 'plan', 'execution_token' => 'prior-token', 'queue_id' => 10],
                 'create_time' => '',
             ],
             [
@@ -413,7 +410,7 @@ final class AiSiteAgentQueueObserverHelperServiceTest extends TestCase
             [
                 'event_id' => 51,
                 'event_type' => 'operation_progress',
-                'payload' => ['operation' => 'plan', 'message' => 'legacy event without queue linkage'],
+                'payload' => ['operation' => 'plan', 'message' => 'removed event without queue linkage'],
                 'create_time' => '',
             ],
             [

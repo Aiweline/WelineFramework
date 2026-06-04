@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
 
-final class BuildPlanContractSchema
+final class PlanJsonContractSchema
 {
     public const VERSION = '2.2';
 
@@ -28,7 +28,7 @@ final class BuildPlanContractSchema
             'i18n',
             'content_manifest',
             'pages',
-            'blocks',
+            'block_nodes',
             'permission_matrix',
             'frozen_fields',
             'mutable_fields',
@@ -113,8 +113,6 @@ final class BuildPlanContractSchema
             'tasks',
             'build_order',
             'task_plan',
-            'build_blueprint',
-            'execution_blueprint',
         ];
     }
 }

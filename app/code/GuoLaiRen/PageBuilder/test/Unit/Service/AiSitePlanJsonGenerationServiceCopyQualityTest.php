@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
-use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonGenerationService;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
-final class AiSiteExecutionBlueprintServiceCopyQualityTest extends TestCase
+final class AiSitePlanJsonGenerationServiceCopyQualityTest extends TestCase
 {
     public function testStageOneContractCopyDoesNotUsePlaceholderSiteNameFallbacks(): void
     {
-        $source = (string)\file_get_contents((new ReflectionClass(AiSiteExecutionBlueprintService::class))->getFileName());
+        $source = (string)\file_get_contents((new ReflectionClass(AiSitePlanJsonGenerationService::class))->getFileName());
         $resolver = $this->extractMethodSource($source, 'resolveStageOneContractSiteDisplayName');
         $headline = $this->extractMethodSource($source, 'buildStageOneContractBlockHeadline');
         $neonSubject = $this->extractMethodSource($source, 'stageOneNeonCardImageSubject');
@@ -21,7 +21,7 @@ final class AiSiteExecutionBlueprintServiceCopyQualityTest extends TestCase
         self::assertStringContainsString('$sharedPromptContext[\'site_title\']', $resolver);
         self::assertStringContainsString('$brandPositioning[\'site_name\']', $resolver);
         self::assertStringContainsString('$manifestItems[\'site.name\']', $resolver);
-        self::assertStringContainsString('isChineseLocale($contentLocale)', $resolver);
+        self::assertStringContainsString("return 'AI Site';", $resolver);
         self::assertStringNotContainsString("return 'the product';", $resolver);
         self::assertStringNotContainsString("'This site'", $resolver);
         self::assertStringNotContainsString(' opens ', $headline);
@@ -34,7 +34,7 @@ final class AiSiteExecutionBlueprintServiceCopyQualityTest extends TestCase
 
     public function testSeoStrategySourceDoesNotLeakInternalChineseCopyIntoEnglishPlans(): void
     {
-        $source = (string)\file_get_contents((new ReflectionClass(AiSiteExecutionBlueprintService::class))->getFileName());
+        $source = (string)\file_get_contents((new ReflectionClass(AiSitePlanJsonGenerationService::class))->getFileName());
         $seoStrategy = $this->extractMethodSource($source, 'buildSeoStrategy');
 
         self::assertStringContainsString('official website', $seoStrategy);
@@ -46,13 +46,14 @@ final class AiSiteExecutionBlueprintServiceCopyQualityTest extends TestCase
 
     public function testStageOneMediaRichnessPromptsRemainGuidanceOnly(): void
     {
-        $source = (string)\file_get_contents((new ReflectionClass(AiSiteExecutionBlueprintService::class))->getFileName());
+        $source = (string)\file_get_contents((new ReflectionClass(AiSitePlanJsonGenerationService::class))->getFileName());
 
         self::assertStringContainsString('About/contact/blog media rhythm rule', $source);
         self::assertStringContainsString('not validation gates', $source);
         self::assertStringContainsString('substantial CSS media surface', $source);
         self::assertStringContainsString('Policy media rule', $source);
-        self::assertStringContainsString('image count, image subject, and generated copy are not validation gates', $source);
+        self::assertStringContainsString('image count, image subject, and', $source);
+        self::assertStringContainsString('generated copy are not validation gates', $source);
     }
 
     private function extractMethodSource(string $source, string $methodName): string

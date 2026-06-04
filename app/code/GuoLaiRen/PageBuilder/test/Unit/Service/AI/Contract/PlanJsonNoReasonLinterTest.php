@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service\AI\Contract;
 
-use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanNoReasonLinter;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PlanJsonNoReasonLinter;
 use PHPUnit\Framework\TestCase;
 
-final class BuildPlanNoReasonLinterTest extends TestCase
+final class PlanJsonNoReasonLinterTest extends TestCase
 {
     public function testAllowsExecutableFieldsWithoutExplanationKeys(): void
     {
-        $result = (new BuildPlanNoReasonLinter())->validate([
+        $result = (new PlanJsonNoReasonLinter())->validate([
             'tasks' => [
                 ['task_id' => 'task.hero', 'acceptance_rule_ids' => ['layout.4_8_spacing']],
             ],
@@ -23,8 +23,8 @@ final class BuildPlanNoReasonLinterTest extends TestCase
 
     public function testRejectsNestedReasonFields(): void
     {
-        $result = (new BuildPlanNoReasonLinter())->validate([
-            'blocks' => [
+        $result = (new PlanJsonNoReasonLinter())->validate([
+            'block_nodes' => [
                 [
                     'block_id' => 'home.hero',
                     'design_reason' => 'Because it looks premium.',

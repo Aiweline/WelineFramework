@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service\AI\Contract;
 
-final class BuildPlanFrozenFieldValidator
+final class PlanJsonFrozenFieldValidator
 {
     private const DEFAULT_FORBIDDEN_PREFIXES = [
         'source_of_truth',
@@ -12,7 +12,7 @@ final class BuildPlanFrozenFieldValidator
         'policy_projection',
         'design_manifest',
         'pages',
-        'blocks',
+        'block_nodes',
         'permission_matrix',
         'frozen_fields',
     ];
@@ -60,7 +60,7 @@ final class BuildPlanFrozenFieldValidator
                 continue;
             }
             if ($prefix === $path || \str_starts_with($path, $prefix . '.') || (\str_ends_with($prefix, '.*') && \str_starts_with($path, \substr($prefix, 0, -1)))) {
-                return ['valid' => false, 'errors' => ['Path is frozen for build plan repair: ' . $path]];
+                return ['valid' => false, 'errors' => ['Path is frozen for Plan JSON repair: ' . $path]];
             }
         }
 

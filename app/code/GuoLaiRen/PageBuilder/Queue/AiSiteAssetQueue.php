@@ -104,7 +104,7 @@ class AiSiteAssetQueue implements QueueInterface
                     $scope['reference_image_insights_signature'] = $referenceInsightSignature;
                 }
             }
-            $manifest = $manifestService->syncFromBuildPlan($scope);
+            $manifest = $manifestService->syncFromPlanJson($scope);
             if ((int)($scope['allow_placeholder_image_assets'] ?? 0) !== 1) {
                 $manifest = $manifestService->discardPlaceholderGeneratedAssets($manifest);
                 $scope['asset_manifest'] = $manifest;
@@ -464,7 +464,7 @@ class AiSiteAssetQueue implements QueueInterface
                 }
             }
             $manifest = $manifestService->recordError(
-                $manifestService->syncFromBuildPlan($scope),
+                $manifestService->syncFromPlanJson($scope),
                 $slotId,
                 $throwable->getMessage()
             );
@@ -894,7 +894,7 @@ class AiSiteAssetQueue implements QueueInterface
         $latestScope = $scopeService->normalizeScope(
             $sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
         );
-        $latestManifest = $manifestService->syncFromBuildPlan($latestScope);
+        $latestManifest = $manifestService->syncFromPlanJson($latestScope);
         if (!\is_array($latestManifest['slots'] ?? null)) {
             return $manifest;
         }
@@ -1057,9 +1057,9 @@ class AiSiteAssetQueue implements QueueInterface
 
         $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        if (\is_array($virtualPage['blocks'] ?? null)) {
+        if (\is_array($virtualPage['block_nodes'] ?? null)) {
             [$blocks, $blockChanged] = $this->patchBlocksImageUrls(
-                \array_values($virtualPage['blocks']),
+                \array_values($virtualPage['block_nodes']),
                 $candidates,
                 $finalUrl,
                 $targetBlockId,
@@ -1067,7 +1067,7 @@ class AiSiteAssetQueue implements QueueInterface
                 $siblingPattern
             );
             if ($blockChanged) {
-                $virtualPage['blocks'] = \array_values($blocks);
+                $virtualPage['block_nodes'] = \array_values($blocks);
                 $virtualPage['updated_at'] = $updatedAt;
                 $virtualPages[$pageType] = $virtualPage;
                 $scope['virtual_pages_by_type'] = $virtualPages;
@@ -1101,8 +1101,8 @@ class AiSiteAssetQueue implements QueueInterface
         if (!empty($materializedPatch['changed'])) {
             $changed = true;
             $materializedPageId = (int)($materializedPatch['page_id'] ?? 0);
-            if ($patchedBlocks === [] && \is_array($materializedPatch['blocks'] ?? null)) {
-                $patchedBlocks = \array_values($materializedPatch['blocks']);
+            if ($patchedBlocks === [] && \is_array($materializedPatch['block_nodes'] ?? null)) {
+                $patchedBlocks = \array_values($materializedPatch['block_nodes']);
             }
         }
 
@@ -1255,7 +1255,6 @@ class AiSiteAssetQueue implements QueueInterface
             ['page_type_layouts', $pageType],
             ['render_data_contract', 'payload', 'page_type_layouts', $pageType],
             ['build_contracts', 'render_data', 'payload', 'page_type_layouts', $pageType],
-            ['build_workbench', 'contracts', 'render_data', 'payload', 'page_type_layouts', $pageType],
         ] as $path) {
             $pathChanged = false;
             $scope = $this->replaceScopePathImageReferences($scope, $path, $candidates, $finalUrl, $siblingPattern, $pathChanged);
@@ -1350,7 +1349,7 @@ class AiSiteAssetQueue implements QueueInterface
     /**
      * @param array<string,mixed> $scope
      * @param list<string> $candidates
-     * @return array{changed:bool,page_id?:int,blocks?:list<mixed>}
+     * @return array{changed:bool,page_id?:int,block_nodes?:list<mixed>}
      */
     private function patchMaterializedPageImageUrls(
         array $scope,
@@ -1378,7 +1377,7 @@ class AiSiteAssetQueue implements QueueInterface
         $renderMode = \trim((string)$page->getData(Page::schema_fields_RENDER_MODE));
         if ($renderMode === Page::RENDER_MODE_AI_HTML) {
             $layout = \json_decode((string)$page->getData(Page::schema_fields_AI_LAYOUT), true);
-            $blocks = \is_array($layout['blocks'] ?? null) ? \array_values($layout['blocks']) : [];
+            $blocks = \is_array($layout['block_nodes'] ?? null) ? \array_values($layout['block_nodes']) : [];
             if ($blocks !== []) {
                 [$nextBlocks, $blockChanged] = $this->patchBlocksImageUrls(
                     $blocks,
@@ -1389,7 +1388,7 @@ class AiSiteAssetQueue implements QueueInterface
                     $siblingPattern
                 );
                 if ($blockChanged) {
-                    $layout['blocks'] = \array_values($nextBlocks);
+                    $layout['block_nodes'] = \array_values($nextBlocks);
                     $page->setData(
                         Page::schema_fields_AI_LAYOUT,
                         \json_encode($layout, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)
@@ -1433,7 +1432,7 @@ class AiSiteAssetQueue implements QueueInterface
         return [
             'changed' => true,
             'page_id' => $pageId,
-            'blocks' => \array_values($nextBlocks),
+            'block_nodes' => \array_values($nextBlocks),
         ];
     }
 
@@ -2028,11 +2027,6 @@ class AiSiteAssetQueue implements QueueInterface
             $payload = $this->applyIdentityAssetToRenderPayload($scope['build_contracts']['render_data']['payload'], $role, $finalUrl);
             $scope['build_contracts']['render_data']['payload'] = $payload;
         }
-        if (\is_array($scope['build_workbench']['contracts']['render_data']['payload'] ?? null)) {
-            $payload = $this->applyIdentityAssetToRenderPayload($scope['build_workbench']['contracts']['render_data']['payload'], $role, $finalUrl);
-            $scope['build_workbench']['contracts']['render_data']['payload'] = $payload;
-        }
-
         return $scope;
     }
 

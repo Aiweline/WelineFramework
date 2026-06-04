@@ -23,7 +23,7 @@
 
 ## 按钮矩阵
 
-单阶段 BuildPlan 使用计划队列状态禁用生成/确认按钮，只有终态成功并存在方案草稿时才开放确认。构建阶段在 `build_plan_confirmed=true` 后开放，若 `build_queue_info` 或 `active_operation` 处于 pending、queued、running、timeout、connection_lost，则保持构建和发布入口锁定。
+单阶段 PlanJson 使用计划队列状态禁用生成/确认按钮，只有终态成功并存在方案草稿时才开放确认。构建阶段在 `plan_json.confirmed=true` 后开放，若 `build_queue_info` 或 `active_operation` 处于 pending、queued、running、timeout、connection_lost，则保持构建和发布入口锁定。
 
 发布按钮同时绑定四类合同字段：`can_publish`、运行中的 AI 队列、最新 AI 构建失败、retryable 失败项。任一条件不满足时，`pb-ai-start-publish` 写入 `data-pb-contract-*` 属性并显示 `pb-ai-publish-blocking-alert`，用于浏览器/E2E 直接断言。
 

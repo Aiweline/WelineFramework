@@ -9,10 +9,10 @@ declare(strict_types=1);
  * 1) 把 app/code/GuoLaiRen/PageBuilder/skills/ 下的每个目录视为一个可加载技能；
  * 2) 解析其 SKILL.md frontmatter（name/description）作为提示词中的“能力声明”；
  * 3) 默认强制加载 claude-design 技能（设计纪律、反 AI-slop、内容真实性等）；
- * 4) 兼容已有的 prompt_guides/frontend-design 技能，作为 build_plan 任务规划的设计指引。
+ * 4) 兼容已有的 prompt_guides/frontend-design 技能，作为 plan_json 任务规划的设计指引。
  *
  * 注：本服务只负责把技能描述、本地路径、硬约束转成提示词行；具体生成走老路径
- * （Stage1 在 buildAiPlanPrompt 注入；BuildPlan 在 buildSkillRegistryPromptGuide 注入）。
+ * （Stage1 在 buildAiPlanPrompt 注入；PlanJson 在 buildSkillRegistryPromptGuide 注入）。
  */
 
 namespace GuoLaiRen\PageBuilder\Service\AI;
@@ -182,9 +182,9 @@ final class AiSiteSkillRegistry
     }
 
     /**
-     * 输出注入到 Stage1 / BuildPlan 提示词的“技能加载能力”段。
+     * 输出注入到 Stage1 / PlanJson 提示词的“技能加载能力”段。
      *
-     * @param string $stage 'stage1' | 'build_plan' | 'build' | 'qa' | 'repair'
+     * @param string $stage 'stage1' | 'plan_json' | 'build' | 'qa' | 'repair'
      * @param list<string> $extraCodes 额外要求加载的技能 code（与默认列表合并、去重）
      * @param list<array<string, mixed>> $skillSnapshots 已冻结的技能快照，优先于当前 DB/文件内容
      * @return list<string>
@@ -302,8 +302,7 @@ final class AiSiteSkillRegistry
         $candidates = [
             $scope['_plan_sse_request']['selected_skill_codes'] ?? null,
             $scope['selected_skill_codes'] ?? null,
-            $scope['plan_workbench']['confirmed']['contract_context']['selected_skill_codes'] ?? null,
-            $scope['plan_workbench']['contract_context']['selected_skill_codes'] ?? null,
+            $scope['plan_json']['contract_context']['selected_skill_codes'] ?? null,
         ];
 
         foreach ($candidates as $candidate) {
@@ -323,8 +322,7 @@ final class AiSiteSkillRegistry
     public function resolveSkillSnapshotsFromScope(array $scope): array
     {
         $candidates = [
-            $scope['plan_workbench']['confirmed']['contract_context']['skill_snapshots'] ?? null,
-            $scope['plan_workbench']['contract_context']['skill_snapshots'] ?? null,
+            $scope['plan_json']['contract_context']['skill_snapshots'] ?? null,
             $scope['contract_context']['skill_snapshots'] ?? null,
         ];
 
@@ -564,7 +562,7 @@ final class AiSiteSkillRegistry
     }
 
     /**
-     * 兼容旧调用：返回包含 frontend-design 与默认技能的注入行（build_plan 用）。
+     * 兼容既有调用：返回包含 frontend-design 与默认技能的注入行（plan_json 用）。
      *
      * @param array<string, mixed> $batch
      * @param list<string> $extraCodes
@@ -633,7 +631,7 @@ final class AiSiteSkillRegistry
     private function adapterCodeForStage(string $stage): string
     {
         $stage = \strtolower(\trim($stage));
-        return \in_array($stage, ['stage1', 'profile', 'build_plan', 'plan'], true)
+        return \in_array($stage, ['stage1', 'profile', 'plan_json', 'plan'], true)
             ? 'pagebuilder_plan_generation'
             : 'pagebuilder_component_generation';
     }

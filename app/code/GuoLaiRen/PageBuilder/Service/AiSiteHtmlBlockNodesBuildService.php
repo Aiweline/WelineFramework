@@ -9,7 +9,7 @@ use GuoLaiRen\PageBuilder\Service\AI\MockPage;
 use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use Weline\Framework\Manager\ObjectManager;
 
-class AiSiteHtmlBlocksBuildService
+class AiSiteHtmlBlockNodesBuildService
 {
     private const META_TEMPLATE_PHTML = '_pb_server_template_phtml';
     private const META_COMPONENT_CODE = '_pb_server_component_code';
@@ -59,7 +59,7 @@ class AiSiteHtmlBlocksBuildService
             $sectionCount++;
         }
         if ($sectionCount === 0) {
-            throw new \RuntimeException((string)__('AI 未生成任何可用页面区块：%{1}', [$pageType]));
+            throw new \RuntimeException((string)__('AI 闂佸搫鐗滄禍鐐哄极閹捐绠ｉ柟閭︿簼瀹曟彃霉閿濆棙绀€鐟滅増鐓￠幃浠嬪Ω閳瑰簱鍋撴径鎰棃闁靛繒濮撮梾姗€鏌涜椤ㄦ劗妲?{1}', [$pageType]));
         }
 
         return $blocks;
@@ -576,14 +576,14 @@ class AiSiteHtmlBlocksBuildService
             if (!\is_string($pageType) || !\is_array($page)) {
                 continue;
             }
-            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            $blocks = \is_array($page['block_nodes'] ?? null) ? $page['block_nodes'] : [];
             foreach ($blocks as $index => $block) {
                 if (!\is_array($block)) {
                     continue;
                 }
                 $blocks[$index] = $this->stripServerOnlyBlock($block);
             }
-            $page['blocks'] = $blocks;
+            $page['block_nodes'] = $blocks;
             $virtualPages[$pageType] = $page;
         }
 
@@ -1421,52 +1421,52 @@ class AiSiteHtmlBlocksBuildService
                 Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
             'th' => [
-                Page::TYPE_HOME => 'หน้าแรก',
-                Page::TYPE_ABOUT => 'เกี่ยวกับเรา',
-                Page::TYPE_CONTACT => 'ติดต่อเรา',
-                Page::TYPE_BLOG_LIST => 'บทความ',
-                Page::TYPE_BLOG => 'บทความ',
-                Page::TYPE_PRIVACY_POLICY => 'นโยบายความเป็นส่วนตัว',
-                Page::TYPE_TERMS_OF_SERVICE => 'ข้อกำหนดการใช้บริการ',
-                Page::TYPE_REFUND_POLICY => 'นโยบายการคืนเงิน',
-                Page::TYPE_SHIPPING_POLICY => 'นโยบายการจัดส่ง',
-                Page::TYPE_COOKIE_POLICY => 'นโยบายคุกกี้',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
             'hi' => [
-                Page::TYPE_HOME => 'होम',
-                Page::TYPE_ABOUT => 'हमारे बारे में',
-                Page::TYPE_CONTACT => 'संपर्क करें',
-                Page::TYPE_BLOG_LIST => 'ब्लॉग',
-                Page::TYPE_BLOG => 'ब्लॉग',
-                Page::TYPE_PRIVACY_POLICY => 'गोपनीयता नीति',
-                Page::TYPE_TERMS_OF_SERVICE => 'सेवा की शर्तें',
-                Page::TYPE_REFUND_POLICY => 'रिफंड नीति',
-                Page::TYPE_SHIPPING_POLICY => 'शिपिंग नीति',
-                Page::TYPE_COOKIE_POLICY => 'कुकी नीति',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
             'zh' => [
-                Page::TYPE_HOME => '首页',
-                Page::TYPE_ABOUT => '关于我们',
-                Page::TYPE_CONTACT => '联系我们',
-                Page::TYPE_BLOG_LIST => '博客',
-                Page::TYPE_BLOG => '博客',
-                Page::TYPE_PRIVACY_POLICY => '隐私政策',
-                Page::TYPE_TERMS_OF_SERVICE => '服务条款',
-                Page::TYPE_REFUND_POLICY => '退款政策',
-                Page::TYPE_SHIPPING_POLICY => '配送政策',
-                Page::TYPE_COOKIE_POLICY => 'Cookie 政策',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
             'ru' => [
-                Page::TYPE_HOME => 'Главная',
-                Page::TYPE_ABOUT => 'О нас',
-                Page::TYPE_CONTACT => 'Контакты',
-                Page::TYPE_BLOG_LIST => 'Блог',
-                Page::TYPE_BLOG => 'Блог',
-                Page::TYPE_PRIVACY_POLICY => 'Политика конфиденциальности',
-                Page::TYPE_TERMS_OF_SERVICE => 'Условия использования',
-                Page::TYPE_REFUND_POLICY => 'Политика возврата',
-                Page::TYPE_SHIPPING_POLICY => 'Доставка',
-                Page::TYPE_COOKIE_POLICY => 'Политика Cookie',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
         ];
 
@@ -1518,80 +1518,52 @@ class AiSiteHtmlBlocksBuildService
                 'site_name_fallback' => 'Website',
             ],
             'th' => [
-                'home' => 'หน้าแรก',
-                'about' => 'เกี่ยวกับเรา',
-                'contact' => 'ติดต่อเรา',
-                'blog' => 'บทความ',
-                'privacy_policy' => 'นโยบายความเป็นส่วนตัว',
-                'terms_of_service' => 'ข้อกำหนดการใช้บริการ',
-                'refund_policy' => 'นโยบายการคืนเงิน',
-                'shipping_policy' => 'นโยบายการจัดส่ง',
-                'cookie_policy' => 'นโยบายคุกกี้',
-                'policy_info' => 'ข้อมูลนโยบาย',
-                'featured_pages' => 'หน้าสำคัญ',
-                'all_pages' => 'ทุกหน้า',
-                'all_rights_reserved' => 'สงวนลิขสิทธิ์',
-                'visitor_experience' => 'ปรับปรุงประสบการณ์ผู้เล่นอย่างต่อเนื่อง',
-                'brief_description' => 'เว็บไซต์เกมไพ่ APK ที่ช่วยให้ผู้เล่นดาวน์โหลดได้ง่าย อ่านกติกา และติดต่อทีมช่วยเหลือได้สะดวก',
-                'brand_summary' => 'เว็บไซต์เกมไพ่ APK ที่รวมข้อมูลดาวน์โหลด กติกา และช่องทางช่วยเหลือสำหรับผู้เล่น',
-                'site_name_fallback' => 'เว็บไซต์',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
             'hi' => [
-                'home' => 'होम',
-                'about' => 'हमारे बारे में',
-                'contact' => 'संपर्क करें',
-                'blog' => 'ब्लॉग',
-                'privacy_policy' => 'गोपनीयता नीति',
-                'terms_of_service' => 'सेवा की शर्तें',
-                'refund_policy' => 'रिफंड नीति',
-                'shipping_policy' => 'शिपिंग नीति',
-                'cookie_policy' => 'कुकी नीति',
-                'policy_info' => 'नीति जानकारी',
-                'featured_pages' => 'मुख्य पेज',
-                'all_pages' => 'सभी पेज',
-                'all_rights_reserved' => 'सर्वाधिकार सुरक्षित।',
-                'visitor_experience' => 'खिलाड़ियों के अनुभव को लगातार बेहतर बनाया जा रहा है',
-                'brief_description' => 'एक कार्ड गेम APK साइट जहां खिलाड़ी डाउनलोड, नियम और सहायता जानकारी आसानी से पा सकते हैं',
-                'brand_summary' => 'डाउनलोड, नियम और सहायता जानकारी के साथ एक कार्ड गेम APK गाइड',
-                'site_name_fallback' => 'वेबसाइट',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
             'zh' => [
-                'home' => '首页',
-                'about' => '关于我们',
-                'contact' => '联系我们',
-                'blog' => '博客',
-                'privacy_policy' => '隐私政策',
-                'terms_of_service' => '服务条款',
-                'refund_policy' => '退款政策',
-                'shipping_policy' => '配送政策',
-                'cookie_policy' => 'Cookie 政策',
-                'policy_info' => '政策信息',
-                'featured_pages' => '重点页面',
-                'all_pages' => '全部页面',
-                'all_rights_reserved' => '保留所有权利。',
-                'visitor_experience' => '持续优化玩家访问体验',
-                'brief_description' => '面向玩家的棋牌 APK 下载与规则支持站点，提供清晰信息和便捷帮助。',
-                'brand_summary' => '棋牌 APK 下载、规则与支持信息站点。',
-                'site_name_fallback' => '站点',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
             'ru' => [
-                'home' => 'Главная',
-                'about' => 'О нас',
-                'contact' => 'Контакты',
-                'blog' => 'Блог',
-                'privacy_policy' => 'Политика конфиденциальности',
-                'terms_of_service' => 'Условия использования',
-                'refund_policy' => 'Политика возврата',
-                'shipping_policy' => 'Доставка',
-                'cookie_policy' => 'Политика Cookie',
-                'policy_info' => 'Правовая информация',
-                'featured_pages' => 'Основные разделы',
-                'all_pages' => 'Все разделы',
-                'all_rights_reserved' => 'Все права защищены.',
-                'visitor_experience' => 'Мы постоянно улучшаем впечатления посетителей.',
-                'brief_description' => 'Сайт APK для карточных игр с понятной информацией о загрузке, правилах и поддержке.',
-                'brand_summary' => 'Сайт APK для карточных игр с информацией о загрузке, правилах и поддержке.',
-                'site_name_fallback' => 'Сайт',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             ],
         ];
 
@@ -1605,34 +1577,17 @@ class AiSiteHtmlBlocksBuildService
         if ($localized !== '') {
             return $localized;
         }
-        if ($this->isRussianLocale($locale)) {
-            return match ($pageType) {
-                Page::TYPE_HOME => 'Главная',
-                Page::TYPE_ABOUT => 'О нас',
-                Page::TYPE_CONTACT => 'Контакты',
-                Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => 'Блог',
-                Page::TYPE_PRIVACY_POLICY => 'Политика конфиденциальности',
-                Page::TYPE_TERMS_OF_SERVICE => 'Условия использования',
-                Page::TYPE_REFUND_POLICY => 'Политика возврата',
-                Page::TYPE_SHIPPING_POLICY => 'Доставка',
-                Page::TYPE_COOKIE_POLICY => 'Политика Cookie',
-                default => '',
-            };
-        }
-        $isZh = $this->isChineseLocale($locale);
-        $isJa = $this->isJapaneseLocale($locale);
-        $isKo = $this->isKoreanLocale($locale);
 
         return match ($pageType) {
-            Page::TYPE_HOME => $isZh ? '首页' : ($isJa ? 'ホーム' : ($isKo ? '홈' : 'Home')),
-            Page::TYPE_ABOUT => $isZh ? '关于我们' : ($isJa ? '私たちについて' : ($isKo ? '회사 소개' : 'About')),
-            Page::TYPE_CONTACT => $isZh ? '联系我们' : ($isJa ? 'お問い合わせ' : ($isKo ? '문의하기' : 'Contact')),
-            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => $isZh ? '博客' : ($isJa ? 'ブログ' : ($isKo ? '블로그' : 'Blog')),
-            Page::TYPE_PRIVACY_POLICY => $isZh ? '隐私政策' : ($isJa ? 'プライバシーポリシー' : ($isKo ? '개인정보처리방침' : 'Privacy Policy')),
-            Page::TYPE_TERMS_OF_SERVICE => $isZh ? '服务条款' : ($isJa ? '利用規約' : ($isKo ? '이용약관' : 'Terms of Service')),
-            Page::TYPE_REFUND_POLICY => $isZh ? '退款政策' : ($isJa ? '返金ポリシー' : ($isKo ? '환불 정책' : 'Refund Policy')),
-            Page::TYPE_SHIPPING_POLICY => $isZh ? '配送政策' : ($isJa ? '配送ポリシー' : ($isKo ? '배송 정책' : 'Shipping Policy')),
-            Page::TYPE_COOKIE_POLICY => $isZh ? 'Cookie 政策' : ($isJa ? 'Cookie ポリシー' : ($isKo ? '쿠키 정책' : 'Cookie Policy')),
+            Page::TYPE_HOME => 'Home',
+            Page::TYPE_ABOUT => 'About',
+            Page::TYPE_CONTACT => 'Contact',
+            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => 'Blog',
+            Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+            Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+            Page::TYPE_REFUND_POLICY => 'Refund Policy',
+            Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+            Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
             default => '',
         };
     }
@@ -1644,24 +1599,12 @@ class AiSiteHtmlBlocksBuildService
             return $localized;
         }
 
-        if ($this->isRussianLocale($locale)) {
-            return match ($key) {
-                'policy_info' => 'Правовая информация',
-                'featured_pages' => 'Основные разделы',
-                'all_pages' => 'Все разделы',
-                'all_rights_reserved' => 'Все права защищены.',
-                'visitor_experience' => 'Мы постоянно улучшаем впечатления посетителей.',
-                default => $key,
-            };
-        }
-        $isZh = $this->isChineseLocale($locale);
-        $isJa = $this->isJapaneseLocale($locale);
-        $isKo = $this->isKoreanLocale($locale);
-
         return match ($key) {
-            'policy_info' => $isZh ? '政策信息' : ($isJa ? 'ポリシー' : ($isKo ? '정책 정보' : 'Policy Info')),
-            'featured_pages' => $isZh ? '重点页面' : ($isJa ? '注目ページ' : ($isKo ? '주요 페이지' : 'Featured Pages')),
-            'all_pages' => $isZh ? '全部页面' : ($isJa ? 'すべてのページ' : ($isKo ? '모든 페이지' : 'All Pages')),
+            'policy_info' => 'Policy Info',
+            'featured_pages' => 'Featured Pages',
+            'all_pages' => 'All Pages',
+            'all_rights_reserved' => 'All rights reserved.',
+            'visitor_experience' => 'Always improving the visitor experience',
             default => $key,
         };
     }
@@ -1828,27 +1771,6 @@ class AiSiteHtmlBlocksBuildService
 
         return $items;
 
-        if (!$this->isRussianLocale($locale)) {
-            return $items;
-        }
-
-        foreach ($items as &$item) {
-            $label = \trim((string)($item['label'] ?? ''));
-            $item['label'] = match (\strtolower($label)) {
-                'home' => 'Главная',
-                'about' => 'О нас',
-                'contact' => 'Контакты',
-                'privacy policy' => 'Политика конфиденциальности',
-                'terms of service' => 'Условия использования',
-                'refund policy' => 'Политика возврата',
-                'shipping policy' => 'Доставка',
-                'cookie policy' => 'Политика Cookie',
-                default => $label,
-            };
-        }
-        unset($item);
-
-        return $items;
     }
 
     private function normalizeFooterLocaleText(string $value, string $fallbackKey, string $locale): string

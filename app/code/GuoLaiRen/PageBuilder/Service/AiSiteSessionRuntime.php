@@ -220,7 +220,7 @@ final class AiSiteSessionRuntime
         $componentCode = $blockId;
         $pages = \is_array($manifest['virtual_pages_by_type'] ?? null) ? $manifest['virtual_pages_by_type'] : [];
         $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-        foreach (\is_array($page['blocks'] ?? null) ? $page['blocks'] : [] as $block) {
+        foreach (\is_array($page['block_nodes'] ?? null) ? $page['block_nodes'] : [] as $block) {
             if (!\is_array($block)) {
                 continue;
             }
@@ -305,8 +305,8 @@ final class AiSiteSessionRuntime
                 \is_array($manifest['virtual_pages_by_type'] ?? null) ? $manifest['virtual_pages_by_type'] : []
             );
 
-        $pageIndex = \is_array($index[$pageType] ?? null) ? $index[$pageType] : ['page_type' => $pageType, 'blocks' => []];
-        $blocks = \is_array($pageIndex['blocks'] ?? null) ? $pageIndex['blocks'] : [];
+        $pageIndex = \is_array($index[$pageType] ?? null) ? $index[$pageType] : ['page_type' => $pageType, 'block_nodes' => []];
+        $blocks = \is_array($pageIndex['block_nodes'] ?? null) ? $pageIndex['block_nodes'] : [];
         $found = false;
         foreach ($blocks as $idx => $entry) {
             if (!\is_array($entry)) {
@@ -322,7 +322,7 @@ final class AiSiteSessionRuntime
         if (!$found) {
             $blocks[] = ['block_id' => $blockId, 'hash' => $hash, 'status' => 'ready', 'component_code' => ''];
         }
-        $pageIndex['blocks'] = $blocks;
+        $pageIndex['block_nodes'] = $blocks;
         $index[$pageType] = $pageIndex;
         $manifest['virtual_page_index'] = $index;
 
@@ -393,7 +393,9 @@ final class AiSiteSessionRuntime
 
     private function emptyArtifact(string $artifactKey): mixed
     {
-        return $artifactKey === 'plan_markdown' ? '' : [];
+        unset($artifactKey);
+
+        return [];
     }
 
     private function sessionService(): AiSiteAgentSessionService

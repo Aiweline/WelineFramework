@@ -17,7 +17,7 @@ final class AiSiteBuildPromptContextAssembler
         $inputScope = \is_array($task['input_scope'] ?? null) ? $task['input_scope'] : [];
         $blockId = \trim((string)($inputScope['block_id'] ?? $task['block_id'] ?? ''));
         $pageId = \trim((string)($inputScope['page_id'] ?? $task['page_id'] ?? ''));
-        $blocks = $this->normalizeRecordSet($contract['blocks'] ?? [], ['block_id', 'id']);
+        $blocks = $this->normalizeRecordSet($contract['block_nodes'] ?? [], ['block_id', 'id']);
         $pages = $this->normalizeRecordSet($contract['pages'] ?? [], ['page_id', 'id']);
         $contentManifest = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
         $items = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
@@ -33,8 +33,6 @@ final class AiSiteBuildPromptContextAssembler
         $runtimeContext = \is_array($task['runtime_context'] ?? null) ? $task['runtime_context'] : [];
         $contentLocale = $this->firstNonEmpty([
             $runtimeContext['content_locale'] ?? null,
-            $contract['i18n']['primary_locale'] ?? null,
-            $contentManifest['primary_locale'] ?? null,
         ]);
         $languageContract = \is_array($runtimeContext['language_contract'] ?? null)
             ? $runtimeContext['language_contract']
@@ -82,7 +80,6 @@ final class AiSiteBuildPromptContextAssembler
         $forbidden = [
             'scope' => true,
             'plan_json' => true,
-            'plan_workbench' => true,
             'presentation_projection' => true,
             'ui_projection' => true,
         ];
@@ -211,7 +208,7 @@ final class AiSiteBuildPromptContextAssembler
         $base = [
             'source_of_truth_locale' => $locale,
             'visible_copy_rule' => 'All visitor-facing copy must use source_of_truth_locale.',
-            'plan_text_rule' => 'BuildPlan copy is intent only and must be rewritten before rendering.',
+            'plan_text_rule' => 'PlanJson copy is intent only and must be rewritten before rendering.',
         ];
 
         $voiceResolver = new AiSiteLanguageVoiceResolver();
@@ -232,9 +229,7 @@ final class AiSiteBuildPromptContextAssembler
         }
 
         $resolver = new AiSiteDesignTokenResolver();
-        $blueprint = \is_array($contract['build_plan_v2'] ?? null)
-            ? $contract['build_plan_v2']
-            : $contract;
+        $blueprint = $contract;
         if (\is_array($contract['plan_json'] ?? null) && !isset($blueprint['theme_design'])) {
             $blueprint['plan_json'] = $contract['plan_json'];
             $blueprint['theme_design'] = $contract['plan_json']['theme_design'] ?? [];

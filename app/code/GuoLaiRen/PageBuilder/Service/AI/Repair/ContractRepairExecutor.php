@@ -7,14 +7,14 @@ namespace GuoLaiRen\PageBuilder\Service\AI\Repair;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractPatchValidator;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractQaReportBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\ContractType;
-use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanFrozenFieldValidator;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PlanJsonFrozenFieldValidator;
 
 final class ContractRepairExecutor
 {
     public function __construct(
         private readonly ?ContractPatchValidator $patchValidator = null,
         private readonly ?ContractQaReportBuilder $qaReportBuilder = null,
-        private readonly ?BuildPlanFrozenFieldValidator $buildPlanFrozenFieldValidator = null
+        private readonly ?PlanJsonFrozenFieldValidator $PlanJsonFrozenFieldValidator = null
     ) {
     }
 
@@ -36,7 +36,7 @@ final class ContractRepairExecutor
                 continue;
             }
             $path = \trim((string)($candidate['path'] ?? ''));
-            $pathValidation = $this->buildPlanFrozenFieldValidator()->validateRepairCandidatePath($path, $targetContract);
+            $pathValidation = $this->PlanJsonFrozenFieldValidator()->validateRepairCandidatePath($path, $targetContract);
             if (!(bool)($pathValidation['valid'] ?? false)) {
                 $blocked[] = $this->blockedCandidate(
                     $candidate,
@@ -63,11 +63,11 @@ final class ContractRepairExecutor
                 );
                 continue;
             }
-            $buildPlanValidation = $this->buildPlanFrozenFieldValidator()->validate($targetContract, $next);
-            if (!(bool)($buildPlanValidation['valid'] ?? false)) {
+            $PlanJsonValidation = $this->PlanJsonFrozenFieldValidator()->validate($targetContract, $next);
+            if (!(bool)($PlanJsonValidation['valid'] ?? false)) {
                 $blocked[] = $this->blockedCandidate(
                     $candidate,
-                    \implode('; ', \array_map('strval', \is_array($buildPlanValidation['errors'] ?? null) ? $buildPlanValidation['errors'] : []))
+                    \implode('; ', \array_map('strval', \is_array($PlanJsonValidation['errors'] ?? null) ? $PlanJsonValidation['errors'] : []))
                 );
                 continue;
             }
@@ -204,8 +204,8 @@ final class ContractRepairExecutor
         return \trim((string)($meta['type'] ?? $contract['type'] ?? ContractType::TYPE_RENDER_DATA));
     }
 
-    private function buildPlanFrozenFieldValidator(): BuildPlanFrozenFieldValidator
+    private function PlanJsonFrozenFieldValidator(): PlanJsonFrozenFieldValidator
     {
-        return $this->buildPlanFrozenFieldValidator ?? new BuildPlanFrozenFieldValidator();
+        return $this->PlanJsonFrozenFieldValidator ?? new PlanJsonFrozenFieldValidator();
     }
 }
